@@ -50,12 +50,6 @@ img, svg { display: block; max-width: 100%; height: auto; }
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-}
-.logo img {
-  height: 48px;
-  width: auto;
 }
 .logo span { color: var(--primary); }
 
@@ -190,7 +184,6 @@ img, svg { display: block; max-width: 100%; height: auto; }
 
 .footer { border-top: 1px solid var(--border); margin-top: 32px; }
 .footer__inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0; flex-wrap: wrap; }
-.footer .logo img { height: 36px; }
 .footer__links { display: flex; gap: 14px; }
 .footer__links a { color: var(--muted); text-decoration: none; }
 .footer__copy { color: var(--muted); margin: 0; }
