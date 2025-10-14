@@ -46,12 +46,23 @@ img, svg { display: block; max-width: 100%; height: auto; }
   padding: 14px 0;
 }
 .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text);
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.2px;
+  font-size: 20px;
 }
-.logo span { color: var(--primary); }
+.logo__icon {
+  width: 46px;
+  height: auto;
+  flex-shrink: 0;
+  filter: drop-shadow(0 6px 16px rgba(58, 163, 255, 0.25));
+}
+.logo__wordmark { display: inline-flex; align-items: baseline; gap: 4px; }
+.logo__wordmark span { color: var(--primary); }
 
 .nav__toggle {
   display: none;

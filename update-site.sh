@@ -48,11 +48,13 @@ echo "🔧 Проверяем статус Caddy..."
 if sudo systemctl is-active --quiet caddy; then
     echo "✅ Caddy работает"
     
-    # Проверяем статус сайта
+    # Проверяем статус сайта и включаем если нужно
     if sudo /usr/local/bin/sitectl status | grep -q "enabled"; then
         echo "✅ Сайт включен"
     else
-        echo "⚠️  Сайт в режиме maintenance"
+        echo "⚠️  Сайт в режиме maintenance - включаем..."
+        sudo /usr/local/bin/sitectl enable
+        echo "✅ Сайт включен"
     fi
 else
     echo "❌ Caddy не работает"
