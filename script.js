@@ -250,4 +250,16 @@ if (accordion) {
       el.addEventListener('click', () => sendGoal(goal), { passive: true });
     });
   });
+
+  // Fallback: capture all clicks and detect anchors by href (in case elements render later)
+  window.addEventListener('click', (e) => {
+    const target = e.target instanceof Element ? e.target.closest('a[href^="#"]') : null;
+    if (!target) return;
+    const href = target.getAttribute('href');
+    if (!href) return;
+    if (href === '#value') sendGoal('nav_how');
+    else if (href === '#benefits') sendGoal('nav_benefits');
+    else if (href === '#pricing') sendGoal('nav_pricing');
+    else if (href === '#faq') sendGoal('nav_faq');
+  }, true);
 })();
