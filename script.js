@@ -178,3 +178,45 @@ if (accordion) {
     });
   }
 })();
+
+// Yandex.Metrika goals for key interactions
+(function initYandexGoals() {
+  const YM_ID = 104655292;
+  const sendGoal = (goal, params) => {
+    if (typeof window.ym === 'function') {
+      try { window.ym(YM_ID, 'reachGoal', goal, params || {}); } catch (_) {}
+    }
+  };
+
+  // Telegram buttons (all CTA with class tg-smart)
+  document.querySelectorAll('a.tg-smart').forEach((el) => {
+    el.addEventListener('click', () => {
+      // Include start payload if present to distinguish placements
+      const start = el.getAttribute('data-tg-start') || '';
+      sendGoal('telegram_click', start ? { start } : undefined);
+    }, { passive: true });
+  });
+
+  // Pricing plan buttons with plan encoded in data-tg-start (pricing_free/pro/ultra)
+  document.querySelectorAll('.plan__cta').forEach((el) => {
+    el.addEventListener('click', () => {
+      const start = el.getAttribute('data-tg-start') || '';
+      // Derive plan name, e.g., pricing_pro -> pro
+      const plan = start.replace(/^pricing_/, '') || 'unknown';
+      sendGoal('pricing_click', { plan });
+    }, { passive: true });
+  });
+
+  // Top nav anchors
+  const navMap = new Map([
+    ['a[href="#value"]', 'nav_how'],
+    ['a[href="#benefits"]', 'nav_benefits'],
+    ['a[href="#pricing"]', 'nav_pricing'],
+    ['a[href="#faq"]', 'nav_faq'],
+  ]);
+  navMap.forEach((goal, selector) => {
+    document.querySelectorAll(selector).forEach((el) => {
+      el.addEventListener('click', () => sendGoal(goal), { passive: true });
+    });
+  });
+})();
