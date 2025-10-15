@@ -182,10 +182,41 @@ if (accordion) {
 // Yandex.Metrika goals for key interactions
 (function initYandexGoals() {
   const YM_ID = 104655292;
+
+  // Queue to handle early clicks before ym is ready
+  const goalQueue = [];
+  let flushTimerStarted = false;
+
+  const tryFlush = () => {
+    if (typeof window.ym !== 'function') return;
+    while (goalQueue.length) {
+      const { goal, params } = goalQueue.shift();
+      try { window.ym(YM_ID, 'reachGoal', goal, params || {}); } catch (_) {}
+    }
+  };
+
+  const startFlushTimer = () => {
+    if (flushTimerStarted) return;
+    flushTimerStarted = true;
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      tryFlush();
+      if (typeof window.ym === 'function' || Date.now() - startedAt > 5000) {
+        clearInterval(interval);
+        // Final flush attempt
+        tryFlush();
+      }
+    }, 300);
+  };
+
   const sendGoal = (goal, params) => {
     if (typeof window.ym === 'function') {
       try { window.ym(YM_ID, 'reachGoal', goal, params || {}); } catch (_) {}
+      return;
     }
+    // ym not ready yet — queue and start timer
+    goalQueue.push({ goal, params });
+    startFlushTimer();
   };
 
   // Telegram buttons (all CTA with class tg-smart)
