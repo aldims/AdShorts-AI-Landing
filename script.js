@@ -55,14 +55,12 @@ if (accordion) {
     const domain = link.getAttribute('data-tg-domain');
     if (!domain) return;
 
-    const startParam = (link.getAttribute('data-tg-start') || '').trim();
-    const startQuery = startParam ? `?start=${encodeURIComponent(startParam)}` : '';
-
-    const webUrl = `https://t.me/${domain}${startQuery}`;
-    const appUrl = `tg://resolve?domain=${domain}${startParam ? `&start=${encodeURIComponent(startParam)}` : ''}`;
+    // Removed start param to avoid auto-triggering /start command
+    const webUrl = `https://t.me/${domain}`;
+    const appUrl = `tg://resolve?domain=${domain}`;
 
     // Telegram Web A with tgaddr resolves username reliably
-    const tgaddr = `tg://resolve?domain=${domain}${startParam ? `&start=${encodeURIComponent(startParam)}` : ''}`;
+    const tgaddr = `tg://resolve?domain=${domain}`;
     const webAUrl = `https://web.telegram.org/a/#?tgaddr=${encodeURIComponent(tgaddr)}`;
 
     // Default href stays t.me; target set in markup
