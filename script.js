@@ -238,7 +238,7 @@ if (accordion) {
 
   // Top nav anchors
   const navMap = new Map([
-    ['a[href="#value"]', 'nav_how'],
+    ['a[href="#how-it-works"]', 'nav_how'],
     ['a[href="#benefits"]', 'nav_benefits'],
     ['a[href="#pricing"]', 'nav_pricing'],
     ['a[href="#faq"]', 'nav_faq'],
@@ -255,7 +255,7 @@ if (accordion) {
     if (!target) return;
     const href = target.getAttribute('href');
     if (!href) return;
-    if (href === '#value') sendGoal('nav_how');
+    if (href === '#how-it-works') sendGoal('nav_how');
     else if (href === '#benefits') sendGoal('nav_benefits');
     else if (href === '#pricing') sendGoal('nav_pricing');
     else if (href === '#faq') sendGoal('nav_faq');
