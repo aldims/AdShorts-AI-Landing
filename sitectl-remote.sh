@@ -8,9 +8,9 @@ set -euo pipefail
 #   ./sitectl-remote.sh reload
 #   ./sitectl-remote.sh status
 # Optional env vars:
-#   VM_HOST=89.169.141.100 VM_USER=aldima DOMAIN=adshortsai.com
+#   VM_HOST=89.169.155.51 VM_USER=aldima DOMAIN=adshortsai.com
 
-VM_HOST=${VM_HOST:-89.169.141.100}
+VM_HOST=${VM_HOST:-89.169.155.51}
 VM_USER=${VM_USER:-aldima}
 DOMAIN=${DOMAIN:-adshortsai.com}
 

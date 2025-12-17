@@ -4,7 +4,7 @@ set -euo pipefail
 # Скрипт обновления сайта на сервере
 # Использование: ./update-site.sh
 
-SERVER="89.169.141.100"
+SERVER="89.169.155.51"
 USER="aldima"
 SITE_DIR="/home/aldima/Landing"
 REPO_URL="https://github.com/aldims/AdShorts-AI-Landing.git"
