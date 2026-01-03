@@ -4,6 +4,53 @@ if (yearEl) {
   yearEl.textContent = new Date().getFullYear().toString();
 }
 
+// ============================================
+// Scroll Reveal Animations
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Add data-reveal to elements
+  const revealElements = document.querySelectorAll(
+    '.section h2, .section > .container > .lead, .card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack, .cta-block__inner, .packs > h3'
+  );
+  
+  revealElements.forEach(el => {
+    el.setAttribute('data-reveal', '');
+  });
+  
+  // Add stagger delays to grid items
+  const grids = document.querySelectorAll('.cards, .benefits, .plans, .samples, .packs__grid');
+  grids.forEach(grid => {
+    const children = grid.children;
+    for (let i = 0; i < children.length; i++) {
+      children[i].setAttribute('data-delay', Math.min(i + 1, 5));
+    }
+  });
+  
+  // Steps stagger
+  const steps = document.querySelectorAll('.steps li');
+  steps.forEach((step, i) => {
+    step.setAttribute('data-delay', i + 1);
+  });
+  
+  // Intersection Observer
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.15,
+    rootMargin: '0px 0px -80px 0px'
+  });
+  
+  // Observe all reveal elements
+  document.querySelectorAll('[data-reveal]').forEach(el => {
+    observer.observe(el);
+  });
+});
+
 // Mobile nav toggle
 const navToggle = document.querySelector('.nav__toggle');
 const navMenu = document.getElementById('nav-menu');

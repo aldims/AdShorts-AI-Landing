@@ -1121,114 +1121,61 @@ main a:not(.btn):not(.logo):hover {
 .section li { margin: 0.5em 0; color: var(--text-secondary); }
 
 /* ============================================
-   Linear-style Page Load Animations (Pure CSS)
+   Scroll Reveal Animations
    ============================================ */
 
-/* Base animation keyframes */
-@keyframes fade-up-blur {
+/* Elements start hidden */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: 
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Revealed state */
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger delays */
+[data-reveal][data-delay="1"] { transition-delay: 0.1s; }
+[data-reveal][data-delay="2"] { transition-delay: 0.2s; }
+[data-reveal][data-delay="3"] { transition-delay: 0.3s; }
+[data-reveal][data-delay="4"] { transition-delay: 0.4s; }
+[data-reveal][data-delay="5"] { transition-delay: 0.5s; }
+
+/* Hero animations (on page load, not scroll) */
+@keyframes hero-fade-up {
   from {
     opacity: 0;
     transform: translateY(30px);
-    filter: blur(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Header animation */
-.header {
-  animation: fade-in 0.5s ease-out 0.1s both;
-}
-
-/* Hero section staggered animations */
 .hero__badge {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  animation: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
 }
 
 .hero h1 {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+  animation: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 
 .hero .lead {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+  animation: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
 }
 
 .hero .cta {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.65s both;
+  animation: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
 }
 
 .hero__features {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
-}
-
-/* Section headings */
-.section h2 {
-  animation: fade-up-blur 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 30%;
-}
-
-/* Cards with stagger */
-.card, .benefit, .plan, .sample, .pack {
-  animation: fade-up-blur 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 40%;
-}
-
-/* Stagger delays for grid items */
-.cards .card:nth-child(1),
-.benefits .benefit:nth-child(1),
-.plans .plan:nth-child(1),
-.samples .sample:nth-child(1) { animation-delay: 0s; }
-
-.cards .card:nth-child(2),
-.benefits .benefit:nth-child(2),
-.plans .plan:nth-child(2),
-.samples .sample:nth-child(2) { animation-delay: 0.1s; }
-
-.cards .card:nth-child(3),
-.benefits .benefit:nth-child(3),
-.plans .plan:nth-child(3),
-.samples .sample:nth-child(3) { animation-delay: 0.2s; }
-
-.benefits .benefit:nth-child(4) { animation-delay: 0.3s; }
-.benefits .benefit:nth-child(5) { animation-delay: 0.4s; }
-.benefits .benefit:nth-child(6) { animation-delay: 0.5s; }
-
-/* Features and steps */
-.feature, .steps li, .accordion__item {
-  animation: fade-up-blur 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 30%;
-}
-
-.steps li:nth-child(1) { animation-delay: 0s; }
-.steps li:nth-child(2) { animation-delay: 0.1s; }
-.steps li:nth-child(3) { animation-delay: 0.2s; }
-
-/* CTA block */
-.cta-block__inner {
-  animation: fade-up-blur 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 40%;
-}
-
-/* Fallback for browsers without scroll-driven animations */
-@supports not (animation-timeline: view()) {
-  .section h2,
-  .card, .benefit, .plan, .sample, .pack,
-  .feature, .steps li, .accordion__item,
-  .cta-block__inner {
-    animation: fade-up-blur 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
-  }
+  animation: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
 }
 
 /* ============================================
