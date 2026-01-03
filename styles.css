@@ -1124,62 +1124,27 @@ main a:not(.btn):not(.logo):hover {
    Scroll Reveal Animations
    ============================================ */
 
-/* Elements start hidden (by selector, not class) */
-.section h2,
-.section .lead,
-.card,
-.benefit,
-.plan,
-.feature,
-.sample,
-.steps li,
-.accordion__item,
-.pack,
-.cta-block__inner,
-.packs > h3 {
+/* Hidden state - applied by JS */
+.will-reveal {
   opacity: 0;
-  transform: translateY(40px);
+  transform: translateY(30px);
   transition: 
-    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Revealed state */
-.section h2.is-visible,
-.section .lead.is-visible,
-.card.is-visible,
-.benefit.is-visible,
-.plan.is-visible,
-.feature.is-visible,
-.sample.is-visible,
-.steps li.is-visible,
-.accordion__item.is-visible,
-.pack.is-visible,
-.cta-block__inner.is-visible,
-.packs > h3.is-visible {
+.will-reveal.is-visible {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* Stagger delays for grids */
-.cards .card:nth-child(2),
-.benefits .benefit:nth-child(2),
-.plans .plan:nth-child(2),
-.samples .sample:nth-child(2),
-.packs__grid .pack:nth-child(2) { transition-delay: 0.1s; }
-
-.cards .card:nth-child(3),
-.benefits .benefit:nth-child(3),
-.plans .plan:nth-child(3),
-.samples .sample:nth-child(3),
-.packs__grid .pack:nth-child(3) { transition-delay: 0.2s; }
-
-.benefits .benefit:nth-child(4) { transition-delay: 0.3s; }
-.benefits .benefit:nth-child(5) { transition-delay: 0.4s; }
-.benefits .benefit:nth-child(6) { transition-delay: 0.5s; }
-
-.steps li:nth-child(2) { transition-delay: 0.1s; }
-.steps li:nth-child(3) { transition-delay: 0.2s; }
+/* Stagger delays */
+.will-reveal[data-delay="1"] { transition-delay: 0.1s; }
+.will-reveal[data-delay="2"] { transition-delay: 0.2s; }
+.will-reveal[data-delay="3"] { transition-delay: 0.3s; }
+.will-reveal[data-delay="4"] { transition-delay: 0.4s; }
+.will-reveal[data-delay="5"] { transition-delay: 0.5s; }
 
 /* Hero animations (on page load) */
 @keyframes hero-fade-up {

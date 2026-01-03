@@ -8,33 +8,50 @@ if (yearEl) {
 // Scroll Reveal Animations
 // ============================================
 (function() {
-  // Elements to reveal on scroll
-  const selector = '.section h2, .section .lead, .card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack, .cta-block__inner, .packs > h3';
-  
-  // Intersection Observer
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
-        observer.unobserve(entry.target);
+  function init() {
+    // Elements to reveal on scroll
+    const elements = document.querySelectorAll(
+      '.section h2, .card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack, .cta-block__inner'
+    );
+    
+    // Add hidden class and stagger delays
+    elements.forEach((el, i) => {
+      el.classList.add('will-reveal');
+      
+      // Add stagger delay for grid children
+      const parent = el.parentElement;
+      if (parent && parent.children.length > 1) {
+        const index = Array.from(parent.children).indexOf(el);
+        if (index > 0 && index <= 5) {
+          el.setAttribute('data-delay', index);
+        }
       }
     });
-  }, {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-  });
+    
+    // Intersection Observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -30px 0px'
+    });
+    
+    // Observe all elements
+    document.querySelectorAll('.will-reveal').forEach(el => {
+      observer.observe(el);
+    });
+  }
   
-  // Start observing when DOM is ready
+  // Run on DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
-  }
-  
-  function init() {
-    document.querySelectorAll(selector).forEach(el => {
-      observer.observe(el);
-    });
   }
 })();
 
