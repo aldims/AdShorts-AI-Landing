@@ -208,9 +208,10 @@ h1, h2, h3, h4, h5, h6 {
 .logo {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   color: var(--text);
   text-decoration: none;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: 0.5px;
   font-size: 22px;
@@ -222,21 +223,27 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .logo__icon {
-  width: 48px;
-  height: auto;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 20px var(--glow-cyan));
-  transition: filter 0.3s ease;
+  border-radius: 10px;
+  filter: drop-shadow(0 0 15px var(--glow-cyan));
+  transition: filter 0.3s ease, transform 0.3s ease;
 }
 
 .logo:hover .logo__icon {
-  filter: drop-shadow(0 0 30px var(--glow-cyan));
+  filter: drop-shadow(0 0 25px var(--glow-cyan));
+  transform: scale(1.05);
 }
 
 .logo__wordmark { 
   display: inline-flex; 
   align-items: baseline; 
-  gap: 2px; 
+  gap: 0; 
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .logo__wordmark span { 
@@ -244,6 +251,9 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  font-weight: 800;
+  margin-left: 2px;
+  text-shadow: 0 0 30px var(--glow-cyan);
 }
 
 /* Navigation */
