@@ -441,10 +441,24 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero .cta { 
   display: flex; 
-  gap: 16px; 
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px; 
   margin: 0 0 40px; 
-  flex-wrap: wrap; 
+}
+
+.cta__note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cta__note::before {
+  content: '💬';
+  font-size: 1rem;
 }
 
 .hero__features {
