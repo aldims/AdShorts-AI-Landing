@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- Main gradient -->
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00f0ff"/>
+      <stop offset="50%" style="stop-color:#bf5af2"/>
+      <stop offset="100%" style="stop-color:#ff2d55"/>
+    </linearGradient>
+    
+    <!-- Glow filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#bf5af2" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Play button triangle -->
+  <path 
+    d="M18 12 L18 88 Q18 92 22 90 L78 54 Q82 52 82 48 L82 48 Q82 44 78 42 L22 6 Q18 4 18 8 Z" 
+    fill="url(#mainGrad)" 
+    filter="url(#shadow)"
+  />
+  
+  <!-- Neural network lines inside -->
+  <g stroke="rgba(255,255,255,0.4)" stroke-width="1.5" fill="none" stroke-linecap="round">
+    <!-- Main circuit paths -->
+    <path d="M28 30 L40 30 L48 42"/>
+    <path d="M28 50 L45 50 L55 50"/>
+    <path d="M28 70 L40 70 L48 58"/>
+    
+    <!-- Connecting nodes -->
+    <circle cx="28" cy="30" r="3" fill="rgba(255,255,255,0.6)"/>
+    <circle cx="28" cy="50" r="3" fill="rgba(255,255,255,0.6)"/>
+    <circle cx="28" cy="70" r="3" fill="rgba(255,255,255,0.6)"/>
+    
+    <!-- Central node -->
+    <circle cx="55" cy="50" r="4" fill="rgba(255,255,255,0.8)" filter="url(#glow)"/>
+  </g>
+  
+  <!-- Speed lines -->
+  <g stroke="url(#mainGrad)" stroke-width="4" stroke-linecap="round" opacity="0.9">
+    <line x1="85" y1="42" x2="95" y2="42"/>
+    <line x1="85" y1="50" x2="98" y2="50"/>
+    <line x1="85" y1="58" x2="95" y2="58"/>
+  </g>
+</svg>
