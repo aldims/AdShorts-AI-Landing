@@ -16,9 +16,12 @@ if (yearEl) {
   // Section headings
   const sectionHeadings = document.querySelectorAll('.section h2');
   
-  // Hero elements for staggered entrance
-  const heroContent = document.querySelector('.hero__content');
-  const heroMedia = document.querySelector('.hero__media');
+  // Hero elements for staggered entrance (centered hero)
+  const heroBadge = document.querySelector('.hero__badge');
+  const heroTitle = document.querySelector('.hero h1');
+  const heroLead = document.querySelector('.hero .lead');
+  const heroCta = document.querySelector('.hero .cta');
+  const heroFeatures = document.querySelector('.hero__features');
   
   // Set initial state
   animatedElements.forEach((el) => {
@@ -33,26 +36,17 @@ if (yearEl) {
     el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
   });
   
-  // Hero animation on load
-  if (heroContent) {
-    heroContent.style.opacity = '0';
-    heroContent.style.transform = 'translateX(-30px)';
-    heroContent.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+  // Hero staggered animation on load
+  const heroElements = [heroBadge, heroTitle, heroLead, heroCta, heroFeatures].filter(Boolean);
+  heroElements.forEach((el, index) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(30px)';
+    el.style.transition = 'opacity 0.7s ease, transform 0.7s ease';
     setTimeout(() => {
-      heroContent.style.opacity = '1';
-      heroContent.style.transform = 'translateX(0)';
-    }, 100);
-  }
-  
-  if (heroMedia) {
-    heroMedia.style.opacity = '0';
-    heroMedia.style.transform = 'translateX(30px)';
-    heroMedia.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
-    setTimeout(() => {
-      heroMedia.style.opacity = '1';
-      heroMedia.style.transform = 'translateX(0)';
-    }, 300);
-  }
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    }, 100 + index * 100);
+  });
   
   // Create Intersection Observer
   const observerOptions = {
@@ -192,76 +186,32 @@ if (accordion) {
   });
 })();
 
-// Ensure autoplay of demo video. Unmute after first user interaction to comply with browser policies.
-(function initAutoplayDemo() {
-  const video = document.querySelector('.screen-video video');
-  const toggle = document.querySelector('.sound-toggle');
-  if (!video) return;
+// Ensure sample videos autoplay
+(function initSampleVideos() {
+  const videos = document.querySelectorAll('.sample__media video');
+  if (!videos.length) return;
 
-  video.muted = true;
-  video.playsInline = true;
+  const tryPlay = (video) => video.play().catch(() => {});
 
-  const tryPlay = () => video.play().catch(() => {});
-
-  // Retry logic for stubborn autoplay
-  const ensurePlaying = () => {
-    if (video.paused || video.readyState < 2) {
-      tryPlay();
-      setTimeout(() => {
-        if (video.paused) tryPlay();
-      }, 400);
-      setTimeout(() => {
-        if (video.paused) tryPlay();
-      }, 1200);
+  videos.forEach((video) => {
+    video.muted = true;
+    video.playsInline = true;
+    
+    if (video.readyState >= 2) {
+      tryPlay(video);
+    } else {
+      video.addEventListener('loadeddata', () => tryPlay(video), { once: true });
     }
-  };
+  });
 
-  if (video.readyState >= 2) ensurePlaying();
-  else video.addEventListener('loadeddata', ensurePlaying, { once: true });
-
+  // Resume videos when page becomes visible
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) ensurePlaying();
-  });
-
-  video.addEventListener('pause', () => {
-    // If user не ставил на паузу через controls (мы их не показываем), пытаемся возобновить
-    ensurePlaying();
-  });
-
-  const enableSound = () => {
-    video.muted = false;
-    ensurePlaying();
-    if (toggle) {
-      toggle.setAttribute('aria-pressed', 'true');
-      toggle.textContent = 'Звук включён';
+    if (!document.hidden) {
+      videos.forEach((video) => {
+        if (video.paused) tryPlay(video);
+      });
     }
-    window.removeEventListener('click', onFirstInteraction, true);
-    window.removeEventListener('touchstart', onFirstInteraction, true);
-    window.removeEventListener('scroll', onFirstInteraction, true);
-  };
-
-  const onFirstInteraction = () => enableSound();
-
-  // Enable on first interaction anywhere
-  window.addEventListener('click', onFirstInteraction, true);
-  window.addEventListener('touchstart', onFirstInteraction, true);
-  window.addEventListener('scroll', onFirstInteraction, true);
-
-  // Manual toggle
-  if (toggle) {
-    toggle.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (video.muted) {
-        enableSound();
-      } else {
-        video.muted = true;
-        if (toggle) {
-          toggle.setAttribute('aria-pressed', 'false');
-          toggle.textContent = 'Включить звук';
-        }
-      }
-    });
-  }
+  });
 })();
 
 // Yandex.Metrika goals for key interactions

@@ -32,7 +32,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
     <link rel="preload" as="image" href="./logo.png" />
     <link rel="icon" href="./favicon.svg" />
     <style>
@@ -87,97 +87,71 @@
     </header>
 
     <main id="top">
-      <section class="hero">
-        <div class="container hero__inner">
-          <div class="hero__content">
-            <h1><span class="highlight">AdShorts AI</span> — готовые Shorts/Reels/TikTok за 1 минуту. Без монтажа</h1>
-            <p class="lead">
-              Вводите тему или оффер — получаете вертикальный ролик 9:16: сценарий, субтитры, озвучка, музыка и видеофон.
-              Готово к публикации.
-            </p>
+      <section class="hero hero--centered">
+        <div class="container">
+          <div class="hero__badge">AI-генератор видео</div>
+          <h1><span class="highlight">Shorts / Reels / TikTok</span><br>за 1 минуту. Без монтажа</h1>
+          <p class="lead">
+            Введите тему — получите готовый ролик 9:16 с озвучкой, субтитрами, музыкой и видеофоном.
+          </p>
 
-            <ul class="hero__bullets">
-              <li><span class="check" aria-hidden="true">✓</span><span>Обычно ~1 минута на ролик</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span>Подходит для каналов, экспертов и бизнеса</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span>Можно использовать свои видео и музыку</span></li>
-            </ul>
-
-            <div class="cta">
-              <a
-                class="btn btn--primary tg-smart"
-                data-tg-domain="AdShortsAIBot"
-                data-tg-start="landing"
-                href="https://t.me/AdShortsAIBot"
-                target="_blank"
-                rel="noopener"
-              >Открыть бота в Telegram</a>
-              <a class="btn btn--ghost" href="#samples">Смотреть примеры</a>
-            </div>
-
-            <div class="trust">
-              Цифровой сервис генерации видео. Поддержка: <a href="mailto:support@adshortsai.com">support@adshortsai.com</a><br />
-              Вы отвечаете за права на загружаемые материалы. Для фонов используются сток-библиотеки и/или ваши файлы.
-            </div>
+          <div class="cta">
+            <a
+              class="btn btn--primary btn--lg tg-smart"
+              data-tg-domain="AdShortsAIBot"
+              data-tg-start="landing"
+              href="https://t.me/AdShortsAIBot"
+              target="_blank"
+              rel="noopener"
+            >Создать видео бесплатно</a>
           </div>
 
-          <div class="hero__media" aria-hidden="true">
-            <div class="phone-mockup">
-              <div class="phone-notch"></div>
-              <div class="phone-screen">
-                <div class="screen-badge">9:16</div>
-                <div class="screen-video">
-                  <video src="./video.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
-                </div>
-                <button class="sound-toggle" type="button" aria-pressed="false" aria-label="Включить звук">Включить звук</button>
-              </div>
-            </div>
-          </div>
+          <ul class="hero__features">
+            <li>~1 минута на ролик</li>
+            <li>Свои видео и музыка</li>
+            <li>Без водяного знака в Pro</li>
+          </ul>
         </div>
       </section>
 
-      <!-- ✅ NEW: Samples -->
+      <!-- Samples -->
       <section class="section" id="samples">
         <div class="container">
           <h2>Примеры роликов</h2>
-          <p class="lead" style="margin-bottom: 18px;">
-            Ниже — примеры форматов. В боте вы можете менять озвучку, музыку, стиль субтитров и фон перед сборкой.
+          <p class="lead" style="margin-bottom: 24px;">
+            Реальные примеры. В боте можно менять озвучку, музыку, субтитры и фон.
           </p>
 
           <div class="samples">
             <article class="sample">
               <div class="sample__media">
-                <!-- Можно заменить на <video src="..." ...> или <img src="..."> -->
-                <span style="opacity:.65;font-size:13px;">Превью #1 (вставь mp4/гиф)</span>
+                <video src="./sample1.mp4" autoplay muted loop playsinline></video>
               </div>
               <div class="sample__body">
                 <h3 class="sample__title">Эксперт / услуга</h3>
-                <p class="sample__text">Хук → боль → решение → призыв. Идеально для лидов и прогрева.</p>
+                <p class="sample__text">Хук → боль → решение → призыв</p>
               </div>
             </article>
 
             <article class="sample">
               <div class="sample__media">
-                <span style="opacity:.65;font-size:13px;">Превью #2 (вставь mp4/гиф)</span>
+                <video src="./sample2.mp4" autoplay muted loop playsinline></video>
               </div>
               <div class="sample__body">
-                <h3 class="sample__title">Канал под контент</h3>
-                <p class="sample__text">Факты / подборки / цитаты. Быстрое производство серии роликов.</p>
+                <h3 class="sample__title">Контент-канал</h3>
+                <p class="sample__text">Факты, подборки, цитаты</p>
               </div>
             </article>
 
             <article class="sample">
               <div class="sample__media">
-                <span style="opacity:.65;font-size:13px;">Превью #3 (вставь mp4/гиф)</span>
+                <video src="./sample3.mp4" autoplay muted loop playsinline></video>
               </div>
               <div class="sample__body">
-                <h3 class="sample__title">Маркетинг / A/B-тест</h3>
-                <p class="sample__text">Несколько вариаций креатива под разные углы оффера.</p>
+                <h3 class="sample__title">Маркетинг</h3>
+                <p class="sample__text">A/B-тесты креативов</p>
               </div>
             </article>
-          </div>
-
-          <div class="mini-note">
-            Совет: добавь сюда реальные 3–6 превью (даже короткие 3–5 секунд) — это сильнее всего поднимает конверсию.
           </div>
         </div>
       </section>
