@@ -1124,29 +1124,64 @@ main a:not(.btn):not(.logo):hover {
    Scroll Reveal Animations
    ============================================ */
 
-/* Elements start hidden */
-[data-reveal] {
+/* Elements start hidden (by selector, not class) */
+.section h2,
+.section .lead,
+.card,
+.benefit,
+.plan,
+.feature,
+.sample,
+.steps li,
+.accordion__item,
+.pack,
+.cta-block__inner,
+.packs > h3 {
   opacity: 0;
   transform: translateY(40px);
   transition: 
-    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Revealed state */
-[data-reveal].is-visible {
+.section h2.is-visible,
+.section .lead.is-visible,
+.card.is-visible,
+.benefit.is-visible,
+.plan.is-visible,
+.feature.is-visible,
+.sample.is-visible,
+.steps li.is-visible,
+.accordion__item.is-visible,
+.pack.is-visible,
+.cta-block__inner.is-visible,
+.packs > h3.is-visible {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* Stagger delays */
-[data-reveal][data-delay="1"] { transition-delay: 0.1s; }
-[data-reveal][data-delay="2"] { transition-delay: 0.2s; }
-[data-reveal][data-delay="3"] { transition-delay: 0.3s; }
-[data-reveal][data-delay="4"] { transition-delay: 0.4s; }
-[data-reveal][data-delay="5"] { transition-delay: 0.5s; }
+/* Stagger delays for grids */
+.cards .card:nth-child(2),
+.benefits .benefit:nth-child(2),
+.plans .plan:nth-child(2),
+.samples .sample:nth-child(2),
+.packs__grid .pack:nth-child(2) { transition-delay: 0.1s; }
 
-/* Hero animations (on page load, not scroll) */
+.cards .card:nth-child(3),
+.benefits .benefit:nth-child(3),
+.plans .plan:nth-child(3),
+.samples .sample:nth-child(3),
+.packs__grid .pack:nth-child(3) { transition-delay: 0.2s; }
+
+.benefits .benefit:nth-child(4) { transition-delay: 0.3s; }
+.benefits .benefit:nth-child(5) { transition-delay: 0.4s; }
+.benefits .benefit:nth-child(6) { transition-delay: 0.5s; }
+
+.steps li:nth-child(2) { transition-delay: 0.1s; }
+.steps li:nth-child(3) { transition-delay: 0.2s; }
+
+/* Hero animations (on page load) */
 @keyframes hero-fade-up {
   from {
     opacity: 0;

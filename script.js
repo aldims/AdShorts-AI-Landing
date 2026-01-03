@@ -7,30 +7,9 @@ if (yearEl) {
 // ============================================
 // Scroll Reveal Animations
 // ============================================
-document.addEventListener('DOMContentLoaded', function() {
-  // Add data-reveal to elements
-  const revealElements = document.querySelectorAll(
-    '.section h2, .section > .container > .lead, .card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack, .cta-block__inner, .packs > h3'
-  );
-  
-  revealElements.forEach(el => {
-    el.setAttribute('data-reveal', '');
-  });
-  
-  // Add stagger delays to grid items
-  const grids = document.querySelectorAll('.cards, .benefits, .plans, .samples, .packs__grid');
-  grids.forEach(grid => {
-    const children = grid.children;
-    for (let i = 0; i < children.length; i++) {
-      children[i].setAttribute('data-delay', Math.min(i + 1, 5));
-    }
-  });
-  
-  // Steps stagger
-  const steps = document.querySelectorAll('.steps li');
-  steps.forEach((step, i) => {
-    step.setAttribute('data-delay', i + 1);
-  });
+(function() {
+  // Elements to reveal on scroll
+  const selector = '.section h2, .section .lead, .card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack, .cta-block__inner, .packs > h3';
   
   // Intersection Observer
   const observer = new IntersectionObserver((entries) => {
@@ -41,15 +20,23 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }, {
-    threshold: 0.15,
-    rootMargin: '0px 0px -80px 0px'
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
   });
   
-  // Observe all reveal elements
-  document.querySelectorAll('[data-reveal]').forEach(el => {
-    observer.observe(el);
-  });
-});
+  // Start observing when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  
+  function init() {
+    document.querySelectorAll(selector).forEach(el => {
+      observer.observe(el);
+    });
+  }
+})();
 
 // Mobile nav toggle
 const navToggle = document.querySelector('.nav__toggle');
