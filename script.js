@@ -5,84 +5,84 @@ if (yearEl) {
 }
 
 // ============================================
-// Scroll Reveal Animations
+// Linear-style Reveal Animations
 // ============================================
-(function initScrollReveal() {
-  // Elements to animate on scroll
-  const animatedElements = document.querySelectorAll(
-    '.card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack'
-  );
+(function initRevealAnimations() {
+  // Add reveal class to elements that should animate
+  const revealSelectors = [
+    '.hero__badge',
+    '.hero h1',
+    '.hero .lead',
+    '.hero .cta',
+    '.hero__features',
+    '.section h2',
+    '.section .lead',
+    '.card',
+    '.benefit',
+    '.plan',
+    '.feature',
+    '.sample',
+    '.steps li',
+    '.accordion__item',
+    '.pack',
+    '.cta-block__inner'
+  ];
   
-  // Section headings
-  const sectionHeadings = document.querySelectorAll('.section h2');
+  // Add stagger class to parent containers
+  const staggerContainers = [
+    '.cards',
+    '.benefits',
+    '.plans',
+    '.samples',
+    '.steps',
+    '.features',
+    '.packs__grid'
+  ];
   
-  // Hero elements for staggered entrance (centered hero)
-  const heroBadge = document.querySelector('.hero__badge');
-  const heroTitle = document.querySelector('.hero h1');
-  const heroLead = document.querySelector('.hero .lead');
-  const heroCta = document.querySelector('.hero .cta');
-  const heroFeatures = document.querySelector('.hero__features');
-  
-  // Set initial state
-  animatedElements.forEach((el) => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(30px)';
-    el.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+  staggerContainers.forEach(selector => {
+    const container = document.querySelector(selector);
+    if (container) {
+      container.classList.add('reveal-stagger');
+    }
   });
   
-  sectionHeadings.forEach((el) => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  // Add reveal class to all target elements
+  revealSelectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      el.classList.add('reveal');
+    });
   });
   
-  // Hero staggered animation on load
-  const heroElements = [heroBadge, heroTitle, heroLead, heroCta, heroFeatures].filter(Boolean);
-  heroElements.forEach((el, index) => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(30px)';
-    el.style.transition = 'opacity 0.7s ease, transform 0.7s ease';
-    setTimeout(() => {
-      el.style.opacity = '1';
-      el.style.transform = 'translateY(0)';
-    }, 100 + index * 100);
-  });
-  
-  // Create Intersection Observer
+  // Intersection Observer for scroll-triggered reveals
   const observerOptions = {
     root: null,
-    rootMargin: '0px 0px -50px 0px',
+    rootMargin: '0px 0px -80px 0px',
     threshold: 0.1
   };
   
-  const revealElement = (entries, observer) => {
-    entries.forEach((entry) => {
+  const revealOnScroll = (entries, observer) => {
+    entries.forEach(entry => {
       if (entry.isIntersecting) {
-        const el = entry.target;
-        
-        // Add stagger delay for grid items
-        const parent = el.parentElement;
-        if (parent) {
-          const siblings = Array.from(parent.children).filter(
-            child => child.matches('.card, .benefit, .plan, .sample, .pack')
-          );
-          const index = siblings.indexOf(el);
-          if (index > -1) {
-            el.style.transitionDelay = `${index * 0.1}s`;
-          }
-        }
-        
-        el.style.opacity = '1';
-        el.style.transform = 'translateY(0)';
-        observer.unobserve(el);
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
       }
     });
   };
   
-  const observer = new IntersectionObserver(revealElement, observerOptions);
+  const observer = new IntersectionObserver(revealOnScroll, observerOptions);
   
-  animatedElements.forEach((el) => observer.observe(el));
-  sectionHeadings.forEach((el) => observer.observe(el));
+  // Observe all reveal elements
+  document.querySelectorAll('.reveal').forEach(el => {
+    observer.observe(el);
+  });
+  
+  // Trigger hero elements immediately on load with stagger
+  const heroElements = document.querySelectorAll('.hero .reveal');
+  heroElements.forEach((el, index) => {
+    setTimeout(() => {
+      el.classList.add('visible');
+    }, 100 + index * 120);
+  });
 })();
 
 // Mobile nav toggle

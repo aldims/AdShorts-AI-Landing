@@ -150,26 +150,6 @@ img, svg { display: block; max-width: 100%; height: auto; }
   75% { transform: translate(15px, 15px) scale(1.05); }
 }
 
-/* Scanning line effect */
-.scan-line {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
-  opacity: 0.3;
-  z-index: 9999;
-  pointer-events: none;
-  animation: scan 8s linear infinite;
-}
-
-@keyframes scan {
-  0% { top: -2px; opacity: 0; }
-  5% { opacity: 0.3; }
-  95% { opacity: 0.3; }
-  100% { top: 100vh; opacity: 0; }
-}
 
 /* Noise texture overlay */
 .noise {
@@ -1141,28 +1121,56 @@ main a:not(.btn):not(.logo):hover {
 .section li { margin: 0.5em 0; color: var(--text-secondary); }
 
 /* ============================================
-   Animations
+   Linear-style Reveal Animations
    ============================================ */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
+
+/* Initial hidden state for animated elements */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  filter: blur(10px);
+  transition: 
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* Stagger delays for grid children */
+.reveal-stagger > .reveal:nth-child(1) { transition-delay: 0s; }
+.reveal-stagger > .reveal:nth-child(2) { transition-delay: 0.1s; }
+.reveal-stagger > .reveal:nth-child(3) { transition-delay: 0.2s; }
+.reveal-stagger > .reveal:nth-child(4) { transition-delay: 0.3s; }
+.reveal-stagger > .reveal:nth-child(5) { transition-delay: 0.4s; }
+.reveal-stagger > .reveal:nth-child(6) { transition-delay: 0.5s; }
+
+/* Hero-specific animations */
+.hero .reveal {
+  filter: blur(12px);
+}
+
+.hero .reveal.visible {
+  filter: blur(0);
+}
+
+/* Faster transition for header */
+.header {
+  opacity: 0;
+  transform: translateY(-20px);
+  animation: header-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+}
+
+@keyframes header-enter {
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
-.animate-in {
-  animation: fade-in-up 0.6s ease-out forwards;
-}
-
-/* Stagger delays */
-.delay-1 { animation-delay: 0.1s; }
-.delay-2 { animation-delay: 0.2s; }
-.delay-3 { animation-delay: 0.3s; }
-.delay-4 { animation-delay: 0.4s; }
 
 /* ============================================
    Responsive
