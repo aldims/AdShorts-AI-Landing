@@ -4,6 +4,93 @@ if (yearEl) {
   yearEl.textContent = new Date().getFullYear().toString();
 }
 
+// ============================================
+// Scroll Reveal Animations
+// ============================================
+(function initScrollReveal() {
+  // Elements to animate on scroll
+  const animatedElements = document.querySelectorAll(
+    '.card, .benefit, .plan, .feature, .sample, .steps li, .accordion__item, .pack'
+  );
+  
+  // Section headings
+  const sectionHeadings = document.querySelectorAll('.section h2');
+  
+  // Hero elements for staggered entrance
+  const heroContent = document.querySelector('.hero__content');
+  const heroMedia = document.querySelector('.hero__media');
+  
+  // Set initial state
+  animatedElements.forEach((el) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(30px)';
+    el.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+  });
+  
+  sectionHeadings.forEach((el) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  });
+  
+  // Hero animation on load
+  if (heroContent) {
+    heroContent.style.opacity = '0';
+    heroContent.style.transform = 'translateX(-30px)';
+    heroContent.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+    setTimeout(() => {
+      heroContent.style.opacity = '1';
+      heroContent.style.transform = 'translateX(0)';
+    }, 100);
+  }
+  
+  if (heroMedia) {
+    heroMedia.style.opacity = '0';
+    heroMedia.style.transform = 'translateX(30px)';
+    heroMedia.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+    setTimeout(() => {
+      heroMedia.style.opacity = '1';
+      heroMedia.style.transform = 'translateX(0)';
+    }, 300);
+  }
+  
+  // Create Intersection Observer
+  const observerOptions = {
+    root: null,
+    rootMargin: '0px 0px -50px 0px',
+    threshold: 0.1
+  };
+  
+  const revealElement = (entries, observer) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        
+        // Add stagger delay for grid items
+        const parent = el.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(
+            child => child.matches('.card, .benefit, .plan, .sample, .pack')
+          );
+          const index = siblings.indexOf(el);
+          if (index > -1) {
+            el.style.transitionDelay = `${index * 0.1}s`;
+          }
+        }
+        
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+        observer.unobserve(el);
+      }
+    });
+  };
+  
+  const observer = new IntersectionObserver(revealElement, observerOptions);
+  
+  animatedElements.forEach((el) => observer.observe(el));
+  sectionHeadings.forEach((el) => observer.observe(el));
+})();
+
 // Mobile nav toggle
 const navToggle = document.querySelector('.nav__toggle');
 const navMenu = document.getElementById('nav-menu');

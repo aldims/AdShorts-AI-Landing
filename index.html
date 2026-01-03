@@ -29,39 +29,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
     <link rel="preload" as="image" href="./logo.png" />
     <link rel="icon" href="./favicon.svg" />
     <style>
-      /* Inline fallback to defeat stale caching on prod */
-      .logo { display: inline-flex; align-items: center; gap: 10px; }
+      /* Inline fallback for critical styles */
+      .logo { display: inline-flex; align-items: center; gap: 12px; }
       .logo__icon { display: inline-block; }
-      .hero__bullets { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-      .hero__bullets li { display: flex; gap: 10px; align-items: flex-start; }
-      .hero__bullets .check { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-weight: 700; }
-      .mini-note { margin-top: 14px; font-size: 13px; opacity: 0.75; line-height: 1.4; }
-      .trust { margin-top: 18px; font-size: 13px; opacity: 0.85; line-height: 1.5; }
-      .samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-      .sample { border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
-      .sample__media { aspect-ratio: 9 / 16; background: rgba(255,255,255,0.06); display: grid; place-items: center; }
-      .sample__body { padding: 14px 14px 16px; }
-      .sample__title { font-weight: 700; margin: 0 0 6px; font-size: 14px; }
-      .sample__text { margin: 0; opacity: 0.8; font-size: 13px; line-height: 1.45; }
-      @media (max-width: 900px) {
-        .samples { grid-template-columns: 1fr; }
-      }
-      .pricing-note { margin-top: 12px; font-size: 13px; opacity: 0.8; line-height: 1.5; }
-      .packs { margin-top: 18px; display: grid; gap: 10px; }
-      .packs__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-      .pack { border-radius: 16px; padding: 14px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
-      .pack h4 { margin: 0 0 6px; font-size: 14px; }
-      .pack p { margin: 0; opacity: 0.85; font-size: 13px; }
-      @media (max-width: 900px) {
-        .packs__grid { grid-template-columns: 1fr; }
-      }
     </style>
     <script defer src="./script.js"></script>
 
@@ -83,6 +60,13 @@
   </head>
 
   <body>
+    <!-- Decorative elements -->
+    <div class="orb orb--cyan" aria-hidden="true"></div>
+    <div class="orb orb--purple" aria-hidden="true"></div>
+    <div class="orb orb--pink" aria-hidden="true"></div>
+    <div class="scan-line" aria-hidden="true"></div>
+    <div class="noise" aria-hidden="true"></div>
+
     <header class="header">
       <div class="container header__inner">
         <a class="logo" href="#top" aria-label="AdShorts AI">
@@ -106,7 +90,7 @@
       <section class="hero">
         <div class="container hero__inner">
           <div class="hero__content">
-            <h1>AdShorts AI — готовые Shorts/Reels/TikTok за 1 минуту. Без монтажа</h1>
+            <h1><span class="highlight">AdShorts AI</span> — готовые Shorts/Reels/TikTok за 1 минуту. Без монтажа</h1>
             <p class="lead">
               Вводите тему или оффер — получаете вертикальный ролик 9:16: сценарий, субтитры, озвучка, музыка и видеофон.
               Готово к публикации.
