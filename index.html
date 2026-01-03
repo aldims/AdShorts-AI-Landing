@@ -3,29 +3,65 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AdShorts AI — умный помощник для коротких вертикальных видео</title>
-    <meta name="description" content="AdShorts AI — ИИ‑помощник, который за минуту создаёт продающие вертикальные ролики 9:16 для TikTok, Reels и YouTube Shorts: сценарий, субтитры, озвучка, музыка и видеофон." />
+    <title>AdShorts AI — Shorts/Reels/TikTok за 1 минуту</title>
+
+    <meta
+      name="description"
+      content="AdShorts AI — ИИ-бот, который за 1 минуту делает готовое вертикальное видео 9:16: сценарий, субтитры, озвучка, музыка и видеофон. Без монтажа."
+    />
 
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="AdShorts AI — короткие видео за минуту" />
-    <meta property="og:description" content="Создавайте вертикальные ролики 9:16 для TikTok, Reels и Shorts: сценарий, субтитры, озвучка, музыка и фон — всё сделает ИИ." />
+    <meta property="og:title" content="AdShorts AI — видео за 1 минуту" />
+    <meta
+      property="og:description"
+      content="Вводите тему или оффер — получаете готовый ролик 9:16: сценарий, субтитры, озвучка, музыка и фон. Без монтажа."
+    />
     <meta property="og:image" content="/og-image.svg" />
     <meta property="og:site_name" content="AdShorts AI" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="AdShorts AI — короткие видео за минуту" />
-    <meta name="twitter:description" content="ИИ‑помощник для быстрых вертикальных видео с субтитрами и озвучкой." />
+    <meta name="twitter:title" content="AdShorts AI — видео за 1 минуту" />
+    <meta
+      name="twitter:description"
+      content="ИИ-бот для генерации Shorts/Reels/TikTok с субтитрами и озвучкой."
+    />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=3" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=4" />
     <link rel="preload" as="image" href="./logo.png" />
     <link rel="icon" href="./favicon.svg" />
     <style>
       /* Inline fallback to defeat stale caching on prod */
-      .logo{display:inline-flex;align-items:center;gap:10px}
-      .logo__icon{display:inline-block}
+      .logo { display: inline-flex; align-items: center; gap: 10px; }
+      .logo__icon { display: inline-block; }
+      .hero__bullets { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+      .hero__bullets li { display: flex; gap: 10px; align-items: flex-start; }
+      .hero__bullets .check { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-weight: 700; }
+      .mini-note { margin-top: 14px; font-size: 13px; opacity: 0.75; line-height: 1.4; }
+      .trust { margin-top: 18px; font-size: 13px; opacity: 0.85; line-height: 1.5; }
+      .samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .sample { border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+      .sample__media { aspect-ratio: 9 / 16; background: rgba(255,255,255,0.06); display: grid; place-items: center; }
+      .sample__body { padding: 14px 14px 16px; }
+      .sample__title { font-weight: 700; margin: 0 0 6px; font-size: 14px; }
+      .sample__text { margin: 0; opacity: 0.8; font-size: 13px; line-height: 1.45; }
+      @media (max-width: 900px) {
+        .samples { grid-template-columns: 1fr; }
+      }
+      .pricing-note { margin-top: 12px; font-size: 13px; opacity: 0.8; line-height: 1.5; }
+      .packs { margin-top: 18px; display: grid; gap: 10px; }
+      .packs__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .pack { border-radius: 16px; padding: 14px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+      .pack h4 { margin: 0 0 6px; font-size: 14px; }
+      .pack p { margin: 0; opacity: 0.85; font-size: 13px; }
+      @media (max-width: 900px) {
+        .packs__grid { grid-template-columns: 1fr; }
+      }
     </style>
     <script defer src="./script.js"></script>
 
@@ -45,6 +81,7 @@
     <noscript><div><img src="https://mc.yandex.ru/watch/104655292" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <!-- /Yandex.Metrika counter -->
   </head>
+
   <body>
     <header class="header">
       <div class="container header__inner">
@@ -56,6 +93,7 @@
           <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">Меню</button>
           <ul id="nav-menu" class="nav__list">
             <li><a href="#how-it-works">Как это работает</a></li>
+            <li><a href="#samples">Примеры</a></li>
             <li><a href="#benefits">Преимущества</a></li>
             <li><a href="#pricing">Тарифы</a></li>
             <li><a href="#faq">FAQ</a></li>
@@ -68,24 +106,94 @@
       <section class="hero">
         <div class="container hero__inner">
           <div class="hero__content">
-            <h1>AdShorts AI — умный помощник для создания коротких вертикальных видео</h1>
+            <h1>AdShorts AI — готовые Shorts/Reels/TikTok за 1 минуту. Без монтажа</h1>
             <p class="lead">
-                Просто опишите идею — ИИ превратит её в готовое видео: сценарий, субтитры, голос, музыка и фон. Всего за минуту.
+              Вводите тему или оффер — получаете вертикальный ролик 9:16: сценарий, субтитры, озвучка, музыка и видеофон.
+              Готово к публикации.
             </p>
+
+            <ul class="hero__bullets">
+              <li><span class="check" aria-hidden="true">✓</span><span>Обычно ~1 минута на ролик</span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span>Подходит для каналов, экспертов и бизнеса</span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span>Можно использовать свои видео и музыку</span></li>
+            </ul>
+
             <div class="cta">
-              <a class="btn btn--primary tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="landing" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Открыть бота в Telegram</a>
-              <a class="btn btn--ghost" href="#how-it-works">Как это работает</a>
+              <a
+                class="btn btn--primary tg-smart"
+                data-tg-domain="AdShortsAIBot"
+                data-tg-start="landing"
+                href="https://t.me/AdShortsAIBot"
+                target="_blank"
+                rel="noopener"
+              >Открыть бота в Telegram</a>
+              <a class="btn btn--ghost" href="#samples">Смотреть примеры</a>
+            </div>
+
+            <div class="trust">
+              Цифровой сервис генерации видео. Поддержка: <a href="mailto:support@adshortsai.com">support@adshortsai.com</a><br />
+              Вы отвечаете за права на загружаемые материалы. Для фонов используются сток-библиотеки и/или ваши файлы.
             </div>
           </div>
+
           <div class="hero__media" aria-hidden="true">
             <div class="phone-mockup">
               <div class="phone-notch"></div>
               <div class="phone-screen">
                 <div class="screen-badge">9:16</div>
-                <div class="screen-video"><video src="./video.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video></div>
+                <div class="screen-video">
+                  <video src="./video.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
+                </div>
                 <button class="sound-toggle" type="button" aria-pressed="false" aria-label="Включить звук">Включить звук</button>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ✅ NEW: Samples -->
+      <section class="section" id="samples">
+        <div class="container">
+          <h2>Примеры роликов</h2>
+          <p class="lead" style="margin-bottom: 18px;">
+            Ниже — примеры форматов. В боте вы можете менять озвучку, музыку, стиль субтитров и фон перед сборкой.
+          </p>
+
+          <div class="samples">
+            <article class="sample">
+              <div class="sample__media">
+                <!-- Можно заменить на <video src="..." ...> или <img src="..."> -->
+                <span style="opacity:.65;font-size:13px;">Превью #1 (вставь mp4/гиф)</span>
+              </div>
+              <div class="sample__body">
+                <h3 class="sample__title">Эксперт / услуга</h3>
+                <p class="sample__text">Хук → боль → решение → призыв. Идеально для лидов и прогрева.</p>
+              </div>
+            </article>
+
+            <article class="sample">
+              <div class="sample__media">
+                <span style="opacity:.65;font-size:13px;">Превью #2 (вставь mp4/гиф)</span>
+              </div>
+              <div class="sample__body">
+                <h3 class="sample__title">Канал под контент</h3>
+                <p class="sample__text">Факты / подборки / цитаты. Быстрое производство серии роликов.</p>
+              </div>
+            </article>
+
+            <article class="sample">
+              <div class="sample__media">
+                <span style="opacity:.65;font-size:13px;">Превью #3 (вставь mp4/гиф)</span>
+              </div>
+              <div class="sample__body">
+                <h3 class="sample__title">Маркетинг / A/B-тест</h3>
+                <p class="sample__text">Несколько вариаций креатива под разные углы оффера.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="mini-note">
+            Совет: добавь сюда реальные 3–6 превью (даже короткие 3–5 секунд) — это сильнее всего поднимает конверсию.
           </div>
         </div>
       </section>
@@ -95,16 +203,16 @@
           <h2>Как это работает</h2>
           <div class="steps">
             <li>
-              <strong>Опишите идею</strong> — напишите, о чём должен быть ролик, и ИИ подготовит сценарий.
+              <strong>Тема / оффер</strong> — напишите, о чём ролик и для кого.
             </li>
             <li>
-              <strong>Выберите параметры</strong> — голос, музыку, стиль субтитров и видеофон.
+              <strong>Настройка (по желанию)</strong> — голос, музыка, стиль субтитров и фон.
             </li>
             <li>
-              <strong>Получите готовое видео</strong> — через минуту ролик будет готов к публикации.
+              <strong>Готовый MP4</strong> — через минуту ролик будет готов к публикации.
             </li>
           </div>
-          <p class="lead" style="margin-top: 20px; font-size: 14px; opacity: 0.7;">Видеокадры подбираются из Pexels.com</p>
+          <p class="mini-note">Видеофоны подбираются из сток-библиотек (в т.ч. Pexels) и/или из ваших файлов.</p>
         </div>
       </section>
 
@@ -113,16 +221,16 @@
           <h2>Для кого это</h2>
           <div class="cards">
             <div class="card">
-                <h3>Создатели контента</h3>
-                <p>Ускорить производство коротких вертикальных видео.</p>
+              <h3>Создатели контента</h3>
+              <p>Ускоряйте производство Shorts/Reels и выпускайте больше роликов без монтажа.</p>
             </div>
             <div class="card">
               <h3>Предприниматели и эксперты</h3>
-              <p>Быстро записать продающий ролик без монтажа.</p>
+              <p>Быстро делайте продающие ролики под оффер, услугу или продукт.</p>
             </div>
             <div class="card">
               <h3>Маркетологи и SMM</h3>
-              <p>Оперативно запускать A/B‑тесты креативов.</p>
+              <p>Запускайте A/B-тесты креативов и находите лучший угол подачи.</p>
             </div>
           </div>
         </div>
@@ -134,18 +242,21 @@
           <div class="features">
             <div class="feature">
               <span class="check" aria-hidden="true">✓</span>
-              <p><strong>Готовое вертикальное видео 9:16 в высоком разрешении</strong> — с музыкой, субтитрами и озвучкой, готовое к публикации в Reels, TikTok и Shorts.</p>
+              <p><strong>Готовое видео 9:16 (MP4)</strong> — с музыкой, субтитрами и озвучкой. Готово к публикации в Reels, TikTok и Shorts.</p>
             </div>
+
             <div class="feature">
               <span class="check" aria-hidden="true">✓</span>
-              <p><strong>Заголовок, описаниеы и хештеги</strong> — всё подбирает ИИ, чтобы видео сразу привлекало внимание.</p>
+              <p><strong>Текст для публикации</strong> — заголовок, описание и хештеги под формат коротких видео.</p>
             </div>
+
             <div class="feature">
               <span class="check" aria-hidden="true">✓</span>
-              <p><strong>Полный контроль над созданием — можно менять видеофон, музыку, озвучку и даже цвет субтитров.</p>
+              <p><strong>Настройки и замены</strong> — меняйте фон, музыку, озвучку и стиль субтитров перед сборкой.</p>
             </div>
+
             <div class="lead">
-              <p>💡 Всё, что нужно — ввести идею. AdShorts AI превратит её в готовое видео, подстроенное под ваш стиль и задачи.</p>
+              <p>💡 Всё, что нужно — ввести идею. AdShorts AI превратит её в ролик, который можно публиковать сразу.</p>
             </div>
           </div>
         </div>
@@ -154,30 +265,78 @@
       <section class="section" id="pricing">
         <div class="container">
           <h2>Тарифы</h2>
+
           <div class="plans">
             <div class="plan">
               <h3>Free</h3>
               <p class="plan__desc">Бесплатный</p>
-              <div class="plan__num">3 видео в месяц</div>
+              <div class="plan__num">3 видео</div>
               <div class="plan__price">0 ₽</div>
-              <a class="btn btn--ghost plan__cta tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="pricing_free" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Выбрать</a>
+              <a
+                class="btn btn--ghost plan__cta tg-smart"
+                data-tg-domain="AdShortsAIBot"
+                data-tg-start="pricing_free"
+                href="https://t.me/AdShortsAIBot"
+                target="_blank"
+                rel="noopener"
+              >Выбрать</a>
+              <p class="pricing-note">В Free на видео стоит водяной знак.</p>
             </div>
 
             <div class="plan plan--featured">
               <div class="plan__badge">Рекомендуем</div>
               <h3>Pro</h3>
-              <p class="plan__desc">Основной платный тариф</p>
-              <div class="plan__num">30 видео в месяц</div>
-              <div class="plan__price"><span class="plan__amount">990 ₽</span><span class="plan__period">/мес</span></div>
-              <a class="btn btn--primary plan__cta tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="pricing_pro" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Выбрать Pro</a>
+              <p class="plan__desc">Комфортный старт</p>
+              <div class="plan__num">25 видео</div>
+              <div class="plan__price"><span class="plan__amount">1 490 ₽</span></div>
+              <a
+                class="btn btn--primary plan__cta tg-smart"
+                data-tg-domain="AdShortsAIBot"
+                data-tg-start="pricing_pro"
+                href="https://t.me/AdShortsAIBot"
+                target="_blank"
+                rel="noopener"
+              >Выбрать Pro</a>
+              <p class="pricing-note">Без водяного знака.</p>
             </div>
 
             <div class="plan">
               <h3>Ultra</h3>
-              <p class="plan__desc">Для продвинутых пользователей</p>
-              <div class="plan__num">200 видео в месяц</div>
-              <div class="plan__price"><span class="plan__amount">2 490 ₽</span><span class="plan__period">/мес</span></div>
-              <a class="btn btn--ghost plan__cta tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="pricing_ultra" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Выбрать Ultra</a>
+              <p class="plan__desc">Максимум выгоды</p>
+              <div class="plan__num">100 видео</div>
+              <div class="plan__price"><span class="plan__amount">4 990 ₽</span></div>
+              <a
+                class="btn btn--ghost plan__cta tg-smart"
+                data-tg-domain="AdShortsAIBot"
+                data-tg-start="pricing_ultra"
+                href="https://t.me/AdShortsAIBot"
+                target="_blank"
+                rel="noopener"
+              >Выбрать Ultra</a>
+              <p class="pricing-note">Лучший тариф по цене за видео.</p>
+            </div>
+          </div>
+
+          <!-- Packs -->
+          <div class="packs">
+            <h3 style="margin: 10px 0 0;">Пакеты генераций</h3>
+            <p class="pricing-note" style="margin-top: 6px;">
+              Кредиты начисляются сразу после оплаты. Купленные видео можно использовать в любое время.
+            </p>
+
+            <div class="packs__grid">
+              <div class="pack">
+                <h4>Pack 10</h4>
+                <p>10 видео — 690 ₽</p>
+              </div>
+              <div class="pack">
+                <h4>Pack 50</h4>
+                <p>50 видео — 2 990 ₽</p>
+              </div>
+              <div class="pack">
+                <h4>Pack 100</h4>
+                <p>100 видео — 4 990 ₽</p>
+              </div>
             </div>
           </div>
         </div>
@@ -188,28 +347,28 @@
           <h2>Особенности и преимущества</h2>
           <div class="benefits">
             <div class="benefit">
-              <h3>ИИ‑сценарий</h3>
-              <p>Короткий, продающий текст под формат Shorts/Reels.</p>
+              <h3>ИИ-сценарий</h3>
+              <p>Короткий текст под формат Shorts/Reels с сильным хуком.</p>
             </div>
             <div class="benefit">
               <h3>Современные субтитры</h3>
-              <p>Читаемые, со стильной подложкой; цвет на выбор.</p>
+              <p>Читаемые, со стильной подложкой; варианты оформления.</p>
             </div>
             <div class="benefit">
-              <h3>Приятная озвучка</h3>
-              <p>Качественные голоса, мужской и женский голос на выбор.</p>
+              <h3>Озвучка</h3>
+              <p>Качественные голоса, мужской и женский на выбор.</p>
             </div>
             <div class="benefit">
-              <h3>Музыкальные стили</h3>
-              <p>Энергичная, спокойная, деловая, ритмичная — или ваша музыка.</p>
+              <h3>Музыка</h3>
+              <p>Подбор под настроение — или ваша музыка.</p>
             </div>
             <div class="benefit">
-              <h3>Свой медиа‑контент</h3>
+              <h3>Свои файлы</h3>
               <p>Загружайте собственные видео/изображения и аудио.</p>
             </div>
             <div class="benefit">
-              <h3>Редактирование</h3>
-              <p>Быстро меняйте любой пункт перед сборкой.</p>
+              <h3>Быстрая пересборка</h3>
+              <p>Меняйте любой пункт и собирайте ролик заново.</p>
             </div>
           </div>
         </div>
@@ -219,7 +378,17 @@
         <div class="container cta-block__inner">
           <h2>Готовы к первому ролику?</h2>
           <p>Откройте бота — получите готовое видео уже сейчас.</p>
-          <a class="btn btn--primary btn--lg tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="landing" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Запустить AdShorts AI</a>
+          <a
+            class="btn btn--primary btn--lg tg-smart"
+            data-tg-domain="AdShortsAIBot"
+            data-tg-start="landing"
+            href="https://t.me/AdShortsAIBot"
+            target="_blank"
+            rel="noopener"
+          >Запустить AdShorts AI</a>
+          <p class="mini-note" style="margin-top: 12px;">
+            Поддержка: <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>
+          </p>
         </div>
       </section>
 
@@ -229,15 +398,32 @@
           <div class="accordion" data-accordion>
             <details class="accordion__item" open>
               <summary>Нужно ли уметь монтировать?</summary>
-              <p>Нет, монтаж делает ИИ — вы только задаёте параметры.</p>
+              <p>Нет. Монтаж делает ИИ — вы только задаёте тему и параметры (по желанию).</p>
             </details>
+
             <details class="accordion__item">
               <summary>Можно ли использовать свои файлы?</summary>
-              <p>Да, загрузите собственные видео и музыку.</p>
+              <p>Да. Вы можете загрузить собственные видео/изображения и музыку.</p>
             </details>
+
             <details class="accordion__item">
               <summary>Сколько занимает время?</summary>
-              <p>Обычно около 1 минуты на ролик.</p>
+              <p>Обычно около 1 минуты на ролик (зависит от длины и загрузки).</p>
+            </details>
+
+            <details class="accordion__item">
+              <summary>Есть ли водяной знак?</summary>
+              <p>Да, водяной знак есть только в Free-тарифе. На платных — без водяного знака.</p>
+            </details>
+
+            <details class="accordion__item">
+              <summary>Можно ли использовать ролики в коммерческих целях?</summary>
+              <p>Да, если у вас есть права на загружаемые материалы. Для фонов используются сток-библиотеки и/или ваши файлы.</p>
+            </details>
+
+            <details class="accordion__item">
+              <summary>Что если результат не понравился?</summary>
+              <p>Вы можете изменить параметры (фон/музыку/озвучку/субтитры) и пересобрать ролик.</p>
             </details>
           </div>
         </div>
@@ -248,7 +434,8 @@
       <div class="container footer__inner">
         <a class="logo" href="#top">AdShorts<span>AI</span></a>
         <div class="footer__links">
-          <a class="tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="landing" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Telegram‑бот</a>
+          <a class="tg-smart" data-tg-domain="AdShortsAIBot" data-tg-start="landing" href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener">Telegram-бот</a>
+          <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>
           <a href="./terms-of-use">Условия использования</a>
           <a href="./terms">Пользовательское соглашение</a>
           <a href="./privacy">Политика конфиденциальности</a>
