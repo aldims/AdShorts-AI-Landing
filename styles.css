@@ -668,6 +668,123 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ============================================
+   How It Works — New Design
+   ============================================ */
+.how-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.how-step {
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.how-step:hover {
+  border-color: var(--border-glow);
+  transform: translateX(4px);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
+}
+
+.how-step__number {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background: var(--gradient-main);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--bg-deep);
+  box-shadow: 0 0 20px var(--glow-cyan);
+}
+
+.how-step__content h3 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.how-step__content p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.how-step__content p + p {
+  margin-top: 8px;
+}
+
+.how-step__detail {
+  color: var(--muted) !important;
+  font-size: 0.95rem;
+}
+
+.how-step__note {
+  color: var(--neon-cyan) !important;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: 12px !important;
+}
+
+/* Optional step styling */
+.how-step--optional {
+  border-style: dashed;
+  border-color: rgba(191, 90, 242, 0.3);
+  background: rgba(191, 90, 242, 0.05);
+  padding-left: 32px;
+}
+
+.how-step--optional:hover {
+  border-color: rgba(191, 90, 242, 0.6);
+  box-shadow: 0 0 30px rgba(191, 90, 242, 0.1);
+}
+
+.how-step__badge {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 14px;
+  border-radius: 20px;
+  box-shadow: 0 0 15px var(--glow-purple);
+}
+
+@media (max-width: 600px) {
+  .how-step {
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px;
+  }
+  
+  .how-step--optional {
+    padding-left: 24px;
+  }
+  
+  .how-step__number {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+}
+
+/* ============================================
    Benefits
    ============================================ */
 .benefits { 
