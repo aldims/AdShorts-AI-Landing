@@ -217,3 +217,29 @@ if (accordion) {
     else if (href === '#faq') sendGoal('nav_faq');
   }, true);
 })();
+
+// ============================================
+// Video Sound Toggle
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  const videoContainers = document.querySelectorAll('.sample__media');
+  
+  videoContainers.forEach(container => {
+    const video = container.querySelector('video');
+    const button = container.querySelector('.video-sound-toggle');
+    
+    if (!video || !button) return;
+    
+    button.addEventListener('click', () => {
+      if (video.muted) {
+        video.muted = false;
+        button.classList.add('unmuted');
+        button.setAttribute('aria-label', 'Выключить звук');
+      } else {
+        video.muted = true;
+        button.classList.remove('unmuted');
+        button.setAttribute('aria-label', 'Включить звук');
+      }
+    });
+  });
+});

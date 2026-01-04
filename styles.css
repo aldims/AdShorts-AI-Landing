@@ -1166,6 +1166,51 @@ h1, h2, h3, h4, h5, h6 {
   object-fit: cover;
 }
 
+/* Video sound toggle button */
+.video-sound-toggle {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.video-sound-toggle:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.sound-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2;
+}
+
+.sound-icon--on {
+  display: none;
+}
+
+.video-sound-toggle.unmuted .sound-icon--off {
+  display: none;
+}
+
+.video-sound-toggle.unmuted .sound-icon--on {
+  display: block;
+}
+
 .sample__body {
   padding: 20px;
 }
