@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://adshortsai.com/sitemap.xml
+
+# Disallow admin/test pages if any
+Disallow: /test/
+Disallow: /*.sh$
