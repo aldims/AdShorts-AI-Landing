@@ -218,28 +218,38 @@ if (accordion) {
   }, true);
 })();
 
-// ============================================
-// Video Sound Toggle
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-  const videoContainers = document.querySelectorAll('.sample__media');
-  
-  videoContainers.forEach(container => {
-    const video = container.querySelector('video');
-    const button = container.querySelector('.video-sound-toggle');
-    
-    if (!video || !button) return;
-    
-    button.addEventListener('click', () => {
-      if (video.muted) {
-        video.muted = false;
-        button.classList.add('unmuted');
-        button.setAttribute('aria-label', 'Выключить звук');
-      } else {
-        video.muted = true;
-        button.classList.remove('unmuted');
-        button.setAttribute('aria-label', 'Включить звук');
+// Video sound toggle
+(function initVideoSoundToggle() {
+  const soundBtns = document.querySelectorAll('.sound-btn');
+  if (!soundBtns.length) return;
+
+  soundBtns.forEach((btn) => {
+    btn.addEventListener('click', function() {
+      const media = this.closest('.sample__media');
+      if (!media) return;
+      const video = media.querySelector('video');
+      if (!video) return;
+
+      // Toggle mute
+      video.muted = !video.muted;
+      
+      // Update button state
+      this.classList.toggle('is-on', !video.muted);
+      this.setAttribute('aria-label', video.muted ? 'Включить звук' : 'Выключить звук');
+
+      // Mute other videos when unmuting this one
+      if (!video.muted) {
+        document.querySelectorAll('.sample__media video').forEach((v) => {
+          if (v !== video) {
+            v.muted = true;
+            const otherBtn = v.closest('.sample__media')?.querySelector('.sound-btn');
+            if (otherBtn) {
+              otherBtn.classList.remove('is-on');
+              otherBtn.setAttribute('aria-label', 'Включить звук');
+            }
+          }
+        });
       }
     });
   });
-});
+})();
