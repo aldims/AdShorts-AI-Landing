@@ -224,7 +224,9 @@ if (accordion) {
   if (!soundBtns.length) return;
 
   soundBtns.forEach((btn) => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
       const media = this.closest('.sample__media');
       if (!media) return;
       const video = media.querySelector('video');
