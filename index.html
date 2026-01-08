@@ -38,7 +38,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=16" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
     <link rel="preload" as="image" href="./logo.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
@@ -274,9 +274,12 @@
           <div class="plans">
             <div class="plan">
               <h3>Free</h3>
-              <p class="plan__desc">Бесплатный</p>
+              <p class="plan__desc">Для знакомства с платформой</p>
               <div class="plan__num">3 видео</div>
               <div class="plan__price">0 ₽</div>
+              <ul class="plan__features">
+                <li class="plan__feature plan__feature--neutral">С водяным знаком</li>
+              </ul>
               <a
                 class="btn btn--ghost plan__cta tg-smart"
                 data-tg-domain="AdShortsAIBot"
@@ -284,16 +287,19 @@
                 href="https://t.me/AdShortsAIBot"
                 target="_blank"
                 rel="noopener"
-              >Выбрать</a>
-              <p class="pricing-note">В Free на видео стоит водяной знак.</p>
+              >Начать бесплатно</a>
             </div>
 
             <div class="plan plan--featured">
               <div class="plan__badge">Рекомендуем</div>
               <h3>Pro</h3>
-              <p class="plan__desc">Комфортный старт</p>
+              <p class="plan__desc">Для регулярного контента</p>
               <div class="plan__num">25 видео</div>
               <div class="plan__price"><span class="plan__amount">1 490 ₽</span></div>
+              <p class="plan__per-video">~60 ₽ за видео</p>
+              <ul class="plan__features">
+                <li class="plan__feature">Без водяного знака</li>
+              </ul>
               <a
                 class="btn btn--primary plan__cta tg-smart"
                 data-tg-domain="AdShortsAIBot"
@@ -301,15 +307,20 @@
                 href="https://t.me/AdShortsAIBot"
                 target="_blank"
                 rel="noopener"
-              >Выбрать Pro</a>
-              <p class="pricing-note">Без водяного знака.</p>
+              >Перейти на Pro</a>
             </div>
 
-            <div class="plan">
+            <div class="plan plan--best-value">
+              <div class="plan__badge plan__badge--hot">🔥 Лучшая цена</div>
               <h3>Ultra</h3>
-              <p class="plan__desc">Максимум выгоды</p>
+              <p class="plan__desc">Максимум видео по лучшей цене</p>
               <div class="plan__num">100 видео</div>
               <div class="plan__price"><span class="plan__amount">4 990 ₽</span></div>
+              <p class="plan__per-video">~50 ₽ за видео</p>
+              <ul class="plan__features">
+                <li class="plan__feature">Без водяного знака</li>
+                <li class="plan__feature">Лучшая цена за видео</li>
+              </ul>
               <a
                 class="btn btn--ghost plan__cta tg-smart"
                 data-tg-domain="AdShortsAIBot"
@@ -318,29 +329,38 @@
                 target="_blank"
                 rel="noopener"
               >Выбрать Ultra</a>
-              <p class="pricing-note">Лучший тариф по цене за видео.</p>
             </div>
           </div>
 
           <!-- Packs -->
           <div class="packs">
-            <h3 style="margin: 10px 0 0;">Пакеты генераций</h3>
-            <p class="pricing-note" style="margin-top: 6px;">
-              Пакеты доступны для тарифов Pro и Ultra. Купленные видео можно использовать в любое время.
+            <div class="packs__header">
+              <h3>Дополнительные пакеты</h3>
+              <p class="packs__subtitle">Для активных пользователей Pro и Ultra</p>
+            </div>
+            <p class="packs__note">
+              Докупите видео в любой момент. Баланс не сгорает.
             </p>
 
             <div class="packs__grid">
               <div class="pack">
                 <h4>Pack 10</h4>
-                <p>10 видео — 690 ₽</p>
+                <p class="pack__videos">10 видео</p>
+                <p class="pack__price">690 ₽</p>
+                <p class="pack__per-video">69 ₽/видео</p>
               </div>
               <div class="pack">
                 <h4>Pack 50</h4>
-                <p>50 видео — 2 990 ₽</p>
+                <p class="pack__videos">50 видео</p>
+                <p class="pack__price">2 990 ₽</p>
+                <p class="pack__per-video">60 ₽/видео</p>
               </div>
-              <div class="pack">
+              <div class="pack pack--best">
+                <div class="pack__badge">Выгодно</div>
                 <h4>Pack 100</h4>
-                <p>100 видео — 4 990 ₽</p>
+                <p class="pack__videos">100 видео</p>
+                <p class="pack__price">4 990 ₽</p>
+                <p class="pack__per-video">50 ₽/видео</p>
               </div>
             </div>
           </div>
