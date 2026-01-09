@@ -55,15 +55,22 @@ if (accordion) {
     const domain = link.getAttribute('data-tg-domain');
     if (!domain) return;
 
-    // Removed start param to avoid auto-triggering /start command
-    const webUrl = `https://t.me/${domain}`;
-    const appUrl = `tg://resolve?domain=${domain}`;
+    // Get start parameter from data-tg-start attribute for bot tracking
+    const startParam = link.getAttribute('data-tg-start') || '';
+    const startQuery = startParam ? `?start=${encodeURIComponent(startParam)}` : '';
+    
+    const webUrl = `https://t.me/${domain}${startQuery}`;
+    const appUrl = startParam 
+      ? `tg://resolve?domain=${domain}&start=${encodeURIComponent(startParam)}`
+      : `tg://resolve?domain=${domain}`;
 
     // Telegram Web A with tgaddr resolves username reliably
-    const tgaddr = `tg://resolve?domain=${domain}`;
+    const tgaddr = startParam
+      ? `tg://resolve?domain=${domain}&start=${encodeURIComponent(startParam)}`
+      : `tg://resolve?domain=${domain}`;
     const webAUrl = `https://web.telegram.org/a/#?tgaddr=${encodeURIComponent(tgaddr)}`;
 
-    // Default href stays t.me; target set in markup
+    // Default href with start parameter for bot tracking
     link.setAttribute('href', webUrl);
     link.setAttribute('rel', 'noopener');
 
