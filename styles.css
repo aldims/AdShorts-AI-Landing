@@ -946,7 +946,10 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400 !important;
   color: rgba(107, 115, 148, 0.6) !important;
   margin-left: 4px;
-  -webkit-text-fill-color: rgba(107, 115, 148, 0.6);
+  -webkit-text-fill-color: rgba(107, 115, 148, 0.6) !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
 }
 
 .pack__price .pack__usd {
