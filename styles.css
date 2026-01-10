@@ -1175,6 +1175,90 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 2px 10px var(--glow-purple);
 }
 
+/* Pricing intro */
+.pricing-intro {
+  text-align: center;
+  margin: -8px 0 32px;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.pricing-intro strong {
+  color: var(--neon-cyan);
+}
+
+/* Payment info block */
+.payment-info {
+  margin-top: 48px;
+  padding: 32px;
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.payment-info h3 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.payment-steps {
+  margin: 0;
+  padding: 0 0 0 24px;
+  counter-reset: step;
+  list-style: none;
+}
+
+.payment-steps li {
+  position: relative;
+  padding: 8px 0 8px 32px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  counter-increment: step;
+}
+
+.payment-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 24px;
+  height: 24px;
+  background: var(--gradient-main);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bg-deep);
+}
+
+.payment-steps li strong {
+  color: var(--text);
+}
+
+.payment-note {
+  margin: 20px 0 0;
+  padding: 16px;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .payment-info {
+    padding: 24px;
+  }
+  
+  .payment-steps li {
+    padding-left: 28px;
+  }
+}
+
 /* ============================================
    CTA Block
    ============================================ */
