@@ -304,6 +304,24 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* Language switch */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px !important;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.lang-switch:hover {
+  border-color: var(--border-glow);
+  background: rgba(0, 240, 255, 0.1) !important;
+}
+
 /* ============================================
    Buttons — Neon Glow Effects
    ============================================ */
