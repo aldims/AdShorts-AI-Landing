@@ -941,17 +941,18 @@ h1, h2, h3, h4, h5, h6 {
   background-clip: text;
 }
 
-.plan__usd {
-  font-size: 12px;
-  font-weight: 400;
-  color: rgba(107, 115, 148, 0.5);
-  margin-left: 2px;
+.plan__price .plan__usd {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: rgba(107, 115, 148, 0.6) !important;
+  margin-left: 4px;
+  -webkit-text-fill-color: rgba(107, 115, 148, 0.6);
 }
 
-.pack__usd {
-  font-size: 11px;
-  font-weight: 400;
-  color: rgba(107, 115, 148, 0.4);
+.pack__price .pack__usd {
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: rgba(107, 115, 148, 0.5) !important;
 }
 
 .plan__period { 
