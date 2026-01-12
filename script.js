@@ -13,15 +13,14 @@
   const isEnglishPage = currentPath.startsWith('/en/');
   const isRootPage = currentPath === '/' || currentPath === '/index.html';
 
-  // Redirect logic
-  if (langCode === 'en' && isRootPage) {
-    // English browser on Russian page -> redirect to English
-    window.location.href = '/en/';
-  } else if (langCode === 'ru' && isEnglishPage) {
+  // Redirect logic: Russian -> Russian, all others -> English
+  if (langCode === 'ru' && isEnglishPage) {
     // Russian browser on English page -> redirect to Russian
     window.location.href = '/';
+  } else if (langCode !== 'ru' && isRootPage) {
+    // Non-Russian browser on Russian page -> redirect to English
+    window.location.href = '/en/';
   }
-  // For other languages, default to Russian (no redirect)
 })();
 
 // Save manual language selection
