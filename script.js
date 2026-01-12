@@ -1,3 +1,44 @@
+// Language detection and auto-redirect
+(function autoDetectLanguage() {
+  // Check if user manually selected language (skip auto-redirect)
+  const manualLang = localStorage.getItem('manual_lang');
+  if (manualLang) return;
+
+  // Get browser language
+  const browserLang = navigator.language || navigator.userLanguage;
+  const langCode = browserLang.toLowerCase().split('-')[0];
+  
+  // Get current path
+  const currentPath = window.location.pathname;
+  const isEnglishPage = currentPath.startsWith('/en/');
+  const isRootPage = currentPath === '/' || currentPath === '/index.html';
+
+  // Redirect logic
+  if (langCode === 'en' && isRootPage) {
+    // English browser on Russian page -> redirect to English
+    window.location.href = '/en/';
+  } else if (langCode === 'ru' && isEnglishPage) {
+    // Russian browser on English page -> redirect to Russian
+    window.location.href = '/';
+  }
+  // For other languages, default to Russian (no redirect)
+})();
+
+// Save manual language selection
+(function initLanguageSwitcher() {
+  const langLinks = document.querySelectorAll('.lang-switch');
+  langLinks.forEach(link => {
+    link.addEventListener('click', function() {
+      const href = this.getAttribute('href');
+      if (href.includes('/en/')) {
+        localStorage.setItem('manual_lang', 'en');
+      } else {
+        localStorage.setItem('manual_lang', 'ru');
+      }
+    });
+  });
+})();
+
 // Update year
 const yearEl = document.getElementById('year');
 if (yearEl) {
