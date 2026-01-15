@@ -190,15 +190,16 @@ if (accordion) {
     if (!video) return;
 
     // Update button state based on video muted state
+    const isEnglish = document.documentElement.lang === 'en';
     const updateButtonState = () => {
       if (video.muted) {
         button.classList.add('muted');
-        button.setAttribute('aria-label', button.getAttribute('aria-label').replace(/Выключить|Mute/, button.closest('html[lang="en"]') ? 'Unmute' : 'Включить'));
-        button.setAttribute('title', button.getAttribute('title').replace(/Выключить|Mute/, button.closest('html[lang="en"]') ? 'Unmute' : 'Включить'));
+        button.setAttribute('aria-label', isEnglish ? 'Unmute video' : 'Включить звук');
+        button.setAttribute('title', isEnglish ? 'Unmute video' : 'Включить звук');
       } else {
         button.classList.remove('muted');
-        button.setAttribute('aria-label', button.getAttribute('aria-label').replace(/Включить|Unmute/, button.closest('html[lang="en"]') ? 'Mute' : 'Выключить'));
-        button.setAttribute('title', button.getAttribute('title').replace(/Включить|Unmute/, button.closest('html[lang="en"]') ? 'Mute' : 'Выключить'));
+        button.setAttribute('aria-label', isEnglish ? 'Mute video' : 'Выключить звук');
+        button.setAttribute('title', isEnglish ? 'Mute video' : 'Выключить звук');
       }
     };
 
