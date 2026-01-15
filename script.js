@@ -180,6 +180,54 @@ if (accordion) {
   });
 })();
 
+// Video sound button toggle
+(function initVideoSoundButtons() {
+  const soundButtons = document.querySelectorAll('.video-sound-btn');
+  if (!soundButtons.length) return;
+
+  soundButtons.forEach((button) => {
+    const video = button.parentElement.querySelector('video');
+    if (!video) return;
+
+    // Update button state based on video muted state
+    const updateButtonState = () => {
+      if (video.muted) {
+        button.classList.add('muted');
+        button.setAttribute('aria-label', button.getAttribute('aria-label').replace(/Выключить|Mute/, button.closest('html[lang="en"]') ? 'Unmute' : 'Включить'));
+        button.setAttribute('title', button.getAttribute('title').replace(/Выключить|Mute/, button.closest('html[lang="en"]') ? 'Unmute' : 'Включить'));
+      } else {
+        button.classList.remove('muted');
+        button.setAttribute('aria-label', button.getAttribute('aria-label').replace(/Включить|Unmute/, button.closest('html[lang="en"]') ? 'Mute' : 'Выключить'));
+        button.setAttribute('title', button.getAttribute('title').replace(/Включить|Unmute/, button.closest('html[lang="en"]') ? 'Mute' : 'Выключить'));
+      }
+    };
+
+    // Initial state
+    updateButtonState();
+
+    // Toggle sound on click
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      video.muted = !video.muted;
+      
+      // Try to play if unmuted
+      if (!video.muted) {
+        video.play().catch(() => {
+          // If autoplay fails, mute again
+          video.muted = true;
+        });
+      }
+      
+      updateButtonState();
+    });
+
+    // Update button when video muted state changes externally
+    video.addEventListener('volumechange', updateButtonState);
+  });
+})();
+
 // Yandex.Metrika goals for key interactions
 (function initYandexGoals() {
   const YM_ID = 104655292;

@@ -1414,6 +1414,70 @@ h1, h2, h3, h4, h5, h6 {
   object-fit: cover;
 }
 
+/* Video sound button */
+.video-sound-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  padding: 0;
+}
+
+.video-sound-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+  transform: scale(1.1);
+}
+
+.video-sound-btn:active {
+  transform: scale(0.95);
+}
+
+.video-sound-btn svg {
+  width: 20px;
+  height: 20px;
+  transition: opacity 0.3s ease;
+}
+
+.video-sound-btn.muted svg .sound-on {
+  opacity: 0;
+}
+
+.video-sound-btn:not(.muted) svg .sound-off {
+  opacity: 0;
+}
+
+/* Sound off icon (crossed out speaker) */
+.video-sound-btn svg .sound-off {
+  opacity: 1;
+}
+
+.video-sound-btn:not(.muted) svg .sound-off {
+  opacity: 0;
+}
+
+/* Sound on icon (speaker with waves) */
+.video-sound-btn svg .sound-on {
+  opacity: 0;
+}
+
+.video-sound-btn:not(.muted) svg .sound-on {
+  opacity: 1;
+}
+
 .sample__body {
   padding: 20px;
 }
