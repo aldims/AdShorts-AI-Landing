@@ -1452,30 +1452,22 @@ h1, h2, h3, h4, h5, h6 {
   transition: opacity 0.3s ease;
 }
 
-.video-sound-btn.muted svg .sound-on {
-  opacity: 0;
-}
-
-.video-sound-btn:not(.muted) svg .sound-off {
-  opacity: 0;
-}
-
-/* Sound off icon (crossed out speaker) */
-.video-sound-btn svg .sound-off {
-  opacity: 1;
-}
-
-.video-sound-btn:not(.muted) svg .sound-off {
-  opacity: 0;
-}
-
-/* Sound on icon (speaker with waves) */
+/* Sound on icon (speaker with waves) - visible when NOT muted */
 .video-sound-btn svg .sound-on {
   opacity: 0;
 }
 
 .video-sound-btn:not(.muted) svg .sound-on {
   opacity: 1;
+}
+
+/* Sound off icon (crossed out speaker) - visible when muted */
+.video-sound-btn svg .sound-off {
+  opacity: 1;
+}
+
+.video-sound-btn:not(.muted) svg .sound-off {
+  opacity: 0;
 }
 
 .sample__body {
