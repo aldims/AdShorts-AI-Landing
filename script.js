@@ -180,52 +180,102 @@ if (accordion) {
   });
 })();
 
-// Video sound button toggle
+// Video sound button toggle with single active video and visibility tracking
 (function initVideoSoundButtons() {
   const soundButtons = document.querySelectorAll('.video-sound-btn');
   if (!soundButtons.length) return;
 
-  soundButtons.forEach((button) => {
-    const video = button.parentElement.querySelector('video');
-    if (!video) return;
+  const videos = Array.from(soundButtons).map(btn => ({
+    button: btn,
+    video: btn.parentElement.querySelector('video'),
+    container: btn.closest('.sample__media')
+  })).filter(item => item.video);
 
-    // Update button state based on video muted state
-    const isEnglish = document.documentElement.lang === 'en';
-    const updateButtonState = () => {
-      if (video.muted) {
-        button.classList.add('muted');
-        button.setAttribute('aria-label', isEnglish ? 'Unmute video' : 'Включить звук');
-        button.setAttribute('title', isEnglish ? 'Unmute video' : 'Включить звук');
-      } else {
-        button.classList.remove('muted');
-        button.setAttribute('aria-label', isEnglish ? 'Mute video' : 'Выключить звук');
-        button.setAttribute('title', isEnglish ? 'Mute video' : 'Выключить звук');
+  if (!videos.length) return;
+
+  const isEnglish = document.documentElement.lang === 'en';
+
+  // Mute all videos except the specified one
+  const muteAllExcept = (activeVideo) => {
+    videos.forEach(({ video, button }) => {
+      if (video !== activeVideo && !video.muted) {
+        video.muted = true;
+        updateButtonState(button, video);
       }
-    };
+    });
+  };
 
-    // Initial state
-    updateButtonState();
+  // Update button state based on video muted state
+  const updateButtonState = (button, video) => {
+    if (video.muted) {
+      button.classList.add('muted');
+      button.setAttribute('aria-label', isEnglish ? 'Unmute video' : 'Включить звук');
+      button.setAttribute('title', isEnglish ? 'Unmute video' : 'Включить звук');
+    } else {
+      button.classList.remove('muted');
+      button.setAttribute('aria-label', isEnglish ? 'Mute video' : 'Выключить звук');
+      button.setAttribute('title', isEnglish ? 'Mute video' : 'Выключить звук');
+    }
+  };
+
+  // Initialize all buttons
+  videos.forEach(({ button, video }) => {
+    updateButtonState(button, video);
 
     // Toggle sound on click
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       
-      video.muted = !video.muted;
+      const wasMuted = video.muted;
       
-      // Try to play if unmuted
-      if (!video.muted) {
+      if (wasMuted) {
+        // Unmuting this video - mute all others first
+        muteAllExcept(video);
+        video.muted = false;
+        
+        // Try to play
         video.play().catch(() => {
           // If autoplay fails, mute again
           video.muted = true;
+          updateButtonState(button, video);
         });
+      } else {
+        // Muting this video
+        video.muted = true;
       }
       
-      updateButtonState();
+      updateButtonState(button, video);
     });
 
     // Update button when video muted state changes externally
-    video.addEventListener('volumechange', updateButtonState);
+    video.addEventListener('volumechange', () => updateButtonState(button, video));
+  });
+
+  // Intersection Observer to mute videos when not visible
+  const visibilityObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const videoItem = videos.find(item => item.container === entry.target);
+      if (!videoItem) return;
+
+      const { video, button } = videoItem;
+
+      // If video is not visible and not muted, mute it
+      if (!entry.isIntersecting && !video.muted) {
+        video.muted = true;
+        updateButtonState(button, video);
+      }
+    });
+  }, {
+    threshold: 0.1, // Video is considered visible if at least 10% is shown
+    rootMargin: '0px'
+  });
+
+  // Observe all video containers
+  videos.forEach(({ container }) => {
+    if (container) {
+      visibilityObserver.observe(container);
+    }
   });
 })();
 
