@@ -283,6 +283,37 @@ if (accordion) {
 (function initYandexGoals() {
   const YM_ID = 104655292;
 
+  // Определяем язык страницы
+  const isEnglish = window.location.pathname.startsWith('/en/');
+  const pageLang = isEnglish ? 'en' : 'ru';
+
+  // Отправляем событие о языке страницы при загрузке
+  (function sendPageLangEvent() {
+    const sendLangEvent = () => {
+      if (typeof window.ym === 'function') {
+        try {
+          window.ym(YM_ID, 'reachGoal', 'page_lang', { lang: pageLang });
+        } catch (_) {}
+      }
+    };
+    
+    // Пробуем сразу, если ym уже загружен
+    if (typeof window.ym === 'function') {
+      sendLangEvent();
+    } else {
+      // Иначе ждём загрузки
+      const checkInterval = setInterval(() => {
+        if (typeof window.ym === 'function') {
+          sendLangEvent();
+          clearInterval(checkInterval);
+        }
+      }, 100);
+      
+      // Таймаут на случай, если ym не загрузится
+      setTimeout(() => clearInterval(checkInterval), 5000);
+    }
+  })();
+
   // Queue to handle early clicks before ym is ready
   const goalQueue = [];
   let flushTimerStarted = false;
