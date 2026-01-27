@@ -453,15 +453,14 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name with neon glow */
+/* Brand name with gradient + glow */
 .hero h1 .brand {
   display: block;
-  color: var(--neon-cyan);
-  text-shadow: 
-    0 0 10px var(--neon-cyan),
-    0 0 20px var(--neon-cyan),
-    0 0 40px var(--neon-cyan),
-    0 0 80px var(--neon-cyan);
+  background: linear-gradient(90deg, var(--neon-cyan), #fff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px var(--neon-cyan)) drop-shadow(0 0 20px rgba(0, 245, 255, 0.5));
 }
 
 @keyframes gradient-shift {
