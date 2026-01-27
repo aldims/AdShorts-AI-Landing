@@ -436,10 +436,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .hero h1 {
-  margin: 0 0 24px;
+  margin: 0 0 32px;
   font-size: clamp(36px, 5vw + 12px, 72px);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   font-weight: 700;
 }
 
@@ -456,12 +456,32 @@ h1, h2, h3, h4, h5, h6 {
 /* Brand name - white with strong glow */
 .hero h1 .brand {
   display: block;
+  font-size: 1.1em;
+  margin-bottom: 8px;
   color: #fff;
   text-shadow: 
     0 0 10px rgba(255, 255, 255, 0.8),
     0 0 20px rgba(255, 255, 255, 0.6),
     0 0 40px rgba(255, 255, 255, 0.4),
     0 0 80px rgba(255, 255, 255, 0.2);
+}
+
+/* Decorative glow behind hero content */
+.hero--centered .container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(0, 245, 255, 0.08) 0%, rgba(168, 85, 247, 0.05) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.hero--centered .container {
+  position: relative;
 }
 
 @keyframes gradient-shift {
@@ -471,10 +491,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero .lead { 
   color: var(--text-secondary); 
-  margin: 0 0 32px; 
-  font-size: 20px;
-  line-height: 1.6;
-  max-width: 600px;
+  margin: 0 0 40px; 
+  font-size: 21px;
+  line-height: 1.7;
+  max-width: 620px;
   margin-inline: auto;
 }
 
