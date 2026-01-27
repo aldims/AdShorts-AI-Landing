@@ -453,6 +453,15 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
+/* Brand name with gradient + glow */
+.hero h1 .brand {
+  background: linear-gradient(90deg, var(--neon-cyan), #fff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px var(--neon-cyan));
+}
+
 @keyframes gradient-shift {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
