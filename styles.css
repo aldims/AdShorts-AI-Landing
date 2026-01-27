@@ -453,17 +453,50 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name - white with strong glow */
+/* Brand name - white with animated glow */
 .hero h1 .brand {
-  display: block;
-  font-size: 1.1em;
-  margin-bottom: 8px;
+  display: inline-block;
+  font-size: 1.15em;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  position: relative;
   color: #fff;
   text-shadow: 
     0 0 10px rgba(255, 255, 255, 0.8),
     0 0 20px rgba(255, 255, 255, 0.6),
     0 0 40px rgba(255, 255, 255, 0.4),
     0 0 80px rgba(255, 255, 255, 0.2);
+  animation: brand-pulse 3s ease-in-out infinite;
+}
+
+/* Decorative gradient line under brand */
+.hero h1 .brand::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-purple), var(--neon-pink), transparent);
+  border-radius: 2px;
+}
+
+@keyframes brand-pulse {
+  0%, 100% { 
+    text-shadow: 
+      0 0 10px rgba(255, 255, 255, 0.8),
+      0 0 20px rgba(255, 255, 255, 0.6),
+      0 0 40px rgba(255, 255, 255, 0.4),
+      0 0 80px rgba(255, 255, 255, 0.2);
+  }
+  50% { 
+    text-shadow: 
+      0 0 15px rgba(255, 255, 255, 1),
+      0 0 30px rgba(255, 255, 255, 0.8),
+      0 0 60px rgba(255, 255, 255, 0.5),
+      0 0 100px rgba(255, 255, 255, 0.3);
+  }
 }
 
 /* Decorative glow behind hero content */
