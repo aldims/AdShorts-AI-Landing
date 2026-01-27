@@ -453,7 +453,7 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name - white with cyan glow */
+/* Brand name - white with purple glow */
 .hero h1 .brand {
   display: inline-block;
   font-size: 1.15em;
@@ -462,9 +462,9 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   color: #fff;
   text-shadow: 
-    0 0 10px rgba(0, 245, 255, 0.6),
-    0 0 30px rgba(0, 245, 255, 0.5),
-    0 0 60px rgba(0, 245, 255, 0.3);
+    0 0 10px rgba(168, 85, 247, 0.6),
+    0 0 30px rgba(168, 85, 247, 0.5),
+    0 0 60px rgba(168, 85, 247, 0.3);
 }
 
 /* Decorative gradient line under brand */
