@@ -456,28 +456,12 @@ h1, h2, h3, h4, h5, h6 {
 /* Brand name with neon glow */
 .hero h1 .brand {
   display: block;
-  font-size: 1.15em;
   color: var(--neon-cyan);
   text-shadow: 
     0 0 10px var(--neon-cyan),
     0 0 20px var(--neon-cyan),
     0 0 40px var(--neon-cyan),
     0 0 80px var(--neon-cyan);
-  margin-bottom: 8px;
-}
-
-/* Highlight stays as animated gradient */
-.hero h1 .highlight {
-  display: block;
-}
-
-/* Tagline - less prominent */
-.hero h1 .tagline {
-  display: block;
-  font-size: 0.55em;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-top: 12px;
 }
 
 @keyframes gradient-shift {
