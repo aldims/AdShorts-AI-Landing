@@ -457,8 +457,8 @@ h1, h2, h3, h4, h5, h6 {
 .hero h1 .brand {
   display: inline-block;
   font-size: 1.15em;
-  margin-bottom: 28px;
-  padding-bottom: 20px;
+  margin-bottom: 40px;
+  padding-bottom: 24px;
   position: relative;
   color: #fff;
   text-shadow: 
