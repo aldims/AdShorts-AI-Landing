@@ -453,7 +453,7 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name - clean white */
+/* Brand name - white with subtle glow */
 .hero h1 .brand {
   display: inline-block;
   font-size: 1.15em;
@@ -461,6 +461,7 @@ h1, h2, h3, h4, h5, h6 {
   padding-bottom: 16px;
   position: relative;
   color: #fff;
+  text-shadow: 0 0 20px rgba(0, 245, 255, 0.4);
 }
 
 /* Decorative gradient line under brand */
