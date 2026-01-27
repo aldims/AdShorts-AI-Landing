@@ -453,14 +453,21 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name with gradient + glow */
+/* Brand name with animated gradient */
 .hero h1 .brand {
   display: block;
-  background: linear-gradient(90deg, var(--neon-cyan), #fff);
+  background: linear-gradient(90deg, #fff, var(--neon-purple), var(--neon-pink), #fff);
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 10px var(--neon-cyan)) drop-shadow(0 0 20px rgba(0, 245, 255, 0.5));
+  animation: brand-shine 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.4));
+}
+
+@keyframes brand-shine {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 @keyframes gradient-shift {
