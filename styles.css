@@ -453,11 +453,15 @@ h1, h2, h3, h4, h5, h6 {
   animation: gradient-shift 8s ease infinite;
 }
 
-/* Brand name - clean white with subtle glow */
+/* Brand name - white with strong glow */
 .hero h1 .brand {
   display: block;
   color: #fff;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(255, 255, 255, 0.6),
+    0 0 40px rgba(255, 255, 255, 0.4),
+    0 0 80px rgba(255, 255, 255, 0.2);
 }
 
 @keyframes gradient-shift {
