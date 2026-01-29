@@ -58,18 +58,6 @@
       .logo { display: inline-flex; align-items: center; gap: 12px; }
       .logo__icon { display: inline-block; }
     </style>
-    <!-- Language auto-detection (runs immediately, before page load) -->
-    <script>
-      (function() {
-        var manualLang = localStorage.getItem('manual_lang');
-        if (manualLang) return;
-        var browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase().split('-')[0];
-        var path = window.location.pathname;
-        if (browserLang === 'ru' && path.startsWith('/en/')) {
-          window.location.href = '/';
-        }
-      })();
-    </script>
     <script defer src="../script.js"></script>
 
     <!-- Yandex.Metrika counter -->

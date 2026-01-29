@@ -1,28 +1,3 @@
-// Language detection and auto-redirect
-(function autoDetectLanguage() {
-  // Check if user manually selected language (skip auto-redirect)
-  const manualLang = localStorage.getItem('manual_lang');
-  if (manualLang) return;
-
-  // Get browser language
-  const browserLang = navigator.language || navigator.userLanguage;
-  const langCode = browserLang.toLowerCase().split('-')[0];
-  
-  // Get current path
-  const currentPath = window.location.pathname;
-  const isEnglishPage = currentPath.startsWith('/en/');
-  const isRootPage = currentPath === '/' || currentPath === '/index.html';
-
-  // Redirect logic: Russian -> Russian, all others -> English
-  if (langCode === 'ru' && isEnglishPage) {
-    // Russian browser on English page -> redirect to Russian
-    window.location.href = '/';
-  } else if (langCode !== 'ru' && isRootPage) {
-    // Non-Russian browser on Russian page -> redirect to English
-    window.location.href = '/en/';
-  }
-})();
-
 // Save manual language selection
 (function initLanguageSwitcher() {
   const langLinks = document.querySelectorAll('.lang-switch');

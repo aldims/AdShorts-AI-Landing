@@ -17,7 +17,7 @@
     />
 
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://adshortsai.com" />
+    <meta property="og:url" content="https://adshortsai.com/" />
     <meta property="og:title" content="AdShorts AI — видео за 1 минуту" />
     <meta
       property="og:description"
@@ -60,19 +60,6 @@
       .logo { display: inline-flex; align-items: center; gap: 12px; }
       .logo__icon { display: inline-block; }
     </style>
-    <!-- Language auto-detection (runs immediately, before page load) -->
-    <script>
-      (function() {
-        var manualLang = localStorage.getItem('manual_lang');
-        if (manualLang) return;
-        var browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase().split('-')[0];
-        var path = window.location.pathname;
-        // Redirect to English for all non-Russian languages
-        if (browserLang !== 'ru' && (path === '/' || path === '/index.html')) {
-          window.location.href = '/en/';
-        }
-      })();
-    </script>
     <script defer src="./script.js"></script>
 
     <!-- Yandex.Metrika counter -->
