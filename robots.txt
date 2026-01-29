@@ -1,9 +1,10 @@
+# Robots.txt for adshortsai.com
+# This file overrides Cloudflare's automatic additions
+
 User-agent: *
 Allow: /
+Disallow: /test/
+Disallow: /*.sh$
 
 # Sitemap
 Sitemap: https://adshortsai.com/sitemap.xml
-
-# Disallow admin/test pages if any
-Disallow: /test/
-Disallow: /*.sh$
