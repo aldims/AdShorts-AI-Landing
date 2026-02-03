@@ -136,6 +136,16 @@ if (accordion) {
   videos.forEach((video) => {
     video.muted = true;
     video.playsInline = true;
+
+    // Toggle play/pause on click
+    video.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (video.paused) {
+        tryPlay(video);
+      } else {
+        video.pause();
+      }
+    });
     
     if (video.readyState >= 2) {
       tryPlay(video);
