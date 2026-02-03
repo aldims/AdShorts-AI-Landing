@@ -332,18 +332,6 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(0, 240, 255, 0.1) !important;
 }
 
-/* Текущий выбранный язык */
-.lang-switch.lang-current {
-  cursor: default;
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.15) !important;
-  opacity: 1;
-}
-.lang-switch.lang-current:hover {
-  border-color: var(--neon-cyan);
-  background: rgba(0, 240, 255, 0.15) !important;
-}
-
 /* ============================================
    Buttons — Neon Glow Effects
    ============================================ */
