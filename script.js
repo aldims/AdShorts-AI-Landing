@@ -1,9 +1,8 @@
 // Save manual language selection
 (function initLanguageSwitcher() {
-  const langLinks = document.querySelectorAll('.lang-switch');
-  langLinks.forEach(link => {
+  document.querySelectorAll('a.lang-switch').forEach(link => {
     link.addEventListener('click', function() {
-      const href = this.getAttribute('href');
+      const href = this.getAttribute('href') || '';
       if (href.includes('/en/')) {
         localStorage.setItem('manual_lang', 'en');
       } else {

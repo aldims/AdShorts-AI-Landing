@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="30" viewBox="0 0 60 30" aria-hidden="true">
+  <!-- Red and white stripes -->
+  <rect width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="2.31" width="60" height="2.31" fill="#fff"/>
+  <rect y="4.62" width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="6.92" width="60" height="2.31" fill="#fff"/>
+  <rect y="9.23" width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="11.54" width="60" height="2.31" fill="#fff"/>
+  <rect y="13.85" width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="16.15" width="60" height="2.31" fill="#fff"/>
+  <rect y="18.46" width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="20.77" width="60" height="2.31" fill="#fff"/>
+  <rect y="23.08" width="60" height="2.31" fill="#bf0a30"/>
+  <rect y="25.38" width="60" height="2.31" fill="#fff"/>
+  <rect y="27.69" width="60" height="2.31" fill="#bf0a30"/>
+  <!-- Blue canton -->
+  <rect width="24" height="13.85" fill="#002868"/>
+  <!-- White stars (simple circles for clarity at small size) -->
+  <g fill="#fff">
+    <circle cx="3" cy="2.5" r="0.8"/>
+    <circle cx="9" cy="2.5" r="0.8"/>
+    <circle cx="15" cy="2.5" r="0.8"/>
+    <circle cx="21" cy="2.5" r="0.8"/>
+    <circle cx="6" cy="5.5" r="0.8"/>
+    <circle cx="12" cy="5.5" r="0.8"/>
+    <circle cx="18" cy="5.5" r="0.8"/>
+    <circle cx="3" cy="8.5" r="0.8"/>
+    <circle cx="9" cy="8.5" r="0.8"/>
+    <circle cx="15" cy="8.5" r="0.8"/>
+    <circle cx="21" cy="8.5" r="0.8"/>
+    <circle cx="6" cy="11.5" r="0.8"/>
+    <circle cx="12" cy="11.5" r="0.8"/>
+    <circle cx="18" cy="11.5" r="0.8"/>
+  </g>
+</svg>
