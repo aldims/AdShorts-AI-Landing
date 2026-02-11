@@ -1922,3 +1922,106 @@ main a:not(.btn):not(.logo):hover {
     padding: 3px 8px;
   }
 }
+
+/* ============================================
+   Language Banner
+   ============================================ */
+#lang-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  max-width: 500px;
+  width: calc(100% - 40px);
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.lang-banner__content {
+  background: linear-gradient(135deg, rgba(109, 94, 252, 0.95), rgba(168, 85, 247, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.lang-banner__content p {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+}
+
+.lang-banner__buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.lang-banner__btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.lang-banner__btn--primary {
+  background: #fff;
+  color: #6d5efc;
+}
+
+.lang-banner__btn--primary:hover {
+  background: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.lang-banner__btn--secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.lang-banner__btn--secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+@media (max-width: 600px) {
+  #lang-banner {
+    bottom: 10px;
+    width: calc(100% - 20px);
+  }
+  
+  .lang-banner__content {
+    padding: 16px 20px;
+  }
+  
+  .lang-banner__buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .lang-banner__btn {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="https://adshortsai.com/kak-testirovat-shorts/" />
+    <link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-testirovat-shorts/" />
+    <link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-testirovat-shorts/" />
+    <title>Как тестировать Shorts: простая система экспериментов и чек‑лист</title>
+    <meta
+      name="description"
+      content="Как тестировать Shorts? Одна гипотеза → 2–3 версии → вывод. Что менять: хук, длину, темп, текст. Чек‑лист + таблица. В конце — «Создать видео бесплатно»."
+    />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://adshortsai.com/kak-testirovat-shorts/" />
+    <meta property="og:title" content="Как тестировать Shorts: простая система экспериментов и чек‑лист" />
+    <meta
+      property="og:description"
+      content="Как тестировать Shorts? Одна гипотеза → 2–3 версии → вывод. Что менять: хук, длину, темп, текст. Чек‑лист + таблица. В конце — «Создать видео бесплатно»."
+    />
+    <meta property="og:image" content="https://adshortsai.com/logo.png?v=2" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:site_name" content="AdShorts AI" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Как тестировать Shorts: простая система экспериментов и чек‑лист" />
+    <meta
+      name="twitter:description"
+      content="Как тестировать Shorts? Одна гипотеза → 2–3 версии → вывод. Что менять: хук, длину, темп, текст. Чек‑лист + таблица. В конце — «Создать видео бесплатно»."
+    />
+    <meta name="twitter:image" content="https://adshortsai.com/logo.png?v=2" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css?v=39" />
+    <link rel="preload" as="image" href="../logo.png?v=2" />
+    <link rel="icon" type="image/png" sizes="120x120" href="../favicon.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico" />
+    <link rel="apple-touch-icon" href="../logo.png?v=2" />
+    <style>
+      .logo { display: inline-flex; align-items: center; gap: 12px; }
+      .logo__icon { display: inline-block; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border: 1px solid rgba(255,255,255,0.12); padding: 10px 12px; text-align: left; vertical-align: top; }
+      th { background: rgba(255,255,255,0.04); }
+    </style>
+    <script defer src="../script.js"></script>
+
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+      (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {
+          if (document.scripts[j].src === r) { return; }
+        }
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+      })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js?id=104655292', 'ym');
+
+      ym(104655292, 'init', { ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true });
+    </script>
+    <noscript><div><img src="https://mc.yandex.ru/watch/104655292" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <!-- /Yandex.Metrika counter -->
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Как тестировать Shorts: простая система экспериментов и чек‑лист",
+      "description": "Как тестировать Shorts? Одна гипотеза → 2–3 версии → вывод. Что менять: хук, длину, темп, текст. Чек‑лист + таблица. В конце — «Создать видео бесплатно».",
+      "inLanguage": "ru",
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://adshortsai.com/kak-testirovat-shorts/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "AdShorts AI",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://adshortsai.com/logo.png?v=2"
+        }
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="container header__inner">
+        <a class="logo" href="../" aria-label="AdShorts AI">
+          <img class="logo__icon" src="../logo.png?v=2" alt="" role="presentation" width="46" height="46" />
+          <span class="logo__wordmark">AdShorts<span>AI</span></span>
+        </a>
+        <nav class="nav" aria-label="Основная навигация">
+          <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">Меню</button>
+          <ul id="nav-menu" class="nav__list">
+            <li><a href="../#how-it-works">Как работает</a></li>
+            <li><a href="../#samples">Примеры</a></li>
+            <li><a href="../#pricing">Тарифы</a></li>
+            <li><a href="../#faq">FAQ</a></li>
+            <li><a href="../en/" class="lang-switch" title="English"><img class="flag-icon" src="../flags/ru.svg" alt="" width="18" height="12" />RU</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container" style="max-width: 860px;">
+          <h1>Как тестировать Shorts</h1>
+          <p class="lead">
+            Тестировать Shorts — значит не “выпускать на удачу”, а делать простые эксперименты. Большинство каналов застревает не потому, что у них “плохая тема”, а потому что они меняют всё сразу: тему, длину, монтаж, музыку. В итоге непонятно, что именно сработало.
+          </p>
+          <p>
+            Нужна простая система: <strong>одна гипотеза → 2–3 версии → вывод</strong>. Ниже — как её применить, что тестировать в первую очередь и как фиксировать результаты.
+          </p>
+
+          <div class="cta cta--center" style="margin: 18px 0 10px;">
+            <a
+              class="btn btn--primary btn--lg tg-smart"
+              data-tg-domain="AdShortsAIBot"
+              data-tg-start="seo_testing_top"
+              href="https://t.me/AdShortsAIBot"
+              target="_blank"
+              rel="noopener"
+            >Создать видео бесплатно</a>
+            <p class="cta__note">Откроется Telegram-бот — ролик можно собрать за минуту и сразу протестировать правки.</p>
+          </div>
+
+          <h2>Принцип: один тест — одна правка (иначе нет выводов)</h2>
+          <p>
+            Самое важное правило: вы меняете <strong>только один</strong> элемент за раз. Например:
+          </p>
+          <ul>
+            <li>в версии B меняется только хук, всё остальное то же;</li>
+            <li>или меняется только длина (20 сек vs 30 сек), сценарий одинаковый;</li>
+            <li>или меняется только финал (вывод vs вопрос).</li>
+          </ul>
+          <p>
+            Если вы меняете 3–4 вещи сразу, результат будет “шумом”, а не выводом.
+          </p>
+
+          <h2>Что тестировать в первую очередь (хук/первые секунды → темп → финал)</h2>
+          <p>
+            В большинстве случаев эффективный порядок такой:
+          </p>
+          <ol>
+            <li><strong>Хук и первые 1–3 секунды.</strong> Обещание, контекст, первый кадр.</li>
+            <li><strong>Темп и прогресс.</strong> Пункты, шаги, “ошибка №1/№2”.</li>
+            <li><strong>Поворот в середине.</strong> Пример, контраст “до/после”, нюанс.</li>
+            <li><strong>Финал.</strong> Вывод‑точка, петля, один следующий шаг.</li>
+            <li><strong>Текст и субтитры.</strong> Читабельность, короткие фразы.</li>
+          </ol>
+          <p>
+            Такой порядок работает, потому что если зритель уходит в первые секунды, остальная часть ролика не имеет значения.
+          </p>
+
+          <h2>Мини‑план на 7 дней: как запускать серии и сравнивать</h2>
+          <p>
+            Пример простой недели экспериментов (можно адаптировать под 3–5 роликов):
+          </p>
+          <ul>
+            <li><strong>День 1:</strong> ролик A (базовая версия).</li>
+            <li><strong>День 2:</strong> ролик B (меняем только хук).</li>
+            <li><strong>День 3:</strong> ролик C (меняем только темп: короче фразы, явный прогресс).</li>
+            <li><strong>День 4:</strong> ролик D (меняем только финал: вывод‑точка vs вопрос).</li>
+            <li><strong>День 5:</strong> повторяем лучший элемент (лучший хук + базовый сюжет).</li>
+          </ul>
+          <p>
+            Важно: сравнивайте ролики на похожей теме и формате. Если один ролик “про тренд”, а другой “про инструкцию”, вывод будет нечестным.
+          </p>
+
+          <h2>Таблица фиксации результатов (что поменяли и что стало)</h2>
+          <p>
+            Самая простая таблица, чтобы не забыть, что вы тестировали:
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Гипотеза</th>
+                <th>Что изменили</th>
+                <th>Версия</th>
+                <th>Что смотреть</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>—</td>
+                <td>Короткий хук удержит лучше</td>
+                <td>Хук (первая фраза)</td>
+                <td>A / B</td>
+                <td>Удержание в первые секунды</td>
+              </tr>
+              <tr>
+                <td>—</td>
+                <td>Прогресс снизит провал в середине</td>
+                <td>Шаги / “ошибка №2”</td>
+                <td>A / B</td>
+                <td>Падение в середине</td>
+              </tr>
+              <tr>
+                <td>—</td>
+                <td>Вывод‑точка увеличит досмотры</td>
+                <td>Финал</td>
+                <td>A / B</td>
+                <td>Удержание в конце</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            Даже такая простая фиксация даёт эффект: вы перестаёте делать хаотичные правки и начинаете строить систему.
+          </p>
+
+          <h2>Типичные ошибки тестирования (и как их избежать)</h2>
+          <ul>
+            <li><strong>Меняете несколько вещей сразу.</strong> Выберите одну правку на тест.</li>
+            <li><strong>Сравниваете разные темы.</strong> Для теста лучше одна и та же тема/формат.</li>
+            <li><strong>Слишком редкие публикации.</strong> Если ролики выходят раз в две недели, выводы будут медленными.</li>
+            <li><strong>Смотрите только просмотры.</strong> Сначала смотрите удержание (где уходят).</li>
+            <li><strong>Делаете вывод по одному случаю.</strong> Иногда нужна ещё одна попытка, чтобы понять, что это не случайность.</li>
+          </ul>
+
+          <h2>Мини‑чек‑лист теста</h2>
+          <ul>
+            <li>Гипотеза записана одной фразой?</li>
+            <li>Изменён только один элемент?</li>
+            <li>Тема и формат одинаковые?</li>
+            <li>Понятно, какую метрику сравниваем (первые секунды/середина/конец)?</li>
+            <li>Результат зафиксирован в таблице?</li>
+          </ul>
+          <p>
+            Этот чек‑лист помогает не “играть в аналитику”, а реально улучшать ролики шаг за шагом.
+          </p>
+
+          <h2>Мини‑FAQ</h2>
+          <h3>Сколько версий делать: 2 или 3?</h3>
+          <p>
+            Начните с двух. Две версии дают быстрый вывод. Третью добавляйте, когда уже понимаете, что именно хотите уточнить (например, “короче” или “ещё короче”).
+          </p>
+          <h3>Что делать, если ролики “разные” и сравнивать сложно?</h3>
+          <p>
+            Сделайте тест внутри одной серии: одинаковый шаблон, разные темы. Тогда вы сможете сравнить хуки/финалы, не ломая структуру.
+          </p>
+
+          <h2>Пример теста: два варианта хука</h2>
+          <p>
+            Допустим, тема ролика — “петля в Shorts”. Вы делаете две версии начала, остальное одинаковое:
+          </p>
+          <ul>
+            <li><strong>Хук A:</strong> “Петля — почему Shorts пересматривают.”</li>
+            <li><strong>Хук B:</strong> “Shorts пролистывают? Добавь петлю вот так.”</li>
+          </ul>
+          <p>
+            Сравниваете удержание в первые секунды. Если B удерживает лучше, значит, вашей аудитории важнее боль и действие. Если A — значит, лучше работает объяснение “почему” и обещание смысла.
+          </p>
+
+          <h2>Когда делать вывод по тесту</h2>
+          <p>
+            Частая ошибка — делать вывод в первые часы и менять всё подряд. Для Shorts лучше держать простой порядок: опубликовали → подождали → посмотрели удержание → выбрали одну следующую правку.
+          </p>
+          <ul>
+            <li><strong>Дайте ролику время.</strong> Обычно стоит подождать хотя бы сутки, чтобы картина стала понятнее.</li>
+            <li><strong>Смотрите не только просмотры.</strong> Сравнивайте, где падает удержание: в первые секунды, в середине или в конце.</li>
+            <li><strong>Проверяйте повторяемость.</strong> Если один раз “не зашло”, это может быть случайностью. Сделайте ещё один похожий тест.</li>
+            <li><strong>Не смешивайте факторы.</strong> Если одновременно поменяли тему, хук и длину, вы не узнаете, что именно сработало.</li>
+          </ul>
+          <p>
+            Самый полезный вывод — не “этот ролик плохой”, а “вот это место ломает удержание”. Тогда следующий тест становится простым и понятным.
+          </p>
+          <p>
+            После теста выберите один “победивший” элемент и закрепите его минимум на 2–3 следующих ролика. Например: оставляете лучший хук, а дальше тестируете темп или финал. Так вы строите стабильный формат, а не прыгаете между случайными версиями.
+          </p>
+
+          <h2>Как быстрее тестировать правки</h2>
+          <p>
+            Тесты работают только тогда, когда вы можете быстро делать версии. Если сборка ролика занимает много часов, вы будете избегать экспериментов. Когда ролик можно собрать за минуту, вы легко делаете A/B по хуку, темпу или финалу — и быстрее находите формулу, которая держит зрителя.
+          </p>
+
+          <h2>Читайте также</h2>
+          <ul>
+            <li><a href="../analitika-youtube-shorts-kak-chitat/">Аналитика YouTube Shorts: как читать</a></li>
+            <li><a href="../kak-sdelat-huk-v-shorts/">Как сделать хук в Shorts</a></li>
+            <li><a href="../kak-analizirovat-uderzhanie-v-shorts/">Как анализировать удержание в Shorts</a></li>
+          </ul>
+
+          <div class="cta cta--center" style="margin-top: 22px;">
+            <a
+              class="btn btn--primary btn--lg tg-smart"
+              data-tg-domain="AdShortsAIBot"
+              data-tg-start="seo_testing_bottom"
+              href="https://t.me/AdShortsAIBot"
+              target="_blank"
+              rel="noopener"
+            >Создать видео бесплатно</a>
+            <p class="cta__note">Откроется Telegram-бот — ролик можно собрать за минуту и сразу протестировать правки.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer__inner">
+        <a class="logo" href="../">AdShorts<span>AI</span></a>
+        <div class="footer__links">
+          <span style="color: var(--muted);">Контакты: <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="../terms-of-use/">Условия использования</a>
+          <a href="../terms/">Пользовательское соглашение</a>
+          <a href="../privacy/">Политика конфиденциальности</a>
+        </div>
+        <p class="footer__copy">© <span id="year"></span> AdShorts AI</p>
+      </div>
+    </footer>
+  </body>
+</html>

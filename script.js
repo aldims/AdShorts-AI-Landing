@@ -1,3 +1,49 @@
+// Language detection and suggestion banner
+(function initLanguageDetection() {
+  // Don't show banner for bots/crawlers
+  const ua = navigator.userAgent || '';
+  const isBot = /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baidu/i.test(ua);
+  if (isBot) return;
+  
+  // Check if user manually selected language or already dismissed banner
+  const manualLang = localStorage.getItem('manual_lang');
+  const bannerDismissed = localStorage.getItem('lang_banner_dismissed');
+  
+  // Only show banner on RU main page for EN users who haven't chosen
+  const isRuMainPage = window.location.pathname === '/' && document.documentElement.lang === 'ru';
+  const userLangIsEn = navigator.language && navigator.language.toLowerCase().startsWith('en');
+  
+  if (isRuMainPage && userLangIsEn && !manualLang && !bannerDismissed) {
+    showLanguageBanner();
+  }
+  
+  function showLanguageBanner() {
+    const banner = document.createElement('div');
+    banner.id = 'lang-banner';
+    banner.innerHTML = `
+      <div class="lang-banner__content">
+        <p>🌐 English version available</p>
+        <div class="lang-banner__buttons">
+          <a href="/en/" class="lang-banner__btn lang-banner__btn--primary">Switch to English</a>
+          <button class="lang-banner__btn lang-banner__btn--secondary" data-action="dismiss">Stay in Russian</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    // Handle button clicks
+    banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => {
+      localStorage.setItem('lang_banner_dismissed', 'true');
+      banner.remove();
+    });
+    
+    banner.querySelector('a[href="/en/"]').addEventListener('click', () => {
+      localStorage.setItem('manual_lang', 'en');
+    });
+  }
+})();
+
 // Save manual language selection
 (function initLanguageSwitcher() {
   document.querySelectorAll('a.lang-switch').forEach(link => {
