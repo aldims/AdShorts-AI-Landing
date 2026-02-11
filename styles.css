@@ -582,6 +582,33 @@ h1, h2, h3, h4, h5, h6 {
   flex-wrap: wrap; 
 }
 
+.cta--center {
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.cta--center .btn {
+  margin-inline: auto;
+}
+
+.cta--center .cta__note {
+  display: block;
+  text-align: center;
+}
+
+.cta--center .cta__note::before {
+  content: none;
+}
+
+.cta__tagline {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 
 /* ============================================
    Sections
@@ -614,6 +641,7 @@ h1, h2, h3, h4, h5, h6 {
 .cards--2 { grid-template-columns: repeat(2, 1fr); }
 
 .card {
+  display: block;
   background: var(--card);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
@@ -622,6 +650,30 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card--link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.card--link:focus-visible {
+  outline: 2px solid var(--border-glow);
+  outline-offset: 4px;
+}
+
+.card--disabled {
+  opacity: 0.6;
+}
+
+.card--disabled:hover {
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
+.card--disabled:hover::before {
+  opacity: 0;
 }
 
 /* Gradient shine on hover */
