@@ -50,7 +50,177 @@
     <style>
       .logo { display: inline-flex; align-items: center; gap: 12px; }
       .logo__icon { display: inline-block; }
-      .guide-section { scroll-margin-top: 110px; }
+      .guide-section { scroll-margin-top: 160px; }
+
+      /* Hero section for guides */
+      .guides-hero {
+        text-align: center;
+        padding: 60px 0 40px;
+      }
+      .guides-hero h1 {
+        font-size: clamp(2.2rem, 5vw, 3.2rem);
+        background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 20px;
+      }
+      .guides-hero .lead {
+        color: var(--text-secondary);
+        max-width: 700px;
+        margin: 0 auto;
+        font-size: 1.1rem;
+      }
+
+      /* Sticky navigation */
+      .guides-nav {
+        position: sticky;
+        top: 70px;
+        z-index: 50;
+        background: rgba(8, 8, 16, 0.85);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 0;
+        margin: 0 -20px 40px;
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .guides-nav__inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+      .guides-nav .btn {
+        font-size: 0.85rem;
+        padding: 8px 16px;
+      }
+      .guides-nav .btn.active {
+        background: var(--gradient-main);
+        border-color: transparent;
+        color: #000;
+      }
+
+      /* Section headers with icons */
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 60px;
+        margin-bottom: 12px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .section-header__icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+      }
+      .section-header__icon--red { background: rgba(255, 45, 85, 0.15); border: 1px solid rgba(255, 45, 85, 0.3); }
+      .section-header__icon--cyan { background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); }
+      .section-header__icon--purple { background: rgba(191, 90, 242, 0.15); border: 1px solid rgba(191, 90, 242, 0.3); }
+      .section-header__icon--green { background: rgba(48, 209, 88, 0.15); border: 1px solid rgba(48, 209, 88, 0.3); }
+      .section-header__icon--yellow { background: rgba(255, 214, 10, 0.15); border: 1px solid rgba(255, 214, 10, 0.3); }
+      .section-header__icon--blue { background: rgba(10, 132, 255, 0.15); border: 1px solid rgba(10, 132, 255, 0.3); }
+
+      .section-header__text h2 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      .section-header__text p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      /* Guide cards improvements */
+      .guide-cards {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, 1fr);
+        margin-top: 24px;
+      }
+      .guide-card {
+        display: block;
+        background: var(--card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+      .guide-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0, 240, 255, 0.08) 0%, transparent 60%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .guide-card:hover {
+        border-color: rgba(0, 240, 255, 0.4);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 240, 255, 0.1);
+      }
+      .guide-card:hover::before { opacity: 1; }
+      .guide-card h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        color: var(--text);
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .guide-card h3::after {
+        content: '→';
+        opacity: 0;
+        transform: translateX(-8px);
+        transition: all 0.3s ease;
+        color: var(--neon-cyan);
+      }
+      .guide-card:hover h3::after {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .guide-card p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        position: relative;
+        line-height: 1.5;
+      }
+
+      /* Count badge */
+      .section-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-left: 12px;
+      }
+
+      @media (max-width: 768px) {
+        .guides-hero { padding: 40px 0 30px; }
+        .guides-nav { top: 60px; }
+        .guide-cards { grid-template-columns: 1fr; }
+        .section-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .section-header__icon { width: 40px; height: 40px; font-size: 1.2rem; }
+      }
     </style>
     <script defer src="../script.js"></script>
 
@@ -93,509 +263,528 @@
     <main>
       <section class="section">
         <div class="container">
-          <h1>Гайд по YouTube Shorts</h1>
-          <p class="lead" style="max-width: 860px;">
-            Здесь собраны материалы про YouTube Shorts: почему ролики не набирают просмотры, как улучшить удержание, что делать с первыми секундами, длиной, сценарием и оформлением.
-          </p>
-
-          <p style="color: var(--muted); margin: 18px 0 0; max-width: 860px;">
-            Разделили материалы по темам, чтобы было легче найти нужный гайд.
-          </p>
-          <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px;">
-            <a class="btn btn--ghost btn--small" href="#problems">Проблемы и ошибки</a>
-            <a class="btn btn--ghost btn--small" href="#retention">Удержание и структура</a>
-            <a class="btn btn--ghost btn--small" href="#texts">Сценарий и тексты</a>
-            <a class="btn btn--ghost btn--small" href="#production">Монтаж и продакшен</a>
-            <a class="btn btn--ghost btn--small" href="#growth">Рост и рекомендации</a>
-            <a class="btn btn--ghost btn--small" href="#strategy">Стратегия</a>
+          <div class="guides-hero">
+            <h1>Гайд по YouTube Shorts</h1>
+            <p class="lead">
+              Здесь собраны материалы про YouTube Shorts: почему ролики не набирают просмотры, как улучшить удержание, что делать с первыми секундами, длиной, сценарием и оформлением.
+            </p>
           </div>
 
-          <h2 id="problems" class="guide-section" style="margin-top: 36px;">1️⃣ Проблемы и ошибки</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Самый трафиковый и конверсионный блок: диагностика + быстрые действия.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../shorts-ne-nabirayut-prosmotry/">
+          <nav class="guides-nav">
+            <div class="guides-nav__inner">
+              <a class="btn btn--ghost btn--small" href="#problems">🚨 Проблемы</a>
+              <a class="btn btn--ghost btn--small" href="#retention">📈 Удержание</a>
+              <a class="btn btn--ghost btn--small" href="#texts">✍️ Тексты</a>
+              <a class="btn btn--ghost btn--small" href="#production">🎬 Монтаж</a>
+              <a class="btn btn--ghost btn--small" href="#growth">🚀 Рост</a>
+              <a class="btn btn--ghost btn--small" href="#strategy">🎯 Стратегия</a>
+            </div>
+          </nav>
+
+          <div class="section-header guide-section" id="problems">
+            <div class="section-header__icon section-header__icon--red">🚨</div>
+            <div class="section-header__text">
+              <h2>Проблемы и ошибки <span class="section-count">18 гайдов</span></h2>
+              <p>Диагностика проблем и быстрые действия для их решения</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../shorts-ne-nabirayut-prosmotry/">
               <h3>Shorts не набирают просмотры</h3>
-              <p>Причины “не залёта” + быстрый план правок.</p>
+              <p>Причины "не залёта" + быстрый план правок.</p>
             </a>
 
-            <a class="card card--link" href="../prosmotry-shorts-upali/">
+            <a class="guide-card" href="../prosmotry-shorts-upali/">
               <h3>Просмотры Shorts упали</h3>
               <p>7 причин просадки и план восстановления на 7 дней.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-0-prosmotrov/">
+            <a class="guide-card" href="../shorts-0-prosmotrov/">
               <h3>Shorts 0 просмотров</h3>
               <p>Что проверить и как вернуть показы: чек‑лист и быстрые правки.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-ne-konvertiruyut-v-podpischiki/">
+            <a class="guide-card" href="../shorts-ne-konvertiruyut-v-podpischiki/">
               <h3>Shorts не конвертируют в подписчиков</h3>
               <p>Как исправить финал и сделать мягкий CTA.</p>
             </a>
 
-            <a class="card card--link" href="../nizkoe-uderzhanie-v-youtube-shorts/">
+            <a class="guide-card" href="../nizkoe-uderzhanie-v-youtube-shorts/">
               <h3>Низкое удержание в YouTube Shorts</h3>
-              <p>Где чаще всего “сыпется” ролик и что с этим делать.</p>
+              <p>Где чаще всего "сыпется" ролик и что с этим делать.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-malo-laykov/">
+            <a class="guide-card" href="../shorts-malo-laykov/">
               <h3>Shorts мало лайков</h3>
               <p>Что влияет на реакции и какие правки помогают чаще всего.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-malo-kommentariev/">
+            <a class="guide-card" href="../shorts-malo-kommentariev/">
               <h3>Shorts мало комментариев</h3>
               <p>Как задавать вопросы и получать больше обсуждений без давления.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-ne-zagruzhayutsya/">
+            <a class="guide-card" href="../shorts-ne-zagruzhayutsya/">
               <h3>Shorts не загружаются</h3>
               <p>Причины ошибки и что проверить по шагам.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-zavisayut-na-obrabotke/">
+            <a class="guide-card" href="../shorts-zavisayut-na-obrabotke/">
               <h3>Shorts зависают на обработке</h3>
               <p>Причины зависания и быстрый чек‑лист: файл, кодек, интернет, приложение.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-ne-otobrazhayutsya-na-kanale/">
+            <a class="guide-card" href="../shorts-ne-otobrazhayutsya-na-kanale/">
               <h3>Shorts не отображаются на канале</h3>
               <p>Формат, видимость, ограничения и кэш: что проверить по шагам.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-net-zvuka/">
+            <a class="guide-card" href="../shorts-net-zvuka/">
               <h3>Shorts нет звука</h3>
               <p>Почему звук пропадает и что проверить при экспорте и загрузке.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-ne-prohodyat-moderaciyu/">
+            <a class="guide-card" href="../shorts-ne-prohodyat-moderaciyu/">
               <h3>Shorts не проходят модерацию</h3>
               <p>Причины и как перепаковать ролик без риска.</p>
             </a>
 
-            <a class="card card--link" href="../avtorskie-prava-v-shorts/">
+            <a class="guide-card" href="../avtorskie-prava-v-shorts/">
               <h3>Авторские права в Shorts</h3>
               <p>Музыка, фрагменты и картинки: что проверить, чтобы снизить риск ограничений.</p>
             </a>
 
-            <a class="card card--link" href="../vozrastnoe-ogranichenie-shorts/">
+            <a class="guide-card" href="../vozrastnoe-ogranichenie-shorts/">
               <h3>Возрастное ограничение Shorts</h3>
               <p>Почему ставят 18+ и как перепаковать ролик, не теряя удержание.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-tenevoy-ban/">
+            <a class="guide-card" href="../shorts-tenevoy-ban/">
               <h3>Теневой бан Shorts</h3>
               <p>Диагностика просадки показов и план восстановления на 7 дней.</p>
             </a>
 
-            <a class="card card--link" href="../povtoryayushchiysya-kontent-shorts/">
+            <a class="guide-card" href="../povtoryayushchiysya-kontent-shorts/">
               <h3>Повторяющийся контент Shorts</h3>
               <p>Как отличить серию от дублей и что делать, если показы просели.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-nizkoe-kachestvo-video/">
+            <a class="guide-card" href="../shorts-nizkoe-kachestvo-video/">
               <h3>Shorts низкое качество видео</h3>
-              <p>Почему “мыло” и как улучшить качество: настройки и чек‑лист.</p>
+              <p>Почему "мыло" и как улучшить качество: настройки и чек‑лист.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-chernye-polosy/">
+            <a class="guide-card" href="../shorts-chernye-polosy/">
               <h3>Shorts черные полосы</h3>
               <p>Почему появляются и как убрать: кадрирование и экспорт 9:16.</p>
             </a>
           </div>
 
-          <h2 id="retention" class="guide-section" style="margin-top: 42px;">2️⃣ Удержание и структура ролика</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Ключевая экспертность: первые секунды, темп, прогресс, повороты, “петля” и финальная точка.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../kak-sdelat-huk-v-shorts/">
+          <div class="section-header guide-section" id="retention">
+            <div class="section-header__icon section-header__icon--cyan">📈</div>
+            <div class="section-header__text">
+              <h2>Удержание и структура <span class="section-count">13 гайдов</span></h2>
+              <p>Первые секунды, темп, прогресс, повороты, "петля" и финальная точка</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-sdelat-huk-v-shorts/">
               <h3>Как сделать хук в Shorts</h3>
               <p>Формулы первых секунд + примеры (внутри есть блок про первые 3 секунды).</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-huk-v-shorts/#pervye-3-sekundy-shorts">
+            <a class="guide-card" href="../kak-sdelat-huk-v-shorts/#pervye-3-sekundy-shorts">
               <h3>Первые 3 секунды Shorts</h3>
               <p>Что показать и сказать сразу, чтобы не пролистывали.</p>
             </a>
 
-            <a class="card card--link" href="../procent-prolistyvaniy-shorts/">
+            <a class="guide-card" href="../procent-prolistyvaniy-shorts/">
               <h3>Процент пролистываний Shorts</h3>
               <p>Почему пролистывают и 10 правок первых секунд.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-shorts-chtoby-dosmotreli-do-konca/">
+            <a class="guide-card" href="../kak-sdelat-shorts-chtoby-dosmotreli-do-konca/">
               <h3>Как сделать Shorts, чтобы досматривали до конца</h3>
-              <p>План монтажа: хук → прогресс → финал → “петля”.</p>
+              <p>План монтажа: хук → прогресс → финал → "петля".</p>
             </a>
 
-            <a class="card card--link" href="../kak-podnyat-uderzhanie-v-shorts/">
+            <a class="guide-card" href="../kak-podnyat-uderzhanie-v-shorts/">
               <h3>Как поднять удержание в Shorts</h3>
               <p>12 практичных приёмов, которые реально внедрить.</p>
             </a>
 
-            <a class="card card--link" href="../kak-analizirovat-uderzhanie-v-shorts/">
+            <a class="guide-card" href="../kak-analizirovat-uderzhanie-v-shorts/">
               <h3>Как анализировать удержание в Shorts</h3>
               <p>5 сигналов слабого ролика и какие правки тестировать.</p>
             </a>
 
-            <a class="card card--link" href="../optimalnaya-dlina-shorts/">
+            <a class="guide-card" href="../optimalnaya-dlina-shorts/">
               <h3>Оптимальная длина Shorts</h3>
               <p>Как выбрать хронометраж под идею и не растягивать.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-povorot-v-seredine-shorts/">
+            <a class="guide-card" href="../kak-sdelat-povorot-v-seredine-shorts/">
               <h3>Как сделать поворот в середине Shorts</h3>
               <p>8 приёмов поворота и простой способ тестировать версии.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-dinamichnyj-temp-v-shorts/">
+            <a class="guide-card" href="../kak-sdelat-dinamichnyj-temp-v-shorts/">
               <h3>Как сделать динамичный темп в Shorts</h3>
               <p>Приёмы темпа без сложного монтажа + примеры и чек‑лист.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-koncovku-v-shorts/">
+            <a class="guide-card" href="../kak-sdelat-koncovku-v-shorts/">
               <h3>Как сделать концовку в Shorts</h3>
               <p>7 вариантов финала + формулы и мини‑чек‑лист.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-petlyu-v-shorts/">
+            <a class="guide-card" href="../kak-sdelat-petlyu-v-shorts/">
               <h3>Как сделать петлю в Shorts</h3>
               <p>Петля, повторы и структуры, которые держат до конца.</p>
             </a>
 
-            <a class="card card--link" href="../storitelling-v-shorts/">
+            <a class="guide-card" href="../storitelling-v-shorts/">
               <h3>Сторителлинг в Shorts</h3>
               <p>3 структуры истории на 30 секунд + фразы и ошибки.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-smotryat-bez-zvuka/">
+            <a class="guide-card" href="../shorts-smotryat-bez-zvuka/">
               <h3>Shorts смотрят без звука</h3>
               <p>Текст, прогресс и субтитры, чтобы ролик был понятен глазами.</p>
             </a>
           </div>
 
-          <h2 id="texts" class="guide-section" style="margin-top: 42px;">3️⃣ Сценарий и тексты</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Шаблоны сценариев, тексты на экране и “следующий шаг” без спама.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../kak-napisat-scenariy-dlya-shorts/">
+          <div class="section-header guide-section" id="texts">
+            <div class="section-header__icon section-header__icon--purple">✍️</div>
+            <div class="section-header__text">
+              <h2>Сценарий и тексты <span class="section-count">12 гайдов</span></h2>
+              <p>Шаблоны сценариев, тексты на экране и "следующий шаг" без спама</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-napisat-scenariy-dlya-shorts/">
               <h3>Как написать сценарий для Shorts</h3>
               <p>Шаблон на 30 секунд + примеры фраз, чтобы держать темп.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-shorts-iz-teksta/">
+            <a class="guide-card" href="../kak-sdelat-shorts-iz-teksta/">
               <h3>Как сделать Shorts из текста</h3>
               <p>Шаблон сценария на 30 секунд + примеры хуков и шагов.</p>
             </a>
 
-            <a class="card card--link" href="../shablony-dlya-shorts/">
+            <a class="guide-card" href="../shablony-dlya-shorts/">
               <h3>Шаблоны для Shorts</h3>
               <p>12 структур роликов + заготовки и чек‑лист, чтобы досматривали.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-tekst-na-video-dlya-shorts/">
+            <a class="guide-card" href="../kak-sdelat-tekst-na-video-dlya-shorts/">
               <h3>Как сделать текст на видео для Shorts</h3>
               <p>Шрифты, строки, безопасные зоны и чек‑лист читабельности.</p>
             </a>
 
-            <a class="card card--link" href="../zagolovok-dlya-shorts-kak-pisat/">
+            <a class="guide-card" href="../zagolovok-dlya-shorts-kak-pisat/">
               <h3>Заголовок для Shorts: как писать</h3>
               <p>Шаблоны заголовков и ошибки кликбейта, которые ломают удержание.</p>
             </a>
 
-            <a class="card card--link" href="../opisanie-dlya-shorts-chto-pisat/">
+            <a class="guide-card" href="../opisanie-dlya-shorts-chto-pisat/">
               <h3>Описание для Shorts: что писать</h3>
               <p>Структура из 3 строк + примеры и ошибки спама.</p>
             </a>
 
-            <a class="card card--link" href="../klyuchevye-slova-dlya-shorts/">
+            <a class="guide-card" href="../klyuchevye-slova-dlya-shorts/">
               <h3>Ключевые слова для Shorts</h3>
               <p>Где брать запросы и как использовать без переспама.</p>
             </a>
 
-            <a class="card card--link" href="../heshtegi-dlya-shorts-rabotayut-li/">
+            <a class="guide-card" href="../heshtegi-dlya-shorts-rabotayut-li/">
               <h3>Хештеги для Shorts: работают ли</h3>
               <p>Когда теги помогают, сколько ставить и что важнее хештегов.</p>
             </a>
 
-            <a class="card card--link" href="../kak-naiti-heshtegi-dlya-shorts/">
+            <a class="guide-card" href="../kak-naiti-heshtegi-dlya-shorts/">
               <h3>Как найти хештеги для Shorts</h3>
               <p>3 способа искать теги и чек‑лист 3–5 хештегов.</p>
             </a>
 
-            <a class="card card--link" href="../cta-v-shorts/">
+            <a class="guide-card" href="../cta-v-shorts/">
               <h3>CTA в Shorts</h3>
               <p>Где ставить CTA и 7 шаблонов фраз без давления.</p>
             </a>
 
-            <a class="card card--link" href="../kak-zakrepit-kommentarij-v-shorts/">
+            <a class="guide-card" href="../kak-zakrepit-kommentarij-v-shorts/">
               <h3>Как закрепить комментарий в Shorts</h3>
               <p>Шаблоны закрепа и ошибки, из‑за которых зрители не отвечают.</p>
             </a>
 
-            <a class="card card--link" href="../ssylka-v-shorts-kak-dobavit/">
+            <a class="guide-card" href="../ssylka-v-shorts-kak-dobavit/">
               <h3>Ссылка в Shorts: как добавить</h3>
               <p>Где поставить ссылку и как подвести к ней без спама.</p>
             </a>
           </div>
 
-          <h2 id="production" class="guide-section" style="margin-top: 42px;">4️⃣ Монтаж и продакшен</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Техническая база и оформление: картинка, звук, субтитры, монтаж.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../razreshenie-dlya-shorts/">
+          <div class="section-header guide-section" id="production">
+            <div class="section-header__icon section-header__icon--green">🎬</div>
+            <div class="section-header__text">
+              <h2>Монтаж и продакшен <span class="section-count">24 гайда</span></h2>
+              <p>Техническая база и оформление: картинка, звук, субтитры, монтаж</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../razreshenie-dlya-shorts/">
               <h3>Разрешение для Shorts</h3>
               <p>Размеры, fps и экспорт, чтобы не было мыла и полос.</p>
             </a>
 
-            <a class="card card--link" href="../bitreyt-dlya-shorts/">
+            <a class="guide-card" href="../bitreyt-dlya-shorts/">
               <h3>Битрейт для Shorts</h3>
               <p>Что ставить при экспорте, чтобы было чётко и без мыла.</p>
             </a>
 
-            <a class="card card--link" href="../format-video-dlya-shorts/">
+            <a class="guide-card" href="../format-video-dlya-shorts/">
               <h3>Формат видео для Shorts</h3>
               <p>MP4, кодек и звук: настройки экспорта, которые реже ломают загрузку.</p>
             </a>
 
-            <a class="card card--link" href="../svet-dlya-shorts/">
+            <a class="guide-card" href="../svet-dlya-shorts/">
               <h3>Свет для Shorts</h3>
               <p>3 схемы света и чек‑лист, который проверить за минуту.</p>
             </a>
 
-            <a class="card card--link" href="../kak-ubrat-tryasku-v-shorts/">
+            <a class="guide-card" href="../kak-ubrat-tryasku-v-shorts/">
               <h3>Как убрать тряску в Shorts</h3>
               <p>Причины тряски и быстрые правки при съёмке и монтаже.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-iz-foto/">
+            <a class="guide-card" href="../shorts-iz-foto/">
               <h3>Shorts из фото</h3>
               <p>Шаблон структуры и чек‑лист, чтобы ролик не пролистывали.</p>
             </a>
 
-            <a class="card card--link" href="../oblozhka-dlya-shorts/">
+            <a class="guide-card" href="../oblozhka-dlya-shorts/">
               <h3>Обложка для Shorts</h3>
               <p>Правила текста, контраста и лица + чек‑лист.</p>
             </a>
 
-            <a class="card card--link" href="../kak-postavit-oblozhku-na-shorts/">
+            <a class="guide-card" href="../kak-postavit-oblozhku-na-shorts/">
               <h3>Как поставить обложку на Shorts</h3>
               <p>Пошагово на телефоне и на ПК + причины, почему превью не отображается.</p>
             </a>
 
-            <a class="card card--link" href="../fon-dlya-shorts/">
+            <a class="guide-card" href="../fon-dlya-shorts/">
               <h3>Фон для Shorts</h3>
               <p>Как выбрать фон, чтобы не отвлекал и удержание было выше.</p>
             </a>
 
-            <a class="card card--link" href="../perehody-v-shorts/">
+            <a class="guide-card" href="../perehody-v-shorts/">
               <h3>Переходы в Shorts</h3>
               <p>10 простых приёмов и где они уместны: шаги, примеры, поворот.</p>
             </a>
 
-            <a class="card card--link" href="../subtitry-dlya-shorts-avtomatom/">
+            <a class="guide-card" href="../subtitry-dlya-shorts-avtomatom/">
               <h3>Субтитры для Shorts автоматически</h3>
               <p>Читабельность, стиль и быстрые правки распознавания.</p>
             </a>
 
-            <a class="card card--link" href="../ozvuchka-dlya-shorts-kak-vybrat-golos/">
+            <a class="guide-card" href="../ozvuchka-dlya-shorts-kak-vybrat-golos/">
               <h3>Озвучка для Shorts: как выбрать голос</h3>
               <p>Голос, темп и паузы — чтобы ролик было приятно досматривать.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-chistyy-zvuk-v-shorts/">
+            <a class="guide-card" href="../kak-sdelat-chistyy-zvuk-v-shorts/">
               <h3>Как сделать чистый звук в Shorts</h3>
               <p>Шум, эхо и тихая речь: чек‑лист без студии.</p>
             </a>
 
-            <a class="card card--link" href="../gromkost-golosa-i-muzyki-v-shorts/">
+            <a class="guide-card" href="../gromkost-golosa-i-muzyki-v-shorts/">
               <h3>Громкость голоса и музыки в Shorts</h3>
               <p>Быстрый баланс, чтобы речь была разборчивой и комфортной.</p>
             </a>
 
-            <a class="card card--link" href="../muzyka-dlya-shorts/">
+            <a class="guide-card" href="../muzyka-dlya-shorts/">
               <h3>Музыка для Shorts</h3>
               <p>Как выбрать трек, чтобы усиливал ролик, а не мешал смыслу.</p>
             </a>
 
-            <a class="card card--link" href="../muzyka-bez-avtorskih-prav-dlya-shorts/">
+            <a class="guide-card" href="../muzyka-bez-avtorskih-prav-dlya-shorts/">
               <h3>Музыка без авторских прав для Shorts</h3>
               <p>Как выбирать треки без риска блокировок и проблем с монетизацией.</p>
             </a>
 
-            <a class="card card--link" href="../kak-uskorit-montazh-shorts/">
+            <a class="guide-card" href="../kak-uskorit-montazh-shorts/">
               <h3>Как ускорить монтаж Shorts</h3>
               <p>10 приёмов и порядок работы, чтобы монтировать быстрее.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-shorts-bez-montazha/">
+            <a class="guide-card" href="../kak-sdelat-shorts-bez-montazha/">
               <h3>Как сделать Shorts без монтажа</h3>
               <p>3 структуры на один дубль, текст на экране и чек‑лист удержания.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-bez-lica/">
+            <a class="guide-card" href="../shorts-bez-lica/">
               <h3>Shorts без лица</h3>
               <p>7 faceless форматов, идеи и чек‑лист, чтобы досматривали чаще.</p>
             </a>
 
-            <a class="card card--link" href="../neyroset-dlya-shorts/">
+            <a class="guide-card" href="../neyroset-dlya-shorts/">
               <h3>Нейросеть для Shorts</h3>
               <p>Как ускорить создание роликов и быстрее тестировать идеи.</p>
             </a>
 
-            <a class="card card--link" href="../kak-zagruzit-shorts/">
+            <a class="guide-card" href="../kak-zagruzit-shorts/">
               <h3>Как загрузить Shorts</h3>
               <p>Чек‑лист публикации: файл, заголовок, описание и проверка результата.</p>
             </a>
 
-            <a class="card card--link" href="../kak-snimat-shorts-pachkoy/">
+            <a class="guide-card" href="../kak-snimat-shorts-pachkoy/">
               <h3>Как снимать Shorts пачкой</h3>
               <p>Сетап, запись блоками и план на 10 роликов за одну сессию.</p>
             </a>
 
-            <a class="card card--link" href="../kak-snimat-shorts-na-telefon/">
+            <a class="guide-card" href="../kak-snimat-shorts-na-telefon/">
               <h3>Как снимать Shorts на телефон</h3>
-              <p>Кадр, свет, звук и быстрый сетап — чтобы ролик выглядел “чисто”.</p>
+              <p>Кадр, свет, звук и быстрый сетап — чтобы ролик выглядел "чисто".</p>
             </a>
           </div>
 
-          <h2 id="growth" class="guide-section" style="margin-top: 42px;">5️⃣ Рост и рекомендации</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Метрики, тесты и регулярность — чтобы расти системно, а не “случайно”.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../kak-popast-v-rekomendacii-youtube-shorts/">
+          <div class="section-header guide-section" id="growth">
+            <div class="section-header__icon section-header__icon--yellow">🚀</div>
+            <div class="section-header__text">
+              <h2>Рост и рекомендации <span class="section-count">9 гайдов</span></h2>
+              <p>Метрики, тесты и регулярность — чтобы расти системно</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-popast-v-rekomendacii-youtube-shorts/">
               <h3>Как попасть в рекомендации YouTube Shorts</h3>
               <p>Что влияет на показы и какие правки дают рост быстрее всего.</p>
             </a>
 
-            <a class="card card--link" href="../ctr-v-shorts/">
+            <a class="guide-card" href="../ctr-v-shorts/">
               <h3>CTR в Shorts</h3>
-              <p>Почему падает и какие правки повышают “включаемость”.</p>
+              <p>Почему падает и какие правки повышают "включаемость".</p>
             </a>
 
-            <a class="card card--link" href="../analitika-youtube-shorts-kak-chitat/">
+            <a class="guide-card" href="../analitika-youtube-shorts-kak-chitat/">
               <h3>Аналитика YouTube Shorts: как читать</h3>
               <p>5 метрик и какие правки тестировать по сигналам.</p>
             </a>
 
-            <a class="card card--link" href="../kak-testirovat-shorts/">
+            <a class="guide-card" href="../kak-testirovat-shorts/">
               <h3>Как тестировать Shorts</h3>
               <p>Одна гипотеза → версии → вывод: простая система экспериментов.</p>
             </a>
 
-            <a class="card card--link" href="../kak-privesti-trafik-iz-shorts-v-telegram/">
+            <a class="guide-card" href="../kak-privesti-trafik-iz-shorts-v-telegram/">
               <h3>Как привести трафик из Shorts в Telegram</h3>
               <p>CTA, закреп и сценарии фраз, чтобы люди переходили без давления.</p>
             </a>
 
-            <a class="card card--link" href="../kak-privesti-trafik-iz-shorts-na-sayt/">
+            <a class="guide-card" href="../kak-privesti-trafik-iz-shorts-na-sayt/">
               <h3>Как привести трафик из Shorts на сайт</h3>
               <p>Куда ставить ссылку и как поднять конверсию на лендинге.</p>
             </a>
 
-            <a class="card card--link" href="../monetizaciya-youtube-shorts/">
+            <a class="guide-card" href="../monetizaciya-youtube-shorts/">
               <h3>Монетизация YouTube Shorts</h3>
               <p>Условия, выплаты и частые ошибки (особенно с музыкой) + чек‑лист.</p>
             </a>
 
-            <a class="card card--link" href="../kogda-vykladyvat-shorts/">
+            <a class="guide-card" href="../kogda-vykladyvat-shorts/">
               <h3>Когда выкладывать Shorts</h3>
               <p>Тест на 7 дней и как выбрать своё лучшее время публикации.</p>
             </a>
 
-            <a class="card card--link" href="../kak-chasto-vykladyvat-shorts/">
+            <a class="guide-card" href="../kak-chasto-vykladyvat-shorts/">
               <h3>Как часто выкладывать Shorts</h3>
               <p>Частота без выгорания + план, который можно выдержать месяц.</p>
             </a>
           </div>
 
-          <h2 id="strategy" class="guide-section" style="margin-top: 42px;">6️⃣ Стратегия</h2>
-          <p style="color: var(--muted); margin: 0; max-width: 860px;">
-            Ниша, идеи, контент‑план и серийность — основа для стабильного роста.
-          </p>
-          <div class="cards cards--2" style="margin-top: 18px;">
-            <a class="card card--link" href="../kak-sdelat-shorts-na-youtube/">
+          <div class="section-header guide-section" id="strategy">
+            <div class="section-header__icon section-header__icon--blue">🎯</div>
+            <div class="section-header__text">
+              <h2>Стратегия <span class="section-count">16 гайдов</span></h2>
+              <p>Ниша, идеи, контент‑план и серийность — основа для стабильного роста</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-sdelat-shorts-na-youtube/">
               <h3>Как сделать Shorts на YouTube</h3>
               <p>Идея → хук → монтаж → публикация: простой шаблон для старта.</p>
             </a>
 
-            <a class="card card--link" href="../kak-vybrat-nishu-dlya-shorts/">
+            <a class="guide-card" href="../kak-vybrat-nishu-dlya-shorts/">
               <h3>Как выбрать нишу для Shorts</h3>
               <p>Критерии спроса, повторяемости и конкуренции.</p>
             </a>
 
-            <a class="card card--link" href="../idei-dlya-shorts-gde-brat/">
+            <a class="guide-card" href="../idei-dlya-shorts-gde-brat/">
               <h3>Идеи для Shorts: где брать</h3>
               <p>Источники тем, тренды и шаблон запаса идей.</p>
             </a>
 
-            <a class="card card--link" href="../kontent-plan-dlya-shorts-na-mesyac/">
+            <a class="guide-card" href="../kontent-plan-dlya-shorts-na-mesyac/">
               <h3>Контент-план для Shorts на месяц</h3>
               <p>30 тем‑формул + расписание на 4 недели без выгорания.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-biznesa/">
+            <a class="guide-card" href="../shorts-dlya-biznesa/">
               <h3>Shorts для бизнеса</h3>
               <p>Как получать лиды и заявки: форматы, серии и CTA без давления.</p>
             </a>
 
-            <a class="card card--link" href="../kak-prodavat-cherez-shorts/">
+            <a class="guide-card" href="../kak-prodavat-cherez-shorts/">
               <h3>Как продавать через Shorts</h3>
               <p>Контент и мягкий CTA, который не режет удержание.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-onlayn-shkoly/">
+            <a class="guide-card" href="../shorts-dlya-onlayn-shkoly/">
               <h3>Shorts для онлайн-школы</h3>
               <p>Форматы уроков, серии и мягкий CTA, чтобы получать лиды и заявки.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-internet-magazina/">
+            <a class="guide-card" href="../shorts-dlya-internet-magazina/">
               <h3>Shorts для интернет-магазина</h3>
               <p>Демо и сравнения товаров, сценарии и чек‑лист, чтобы продавать без спама.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-nedvizhimosti/">
+            <a class="guide-card" href="../shorts-dlya-nedvizhimosti/">
               <h3>Shorts для недвижимости</h3>
-              <p>Форматы обзоров и чек‑листы, которые приводят заявки без “рекламы в лоб”.</p>
+              <p>Форматы обзоров и чек‑листы, которые приводят заявки без "рекламы в лоб".</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-kliniki/">
+            <a class="guide-card" href="../shorts-dlya-kliniki/">
               <h3>Shorts для клиники</h3>
               <p>FAQ, мифы, подготовка и безопасный тон — чтобы росло доверие и заявки.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-yuristov/">
+            <a class="guide-card" href="../shorts-dlya-yuristov/">
               <h3>Shorts для юристов</h3>
               <p>Как объяснять сложное просто и получать обращения через мягкий CTA.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-smm-agentstva/">
+            <a class="guide-card" href="../shorts-dlya-smm-agentstva/">
               <h3>Shorts для SMM-агентства</h3>
               <p>Мини‑кейсы, разборы и оффер, который даёт лиды из YouTube Shorts.</p>
             </a>
 
-            <a class="card card--link" href="../shorts-dlya-it-kompanii/">
+            <a class="guide-card" href="../shorts-dlya-it-kompanii/">
               <h3>Shorts для IT-компании</h3>
-              <p>Демо, кейсы и “ошибка → решение”, чтобы объяснять продукт и получать заявки.</p>
+              <p>Демо, кейсы и "ошибка → решение", чтобы объяснять продукт и получать заявки.</p>
             </a>
 
-            <a class="card card--link" href="../skolko-stoit-montazh-shorts/">
+            <a class="guide-card" href="../skolko-stoit-montazh-shorts/">
               <h3>Сколько стоит монтаж Shorts</h3>
               <p>От чего зависит цена, как экономить и не терять удержание.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-seriyu-shorts/">
+            <a class="guide-card" href="../kak-sdelat-seriyu-shorts/">
               <h3>Как сделать серию Shorts</h3>
-              <p>Шаблон серии, матрица тем и “петля” между выпусками.</p>
+              <p>Шаблон серии, матрица тем и "петля" между выпусками.</p>
             </a>
 
-            <a class="card card--link" href="../kak-sdelat-shorts-iz-dlinnogo-video/">
+            <a class="guide-card" href="../kak-sdelat-shorts-iz-dlinnogo-video/">
               <h3>Как сделать Shorts из длинного видео</h3>
               <p>Схема нарезки: что оставить и как собрать сюжет за 30 секунд.</p>
             </a>
