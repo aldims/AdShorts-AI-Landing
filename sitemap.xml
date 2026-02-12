@@ -6,7 +6,7 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/" />
     <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/" />
-    <lastmod>2026-02-11</lastmod>
+    <lastmod>2026-02-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -15,63 +15,9 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/" />
     <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/" />
-    <lastmod>2026-02-11</lastmod>
+    <lastmod>2026-02-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/terms-of-use/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms-of-use/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms-of-use/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/en/terms-of-use/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms-of-use/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms-of-use/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/terms/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/en/terms/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/privacy/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/privacy/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/privacy/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/en/privacy/</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/privacy/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/privacy/" />
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://adshortsai.com/data-deletion.html</loc>
-    <lastmod>2026-01-29</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.2</priority>
   </url>
   <url>
     <loc>https://adshortsai.com/shorts-ne-nabirayut-prosmotry/</loc>
@@ -85,7 +31,7 @@
     <loc>https://adshortsai.com/shorts-guides/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-guides/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/shorts-guides/" />
-    <lastmod>2026-02-11</lastmod>
+    <lastmod>2026-02-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -566,6 +512,158 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/monetizaciya-youtube-shorts/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/monetizaciya-youtube-shorts/" />
     <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/prosmotry-shorts-upali/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/prosmotry-shorts-upali/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/prosmotry-shorts-upali/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/bitreyt-dlya-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/bitreyt-dlya-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/bitreyt-dlya-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/svet-dlya-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/svet-dlya-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/svet-dlya-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-ubrat-tryasku-v-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-ubrat-tryasku-v-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-ubrat-tryasku-v-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/shorts-iz-foto/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-iz-foto/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/shorts-iz-foto/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/klyuchevye-slova-dlya-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/klyuchevye-slova-dlya-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/klyuchevye-slova-dlya-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-naiti-heshtegi-dlya-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-naiti-heshtegi-dlya-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-naiti-heshtegi-dlya-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/cta-v-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/cta-v-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/cta-v-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/procent-prolistyvaniy-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/procent-prolistyvaniy-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/procent-prolistyvaniy-shorts/" />
+    <lastmod>2026-02-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/neyroset-dlya-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/neyroset-dlya-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/neyroset-dlya-shorts/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-sdelat-shorts-bez-montazha/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-sdelat-shorts-bez-montazha/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-sdelat-shorts-bez-montazha/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-privesti-trafik-iz-shorts-v-telegram/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-privesti-trafik-iz-shorts-v-telegram/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-privesti-trafik-iz-shorts-v-telegram/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-privesti-trafik-iz-shorts-na-sayt/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-privesti-trafik-iz-shorts-na-sayt/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-privesti-trafik-iz-shorts-na-sayt/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/kak-prodavat-cherez-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/kak-prodavat-cherez-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/kak-prodavat-cherez-shorts/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/shorts-dlya-biznesa/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-dlya-biznesa/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/shorts-dlya-biznesa/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/avtorskie-prava-v-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/avtorskie-prava-v-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/avtorskie-prava-v-shorts/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/shorts-tenevoy-ban/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-tenevoy-ban/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/shorts-tenevoy-ban/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/vozrastnoe-ogranichenie-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/vozrastnoe-ogranichenie-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/vozrastnoe-ogranichenie-shorts/" />
+    <lastmod>2026-02-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/povtoryayushchiysya-kontent-shorts/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/povtoryayushchiysya-kontent-shorts/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/povtoryayushchiysya-kontent-shorts/" />
+    <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
