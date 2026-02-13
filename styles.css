@@ -713,6 +713,37 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ============================================
+   Guides (Homepage)
+   ============================================ */
+.guide-topic h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.guide-topic__emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.guide-topic__title {
+  flex: 1 1 auto;
+}
+
+.guide-topic__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.guide-topic p {
+  margin: 0;
+}
+
+/* ============================================
    Features
    ============================================ */
 .features { 
@@ -1677,9 +1708,9 @@ h1, h2, h3, h4, h5, h6 {
   display: flex; 
   align-items: center; 
   justify-content: space-between; 
-  gap: 20px; 
+  gap: 16px; 
   padding: 24px 0; 
-  flex-wrap: wrap; 
+  flex-wrap: nowrap;
 }
 
 .footer .logo {
@@ -1688,14 +1719,16 @@ h1, h2, h3, h4, h5, h6 {
 
 .footer__links { 
   display: flex; 
-  gap: 20px; 
-  flex-wrap: wrap; 
+  gap: 16px; 
+  flex-wrap: nowrap;
+  align-items: center;
+  font-size: 13px;
 }
 
 .footer__links a { 
   color: var(--muted); 
   text-decoration: none; 
-  font-size: 14px;
+  font-size: inherit;
   transition: color 0.2s ease;
 }
 
@@ -1706,19 +1739,40 @@ h1, h2, h3, h4, h5, h6 {
 .footer__copy { 
   color: var(--muted); 
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.footer .container.footer__inner {
+  width: min(1440px, calc(100% - 40px));
+}
+
+@media (max-width: 1200px) {
+  .footer__inner {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .footer__links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .footer__copy {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* ============================================
    Content Links
    ============================================ */
-main a:not(.btn):not(.logo) { 
+main a:not(.btn):not(.logo):not(.card--link) { 
   color: var(--neon-cyan); 
   text-decoration: none;
   transition: opacity 0.2s ease;
 }
 
-main a:not(.btn):not(.logo):hover { 
+main a:not(.btn):not(.logo):not(.card--link):hover { 
   opacity: 0.8;
 }
 
@@ -2023,5 +2077,220 @@ main a:not(.btn):not(.logo):hover {
   .lang-banner__btn {
     width: 100%;
     text-align: center;
+  }
+}
+
+/* ============================================
+   SEO Article Pages
+   ============================================ */
+.article {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+
+.article h1 {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 24px;
+  line-height: 1.2;
+}
+
+.article .lead {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 32px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+.article h2 {
+  font-size: 1.5rem;
+  margin: 48px 0 20px;
+  color: var(--text);
+  position: relative;
+  padding-left: 20px;
+}
+
+.article h2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  background: var(--gradient-main);
+  border-radius: 2px;
+}
+
+.article h3 {
+  font-size: 1.15rem;
+  margin: 32px 0 12px;
+  color: var(--text);
+}
+
+.article p {
+  color: var(--text-secondary);
+  line-height: 1.8;
+  margin: 16px 0;
+}
+
+.article ul,
+.article ol {
+  margin: 20px 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.article li {
+  position: relative;
+  margin: 12px 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.article ul > li {
+  padding-left: 28px;
+}
+
+.article ul > li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  background: var(--neon-cyan);
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+.article ol {
+  counter-reset: article-ol;
+}
+
+.article ol > li {
+  padding-left: 34px;
+  counter-increment: article-ol;
+}
+
+.article ol > li::before {
+  content: counter(article-ol) '.';
+  position: absolute;
+  left: 0;
+  top: 0.05em;
+  width: auto;
+  height: auto;
+  background: none;
+  border-radius: 0;
+  color: var(--neon-cyan);
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.article li strong {
+  color: var(--text);
+}
+
+.article a:not(.btn) {
+  color: var(--neon-cyan);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+  transition: border-color 0.2s ease;
+}
+
+.article a:not(.btn):hover {
+  border-color: var(--neon-cyan);
+}
+
+/* Highlight box for checklist */
+.article ul:has(li:first-child strong:first-child) {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 24px 24px 28px;
+}
+
+/* CTA block styling */
+.article .cta {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  text-align: center;
+  margin: 40px 0;
+}
+
+.article .cta__note {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+}
+
+/* Related links (Read also) */
+.article h2 + ul:last-of-type {
+  display: grid;
+  gap: 12px;
+}
+
+.article h2 + ul:last-of-type li {
+  padding: 0;
+}
+
+.article h2 + ul:last-of-type li::before {
+  display: none;
+}
+
+.article h2 + ul:last-of-type a {
+  display: block;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  border-bottom: none;
+  transition: all 0.2s ease;
+}
+
+.article h2 + ul:last-of-type a:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  transform: translateX(4px);
+}
+
+/* Back to guides link */
+.article-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin-bottom: 24px;
+  transition: color 0.2s ease;
+  border-bottom: none;
+}
+
+.article-back:hover {
+  color: var(--neon-cyan);
+}
+
+.article-back::before {
+  content: '←';
+}
+
+@media (max-width: 768px) {
+  .article {
+    padding: 24px 16px 40px;
+  }
+
+  .article h2 {
+    font-size: 1.3rem;
+    margin-top: 36px;
+  }
+
+  .article .cta {
+    padding: 24px 20px;
   }
 }

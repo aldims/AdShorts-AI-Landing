@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="https://adshortsai.com/en/shorts-guides/" />
+    <link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-guides/" />
+    <link rel="alternate" hreflang="en" href="https://adshortsai.com/en/shorts-guides/" />
+    <link rel="alternate" hreflang="x-default" href="https://adshortsai.com/shorts-guides/" />
+    <title>Shorts Guides: retention, hooks, editing — AdShorts AI</title>
+    <meta
+      name="description"
+      content="Practical YouTube Shorts guides: views, retention, hooks, length, scripting, editing, growth, and strategy. Checklists and examples for fast fixes."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://adshortsai.com/en/shorts-guides/" />
+    <meta property="og:title" content="Shorts Guides — AdShorts AI" />
+    <meta
+      property="og:description"
+      content="Practical YouTube Shorts guides: views, retention, hooks, length, scripting, editing, growth, and strategy. Checklists and examples for fast fixes."
+    />
+    <meta property="og:image" content="https://adshortsai.com/logo.png?v=2" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:site_name" content="AdShorts AI" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Shorts Guides — AdShorts AI" />
+    <meta
+      name="twitter:description"
+      content="Practical YouTube Shorts guides: views, retention, hooks, length, scripting, editing, growth, and strategy. Checklists and examples for fast fixes."
+    />
+    <meta name="twitter:image" content="https://adshortsai.com/logo.png?v=2" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../../styles.css?v=47" />
+    <link rel="preload" as="image" href="../../logo.png?v=2" />
+    <link rel="icon" type="image/png" sizes="120x120" href="../../favicon.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="../../favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../../favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../../favicon-16.png" />
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.ico" />
+    <link rel="apple-touch-icon" href="../../logo.png?v=2" />
+    <style>
+      .logo { display: inline-flex; align-items: center; gap: 12px; }
+      .logo__icon { display: inline-block; }
+      .guide-section { scroll-margin-top: 160px; }
+
+      /* Hero section for guides */
+      .guides-hero {
+        text-align: center;
+        padding: 60px 0 40px;
+      }
+      .guides-hero h1 {
+        font-size: clamp(2.2rem, 5vw, 3.2rem);
+        background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 20px;
+      }
+      .guides-hero .lead {
+        color: var(--text-secondary);
+        max-width: 760px;
+        margin: 0 auto;
+        font-size: 1.1rem;
+      }
+
+      /* Sticky navigation */
+      .guides-nav {
+        position: sticky;
+        top: 70px;
+        z-index: 50;
+        background: rgba(8, 8, 16, 0.85);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 0;
+        margin: 0 -20px 40px;
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .guides-nav__inner {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        justify-content: center;
+      }
+      .guides-nav .btn {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+        white-space: nowrap;
+      }
+      .guides-nav .btn.active {
+        background: var(--gradient-main);
+        border-color: transparent;
+        color: #000;
+      }
+
+      /* Section headers with icons */
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 60px;
+        margin-bottom: 0;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s ease;
+        border-radius: 12px 12px 0 0;
+      }
+      .section-header:hover {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .section-header::after {
+        content: '';
+        margin-left: auto;
+        width: 24px;
+        height: 24px;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7394'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") center/contain no-repeat;
+        transition: transform 0.3s ease;
+        flex-shrink: 0;
+      }
+      .section-header.collapsed::after {
+        transform: rotate(-90deg);
+      }
+      .section-header__icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+      }
+      .section-header__icon--red { background: rgba(255, 45, 85, 0.15); border: 1px solid rgba(255, 45, 85, 0.3); }
+      .section-header__icon--cyan { background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); }
+      .section-header__icon--purple { background: rgba(191, 90, 242, 0.15); border: 1px solid rgba(191, 90, 242, 0.3); }
+      .section-header__icon--green { background: rgba(48, 209, 88, 0.15); border: 1px solid rgba(48, 209, 88, 0.3); }
+      .section-header__icon--yellow { background: rgba(255, 214, 10, 0.15); border: 1px solid rgba(255, 214, 10, 0.3); }
+      .section-header__icon--blue { background: rgba(10, 132, 255, 0.15); border: 1px solid rgba(10, 132, 255, 0.3); }
+
+      .section-header__text h2 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      .section-header__text p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      /* Guide cards improvements */
+      .guide-cards {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, 1fr);
+        margin-top: 24px;
+        overflow: hidden;
+        transition: max-height 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
+      }
+      .guide-cards.collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .guide-card {
+        display: block;
+        background: var(--card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+      .guide-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0, 240, 255, 0.08) 0%, transparent 60%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .guide-card:hover {
+        border-color: rgba(0, 240, 255, 0.4);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 240, 255, 0.1);
+      }
+      .guide-card:hover::before { opacity: 1; }
+      .guide-card h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        color: var(--text);
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .guide-card h3::after {
+        content: '→';
+        opacity: 0;
+        transform: translateX(-8px);
+        transition: all 0.3s ease;
+        color: var(--neon-cyan);
+      }
+      .guide-card:hover h3::after {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .guide-card p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        position: relative;
+        line-height: 1.5;
+      }
+
+      /* Count badge */
+      .section-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-left: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .guides-nav__inner { flex-wrap: wrap; }
+      }
+      @media (max-width: 768px) {
+        .guides-hero { padding: 40px 0 30px; }
+        .guides-nav { top: 60px; }
+        .guide-cards { grid-template-columns: 1fr; }
+        .section-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .section-header__icon { width: 40px; height: 40px; font-size: 1.2rem; }
+      }
+    </style>
+    <script defer src="../../script.js"></script>
+    <script>
+      const initialHash = (window.location.hash || '').replace('#', '');
+      const shouldForceTop = initialHash === '';
+
+      if (history.scrollRestoration) {
+        history.scrollRestoration = 'manual';
+      }
+      if (shouldForceTop) {
+        window.scrollTo(0, 0);
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        if (shouldForceTop) {
+          window.scrollTo(0, 0);
+        }
+
+        const headers = document.querySelectorAll('.section-header');
+        const navLinks = document.querySelectorAll('.guides-nav__inner a');
+
+        function expandSectionById(targetId, options) {
+          const opts = options || {};
+          const targetHeader = document.getElementById(targetId);
+
+          if (!targetHeader || !targetHeader.classList.contains('section-header')) return;
+
+          const cards = targetHeader.nextElementSibling;
+          if (!cards || !cards.classList.contains('guide-cards')) return;
+
+          targetHeader.classList.remove('collapsed');
+          cards.classList.remove('collapsed');
+          cards.style.maxHeight = cards.scrollHeight + 'px';
+
+          if (opts.scroll) {
+            targetHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+
+        headers.forEach(header => {
+          const cards = header.nextElementSibling;
+          if (!cards || !cards.classList.contains('guide-cards')) return;
+
+          header.classList.add('collapsed');
+          cards.classList.add('collapsed');
+          cards.style.maxHeight = '0px';
+
+          header.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A') return;
+
+            const isCollapsed = header.classList.toggle('collapsed');
+
+            if (isCollapsed) {
+              cards.classList.add('collapsed');
+            } else {
+              cards.classList.remove('collapsed');
+              cards.style.maxHeight = cards.scrollHeight + 'px';
+            }
+          });
+        });
+
+        navLinks.forEach(link => {
+          link.addEventListener('click', function() {
+            const targetId = this.getAttribute('href').replace('#', '');
+            expandSectionById(targetId);
+          });
+        });
+
+        if (initialHash) {
+          requestAnimationFrame(function() {
+            expandSectionById(initialHash, { scroll: true });
+          });
+        }
+
+        window.addEventListener('hashchange', function() {
+          const hash = (window.location.hash || '').replace('#', '');
+          if (!hash) return;
+          expandSectionById(hash, { scroll: true });
+        });
+      });
+    </script>
+
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+      (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {
+          if (document.scripts[j].src === r) { return; }
+        }
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+      })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js?id=104655292', 'ym');
+
+      ym(104655292, 'init', { ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true });
+    </script>
+    <noscript><div><img src="https://mc.yandex.ru/watch/104655292" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <!-- /Yandex.Metrika counter -->
+  </head>
+  <body>
+    <header class="header">
+      <div class="container header__inner">
+        <a class="logo" href="../" aria-label="AdShorts AI">
+          <img class="logo__icon" src="../../logo.png?v=2" alt="" role="presentation" width="46" height="46" />
+          <span class="logo__wordmark">AdShorts<span>AI</span></span>
+        </a>
+        <nav class="nav" aria-label="Main navigation">
+          <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">Menu</button>
+          <ul id="nav-menu" class="nav__list">
+            <li><a href="../#how-it-works">How it works</a></li>
+            <li><a href="../#samples">Samples</a></li>
+            <li><a href="../#pricing">Pricing</a></li>
+            <li><a href="../#faq">FAQ</a></li>
+            <li><a href="../../shorts-guides/" class="lang-switch" title="Русский"><img class="flag-icon" src="../../flags/us.svg" alt="" width="18" height="12" />EN</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <div class="guides-hero">
+            <h1>Shorts Guides</h1>
+            <p class="lead">
+              A curated library for YouTube Shorts: why videos stop getting views, how to improve retention, what to change in the first seconds, length, scripts, editing, growth, and strategy.
+            </p>
+            <p class="lead" style="margin-top: 12px;">
+              “Problems &amp; mistakes” is available in English. Other topics are currently in Russian — we’re translating them.
+            </p>
+          </div>
+
+          <nav class="guides-nav">
+            <div class="guides-nav__inner">
+              <a class="btn btn--ghost btn--small" href="#problems">🚨 Problems</a>
+              <a class="btn btn--ghost btn--small" href="#retention">📈 Retention</a>
+              <a class="btn btn--ghost btn--small" href="#texts">✍️ Scripts</a>
+              <a class="btn btn--ghost btn--small" href="#production">🎬 Editing</a>
+              <a class="btn btn--ghost btn--small" href="#growth">🚀 Growth</a>
+              <a class="btn btn--ghost btn--small" href="#strategy">🎯 Strategy</a>
+            </div>
+          </nav>
+
+          <div class="section-header guide-section" id="problems">
+            <div class="section-header__icon section-header__icon--red">🚨</div>
+            <div class="section-header__text">
+              <h2>Problems &amp; mistakes <span class="section-count">18 guides</span></h2>
+              <p>Diagnostics and quick actions to fix issues.</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../shorts-ne-nabirayut-prosmotry/">
+              <h3>Shorts Not Getting Views</h3>
+              <p>Why Shorts stall and what to fix first (hook, pacing, clarity).</p>
+            </a>
+
+            <a class="guide-card" href="../prosmotry-shorts-upali/">
+              <h3>Shorts Views Dropped</h3>
+              <p>7 common causes + a 7‑day recovery plan.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-0-prosmotrov/">
+              <h3>Shorts Getting 0 Views</h3>
+              <p>Visibility, format, restrictions — quick troubleshooting checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-ne-konvertiruyut-v-podpischiki/">
+              <h3>Shorts Not Converting to Subscribers</h3>
+              <p>Fix the ending and use CTA templates that feel natural.</p>
+            </a>
+
+            <a class="guide-card" href="../nizkoe-uderzhanie-v-youtube-shorts/">
+              <h3>Low Retention on YouTube Shorts</h3>
+              <p>Where retention breaks and the quickest fixes to start with.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-malo-laykov/">
+              <h3>Shorts Getting Few Likes</h3>
+              <p>10 practical tweaks that increase reactions without begging.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-malo-kommentariev/">
+              <h3>Shorts Getting Few Comments</h3>
+              <p>Simple prompts that start discussion and boost engagement.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-ne-zagruzhayutsya/">
+              <h3>Shorts Won’t Upload</h3>
+              <p>Format, size, network, app — step-by-step checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-zavisayut-na-obrabotke/">
+              <h3>Shorts Stuck Processing</h3>
+              <p>Codec/audio issues and quick fixes to unblock processing.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-ne-otobrazhayutsya-na-kanale/">
+              <h3>Shorts Not Showing on Channel</h3>
+              <p>9:16, visibility, restrictions, cache — what to check.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-net-zvuka/">
+              <h3>Shorts Have No Sound</h3>
+              <p>Export, audio tracks, copyright mutes — fast diagnosis.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-ne-prohodyat-moderaciyu/">
+              <h3>Shorts Not Passing Moderation</h3>
+              <p>Common triggers + safe fixes before re-uploading.</p>
+            </a>
+
+            <a class="guide-card" href="../avtorskie-prava-v-shorts/">
+              <h3>Copyright on Shorts</h3>
+              <p>Music/clips/images: reduce risk and stay stable.</p>
+            </a>
+
+            <a class="guide-card" href="../vozrastnoe-ogranichenie-shorts/">
+              <h3>Shorts Age Restriction</h3>
+              <p>Why it happens, how it affects reach, and what to change.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-tenevoy-ban/">
+              <h3>Shorts Shadowban</h3>
+              <p>Diagnostics and a structured reset plan.</p>
+            </a>
+
+            <a class="guide-card" href="../povtoryayushchiysya-kontent-shorts/">
+              <h3>Reused Content on Shorts</h3>
+              <p>Series vs duplicates — and how to fix “reused” signals.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-nizkoe-kachestvo-video/">
+              <h3>Shorts Low Video Quality</h3>
+              <p>Blurry export settings checklist + safe defaults.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-chernye-polosy/">
+              <h3>Shorts Black Bars</h3>
+              <p>How to crop/export true 9:16 without borders.</p>
+            </a>
+          </div>
+
+          <div class="section-header guide-section" id="retention">
+            <div class="section-header__icon section-header__icon--cyan">📈</div>
+            <div class="section-header__text">
+              <h2>Retention &amp; structure <span class="section-count">13 guides</span></h2>
+              <p>The first seconds, pacing, progress, twists, “loop”, and a clear ending</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-sdelat-huk-v-shorts/">
+              <h3>How to Create a Hook in Shorts</h3>
+              <p>First‑second formulas + examples (includes a block about the first 3 seconds).</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-huk-v-shorts/#pervye-3-sekundy-shorts">
+              <h3>The First 3 Seconds of Shorts</h3>
+              <p>What to show and say immediately so people don’t swipe away.</p>
+            </a>
+
+            <a class="guide-card" href="../procent-prolistyvaniy-shorts/">
+              <h3>Shorts Swipe‑Away Rate</h3>
+              <p>Why people swipe and 10 fixes for the first seconds.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-shorts-chtoby-dosmotreli-do-konca/">
+              <h3>How to Make Shorts People Watch to the End</h3>
+              <p>Editing plan: hook → progress → finish → “loop”.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-podnyat-uderzhanie-v-shorts/">
+              <h3>How to Increase Retention in Shorts</h3>
+              <p>12 practical techniques you can realistically implement.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-analizirovat-uderzhanie-v-shorts/">
+              <h3>How to Analyze Retention in Shorts</h3>
+              <p>5 signals of a weak video and which fixes to test.</p>
+            </a>
+
+            <a class="guide-card" href="../optimalnaya-dlina-shorts/">
+              <h3>Optimal Shorts Length</h3>
+              <p>How to choose duration for the idea — and not stretch it.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-povorot-v-seredine-shorts/">
+              <h3>How to Add a Mid‑Video Twist in Shorts</h3>
+              <p>8 twist techniques and an easy way to test versions.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-dinamichnyj-temp-v-shorts/">
+              <h3>How to Create Dynamic Pacing in Shorts</h3>
+              <p>Pacing techniques without complex editing + examples and a checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-koncovku-v-shorts/">
+              <h3>How to Create an Ending in Shorts</h3>
+              <p>7 ending options + formulas and a mini‑checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-petlyu-v-shorts/">
+              <h3>How to Create a Loop in Shorts</h3>
+              <p>Loops, rewatches, and structures that hold attention to the end.</p>
+            </a>
+
+            <a class="guide-card" href="../storitelling-v-shorts/">
+              <h3>Storytelling in Shorts</h3>
+              <p>3 story structures for 30 seconds + phrases and mistakes.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-smotryat-bez-zvuka/">
+              <h3>People Watch Shorts Without Sound</h3>
+              <p>On‑screen text, progress, and subtitles so the video is clear visually.</p>
+            </a>
+          </div>
+
+          <div class="section-header guide-section" id="texts">
+            <div class="section-header__icon section-header__icon--purple">✍️</div>
+            <div class="section-header__text">
+              <h2>Scripts &amp; text <span class="section-count">12 guides</span></h2>
+              <p>Script templates, on‑screen copy, and a “next step” without spam</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-napisat-scenariy-dlya-shorts/">
+              <h3>How to Write a Script for Shorts</h3>
+              <p>A 30‑second template + phrase examples to keep the pace.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-shorts-iz-teksta/">
+              <h3>How to Turn Text into Shorts</h3>
+              <p>A 30‑second script template + hook and step examples.</p>
+            </a>
+
+            <a class="guide-card" href="../shablony-dlya-shorts/">
+              <h3>Shorts Templates</h3>
+              <p>12 video structures + templates and a checklist to improve completion.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-tekst-na-video-dlya-shorts/">
+              <h3>How to Add On‑Screen Text for Shorts</h3>
+              <p>Fonts, lines, safe zones, and a readability checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../zagolovok-dlya-shorts-kak-pisat/">
+              <h3>Shorts Title: How to Write It</h3>
+              <p>Title templates and clickbait mistakes that break retention.</p>
+            </a>
+
+            <a class="guide-card" href="../opisanie-dlya-shorts-chto-pisat/">
+              <h3>Shorts Description: What to Write</h3>
+              <p>A 3‑line structure + examples and common spam mistakes.</p>
+            </a>
+
+            <a class="guide-card" href="../klyuchevye-slova-dlya-shorts/">
+              <h3>Keywords for Shorts</h3>
+              <p>Where to find queries and how to use them without stuffing.</p>
+            </a>
+
+            <a class="guide-card" href="../heshtegi-dlya-shorts-rabotayut-li/">
+              <h3>Hashtags for Shorts: Do They Work?</h3>
+              <p>When tags help, how many to use, and what matters more than hashtags.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-naiti-heshtegi-dlya-shorts/">
+              <h3>How to Find Hashtags for Shorts</h3>
+              <p>3 ways to find tags + a 3–5 hashtag checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../cta-v-shorts/">
+              <h3>CTA in Shorts</h3>
+              <p>Where to place CTA and 7 phrase templates without pressure.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-zakrepit-kommentarij-v-shorts/">
+              <h3>How to Pin a Comment in Shorts</h3>
+              <p>Pinned comment templates and mistakes that stop viewers from replying.</p>
+            </a>
+
+            <a class="guide-card" href="../ssylka-v-shorts-kak-dobavit/">
+              <h3>Link in Shorts: How to Add It</h3>
+              <p>Where to place the link and how to lead to it without spam.</p>
+            </a>
+          </div>
+
+          <div class="section-header guide-section" id="production">
+            <div class="section-header__icon section-header__icon--green">🎬</div>
+            <div class="section-header__text">
+              <h2>Editing &amp; production <span class="section-count">23 guides</span></h2>
+              <p>The technical foundation: picture, sound, subtitles, and export settings</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../razreshenie-dlya-shorts/">
+              <h3>Shorts Resolution</h3>
+              <p>Sizes, FPS, and export — so it’s sharp and without black bars.</p>
+            </a>
+
+            <a class="guide-card" href="../bitreyt-dlya-shorts/">
+              <h3>Shorts Bitrate</h3>
+              <p>What to set on export so the video stays crisp.</p>
+            </a>
+
+            <a class="guide-card" href="../format-video-dlya-shorts/">
+              <h3>Video Format for Shorts</h3>
+              <p>MP4, codec, and audio: export settings that break uploads less often.</p>
+            </a>
+
+            <a class="guide-card" href="../svet-dlya-shorts/">
+              <h3>Lighting for Shorts</h3>
+              <p>3 lighting setups and a 1‑minute checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-ubrat-tryasku-v-shorts/">
+              <h3>How to Remove Shake in Shorts</h3>
+              <p>Why footage shakes — and quick fixes during filming and editing.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-iz-foto/">
+              <h3>Shorts from Photos</h3>
+              <p>A structure template and checklist so viewers don’t swipe away.</p>
+            </a>
+
+            <a class="guide-card" href="../oblozhka-dlya-shorts/">
+              <h3>Shorts Thumbnail</h3>
+              <p>Rules for text, contrast, and face + a checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-postavit-oblozhku-na-shorts/">
+              <h3>How to Set a Thumbnail on Shorts</h3>
+              <p>Step‑by‑step on phone and desktop + why the preview may not show.</p>
+            </a>
+
+            <a class="guide-card" href="../fon-dlya-shorts/">
+              <h3>Background for Shorts</h3>
+              <p>How to choose a background so it doesn’t distract and retention is higher.</p>
+            </a>
+
+            <a class="guide-card" href="../perehody-v-shorts/">
+              <h3>Transitions in Shorts</h3>
+              <p>10 simple techniques and where they fit: steps, examples, twists.</p>
+            </a>
+
+            <a class="guide-card" href="../subtitry-dlya-shorts-avtomatom/">
+              <h3>Automatic Subtitles for Shorts</h3>
+              <p>Readability, style, and quick recognition fixes.</p>
+            </a>
+
+            <a class="guide-card" href="../ozvuchka-dlya-shorts-kak-vybrat-golos/">
+              <h3>Voiceover for Shorts: How to Choose a Voice</h3>
+              <p>Voice, tempo, and pauses — so it’s pleasant to watch.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-chistyy-zvuk-v-shorts/">
+              <h3>How to Get Clean Audio in Shorts</h3>
+              <p>Noise, echo, quiet speech: a checklist without a studio.</p>
+            </a>
+
+            <a class="guide-card" href="../gromkost-golosa-i-muzyki-v-shorts/">
+              <h3>Voice vs Music Volume in Shorts</h3>
+              <p>A quick balance so speech is clear and comfortable.</p>
+            </a>
+
+            <a class="guide-card" href="../muzyka-dlya-shorts/">
+              <h3>Music for Shorts</h3>
+              <p>How to choose a track that supports the video instead of fighting the message.</p>
+            </a>
+
+            <a class="guide-card" href="../muzyka-bez-avtorskih-prav-dlya-shorts/">
+              <h3>Copyright‑Free Music for Shorts</h3>
+              <p>How to choose tracks with lower risk of blocks and monetization issues.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-uskorit-montazh-shorts/">
+              <h3>How to Speed Up Shorts Editing</h3>
+              <p>10 techniques and workflow order to edit faster.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-sdelat-shorts-bez-montazha/">
+              <h3>How to Make Shorts Without Editing</h3>
+              <p>3 one‑take structures, on‑screen text, and a retention checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../shorts-bez-lica/">
+              <h3>Faceless Shorts</h3>
+              <p>7 faceless formats, ideas, and a checklist to get more full watches.</p>
+            </a>
+
+            <a class="guide-card" href="../neyroset-dlya-shorts/">
+              <h3>AI for Shorts</h3>
+              <p>How to speed up video creation and test ideas faster.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-zagruzit-shorts/">
+              <h3>How to Upload Shorts</h3>
+              <p>Publishing checklist: file, title, description, and result check.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-snimat-shorts-pachkoy/">
+              <h3>How to Batch‑Film Shorts</h3>
+              <p>Setup, recording in blocks, and a plan for 10 videos in one session.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-snimat-shorts-na-telefon/">
+              <h3>How to Film Shorts on a Phone</h3>
+              <p>Frame, light, sound, and a quick setup — so the video looks “clean”.</p>
+            </a>
+          </div>
+
+          <div class="section-header guide-section" id="growth">
+            <div class="section-header__icon section-header__icon--yellow">🚀</div>
+            <div class="section-header__text">
+              <h2>Growth &amp; recommendations <span class="section-count">9 guides</span></h2>
+              <p>Metrics, tests, and consistency — to grow systematically</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../kak-popast-v-rekomendacii-youtube-shorts/">
+              <h3>How to Get Into YouTube Shorts Recommendations</h3>
+              <p>What drives impressions — and which changes bring growth fastest.</p>
+            </a>
+
+            <a class="guide-card" href="../ctr-v-shorts/">
+              <h3>CTR in Shorts</h3>
+              <p>Why it drops and which changes raise “activation”.</p>
+            </a>
+
+            <a class="guide-card" href="../analitika-youtube-shorts-kak-chitat/">
+              <h3>YouTube Shorts Analytics: How to Read It</h3>
+              <p>5 metrics — and which fixes to test based on the signals.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-testirovat-shorts/">
+              <h3>How to Test Shorts</h3>
+              <p>One hypothesis → versions → conclusion: a simple experimentation system.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-privesti-trafik-iz-shorts-v-telegram/">
+              <h3>How to Drive Traffic from Shorts to Telegram</h3>
+              <p>CTA, pinned comment, and phrase scripts so people move without pressure.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-privesti-trafik-iz-shorts-na-sayt/">
+              <h3>How to Drive Traffic from Shorts to a Website</h3>
+              <p>Where to place the link and how to increase landing conversion.</p>
+            </a>
+
+            <a class="guide-card" href="../monetizaciya-youtube-shorts/">
+              <h3>YouTube Shorts Monetization</h3>
+              <p>Requirements, payouts, and common mistakes (especially with music) + checklist.</p>
+            </a>
+
+            <a class="guide-card" href="../kogda-vykladyvat-shorts/">
+              <h3>When to Post Shorts</h3>
+              <p>A 7‑day test and how to find your best publishing time.</p>
+            </a>
+
+            <a class="guide-card" href="../kak-chasto-vykladyvat-shorts/">
+              <h3>How Often to Post Shorts</h3>
+              <p>Frequency without burnout + a plan you can sustain for a month.</p>
+            </a>
+          </div>
+
+          <div class="section-header guide-section" id="strategy">
+            <div class="section-header__icon section-header__icon--blue">🎯</div>
+            <div class="section-header__text">
+              <h2>Strategy <span class="section-count">16 guides</span></h2>
+              <p>Niche, ideas, content planning, and series — the foundation for stable growth</p>
+            </div>
+          </div>
+          <div class="guide-cards">
+            <a class="guide-card" href="../../kak-sdelat-shorts-na-youtube/">
+              <h3>How to Make Shorts on YouTube</h3>
+              <p>Idea → hook → editing → publishing: a simple template to start.</p>
+            </a>
+
+            <a class="guide-card" href="../../kak-vybrat-nishu-dlya-shorts/">
+              <h3>How to Choose a Niche for Shorts</h3>
+              <p>Criteria: demand, repeatability, and competition.</p>
+            </a>
+
+            <a class="guide-card" href="../../idei-dlya-shorts-gde-brat/">
+              <h3>Shorts Ideas: Where to Find Them</h3>
+              <p>Topic sources, trends, and an idea bank template.</p>
+            </a>
+
+            <a class="guide-card" href="../../kontent-plan-dlya-shorts-na-mesyac/">
+              <h3>Shorts Content Plan for a Month</h3>
+              <p>30 topic formulas + a 4‑week schedule without burnout.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-biznesa/">
+              <h3>Shorts for Business</h3>
+              <p>How to get leads: formats, series, and CTA without pressure.</p>
+            </a>
+
+            <a class="guide-card" href="../../kak-prodavat-cherez-shorts/">
+              <h3>How to Sell with Shorts</h3>
+              <p>Content and a soft CTA that doesn’t cut retention.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-onlayn-shkoly/">
+              <h3>Shorts for an Online School</h3>
+              <p>Lesson formats, series, and soft CTA to get leads and sign‑ups.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-internet-magazina/">
+              <h3>Shorts for an Online Store</h3>
+              <p>Product demos and comparisons, scripts, and a checklist to sell without spam.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-nedvizhimosti/">
+              <h3>Shorts for Real Estate</h3>
+              <p>Tour formats and checklists that generate inquiries without hard selling.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-kliniki/">
+              <h3>Shorts for a Clinic</h3>
+              <p>FAQ, myths, prep, and a safe tone — so trust and inquiries grow.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-yuristov/">
+              <h3>Shorts for Lawyers</h3>
+              <p>Explain complex topics simply and get consultations via a soft CTA.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-smm-agentstva/">
+              <h3>Shorts for an SMM Agency</h3>
+              <p>Mini case studies, breakdowns, and an offer that brings leads from Shorts.</p>
+            </a>
+
+            <a class="guide-card" href="../../shorts-dlya-it-kompanii/">
+              <h3>Shorts for an IT Company</h3>
+              <p>Demos, cases, and “problem → solution” to explain a product and get leads.</p>
+            </a>
+
+            <a class="guide-card" href="../../skolko-stoit-montazh-shorts/">
+              <h3>How Much Does Shorts Editing Cost?</h3>
+              <p>What affects price, how to save, and how not to lose retention.</p>
+            </a>
+
+            <a class="guide-card" href="../../kak-sdelat-seriyu-shorts/">
+              <h3>How to Make a Shorts Series</h3>
+              <p>A series template, a topic matrix, and a “loop” between episodes.</p>
+            </a>
+
+            <a class="guide-card" href="../../kak-sdelat-shorts-iz-dlinnogo-video/">
+              <h3>How to Make Shorts from a Long Video</h3>
+              <p>Cutting plan: what to keep and how to build a 30‑second story.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer__inner">
+        <a class="logo" href="../">AdShorts<span>AI</span></a>
+        <div class="footer__links">
+          <span style="color: var(--muted);">Contact: <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="../terms-of-use/">Terms of Use</a>
+          <a href="../terms/">User Agreement</a>
+          <a href="../privacy/">Privacy Policy</a>
+          <a href="../../shorts-guides/" rel="alternate" hreflang="ru">Русский</a>
+          <span style="color: var(--muted);">© <span id="year"></span> AdShorts AI</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
