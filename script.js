@@ -80,12 +80,14 @@ if (navToggle && navMenu) {
     });
   });
 
-  window.addEventListener('scroll', () => {
+  const closeMenuOnScroll = () => {
     if (navMenu.classList.contains('open')) {
       navMenu.classList.remove('open');
       navToggle.setAttribute('aria-expanded', 'false');
     }
-  }, { passive: true });
+  };
+  window.addEventListener('scroll', closeMenuOnScroll, { passive: true });
+  window.addEventListener('touchmove', closeMenuOnScroll, { passive: true });
 
   document.addEventListener('click', (e) => {
     if (navMenu.classList.contains('open') && !navMenu.contains(e.target) && !navToggle.contains(e.target)) {
