@@ -1896,20 +1896,21 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
     display: inline-flex; 
   }
   
-  .nav__list { 
-    position: absolute; 
-    right: 20px; 
-    top: 70px; 
+  .nav__list {
+    position: fixed;
+    right: 20px;
+    top: 70px;
     background: var(--card-solid);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 16px; 
-    display: none; 
-    flex-direction: column; 
-    gap: 8px; 
+    padding: 16px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
     min-width: 200px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    z-index: 200;
   }
   
   .nav__list.open { 

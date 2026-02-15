@@ -79,6 +79,20 @@ if (navToggle && navMenu) {
       navToggle.setAttribute('aria-expanded', 'false');
     });
   });
+
+  window.addEventListener('scroll', () => {
+    if (navMenu.classList.contains('open')) {
+      navMenu.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+  }, { passive: true });
+
+  document.addEventListener('click', (e) => {
+    if (navMenu.classList.contains('open') && !navMenu.contains(e.target) && !navToggle.contains(e.target)) {
+      navMenu.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
 }
 
 // Accordion behavior: allow multiple open, but close others if desired
