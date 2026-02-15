@@ -73,7 +73,7 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: 
+  background:
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 240, 255, 0.15), transparent 50%),
     radial-gradient(ellipse 60% 40% at 100% 0%, rgba(191, 90, 242, 0.12), transparent 50%),
     radial-gradient(ellipse 50% 30% at 0% 100%, rgba(255, 45, 85, 0.08), transparent 50%);
@@ -86,13 +86,14 @@ body::after {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: 
+  background-image:
     linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
   background-size: 60px 60px;
   pointer-events: none;
   z-index: -1;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black, transparent);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black, transparent);
 }
 
 img, svg { display: block; max-width: 100%; height: auto; }
@@ -1975,6 +1976,91 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
     top: -8px;
     font-size: 9px;
     padding: 3px 8px;
+  }
+
+  /* Mobile background — brighter gradients for small screens */
+  body::before {
+    background:
+      radial-gradient(ellipse 100% 60% at 50% -10%, rgba(0, 240, 255, 0.2), transparent 60%),
+      radial-gradient(ellipse 80% 50% at 100% 0%, rgba(191, 90, 242, 0.18), transparent 55%),
+      radial-gradient(ellipse 70% 40% at 0% 100%, rgba(255, 45, 85, 0.12), transparent 55%);
+  }
+
+  /* Smaller grid on mobile */
+  body::after {
+    background-size: 40px 40px;
+  }
+
+  /* Smaller orbs on mobile */
+  .orb--cyan {
+    width: 200px;
+    height: 200px;
+    right: -60px;
+  }
+
+  .orb--purple {
+    width: 160px;
+    height: 160px;
+    left: -40px;
+  }
+
+  .orb--pink {
+    width: 140px;
+    height: 140px;
+  }
+
+  /* Tighter container on mobile */
+  .container {
+    width: min(1140px, calc(100% - 32px));
+  }
+
+  /* Compact header */
+  .header__inner {
+    padding: 12px 0;
+  }
+
+  .logo__icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .logo__wordmark {
+    font-size: 1.15rem;
+  }
+
+  /* Lead text */
+  .hero .lead {
+    font-size: 17px;
+    margin-bottom: 28px;
+  }
+
+  /* Section spacing */
+  .section h2 {
+    margin-bottom: 20px;
+  }
+
+  /* Better card touch targets */
+  .card {
+    padding: 20px;
+  }
+
+  .benefit {
+    padding: 22px;
+  }
+
+  /* Accordion — bigger touch targets */
+  .accordion__item {
+    padding: 18px 16px;
+  }
+
+  .accordion__item summary {
+    font-size: 15px;
+    gap: 12px;
+  }
+
+  /* CTA block */
+  .cta-block {
+    margin-top: 60px;
   }
 }
 
