@@ -150,25 +150,53 @@
           </ul>
 
           <h2>7. Данные YouTube и Google API Services</h2>
+
           <p>
-            Если Пользователь подключает YouTube-канал через Google OAuth, Сервис обрабатывает данные Google/YouTube только в рамках предоставленных разрешений (scopes), указанных на экране согласия.
+            Если Пользователь подключает YouTube-канал через Google OAuth, AdShorts AI запрашивает доступ только к конкретным разрешениям (scopes), указанным на экране согласия Google.
           </p>
-          <p>
-            В зависимости от выбранных разрешений Сервис может обрабатывать:
-          </p>
+
+          <h3>7.1. Scope: <code>https://www.googleapis.com/auth/youtube.upload</code></h3>
+          <p>Используется исключительно для:</p>
           <ul>
-            <li>идентификаторы аккаунта и канала (например, Google account ID, YouTube channel ID, название канала);</li>
-            <li>технические данные авторизации (токены доступа и служебные метаданные);</li>
-            <li>данные, необходимые для загрузки и публикации видео по прямому запросу Пользователя (название, описание, параметры публикации).</li>
+            <li>загрузки видео на YouTube-канал Пользователя;</li>
+            <li>установки метаданных видео при загрузке (название, описание, теги);</li>
+            <li>публикации видео по прямому запросу Пользователя.</li>
+          </ul>
+          <p>Данный scope не предоставляет доступа к Gmail, Google Диску, контактам или другим сервисам Google.</p>
+
+          <h3>7.2. Scope: <code>https://www.googleapis.com/auth/youtube.readonly</code></h3>
+          <p>Используется только для:</p>
+          <ul>
+            <li>получения названия YouTube-канала Пользователя;</li>
+            <li>получения идентификатора (ID) YouTube-канала;</li>
+            <li>получения аватара (обложки) канала;</li>
+            <li>отображения выбранного канала в интерфейсе бота;</li>
+            <li>подтверждения правильного канала для публикации.</li>
+          </ul>
+          <p>Мы <strong>не изменяем, не удаляем и не управляем</strong> существующим контентом YouTube через доступ только для чтения.</p>
+
+          <h3>7.3. Использование и хранение данных</h3>
+          <ul>
+            <li>OAuth-токены доступа хранятся в зашифрованном виде.</li>
+            <li>Токены используются только для выполнения авторизованных действий.</li>
+            <li>Пользователь может отозвать доступ в любой момент через <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">настройки аккаунта Google</a>.</li>
+            <li>При отключении канала хранимые токены удаляются безвозвратно.</li>
+            <li>Данные контента YouTube не хранятся постоянно — только в объёме, строго необходимом для обеспечения функции публикации.</li>
+          </ul>
+
+          <h3>7.4. Соответствие требованиям Limited Use</h3>
+          <p>
+            Использование данных пользователей Google в AdShorts AI соответствует <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования об ограниченном использовании (Limited Use).
+          </p>
+          <p>Данные пользователей Google:</p>
+          <ul>
+            <li>не продаются;</li>
+            <li>не передаются третьим лицам;</li>
+            <li>не используются в рекламных целях;</li>
+            <li>не используются для обучения моделей искусственного интеллекта или машинного обучения.</li>
           </ul>
           <p>
-            Эти данные используются исключительно для авторизации, публикации и управления видео в YouTube по запросу Пользователя.
-          </p>
-          <p>
-            AdShorts AI соблюдает <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования Limited Use. Данные, полученные через Google API Services, не продаются и не используются для рекламного таргетинга.
-          </p>
-          <p>
-            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">Условиями использования YouTube</a> и <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Политикой конфиденциальности Google</a>.
+            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">Условиями использования YouTube</a> и Политикой конфиденциальности Google: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">https://policies.google.com/privacy</a>.
           </p>
 
           <h2>8. Отзыв доступа и удаление данных</h2>
