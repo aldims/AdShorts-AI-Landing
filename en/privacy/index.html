@@ -146,11 +146,17 @@
           <p>
             AdShorts AI accesses the following Google user data via YouTube Data API:
           </p>
+          <p><strong>Via <code>youtube.upload</code> scope:</strong></p>
           <ul>
-            <li>YouTube channel basic information (channel name, channel ID);</li>
-            <li>permission to upload videos;</li>
+            <li>permission to upload videos to the user's YouTube channel;</li>
             <li>permission to set video metadata during upload (title, description, tags);</li>
             <li>permission to publish videos as part of the upload flow.</li>
+          </ul>
+          <p><strong>Via <code>youtube.readonly</code> scope:</strong></p>
+          <ul>
+            <li>YouTube channel name and channel ID;</li>
+            <li>channel thumbnail (avatar) for display in the bot interface;</li>
+            <li>list of user's channels for channel selection.</li>
           </ul>
           <p>
             We do <strong>NOT</strong> access:
@@ -166,11 +172,21 @@
           <p>
             Google user data is used strictly for:
           </p>
+          <p><strong>Upload functionality (<code>youtube.upload</code>):</strong></p>
           <ul>
             <li>uploading and publishing videos to the user's connected YouTube channel;</li>
             <li>setting video metadata during upload (title, description, tags);</li>
             <li>displaying upload status inside the Telegram bot.</li>
           </ul>
+          <p><strong>Read-only access (<code>youtube.readonly</code>):</strong></p>
+          <ul>
+            <li>retrieving channel name and ID to display the connected channel inside the bot;</li>
+            <li>confirming the correct channel for video publishing;</li>
+            <li>displaying channel avatar in the bot interface.</li>
+          </ul>
+          <p>
+            We do <strong>NOT</strong> modify, delete, or manage existing YouTube content through read-only access.
+          </p>
           <p>
             We do <strong>NOT</strong>:
           </p>
