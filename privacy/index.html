@@ -71,7 +71,7 @@
         <div class="container" style="max-width: 800px;">
           <h1>Политика конфиденциальности</h1>
           <p style="font-size: 18px; margin-bottom: 1em; color: var(--muted);"><strong>AdShorts AI</strong></p>
-          <p style="margin-top: -4px; color: var(--muted);"><strong>Дата последнего обновления:</strong> 23 февраля 2026 г.</p>
+          <p style="margin-top: -4px; color: var(--muted);"><strong>Дата последнего обновления:</strong> 2 марта 2026 г.</p>
 
           <p>
             Настоящая Политика конфиденциальности описывает порядок сбора, использования и защиты информации пользователей сервиса AdShorts AI (далее — «Сервис»).
@@ -149,26 +149,71 @@
             <li>прекратить использование Сервиса в любой момент.</li>
           </ul>
 
-          <h2>7. Данные YouTube и Google API Services</h2>
+          <h2>7. Данные пользователей Google (Google User Data)</h2>
+
+          <h3>7.1. Какие данные мы получаем</h3>
           <p>
-            Если Пользователь подключает YouTube-канал через Google OAuth, Сервис обрабатывает данные Google/YouTube только в рамках предоставленных разрешений (scopes), указанных на экране согласия.
-          </p>
-          <p>
-            В зависимости от выбранных разрешений Сервис может обрабатывать:
+            AdShorts AI получает следующие данные пользователей Google через YouTube Data API:
           </p>
           <ul>
-            <li>идентификаторы аккаунта и канала (например, Google account ID, YouTube channel ID, название канала);</li>
-            <li>технические данные авторизации (токены доступа и служебные метаданные);</li>
-            <li>данные, необходимые для загрузки и публикации видео по прямому запросу Пользователя (название, описание, параметры публикации).</li>
+            <li>базовая информация о YouTube-канале (название, идентификатор канала);</li>
+            <li>разрешение на загрузку видео;</li>
+            <li>разрешение на установку метаданных видео при загрузке (название, описание, теги);</li>
+            <li>разрешение на публикацию видео в рамках процесса загрузки.</li>
           </ul>
           <p>
-            Эти данные используются исключительно для авторизации, публикации и управления видео в YouTube по запросу Пользователя.
+            Мы <strong>не получаем</strong> доступ к:
           </p>
+          <ul>
+            <li>данным Gmail;</li>
+            <li>данным Google Диска;</li>
+            <li>контактам Google;</li>
+            <li>любым другим сервисам Google, не связанным с YouTube.</li>
+          </ul>
+
+          <h3>7.2. Как мы используем данные Google</h3>
           <p>
-            AdShorts AI соблюдает <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования Limited Use. Данные, полученные через Google API Services, не продаются и не используются для рекламного таргетинга.
+            Данные пользователей Google используются исключительно для:
           </p>
+          <ul>
+            <li>загрузки и публикации видео на подключённый YouTube-канал пользователя;</li>
+            <li>установки метаданных видео при загрузке (название, описание, теги);</li>
+            <li>отображения статуса загрузки внутри Telegram-бота.</li>
+          </ul>
           <p>
-            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">Условиями использования YouTube</a> и <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Политикой конфиденциальности Google</a>.
+            Мы <strong>не</strong>:
+          </p>
+          <ul>
+            <li>продаём данные пользователей Google;</li>
+            <li>передаём данные пользователей Google третьим лицам;</li>
+            <li>используем данные пользователей Google в рекламных целях;</li>
+            <li>используем данные пользователей Google для обучения моделей искусственного интеллекта или машинного обучения.</li>
+          </ul>
+
+          <h3>7.3. Хранение данных</h3>
+          <ul>
+            <li>OAuth-токены хранятся в зашифрованном виде;</li>
+            <li>токены используются только для выполнения авторизованных действий;</li>
+            <li>пользователь может отозвать доступ в любой момент через <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">настройки безопасности Google</a>;</li>
+            <li>по запросу пользователя все хранимые токены удаляются.</li>
+          </ul>
+
+          <h3>7.4. Срок хранения данных</h3>
+          <ul>
+            <li>токены доступа хранятся только пока пользователь держит канал подключённым;</li>
+            <li>при отключении YouTube-канала токены удаляются безвозвратно.</li>
+          </ul>
+
+          <h3>7.5. Соответствие требованиям</h3>
+          <p>
+            AdShorts AI соблюдает:
+          </p>
+          <ul>
+            <li><a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования Limited Use;</li>
+            <li><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.</li>
+          </ul>
+          <p>
+            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Политикой конфиденциальности Google</a>.
           </p>
 
           <h2>8. Отзыв доступа и удаление данных</h2>
