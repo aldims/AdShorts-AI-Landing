@@ -158,8 +158,7 @@
           <p><strong>Через scope <code>youtube.upload</code>:</strong></p>
           <ul>
             <li>разрешение на загрузку видео на YouTube-канал пользователя;</li>
-            <li>разрешение на установку метаданных видео при загрузке (название, описание, теги);</li>
-            <li>разрешение на публикацию видео в рамках процесса загрузки.</li>
+            <li>разрешение на установку метаданных видео при загрузке (название, описание, теги).</li>
           </ul>
           <p><strong>Через scope <code>youtube.readonly</code>:</strong></p>
           <ul>
@@ -183,7 +182,7 @@
           </p>
           <p><strong>Функция загрузки (<code>youtube.upload</code>):</strong></p>
           <ul>
-            <li>загрузки и публикации видео на подключённый YouTube-канал пользователя;</li>
+            <li>загрузки видео на подключённый YouTube-канал пользователя;</li>
             <li>установки метаданных видео при загрузке (название, описание, теги);</li>
             <li>отображения статуса загрузки внутри Telegram-бота.</li>
           </ul>
@@ -211,7 +210,9 @@
             <li>OAuth-токены хранятся в зашифрованном виде;</li>
             <li>токены используются только для выполнения авторизованных действий;</li>
             <li>пользователь может отозвать доступ в любой момент через <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">настройки безопасности Google</a>;</li>
-            <li>по запросу пользователя все хранимые токены удаляются.</li>
+            <li>по запросу пользователя все хранимые токены удаляются;</li>
+            <li>метаданные YouTube-канала не хранятся постоянно — только в объёме, строго необходимом для обеспечения функции публикации;</li>
+            <li>название и ID канала могут храниться только для обеспечения повторного подключения и операций публикации.</li>
           </ul>
 
           <h3>7.4. Срок хранения данных</h3>
@@ -222,14 +223,13 @@
 
           <h3>7.5. Соответствие требованиям</h3>
           <p>
-            AdShorts AI соблюдает:
+            Использование данных пользователей Google в AdShorts AI ограничено практиками, описанными в настоящей Политике конфиденциальности, и соответствует <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования об ограниченном использовании (Limited Use).
           </p>
-          <ul>
-            <li><a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования Limited Use;</li>
-            <li><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.</li>
-          </ul>
           <p>
-            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Политикой конфиденциальности Google</a>.
+            AdShorts AI также соблюдает <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.
+          </p>
+          <p>
+            Подключая YouTube через Сервис, Пользователь также соглашается с Политикой конфиденциальности Google: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">https://policies.google.com/privacy</a>.
           </p>
 
           <h2>8. Отзыв доступа и удаление данных</h2>

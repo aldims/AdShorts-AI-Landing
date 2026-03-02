@@ -149,8 +149,7 @@
           <p><strong>Via <code>youtube.upload</code> scope:</strong></p>
           <ul>
             <li>permission to upload videos to the user's YouTube channel;</li>
-            <li>permission to set video metadata during upload (title, description, tags);</li>
-            <li>permission to publish videos as part of the upload flow.</li>
+            <li>permission to set video metadata during upload (title, description, tags).</li>
           </ul>
           <p><strong>Via <code>youtube.readonly</code> scope:</strong></p>
           <ul>
@@ -174,7 +173,7 @@
           </p>
           <p><strong>Upload functionality (<code>youtube.upload</code>):</strong></p>
           <ul>
-            <li>uploading and publishing videos to the user's connected YouTube channel;</li>
+            <li>uploading videos to the user's connected YouTube channel;</li>
             <li>setting video metadata during upload (title, description, tags);</li>
             <li>displaying upload status inside the Telegram bot.</li>
           </ul>
@@ -203,6 +202,8 @@
             <li>tokens are used only to perform authorized actions;</li>
             <li>users may revoke access at any time via <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">Google Security Settings</a>;</li>
             <li>upon user request, all stored tokens are deleted.</li>
+            <li>we do not permanently store YouTube channel metadata beyond what is strictly necessary for publishing functionality;</li>
+            <li>channel name and ID may be stored only to enable reconnect and publishing operations.</li>
           </ul>
 
           <h3>7.4. Data Retention</h3>
@@ -213,14 +214,13 @@
 
           <h3>7.5. Compliance</h3>
           <p>
-            AdShorts AI complies with:
+            AdShorts AI's use of Google user data is limited to the practices described in this Privacy Policy and complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, including the Limited Use requirements.
           </p>
-          <ul>
-            <li><a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, including Limited Use requirements;</li>
-            <li><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.</li>
-          </ul>
           <p>
-            By connecting YouTube through the Service, the User also agrees to the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Google Privacy Policy</a>.
+            AdShorts AI also complies with the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.
+          </p>
+          <p>
+            By connecting YouTube through the Service, the User also agrees to the Google Privacy Policy: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">https://policies.google.com/privacy</a>.
           </p>
 
           <h2>8. Access Revocation and Data Deletion</h2>
