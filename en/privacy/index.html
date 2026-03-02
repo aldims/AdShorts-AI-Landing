@@ -62,7 +62,7 @@
         <div class="container" style="max-width: 800px;">
           <h1>Privacy Policy</h1>
           <p style="font-size: 18px; margin-bottom: 1em; color: var(--muted);"><strong>AdShorts AI</strong></p>
-          <p style="margin-top: -4px; color: var(--muted);"><strong>Last updated:</strong> March 2, 2026</p>
+          <p style="margin-top: -4px; color: var(--muted);"><strong>Last updated:</strong> February 23, 2026</p>
 
           <p>
             This Privacy Policy describes the procedures for collecting, using, and protecting information of users of the AdShorts AI service (hereinafter referred to as the "Service").
@@ -140,87 +140,26 @@
             <li>stop using the Service at any time.</li>
           </ul>
 
-          <h2>7. Google User Data</h2>
-
-          <h3>7.1. Data Accessed</h3>
+          <h2>7. YouTube Data and Google API Services</h2>
           <p>
-            AdShorts AI accesses the following Google user data via YouTube Data API:
-          </p>
-          <p><strong>Via <code>youtube.upload</code> scope:</strong></p>
-          <ul>
-            <li>permission to upload videos to the user's YouTube channel;</li>
-            <li>permission to set video metadata during upload (title, description, tags).</li>
-          </ul>
-          <p><strong>Via <code>youtube.readonly</code> scope:</strong></p>
-          <ul>
-            <li>YouTube channel name and channel ID;</li>
-            <li>channel thumbnail (avatar) for display in the bot interface;</li>
-            <li>list of user's channels for channel selection.</li>
-          </ul>
-          <p>
-            We do <strong>NOT</strong> access:
-          </p>
-          <ul>
-            <li>Gmail data;</li>
-            <li>Google Drive data;</li>
-            <li>Google Contacts;</li>
-            <li>any unrelated Google services.</li>
-          </ul>
-
-          <h3>7.2. How We Use Google Data</h3>
-          <p>
-            Google user data is used strictly for:
-          </p>
-          <p><strong>Upload functionality (<code>youtube.upload</code>):</strong></p>
-          <ul>
-            <li>uploading videos to the user's connected YouTube channel;</li>
-            <li>setting video metadata during upload (title, description, tags);</li>
-            <li>displaying upload status inside the Telegram bot.</li>
-          </ul>
-          <p><strong>Read-only access (<code>youtube.readonly</code>):</strong></p>
-          <ul>
-            <li>retrieving channel name and ID to display the connected channel inside the bot;</li>
-            <li>confirming the correct channel for video publishing;</li>
-            <li>displaying channel avatar in the bot interface.</li>
-          </ul>
-          <p>
-            We do <strong>NOT</strong> modify, delete, or manage existing YouTube content through read-only access.
+            If the User connects a YouTube channel via Google OAuth, the Service processes Google/YouTube data only within the granted permissions (scopes) shown on the consent screen.
           </p>
           <p>
-            We do <strong>NOT</strong>:
+            Depending on granted permissions, the Service may process:
           </p>
           <ul>
-            <li>sell Google user data;</li>
-            <li>transfer Google user data to third parties;</li>
-            <li>use Google user data for advertising purposes;</li>
-            <li>use Google user data to train artificial intelligence or machine learning models.</li>
+            <li>account and channel identifiers (for example, Google account ID, YouTube channel ID, channel title);</li>
+            <li>technical authorization data (access tokens and service metadata);</li>
+            <li>data required to upload and publish videos at the User's direct request (title, description, publishing settings).</li>
           </ul>
-
-          <h3>7.3. Data Storage</h3>
-          <ul>
-            <li>OAuth tokens are stored securely in encrypted format;</li>
-            <li>tokens are used only to perform authorized actions;</li>
-            <li>users may revoke access at any time via <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">Google Security Settings</a>;</li>
-            <li>upon user request, all stored tokens are deleted.</li>
-            <li>we do not permanently store YouTube channel metadata beyond what is strictly necessary for publishing functionality;</li>
-            <li>channel name and ID may be stored only to enable reconnect and publishing operations.</li>
-          </ul>
-
-          <h3>7.4. Data Retention</h3>
-          <ul>
-            <li>access tokens are stored only while the user keeps the channel connected;</li>
-            <li>if the user disconnects YouTube, tokens are permanently deleted.</li>
-          </ul>
-
-          <h3>7.5. Compliance</h3>
           <p>
-            AdShorts AI's use of Google user data is limited to the practices described in this Privacy Policy and complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, including the Limited Use requirements.
+            This data is used only for authorization, publishing, and managing YouTube videos requested by the User.
           </p>
           <p>
-            AdShorts AI also complies with the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube API Services Terms of Service</a>.
+            AdShorts AI complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, including Limited Use requirements. Data received from Google API Services is not sold and is not used for advertising targeting.
           </p>
           <p>
-            By connecting YouTube through the Service, the User also agrees to the Google Privacy Policy: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">https://policies.google.com/privacy</a>.
+            By connecting YouTube through the Service, the User also agrees to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">YouTube Terms of Service</a> and the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">Google Privacy Policy</a>.
           </p>
 
           <h2>8. Access Revocation and Data Deletion</h2>
