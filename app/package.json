@@ -1,0 +1,43 @@
+{
+  "name": "adshortsai-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n auth,web \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch --include .env --include .env.* server/server.ts",
+    "dev:web": "vite",
+    "build": "tsc && tsc -p tsconfig.server.json && vite build",
+    "preview": "vite preview",
+    "start:server": "node dist-server/server.js",
+    "auth:generate": "npx auth@latest generate --config ./server/auth.ts --yes",
+    "auth:migrate": "npx auth@latest migrate --config ./server/auth.ts --yes",
+    "auth:sync-legacy": "tsx server/migrate-auth-data.ts",
+    "auth:prepare-shared": "npm run auth:migrate && npm run auth:sync-legacy"
+  },
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "better-auth": "^1.5.6",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "nodemailer": "^8.0.3",
+    "pg": "^8.20.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.2",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.11",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.1"
+  }
+}

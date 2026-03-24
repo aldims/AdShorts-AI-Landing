@@ -1,0 +1,143 @@
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+.button-reset {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.route-page {
+  min-height: 100vh;
+}
+
+.route-page--loading {
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+}
+
+.route-loading {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-width: 260px;
+  padding: 24px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background: rgba(12, 16, 24, 0.72);
+  color: white;
+  text-align: center;
+  backdrop-filter: blur(20px);
+}
+
+.route-loading__eyebrow {
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.route-linkbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.route-guide-link {
+  text-decoration: none;
+}
+
+.route-guide-link[href="#"],
+.route-linkbtn[disabled] {
+  pointer-events: none;
+}
+
+.route-button.btn,
+.route-button.short-card__button,
+.route-button.site-header__link,
+.route-button.account-linkbtn,
+.route-button.guides-strip__cta {
+  cursor: pointer;
+}
+
+.route-button.site-header__link,
+.route-button.account-sidebar__link,
+.route-button.account-linkbtn,
+.route-button.guides-strip__cta {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+
+.route-button.site-header__link {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.signup-modal__backdrop,
+.account-shell__backdrop,
+.route-close {
+  border: 0;
+  cursor: pointer;
+}
+
+.account-shell--page {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  display: block;
+  padding: 0;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  min-height: 100%;
+}
+
+.account-shell--page .account-shell__backdrop {
+  display: none;
+}
+
+.account-shell--page .account-shell__frame {
+  width: min(1480px, calc(100% - 32px));
+  min-height: calc(100vh - 154px);
+  height: auto;
+  margin: 0 auto;
+}
+
+.account-shell--page .account-shell__content {
+  min-height: 0;
+}
+
+.account-shell--page .account-shell__body {
+  flex: 1 1 auto;
+}
+
+.account-section--studio {
+  min-height: 100%;
+  padding-bottom: 250px;
+}
+
+@media (max-width: 1180px) {
+  .account-shell--page .account-shell__frame {
+    width: calc(100% - 24px);
+    min-height: calc(100vh - 136px);
+  }
+}
+
+@media (max-width: 860px) {
+  .account-section--studio {
+    padding-bottom: 18px;
+  }
+
+  .account-shell--page .account-shell__frame {
+    width: calc(100% - 20px);
+    min-height: calc(100vh - 112px);
+  }
+}
