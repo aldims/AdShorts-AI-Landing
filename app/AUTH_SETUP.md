@@ -80,32 +80,54 @@ npm run dev
 - `GET http://127.0.0.1:4174/api/auth/status`
 - там `googleEnabled` должен стать `true`
 
-## 3. Telegram sign-in
+## 3. Telegram sign-in (Telegram Login Widget)
 
-Здесь важная граница:
+Telegram не поддерживает стандартный OAuth — вместо него используется **Telegram Login Widget**, который:
 
-- официальный Telegram doc, который удалось подтвердить, описывает `Telegram Login Widget`
-- он работает через bot + `/setdomain` в `@BotFather`
-- Telegram возвращает `id`, `first_name`, `last_name`, `username`, `photo_url`, `auth_date`, `hash`
-- сервер должен проверять `hash` через HMAC-SHA256 с секретом на основе bot token
+- Встраивается как iframe на странице авторизации
+- Возвращает подписанные данные: `id`, `first_name`, `last_name`, `username`, `photo_url`, `auth_date`, `hash`
+- Сервер проверяет `hash` через HMAC-SHA256 (секрет = SHA256 от bot token)
 
-Это **не выглядит как обычный Google-style OAuth setup с понятными client ID / client secret в официальной документации**.
+### Настройка:
 
-Поэтому:
+1. Создайте бота через `@BotFather`: `/newbot`
+2. Скопируйте токен бота (формат: `123456789:ABCdefGHI...`)
+3. В BotFather откройте `Bot Settings` → `Domain` → добавьте домен:
+   - Для dev: `127.0.0.1` (без http://)
+   - Для production: `adshortsai.com`
+4. Добавьте в `app/.env`:
 
-- email verification и Google можно довести до production уже сейчас
-- Telegram лучше делать отдельным следующим шагом через **официальный Telegram Login Widget flow**
+```env
+TELEGRAM_BOT_USERNAME=YourBotName
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHI...
+```
 
-Что потребуется для Telegram:
+5. Перезапустите сервер:
 
-1. Создать bot через `@BotFather`
-2. Настроить bot name / avatar
-3. Выполнить `/setdomain`
-4. Привязать production domain сайта
-5. Реализовать серверную проверку `hash` из Telegram login payload
-6. После верификации payload создавать или находить пользователя и открывать app session
+```bash
+cd app
+npm run dev
+```
 
-Для localhost Telegram-логин обычно неудобен, потому что он завязан на domain linking.
+### Проверка:
+
+- `GET http://127.0.0.1:4174/api/auth/status` — `telegramEnabled: true`
+- `GET http://127.0.0.1:4174/api/auth/telegram/config` — `botUsername: "YourBotName"`
+
+### Как это работает:
+
+1. На странице авторизации появляется Telegram Login Widget
+2. Пользователь нажимает кнопку и авторизуется в Telegram
+3. Telegram возвращает подписанные данные в JavaScript callback
+4. Frontend отправляет данные на `/api/auth/telegram/callback`
+5. Сервер верифицирует `hash` и создаёт/связывает пользователя
+6. Сервер устанавливает session cookie и возвращает успех
+
+### Важно:
+
+- Для localhost (`127.0.0.1`) Telegram widget работает, но домен должен быть добавлен в BotFather
+- `id` из Telegram — это уникальный числовой идентификатор пользователя
+- Email генерируется как `telegram-{id}@users.adshorts.local` (фейковый, для внутреннего использования)
 
 ## 4. Полезные env поля
 

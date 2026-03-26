@@ -1,4 +1,5 @@
 import { env } from "./env.js";
+import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 
 type StudioUser = {
   email?: string | null;
@@ -30,6 +31,7 @@ type AdsflowJobStatusResponse = {
 type AdsflowWebUserPayload = {
   balance?: number;
   plan?: string;
+  user_id?: number;
 };
 
 type AdsflowLatestGenerationPayload = {
@@ -145,24 +147,12 @@ const assertAdsflowConfigured = () => {
   }
 };
 
-export const buildExternalUserId = (user: StudioUser) => {
-  const userId = String(user.id ?? "").trim();
-  if (userId) return `better-auth:${userId}`;
-
-  const email = String(user.email ?? "").trim().toLowerCase();
-  if (email) return `email:${email}`;
-
-  throw new Error("Authenticated user identifier is missing.");
-};
-
-const buildTitle = (prompt: string, fallback = "Studio generation") => {
-  const normalized = normalizePrompt(prompt);
-
-  if (!normalized) return fallback;
-  if (normalized.length <= 72) return normalized;
-
-  const compact = normalized.slice(0, 69).trim();
-  return compact ? `${compact}...` : fallback;
+const resolveStudioExternalUserId = async (user: StudioUser) => {
+  try {
+    return (await resolveExternalUserIdentity(user)).preferred;
+  } catch {
+    return buildExternalUserId(user);
+  }
 };
 
 const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
@@ -183,13 +173,14 @@ const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfil
 const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGeneration => {
   const prompt = normalizePrompt(payload.prompt ?? "");
   const jobId = String(payload.job_id ?? "");
-  const description = normalizeGenerationText(payload.description) || prompt;
+  const description = normalizeGenerationText(payload.description);
   const hashtags = parseGenerationHashtags(payload.hashtags);
+  const title = normalizeGenerationText(payload.title);
 
   return {
     id: jobId,
     prompt,
-    title: buildTitle(prompt, String(payload.title ?? "Studio generation")),
+    title,
     description,
     hashtags,
     videoUrl: `/api/studio/video/${encodeURIComponent(jobId)}`,
@@ -203,13 +194,14 @@ const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGenerat
 const buildStudioGenerationFromLatest = (payload: AdsflowLatestGenerationPayload): StudioGeneration => {
   const prompt = normalizePrompt(payload.prompt ?? "");
   const jobId = String(payload.job_id ?? "");
-  const description = normalizeGenerationText(payload.description) || prompt;
+  const description = normalizeGenerationText(payload.description);
   const hashtags = parseGenerationHashtags(payload.hashtags);
+  const title = normalizeGenerationText(payload.title);
 
   return {
     id: jobId,
     prompt,
-    title: buildTitle(prompt, String(payload.title ?? "Studio generation")),
+    title,
     description,
     hashtags,
     videoUrl: `/api/studio/video/${encodeURIComponent(jobId)}`,
@@ -282,19 +274,22 @@ const fetchAdsflowJobStatus = async (jobId: string, user: StudioUser) => {
     throw new Error("Job id is required.");
   }
 
+  const externalUserId = await resolveStudioExternalUserId(user);
+
   return fetchAdsflowJson<AdsflowJobStatusResponse>(
     buildAdsflowUrl(`/api/web/generations/${encodeURIComponent(safeJobId)}`, {
       admin_token: env.adsflowAdminToken ?? "",
-      external_user_id: buildExternalUserId(user),
+      external_user_id: externalUserId,
     }),
   );
 };
 
 const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1) => {
+  const externalUserId = await resolveStudioExternalUserId(user);
   const payload = await postAdsflowJson<AdsflowCreditConsumeResponse>("/api/web/credits/consume", {
     admin_token: env.adsflowAdminToken,
     amount: Math.max(1, Math.trunc(amount || 1)),
-    external_user_id: buildExternalUserId(user),
+    external_user_id: externalUserId,
     language: "ru",
     referral_source: "landing_site",
     user_email: user.email ?? undefined,
@@ -322,11 +317,12 @@ const refundWorkspaceGenerationCredit = async (
     return buildWorkspaceProfile();
   }
 
+  const externalUserId = await resolveStudioExternalUserId(user);
   const payload = await postAdsflowJson<AdsflowCreditRefundResponse>("/api/web/credits/refund", {
     admin_token: env.adsflowAdminToken,
     consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
     consumed_subscription: Math.max(0, Math.trunc(consumed.subscription || 0)),
-    external_user_id: buildExternalUserId(user),
+    external_user_id: externalUserId,
     language: "ru",
     referral_source: "landing_site",
     user_email: user.email ?? undefined,
@@ -341,9 +337,10 @@ const refundWorkspaceGenerationCredit = async (
 };
 
 export async function getWorkspaceBootstrap(user: StudioUser): Promise<WorkspaceBootstrap> {
+  const externalUserId = await resolveStudioExternalUserId(user);
   const payload = await postAdsflowJson<AdsflowBootstrapResponse>("/api/web/bootstrap", {
     admin_token: env.adsflowAdminToken,
-    external_user_id: buildExternalUserId(user),
+    external_user_id: externalUserId,
     language: "ru",
     referral_source: "landing_site",
     user_email: user.email ?? undefined,
@@ -369,6 +366,7 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
   }
 
   const creditReservation = await consumeWorkspaceGenerationCredit(user);
+  const externalUserId = await resolveStudioExternalUserId(user);
   let jobCreated = false;
 
   try {
@@ -379,7 +377,7 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
       },
       body: JSON.stringify({
         admin_token: env.adsflowAdminToken,
-        external_user_id: buildExternalUserId(user),
+        external_user_id: externalUserId,
         prompt: normalizedPrompt,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
@@ -403,7 +401,7 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
       jobId,
       profile: creditReservation.profile,
       status: String(payload.status ?? "queued"),
-      title: buildTitle(normalizedPrompt, String(payload.title ?? "Studio generation")),
+      title: normalizeGenerationText(payload.title) || "Studio generation",
     };
   } catch (error) {
     if (!jobCreated) {

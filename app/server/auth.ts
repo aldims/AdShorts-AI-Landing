@@ -1,7 +1,6 @@
+import type { Request, Response } from "express";
+
 import { betterAuth } from "better-auth";
-import { genericOAuth } from "better-auth/plugins";
-import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
-import { decodeJwt } from "jose";
 
 import { database } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
@@ -9,60 +8,6 @@ import { sendAppEmail } from "./mail.js";
 
 const appName = "AdShorts AI";
 const appOrigin = env.appUrl;
-
-const telegramProvider: GenericOAuthConfig[] = authProviderStatus.telegramEnabled
-  ? [
-      {
-        clientId: env.telegramClientId!,
-        clientSecret: env.telegramClientSecret!,
-        discoveryUrl: "https://oauth.telegram.org/.well-known/openid-configuration",
-        getUserInfo: async (tokens) => {
-          if (!tokens.idToken) return null;
-
-          const claims = decodeJwt(tokens.idToken);
-          const subject = String(claims.sub ?? claims.id ?? "telegram-user");
-          const username = typeof claims.preferred_username === "string" ? claims.preferred_username : undefined;
-
-          return {
-            id: subject,
-            email: `telegram-${subject}@users.adshorts.local`,
-            emailVerified: true,
-            name:
-              typeof claims.name === "string"
-                ? claims.name
-                : username
-                  ? `@${username}`
-                  : "Telegram User",
-            picture: typeof claims.picture === "string" ? claims.picture : undefined,
-            preferred_username: username,
-            sub: subject,
-          };
-        },
-        issuer: "https://oauth.telegram.org",
-        mapProfileToUser: async (profile) => {
-          const subject =
-            typeof profile.sub === "string" ? profile.sub : String(profile.id ?? "telegram-user");
-          const username =
-            typeof profile.preferred_username === "string" ? profile.preferred_username : undefined;
-
-          return {
-            email: `telegram-${subject}@users.adshorts.local`,
-            emailVerified: true,
-            image: typeof profile.picture === "string" ? profile.picture : null,
-            name:
-              typeof profile.name === "string"
-                ? profile.name
-                : username
-                  ? `@${username}`
-                  : "Telegram User",
-          };
-        },
-        pkce: true,
-        providerId: "telegram",
-        scopes: ["openid", "profile"],
-      },
-    ]
-  : [];
 
 export const auth = betterAuth({
   baseURL: env.authBaseUrl,
@@ -88,37 +33,47 @@ export const auth = betterAuth({
     },
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
-      void sendAppEmail({
-        html: `
+      try {
+        await sendAppEmail({
+          html: `
           <p>You requested a password reset for ${appName}.</p>
           <p><a href="${url}">Reset your password</a></p>
         `,
-        subject: "Reset your AdShorts AI password",
-        text: `You requested a password reset for ${appName}. Reset it here: ${url}`,
-        to: user.email,
-      }).catch((error: unknown) => {
+          subject: "Reset your AdShorts AI password",
+          text: `You requested a password reset for ${appName}. Reset it here: ${url}`,
+          to: user.email,
+        });
+      } catch (error: unknown) {
         console.error("[auth] Failed to send password reset email", error);
-      });
+        throw new Error(
+          "Не удалось отправить письмо для сброса пароля. Проверьте SMTP на сервере или попробуйте позже.",
+        );
+      }
     },
   },
   emailVerification: {
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      void sendAppEmail({
-        html: `
+      try {
+        await sendAppEmail({
+          html: `
           <p>Finish setting up your ${appName} account.</p>
           <p><a href="${url}">Verify your email</a></p>
           <p>If you didn't request this, you can ignore this email.</p>
         `,
-        subject: "Verify your AdShorts AI email",
-        text: `Finish setting up your ${appName} account by opening this link: ${url}`,
-        to: user.email,
-      }).catch((error: unknown) => {
+          subject: "Verify your AdShorts AI email",
+          text: `Finish setting up your ${appName} account by opening this link: ${url}`,
+          to: user.email,
+        });
+      } catch (error: unknown) {
         console.error("[auth] Failed to send verification email", error);
-      });
+        throw new Error(
+          "Не удалось отправить письмо с подтверждением. Проверьте настройки SMTP на сервере и поле SMTP_PASS в .env (для пароля с пробелами используйте кавычки), затем попробуйте снова.",
+        );
+      }
     },
   },
-  plugins: telegramProvider.length ? [genericOAuth({ config: telegramProvider })] : [],
+  plugins: [],
   secret: env.authSecret,
   socialProviders: {
     ...(authProviderStatus.googleEnabled
@@ -156,3 +111,117 @@ export const ensureAuthSchema = async () => {
 
   await authSchemaPromise;
 };
+
+type TelegramProfile = {
+  telegramId: string;
+  email: string;
+  name: string;
+  image: string | null;
+  username?: string;
+};
+
+export async function signInWithTelegram(
+  profile: TelegramProfile,
+  req: Request,
+  res: Response,
+): Promise<{ user: { id: string; email: string; name: string } }> {
+  const ctx = await (auth as unknown as { $context: Promise<{ adapter: unknown }> }).$context;
+  const adapter = ctx.adapter as {
+    findOne: <T>(options: { model: string; where: { field: string; value: string }[] }) => Promise<T | null>;
+    create: <T>(options: { model: string; data: Record<string, unknown> }) => Promise<T>;
+    update: <T>(options: { model: string; where: { field: string; value: string }[]; update: Record<string, unknown> }) => Promise<T>;
+  };
+
+  let account = await adapter.findOne<{ userId: string }>({
+    model: "account",
+    where: [
+      { field: "providerId", value: "telegram" },
+      { field: "accountId", value: profile.telegramId },
+    ],
+  });
+
+  let userId: string;
+
+  if (account) {
+    userId = account.userId;
+
+    await adapter.update({
+      model: "user",
+      where: [{ field: "id", value: userId }],
+      update: {
+        name: profile.name,
+        image: profile.image,
+        updatedAt: new Date(),
+      },
+    });
+  } else {
+    let existingUser = await adapter.findOne<{ id: string }>({
+      model: "user",
+      where: [{ field: "email", value: profile.email }],
+    });
+
+    if (!existingUser) {
+      existingUser = await adapter.create<{ id: string }>({
+        model: "user",
+        data: {
+          email: profile.email,
+          emailVerified: true,
+          name: profile.name,
+          image: profile.image,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    userId = existingUser.id;
+
+    await adapter.create({
+      model: "account",
+      data: {
+        userId,
+        providerId: "telegram",
+        accountId: profile.telegramId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  const user = await adapter.findOne<{ id: string; email: string; name: string }>({
+    model: "user",
+    where: [{ field: "id", value: userId }],
+  });
+
+  if (!user) {
+    throw new Error("User not found after Telegram sign-in.");
+  }
+
+  const sessionToken = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await adapter.create({
+    model: "session",
+    data: {
+      token: sessionToken,
+      userId: user.id,
+      expiresAt,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    },
+  });
+
+  res.cookie("better-auth.session_token", sessionToken, {
+    httpOnly: true,
+    secure: env.isProduction,
+    sameSite: "lax",
+    path: "/",
+    expires: expiresAt,
+  });
+
+  console.info(`[telegram] User signed in: ${user.email} (id=${user.id}, telegramId=${profile.telegramId})`);
+
+  return { user };
+}

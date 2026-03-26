@@ -23,8 +23,6 @@ const studioLayers = [
   { label: "Captions", value: "Auto-highlight timing" },
 ];
 const waveformBars = [14, 22, 30, 18, 12, 26, 34, 17, 28, 20, 32, 16];
-const editorModes = ["Narration", "Scenes", "Captions"];
-const editorFormats = ["Tune", "0:32", "9000", "9:16"];
 
 export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
   const topic = "AI tools";
@@ -51,9 +49,6 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
           <PrimarySiteNav activeItem="home" onOpenStudio={openPrimaryFlow} />
 
           <div className="site-header__actions">
-            <Link className="site-header__link" to="/pricing">
-              Pricing
-            </Link>
             <a
               className="site-header__link"
               href="https://t.me/AdShortsAIBot"
@@ -181,60 +176,7 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
               </div>
             </aside>
 
-            <div className="hero-editor-card" aria-label="Studio timeline preview">
-              <div className="hero-editor-card__rail">
-                <div className="hero-editor-card__brand">
-                  <span className="hero-editor-card__brand-mark"></span>
-                  <span>AdShorts.AI</span>
-                </div>
-                <div className="hero-editor-card__nav">
-                  <span className="is-active">AI script</span>
-                  <span>Timeline</span>
-                  <span>Preview</span>
-                </div>
-              </div>
-
-              <div className="hero-editor-card__main">
-                <div className="hero-editor-card__head">
-                  <span>Batch editor</span>
-                  <span>0:58</span>
-                </div>
-
-                <div className="hero-editor-card__script">
-                  <p>
-                    {topic} превращается в готовый vertical-first сценарий: сильный hook, 3 сцены, AI voiceover и
-                    финальный CTA без ручного монтажа.
-                  </p>
-                </div>
-
-                <div className="hero-editor-card__wave-row">
-                  <div className="hero-editor-card__waveform" aria-hidden="true">
-                    {waveformBars.map((height, index) => (
-                      <span key={`editor-${height}-${index}`} style={{ height: Math.max(10, height - 2) }}></span>
-                    ))}
-                  </div>
-
-                  <div className="hero-editor-card__thumb" aria-hidden="true">
-                    <div className="hero-editor-card__thumb-ring"></div>
-                  </div>
-                </div>
-
-                <div className="hero-editor-card__footer">
-                  <div className="hero-editor-card__chips">
-                    {editorModes.map((item) => (
-                      <span key={item}>{item}</span>
-                    ))}
-                    {editorFormats.map((item) => (
-                      <span key={item}>{item}</span>
-                    ))}
-                  </div>
-
-                  <button className="btn hero-editor-card__cta route-button" type="button" onClick={openPrimaryFlow}>
-                    Generate
-                  </button>
-                </div>
-              </div>
-            </div>
+            
           </div>
 
           <div className="container hero__trust">
@@ -253,61 +195,91 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--paper section--tight" id="product">
           <div className="container">
             <div className="section-head">
-              <p className="eyebrow eyebrow--dark">One flagship product</p>
-              <h2>Один продукт для всего пайплайна коротких видео.</h2>
+              <p className="eyebrow eyebrow--dark">ВСЁ ДЛЯ SHORTS В ОДНОМ СЕРВИСЕ</p>
+              <h2>Превращайте идею в готовый Shorts в одном сервисе.</h2>
               <p>
-                AdShorts AI не должен выглядеть как бот-надстройка или набор разрозненных утилит. Главная страница
-                продает цельный продукт, а ниже раскрывает его core capabilities.
+                AdShorts AI автоматически создаёт сценарий, озвучку, визуал и субтитры. Вы получаете готовый
+                вертикальный ролик без монтажа, сложных программ и переключения между сервисами.
               </p>
             </div>
 
             <div className="capability-grid">
               <article className="capability capability--lead">
-                <span className="capability__label">AdShorts AI Core</span>
-                <h3>От идеи до ready-to-post ролика в одном editorial flow.</h3>
+                <h3>От идеи до готового Shorts — в одном сервисе</h3>
                 <p>
-                  Brief, hook, voice, visual language, captions и export собираются в одном продукте, который ощущается
-                  как настоящий web studio, а не как цепочка из пяти разрозненных шагов.
+                  Сценарий, озвучка, видеофон, субтитры и экспорт собираются в одном сервисе, чтобы вы могли создавать
+                  готовые short-видео без монтажа и без сложных программ.
                 </p>
 
                 <div className="capability__list">
-                  <span>Hook &amp; structure</span>
-                  <span>Voice direction</span>
-                  <span>Visual treatment</span>
-                  <span>Captions &amp; pacing</span>
-                  <span>Batch generation</span>
-                  <span>9:16 delivery</span>
+                  <span>Hook и структура</span>
+                  <span>AI Сценарий</span>
+                  <span>Визуал</span>
+                  <span>Озвучка</span>
+                  <span>Субтитры</span>
+                  <span>Музыка</span>
+                  <span>Автопубликация</span>
                 </div>
               </article>
 
               <article className="capability">
-                <span className="capability__label">AI Script</span>
-                <h3>Структура для первого экрана и удержания.</h3>
-                <p>Сильный hook, ритм и сценарная логика под vertical-first format.</p>
+                <span className="capability__label">HOOK И СТРУКТУРА</span>
+                <h3>Сильное начало и понятная структура ролика</h3>
+                <p>
+                  Хук в первые секунды, правильный ритм и логичная структура, чтобы ролик удерживал внимание до конца.
+                </p>
               </article>
 
               <article className="capability">
-                <span className="capability__label">Voiceover</span>
-                <h3>Озвучка, которая ощущается частью продукта.</h3>
-                <p>Natural delivery, multilanguage voice options и быстрая правка тона.</p>
+                <span className="capability__label">AI СЦЕНАРИЙ</span>
+                <h3>Структура для первых секунд и удержания внимания</h3>
+                <p>
+                  Сильное начало, правильный ритм и логичный сценарий, оптимизированный для коротких вертикальных
+                  видео.
+                </p>
               </article>
 
               <article className="capability">
-                <span className="capability__label">Visuals</span>
-                <h3>Визуалы и динамика, а не просто stock-замена.</h3>
-                <p>Готовые сцены, motion rhythm и consistent visual treatment для серий.</p>
+                <span className="capability__label">ВИЗУАЛ</span>
+                <h3>Готовые сцены и единый стиль роликов</h3>
+                <p>
+                  Сцены, динамика и визуальный стиль создаются автоматически, чтобы ролики выглядели целостно и
+                  профессионально.
+                </p>
               </article>
 
               <article className="capability">
-                <span className="capability__label">Captions</span>
-                <h3>Субтитры и акценты, которые читаются без звука.</h3>
-                <p>Ключевые фразы, semantic emphasis и скорость чтения под мобайл.</p>
+                <span className="capability__label">ОЗВУЧКА</span>
+                <h3>Озвучка, которая звучит естественно</h3>
+                <p>
+                  Натуральное звучание, разные языки и быстрая настройка голоса, чтобы озвучка подходила под стиль
+                  ролика.
+                </p>
               </article>
 
               <article className="capability">
-                <span className="capability__label">Export</span>
-                <h3>Готово для Shorts, Reels и TikTok без ручной адаптации.</h3>
-                <p>Native 9:16 export, batch preview и быстрый handoff в публикацию.</p>
+                <span className="capability__label">Субтитры</span>
+                <h3>Субтитры с акцентами и правильным ритмом</h3>
+                <p>
+                  Выделение важных фраз, удобная скорость чтения и формат, который хорошо смотрится на мобильных
+                  экранах.
+                </p>
+              </article>
+
+              <article className="capability">
+                <span className="capability__label">МУЗЫКА</span>
+                <h3>Музыка, подходящая под ритм ролика</h3>
+                <p>
+                  Фоновая музыка подбирается автоматически, чтобы ролик звучал динамично и удерживал внимание.
+                </p>
+              </article>
+
+              <article className="capability">
+                <span className="capability__label">АВТОПУБЛИКАЦИЯ</span>
+                <h3>Публикуйте сразу в YouTube Shorts</h3>
+                <p>
+                  Готовый ролик можно отправить в YouTube прямо из студии, без скачивания и без ручной загрузки.
+                </p>
               </article>
             </div>
           </div>
@@ -317,19 +289,13 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
           <div className="container">
             <div className="section-head section-head--split">
               <div>
-                <p className="eyebrow eyebrow--dark">Live web studio</p>
-                <h2>Пробуйте тему прямо на странице.</h2>
+                <p className="eyebrow eyebrow--dark">СТУДИЯ</p>
+                <h2>Создавайте Shorts прямо в браузере.</h2>
                 <p>
-                  Ниже — локальный high-fidelity модуль, который показывает, как должен ощущаться основной web-продукт.
-                  Здесь важен UX-flow, а не реальная backend-генерация.
+                  Создавайте Shorts в одном интерфейсе и получайте видео готовое к публикации за минуту.
                 </p>
               </div>
 
-              <div className="section-head__aside">
-                <span className="section-chip">Web-first UX</span>
-                <span className="section-chip">Local mock state</span>
-                <span className="section-chip">Local auth flow</span>
-              </div>
             </div>
 
           </div>
@@ -338,11 +304,11 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--paper" id="examples">
           <div className="container">
             <div className="section-head">
-              <p className="eyebrow eyebrow--dark">Editorial product story</p>
-              <h2>Сайт должен продавать не экран управления, а результат.</h2>
+              <p className="eyebrow eyebrow--dark">НЕСКОЛЬКО ВИДЕО ИЗ ОДНОЙ ИДЕИ</p>
+              <h2>Создавайте несколько видео из одной идеи</h2>
               <p>
-                Поэтому ниже — большие медиаблоки, сценарии использования и outcomes, которые объясняют продукт через
-                итоговый эффект, а не через интерфейсную механику.
+                AdShorts позволяет собирать разные версии коротких видео из одной темы, чтобы быстрее проверять идеи и
+                делать серии контента без ручного монтажа.
               </p>
             </div>
 
@@ -350,53 +316,57 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
               <article className="showcase-card showcase-card--wide">
                 <div className="showcase-card__media">
                   <div className="showcase-frame">
-                    <span className="showcase-frame__label">Campaign system</span>
-                    <strong>One topic. Multiple hooks. One export flow.</strong>
+                    <span className="showcase-frame__label">Вариации из одной идеи</span>
+                    <strong>Одна тема. Несколько версий. Быстрый тест.</strong>
                     <div className="showcase-frame__rails">
-                      <span>Hook variations</span>
-                      <span>Voice versions</span>
-                      <span>Visual styles</span>
-                      <span>Captions</span>
+                      <span>Хуки</span>
+                      <span>Озвучка</span>
+                      <span>Визуальные стили</span>
+                      <span>Субтитры</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="showcase-card__copy">
-                  <span className="showcase-card__label">Why it matters</span>
-                  <h3>AdShorts AI должен ощущаться как основная production-система для short-form.</h3>
+                  <span className="showcase-card__label">Почему это важно</span>
+                  <h3>Проверяйте гипотезы на нескольких версиях, а не на одном ролике.</h3>
                   <p>
-                    Не просто генератор идеи, а место, где собирается полный пакет роликов для теста оффера, гипотезы
-                    или серии контента.
+                    AdShorts собирает несколько вариантов из одной темы: меняйте хук, ритм, озвучку и визуал, чтобы
+                    быстрее найти формат, который удерживает и набирает просмотры.
                   </p>
                   <div className="showcase-metrics">
                     <article>
-                      <strong>1 brief</strong>
+                      <strong>1 тема</strong>
                       <span>на входе</span>
                     </article>
                     <article>
-                      <strong>3-5 cuts</strong>
+                      <strong>3-5 версий</strong>
                       <span>на выходе</span>
                     </article>
                     <article>
-                      <strong>0 handoff</strong>
-                      <span>между инструментами</span>
+                      <strong>0 монтажа</strong>
+                      <span>вручную</span>
                     </article>
                   </div>
                 </div>
               </article>
 
               <article className="showcase-card">
-                <span className="showcase-card__label">Creators</span>
-                <h3>Тестируйте серию идей, не собирая каждый ролик вручную.</h3>
+                <span className="showcase-card__label">Тест гипотез</span>
+                <h3>Запускайте A/B-вариации коротких роликов за минуты.</h3>
                 <p>
-                  Один продукт для поиска hook, темпа, визуального treatment и быстрой публикации в short-form каналы.
+                  Делайте несколько версий с разными хуками и подачей, сравнивайте результаты и оставляйте только то,
+                  что реально работает по удержанию.
                 </p>
               </article>
 
               <article className="showcase-card">
-                <span className="showcase-card__label">Teams</span>
-                <h3>Давайте growth-команде не “сырой AI”, а production-ready output.</h3>
-                <p>Web-first flow помогает продавать продукт через результат, а не через список технических функций.</p>
+                <span className="showcase-card__label">Серии контента</span>
+                <h3>Собирайте контент-серии из одной идеи без потери стиля.</h3>
+                <p>
+                  Сервис сохраняет единый формат роликов: структура, визуал и ритм остаются согласованными, чтобы серия
+                  выглядела цельно и узнаваемо.
+                </p>
               </article>
             </div>
           </div>
@@ -405,27 +375,31 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--paper section--workflow">
           <div className="container">
             <div className="section-head">
-              <p className="eyebrow eyebrow--dark">How it works</p>
-              <h2>От темы до готового batch-а за 3 шага.</h2>
+              <p className="eyebrow eyebrow--dark">КАК ЭТО РАБОТАЕТ</p>
+              <h2>От идеи до готового Shorts за 3 шага</h2>
+              <p>
+                Вы задаёте тему, сервис автоматически собирает сценарий, озвучку, визуал и субтитры, а на выходе
+                получаете готовый ролик для публикации.
+              </p>
             </div>
 
             <div className="steps-grid">
               <article className="step-card">
                 <div className="step-card__num">01</div>
                 <h3>Введите тему</h3>
-                <p>Идея, ниша, оффер или тренд, который нужно превратить в short-form batch.</p>
+                <p>Опишите идею ролика: тему, оффер или формат, который хотите протестировать в Shorts.</p>
               </article>
 
               <article className="step-card">
                 <div className="step-card__num">02</div>
-                <h3>Соберите пакет роликов</h3>
-                <p>Сценарий, озвучка, визуал, subtitles и pacing собираются в одном flow.</p>
+                <h3>Соберите видео автоматически</h3>
+                <p>AdShorts AI создаёт сценарий, озвучку, визуал и субтитры в одном процессе — без ручного монтажа.</p>
               </article>
 
               <article className="step-card">
                 <div className="step-card__num">03</div>
-                <h3>Скачайте и публикуйте</h3>
-                <p>Готово для Shorts, Reels и TikTok без ручной адаптации и лишнего handoff.</p>
+                <h3>Публикуйте готовый Shorts</h3>
+                <p>Получите ролик, готовый к публикации в вертикальных форматах, и запускайте тесты сразу.</p>
               </article>
             </div>
           </div>
@@ -434,30 +408,30 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--stone" id="history">
           <div className="container trust-shell">
             <div className="trust-shell__copy">
-              <p className="eyebrow eyebrow--dark">Trust &amp; speed</p>
-              <h2>Сильный продукт должен считываться за 20 секунд.</h2>
+              <p className="eyebrow eyebrow--dark">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
+              <h2>Результат за минуты, качество — на уровне продакшна.</h2>
               <p>
-                Поэтому новый landing-first подход сначала продает outcome, затем показывает capabilities, и только
-                после этого раскрывает local studio module.
+                AdShorts AI помогает быстро выпускать short-видео без потери качества: от идеи и сценария до готового
+                ролика в одном сервисе.
               </p>
             </div>
 
             <div className="trust-stats">
               <article className="stat-card">
                 <strong>50,000+</strong>
-                <span>creators &amp; marketers</span>
+                <span>создателей и маркетологов</span>
               </article>
               <article className="stat-card">
                 <strong>12M+</strong>
-                <span>shorts generated</span>
+                <span>сгенерированных Shorts</span>
               </article>
               <article className="stat-card">
                 <strong>4.9/5</strong>
-                <span>ощущение сильного AI-продукта</span>
+                <span>средняя оценка пользователей</span>
               </article>
               <article className="stat-card">
-                <strong>3 min</strong>
-                <span>до первого preview batch</span>
+                <strong>~1 мин</strong>
+                <span>до первого готового ролика</span>
               </article>
             </div>
           </div>
@@ -466,11 +440,11 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--dark" id="pricing">
           <div className="container pricing-shell">
             <div className="pricing-shell__copy">
-              <p className="eyebrow">Find your launch flow</p>
-              <h2>Веб-студия сверху. Бот и guides — ниже по иерархии.</h2>
+              <p className="eyebrow">ВЫБЕРИТЕ СВОЙ СЦЕНАРИЙ ЗАПУСКА</p>
+              <h2>Выберите формат запуска под вашу задачу</h2>
               <p>
-                Главная должна продавать AdShorts AI как web-продукт с сильным editorial presentation, а не как
-                промо-страницу для Telegram.
+                Начните с веб-студии, если хотите быстро получить готовый Shorts в одном интерфейсе. Используйте
+                Telegram-бот как дополнительный инструмент для масштабирования контента.
               </p>
 
               <div className="pricing-shell__actions">
@@ -484,30 +458,30 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Предпочитаете Telegram? Открыть бота
+                Открыть бота
               </a>
             </div>
 
             <div className="plan-grid">
               <article className="plan-card">
-                <span className="plan-card__label">Creator</span>
+                <span className="plan-card__label">СТАРТ</span>
                 <h3>Быстрый тест идеи</h3>
-                <p>Для solo creators, founders и маркетологов, которым нужен быстрый batch под Shorts.</p>
+                <p>Для авторов, фаундеров и маркетологов, которым нужно быстро проверить идею в формате Shorts.</p>
                 <ul className="plan-card__list">
-                  <li>Script + voice + visuals</li>
-                  <li>Batch preview</li>
-                  <li>9:16 export</li>
+                  <li>Сценарий, озвучка и визуал</li>
+                  <li>Предпросмотр нескольких вариантов</li>
+                  <li>Готовый ролик в формате 9:16</li>
                 </ul>
               </article>
 
               <article className="plan-card plan-card--accent">
-                <span className="plan-card__label">Growth</span>
+                <span className="plan-card__label">РОСТ</span>
                 <h3>Система для контент-команды</h3>
-                <p>Для агентств и growth-команд, которым нужен единый short-form workflow вместо ручной сборки.</p>
+                <p>Для агентств и команд, которым нужен единый процесс создания коротких видео без ручной сборки.</p>
                 <ul className="plan-card__list">
-                  <li>Reusable styles</li>
-                  <li>Voice direction</li>
-                  <li>Series-ready pipeline</li>
+                  <li>Переиспользуемые стили и шаблоны</li>
+                  <li>Управление подачей и тоном озвучки</li>
+                  <li>Пайплайн для серийного выпуска роликов</li>
                 </ul>
               </article>
             </div>
@@ -517,8 +491,8 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section section--paper section--guides" id="guides">
           <div className="container guides-strip">
             <div className="guides-strip__copy">
-              <p className="eyebrow eyebrow--dark">Guides / SEO layer</p>
-              <h2>Гайды остаются слоем дистрибуции, но не спорят с продуктовой историей.</h2>
+              <p className="eyebrow eyebrow--dark">ГАЙДЫ</p>
+              <h2>Полезные материалы привлекают трафик и подводят к продукту.</h2>
             </div>
 
             <div className="guides-strip__cards">
@@ -528,9 +502,9 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span className="guide-card__label">Hub</span>
-                <h3>Shorts Guides</h3>
-                <p>Единая точка входа в материалы по стратегии, удержанию и росту.</p>
+                <span className="guide-card__label">БАЗА</span>
+                <h3>Все гайды по Shorts в одном месте</h3>
+                <p>Единая точка входа: идеи, структура ролика, удержание, оформление и публикация.</p>
               </a>
 
               <a
@@ -539,7 +513,7 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span className="guide-card__label">Hook</span>
+                <span className="guide-card__label">ХУК</span>
                 <h3>Как сделать сильный первый экран</h3>
                 <p>Что удерживает внимание и снижает вероятность свайпа.</p>
               </a>
@@ -550,9 +524,9 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span className="guide-card__label">Captions</span>
+                <span className="guide-card__label">СУБТИТРЫ</span>
                 <h3>Автоматические субтитры</h3>
-                <p>Как captions помогают short-form контенту работать даже без звука.</p>
+                <p>Как субтитры помогают коротким видео работать даже без звука.</p>
               </a>
             </div>
 

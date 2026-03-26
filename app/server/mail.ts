@@ -30,18 +30,38 @@ let lastDevEmailPreview: DevEmailPreview | null = null;
 
 const createTransport = async (): Promise<MailTransport> => {
   if (authProviderStatus.smtpConfigured) {
+    const useStartTls = !env.smtpSecure && env.smtpPort === 587;
+    const transporter = nodemailer.createTransport({
+      auth: {
+        user: env.smtpUser,
+        pass: env.smtpPass,
+      },
+      host: env.smtpHost,
+      port: env.smtpPort,
+      secure: env.smtpSecure,
+      ...(useStartTls ? { requireTLS: true } : {}),
+    });
+
+    if (env.smtpHost?.toLowerCase().includes("gmail") && env.smtpUser && !env.smtpFrom.includes(env.smtpUser)) {
+      console.warn(
+        "[mail] Gmail SMTP: адрес в SMTP_FROM должен совпадать с SMTP_USER (или быть добавленным алиасом в настройках Gmail), иначе письма часто не доставляются.",
+      );
+    }
+
+    try {
+      await transporter.verify();
+      console.info("[mail] SMTP verify OK", { host: env.smtpHost, port: env.smtpPort });
+    } catch (error) {
+      console.error(
+        "[mail] SMTP verify failed — письма, скорее всего, не отправятся. Проверьте SMTP_*, для Gmail нужен пароль приложения; если в пароле есть пробелы, задайте SMTP_PASS в кавычках в .env.",
+        error,
+      );
+    }
+
     return {
       from: env.smtpFrom,
       mode: "smtp",
-      transporter: nodemailer.createTransport({
-        auth: {
-          user: env.smtpUser,
-          pass: env.smtpPass,
-        },
-        host: env.smtpHost,
-        port: env.smtpPort,
-        secure: env.smtpSecure,
-      }),
+      transporter,
     };
   }
 
@@ -80,6 +100,14 @@ export async function sendAppEmail(payload: MailPayload) {
     text: payload.text,
     to: payload.to,
   });
+
+  if (mode === "smtp") {
+    console.info("[mail] SMTP sendMail OK", {
+      to: payload.to,
+      messageId: info.messageId,
+      response: typeof info.response === "string" ? info.response.slice(0, 200) : info.response,
+    });
+  }
 
   const rawPreviewUrl = mode === "ethereal" ? nodemailer.getTestMessageUrl(info) : null;
   const previewUrl = typeof rawPreviewUrl === "string" ? rawPreviewUrl : null;

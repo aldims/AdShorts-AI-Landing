@@ -46,34 +46,34 @@ type PricingFAQ = {
 
 const pricingPlans: PricingPlan[] = [
   {
-    name: "Free",
-    audience: "Для первого теста продукта",
-    price: "0 ₽",
-    billing: "навсегда",
-    credits: "3 кредита",
-    subnote: "С водяным знаком",
+    name: "START",
+    audience: "Для первого запуска",
+    price: "390 ₽",
+    billing: "",
+    credits: "5 кредитов",
+    subnote: "Доступен один раз",
     features: [
-      "3 генерации для знакомства",
-      "AI сценарий, озвучка и визуал",
-      "Авто title, description и hashtags",
-      "Экспорт в 9:16 с watermark",
+      "Автопубликация в YouTube",
+      "Брендинг на видео",
+      "Улучшение видео до Premium",
+      "Видео без водяного знака",
     ],
-    ctaLabel: "Начать бесплатно",
-    ctaType: "app",
+    ctaLabel: "Оформить START",
+    ctaType: "telegram",
   },
   {
-    name: "Pro",
+    name: "PRO",
     audience: "Для регулярного контент-потока",
     audienceLines: ["Для регулярного", "контент-потока"],
     price: "1 490 ₽",
-    billing: "/ месяц",
+    billing: "",
     credits: "25 кредитов",
-    subnote: "~60 ₽ за кредит",
+    subnote: "1 кредит = 1 видео",
     features: [
-      "Без водяного знака",
-      "Оптимально для стабильного постинга",
-      "Полный AI pipeline под Shorts",
-      "Лучшая точка входа для creators",
+      "Всё из START",
+      "Приоритетная генерация",
+      "Можно докупать кредиты",
+      "Видео без водяного знака",
     ],
     badge: "Most popular",
     featured: true,
@@ -81,18 +81,18 @@ const pricingPlans: PricingPlan[] = [
     ctaType: "telegram",
   },
   {
-    name: "Ultra",
+    name: "ULTRA",
     audience: "Для максимального объёма",
     audienceLines: ["Для максимального", "объёма"],
     price: "4 990 ₽",
-    billing: "/ месяц",
+    billing: "",
     credits: "100 кредитов",
-    subnote: "~50 ₽ за кредит",
+    subnote: "1 кредит = 1 видео",
     features: [
-      "Без водяного знака",
-      "Лучшее соотношение цены и объёма",
-      "Подходит для ежедневного контент-плана",
-      "Максимальный месячный запас",
+      "Всё из PRO",
+      "Максимальный приоритет",
+      "Ранний доступ к новым функциям",
+      "Видео без водяного знака",
     ],
     badge: "Best value",
     ctaLabel: "Перейти на Ultra",
@@ -124,19 +124,16 @@ const pricingPacks: PricingPack[] = [
 
 const pricingFaqs: PricingFAQ[] = [
   {
-    question: "Как выбрать план?",
-    answer:
-      "Free подойдёт для первого теста, Pro для регулярного постинга, Ultra если вы выпускаете шортсы почти каждый день или ведёте несколько рубрик сразу.",
+    question: "1 кредит = 1 видео",
+    answer: "Каждая генерация Shorts списывает 1 кредит. Это единая логика для всех тарифов.",
   },
   {
-    question: "Что дают дополнительные пакеты?",
-    answer:
-      "Это быстрый top-up, если месячного лимита не хватает. Их можно докупать в любой момент, и такой баланс не сгорает.",
+    question: "Срок действия функций",
+    answer: "Функции тарифа активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
   },
   {
-    question: "Где сейчас активируется платный тариф?",
-    answer:
-      "Текущий апгрейд ведёт в Telegram-бот, где уже настроена продуктовая логика оплаты и выдачи лимитов.",
+    question: "Что включено в оплату",
+    answer: "Все видео идут без водяного знака. Автопродления нет, повторная оплата только вручную.",
   },
 ];
 
@@ -159,7 +156,7 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
             <span>AdShorts AI</span>
           </Link>
 
-          <PrimarySiteNav onOpenStudio={openPrimaryFlow} />
+          <PrimarySiteNav activeItem="pricing" onOpenStudio={openPrimaryFlow} />
 
           <div className="site-header__actions">
             {session ? (
@@ -182,7 +179,7 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section pricing-max-hero">
           <div className="container">
             <div className="pricing-max-hero__heading">
-              <p className="eyebrow">Pricing</p>
+              <p className="eyebrow">Тарифы</p>
               <h1>Выберите свой тариф</h1>
             </div>
           </div>
@@ -283,7 +280,7 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
           <div className="container">
             <div className="pricing-max-section-head">
               <div>
-                <p className="eyebrow eyebrow--dark">Additional packs</p>
+                <p className="eyebrow">Дополнительные кредиты</p>
                 <h2>Пополняйте кредиты не меняя тарифный план</h2>
               </div>
             </div>
@@ -305,8 +302,8 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         <section className="section pricing-max-faq">
           <div className="container pricing-max-faq__frame">
             <div className="pricing-max-faq__lead">
-              <p className="eyebrow eyebrow--dark">Need clarity?</p>
-              <h2>Как работает pricing</h2>
+              <p className="eyebrow">Как работает</p>
+              <h2>Как работают тарифы</h2>
             </div>
 
             <div className="pricing-max-faq__grid">

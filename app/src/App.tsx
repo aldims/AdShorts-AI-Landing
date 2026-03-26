@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import { AuthModal } from "./components/AuthModal";
 import { authClient } from "./lib/auth-client";
 import { LandingPage } from "./pages/LandingPage";
+import { ExamplesPage } from "./pages/ExamplesPage";
 import { PricingPage } from "./pages/PricingPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
@@ -84,6 +85,7 @@ export function App() {
 
   const workspaceEntryTab = useMemo<WorkspaceTab>(() => {
     if (location.pathname.startsWith("/app/studio")) return "studio";
+    if (location.pathname.startsWith("/app/projects")) return "generations";
     return "overview";
   }, [location.pathname]);
 
@@ -106,6 +108,18 @@ export function App() {
           path="/pricing"
           element={
             <PricingPage
+              session={session}
+              onOpenSignup={() => openAuth("signup")}
+              onOpenSignin={() => openAuth("signin")}
+              onLogout={handleLogout}
+              onOpenWorkspace={() => navigate("/app/studio")}
+            />
+          }
+        />
+        <Route
+          path="/examples"
+          element={
+            <ExamplesPage
               session={session}
               onOpenSignup={() => openAuth("signup")}
               onOpenSignin={() => openAuth("signin")}
@@ -138,6 +152,18 @@ export function App() {
             )
           }
         />
+        <Route
+          path="/app/projects"
+          element={
+            isSessionPending ? (
+              <LoadingScreen />
+            ) : session ? (
+              <WorkspacePage defaultTab="generations" session={session} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
       </Routes>
 
       <AuthModal
@@ -145,7 +171,7 @@ export function App() {
         mode={authState.mode}
         onClose={closeAuth}
         onModeChange={(mode) => setAuthState({ isOpen: true, mode })}
-        onSignedIn={() => navigate("/app/studio")}
+        onSignedIn={closeAuth}
       />
     </>
   );

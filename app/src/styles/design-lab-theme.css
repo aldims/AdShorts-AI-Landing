@@ -252,11 +252,12 @@ textarea {
 }
 
 .site-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
   align-items: center;
   justify-content: center;
   justify-self: center;
-  width: max-content;
+  width: fit-content;
   max-width: 100%;
   gap: 6px;
   flex: 0 1 auto;
@@ -272,8 +273,10 @@ textarea {
 .site-nav__item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   min-height: 42px;
+  min-width: 112px;
   padding: 0 18px;
   border-radius: 999px;
   white-space: nowrap;
@@ -505,12 +508,11 @@ textarea {
 }
 
 .site-header--workspace .site-nav {
-  width: max-content;
+  width: fit-content;
   min-width: 0;
   gap: 10px;
   padding: 8px 10px;
   justify-self: center;
-  justify-content: center;
 }
 
 .site-header--workspace .site-nav__item {
@@ -829,7 +831,7 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
   margin-top: 22px;
 }
 
@@ -837,8 +839,8 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
-  padding: 0 20px;
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   background:
@@ -848,7 +850,7 @@ textarea {
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 16px 34px rgba(0, 0, 0, 0.18);
   color: rgba(255, 255, 255, 0.88);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   text-align: center;
@@ -858,8 +860,8 @@ textarea {
 
 .hero-studio-card {
   position: absolute;
-  top: 158px;
-  right: clamp(-170px, calc((100vw - 1240px) / -2), -24px);
+  top: 178px;
+  right: clamp(-190px, calc((100vw - 1240px) / -2), -40px);
   z-index: 1;
   width: min(432px, 33vw);
   margin-top: 0;
@@ -870,7 +872,7 @@ textarea {
   position: relative;
   overflow: hidden;
   padding: 20px;
-  border-radius: 34px;
+  border-radius: 44px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(180deg, rgba(12, 14, 28, 0.92), rgba(8, 9, 20, 0.9));
   box-shadow:
@@ -1133,30 +1135,34 @@ textarea {
   bottom: auto;
   left: auto;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
-  width: min(930px, 100%);
-  margin-top: 10px;
-  padding: 18px;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(18, 21, 37, 0.94), rgba(10, 12, 23, 0.94));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 28px 70px rgba(4, 6, 16, 0.48);
-  backdrop-filter: blur(16px);
+  display: block;
+  width: min(1020px, 100%);
+  margin-top: -0px;
+  padding: 0;
+  border-radius: 44px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
   animation: card-float 7s ease-in-out infinite;
 }
 
 .hero-editor-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 60% 0%, rgba(119, 128, 255, 0.14), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 46%);
-  pointer-events: none;
+  display: none;
+}
+
+.hero-editor-card .hero-studio-card__canvas {
+  /* нижняя карточка короче верхней */
+  min-height: 330px;
+}
+
+.hero-editor-card .hero-studio-card__caption p {
+  max-width: 500px;
+}
+
+.hero-editor-card .hero-editor-card__footer {
+  justify-content: center;
+  margin-top: 14px;
 }
 
 .hero-editor-card__rail,
@@ -1198,9 +1204,9 @@ textarea {
 .hero-editor-card__nav span {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.62);
@@ -1226,10 +1232,10 @@ textarea {
 }
 
 .hero-editor-card__script {
-  padding: 18px 20px;
-  border-radius: 20px;
+  padding: 16px 18px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .hero-editor-card__script p {
@@ -1599,13 +1605,13 @@ textarea {
 .capability__list span {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 16px;
+  min-height: 30px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.8);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -1630,20 +1636,19 @@ textarea {
   isolation: isolate;
   left: calc((100vw - min(1480px, calc(100vw - 32px))) / 2 + 308px);
   right: calc((100vw - min(1480px, calc(100vw - 32px))) / 2 + 18px);
-  bottom: 16px;
+  bottom: 48px;
   z-index: 34;
   width: auto;
   margin: 0;
   padding: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 54px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(95, 102, 246, 0.18), transparent 28%),
-    radial-gradient(circle at 100% 0%, rgba(191, 90, 242, 0.16), transparent 26%),
-    linear-gradient(180deg, rgba(19, 21, 28, 0.84), rgba(10, 12, 20, 0.78));
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.02), transparent 30%),
+    linear-gradient(180deg, rgba(120, 120, 120, 0.06), rgba(35, 35, 35, 0.04));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 34px 90px rgba(2, 4, 12, 0.42);
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 34px 90px rgba(0, 0, 0, 0.52);
   transform: none;
   backdrop-filter: blur(34px);
 }
@@ -1653,10 +1658,10 @@ textarea {
   position: absolute;
   inset: 0;
   z-index: -1;
+  border-radius: inherit;
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.08), transparent 24%),
-    radial-gradient(circle at 86% 16%, rgba(180, 126, 255, 0.14), transparent 20%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 42%);
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.02), transparent 26%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent 42%);
   pointer-events: none;
 }
 
@@ -1697,6 +1702,15 @@ textarea {
   font-weight: 800;
   letter-spacing: -0.03em;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.studio-prompt-stage__tool img {
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  flex-shrink: 0;
+  opacity: 0.94;
+  object-fit: contain;
 }
 
 .studio-prompt-stage__tool.is-active {
@@ -2089,7 +2103,7 @@ textarea {
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.94);
-  font-family: "Sora", "Manrope", sans-serif;
+  font-family: "Manrope", sans-serif;
   font-size: clamp(1.04rem, 1.16vw, 1.2rem);
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -2175,6 +2189,23 @@ textarea {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     0 16px 34px rgba(165, 214, 235, 0.22);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 rgba(120, 80, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(120, 80, 255, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(120, 80, 255, 0.5);
+  }
+}
+
+.studio-prompt-stage .btn--studio.is-working {
+  animation: none;
 }
 
 .studio-brief-card {
@@ -2750,6 +2781,11 @@ textarea {
   font-size: 0.92rem;
 }
 
+.studio-video-modal__meta {
+  display: grid;
+  gap: 8px;
+}
+
 .results-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.91fr) minmax(0, 0.91fr);
@@ -3129,7 +3165,7 @@ textarea {
 .pricing-max-hero__heading {
   display: grid;
   justify-items: center;
-  gap: 16px;
+  gap: 8px;
   max-width: 760px;
   margin: 0 auto;
   text-align: center;
@@ -3163,7 +3199,7 @@ textarea {
 }
 
 .pricing-max-plans {
-  padding-top: 0;
+  padding-top: 28px;
   padding-bottom: 96px;
 }
 
@@ -3558,12 +3594,24 @@ textarea {
   gap: 18px;
 }
 
+.guides-strip__copy h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
 .guide-card {
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.76);
   box-shadow: var(--shadow-md);
+}
+
+.guide-card h3,
+.guide-card p {
+  color: var(--muted);
 }
 
 .guides-strip__cta {
@@ -3739,6 +3787,18 @@ textarea {
   margin-top: 4px;
 }
 
+.signup-form__submit--dark {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.signup-form__submit--dark:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
 .signup-modal__social {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3748,7 +3808,9 @@ textarea {
 
 .signup-social__button {
   display: grid;
-  gap: 4px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
   min-height: 68px;
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -3767,10 +3829,42 @@ textarea {
   font-weight: 800;
 }
 
+.signup-social__copy {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
 .signup-social__button small {
   color: rgba(255, 255, 255, 0.56);
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.signup-social__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.signup-social__icon img {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+
+.signup-social__icon--google {
+  background: transparent;
+}
+
+.signup-social__icon--telegram {
+  background: transparent;
 }
 
 .signup-social__button:hover:not(:disabled) {
@@ -3807,7 +3901,7 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: #0f131b;
+  background: transparent;
 }
 
 .signup-modal__status {
@@ -3855,27 +3949,53 @@ textarea {
 }
 
 .signup-modal__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   justify-self: flex-start;
   min-height: 40px;
-  color: rgba(255, 255, 255, 0.82);
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  color: white;
   font-size: 0.92rem;
   font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.signup-modal__secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .signup-modal__switch {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   margin: 0;
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.92rem;
+  text-align: center;
 }
 
 .signup-modal__switchbtn {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: white;
   font-size: 0.92rem;
   font-weight: 800;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.signup-modal__switchbtn:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .account-shell {
@@ -4405,6 +4525,16 @@ textarea {
   background: rgba(95, 102, 246, 0.16);
 }
 
+.account-status--processing {
+  color: #f9d97f;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.account-status--failed {
+  color: #ffb6c1;
+  background: rgba(255, 61, 99, 0.16);
+}
+
 .account-linkbtn {
   display: inline-flex;
   align-items: center;
@@ -4475,6 +4605,34 @@ textarea {
   gap: 18px;
 }
 
+.account-empty-state {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.18);
+}
+
+.account-empty-state strong {
+  color: white;
+}
+
+.account-empty-state p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.account-empty-state--error {
+  border-color: rgba(255, 61, 99, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 120, 146, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+}
+
 .account-library__label {
   display: inline-block;
   margin-bottom: 10px;
@@ -4483,6 +4641,60 @@ textarea {
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.account-project-card {
+  display: grid;
+  gap: 16px;
+}
+
+.account-project-card__meta,
+.account-project-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-project-card__details {
+  display: grid;
+  gap: 10px;
+}
+
+.account-project-card__detail {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.account-project-card__detail span,
+.account-project-card__footer span {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.account-project-card__detail strong {
+  color: white;
+}
+
+.account-project-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.account-project-card__tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.82rem;
 }
 
 .account-formgrid {
@@ -4626,7 +4838,7 @@ textarea {
     left: calc((100vw - min(1480px, calc(100vw - 32px))) / 2 + 18px);
     right: calc((100vw - min(1480px, calc(100vw - 32px))) / 2 + 18px);
     width: auto;
-    bottom: 14px;
+    bottom: 42px;
   }
 
   .site-header__inner,
@@ -4721,7 +4933,7 @@ textarea {
   }
 
   .site-header--workspace .site-nav {
-    width: max-content;
+    width: fit-content;
     min-width: 0;
     gap: 8px;
     padding: 7px 8px;
@@ -4732,6 +4944,7 @@ textarea {
   }
 
   .site-nav__item {
+    min-width: 104px;
     padding: 0 15px;
     font-size: 0.92rem;
   }
@@ -4766,7 +4979,7 @@ textarea {
     width: auto;
     margin-bottom: 18px;
     padding: 11px;
-    border-radius: 28px;
+    border-radius: 40px;
     transform: none;
   }
 
@@ -4803,6 +5016,12 @@ textarea {
 
   .studio-live-stage__tags {
     justify-content: flex-start;
+  }
+
+  .account-project-card__meta,
+  .account-project-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .container {

@@ -69,24 +69,93 @@ type WorkspaceBootstrapResponse = {
   error?: string;
 };
 
+type WorkspaceProject = {
+  adId: number | null;
+  createdAt: string;
+  description: string;
+  generatedAt: string | null;
+  hashtags: string[];
+  id: string;
+  jobId: string | null;
+  prompt: string;
+  source: "project" | "task";
+  status: string;
+  title: string;
+  updatedAt: string;
+  videoUrl: string | null;
+};
+
+type WorkspaceProjectsPayload = {
+  projects: WorkspaceProject[];
+};
+
+type WorkspaceProjectsResponse = {
+  data?: WorkspaceProjectsPayload;
+  error?: string;
+};
+
 const studioPromptTools = ["Img", "Vid", "Sfx"];
-const studioPromptChips = ["Shorts", "9:16", "RU voice", "Captions", "Fast cut", "Negative prompt"];
+const studioPromptChips = ["Видео", "Субтитры", "Озвучка", "Музыка", "Бренд", "Сегменты", "Язык"];
 
 const getStudioStatusLabel = (value: string) => {
   switch (value) {
     case "queued":
       return "Task queued";
     case "processing":
-      return "Generating video...";
+      return "Генерация видео...";
     case "retrying":
       return "Retrying generation...";
     case "done":
-      return "Preview ready";
+      return "";
     case "failed":
       return "Generation failed";
     default:
-      return "Generating video...";
+      return "Генерация видео...";
   }
+};
+
+const getProjectStatusLabel = (value: string) => {
+  switch (value) {
+    case "ready":
+      return "Готов";
+    case "queued":
+      return "В очереди";
+    case "processing":
+      return "Генерация";
+    case "failed":
+      return "Ошибка";
+    case "draft":
+      return "Черновик";
+    default:
+      return "Проект";
+  }
+};
+
+const getProjectStatusClassName = (value: string) => {
+  switch (value) {
+    case "ready":
+      return "account-status--ready";
+    case "queued":
+    case "processing":
+      return "account-status--processing";
+    case "failed":
+      return "account-status--failed";
+    default:
+      return "account-status--draft";
+  }
+};
+
+const formatProjectDate = (value: string) => {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Дата недоступна";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
 };
 
 const tabCopy: Record<
@@ -104,15 +173,14 @@ const tabCopy: Record<
       "Управляйте генерациями, тарифом, каналами публикации и рабочими пресетами из одного workspace.",
   },
   studio: {
-    eyebrow: "Live web studio",
+    eyebrow: "Студия Shorts",
     heading: "",
     subtitle: "",
   },
   generations: {
-    eyebrow: "Generations library",
-    heading: "Все ваши генерации",
-    subtitle:
-      "Библиотека batch-ов, шаблонов, пресетов и готовых роликов для Shorts, Reels и TikTok.",
+    eyebrow: "Проекты",
+    heading: "Все проекты аккаунта",
+    subtitle: "Здесь собраны все генерации и готовые Shorts, связанные с вашим аккаунтом в общей БД.",
   },
   billing: {
     eyebrow: "Billing & usage",
@@ -136,6 +204,10 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<StudioGeneration | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<WorkspaceProject[]>([]);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(false);
+  const [hasLoadedProjects, setHasLoadedProjects] = useState(false);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
 
@@ -179,12 +251,85 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
     }
   }, [activeTab, isPreviewModalOpen]);
 
+  useEffect(() => {
+    setProjects([]);
+    setProjectsError(null);
+    setHasLoadedProjects(false);
+  }, [session.email]);
+
+  useEffect(() => {
+    if (!generatedVideo?.id) return;
+    setHasLoadedProjects(false);
+  }, [generatedVideo?.id]);
+
+  useEffect(() => {
+    if (activeTab !== "generations" || hasLoadedProjects) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort("projects-timeout"), 12000);
+
+    const loadProjects = async () => {
+      setIsProjectsLoading(true);
+      setProjectsError(null);
+
+      try {
+        const response = await fetch("/api/workspace/projects", {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceProjectsResponse | null;
+
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error ?? "Failed to load projects.");
+        }
+
+        setProjects(payload.data.projects);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          if (controller.signal.reason === "projects-timeout") {
+            setProjectsError("Сервер слишком долго отвечает. Попробуйте обновить вкладку Проекты.");
+            setHasLoadedProjects(true);
+          }
+
+          return;
+        }
+
+        setProjectsError(error instanceof Error ? error.message : "Failed to load projects.");
+        setHasLoadedProjects(true);
+      } finally {
+        window.clearTimeout(timeoutId);
+        setIsProjectsLoading(false);
+      }
+    };
+
+    void loadProjects();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [activeTab, hasLoadedProjects]);
+
   const header = tabCopy[activeTab];
   const sectionTitleId = header.heading ? "account-shell-title" : undefined;
   const workspacePlan = workspaceProfile?.plan ?? session.plan;
   const workspaceBalance = workspaceProfile?.balance ?? 1;
+  const generatedVideoTopic = generatedVideo?.prompt ?? "";
+  const generatedVideoTitle = generatedVideo?.title ?? "";
   const generatedVideoDescription = generatedVideo?.description ?? "";
   const generatedVideoHashtags = generatedVideo?.hashtags ?? [];
+  const hasGeneratedVideoTitle = Boolean(generatedVideoTitle);
+  const hasGeneratedVideoDescription = Boolean(generatedVideoDescription);
+  const hasGeneratedVideoHashtags = generatedVideoHashtags.length > 0;
+  const hasGeneratedPublishMeta =
+    hasGeneratedVideoTitle || hasGeneratedVideoDescription || hasGeneratedVideoHashtags;
+  const generatedVideoModalTitle = hasGeneratedVideoTitle ? generatedVideoTitle : "Результат генерации";
+  const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
+  const activeProjectsCount = projects.filter(
+    (project) => project.status === "queued" || project.status === "processing",
+  ).length;
+  const failedProjectsCount = projects.filter((project) => project.status === "failed").length;
 
   const pollGenerationJob = async (jobId: string, initialStatus = "queued") => {
     const safeJobId = jobId.trim();
@@ -223,7 +368,7 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
           setGeneratedVideo(statusPayload.data.generation);
           setGenerateError(statusPayload.data.error ?? null);
           setTopicInput(statusPayload.data.generation.prompt);
-          setStatus("Preview ready");
+          setStatus("");
           break;
         }
 
@@ -273,6 +418,7 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
     setTopicInput(safeTopic);
     setIsPreviewModalOpen(false);
     setGenerateError(null);
+    setHasLoadedProjects(false);
     setStatus("Task queued");
 
     try {
@@ -356,7 +502,7 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
         }
 
         if (latestGeneration.status === "done") {
-          setStatus("Preview ready");
+          setStatus("");
           setIsGenerating(false);
           return;
         }
@@ -389,22 +535,22 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
         <div className="studio-prompt-stage__toolbar" aria-hidden="true">
           {studioPromptTools.map((tool, index) => (
             <span className={`studio-prompt-stage__tool${index === 1 ? " is-active" : ""}`} key={tool}>
-              {tool}
+              {tool === "Img" ? <img src="/hybrid.png" alt="" width="36" height="36" aria-hidden="true" /> : tool}
             </span>
           ))}
         </div>
 
         <div className="studio-prompt-stage__main">
           <div className="studio-prompt-stage__head">
-            <span className="results-label">Main prompt</span>
-            <span className="status-pill status-pill--soft">{status}</span>
+            <span className="results-label">Тема Shorts</span>
+            {status ? <span className="status-pill status-pill--soft">{status}</span> : null}
           </div>
 
           <label className="composer-field composer-field--prompt">
             <textarea
-              aria-label="Main prompt"
+              aria-label="Тема Shorts"
               className="composer-field__textarea composer-field__textarea--stage"
-              placeholder="Опиши идею, хук, тон, pacing, озвучку, captions и CTA для вертикального Shorts / Reels / TikTok ролика."
+              placeholder="Опишите идею"
               value={topicInput}
               onChange={(event) => setTopicInput(event.target.value)}
             />
@@ -424,7 +570,7 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
               type="button"
               onClick={() => handleGenerate(topicInput)}
             >
-              {isGenerating ? "Generating..." : "Generate Shorts"}
+              {isGenerating ? "Generating..." : "Создать Shorts"}
             </button>
           </div>
         </div>
@@ -444,9 +590,6 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
           <PrimarySiteNav activeItem={activeTab === "studio" ? "studio" : null} onOpenStudio={() => setActiveTab("studio")} />
 
           <div className="site-header__actions">
-            <Link className="site-header__link" to="/pricing">
-              Pricing
-            </Link>
             <a
               className="site-header__link"
               href="https://t.me/AdShortsAIBot"
@@ -478,11 +621,6 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
         >
           <div className="account-shell__frame">
         <aside className="account-shell__sidebar">
-          <Link className="account-shell__brand" to="/" aria-label="AdShorts AI">
-            <img src="/logo.png" alt="" width="40" height="40" />
-            <span>AdShorts AI</span>
-          </Link>
-
           <div className="account-user account-user--summary">
             <div className="account-user__summary-row">
               <span>Тариф</span>
@@ -500,40 +638,40 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
               type="button"
               onClick={() => setActiveTab("overview")}
             >
-              <strong>Overview</strong>
-              <span>Ключевые метрики, recent activity и быстрые действия</span>
+              <strong>Обзор</strong>
+              <span>Метрики и активность</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "studio" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("studio")}
             >
-              <strong>Studio</strong>
-              <span>Prompt, preview, озвучка, визуалы и 9:16 export</span>
+              <strong>Студия</strong>
+              <span>Создание Shorts</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "generations" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("generations")}
             >
-              <strong>Generations</strong>
-              <span>Все batch-генерации, статусы, пресеты и готовые cuts</span>
+              <strong>Проекты</strong>
+              <span>Все созданные Shorts</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "billing" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("billing")}
             >
-              <strong>Billing</strong>
-              <span>Тариф, лимиты, инвойсы и загрузка команды</span>
+              <strong>Использование</strong>
+              <span>Тариф, лимиты и оплата</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "settings" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("settings")}
             >
-              <strong>Settings</strong>
-              <span>Профиль, интеграции, уведомления и безопасность</span>
+              <strong>Настройки</strong>
+              <span>Профиль и интеграции</span>
             </button>
           </nav>
 
@@ -555,82 +693,18 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
                   <article className="account-stat">
                     <span>Кредиты</span>
                     <strong>184</strong>
-                    <p>42 генерации осталось до next top-up</p>
                   </article>
                   <article className="account-stat">
                     <span>Экспортов в марте</span>
                     <strong>126</strong>
-                    <p>Shorts, Reels и TikTok из одного пайплайна</p>
                   </article>
                   <article className="account-stat">
                     <span>Подключенные каналы</span>
                     <strong>2</strong>
-                    <p>YouTube и TikTok уже синхронизированы</p>
-                  </article>
-                  <article className="account-stat">
-                    <span>Средний time-to-preview</span>
-                    <strong>58s</strong>
-                    <p>От темы до первого готового batch preview</p>
                   </article>
                 </div>
 
                 <div className="account-layout">
-                  <article className="account-card account-card--wide">
-                    <div className="account-card__head">
-                      <div>
-                        <h3>Последние генерации</h3>
-                        <p>Контроль над очередью, статусами и готовыми файлами.</p>
-                      </div>
-                      <span className="account-pill">Live queue</span>
-                    </div>
-
-                    <div className="account-list">
-                      <article className="account-list__item">
-                        <div className="account-list__meta">
-                          <strong>AI tools trend batch</strong>
-                          <span>Shorts / Reels / TikTok · 3 cuts · 11 minutes ago</span>
-                        </div>
-                        <div className="account-list__actions">
-                          <span className="account-status account-status--ready">Ready</span>
-                          <button className="account-linkbtn route-button" type="button" onClick={() => setActiveTab("studio")}>
-                            Открыть
-                          </button>
-                        </div>
-                      </article>
-
-                      <article className="account-list__item">
-                        <div className="account-list__meta">
-                          <strong>Real estate offer test</strong>
-                          <span>YouTube Shorts · 5 variations · scheduled for 18:30</span>
-                        </div>
-                        <div className="account-list__actions">
-                          <span className="account-status account-status--scheduled">Scheduled</span>
-                          <a
-                            className="account-linkbtn route-linkbtn"
-                            href="/1ru.mp4"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Preview
-                          </a>
-                        </div>
-                      </article>
-
-                      <article className="account-list__item">
-                        <div className="account-list__meta">
-                          <strong>Crypto explainer series</strong>
-                          <span>TikTok-first pack · captions revision pending</span>
-                        </div>
-                        <div className="account-list__actions">
-                          <span className="account-status account-status--draft">Draft</span>
-                          <button className="account-linkbtn route-button" type="button" onClick={() => setActiveTab("studio")}>
-                            Continue
-                          </button>
-                        </div>
-                      </article>
-                    </div>
-                  </article>
-
                   <div className="account-stack">
                     <article className="account-card">
                       <div className="account-card__head">
@@ -690,7 +764,7 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
                           <button
                             className="studio-live-stage__preview route-button"
                             type="button"
-                            aria-label={`Открыть превью: ${generatedVideo.title}`}
+                            aria-label={hasGeneratedVideoTitle ? `Открыть превью: ${generatedVideoTitle}` : "Открыть превью видео"}
                             onClick={() => setIsPreviewModalOpen(true)}
                           >
                             <video
@@ -707,15 +781,15 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
                         ) : (
                           <div className={`studio-live-stage__placeholder${generateError ? " is-error" : ""}`}>
                             {isGenerating ? <span className="studio-live-stage__spinner" aria-hidden="true"></span> : null}
-                            <strong>{isGenerating ? "Generating video..." : "Generation failed"}</strong>
-                            <p>{isGenerating ? "Собираем превью по вашему prompt." : generateError}</p>
+                            <strong>{isGenerating ? "Генерация видео..." : "Generation failed"}</strong>
+                            <p>{isGenerating ? null : generateError}</p>
                           </div>
                         )}
 
                         {isGenerating && generatedVideo ? (
                           <div className="studio-live-stage__overlay">
                             <span className="studio-live-stage__spinner" aria-hidden="true"></span>
-                            <strong>Generating video...</strong>
+                            <strong>Генерация видео...</strong>
                           </div>
                         ) : null}
                       </div>
@@ -731,38 +805,107 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
               <section className="account-panel is-active" data-account-panel="generations">
                 <div className="account-card__head account-card__head--panel">
                   <div>
-                    <h3>Generations library</h3>
-                    <p>Библиотека batch-ов, шаблонов и визуальных treatments.</p>
+                    <h3>Проекты аккаунта</h3>
+                    <p>Список генераций и готовых Shorts, найденных для текущего аккаунта в общей БД.</p>
                   </div>
                   <div className="account-pills">
-                    <span className="account-pill">Drafts</span>
-                    <span className="account-pill">Ready</span>
-                    <span className="account-pill">Published</span>
+                    <span className="account-pill">Готово: {readyProjectsCount}</span>
+                    <span className="account-pill">В работе: {activeProjectsCount}</span>
+                    <span className="account-pill">Ошибки: {failedProjectsCount}</span>
                   </div>
                 </div>
 
-                <div className="account-library">
-                  <article className="account-library__item">
-                    <span className="account-library__label">Batch 01</span>
-                    <h4>AI tools / POV hooks</h4>
-                    <p>5 variations, 2 voices, captions v3, export-ready.</p>
+                {isProjectsLoading ? (
+                  <article className="account-empty-state">
+                    <strong>Загружаем проекты...</strong>
+                    <p>Собираем список генераций и готовых видео из базы данных аккаунта.</p>
                   </article>
-                  <article className="account-library__item">
-                    <span className="account-library__label">Batch 02</span>
-                    <h4>Business facts / carousel-to-video</h4>
-                    <p>3 cuts, brand-safe palette, TikTok pacing preset.</p>
+                ) : null}
+
+                {!isProjectsLoading && projectsError ? (
+                  <article className="account-empty-state account-empty-state--error">
+                    <strong>Не удалось загрузить проекты</strong>
+                    <p>{projectsError}</p>
+                    <button
+                      className="account-linkbtn route-button"
+                      type="button"
+                      onClick={() => {
+                        setProjectsError(null);
+                        setHasLoadedProjects(false);
+                      }}
+                    >
+                      Повторить загрузку
+                    </button>
                   </article>
-                  <article className="account-library__item">
-                    <span className="account-library__label">Preset</span>
-                    <h4>Motivation / high-retention opener</h4>
-                    <p>Saved hook structure, dynamic captions and fast edit rhythm.</p>
+                ) : null}
+
+                {!isProjectsLoading && !projectsError && !projects.length ? (
+                  <article className="account-empty-state">
+                    <strong>Проектов пока нет</strong>
+                    <p>Как только в этом аккаунте появятся созданные Shorts, они отобразятся в этой вкладке.</p>
                   </article>
-                  <article className="account-library__item">
-                    <span className="account-library__label">Style pack</span>
-                    <h4>Luxury real estate launch</h4>
-                    <p>Voice profile, scene pacing and CTA overlays reused across series.</p>
-                  </article>
-                </div>
+                ) : null}
+
+                {!isProjectsLoading && !projectsError && projects.length ? (
+                  <div className="account-library account-library--projects">
+                    {projects.map((project) => (
+                      <article className="account-library__item account-project-card" key={project.id}>
+                        <div className="account-project-card__meta">
+                          <span className="account-library__label">
+                            {project.adId ? `Проект #${project.adId}` : `Job ${project.jobId?.slice(0, 8) ?? "N/A"}`}
+                          </span>
+                          <span className={`account-status ${getProjectStatusClassName(project.status)}`}>
+                            {getProjectStatusLabel(project.status)}
+                          </span>
+                        </div>
+
+                        <h4>{project.title}</h4>
+                        <p>{project.description}</p>
+
+                        <div className="account-project-card__details">
+                          <div className="account-project-card__detail">
+                            <span>Тема</span>
+                            <strong>{project.prompt || "Без темы"}</strong>
+                          </div>
+                          <div className="account-project-card__detail">
+                            <span>Источник</span>
+                            <strong>{project.source === "task" ? "Generation task" : "Saved project"}</strong>
+                          </div>
+                          <div className="account-project-card__detail">
+                            <span>Обновлен</span>
+                            <strong>{formatProjectDate(project.updatedAt)}</strong>
+                          </div>
+                        </div>
+
+                        {project.hashtags.length ? (
+                          <div className="account-project-card__tags" aria-label="Хэштеги проекта">
+                            {project.hashtags.map((tag) => (
+                              <span key={`${project.id}-${tag}`}>{tag}</span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <div className="account-project-card__footer">
+                          <span>
+                            Создан: {formatProjectDate(project.createdAt)}
+                            {project.generatedAt ? ` · Готов: ${formatProjectDate(project.generatedAt)}` : ""}
+                          </span>
+
+                          {project.videoUrl ? (
+                            <a
+                              className="account-linkbtn"
+                              href={project.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Открыть видео
+                            </a>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </section>
             )}
 
@@ -1002,18 +1145,42 @@ export function WorkspacePage({ defaultTab, session, onLogout }: Props) {
 
               <div className="studio-video-modal__sidebar">
                 <div className="studio-video-modal__section">
-                  <p className="studio-video-modal__eyebrow">Ready to publish</p>
-                  <strong id="studio-video-modal-title">{generatedVideo.title}</strong>
-                  <p className="studio-video-modal__description">{generatedVideoDescription}</p>
+                  <p className="studio-video-modal__eyebrow">Готово к публикации</p>
+                  <strong id="studio-video-modal-title">{generatedVideoModalTitle}</strong>
                 </div>
 
                 <div className="studio-video-modal__section">
-                  <span className="studio-video-modal__label">Hashtags</span>
-                  <div className="studio-video-modal__hashtags" aria-label="Hashtags">
-                    {generatedVideoHashtags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
+                  <div className="studio-video-modal__meta">
+                    <span className="studio-video-modal__label">Тема</span>
+                    <p className="studio-video-modal__description">{generatedVideoTopic}</p>
                   </div>
+                  {hasGeneratedVideoTitle ? (
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Заголовок</span>
+                      <p className="studio-video-modal__description">{generatedVideoTitle}</p>
+                    </div>
+                  ) : null}
+                  {hasGeneratedVideoDescription ? (
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Описание</span>
+                      <p className="studio-video-modal__description">{generatedVideoDescription}</p>
+                    </div>
+                  ) : null}
+                  {hasGeneratedVideoHashtags ? (
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Хэштеги</span>
+                      <div className="studio-video-modal__hashtags" aria-label="Хэштеги">
+                        {generatedVideoHashtags.map((tag) => (
+                          <span key={tag}>{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!hasGeneratedPublishMeta ? (
+                    <p className="studio-video-modal__description">
+                      Publish-метаданные для web-генерации пока не вернулись из AdsFlow API.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="studio-video-modal__actions" aria-label="Действия с видео">

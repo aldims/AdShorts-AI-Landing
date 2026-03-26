@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-type NavItem = "examples" | "guides" | "home" | "studio";
+type NavItem = "examples" | "home" | "pricing" | "studio";
 
 type Props = {
   activeItem?: NavItem | null;
@@ -11,22 +11,21 @@ export function PrimarySiteNav({ activeItem = null, onOpenStudio }: Props) {
   return (
     <nav className="site-nav" aria-label="Главная навигация">
       <Link className={`site-nav__item${activeItem === "home" ? " site-nav__item--active" : ""}`} to="/">
-        Home
+        Главная
       </Link>
-      <a className={`site-nav__item${activeItem === "examples" ? " site-nav__item--active" : ""}`} href="/#examples">
-        Examples
-      </a>
+      <Link className={`site-nav__item${activeItem === "examples" ? " site-nav__item--active" : ""}`} to="/examples">
+        Примеры
+      </Link>
       <button
         className={`site-nav__item route-button${activeItem === "studio" ? " site-nav__item--active" : ""}`}
         type="button"
         onClick={onOpenStudio}
       >
-        <span>Studio</span>
-        <span className="site-nav__badge">Web</span>
+        <span>Студия</span>
       </button>
-      <a className={`site-nav__item${activeItem === "guides" ? " site-nav__item--active" : ""}`} href="/#guides">
-        Guides
-      </a>
+      <Link className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`} to="/pricing">
+        Тарифы
+      </Link>
     </nav>
   );
 }

@@ -37,8 +37,8 @@ type Props = {
 const copy = {
   signup: {
     eyebrow: "Регистрация",
-    title: "Создайте аккаунт и откройте web-версию AdShorts AI",
-    lead: "Email + подтверждение почты, а также быстрый вход через Google и Telegram.",
+    title: "Создайте аккаунт",
+    lead: "",
     submit: "Создать аккаунт",
     switchLabel: "Уже есть аккаунт?",
     switchMode: "Войти",
@@ -46,7 +46,7 @@ const copy = {
   signin: {
     eyebrow: "Вход",
     title: "Войдите в личный кабинет AdShorts AI",
-    lead: "Используйте email и пароль, либо быстрый вход через подключенные OAuth-провайдеры.",
+    lead: "",
     submit: "Войти",
     switchLabel: "Новый пользователь?",
     switchMode: "Создать аккаунт",
@@ -61,9 +61,9 @@ const emptyStatus: AuthStatus = {
 };
 
 export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: Props) {
-  const [name, setName] = useState("Alex Kumar");
-  const [email, setEmail] = useState("alex@adshorts.ai");
-  const [password, setPassword] = useState("password123");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [status, setStatus] = useState<AuthStatus>(emptyStatus);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -71,9 +71,9 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
 
   const content = copy[mode];
   const isBusy = busyAction !== null;
-  const verificationCallbackURL = useMemo(() => {
-    if (typeof window === "undefined") return "http://127.0.0.1:4174/app/studio";
-    return `${window.location.origin}/app/studio`;
+  const callbackURL = useMemo(() => {
+    if (typeof window === "undefined") return "http://127.0.0.1:4174/";
+    return `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
   }, []);
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       setBusyAction("signup");
 
       const { error } = await authClient.signUp.email({
-        callbackURL: verificationCallbackURL,
+        callbackURL,
         email,
         name,
         password,
@@ -144,7 +144,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         kind: "success",
         message:
           status.mailMode === "smtp"
-            ? "Аккаунт создан. Мы отправили письмо с подтверждением на вашу почту."
+            ? "Аккаунт создан. Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам»."
             : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
       });
 
@@ -160,7 +160,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
 
     const { error } = await authClient.signIn.email(
       {
-        callbackURL: verificationCallbackURL,
+        callbackURL,
         email,
         password,
         rememberMe: true,
@@ -191,62 +191,17 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     setBusyAction(null);
   };
 
-  const handleResendVerification = async () => {
-    setBusyAction("resend-verification");
-    setFeedback(null);
-
-    const { error } = await authClient.sendVerificationEmail({
-      callbackURL: verificationCallbackURL,
-      email,
-    });
-
-    if (error) {
-      setFeedback({ kind: "error", message: error.message ?? "Не удалось отправить письмо повторно." });
-      setBusyAction(null);
-      return;
-    }
-
-    setFeedback({
-      kind: "success",
-      message:
-        status.mailMode === "smtp"
-          ? "Письмо с подтверждением отправлено повторно."
-          : "Новое письмо готово. Откройте превью ниже и завершите подтверждение.",
-    });
-
-    if (status.mailMode === "ethereal") {
-      await loadDevEmailPreview();
-    }
-
-    setBusyAction(null);
-  };
-
   const handleGoogleSignIn = async () => {
     setBusyAction("google");
     setFeedback(null);
 
     const { error } = await authClient.signIn.social({
-      callbackURL: verificationCallbackURL,
+      callbackURL,
       provider: "google",
     });
 
     if (error) {
       setFeedback({ kind: "error", message: error.message ?? "Не удалось запустить вход через Google." });
-      setBusyAction(null);
-    }
-  };
-
-  const handleTelegramSignIn = async () => {
-    setBusyAction("telegram");
-    setFeedback(null);
-
-    const { error } = await authClient.signIn.oauth2({
-      callbackURL: verificationCallbackURL,
-      providerId: "telegram",
-    });
-
-    if (error) {
-      setFeedback({ kind: "error", message: error.message ?? "Не удалось запустить вход через Telegram." });
       setBusyAction(null);
     }
   };
@@ -274,7 +229,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         </button>
         <p className="signup-modal__eyebrow">{content.eyebrow}</p>
         <h2 id="signup-modal-title">{content.title}</h2>
-        <p className="signup-modal__lead">{content.lead}</p>
+        {content.lead ? <p className="signup-modal__lead">{content.lead}</p> : null}
 
         <div className="signup-modal__social">
           <button
@@ -283,17 +238,26 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             disabled={!status.googleEnabled || isBusy}
             onClick={handleGoogleSignIn}
           >
-            <span>Google</span>
-            <small>{status.googleEnabled ? "OAuth" : "Not configured"}</small>
+            <span className="signup-social__icon signup-social__icon--google" aria-hidden="true">
+              <img src="/google-g-logo.svg" alt="" />
+            </span>
+            <span className="signup-social__copy">
+              <span>Google</span>
+              {!status.googleEnabled ? <small>Не настроено</small> : null}
+            </span>
           </button>
           <button
             className="signup-social__button route-button"
             type="button"
-            disabled={!status.telegramEnabled || isBusy}
-            onClick={handleTelegramSignIn}
+            disabled
           >
-            <span>Telegram</span>
-            <small>{status.telegramEnabled ? "OIDC" : "Not configured"}</small>
+            <span className="signup-social__icon signup-social__icon--telegram" aria-hidden="true">
+              <img src="/telegram-2019-logo.svg" alt="" />
+            </span>
+            <span className="signup-social__copy">
+              <span>Telegram</span>
+              <small>Скоро</small>
+            </span>
           </button>
         </div>
 
@@ -310,14 +274,14 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Alex Kumar"
+                placeholder="Ваше имя"
                 required
               />
             </label>
           )}
 
           <label className="signup-field">
-            <span>Рабочий email</span>
+            <span>Email</span>
             <input
               id="signup-email"
               autoComplete="email"
@@ -342,7 +306,11 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             />
           </label>
 
-          <button className="btn btn--primary signup-form__submit route-button" type="submit" disabled={isBusy}>
+          <button
+            className={`btn ${mode === "signin" ? "signup-form__submit--dark" : "btn--primary"} signup-form__submit route-button`}
+            type="submit"
+            disabled={isBusy}
+          >
             {busyAction === "signup" || busyAction === "signin" ? "Подождите..." : content.submit}
           </button>
         </form>
@@ -368,15 +336,6 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         )}
 
         <div className="signup-modal__footer">
-          <button
-            className="signup-modal__secondary route-button"
-            type="button"
-            disabled={!email || isBusy}
-            onClick={handleResendVerification}
-          >
-            Отправить письмо повторно
-          </button>
-
           <p className="signup-modal__switch">
             <span>{content.switchLabel}</span>
             <button
@@ -389,12 +348,6 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             </button>
           </p>
         </div>
-
-        <p className="signup-modal__meta">
-          {status.mailMode === "smtp"
-            ? "Email verification отправляется через SMTP."
-            : "SMTP не настроен. В локальной разработке используется Ethereal preview inbox."}
-        </p>
       </div>
     </div>
   );
