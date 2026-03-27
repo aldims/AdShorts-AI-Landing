@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
+import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 
 type Session = {
   name: string;
@@ -8,25 +10,111 @@ type Session = {
   plan: string;
 } | null;
 
+type WorkspaceProfile = {
+  balance: number;
+  expiresAt: string | null;
+  plan: string;
+} | null;
+
 type Props = {
   session: Session;
+  workspaceProfile?: WorkspaceProfile;
   onOpenSignup: () => void;
   onOpenSignin: () => void;
   onLogout: () => void | Promise<void>;
   onOpenWorkspace: () => void;
 };
 
-const studioModes = ["Script", "Voice", "Visual", "Captions"];
-const studioLayers = [
-  { label: "AI Script", value: "Hook / pacing / CTA" },
-  { label: "Voice", value: "Natural RU narration" },
-  { label: "Captions", value: "Auto-highlight timing" },
-];
-const waveformBars = [14, 22, 30, 18, 12, 26, 34, 17, 28, 20, 32, 16];
+const heroPromptText = "Как нейросети меняют маркетинг в 2026";
+const heroChips = ["Видео", "Субтитры", "Озвучка", "9:16"];
+const landingRevealSelector = [
+  ".section-head",
+  "#studio .section-head--split > div",
+  ".capability",
+  ".showcase-card",
+  ".step-card",
+  ".trust-shell__copy",
+  ".stat-card",
+  ".pricing-shell__copy",
+  ".plan-card",
+  ".guide-card",
+  ".guides-strip__cta",
+].join(", ");
 
-export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
-  const topic = "AI tools";
-  const status = "Ready to generate";
+export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+  const previewRef = useRef<HTMLDivElement>(null);
+  const revealRootRef = useRef<HTMLElement>(null);
+  const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!previewRef.current) return;
+      const scrollY = window.scrollY;
+      const maxScroll = 600;
+      const progress = Math.min(scrollY / maxScroll, 1);
+      
+      const rotateY = -25 + progress * 25;
+      const rotateX = 12 - progress * 12;
+      const rotateZ = 3 - progress * 3;
+      const translateY = progress * -40;
+      
+      previewRef.current.style.transform = 
+        `rotateY(${rotateY}deg) rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateY(${translateY}px)`;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const root = revealRootRef.current;
+    if (!root) return undefined;
+
+    const revealNodes = Array.from(root.querySelectorAll<HTMLElement>(landingRevealSelector));
+    if (!revealNodes.length) return undefined;
+
+    revealNodes.forEach((node) => {
+      node.setAttribute("data-reveal", "");
+      node.classList.remove("is-visible");
+      delete node.dataset.revealDelay;
+
+      const parent = node.parentElement;
+      if (!parent) return;
+
+      const siblings = Array.from(parent.children).filter(
+        (child): child is HTMLElement => child instanceof HTMLElement && child.matches(landingRevealSelector),
+      );
+      const siblingIndex = siblings.indexOf(node);
+
+      if (siblingIndex >= 0 && siblingIndex < 5) {
+        node.dataset.revealDelay = String(siblingIndex + 1);
+      }
+    });
+
+    if (typeof IntersectionObserver === "undefined") {
+      revealNodes.forEach((node) => node.classList.add("is-visible"));
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      {
+        threshold: 0.1,
+        rootMargin: "0px 0px -30px 0px",
+      },
+    );
+
+    revealNodes.forEach((node) => observer.observe(node));
+
+    return () => observer.disconnect();
+  }, []);
 
   const openPrimaryFlow = () => {
     if (session) {
@@ -58,7 +146,10 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
               Telegram
             </a>
             {session ? (
-              <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={session.plan} />
+              <>
+                <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+                <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
+              </>
             ) : (
               <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
                 Sign in
@@ -73,7 +164,7 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
         </div>
       </header>
 
-      <main>
+      <main ref={revealRootRef}>
         <section className="hero">
           <div className="hero__scene" aria-hidden="true">
             <span className="hero__scene-stars"></span>
@@ -98,7 +189,10 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
 
               <div className="hero__actions">
                 <button className="btn btn--primary btn--hero route-button" type="button" onClick={openPrimaryFlow}>
-                  Создать Shorts бесплатно
+                  <span>Создать Shorts бесплатно</span>
+                  <svg className="btn--hero__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
                 </button>
               </div>
 
@@ -118,59 +212,33 @@ export function LandingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
               </div>
             </div>
 
-            <aside className="hero-studio-card" aria-label="Studio preview card">
-              <div className="hero-studio-card__shell">
-                <div className="hero-studio-card__topbar">
-                  <div className="hero-studio-card__brand">
-                    <span className="hero-studio-card__brand-mark"></span>
-                    <span>AdShorts Studio</span>
+            <aside className="hero-live-preview" aria-label="Live studio preview">
+              <div className="hero-live-preview__perspective" ref={previewRef}>
+                <div className="hero-live-preview__glow" aria-hidden="true"></div>
+                <div className="hero-live-preview__reflection" aria-hidden="true"></div>
+                <div className="hero-live-preview__frame">
+                  <div className="hero-live-preview__video">
+                    <img
+                      className="hero-live-preview__image"
+                      src="/hero_image.png"
+                      alt="Превью интерфейса AdShorts AI внутри hero-экрана"
+                      loading="eager"
+                      decoding="async"
+                    />
+                    <span className="hero-live-preview__image-shade" aria-hidden="true"></span>
                   </div>
-                  <div className="hero-studio-card__topmeta">
-                    <span>Web beta</span>
-                    <span>{status}</span>
+                  <div className="hero-live-preview__prompt">
+                    <span className="hero-live-preview__prompt-text">{heroPromptText}</span>
+                    <button className="hero-live-preview__btn" type="button" aria-label="Generate">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    </button>
                   </div>
-                </div>
-
-                <div className="hero-studio-card__workspace">
-                  <div className="hero-studio-card__sidebar">
-                    {studioModes.map((item, index) => (
-                      <span className={index === 0 ? "is-active" : ""} key={item}>
-                        {item}
-                      </span>
+                  <div className="hero-live-preview__chips">
+                    {heroChips.map((chip) => (
+                      <span className="hero-live-preview__chip" key={chip}>{chip}</span>
                     ))}
-                  </div>
-
-                  <div className="hero-studio-card__preview">
-                    <div className="hero-studio-card__canvas">
-                      <div className="hero-studio-card__nebula"></div>
-                      <div className="hero-studio-card__ring"></div>
-                      <div className="hero-studio-card__caption">
-                        <span className="hero-studio-card__caption-label">Preview script</span>
-                        <strong>{topic}</strong>
-                        <p>Один prompt превращается в hook, визуал и voiceover для вертикального ролика.</p>
-                      </div>
-                    </div>
-
-                    <div className="hero-studio-card__layers">
-                      {studioLayers.map((item) => (
-                        <article key={item.label}>
-                          <span>{item.label}</span>
-                          <strong>{item.value}</strong>
-                        </article>
-                      ))}
-                    </div>
-
-                    <div className="hero-studio-card__timeline">
-                      <div className="hero-studio-card__timeline-head">
-                        <span>Timeline</span>
-                        <span>0:58</span>
-                      </div>
-                      <div className="hero-studio-card__waveform" aria-hidden="true">
-                        {waveformBars.map((height, index) => (
-                          <span key={`${height}-${index}`} style={{ height }}></span>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

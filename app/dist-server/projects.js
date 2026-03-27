@@ -1,8 +1,40 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { listWorkspaceGenerationHistory } from "./workspace-history.js";
 const MAX_PROJECTS = 60;
+const PROJECTS_CACHE_TTL_MS = 15_000;
+const workspaceProjectsCache = new Map();
+const workspaceProjectsInFlight = new Map();
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizePrompt = (value) => normalizeText(value);
+const parseJson = (value) => {
+    try {
+        return JSON.parse(value);
+    }
+    catch {
+        return null;
+    }
+};
+const extractErrorDetail = (value) => {
+    const payload = parseJson(value);
+    if (!payload || typeof payload !== "object") {
+        const normalized = normalizeText(value);
+        return normalized && !normalized.startsWith("<") ? normalized : null;
+    }
+    const detail = payload.detail;
+    if (typeof detail === "string" && detail.trim()) {
+        return detail.trim();
+    }
+    const error = payload.error;
+    if (typeof error === "string" && error.trim()) {
+        return error.trim();
+    }
+    return null;
+};
+const extractBootstrapUserId = (value) => {
+    const match = value.match(/"user"\s*:\s*\{[\s\S]*?"user_id"\s*:\s*(\d+)/);
+    return match?.[1]?.trim() || null;
+};
 const parseHashtags = (value) => {
     const normalized = normalizeText(value);
     if (!normalized)
@@ -17,6 +49,11 @@ const parseHashtags = (value) => {
         .filter(Boolean)
         .map((item) => `#${item.replace(/^#+/, "")}`)));
 };
+const cloneWorkspaceProject = (project) => ({
+    ...project,
+    hashtags: [...project.hashtags],
+});
+const cloneWorkspaceProjects = (projects) => projects.map(cloneWorkspaceProject);
 const buildPromptTitle = (prompt, fallback = "Проект") => {
     const normalized = normalizePrompt(prompt);
     if (!normalized)
@@ -67,6 +104,14 @@ const buildAbsoluteAdsflowUrl = (value) => {
         return normalized;
     }
 };
+const buildWorkspaceProjectVideoProxyUrl = (value) => {
+    const resolvedUrl = buildAbsoluteAdsflowUrl(value);
+    if (!resolvedUrl)
+        return null;
+    const proxyUrl = new URL("/api/workspace/project-video", env.appUrl);
+    proxyUrl.searchParams.set("path", resolvedUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
 const assertAdsflowConfigured = () => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         throw new Error("AdsFlow API is not configured.");
@@ -90,6 +135,23 @@ const fetchAdsflowJson = async (url, init) => {
     }
     return payload;
 };
+const postAdsflowText = async (path, body) => {
+    const response = await fetch(new URL(path, getAdsflowBaseUrl()), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+    });
+    const payload = await response.text();
+    if (!response.ok) {
+        throw new Error(extractErrorDetail(payload) ?? `AdsFlow request failed (${response.status}).`);
+    }
+    if (!payload) {
+        throw new Error("AdsFlow returned an empty response.");
+    }
+    return payload;
+};
 const postAdsflowJson = async (path, body) => {
     return fetchAdsflowJson(new URL(path, getAdsflowBaseUrl()), {
         method: "POST",
@@ -107,24 +169,32 @@ const resolvePreferredExternalUserId = async (user) => {
         return buildExternalUserId(user);
     }
 };
-const fetchBootstrapPayload = async (user) => {
-    const externalUserId = await resolvePreferredExternalUserId(user);
-    const payload = await postAdsflowJson("/api/web/bootstrap", {
+const fetchBootstrapPayload = async (user, externalUserId) => {
+    const resolvedExternalUserId = externalUserId ?? (await resolvePreferredExternalUserId(user));
+    const payloadText = await postAdsflowText("/api/web/bootstrap", {
         admin_token: env.adsflowAdminToken,
-        external_user_id: externalUserId,
+        external_user_id: resolvedExternalUserId,
         language: "ru",
         referral_source: "landing_site",
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
-    if (!payload.user) {
+    const payload = parseJson(payloadText);
+    const remoteUserId = extractBootstrapUserId(payloadText);
+    if (!payload || typeof payload !== "object") {
+        throw new Error("AdsFlow returned an invalid bootstrap response.");
+    }
+    if (!remoteUserId || !/^\d+$/.test(remoteUserId)) {
         throw new Error("AdsFlow did not return web user profile.");
     }
-    return payload;
+    return {
+        latest_generation: "latest_generation" in payload ? payload.latest_generation : null,
+        remoteUserId,
+    };
 };
 const fetchAdminVideos = async (userId) => {
     const url = new URL("/api/admin/videos", getAdsflowBaseUrl());
-    url.searchParams.set("user_id", String(userId));
+    url.searchParams.set("user_id", userId);
     url.searchParams.set("page", "1");
     url.searchParams.set("page_size", String(MAX_PROJECTS));
     const payload = await fetchAdsflowJson(url, {
@@ -154,7 +224,7 @@ const buildProjectFromAdminVideo = (item) => {
         status: normalizeProjectStatus(item.status),
         title: normalizeText(item.ai_title) || buildPromptTitle(prompt, `Проект #${adId}`),
         updatedAt: createdAt,
-        videoUrl: buildAbsoluteAdsflowUrl(item.download_path),
+        videoUrl: buildWorkspaceProjectVideoProxyUrl(item.download_path),
     };
 };
 const buildProjectFromLatestGeneration = (item) => {
@@ -180,22 +250,67 @@ const buildProjectFromLatestGeneration = (item) => {
         status: normalizeProjectStatus(item.status),
         title,
         updatedAt: generatedAt ?? createdAt,
-        videoUrl: normalizeProjectStatus(item.status) === "ready" ? buildAbsoluteAdsflowUrl(item.download_path) : null,
+        videoUrl: normalizeProjectStatus(item.status) === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.download_path) : null,
+    };
+};
+const buildProjectFromHistoryEntry = (item) => {
+    const jobId = normalizeText(item.jobId);
+    if (!jobId)
+        return null;
+    const prompt = normalizePrompt(item.prompt ?? "");
+    const generatedAt = toIsoString(item.generatedAt);
+    const createdAt = toIsoString(item.createdAt) ?? generatedAt ?? new Date().toISOString();
+    const updatedAt = toIsoString(item.updatedAt) ?? generatedAt ?? createdAt;
+    const adId = item.adId && Number.isFinite(Number(item.adId)) ? Number(item.adId) : null;
+    const status = normalizeProjectStatus(item.status);
+    const title = normalizeText(item.title) || buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
+    const description = normalizeText(item.description) ||
+        prompt ||
+        (status === "failed" ? "Генерация не завершилась успешно." : "Описание проекта появится после завершения генерации.");
+    return {
+        adId,
+        createdAt,
+        description,
+        generatedAt,
+        hashtags: [],
+        id: `task:${jobId}`,
+        jobId,
+        prompt,
+        source: "task",
+        status,
+        title,
+        updatedAt,
+        videoUrl: status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.downloadPath) : null,
     };
 };
 const getSortTime = (value) => {
     const timestamp = Date.parse(value.updatedAt || value.createdAt);
     return Number.isNaN(timestamp) ? 0 : timestamp;
 };
-export async function getWorkspaceProjects(user) {
-    const bootstrapPayload = await fetchBootstrapPayload(user);
-    const remoteUserId = Number(bootstrapPayload.user?.user_id ?? 0);
+const loadWorkspaceProjects = async (user, externalUserId) => {
+    const [bootstrapPayload, historyEntries] = await Promise.all([
+        fetchBootstrapPayload(user, externalUserId),
+        listWorkspaceGenerationHistory(user, MAX_PROJECTS).catch((error) => {
+            console.error("[workspace] Failed to load local workspace history", error);
+            return [];
+        }),
+    ]);
     const projects = new Map();
-    if (Number.isFinite(remoteUserId) && remoteUserId > 0) {
-        for (const item of await fetchAdminVideos(remoteUserId)) {
+    if (bootstrapPayload.remoteUserId) {
+        for (const item of await fetchAdminVideos(bootstrapPayload.remoteUserId)) {
             const project = buildProjectFromAdminVideo(item);
             if (!project)
                 continue;
+            projects.set(project.id, project);
+        }
+    }
+    for (const item of historyEntries) {
+        const project = buildProjectFromHistoryEntry(item);
+        if (!project)
+            continue;
+        const duplicateByAdId = project.adId !== null &&
+            Array.from(projects.values()).some((existingProject) => existingProject.adId !== null && existingProject.adId === project.adId);
+        if (!duplicateByAdId && !projects.has(project.id)) {
             projects.set(project.id, project);
         }
     }
@@ -212,4 +327,45 @@ export async function getWorkspaceProjects(user) {
     return Array.from(projects.values())
         .sort((left, right) => getSortTime(right) - getSortTime(left))
         .slice(0, MAX_PROJECTS);
+};
+export function getWorkspaceProjectVideoProxyTarget(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+        throw new Error("Project video path is missing.");
+    }
+    const upstreamUrl = new URL(normalized, getAdsflowBaseUrl());
+    const adsflowBaseUrl = new URL(getAdsflowBaseUrl());
+    if (upstreamUrl.origin === adsflowBaseUrl.origin) {
+        upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+    }
+    return upstreamUrl;
+}
+export async function invalidateWorkspaceProjectsCache(user) {
+    const cacheKey = await resolvePreferredExternalUserId(user);
+    workspaceProjectsCache.delete(cacheKey);
+    workspaceProjectsInFlight.delete(cacheKey);
+}
+export async function getWorkspaceProjects(user) {
+    const cacheKey = await resolvePreferredExternalUserId(user);
+    const cachedEntry = workspaceProjectsCache.get(cacheKey);
+    if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+        return cloneWorkspaceProjects(cachedEntry.projects);
+    }
+    const inFlightRequest = workspaceProjectsInFlight.get(cacheKey);
+    if (inFlightRequest) {
+        return cloneWorkspaceProjects(await inFlightRequest);
+    }
+    const request = loadWorkspaceProjects(user, cacheKey)
+        .then((projects) => {
+        workspaceProjectsCache.set(cacheKey, {
+            expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
+            projects: cloneWorkspaceProjects(projects),
+        });
+        return projects;
+    })
+        .finally(() => {
+        workspaceProjectsInFlight.delete(cacheKey);
+    });
+    workspaceProjectsInFlight.set(cacheKey, request);
+    return cloneWorkspaceProjects(await request);
 }

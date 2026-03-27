@@ -62,6 +62,10 @@ export const env = {
   telegramBotToken: trim(process.env.TELEGRAM_BOT_TOKEN),
   adsflowApiBaseUrl: trim(process.env.ADSFLOW_API_BASE_URL),
   adsflowAdminToken: trim(process.env.ADSFLOW_ADMIN_TOKEN),
+  paymentBaseUrl: trim(process.env.PAYMENT_BASE_URL),
+  paymentLinkStart: trim(process.env.PAYMENT_LINK_START),
+  paymentLinkPro: trim(process.env.PAYMENT_LINK_PRO),
+  paymentLinkUltra: trim(process.env.PAYMENT_LINK_ULTRA),
 };
 
 export const authProviderStatus = {

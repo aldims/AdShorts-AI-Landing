@@ -18,9 +18,98 @@ type Session = {
   plan: string;
 };
 
+type WorkspaceProfile = {
+  balance: number;
+  expiresAt: string | null;
+  plan: string;
+};
+
+type WorkspaceBootstrapResponse = {
+  data?: {
+    profile?: WorkspaceProfile;
+  };
+  error?: string;
+};
+
 type AuthState = {
   isOpen: boolean;
   mode: AuthMode;
+};
+
+const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
+
+const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
+
+const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown };
+  const parsedBalance = Number(profile.balance);
+  const normalizedPlan = String(profile.plan ?? "").trim().toUpperCase();
+  const normalizedExpiresAt = String(profile.expiresAt ?? "").trim() || null;
+
+  if (!Number.isFinite(parsedBalance) || !normalizedPlan) {
+    return null;
+  }
+
+  return {
+    balance: Math.max(0, parsedBalance),
+    expiresAt: normalizedExpiresAt,
+    plan: normalizedPlan,
+  };
+};
+
+const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, right: WorkspaceProfile | null | undefined) => {
+  const normalizedLeft = normalizeWorkspaceProfile(left);
+  const normalizedRight = normalizeWorkspaceProfile(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return normalizedLeft === normalizedRight;
+  }
+
+  return (
+    normalizedLeft.plan === normalizedRight.plan &&
+    normalizedLeft.balance === normalizedRight.balance &&
+    normalizedLeft.expiresAt === normalizedRight.expiresAt
+  );
+};
+
+const getWorkspaceProfileStorageKey = (email: string) => `${WORKSPACE_PROFILE_STORAGE_KEY_PREFIX}${email}`;
+
+const readCachedWorkspaceProfile = (email: string | null | undefined): WorkspaceProfile | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  try {
+    return normalizeWorkspaceProfile(window.localStorage.getItem(getWorkspaceProfileStorageKey(normalizedEmail)) ? JSON.parse(window.localStorage.getItem(getWorkspaceProfileStorageKey(normalizedEmail)) as string) : null);
+  } catch {
+    return null;
+  }
+};
+
+const persistWorkspaceProfile = (email: string | null | undefined, profile: WorkspaceProfile | null) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail || !profile) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getWorkspaceProfileStorageKey(normalizedEmail), JSON.stringify(profile));
+  } catch {
+    // Ignore storage write errors.
+  }
 };
 
 function LoadingScreen() {
@@ -39,6 +128,8 @@ export function App() {
   const location = useLocation();
   const { data: authSession, isPending: isSessionPending } = authClient.useSession();
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
+  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  const [isWorkspaceProfilePending, setIsWorkspaceProfilePending] = useState(false);
 
   const session = useMemo<Session | null>(() => {
     if (!authSession?.user) return null;
@@ -50,6 +141,64 @@ export function App() {
       plan: "FREE",
     };
   }, [authSession]);
+
+  useEffect(() => {
+    if (!session?.email) {
+      setWorkspaceProfile(null);
+      setIsWorkspaceProfilePending(false);
+      return;
+    }
+
+    const cachedProfile = readCachedWorkspaceProfile(session.email);
+    setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
+    setIsWorkspaceProfilePending(!cachedProfile);
+
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    const loadWorkspaceProfile = async () => {
+      try {
+        const response = await fetch("/api/workspace/bootstrap", {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
+
+        if (!response.ok || !payload?.data?.profile) {
+          throw new Error(payload?.error ?? "Failed to load workspace profile.");
+        }
+
+        if (isCancelled) return;
+
+        const nextProfile = payload.data?.profile ?? null;
+        setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, nextProfile) ? current : nextProfile));
+        persistWorkspaceProfile(session.email, nextProfile);
+      } catch (error) {
+        if (isCancelled || controller.signal.aborted) return;
+        console.error("[app] Failed to preload workspace profile", error);
+      } finally {
+        if (!isCancelled) {
+          setIsWorkspaceProfilePending(false);
+        }
+      }
+    };
+
+    void loadWorkspaceProfile();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [session?.email]);
+
+  useEffect(() => {
+    if (!session?.email || !workspaceProfile) {
+      return;
+    }
+
+    persistWorkspaceProfile(session.email, workspaceProfile);
+  }, [session?.email, workspaceProfile]);
+
+  const shouldBlockWorkspaceRoute = Boolean(session && !workspaceProfile && isWorkspaceProfilePending);
 
   useEffect(() => {
     document.body.classList.toggle("modal-open", authState.isOpen);
@@ -76,6 +225,8 @@ export function App() {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
+          setWorkspaceProfile(null);
+          setIsWorkspaceProfilePending(false);
           closeAuth();
           navigate("/");
         },
@@ -97,6 +248,7 @@ export function App() {
           element={
             <LandingPage
               session={session}
+              workspaceProfile={workspaceProfile}
               onOpenSignup={() => openAuth("signup")}
               onOpenSignin={() => openAuth("signin")}
               onLogout={handleLogout}
@@ -109,6 +261,7 @@ export function App() {
           element={
             <PricingPage
               session={session}
+              workspaceProfile={workspaceProfile}
               onOpenSignup={() => openAuth("signup")}
               onOpenSignin={() => openAuth("signin")}
               onLogout={handleLogout}
@@ -121,6 +274,7 @@ export function App() {
           element={
             <ExamplesPage
               session={session}
+              workspaceProfile={workspaceProfile}
               onOpenSignup={() => openAuth("signup")}
               onOpenSignin={() => openAuth("signin")}
               onLogout={handleLogout}
@@ -133,8 +287,16 @@ export function App() {
           element={
             isSessionPending ? (
               <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
             ) : session ? (
-              <WorkspacePage defaultTab={workspaceEntryTab} session={session} onLogout={handleLogout} />
+              <WorkspacePage
+                defaultTab={workspaceEntryTab}
+                initialProfile={workspaceProfile}
+                onLogout={handleLogout}
+                onProfileChange={setWorkspaceProfile}
+                session={session}
+              />
             ) : (
               <Navigate to="/" replace />
             )
@@ -145,8 +307,16 @@ export function App() {
           element={
             isSessionPending ? (
               <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
             ) : session ? (
-              <WorkspacePage defaultTab="studio" session={session} onLogout={handleLogout} />
+              <WorkspacePage
+                defaultTab="studio"
+                initialProfile={workspaceProfile}
+                onLogout={handleLogout}
+                onProfileChange={setWorkspaceProfile}
+                session={session}
+              />
             ) : (
               <Navigate to="/" replace />
             )
@@ -157,8 +327,16 @@ export function App() {
           element={
             isSessionPending ? (
               <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
             ) : session ? (
-              <WorkspacePage defaultTab="generations" session={session} onLogout={handleLogout} />
+              <WorkspacePage
+                defaultTab="generations"
+                initialProfile={workspaceProfile}
+                onLogout={handleLogout}
+                onProfileChange={setWorkspaceProfile}
+                session={session}
+              />
             ) : (
               <Navigate to="/" replace />
             )

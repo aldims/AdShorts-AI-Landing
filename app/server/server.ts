@@ -8,15 +8,17 @@ import { auth, ensureAuthSchema, signInWithTelegram } from "./auth.js";
 import { authDatabaseConfig } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
-import { getWorkspaceProjects } from "./projects.js";
+import { getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache } from "./projects.js";
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
   createStudioGenerationJob,
   getWorkspaceBootstrap,
   getStudioGenerationStatus,
+  getStudioVideoProxyTargetByPath,
   getStudioVideoProxyTarget,
   WorkspaceCreditLimitError,
 } from "./studio.js";
+import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
 
 const app = express();
 
@@ -27,6 +29,56 @@ app.use(
     origin: env.appUrl,
   }),
 );
+
+const buildVideoProxyRequestHeaders = (req: express.Request) => {
+  const headers: Record<string, string> = {};
+
+  const range = req.header("range");
+  if (range) headers.range = range;
+
+  const ifRange = req.header("if-range");
+  if (ifRange) headers["if-range"] = ifRange;
+
+  return headers;
+};
+
+const proxyVideoResponse = async (
+  req: express.Request,
+  res: express.Response,
+  upstreamUrl: URL,
+  fallbackMessage: string,
+) => {
+  const upstreamResponse = await fetch(upstreamUrl, {
+    headers: buildVideoProxyRequestHeaders(req),
+  });
+
+  if (!upstreamResponse.ok || !upstreamResponse.body) {
+    const detail = await upstreamResponse.text().catch(() => "");
+    res.status(upstreamResponse.status || 502).json({
+      error: detail || fallbackMessage,
+    });
+    return;
+  }
+
+  res.status(upstreamResponse.status);
+
+  const forwardedHeaders = [
+    "accept-ranges",
+    "cache-control",
+    "content-length",
+    "content-range",
+    "content-type",
+    "etag",
+    "last-modified",
+  ];
+
+  forwardedHeaders.forEach((headerName) => {
+    const value = upstreamResponse.headers.get(headerName);
+    if (value) res.setHeader(headerName, value);
+  });
+
+  Readable.fromWeb(upstreamResponse.body as never).pipe(res);
+};
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -202,6 +254,10 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
   try {
     const workspace = await getWorkspaceBootstrap(session.user);
 
+    if (workspace.latestGeneration?.generation) {
+      await invalidateWorkspaceProjectsCache(session.user);
+    }
+
     res.json({
       data: {
         latestGeneration: workspace.latestGeneration,
@@ -237,6 +293,60 @@ app.get("/api/workspace/projects", async (req, res) => {
   }
 });
 
+app.get("/api/workspace/project-video", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const path = typeof req.query.path === "string" ? req.query.path.trim() : "";
+  if (!path) {
+    res.status(400).json({ error: "Project video path is required." });
+    return;
+  }
+
+  try {
+    const upstreamUrl = getWorkspaceProjectVideoProxyTarget(path);
+    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load project video.");
+  } catch (error) {
+    console.error("[workspace] Failed to proxy project video", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to proxy project video.",
+    });
+  }
+});
+
+app.get("/api/payments/checkout/:productId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const productId = String(req.params.productId ?? "").trim().toLowerCase();
+  if (!isCheckoutProductId(productId)) {
+    res.status(400).json({ error: "Unknown pricing plan." });
+    return;
+  }
+
+  try {
+    const url = await getCheckoutUrl(productId, session.user);
+    res.json({ data: { url } });
+  } catch (error) {
+    const statusCode = error instanceof CheckoutConfigError ? 503 : 500;
+    res.status(statusCode).json({
+      error: error instanceof Error ? error.message : "Failed to prepare checkout.",
+    });
+  }
+});
+
 app.all(/^\/api\/auth(\/.*)?$/, toNodeHandler(auth));
 
 app.use(express.json());
@@ -252,6 +362,7 @@ app.post("/api/studio/generate", async (req, res) => {
   }
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+  const isRegeneration = Boolean(req.body?.isRegeneration);
 
   if (!prompt) {
     res.status(400).json({ error: "Prompt is required." });
@@ -259,7 +370,9 @@ app.post("/api/studio/generate", async (req, res) => {
   }
 
   try {
-    const job = await createStudioGenerationJob(prompt, session.user);
+    const job = await createStudioGenerationJob(prompt, session.user, {
+      isRegeneration,
+    });
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create generation job", error);
@@ -283,6 +396,9 @@ app.get("/api/studio/generations/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioGenerationStatus(req.params.jobId, session.user);
+    if (status.generation) {
+      await invalidateWorkspaceProjectsCache(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to fetch generation status", error);
@@ -304,28 +420,36 @@ app.get("/api/studio/video/:jobId", async (req, res) => {
 
   try {
     const upstreamUrl = await getStudioVideoProxyTarget(req.params.jobId, session.user);
-    const upstreamResponse = await fetch(upstreamUrl);
-
-    if (!upstreamResponse.ok || !upstreamResponse.body) {
-      const detail = await upstreamResponse.text().catch(() => "");
-      res.status(upstreamResponse.status || 502).json({
-        error: detail || "Failed to load generated video.",
-      });
-      return;
-    }
-
-    const contentType = upstreamResponse.headers.get("content-type") ?? "video/mp4";
-    const contentLength = upstreamResponse.headers.get("content-length");
-    const cacheControl = upstreamResponse.headers.get("cache-control");
-
-    res.status(200);
-    res.setHeader("Content-Type", contentType);
-    if (contentLength) res.setHeader("Content-Length", contentLength);
-    if (cacheControl) res.setHeader("Cache-Control", cacheControl);
-
-    Readable.fromWeb(upstreamResponse.body as never).pipe(res);
+    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated video.");
   } catch (error) {
     console.error("[studio] Failed to proxy generated video", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to proxy generated video.",
+    });
+  }
+});
+
+app.get("/api/studio/video", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const path = typeof req.query.path === "string" ? req.query.path.trim() : "";
+  if (!path) {
+    res.status(400).json({ error: "Video path is required." });
+    return;
+  }
+
+  try {
+    const upstreamUrl = getStudioVideoProxyTargetByPath(path);
+    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated video.");
+  } catch (error) {
+    console.error("[studio] Failed to proxy generated video by path", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to proxy generated video.",
     });

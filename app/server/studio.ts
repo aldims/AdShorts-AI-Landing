@@ -1,5 +1,6 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { saveWorkspaceGenerationHistory } from "./workspace-history.js";
 
 type StudioUser = {
   email?: string | null;
@@ -31,7 +32,20 @@ type AdsflowJobStatusResponse = {
 type AdsflowWebUserPayload = {
   balance?: number;
   plan?: string;
+  subscription_expires_at?: string | null;
   user_id?: number;
+};
+
+type AdsflowAdminUserDetailsResponse = {
+  user?: {
+    subscription_type?: string | null;
+    subscription_expires_at?: string | null;
+  };
+  payments?: Array<{
+    paid_at?: string | null;
+    plan_code?: string | null;
+    status?: string | null;
+  }>;
 };
 
 type AdsflowLatestGenerationPayload = {
@@ -75,6 +89,7 @@ type WorkspaceCreditConsumption = {
 
 export type WorkspaceProfile = {
   balance: number;
+  expiresAt: string | null;
   plan: string;
 };
 
@@ -165,10 +180,88 @@ const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
   return url;
 };
 
+const buildStudioVideoProxyUrl = (value: string | null | undefined) => {
+  const normalized = normalizeGenerationText(value);
+  if (!normalized) {
+    throw new Error("AdsFlow did not return a download path.");
+  }
+
+  const upstreamUrl = buildAdsflowUrl(normalized);
+  const proxyUrl = new URL("/api/studio/video", env.appUrl);
+  proxyUrl.searchParams.set("path", upstreamUrl.toString());
+  return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+
 const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfile => ({
-  balance: Math.max(0, Number(payload?.balance ?? 1)),
+  balance: Math.max(0, Number(payload?.balance ?? 0)),
+  expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
   plan: String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE",
 });
+
+const fetchAdsflowSubscriptionExpiry = async (userId: number | null | undefined) => {
+  const normalizedUserId = Number(userId);
+  if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+    return null;
+  }
+
+  const payload = await fetchAdsflowJson<AdsflowAdminUserDetailsResponse>(
+    buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(String(Math.trunc(normalizedUserId)))}`),
+    {
+      headers: {
+        "X-Admin-Token": env.adsflowAdminToken ?? "",
+      },
+    },
+  );
+
+  const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
+  if (directExpiry) {
+    return directExpiry;
+  }
+
+  const currentPlan = String(payload.user?.subscription_type ?? "").trim().toLowerCase();
+  const planDurationDays =
+    currentPlan === "start" ? 30 : currentPlan === "pro" ? 30 : currentPlan === "ultra" ? 30 : 0;
+  if (!planDurationDays || !Array.isArray(payload.payments)) {
+    return null;
+  }
+
+  const latestSuccessfulPayment = payload.payments
+    .filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
+    .filter((payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === currentPlan)
+    .map((payment) => {
+      const paidAt = normalizeGenerationText(payment.paid_at);
+      const parsedPaidAt = paidAt ? new Date(paidAt) : null;
+      return Number.isNaN(parsedPaidAt?.getTime?.() ?? Number.NaN) ? null : parsedPaidAt;
+    })
+    .filter((value): value is Date => value instanceof Date)
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+
+  if (!latestSuccessfulPayment) {
+    return null;
+  }
+
+  const derivedExpiry = new Date(latestSuccessfulPayment.getTime());
+  derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
+  return derivedExpiry.toISOString();
+};
+
+const enrichWorkspaceProfile = async (payload?: AdsflowWebUserPayload): Promise<WorkspaceProfile> => {
+  const profile = buildWorkspaceProfile(payload);
+  if (profile.plan === "FREE" || profile.expiresAt) {
+    return profile;
+  }
+
+  try {
+    const expiresAt = await fetchAdsflowSubscriptionExpiry(payload?.user_id);
+    return {
+      ...profile,
+      expiresAt,
+    };
+  } catch (error) {
+    console.error("[studio] Failed to enrich workspace profile with expiry", error);
+    return profile;
+  }
+};
 
 const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGeneration => {
   const prompt = normalizePrompt(payload.prompt ?? "");
@@ -183,7 +276,7 @@ const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGenerat
     title,
     description,
     hashtags,
-    videoUrl: `/api/studio/video/${encodeURIComponent(jobId)}`,
+    videoUrl: buildStudioVideoProxyUrl(payload.download_path),
     durationLabel: "Ready",
     modelLabel: "AdsFlow pipeline",
     aspectRatio: "9:16",
@@ -204,7 +297,7 @@ const buildStudioGenerationFromLatest = (payload: AdsflowLatestGenerationPayload
     title,
     description,
     hashtags,
-    videoUrl: `/api/studio/video/${encodeURIComponent(jobId)}`,
+    videoUrl: buildStudioVideoProxyUrl(payload.download_path),
     durationLabel: "Ready",
     modelLabel: "AdsFlow pipeline",
     aspectRatio: "9:16",
@@ -305,7 +398,7 @@ const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1) =>
       purchased: Math.max(0, Number(payload.consumed.purchased ?? 0)),
       subscription: Math.max(0, Number(payload.consumed.subscription ?? 0)),
     } satisfies WorkspaceCreditConsumption,
-    profile: buildWorkspaceProfile(payload.user),
+    profile: await enrichWorkspaceProfile(payload.user),
   };
 };
 
@@ -333,7 +426,7 @@ const refundWorkspaceGenerationCredit = async (
     throw new Error("AdsFlow did not return refunded web profile.");
   }
 
-  return buildWorkspaceProfile(payload.user);
+  return await enrichWorkspaceProfile(payload.user);
 };
 
 export async function getWorkspaceBootstrap(user: StudioUser): Promise<WorkspaceBootstrap> {
@@ -351,13 +444,38 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
     throw new Error("AdsFlow did not return web user profile.");
   }
 
+  const profile = await enrichWorkspaceProfile(payload.user);
+
+  if (payload.latest_generation?.job_id) {
+    try {
+      await saveWorkspaceGenerationHistory(user, {
+        adId: payload.latest_generation.ad_id ?? null,
+        description: payload.latest_generation.description ?? payload.latest_generation.prompt ?? "",
+        downloadPath: payload.latest_generation.download_path ?? null,
+        error: payload.latest_generation.error ?? null,
+        generatedAt: payload.latest_generation.generated_at ?? null,
+        jobId: payload.latest_generation.job_id,
+        prompt: payload.latest_generation.prompt ?? "",
+        status: payload.latest_generation.status ?? "queued",
+        title: payload.latest_generation.title ?? payload.latest_generation.prompt ?? "",
+        updatedAt: payload.latest_generation.generated_at ?? new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[studio] Failed to sync workspace history from bootstrap", error);
+    }
+  }
+
   return {
     latestGeneration: buildLatestGenerationStatus(payload.latest_generation),
-    profile: buildWorkspaceProfile(payload.user),
+    profile,
   };
 }
 
-export async function createStudioGenerationJob(prompt: string, user: StudioUser): Promise<StudioGenerationJob> {
+export async function createStudioGenerationJob(
+  prompt: string,
+  user: StudioUser,
+  options?: { isRegeneration?: boolean },
+): Promise<StudioGenerationJob> {
   assertAdsflowConfigured();
 
   const normalizedPrompt = normalizePrompt(prompt);
@@ -367,6 +485,10 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
 
   const creditReservation = await consumeWorkspaceGenerationCredit(user);
   const externalUserId = await resolveStudioExternalUserId(user);
+  const shouldAddWatermark =
+    creditReservation.profile.plan === "FREE" &&
+    creditReservation.consumed.subscription > 0 &&
+    creditReservation.consumed.purchased <= 0;
   let jobCreated = false;
 
   try {
@@ -382,7 +504,9 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
         language: "ru",
+        add_watermark: shouldAddWatermark,
         credit_cost: 0,
+        is_regeneration: Boolean(options?.isRegeneration),
       }),
     });
 
@@ -395,6 +519,18 @@ export async function createStudioGenerationJob(prompt: string, user: StudioUser
 
     if (payload.enqueue_error) {
       console.warn("[studio] AdsFlow enqueue warning:", payload.enqueue_error);
+    }
+
+    try {
+      await saveWorkspaceGenerationHistory(user, {
+        description: normalizedPrompt,
+        jobId,
+        prompt: normalizedPrompt,
+        status: String(payload.status ?? "queued"),
+        title: normalizeGenerationText(payload.title) || normalizedPrompt,
+      });
+    } catch (error) {
+      console.error("[studio] Failed to persist queued generation", error);
     }
 
     return {
@@ -421,6 +557,23 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
   const status = String(payload.status ?? "queued");
   const safeJobId = String(payload.job_id ?? jobId).trim();
 
+  try {
+    await saveWorkspaceGenerationHistory(user, {
+      adId: payload.ad_id ?? null,
+      description: payload.description ?? payload.prompt ?? "",
+      downloadPath: payload.download_path ?? null,
+      error: payload.error ?? null,
+      generatedAt: payload.generated_at ?? null,
+      jobId: safeJobId,
+      prompt: payload.prompt ?? "",
+      status,
+      title: payload.title ?? payload.prompt ?? "",
+      updatedAt: payload.generated_at ?? new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[studio] Failed to sync generation history", error);
+  }
+
   if (status === "done") {
     if (!payload.download_path) {
       throw new Error("AdsFlow finished the job without a video path.");
@@ -442,6 +595,22 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
 
 export async function getLatestStudioGeneration(user: StudioUser): Promise<StudioGenerationStatus | null> {
   return (await getWorkspaceBootstrap(user)).latestGeneration;
+}
+
+export function getStudioVideoProxyTargetByPath(value: string): URL {
+  const normalized = normalizeGenerationText(value);
+  if (!normalized) {
+    throw new Error("Video path is required.");
+  }
+
+  const upstreamUrl = buildAdsflowUrl(normalized);
+  const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl as string);
+
+  if (upstreamUrl.origin === adsflowBaseUrl.origin) {
+    upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+  }
+
+  return upstreamUrl;
 }
 
 export async function getStudioVideoProxyTarget(jobId: string, user: StudioUser): Promise<URL> {

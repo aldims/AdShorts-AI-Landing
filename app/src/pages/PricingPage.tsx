@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
+import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 
 type Session = {
   name: string;
@@ -8,8 +10,15 @@ type Session = {
   plan: string;
 } | null;
 
+type WorkspaceProfile = {
+  balance: number;
+  expiresAt: string | null;
+  plan: string;
+} | null;
+
 type Props = {
   session: Session;
+  workspaceProfile?: WorkspaceProfile;
   onOpenSignup: () => void;
   onOpenSignin: () => void;
   onLogout: () => void | Promise<void>;
@@ -17,6 +26,7 @@ type Props = {
 };
 
 type PricingPlan = {
+  checkoutProductId: CheckoutProductId;
   name: string;
   audience: string;
   audienceLines?: string[];
@@ -28,7 +38,15 @@ type PricingPlan = {
   badge?: string;
   featured?: boolean;
   ctaLabel: string;
-  ctaType: "app" | "telegram";
+};
+
+type CheckoutProductId = "start" | "pro" | "ultra";
+
+type CheckoutResponse = {
+  data?: {
+    url: string;
+  };
+  error?: string;
 };
 
 type PricingPack = {
@@ -44,8 +62,12 @@ type PricingFAQ = {
   answer: string;
 };
 
+const PENDING_CHECKOUT_STORAGE_KEY = "adshorts.pending-checkout-plan";
+const ENTERPRISE_CONTACT_EMAIL = "adsflowai@gmail.com";
+
 const pricingPlans: PricingPlan[] = [
   {
+    checkoutProductId: "start",
     name: "START",
     audience: "Для первого запуска",
     price: "390 ₽",
@@ -58,10 +80,10 @@ const pricingPlans: PricingPlan[] = [
       "Улучшение видео до Premium",
       "Видео без водяного знака",
     ],
-    ctaLabel: "Оформить START",
-    ctaType: "telegram",
+    ctaLabel: "Оплатить START",
   },
   {
+    checkoutProductId: "pro",
     name: "PRO",
     audience: "Для регулярного контент-потока",
     audienceLines: ["Для регулярного", "контент-потока"],
@@ -75,12 +97,12 @@ const pricingPlans: PricingPlan[] = [
       "Можно докупать кредиты",
       "Видео без водяного знака",
     ],
-    badge: "Most popular",
+    badge: "Самый популярный",
     featured: true,
-    ctaLabel: "Оформить через Telegram",
-    ctaType: "telegram",
+    ctaLabel: "Оплатить PRO",
   },
   {
+    checkoutProductId: "ultra",
     name: "ULTRA",
     audience: "Для максимального объёма",
     audienceLines: ["Для максимального", "объёма"],
@@ -94,9 +116,8 @@ const pricingPlans: PricingPlan[] = [
       "Ранний доступ к новым функциям",
       "Видео без водяного знака",
     ],
-    badge: "Best value",
-    ctaLabel: "Перейти на Ultra",
-    ctaType: "telegram",
+    badge: "Лучшая выгода",
+    ctaLabel: "Оплатить ULTRA",
   },
 ];
 
@@ -137,7 +158,18 @@ const pricingFaqs: PricingFAQ[] = [
   },
 ];
 
-export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+export function PricingPage({
+  session,
+  workspaceProfile = null,
+  onOpenSignup,
+  onOpenSignin,
+  onLogout,
+  onOpenWorkspace,
+}: Props) {
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
+  const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+
   const openPrimaryFlow = () => {
     if (session) {
       onOpenWorkspace();
@@ -146,6 +178,67 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
 
     onOpenSignup();
   };
+
+  const requestCheckout = async (productId: CheckoutProductId) => {
+    setCheckoutError(null);
+    setActiveCheckoutProductId(productId);
+
+    try {
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}`);
+      const payload = (await response.json().catch(() => null)) as CheckoutResponse | null;
+
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, productId);
+        }
+        onOpenSignin();
+        return;
+      }
+
+      if (!response.ok || !payload?.data?.url) {
+        throw new Error(payload?.error ?? "Не удалось открыть страницу оплаты.");
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
+        window.location.assign(payload.data.url);
+      }
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Не удалось открыть страницу оплаты.");
+    } finally {
+      setActiveCheckoutProductId(null);
+    }
+  };
+
+  const handlePlanCheckout = (productId: CheckoutProductId) => {
+    if (!session) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, productId);
+      }
+      onOpenSignup();
+      return;
+    }
+
+    void requestCheckout(productId);
+  };
+
+  useEffect(() => {
+    if (!session || typeof window === "undefined") {
+      return;
+    }
+
+    const pendingCheckoutProductId = window.sessionStorage.getItem(PENDING_CHECKOUT_STORAGE_KEY);
+    if (
+      pendingCheckoutProductId !== "start" &&
+      pendingCheckoutProductId !== "pro" &&
+      pendingCheckoutProductId !== "ultra"
+    ) {
+      return;
+    }
+
+    window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
+    void requestCheckout(pendingCheckoutProductId);
+  }, [session]);
 
   return (
     <div className="route-page pricing-page">
@@ -160,7 +253,10 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
 
           <div className="site-header__actions">
             {session ? (
-              <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={session.plan} />
+              <>
+                <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+                <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
+              </>
             ) : (
               <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
                 Sign in
@@ -181,6 +277,11 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
             <div className="pricing-max-hero__heading">
               <p className="eyebrow">Тарифы</p>
               <h1>Выберите свой тариф</h1>
+              {checkoutError ? (
+                <p className="pricing-max-hero__status" role="alert">
+                  {checkoutError}
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
@@ -225,24 +326,14 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                     ))}
                   </ul>
 
-                  {plan.ctaType === "app" ? (
-                    <button
-                      className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
-                      type="button"
-                      onClick={openPrimaryFlow}
-                    >
-                      {plan.ctaLabel}
-                    </button>
-                  ) : (
-                    <a
-                      className="btn pricing-max-card__cta pricing-max-card__cta--secondary"
-                      href="https://t.me/AdShortsAIBot"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {plan.ctaLabel}
-                    </a>
-                  )}
+                  <button
+                    className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
+                    type="button"
+                    onClick={() => handlePlanCheckout(plan.checkoutProductId)}
+                    disabled={activeCheckoutProductId === plan.checkoutProductId}
+                  >
+                    {activeCheckoutProductId === plan.checkoutProductId ? "Открываем оплату..." : plan.ctaLabel}
+                  </button>
                 </article>
               ))}
 
@@ -251,7 +342,7 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
                   <span className="pricing-max-enterprise__eyebrow">Agency / Teams</span>
                   <h3>Нужен объём выше Ultra или запуск для команды?</h3>
                   <p>
-                    Если вы ведёте несколько брендов, рубрик или клиентских потоков, начните с Telegram и мы подберём
+                    Если вы ведёте несколько брендов, рубрик или клиентских потоков, оставьте заявку и мы подберём
                     расширенный сценарий подключения.
                   </p>
                 </div>
@@ -264,11 +355,9 @@ export function PricingPage({ session, onOpenSignup, onOpenSignin, onLogout, onO
 
                 <a
                   className="btn pricing-max-button pricing-max-button--ghost"
-                  href="https://t.me/AdShortsAIBot"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`mailto:${ENTERPRISE_CONTACT_EMAIL}?subject=Enterprise%20plan%20AdShorts%20AI`}
                 >
-                  Обсудить подключение
+                  Оставить заявку
                 </a>
               </article>
             </div>
