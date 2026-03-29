@@ -34,10 +34,25 @@ type AdsflowAdminVideoItem = {
   id?: number;
   status?: string | null;
   user_id?: number;
+  youtube_channel_name?: string | null;
+  youtube_publish_state?: string | null;
+  youtube_published_at?: string | null;
+  youtube_published_link?: string | null;
+  youtube_scheduled_at?: string | null;
+  youtube_video_id?: string | null;
 };
 
 type AdsflowAdminVideosResponse = {
   items?: AdsflowAdminVideoItem[];
+};
+
+export type WorkspaceProjectYouTubePublication = {
+  channelName: string | null;
+  link: string | null;
+  publishedAt: string | null;
+  scheduledAt: string | null;
+  state: string | null;
+  youtubeVideoId: string | null;
 };
 
 export type WorkspaceProject = {
@@ -54,6 +69,7 @@ export type WorkspaceProject = {
   title: string;
   updatedAt: string;
   videoUrl: string | null;
+  youtubePublication: WorkspaceProjectYouTubePublication | null;
 };
 
 const MAX_PROJECTS = 60;
@@ -121,6 +137,7 @@ const parseHashtags = (value: unknown) => {
 const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => ({
   ...project,
   hashtags: [...project.hashtags],
+  youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 
 const cloneWorkspaceProjects = (projects: WorkspaceProject[]) => projects.map(cloneWorkspaceProject);
@@ -179,12 +196,42 @@ const buildAbsoluteAdsflowUrl = (value: string | null | undefined) => {
   }
 };
 
-const buildWorkspaceProjectVideoProxyUrl = (value: string | null | undefined) => {
+const isPlayableWorkspaceVideoPath = (value: string | null | undefined) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return false;
+
+  try {
+    const resolvedUrl = new URL(normalized, getAdsflowBaseUrl());
+    const hostname = resolvedUrl.hostname.toLowerCase();
+    const pathname = resolvedUrl.pathname.toLowerCase();
+
+    if (hostname === "youtu.be" || hostname.endsWith(".youtube.com") || hostname === "youtube.com") {
+      return false;
+    }
+
+    return pathname.includes("/api/video/download/") || /\.(mp4|mov|webm|m4v)$/i.test(pathname);
+  } catch {
+    return false;
+  }
+};
+
+const buildWorkspaceProjectVideoProxyUrl = (
+  value: string | null | undefined,
+  version?: string | null,
+) => {
+  if (!isPlayableWorkspaceVideoPath(value)) {
+    return null;
+  }
+
   const resolvedUrl = buildAbsoluteAdsflowUrl(value);
   if (!resolvedUrl) return null;
 
   const proxyUrl = new URL("/api/workspace/project-video", env.appUrl);
   proxyUrl.searchParams.set("path", resolvedUrl);
+  const normalizedVersion = normalizeText(version);
+  if (normalizedVersion) {
+    proxyUrl.searchParams.set("v", normalizedVersion);
+  }
   return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 
@@ -311,6 +358,22 @@ const buildProjectFromAdminVideo = (item: AdsflowAdminVideoItem): WorkspaceProje
   const prompt = normalizePrompt(item.description ?? "");
   const createdAt = toIsoString(item.created_at) ?? new Date().toISOString();
   const description = normalizeText(item.description) || prompt || "Описание проекта недоступно.";
+  const youtubePublication =
+    normalizeText(item.youtube_publish_state) ||
+    normalizeText(item.youtube_published_link) ||
+    normalizeText(item.youtube_video_id) ||
+    normalizeText(item.youtube_published_at) ||
+    normalizeText(item.youtube_scheduled_at) ||
+    normalizeText(item.youtube_channel_name)
+      ? {
+          channelName: normalizeText(item.youtube_channel_name) || null,
+          link: normalizeText(item.youtube_published_link) || null,
+          publishedAt: toIsoString(item.youtube_published_at),
+          scheduledAt: toIsoString(item.youtube_scheduled_at),
+          state: normalizeText(item.youtube_publish_state).toLowerCase() || null,
+          youtubeVideoId: normalizeText(item.youtube_video_id) || null,
+        }
+      : null;
 
   return {
     adId,
@@ -325,7 +388,8 @@ const buildProjectFromAdminVideo = (item: AdsflowAdminVideoItem): WorkspaceProje
     status: normalizeProjectStatus(item.status),
     title: normalizeText(item.ai_title) || buildPromptTitle(prompt, `Проект #${adId}`),
     updatedAt: createdAt,
-    videoUrl: buildWorkspaceProjectVideoProxyUrl(item.download_path),
+    videoUrl: buildWorkspaceProjectVideoProxyUrl(item.download_path, createdAt),
+    youtubePublication,
   };
 };
 
@@ -337,6 +401,11 @@ const buildProjectFromLatestGeneration = (item: AdsflowLatestGenerationPayload):
   const generatedAt = toIsoString(item.generated_at);
   const createdAt = generatedAt ?? new Date().toISOString();
   const adId = item.ad_id && Number.isFinite(Number(item.ad_id)) ? Number(item.ad_id) : null;
+  const status = normalizeProjectStatus(item.status);
+  const videoUrl = status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.download_path, generatedAt ?? createdAt) : null;
+  if (status === "ready" && !videoUrl) {
+    return null;
+  }
   const title = normalizeText(item.title) || buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
   const description = normalizeText(item.description) || prompt || "Описание проекта появится после завершения генерации.";
 
@@ -350,10 +419,11 @@ const buildProjectFromLatestGeneration = (item: AdsflowLatestGenerationPayload):
     jobId,
     prompt,
     source: "task",
-    status: normalizeProjectStatus(item.status),
+    status,
     title,
     updatedAt: generatedAt ?? createdAt,
-    videoUrl: normalizeProjectStatus(item.status) === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.download_path) : null,
+    videoUrl,
+    youtubePublication: null,
   };
 };
 
@@ -367,6 +437,10 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
   const updatedAt = toIsoString(item.updatedAt) ?? generatedAt ?? createdAt;
   const adId = item.adId && Number.isFinite(Number(item.adId)) ? Number(item.adId) : null;
   const status = normalizeProjectStatus(item.status);
+  const videoUrl = status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.downloadPath, updatedAt) : null;
+  if (status === "ready" && !videoUrl) {
+    return null;
+  }
   const title = normalizeText(item.title) || buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
   const description =
     normalizeText(item.description) ||
@@ -386,7 +460,8 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     status,
     title,
     updatedAt,
-    videoUrl: status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.downloadPath) : null,
+    videoUrl,
+    youtubePublication: null,
   };
 };
 
@@ -453,6 +528,10 @@ export function getWorkspaceProjectVideoProxyTarget(value: string): URL {
 
   const upstreamUrl = new URL(normalized, getAdsflowBaseUrl());
   const adsflowBaseUrl = new URL(getAdsflowBaseUrl());
+
+  if (!isPlayableWorkspaceVideoPath(normalized)) {
+    throw new Error("Project video path is not a direct media file.");
+  }
 
   if (upstreamUrl.origin === adsflowBaseUrl.origin) {
     upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");

@@ -39,6 +39,10 @@ type AuthState = {
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
 
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
+const isAbortLikeError = (error: unknown) =>
+  error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
 
 const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
   if (!value || typeof value !== "object") {
@@ -163,6 +167,12 @@ export function App() {
         });
         const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
 
+        if (response.status === 401 || response.status === 403) {
+          if (isCancelled) return;
+          setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
+          return;
+        }
+
         if (!response.ok || !payload?.data?.profile) {
           throw new Error(payload?.error ?? "Failed to load workspace profile.");
         }
@@ -173,7 +183,8 @@ export function App() {
         setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, nextProfile) ? current : nextProfile));
         persistWorkspaceProfile(session.email, nextProfile);
       } catch (error) {
-        if (isCancelled || controller.signal.aborted) return;
+        if (isCancelled || controller.signal.aborted || isAbortLikeError(error)) return;
+        if (cachedProfile) return;
         console.error("[app] Failed to preload workspace profile", error);
       } finally {
         if (!isCancelled) {

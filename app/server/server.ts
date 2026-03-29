@@ -8,6 +8,13 @@ import { auth, ensureAuthSchema, signInWithTelegram } from "./auth.js";
 import { authDatabaseConfig } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
+import {
+  disconnectWorkspaceYoutubeChannel,
+  getWorkspacePublishBootstrap,
+  getWorkspacePublishJobStatus,
+  getWorkspaceYoutubeConnectUrl,
+  startWorkspaceYoutubePublish,
+} from "./publish.js";
 import { getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache } from "./projects.js";
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
@@ -18,6 +25,7 @@ import {
   getStudioVideoProxyTarget,
   WorkspaceCreditLimitError,
 } from "./studio.js";
+import { getStudioVoicePreview } from "./voice-preview.js";
 import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
 
 const app = express();
@@ -262,6 +270,7 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
       data: {
         latestGeneration: workspace.latestGeneration,
         profile: workspace.profile,
+        studioOptions: workspace.studioOptions,
       },
     });
   } catch (error) {
@@ -293,6 +302,35 @@ app.get("/api/workspace/projects", async (req, res) => {
   }
 });
 
+app.get("/api/workspace/voice-preview", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const preview = await getStudioVoicePreview({
+      language: typeof req.query.language === "string" ? req.query.language : null,
+      voiceId: typeof req.query.voiceId === "string" ? req.query.voiceId : null,
+    });
+
+    res.status(200);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.setHeader("Content-Length", String(preview.audio.byteLength));
+    res.setHeader("Content-Type", preview.contentType || "audio/wav");
+    res.send(preview.audio);
+  } catch (error) {
+    console.error("[workspace] Failed to generate voice preview", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to generate voice preview.",
+    });
+  }
+});
+
 app.get("/api/workspace/project-video", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -311,6 +349,9 @@ app.get("/api/workspace/project-video", async (req, res) => {
 
   try {
     const upstreamUrl = getWorkspaceProjectVideoProxyTarget(path);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     await proxyVideoResponse(req, res, upstreamUrl, "Failed to load project video.");
   } catch (error) {
     console.error("[workspace] Failed to proxy project video", error);
@@ -332,7 +373,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 
   const productId = String(req.params.productId ?? "").trim().toLowerCase();
   if (!isCheckoutProductId(productId)) {
-    res.status(400).json({ error: "Unknown pricing plan." });
+    res.status(400).json({ error: "Unknown checkout product." });
     return;
   }
 
@@ -349,7 +390,174 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 
 app.all(/^\/api\/auth(\/.*)?$/, toNodeHandler(auth));
 
-app.use(express.json());
+app.use(express.json({ limit: "90mb" }));
+
+app.post("/api/workspace/publish/bootstrap", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const videoProjectId = Number(req.body?.videoProjectId ?? 0);
+  if (!Number.isFinite(videoProjectId) || videoProjectId <= 0) {
+    res.status(400).json({ error: "Video project id is required." });
+    return;
+  }
+
+  try {
+    const data = await getWorkspacePublishBootstrap(session.user, videoProjectId);
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to bootstrap publish modal", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load publish options.",
+    });
+  }
+});
+
+app.post("/api/workspace/youtube/connect-url", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const url = await getWorkspaceYoutubeConnectUrl(session.user, {
+      videoProjectId: Number(req.body?.videoProjectId ?? 0) || null,
+    });
+    res.json({ data: { url } });
+  } catch (error) {
+    console.error("[workspace] Failed to build YouTube connect url", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to build YouTube connect url.",
+    });
+  }
+});
+
+app.post("/api/workspace/youtube/disconnect", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const videoProjectId = Number(req.body?.videoProjectId ?? 0);
+  const channelPk = Number(req.body?.channelPk ?? 0);
+
+  if (!Number.isFinite(videoProjectId) || videoProjectId <= 0) {
+    res.status(400).json({ error: "Video project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(channelPk) || channelPk <= 0) {
+    res.status(400).json({ error: "YouTube channel is required." });
+    return;
+  }
+
+  try {
+    const data = await disconnectWorkspaceYoutubeChannel(session.user, {
+      channelPk,
+      videoProjectId,
+    });
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to disconnect YouTube channel", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to disconnect YouTube channel.",
+    });
+  }
+});
+
+app.post("/api/workspace/publish/youtube", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const videoProjectId = Number(req.body?.videoProjectId ?? 0);
+  const channelPk = Number(req.body?.channelPk ?? 0);
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const description = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+  const hashtags = typeof req.body?.hashtags === "string" ? req.body.hashtags.trim() : "";
+  const publishAt = typeof req.body?.publishAt === "string" ? req.body.publishAt.trim() : "";
+
+  if (!Number.isFinite(videoProjectId) || videoProjectId <= 0) {
+    res.status(400).json({ error: "Video project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(channelPk) || channelPk <= 0) {
+    res.status(400).json({ error: "YouTube channel is required." });
+    return;
+  }
+
+  if (!title) {
+    res.status(400).json({ error: "Publish title is required." });
+    return;
+  }
+
+  try {
+    const data = await startWorkspaceYoutubePublish(session.user, {
+      channelPk,
+      description,
+      hashtags,
+      publishAt: publishAt || null,
+      title,
+      videoProjectId,
+    });
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to queue YouTube publish", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to queue YouTube publish.",
+    });
+  }
+});
+
+app.get("/api/workspace/publish/jobs/:jobId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const jobId = String(req.params.jobId ?? "").trim();
+  if (!jobId) {
+    res.status(400).json({ error: "Publish job id is required." });
+    return;
+  }
+
+  try {
+    const data = await getWorkspacePublishJobStatus(session.user, jobId);
+    if (data.status === "done" && data.videoProjectId) {
+      await invalidateWorkspaceProjectsCache(session.user);
+    }
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to fetch publish job status", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to fetch publish job status.",
+    });
+  }
+});
 
 app.post("/api/studio/generate", async (req, res) => {
   const session = await auth.api.getSession({
@@ -363,6 +571,20 @@ app.post("/api/studio/generate", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const isRegeneration = Boolean(req.body?.isRegeneration);
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const voiceId = typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "";
+  const musicType = typeof req.body?.musicType === "string" ? req.body.musicType.trim() : "";
+  const customMusicFileName = typeof req.body?.customMusicFileName === "string" ? req.body.customMusicFileName.trim() : "";
+  const customMusicFileDataUrl =
+    typeof req.body?.customMusicFileDataUrl === "string" ? req.body.customMusicFileDataUrl.trim() : "";
+  const videoMode = typeof req.body?.videoMode === "string" ? req.body.videoMode.trim() : "";
+  const subtitleStyleId = typeof req.body?.subtitleStyleId === "string" ? req.body.subtitleStyleId.trim() : "";
+  const subtitleColorId = typeof req.body?.subtitleColorId === "string" ? req.body.subtitleColorId.trim() : "";
+  const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+  const customVideoFileMimeType =
+    typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
+  const customVideoFileDataUrl =
+    typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
 
   if (!prompt) {
     res.status(400).json({ error: "Prompt is required." });
@@ -371,7 +593,18 @@ app.post("/api/studio/generate", async (req, res) => {
 
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
+      customMusicFileDataUrl,
+      customMusicFileName,
+      customVideoFileDataUrl,
+      customVideoFileMimeType,
+      customVideoFileName,
       isRegeneration,
+      language,
+      musicType,
+      subtitleColorId,
+      subtitleStyleId,
+      videoMode,
+      voiceId,
     });
     res.json({ data: job });
   } catch (error) {

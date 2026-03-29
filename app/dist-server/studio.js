@@ -1,5 +1,6 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { getWorkspaceProjects } from "./projects.js";
 import { saveWorkspaceGenerationHistory } from "./workspace-history.js";
 export class WorkspaceCreditLimitError extends Error {
     constructor(message = "На тарифе FREE доступна 1 бесплатная генерация. Обновите тариф, чтобы продолжить.") {
@@ -7,8 +8,218 @@ export class WorkspaceCreditLimitError extends Error {
         this.name = "WorkspaceCreditLimitError";
     }
 }
+const studioSupportedMusicTypes = new Set([
+    "ai",
+    "business",
+    "calm",
+    "custom",
+    "dramatic",
+    "energetic",
+    "fun",
+    "inspirational",
+    "luxury",
+    "none",
+    "tech",
+    "upbeat",
+]);
+const studioSupportedSubtitleStyleIds = new Set([
+    "modern",
+    "impact",
+    "story",
+    "editorial",
+    "cinema",
+    "karaoke",
+]);
+const studioSupportedSubtitleColorIds = new Set([
+    "purple",
+    "yellow",
+    "orange",
+    "pink",
+    "blue",
+    "cyan",
+    "green",
+    "red",
+    "gold",
+    "white",
+    "black",
+]);
+const studioSupportedVideoModes = new Set([
+    "ai_photo",
+    "ai_video",
+    "custom",
+    "standard",
+]);
+const studioSupportedLanguages = new Set(["en", "ru"]);
 const normalizePrompt = (value) => value.replace(/\s+/g, " ").trim();
 const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeStudioMusicType = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return studioSupportedMusicTypes.has(normalized) ? normalized : "ai";
+};
+const normalizeStudioSubtitleStyle = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return studioSupportedSubtitleStyleIds.has(normalized) ? normalized : "modern";
+};
+const normalizeStudioSubtitleColor = (value, fallback = "purple") => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (studioSupportedSubtitleColorIds.has(normalized)) {
+        return normalized;
+    }
+    const normalizedFallback = String(fallback ?? "").trim().toLowerCase();
+    return studioSupportedSubtitleColorIds.has(normalizedFallback) ? normalizedFallback : "purple";
+};
+const getDefaultStudioSubtitleColorForStyle = (styleId) => fallbackWorkspaceStudioOptions.subtitleStyles.find((style) => style.id === styleId)?.defaultColorId ?? "purple";
+const normalizeStudioVideoMode = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return studioSupportedVideoModes.has(normalized) ? normalized : "standard";
+};
+const normalizeStudioLanguage = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return studioSupportedLanguages.has(normalized) ? normalized : "ru";
+};
+const parseJson = (value) => {
+    try {
+        return JSON.parse(value);
+    }
+    catch {
+        return null;
+    }
+};
+const extractErrorDetail = (value) => {
+    const payload = parseJson(value);
+    if (!payload || typeof payload !== "object") {
+        const normalized = normalizeGenerationText(value);
+        return normalized && !normalized.startsWith("<") ? normalized : null;
+    }
+    if (typeof payload.detail === "string" && payload.detail.trim()) {
+        return payload.detail.trim();
+    }
+    if (typeof payload.error === "string" && payload.error.trim()) {
+        return payload.error.trim();
+    }
+    return null;
+};
+const extractAdsflowUserId = (value) => {
+    const exactUserMatch = value.match(/"user"\s*:\s*\{[\s\S]*?"user_id"\s*:\s*(\d+)/);
+    if (exactUserMatch?.[1]) {
+        return exactUserMatch[1].trim();
+    }
+    const fallbackMatch = value.match(/"user_id"\s*:\s*(\d+)/);
+    return fallbackMatch?.[1]?.trim() || null;
+};
+const fallbackWorkspaceStudioOptions = {
+    subtitleStyles: [
+        {
+            defaultColorId: "purple",
+            description: "Текущий дефолт для Shorts на Manrope.",
+            fontFamily: "Manrope",
+            fontSize: 96,
+            id: "modern",
+            label: "Modern",
+            logicMode: "block",
+            marginBottom: 420,
+            outlineWidth: 3,
+            position: "bottom_center",
+            transitionMode: "hard_cut",
+            usesAccentColor: true,
+            windowSize: 3,
+            wordEffect: "none",
+        },
+        {
+            defaultColorId: "yellow",
+            description: "Агрессивный viral-стиль с тяжелым контуром и плотной посадкой.",
+            fontFamily: "Manrope",
+            fontSize: 108,
+            id: "impact",
+            label: "Impact",
+            logicMode: "block",
+            marginBottom: 300,
+            outlineWidth: 4,
+            position: "bottom_center",
+            transitionMode: "hard_cut",
+            usesAccentColor: true,
+            windowSize: 3,
+            wordEffect: "scale",
+        },
+        {
+            defaultColorId: "pink",
+            description: "Мягкий social/UGC стиль с более легкой анимацией.",
+            fontFamily: "Manrope",
+            fontSize: 84,
+            id: "story",
+            label: "Story",
+            logicMode: "block",
+            marginBottom: 360,
+            outlineWidth: 2,
+            position: "bottom_center",
+            transitionMode: "slide_up",
+            usesAccentColor: true,
+            windowSize: 4,
+            wordEffect: "slide",
+        },
+        {
+            defaultColorId: "blue",
+            description: "Спокойный explanatory-пресет с большим количеством воздуха.",
+            fontFamily: "DejaVu Sans",
+            fontSize: 72,
+            id: "editorial",
+            label: "Editorial",
+            logicMode: "sliding",
+            marginBottom: 240,
+            outlineWidth: 2,
+            position: "bottom_center",
+            transitionMode: "soft_fade",
+            usesAccentColor: true,
+            windowSize: 6,
+            wordEffect: "fade",
+        },
+        {
+            defaultColorId: "white",
+            description: "Чистый lower-third с мягким crossfade без цветового акцента.",
+            fontFamily: "DejaVu Sans",
+            fontSize: 68,
+            id: "cinema",
+            label: "Cinema",
+            logicMode: "crossfade",
+            marginBottom: 190,
+            outlineWidth: 1,
+            position: "bottom_center",
+            transitionMode: "soft_crossfade",
+            usesAccentColor: false,
+            windowSize: 7,
+            wordEffect: "none",
+        },
+        {
+            defaultColorId: "orange",
+            description: "Фразовый caption с явной подсветкой активного слова.",
+            fontFamily: "Manrope",
+            fontSize: 86,
+            id: "karaoke",
+            label: "Karaoke",
+            logicMode: "phrase",
+            marginBottom: 235,
+            outlineWidth: 3,
+            position: "bottom_center",
+            transitionMode: "karaoke_follow",
+            usesAccentColor: true,
+            windowSize: 8,
+            wordEffect: "fade",
+        },
+    ],
+    subtitleColors: [
+        { hex: "8B5CF6", id: "purple", label: "Фиолетовый" },
+        { hex: "EAB308", id: "yellow", label: "Желтый" },
+        { hex: "F97316", id: "orange", label: "Оранжевый" },
+        { hex: "EC4899", id: "pink", label: "Розовый" },
+        { hex: "3B82F6", id: "blue", label: "Синий" },
+        { hex: "06B6D4", id: "cyan", label: "Голубой" },
+        { hex: "10B981", id: "green", label: "Зеленый" },
+        { hex: "EF4444", id: "red", label: "Красный" },
+        { hex: "FFD700", id: "gold", label: "Золотой" },
+        { hex: "FFFFFF", id: "white", label: "Белый" },
+        { hex: "000000", id: "black", label: "Черный" },
+    ],
+};
 const parseGenerationHashtags = (value) => {
     const rawValue = normalizeGenerationText(value);
     if (!rawValue)
@@ -44,10 +255,31 @@ const buildAdsflowUrl = (path, params) => {
     });
     return url;
 };
+const isPlayableStudioVideoPath = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized)
+        return false;
+    try {
+        const resolvedUrl = buildAdsflowUrl(normalized);
+        const hostname = resolvedUrl.hostname.toLowerCase();
+        const pathname = resolvedUrl.pathname.toLowerCase();
+        if (hostname === "youtu.be" || hostname.endsWith(".youtube.com") || hostname === "youtube.com") {
+            return false;
+        }
+        return (pathname.includes("/api/video/download/") ||
+            /\.(mp4|mov|webm|m4v)$/i.test(pathname));
+    }
+    catch {
+        return false;
+    }
+};
 const buildStudioVideoProxyUrl = (value) => {
     const normalized = normalizeGenerationText(value);
     if (!normalized) {
-        throw new Error("AdsFlow did not return a download path.");
+        return null;
+    }
+    if (!isPlayableStudioVideoPath(normalized)) {
+        return null;
     }
     const upstreamUrl = buildAdsflowUrl(normalized);
     const proxyUrl = new URL("/api/studio/video", env.appUrl);
@@ -59,12 +291,54 @@ const buildWorkspaceProfile = (payload) => ({
     expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
     plan: String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE",
 });
+const buildWorkspaceStudioOptions = (payload) => {
+    const subtitleStyles = Array.isArray(payload?.subtitle_styles)
+        ? payload.subtitle_styles
+            .map((style) => {
+            const id = normalizeStudioSubtitleStyle(style?.id);
+            return {
+                defaultColorId: normalizeStudioSubtitleColor(style?.default_color, "purple"),
+                description: normalizeGenerationText(style?.description) || "Subtitle style",
+                fontFamily: normalizeGenerationText(style?.font_family) || "Manrope",
+                fontSize: Math.max(32, Number(style?.font_size ?? 96) || 96),
+                id,
+                label: normalizeGenerationText(style?.label) || id,
+                logicMode: normalizeGenerationText(style?.logic_mode) || "block",
+                marginBottom: Math.max(0, Number(style?.margin_bottom ?? 240) || 240),
+                outlineWidth: Math.max(0, Number(style?.outline_width ?? 2) || 2),
+                position: normalizeGenerationText(style?.position) || "bottom_center",
+                transitionMode: normalizeGenerationText(style?.transition_mode) || "hard_cut",
+                usesAccentColor: Boolean(style?.uses_accent_color ?? true),
+                windowSize: Math.max(1, Number(style?.window_size ?? 3) || 3),
+                wordEffect: normalizeGenerationText(style?.word_effect) || "none",
+            };
+        })
+            .filter((style, index, list) => list.findIndex((candidate) => candidate.id === style.id) === index)
+        : [];
+    const subtitleColors = Array.isArray(payload?.subtitle_colors)
+        ? payload.subtitle_colors
+            .map((color) => {
+            const id = normalizeStudioSubtitleColor(color?.id);
+            const hex = String(color?.hex ?? "").replace(/[^a-fA-F0-9]/g, "").slice(0, 6).toUpperCase();
+            return {
+                hex: hex.length === 6 ? hex : fallbackWorkspaceStudioOptions.subtitleColors.find((item) => item.id === id)?.hex ?? "8B5CF6",
+                id,
+                label: normalizeGenerationText(color?.label) || id,
+            };
+        })
+            .filter((color, index, list) => list.findIndex((candidate) => candidate.id === color.id) === index)
+        : [];
+    return {
+        subtitleStyles: subtitleStyles.length ? subtitleStyles : fallbackWorkspaceStudioOptions.subtitleStyles,
+        subtitleColors: subtitleColors.length ? subtitleColors : fallbackWorkspaceStudioOptions.subtitleColors,
+    };
+};
 const fetchAdsflowSubscriptionExpiry = async (userId) => {
-    const normalizedUserId = Number(userId);
-    if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+    const normalizedUserId = String(userId ?? "").trim();
+    if (!/^\d+$/.test(normalizedUserId)) {
         return null;
     }
-    const payload = await fetchAdsflowJson(buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(String(Math.trunc(normalizedUserId)))}`), {
+    const payload = await fetchAdsflowJson(buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(normalizedUserId)}`), {
         headers: {
             "X-Admin-Token": env.adsflowAdminToken ?? "",
         },
@@ -95,13 +369,13 @@ const fetchAdsflowSubscriptionExpiry = async (userId) => {
     derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
     return derivedExpiry.toISOString();
 };
-const enrichWorkspaceProfile = async (payload) => {
+const enrichWorkspaceProfile = async (payload, options) => {
     const profile = buildWorkspaceProfile(payload);
     if (profile.plan === "FREE" || profile.expiresAt) {
         return profile;
     }
     try {
-        const expiresAt = await fetchAdsflowSubscriptionExpiry(payload?.user_id);
+        const expiresAt = await fetchAdsflowSubscriptionExpiry(options?.rawUserId ?? payload?.user_id);
         return {
             ...profile,
             expiresAt,
@@ -118,13 +392,18 @@ const buildStudioGeneration = (payload) => {
     const description = normalizeGenerationText(payload.description);
     const hashtags = parseGenerationHashtags(payload.hashtags);
     const title = normalizeGenerationText(payload.title);
+    const videoUrl = buildStudioVideoProxyUrl(payload.download_path);
+    if (!videoUrl) {
+        return null;
+    }
     return {
+        adId: payload.ad_id ?? null,
         id: jobId,
         prompt,
         title,
         description,
         hashtags,
-        videoUrl: buildStudioVideoProxyUrl(payload.download_path),
+        videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
         aspectRatio: "9:16",
@@ -137,17 +416,41 @@ const buildStudioGenerationFromLatest = (payload) => {
     const description = normalizeGenerationText(payload.description);
     const hashtags = parseGenerationHashtags(payload.hashtags);
     const title = normalizeGenerationText(payload.title);
+    const videoUrl = buildStudioVideoProxyUrl(payload.download_path);
+    if (!videoUrl) {
+        return null;
+    }
     return {
+        adId: payload.ad_id ?? null,
         id: jobId,
         prompt,
         title,
         description,
         hashtags,
-        videoUrl: buildStudioVideoProxyUrl(payload.download_path),
+        videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
         aspectRatio: "9:16",
         generatedAt: payload.generated_at ?? new Date().toISOString(),
+    };
+};
+const buildStudioGenerationFromWorkspaceProject = (project) => {
+    const videoUrl = normalizeGenerationText(project.videoUrl);
+    if (!videoUrl) {
+        return null;
+    }
+    return {
+        adId: project.adId,
+        aspectRatio: "9:16",
+        description: normalizeGenerationText(project.description),
+        durationLabel: "Ready",
+        generatedAt: project.generatedAt ?? project.updatedAt ?? project.createdAt,
+        hashtags: [...project.hashtags],
+        id: normalizeGenerationText(project.jobId) || project.id,
+        modelLabel: "AdsFlow pipeline",
+        prompt: normalizePrompt(project.prompt),
+        title: normalizeGenerationText(project.title),
+        videoUrl,
     };
 };
 const buildLatestGenerationStatus = (payload) => {
@@ -155,21 +458,82 @@ const buildLatestGenerationStatus = (payload) => {
         return null;
     }
     const status = String(payload.status ?? "queued");
-    const generationReady = status === "done" && Boolean(String(payload.download_path ?? "").trim());
+    const generation = status === "done" ? buildStudioGenerationFromLatest(payload) : null;
     return {
         error: payload.error ?? undefined,
-        generation: generationReady ? buildStudioGenerationFromLatest(payload) : undefined,
+        generation: generation ?? undefined,
         jobId: String(payload.job_id),
         status,
     };
 };
+const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 504]);
+const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
+const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const describeAdsflowFetchFailure = (url, error) => {
+    const target = `${url.origin}${url.pathname}`;
+    if (!(error instanceof Error)) {
+        return `AdsFlow unavailable for ${target}.`;
+    }
+    const cause = error.cause;
+    const causeCode = typeof cause?.code === "string" ? cause.code : "";
+    const causeMessage = typeof cause?.message === "string" ? cause.message : "";
+    const detail = causeCode || causeMessage || error.message || "Network error";
+    return `AdsFlow unavailable for ${target}: ${detail}.`;
+};
+const fetchAdsflowResponse = async (url, init) => {
+    let lastError = null;
+    for (let attempt = 0; attempt <= ADSFLOW_FETCH_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+            const response = await fetch(url, {
+                ...init,
+                signal: AbortSignal.timeout(ADSFLOW_FETCH_TIMEOUT_MS),
+            });
+            if (!ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(response.status) || attempt === ADSFLOW_FETCH_RETRY_DELAYS_MS.length) {
+                return response;
+            }
+            console.warn(`[studio] AdsFlow responded with ${response.status} for ${url.pathname}, retry ${attempt + 1}/${ADSFLOW_FETCH_RETRY_DELAYS_MS.length}`);
+        }
+        catch (error) {
+            lastError = error;
+            if (attempt === ADSFLOW_FETCH_RETRY_DELAYS_MS.length) {
+                throw new Error(describeAdsflowFetchFailure(url, error));
+            }
+            console.warn(`[studio] AdsFlow fetch error for ${url.pathname}, retry ${attempt + 1}/${ADSFLOW_FETCH_RETRY_DELAYS_MS.length}`, error);
+        }
+        await wait(ADSFLOW_FETCH_RETRY_DELAYS_MS[attempt] ?? 0);
+    }
+    throw new Error(lastError ? describeAdsflowFetchFailure(url, lastError) : `AdsFlow unavailable for ${url.origin}${url.pathname}.`);
+};
 const fetchAdsflowJson = async (url, init) => {
-    const response = await fetch(url, init);
+    const response = await fetchAdsflowResponse(url, init);
     const payload = (await response.json().catch(() => null));
     if (!response.ok) {
         const detail = payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string"
             ? payload.detail
             : `AdsFlow request failed (${response.status}).`;
+        if (response.status === 402) {
+            throw new WorkspaceCreditLimitError(detail);
+        }
+        throw new Error(detail);
+    }
+    if (!payload) {
+        throw new Error("AdsFlow returned an empty response.");
+    }
+    return payload;
+};
+const postAdsflowText = async (path, body) => {
+    assertAdsflowConfigured();
+    const response = await fetchAdsflowResponse(buildAdsflowUrl(path), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+    });
+    const payload = await response.text();
+    if (!response.ok) {
+        const detail = extractErrorDetail(payload) ?? `AdsFlow request failed (${response.status}).`;
         if (response.status === 402) {
             throw new WorkspaceCreditLimitError(detail);
         }
@@ -202,18 +566,19 @@ const fetchAdsflowJobStatus = async (jobId, user) => {
         external_user_id: externalUserId,
     }));
 };
-const consumeWorkspaceGenerationCredit = async (user, amount = 1) => {
+const consumeWorkspaceGenerationCredit = async (user, amount = 1, language) => {
     const externalUserId = await resolveStudioExternalUserId(user);
-    const payload = await postAdsflowJson("/api/web/credits/consume", {
+    const payloadText = await postAdsflowText("/api/web/credits/consume", {
         admin_token: env.adsflowAdminToken,
         amount: Math.max(1, Math.trunc(amount || 1)),
         external_user_id: externalUserId,
-        language: "ru",
+        language: normalizeStudioLanguage(language),
         referral_source: "landing_site",
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
-    if (!payload.user || !payload.consumed) {
+    const payload = parseJson(payloadText);
+    if (!payload?.user || !payload.consumed) {
         throw new Error("AdsFlow did not return consumed web credits.");
     }
     return {
@@ -221,32 +586,37 @@ const consumeWorkspaceGenerationCredit = async (user, amount = 1) => {
             purchased: Math.max(0, Number(payload.consumed.purchased ?? 0)),
             subscription: Math.max(0, Number(payload.consumed.subscription ?? 0)),
         },
-        profile: await enrichWorkspaceProfile(payload.user),
+        profile: await enrichWorkspaceProfile(payload.user, {
+            rawUserId: extractAdsflowUserId(payloadText),
+        }),
     };
 };
-const refundWorkspaceGenerationCredit = async (user, consumed) => {
+const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
     if (consumed.purchased <= 0 && consumed.subscription <= 0) {
         return buildWorkspaceProfile();
     }
     const externalUserId = await resolveStudioExternalUserId(user);
-    const payload = await postAdsflowJson("/api/web/credits/refund", {
+    const payloadText = await postAdsflowText("/api/web/credits/refund", {
         admin_token: env.adsflowAdminToken,
         consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
         consumed_subscription: Math.max(0, Math.trunc(consumed.subscription || 0)),
         external_user_id: externalUserId,
-        language: "ru",
+        language: normalizeStudioLanguage(language),
         referral_source: "landing_site",
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
-    if (!payload.user) {
+    const payload = parseJson(payloadText);
+    if (!payload?.user) {
         throw new Error("AdsFlow did not return refunded web profile.");
     }
-    return await enrichWorkspaceProfile(payload.user);
+    return await enrichWorkspaceProfile(payload.user, {
+        rawUserId: extractAdsflowUserId(payloadText),
+    });
 };
 export async function getWorkspaceBootstrap(user) {
     const externalUserId = await resolveStudioExternalUserId(user);
-    const payload = await postAdsflowJson("/api/web/bootstrap", {
+    const payloadText = await postAdsflowText("/api/web/bootstrap", {
         admin_token: env.adsflowAdminToken,
         external_user_id: externalUserId,
         language: "ru",
@@ -254,10 +624,13 @@ export async function getWorkspaceBootstrap(user) {
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
-    if (!payload.user) {
+    const payload = parseJson(payloadText);
+    if (!payload?.user) {
         throw new Error("AdsFlow did not return web user profile.");
     }
-    const profile = await enrichWorkspaceProfile(payload.user);
+    const profile = await enrichWorkspaceProfile(payload.user, {
+        rawUserId: extractAdsflowUserId(payloadText),
+    });
     if (payload.latest_generation?.job_id) {
         try {
             await saveWorkspaceGenerationHistory(user, {
@@ -277,9 +650,32 @@ export async function getWorkspaceBootstrap(user) {
             console.error("[studio] Failed to sync workspace history from bootstrap", error);
         }
     }
+    let latestGeneration = buildLatestGenerationStatus(payload.latest_generation);
+    if (!latestGeneration?.generation && (!latestGeneration || latestGeneration.status === "done")) {
+        try {
+            const fallbackProject = (await getWorkspaceProjects(user)).find((project) => project.status === "ready" && Boolean(project.videoUrl));
+            const fallbackGeneration = fallbackProject ? buildStudioGenerationFromWorkspaceProject(fallbackProject) : null;
+            if (fallbackGeneration) {
+                latestGeneration = latestGeneration
+                    ? {
+                        ...latestGeneration,
+                        generation: fallbackGeneration,
+                    }
+                    : {
+                        generation: fallbackGeneration,
+                        jobId: fallbackProject?.jobId ?? fallbackProject?.id ?? fallbackGeneration.id,
+                        status: "done",
+                    };
+            }
+        }
+        catch (error) {
+            console.error("[studio] Failed to backfill latest generation from workspace projects", error);
+        }
+    }
     return {
-        latestGeneration: buildLatestGenerationStatus(payload.latest_generation),
+        latestGeneration,
         profile,
+        studioOptions: buildWorkspaceStudioOptions(payload.studio_options),
     };
 }
 export async function createStudioGenerationJob(prompt, user, options) {
@@ -288,11 +684,29 @@ export async function createStudioGenerationJob(prompt, user, options) {
     if (!normalizedPrompt) {
         throw new Error("Prompt is required.");
     }
-    const creditReservation = await consumeWorkspaceGenerationCredit(user);
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
+    const requiredCredits = normalizedVideoMode === "ai_video" ? 3 : 1;
+    const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
     const externalUserId = await resolveStudioExternalUserId(user);
     const shouldAddWatermark = creditReservation.profile.plan === "FREE" &&
         creditReservation.consumed.subscription > 0 &&
         creditReservation.consumed.purchased <= 0;
+    const normalizedVoiceId = String(options?.voiceId ?? "").trim() || undefined;
+    const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
+    const normalizedSubtitleStyleId = normalizeStudioSubtitleStyle(options?.subtitleStyleId);
+    const normalizedSubtitleColorId = normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId));
+    const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
+    const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
+    const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+    const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+    const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+    if (normalizedMusicType === "custom" && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
+        throw new Error("Upload a custom music track or choose a different music mode.");
+    }
+    if (normalizedVideoMode === "custom" && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
+        throw new Error("Upload a custom video or choose a different video mode.");
+    }
     let jobCreated = false;
     try {
         const payload = await fetchAdsflowJson(buildAdsflowUrl("/api/web/generations"), {
@@ -306,10 +720,20 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 prompt: normalizedPrompt,
                 user_email: user.email ?? undefined,
                 user_name: user.name ?? undefined,
-                language: "ru",
+                language: normalizedLanguage,
                 add_watermark: shouldAddWatermark,
-                credit_cost: 0,
+                credit_cost: requiredCredits,
+                custom_video_data_url: normalizedVideoMode === "custom" ? normalizedCustomVideoFileDataUrl : undefined,
+                custom_video_mime_type: normalizedVideoMode === "custom" ? normalizedCustomVideoFileMimeType : undefined,
+                custom_video_original_name: normalizedVideoMode === "custom" ? normalizedCustomVideoFileName : undefined,
                 is_regeneration: Boolean(options?.isRegeneration),
+                music_type: normalizedMusicType,
+                custom_music_data_url: normalizedMusicType === "custom" ? normalizedCustomMusicFileDataUrl : undefined,
+                custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : undefined,
+                subtitle_color: normalizedSubtitleColorId,
+                subtitle_style: normalizedSubtitleStyleId,
+                video_mode: normalizedVideoMode,
+                voice_code: normalizedVoiceId,
             }),
         });
         const jobId = String(payload.job_id ?? "").trim();
@@ -342,7 +766,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     catch (error) {
         if (!jobCreated) {
             try {
-                await refundWorkspaceGenerationCredit(user, creditReservation.consumed);
+                await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
             }
             catch (refundError) {
                 console.error("[studio] Failed to refund reserved credits", refundError);
@@ -376,10 +800,18 @@ export async function getStudioGenerationStatus(jobId, user) {
         if (!payload.download_path) {
             throw new Error("AdsFlow finished the job without a video path.");
         }
+        const generation = buildStudioGeneration(payload);
+        if (!generation) {
+            return {
+                jobId: safeJobId,
+                status,
+                error: "Готовое видео недоступно как прямой media-файл.",
+            };
+        }
         return {
             jobId: safeJobId,
             status,
-            generation: buildStudioGeneration(payload),
+            generation,
         };
     }
     return {
@@ -396,6 +828,9 @@ export function getStudioVideoProxyTargetByPath(value) {
     if (!normalized) {
         throw new Error("Video path is required.");
     }
+    if (!isPlayableStudioVideoPath(normalized)) {
+        throw new Error("Video path is not a direct media file.");
+    }
     const upstreamUrl = buildAdsflowUrl(normalized);
     const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl);
     if (upstreamUrl.origin === adsflowBaseUrl.origin) {
@@ -411,6 +846,9 @@ export async function getStudioVideoProxyTarget(jobId, user) {
     const downloadPath = String(payload.download_path ?? "").trim();
     if (!downloadPath) {
         throw new Error("AdsFlow did not return a download path.");
+    }
+    if (!isPlayableStudioVideoPath(downloadPath)) {
+        throw new Error("AdsFlow returned a non-playable video path.");
     }
     return buildAdsflowUrl(downloadPath, {
         admin_token: env.adsflowAdminToken ?? "",

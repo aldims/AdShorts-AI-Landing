@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,19 @@ const envFile = join(rootDir, ".env");
 const dataDir = join(rootDir, "data");
 
 dotenv.config({ path: envFile });
+
+const siblingAdsflowWorkerEnvFile = join(rootDir, "..", "..", "AdsFlow AI", "services", "worker", ".env");
+if (existsSync(siblingAdsflowWorkerEnvFile)) {
+  const siblingAdsflowWorkerEnv = dotenv.parse(readFileSync(siblingAdsflowWorkerEnvFile));
+
+  if (!process.env.DEAPI_API_KEY && siblingAdsflowWorkerEnv.DEAPI_API_KEY) {
+    process.env.DEAPI_API_KEY = siblingAdsflowWorkerEnv.DEAPI_API_KEY;
+  }
+
+  if (!process.env.DEAPI_VERIFY_SSL && siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL) {
+    process.env.DEAPI_VERIFY_SSL = siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL;
+  }
+}
 
 mkdirSync(dataDir, { recursive: true });
 
@@ -66,6 +79,11 @@ export const env = {
   paymentLinkStart: trim(process.env.PAYMENT_LINK_START),
   paymentLinkPro: trim(process.env.PAYMENT_LINK_PRO),
   paymentLinkUltra: trim(process.env.PAYMENT_LINK_ULTRA),
+  paymentLinkPackage10: trim(process.env.PAYMENT_LINK_PACKAGE_10),
+  paymentLinkPackage50: trim(process.env.PAYMENT_LINK_PACKAGE_50),
+  paymentLinkPackage100: trim(process.env.PAYMENT_LINK_PACKAGE_100),
+  deapiApiKey: trim(process.env.DEAPI_API_KEY),
+  deapiVerifySsl: process.env.DEAPI_VERIFY_SSL === "true" || (process.env.DEAPI_VERIFY_SSL == null && isProduction),
 };
 
 export const authProviderStatus = {

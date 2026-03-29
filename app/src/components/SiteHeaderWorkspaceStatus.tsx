@@ -67,7 +67,6 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
         className={`site-header__plan${isExpiringSoon ? " is-expiring-soon" : ""}`}
         to="/pricing"
         aria-label="Открыть тариф"
-        title={tooltipText}
       >
         <span>Тариф</span>
         <strong>{normalizedPlan}</strong>
