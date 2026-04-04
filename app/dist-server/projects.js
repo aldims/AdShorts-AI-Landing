@@ -1,7 +1,17 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
-import { listWorkspaceGenerationHistory } from "./workspace-history.js";
+import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
+import { ensureWorkspaceProjectPoster, getWorkspaceProjectPosterCacheKey, warmWorkspaceProjectPoster, } from "./project-posters.js";
+import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory, markWorkspaceProjectDeleted, } from "./workspace-history.js";
+export class WorkspaceProjectNotFoundError extends Error {
+    constructor() {
+        super("Project not found.");
+        this.name = "WorkspaceProjectNotFoundError";
+    }
+}
 const MAX_PROJECTS = 60;
+const MAX_PROJECT_FETCH_LIMIT = 200;
+const ADSFLOW_ADMIN_VIDEOS_MAX_PAGE_SIZE = 100;
 const PROJECTS_CACHE_TTL_MS = 15_000;
 const workspaceProjectsCache = new Map();
 const workspaceProjectsInFlight = new Map();
@@ -15,21 +25,54 @@ const parseJson = (value) => {
         return null;
     }
 };
+const formatErrorDetailEntry = (value) => {
+    if (typeof value === "string") {
+        const normalized = normalizeText(value);
+        return normalized || null;
+    }
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+    const record = value;
+    const loc = Array.isArray(record.loc)
+        ? record.loc
+            .map((entry) => normalizeText(entry))
+            .filter(Boolean)
+            .join(".")
+        : "";
+    const message = (typeof record.msg === "string" && normalizeText(record.msg)) ||
+        (typeof record.error === "string" && normalizeText(record.error)) ||
+        "";
+    if (loc && message) {
+        return `${loc}: ${message}`;
+    }
+    return message || null;
+};
 const extractErrorDetail = (value) => {
-    const payload = parseJson(value);
+    const payload = typeof value === "string"
+        ? parseJson(value)
+        : value && typeof value === "object"
+            ? value
+            : null;
     if (!payload || typeof payload !== "object") {
         const normalized = normalizeText(value);
         return normalized && !normalized.startsWith("<") ? normalized : null;
     }
-    const detail = payload.detail;
+    const detail = "detail" in payload ? payload.detail : undefined;
     if (typeof detail === "string" && detail.trim()) {
         return detail.trim();
     }
-    const error = payload.error;
+    if (Array.isArray(detail)) {
+        const parts = detail.map(formatErrorDetailEntry).filter(Boolean);
+        if (parts.length > 0) {
+            return parts.join("; ");
+        }
+    }
+    const error = "error" in payload ? payload.error : undefined;
     if (typeof error === "string" && error.trim()) {
         return error.trim();
     }
-    return null;
+    return formatErrorDetailEntry(detail) || formatErrorDetailEntry(error);
 };
 const extractBootstrapUserId = (value) => {
     const match = value.match(/"user"\s*:\s*\{[\s\S]*?"user_id"\s*:\s*(\d+)/);
@@ -64,6 +107,14 @@ const buildPromptTitle = (prompt, fallback = "Проект") => {
     const compact = normalized.slice(0, 69).trim();
     return compact ? `${compact}...` : fallback;
 };
+const isWorkspaceTaskPlaceholderTitle = (value) => normalizeText(value).toLowerCase() === "studio generation";
+const resolveWorkspaceTaskTitle = ({ adId, prompt, title, }) => {
+    const normalizedTitle = normalizeText(title);
+    if (normalizedTitle && !isWorkspaceTaskPlaceholderTitle(normalizedTitle)) {
+        return normalizedTitle;
+    }
+    return buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
+};
 const toIsoString = (value) => {
     if (!value)
         return null;
@@ -94,6 +145,10 @@ const normalizeProjectStatus = (value) => {
             return normalized || "draft";
     }
 };
+const isAdsflowLatestVideoGenerationTask = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return !normalized || normalized === "video.generate" || normalized === "video.edit";
+};
 const buildAbsoluteAdsflowUrl = (value) => {
     const normalized = normalizeText(value);
     if (!normalized)
@@ -116,7 +171,9 @@ const isPlayableWorkspaceVideoPath = (value) => {
         if (hostname === "youtu.be" || hostname.endsWith(".youtube.com") || hostname === "youtube.com") {
             return false;
         }
-        return pathname.includes("/api/video/download/") || /\.(mp4|mov|webm|m4v)$/i.test(pathname);
+        return (pathname.includes("/api/video/download/") ||
+            pathname.includes("/api/web/video/") ||
+            /\.(mp4|mov|webm|m4v)$/i.test(pathname));
     }
     catch {
         return false;
@@ -137,6 +194,49 @@ const buildWorkspaceProjectVideoProxyUrl = (value, version) => {
     }
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
+const buildWorkspaceJobVideoProxyUrl = (jobId, version) => {
+    const normalizedJobId = normalizeText(jobId);
+    if (!normalizedJobId)
+        return null;
+    const proxyUrl = new URL(`/api/studio/video/${encodeURIComponent(normalizedJobId)}`, env.appUrl);
+    const normalizedVersion = normalizeText(version);
+    if (normalizedVersion) {
+        proxyUrl.searchParams.set("v", normalizedVersion);
+    }
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildWorkspaceProjectPosterUrl = (projectId, version) => {
+    const normalizedProjectId = normalizeText(projectId);
+    if (!normalizedProjectId)
+        return null;
+    const proxyUrl = new URL(`/api/workspace/projects/${encodeURIComponent(normalizedProjectId)}/poster`, env.appUrl);
+    const normalizedVersion = normalizeText(version);
+    if (normalizedVersion) {
+        proxyUrl.searchParams.set("v", normalizedVersion);
+    }
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildWorkspaceProjectLocalPlaybackUrl = (projectId, version) => {
+    const normalizedProjectId = normalizeText(projectId);
+    if (!normalizedProjectId)
+        return null;
+    const proxyUrl = new URL(`/api/workspace/projects/${encodeURIComponent(normalizedProjectId)}/playback`, env.appUrl);
+    const normalizedVersion = normalizeText(version);
+    if (normalizedVersion) {
+        proxyUrl.searchParams.set("v", normalizedVersion);
+    }
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildWorkspaceProjectPlaybackTargets = ({ projectId, downloadPath, jobId, version, }) => {
+    const localPlaybackUrl = buildWorkspaceProjectLocalPlaybackUrl(projectId, version);
+    const jobVideoUrl = buildWorkspaceJobVideoProxyUrl(jobId, version);
+    const directVideoUrl = buildWorkspaceProjectVideoProxyUrl(downloadPath, version);
+    const videoFallbackUrl = directVideoUrl ?? jobVideoUrl;
+    return {
+        videoFallbackUrl,
+        videoUrl: videoFallbackUrl ? localPlaybackUrl ?? videoFallbackUrl : null,
+    };
+};
 const assertAdsflowConfigured = () => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         throw new Error("AdsFlow API is not configured.");
@@ -150,9 +250,7 @@ const fetchAdsflowJson = async (url, init) => {
     const response = await fetch(url, init);
     const payload = (await response.json().catch(() => null));
     if (!response.ok) {
-        const detail = payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string"
-            ? payload.detail
-            : `AdsFlow request failed (${response.status}).`;
+        const detail = extractErrorDetail(payload) ?? `AdsFlow request failed (${response.status}).`;
         throw new Error(detail);
     }
     if (!payload) {
@@ -217,25 +315,53 @@ const fetchBootstrapPayload = async (user, externalUserId) => {
         remoteUserId,
     };
 };
-const fetchAdminVideos = async (userId) => {
-    const url = new URL("/api/admin/videos", getAdsflowBaseUrl());
-    url.searchParams.set("user_id", userId);
-    url.searchParams.set("page", "1");
-    url.searchParams.set("page_size", String(MAX_PROJECTS));
-    const payload = await fetchAdsflowJson(url, {
-        headers: {
-            "X-Admin-Token": env.adsflowAdminToken ?? "",
-        },
-    });
-    return payload.items ?? [];
+const getWorkspaceProjectFetchLimit = (deletedProjectsCount) => Math.max(MAX_PROJECTS, Math.min(MAX_PROJECTS + Math.max(0, Math.trunc(deletedProjectsCount || 0)), MAX_PROJECT_FETCH_LIMIT));
+const fetchAdminVideos = async (userId, limit = MAX_PROJECTS) => {
+    const requestedLimit = Math.max(1, Math.min(Math.trunc(limit || MAX_PROJECTS), MAX_PROJECT_FETCH_LIMIT));
+    const items = [];
+    let page = 1;
+    while (items.length < requestedLimit) {
+        const pageSize = Math.min(ADSFLOW_ADMIN_VIDEOS_MAX_PAGE_SIZE, requestedLimit - items.length);
+        const url = new URL("/api/admin/videos", getAdsflowBaseUrl());
+        url.searchParams.set("user_id", userId);
+        url.searchParams.set("page", String(page));
+        url.searchParams.set("page_size", String(pageSize));
+        const payload = await fetchAdsflowJson(url, {
+            headers: {
+                "X-Admin-Token": env.adsflowAdminToken ?? "",
+            },
+        });
+        const batch = payload.items ?? [];
+        if (batch.length === 0) {
+            break;
+        }
+        items.push(...batch);
+        if (batch.length < pageSize) {
+            break;
+        }
+        page += 1;
+    }
+    return items.slice(0, requestedLimit);
 };
-const buildProjectFromAdminVideo = (item) => {
+const buildProjectFromAdminVideo = (item, historyEntry) => {
     const adId = Number(item.id ?? 0);
     if (!Number.isFinite(adId) || adId <= 0)
         return null;
     const prompt = normalizePrompt(item.description ?? "");
     const createdAt = toIsoString(item.created_at) ?? new Date().toISOString();
+    const historyJobId = normalizeText(historyEntry?.jobId);
+    const historyUpdatedAt = toIsoString(historyEntry?.updatedAt);
+    const updatedAt = historyUpdatedAt ?? createdAt;
+    const status = normalizeProjectStatus(item.status);
+    const playbackTargets = buildWorkspaceProjectPlaybackTargets({
+        projectId: `project:${adId}`,
+        downloadPath: item.download_path,
+        jobId: historyJobId || null,
+        version: updatedAt,
+    });
     const description = normalizeText(item.description) || prompt || "Описание проекта недоступно.";
+    const videoUrl = status === "ready" ? playbackTargets.videoUrl : null;
+    const videoFallbackUrl = status === "ready" ? playbackTargets.videoFallbackUrl : null;
     const youtubePublication = normalizeText(item.youtube_publish_state) ||
         normalizeText(item.youtube_published_link) ||
         normalizeText(item.youtube_video_id) ||
@@ -258,17 +384,22 @@ const buildProjectFromAdminVideo = (item) => {
         generatedAt: createdAt,
         hashtags: [],
         id: `project:${adId}`,
-        jobId: null,
+        jobId: historyJobId || null,
         prompt,
         source: "project",
-        status: normalizeProjectStatus(item.status),
+        status,
         title: normalizeText(item.ai_title) || buildPromptTitle(prompt, `Проект #${adId}`),
-        updatedAt: createdAt,
-        videoUrl: buildWorkspaceProjectVideoProxyUrl(item.download_path, createdAt),
+        updatedAt,
+        posterUrl: status === "ready" && videoUrl ? buildWorkspaceProjectPosterUrl(`project:${adId}`, updatedAt) : null,
+        videoFallbackUrl,
+        videoUrl,
         youtubePublication,
     };
 };
 const buildProjectFromLatestGeneration = (item) => {
+    if (!isAdsflowLatestVideoGenerationTask(item.task_type)) {
+        return null;
+    }
     const jobId = normalizeText(item.job_id);
     if (!jobId)
         return null;
@@ -277,11 +408,23 @@ const buildProjectFromLatestGeneration = (item) => {
     const createdAt = generatedAt ?? new Date().toISOString();
     const adId = item.ad_id && Number.isFinite(Number(item.ad_id)) ? Number(item.ad_id) : null;
     const status = normalizeProjectStatus(item.status);
-    const videoUrl = status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.download_path, generatedAt ?? createdAt) : null;
-    if (status === "ready" && !videoUrl) {
+    if (status !== "ready") {
         return null;
     }
-    const title = normalizeText(item.title) || buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
+    const playbackTargets = buildWorkspaceProjectPlaybackTargets({
+        projectId: `task:${jobId}`,
+        downloadPath: item.download_path,
+        jobId,
+        version: generatedAt ?? createdAt,
+    });
+    if (!playbackTargets.videoUrl) {
+        return null;
+    }
+    const title = resolveWorkspaceTaskTitle({
+        adId,
+        prompt,
+        title: item.title,
+    });
     const description = normalizeText(item.description) || prompt || "Описание проекта появится после завершения генерации.";
     return {
         adId,
@@ -296,7 +439,9 @@ const buildProjectFromLatestGeneration = (item) => {
         status,
         title,
         updatedAt: generatedAt ?? createdAt,
-        videoUrl,
+        posterUrl: playbackTargets.videoUrl ? buildWorkspaceProjectPosterUrl(`task:${jobId}`, generatedAt ?? createdAt) : null,
+        videoFallbackUrl: playbackTargets.videoFallbackUrl,
+        videoUrl: playbackTargets.videoUrl,
         youtubePublication: null,
     };
 };
@@ -310,14 +455,26 @@ const buildProjectFromHistoryEntry = (item) => {
     const updatedAt = toIsoString(item.updatedAt) ?? generatedAt ?? createdAt;
     const adId = item.adId && Number.isFinite(Number(item.adId)) ? Number(item.adId) : null;
     const status = normalizeProjectStatus(item.status);
-    const videoUrl = status === "ready" ? buildWorkspaceProjectVideoProxyUrl(item.downloadPath, updatedAt) : null;
-    if (status === "ready" && !videoUrl) {
+    if (status !== "ready") {
         return null;
     }
-    const title = normalizeText(item.title) || buildPromptTitle(prompt, adId ? `Проект #${adId}` : "Проект");
+    const playbackTargets = buildWorkspaceProjectPlaybackTargets({
+        projectId: `task:${jobId}`,
+        downloadPath: item.downloadPath,
+        jobId,
+        version: updatedAt,
+    });
+    if (!playbackTargets.videoUrl) {
+        return null;
+    }
+    const title = resolveWorkspaceTaskTitle({
+        adId,
+        prompt,
+        title: item.title,
+    });
     const description = normalizeText(item.description) ||
         prompt ||
-        (status === "failed" ? "Генерация не завершилась успешно." : "Описание проекта появится после завершения генерации.");
+        "Описание проекта появится после завершения генерации.";
     return {
         adId,
         createdAt,
@@ -331,7 +488,9 @@ const buildProjectFromHistoryEntry = (item) => {
         status,
         title,
         updatedAt,
-        videoUrl,
+        posterUrl: playbackTargets.videoUrl ? buildWorkspaceProjectPosterUrl(`task:${jobId}`, updatedAt) : null,
+        videoFallbackUrl: playbackTargets.videoFallbackUrl,
+        videoUrl: playbackTargets.videoUrl,
         youtubePublication: null,
     };
 };
@@ -339,34 +498,211 @@ const getSortTime = (value) => {
     const timestamp = Date.parse(value.updatedAt || value.createdAt);
     return Number.isNaN(timestamp) ? 0 : timestamp;
 };
+const resolveWorkspaceProjectHistoryVideoTarget = async (jobId, user) => {
+    const normalizedJobId = normalizeText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const historyEntries = await listWorkspaceGenerationHistory(user, MAX_PROJECT_FETCH_LIMIT).catch((error) => {
+        console.error("[workspace] Failed to load workspace history for project poster", error);
+        return [];
+    });
+    const historyEntry = historyEntries.find((entry) => normalizeText(entry.jobId) === normalizedJobId) ?? null;
+    const downloadPath = normalizeText(historyEntry?.downloadPath);
+    return downloadPath ? getWorkspaceProjectVideoProxyTarget(downloadPath) : null;
+};
+const resolveWorkspaceProjectUpstreamTargetFromVideoUrl = async (playbackUrl, user) => {
+    const normalizedPlaybackUrl = normalizeText(playbackUrl);
+    if (!normalizedPlaybackUrl) {
+        return null;
+    }
+    let resolvedUrl;
+    try {
+        resolvedUrl = new URL(normalizedPlaybackUrl, env.appUrl);
+    }
+    catch {
+        return null;
+    }
+    if (resolvedUrl.pathname === "/api/workspace/project-video" || resolvedUrl.pathname === "/api/studio/video") {
+        const path = normalizeText(resolvedUrl.searchParams.get("path"));
+        return path ? getWorkspaceProjectVideoProxyTarget(path) : null;
+    }
+    if (resolvedUrl.pathname.startsWith("/api/studio/video/")) {
+        const jobId = decodeURIComponent(resolvedUrl.pathname.slice("/api/studio/video/".length));
+        return resolveWorkspaceProjectHistoryVideoTarget(jobId, user);
+    }
+    if (resolvedUrl.protocol === "http:" || resolvedUrl.protocol === "https:") {
+        return resolvedUrl;
+    }
+    return null;
+};
+const getWorkspaceProjectPlaybackSource = async (project, user) => {
+    if (project.status !== "ready" || !project.videoUrl) {
+        return null;
+    }
+    const upstreamUrl = await resolveWorkspaceProjectUpstreamTargetFromVideoUrl(project.videoFallbackUrl ?? project.videoUrl, user);
+    if (!upstreamUrl) {
+        return null;
+    }
+    return {
+        cacheKey: getWorkspaceProjectPlaybackCacheKey({
+            projectId: project.id,
+            targetUrl: upstreamUrl,
+            updatedAt: project.updatedAt || project.createdAt,
+        }),
+        projectId: project.id,
+        upstreamUrl,
+    };
+};
+const getWorkspaceProjectPosterSource = async (project, user) => {
+    if (project.status !== "ready" || !project.videoUrl || !project.posterUrl) {
+        return null;
+    }
+    for (const candidateUrl of [project.videoFallbackUrl, project.videoUrl]) {
+        const upstreamUrl = await resolveWorkspaceProjectUpstreamTargetFromVideoUrl(candidateUrl, user);
+        if (!upstreamUrl) {
+            continue;
+        }
+        return {
+            cacheKey: getWorkspaceProjectPosterCacheKey({
+                projectId: project.id,
+                targetUrl: upstreamUrl,
+                updatedAt: project.updatedAt || project.createdAt,
+            }),
+            projectId: project.id,
+            upstreamUrl,
+        };
+    }
+    return null;
+};
+const warmWorkspaceProjectPlaybacks = (projects, user) => {
+    for (const project of projects) {
+        if (!project.videoUrl || project.status !== "ready") {
+            continue;
+        }
+        void getWorkspaceProjectPlaybackSource(project, user)
+            .then((playbackSource) => {
+            if (!playbackSource) {
+                return;
+            }
+            return warmWorkspaceProjectPlayback(playbackSource);
+        })
+            .catch((error) => {
+            console.error("[workspace] Failed to warm project playback cache", {
+                error: error instanceof Error ? error.message : "Unknown project playback warmup error.",
+                projectId: project.id,
+            });
+        });
+    }
+};
+const warmWorkspaceProjectPosters = (projects, user) => {
+    for (const project of projects) {
+        if (!project.posterUrl || !project.videoUrl || project.status !== "ready") {
+            continue;
+        }
+        void getWorkspaceProjectPosterSource(project, user)
+            .then((posterSource) => {
+            if (!posterSource) {
+                return;
+            }
+            return warmWorkspaceProjectPoster(posterSource);
+        })
+            .catch((error) => {
+            console.error("[workspace] Failed to warm project poster", {
+                error: error instanceof Error ? error.message : "Unknown project poster warmup error.",
+                projectId: project.id,
+            });
+        });
+    }
+};
+const getWorkspaceHistoryEntrySortTime = (entry) => {
+    const timestamp = Date.parse(entry.updatedAt || entry.generatedAt || entry.createdAt);
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+const isWorkspaceProjectDeleted = (project, deletedProjects) => deletedProjects.some((deletedProject) => {
+    if (deletedProject.projectId && deletedProject.projectId === project.id) {
+        return true;
+    }
+    if (deletedProject.adId !== null && project.adId !== null && deletedProject.adId === project.adId) {
+        return true;
+    }
+    if (deletedProject.jobId && project.jobId && deletedProject.jobId === project.jobId) {
+        return true;
+    }
+    return false;
+});
 const loadWorkspaceProjects = async (user, externalUserId) => {
-    const [bootstrapPayload, historyEntries] = await Promise.all([
+    const [bootstrapPayload, deletedProjects] = await Promise.all([
         fetchBootstrapPayload(user, externalUserId),
-        listWorkspaceGenerationHistory(user, MAX_PROJECTS).catch((error) => {
-            console.error("[workspace] Failed to load local workspace history", error);
+        listWorkspaceDeletedProjects(user).catch((error) => {
+            console.error("[workspace] Failed to load deleted workspace projects", error);
             return [];
         }),
     ]);
+    const fetchLimit = getWorkspaceProjectFetchLimit(deletedProjects.length);
+    const historyEntriesPromise = listWorkspaceGenerationHistory(user, fetchLimit).catch((error) => {
+        console.error("[workspace] Failed to load local workspace history", error);
+        return [];
+    });
+    const adminVideosPromise = bootstrapPayload.remoteUserId
+        ? fetchAdminVideos(bootstrapPayload.remoteUserId, fetchLimit)
+            .then((items) => ({
+            items,
+            isFallback: false,
+        }))
+            .catch((error) => {
+            console.warn("[workspace] Failed to load admin videos from AdsFlow, using local fallbacks only", {
+                error: error instanceof Error ? error.message : "Unknown AdsFlow admin videos error.",
+                fetchLimit,
+                remoteUserId: bootstrapPayload.remoteUserId,
+            });
+            return {
+                items: [],
+                isFallback: true,
+            };
+        })
+        : Promise.resolve({
+            items: [],
+            isFallback: true,
+        });
+    const [historyEntries, adminVideosResult] = await Promise.all([historyEntriesPromise, adminVideosPromise]);
+    const adminVideos = adminVideosResult.items;
+    const shouldUseLocalFallbackProjects = adminVideosResult.isFallback || adminVideos.length === 0;
     const projects = new Map();
-    if (bootstrapPayload.remoteUserId) {
-        for (const item of await fetchAdminVideos(bootstrapPayload.remoteUserId)) {
-            const project = buildProjectFromAdminVideo(item);
+    const historyEntriesByAdId = new Map();
+    for (const entry of historyEntries) {
+        const adId = entry.adId && Number.isFinite(Number(entry.adId)) ? Number(entry.adId) : null;
+        if (adId === null) {
+            continue;
+        }
+        const currentEntry = historyEntriesByAdId.get(adId);
+        if (!currentEntry || getWorkspaceHistoryEntrySortTime(entry) > getWorkspaceHistoryEntrySortTime(currentEntry)) {
+            historyEntriesByAdId.set(adId, entry);
+        }
+    }
+    if (adminVideos.length > 0) {
+        for (const item of adminVideos) {
+            const adId = Number(item.id ?? 0);
+            const historyEntry = Number.isFinite(adId) && adId > 0 ? historyEntriesByAdId.get(adId) ?? null : null;
+            const project = buildProjectFromAdminVideo(item, historyEntry);
             if (!project)
                 continue;
             projects.set(project.id, project);
         }
     }
-    for (const item of historyEntries) {
-        const project = buildProjectFromHistoryEntry(item);
-        if (!project)
-            continue;
-        const duplicateByAdId = project.adId !== null &&
-            Array.from(projects.values()).some((existingProject) => existingProject.adId !== null && existingProject.adId === project.adId);
-        if (!duplicateByAdId && !projects.has(project.id)) {
-            projects.set(project.id, project);
+    if (shouldUseLocalFallbackProjects) {
+        for (const item of historyEntries) {
+            const project = buildProjectFromHistoryEntry(item);
+            if (!project)
+                continue;
+            const duplicateByAdId = project.adId !== null &&
+                Array.from(projects.values()).some((existingProject) => existingProject.adId !== null && existingProject.adId === project.adId);
+            if (!duplicateByAdId && !projects.has(project.id)) {
+                projects.set(project.id, project);
+            }
         }
     }
-    if (bootstrapPayload.latest_generation) {
+    if (shouldUseLocalFallbackProjects && bootstrapPayload.latest_generation) {
         const latestProject = buildProjectFromLatestGeneration(bootstrapPayload.latest_generation);
         if (latestProject) {
             const duplicateByAdId = latestProject.adId !== null &&
@@ -377,6 +713,7 @@ const loadWorkspaceProjects = async (user, externalUserId) => {
         }
     }
     return Array.from(projects.values())
+        .filter((project) => !isWorkspaceProjectDeleted(project, deletedProjects))
         .sort((left, right) => getSortTime(right) - getSortTime(left))
         .slice(0, MAX_PROJECTS);
 };
@@ -404,7 +741,10 @@ export async function getWorkspaceProjects(user) {
     const cacheKey = await resolvePreferredExternalUserId(user);
     const cachedEntry = workspaceProjectsCache.get(cacheKey);
     if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-        return cloneWorkspaceProjects(cachedEntry.projects);
+        const projects = cloneWorkspaceProjects(cachedEntry.projects);
+        warmWorkspaceProjectPlaybacks(projects, user);
+        warmWorkspaceProjectPosters(projects, user);
+        return projects;
     }
     const inFlightRequest = workspaceProjectsInFlight.get(cacheKey);
     if (inFlightRequest) {
@@ -416,6 +756,8 @@ export async function getWorkspaceProjects(user) {
             expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
             projects: cloneWorkspaceProjects(projects),
         });
+        warmWorkspaceProjectPlaybacks(projects, user);
+        warmWorkspaceProjectPosters(projects, user);
         return projects;
     })
         .finally(() => {
@@ -423,4 +765,53 @@ export async function getWorkspaceProjects(user) {
     });
     workspaceProjectsInFlight.set(cacheKey, request);
     return cloneWorkspaceProjects(await request);
+}
+export async function getWorkspaceProjectPlaybackAsset(user, projectId) {
+    const normalizedProjectId = normalizeText(projectId);
+    if (!normalizedProjectId) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    const projects = await getWorkspaceProjects(user);
+    const project = projects.find((item) => item.id === normalizedProjectId) ?? null;
+    if (!project) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    const playbackSource = await getWorkspaceProjectPlaybackSource(project, user);
+    if (!playbackSource) {
+        throw new Error("Project playback source is unavailable.");
+    }
+    return ensureWorkspaceProjectPlayback(playbackSource);
+}
+export async function getWorkspaceProjectPosterPath(user, projectId) {
+    const normalizedProjectId = normalizeText(projectId);
+    if (!normalizedProjectId) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    const projects = await getWorkspaceProjects(user);
+    const project = projects.find((item) => item.id === normalizedProjectId) ?? null;
+    if (!project) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    const posterSource = await getWorkspaceProjectPosterSource(project, user);
+    if (!posterSource) {
+        throw new Error("Project poster source is unavailable.");
+    }
+    return ensureWorkspaceProjectPoster(posterSource);
+}
+export async function deleteWorkspaceProject(user, projectId) {
+    const normalizedProjectId = normalizeText(projectId);
+    if (!normalizedProjectId) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    const projects = await getWorkspaceProjects(user);
+    const project = projects.find((item) => item.id === normalizedProjectId) ?? null;
+    if (!project) {
+        throw new WorkspaceProjectNotFoundError();
+    }
+    await markWorkspaceProjectDeleted(user, {
+        adId: project.adId,
+        jobId: project.jobId,
+        projectId: project.id,
+    });
+    await invalidateWorkspaceProjectsCache(user);
 }

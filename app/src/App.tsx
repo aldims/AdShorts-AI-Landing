@@ -1,12 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { AuthModal } from "./components/AuthModal";
 import { authClient } from "./lib/auth-client";
-import { LandingPage } from "./pages/LandingPage";
-import { ExamplesPage } from "./pages/ExamplesPage";
-import { PricingPage } from "./pages/PricingPage";
-import { WorkspacePage } from "./pages/WorkspacePage";
+
+const AuthModal = lazy(() =>
+  import("./components/AuthModal").then((module) => ({
+    default: module.AuthModal,
+  })),
+);
+const LandingPage = lazy(() =>
+  import("./pages/LandingPage").then((module) => ({
+    default: module.LandingPage,
+  })),
+);
+const ExamplesPage = lazy(() =>
+  import("./pages/ExamplesPage").then((module) => ({
+    default: module.ExamplesPage,
+  })),
+);
+const PricingPage = lazy(() =>
+  import("./pages/PricingPage").then((module) => ({
+    default: module.PricingPage,
+  })),
+);
+const WorkspacePage = lazy(() =>
+  import("./pages/WorkspacePage").then((module) => ({
+    default: module.WorkspacePage,
+  })),
+);
 
 type AuthMode = "signup" | "signin";
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
@@ -125,6 +146,10 @@ function LoadingScreen() {
       </div>
     </div>
   );
+}
+
+function RouteSuspense({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>;
 }
 
 export function App() {
@@ -257,40 +282,46 @@ export function App() {
         <Route
           path="/"
           element={
-            <LandingPage
-              session={session}
-              workspaceProfile={workspaceProfile}
-              onOpenSignup={() => openAuth("signup")}
-              onOpenSignin={() => openAuth("signin")}
-              onLogout={handleLogout}
-              onOpenWorkspace={() => navigate("/app/studio")}
-            />
+            <RouteSuspense>
+              <LandingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate("/app/studio")}
+              />
+            </RouteSuspense>
           }
         />
         <Route
           path="/pricing"
           element={
-            <PricingPage
-              session={session}
-              workspaceProfile={workspaceProfile}
-              onOpenSignup={() => openAuth("signup")}
-              onOpenSignin={() => openAuth("signin")}
-              onLogout={handleLogout}
-              onOpenWorkspace={() => navigate("/app/studio")}
-            />
+            <RouteSuspense>
+              <PricingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate("/app/studio")}
+              />
+            </RouteSuspense>
           }
         />
         <Route
           path="/examples"
           element={
-            <ExamplesPage
-              session={session}
-              workspaceProfile={workspaceProfile}
-              onOpenSignup={() => openAuth("signup")}
-              onOpenSignin={() => openAuth("signin")}
-              onLogout={handleLogout}
-              onOpenWorkspace={() => navigate("/app/studio")}
-            />
+            <RouteSuspense>
+              <ExamplesPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate("/app/studio")}
+              />
+            </RouteSuspense>
           }
         />
         <Route
@@ -301,13 +332,15 @@ export function App() {
             ) : shouldBlockWorkspaceRoute ? (
               <LoadingScreen />
             ) : session ? (
-              <WorkspacePage
-                defaultTab={workspaceEntryTab}
-                initialProfile={workspaceProfile}
-                onLogout={handleLogout}
-                onProfileChange={setWorkspaceProfile}
-                session={session}
-              />
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab={workspaceEntryTab}
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
             ) : (
               <Navigate to="/" replace />
             )
@@ -321,13 +354,15 @@ export function App() {
             ) : shouldBlockWorkspaceRoute ? (
               <LoadingScreen />
             ) : session ? (
-              <WorkspacePage
-                defaultTab="studio"
-                initialProfile={workspaceProfile}
-                onLogout={handleLogout}
-                onProfileChange={setWorkspaceProfile}
-                session={session}
-              />
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab="studio"
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
             ) : (
               <Navigate to="/" replace />
             )
@@ -341,13 +376,15 @@ export function App() {
             ) : shouldBlockWorkspaceRoute ? (
               <LoadingScreen />
             ) : session ? (
-              <WorkspacePage
-                defaultTab="generations"
-                initialProfile={workspaceProfile}
-                onLogout={handleLogout}
-                onProfileChange={setWorkspaceProfile}
-                session={session}
-              />
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab="generations"
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
             ) : (
               <Navigate to="/" replace />
             )
@@ -355,13 +392,17 @@ export function App() {
         />
       </Routes>
 
-      <AuthModal
-        isOpen={authState.isOpen}
-        mode={authState.mode}
-        onClose={closeAuth}
-        onModeChange={(mode) => setAuthState({ isOpen: true, mode })}
-        onSignedIn={closeAuth}
-      />
+      {authState.isOpen ? (
+        <Suspense fallback={null}>
+          <AuthModal
+            isOpen={authState.isOpen}
+            mode={authState.mode}
+            onClose={closeAuth}
+            onModeChange={(mode) => setAuthState({ isOpen: true, mode })}
+            onSignedIn={closeAuth}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

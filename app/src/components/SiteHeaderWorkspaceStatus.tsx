@@ -75,10 +75,13 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
         </span>
       </Link>
       <Link className="site-header__credits" to="/pricing" aria-label="Пополнить баланс">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M13 3v6h6l-8 12v-6H5l8-12z" />
-        </svg>
-        <span>{normalizeBalance(profile?.balance)}</span>
+        <span className="site-header__credits-label">Баланс</span>
+        <span className="site-header__credits-value">
+          <strong>{normalizeBalance(profile?.balance)}</strong>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M13 3v6h6l-8 12v-6H5l8-12z" />
+          </svg>
+        </span>
       </Link>
     </>
   );

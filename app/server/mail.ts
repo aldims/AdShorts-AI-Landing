@@ -9,6 +9,7 @@ type MailPayload = {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string;
 };
 
 type MailTransport = {
@@ -96,6 +97,7 @@ export async function sendAppEmail(payload: MailPayload) {
   const info = await transporter.sendMail({
     from,
     html: payload.html,
+    replyTo: payload.replyTo,
     subject: payload.subject,
     text: payload.text,
     to: payload.to,

@@ -7,6 +7,17 @@ const rootDir = join(serverDir, "..");
 const envFile = join(rootDir, ".env");
 const dataDir = join(rootDir, "data");
 dotenv.config({ path: envFile });
+const shouldUseSiblingSecret = (currentValue, siblingValue, minLength = 40) => {
+    const normalizedSibling = siblingValue?.trim();
+    if (!normalizedSibling) {
+        return false;
+    }
+    const normalizedCurrent = currentValue?.trim();
+    if (!normalizedCurrent || normalizedCurrent === "your_api_key_here") {
+        return true;
+    }
+    return normalizedCurrent.length < minLength && normalizedSibling.length >= minLength;
+};
 const siblingAdsflowWorkerEnvFile = join(rootDir, "..", "..", "AdsFlow AI", "services", "worker", ".env");
 if (existsSync(siblingAdsflowWorkerEnvFile)) {
     const siblingAdsflowWorkerEnv = dotenv.parse(readFileSync(siblingAdsflowWorkerEnvFile));
@@ -15,6 +26,18 @@ if (existsSync(siblingAdsflowWorkerEnvFile)) {
     }
     if (!process.env.DEAPI_VERIFY_SSL && siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL) {
         process.env.DEAPI_VERIFY_SSL = siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL;
+    }
+    if (shouldUseSiblingSecret(process.env.OPENROUTER_API_KEY, siblingAdsflowWorkerEnv.OPENROUTER_API_KEY)) {
+        process.env.OPENROUTER_API_KEY = siblingAdsflowWorkerEnv.OPENROUTER_API_KEY;
+    }
+    if (!process.env.OPENROUTER_BASE_URL && siblingAdsflowWorkerEnv.OPENROUTER_BASE_URL) {
+        process.env.OPENROUTER_BASE_URL = siblingAdsflowWorkerEnv.OPENROUTER_BASE_URL;
+    }
+    if (!process.env.OPENROUTER_MAIN_MODEL && siblingAdsflowWorkerEnv.OPENROUTER_MAIN_MODEL) {
+        process.env.OPENROUTER_MAIN_MODEL = siblingAdsflowWorkerEnv.OPENROUTER_MAIN_MODEL;
+    }
+    if (!process.env.OPENROUTER_FALLBACK_MODEL && siblingAdsflowWorkerEnv.OPENROUTER_FALLBACK_MODEL) {
+        process.env.OPENROUTER_FALLBACK_MODEL = siblingAdsflowWorkerEnv.OPENROUTER_FALLBACK_MODEL;
     }
 }
 mkdirSync(dataDir, { recursive: true });
@@ -71,6 +94,10 @@ export const env = {
     paymentLinkPackage100: trim(process.env.PAYMENT_LINK_PACKAGE_100),
     deapiApiKey: trim(process.env.DEAPI_API_KEY),
     deapiVerifySsl: process.env.DEAPI_VERIFY_SSL === "true" || (process.env.DEAPI_VERIFY_SSL == null && isProduction),
+    openrouterApiKey: trim(process.env.OPENROUTER_API_KEY),
+    openrouterBaseUrl: trim(process.env.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1",
+    openrouterMainModel: trim(process.env.OPENROUTER_MAIN_MODEL) ?? "google/gemini-3-flash-preview",
+    openrouterFallbackModel: trim(process.env.OPENROUTER_FALLBACK_MODEL) ?? "openai/gpt-4o-mini",
 };
 export const authProviderStatus = {
     googleEnabled: Boolean(env.googleClientId && env.googleClientSecret),

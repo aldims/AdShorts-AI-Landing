@@ -1,7 +1,10 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { pathToFileURL } from "node:url";
+import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
+import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorkspaceVideoPoster, } from "./project-posters.js";
 import { getWorkspaceProjects } from "./projects.js";
-import { saveWorkspaceGenerationHistory } from "./workspace-history.js";
+import { listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
 export class WorkspaceCreditLimitError extends Error {
     constructor(message = "На тарифе FREE доступна 1 бесплатная генерация. Обновите тариф, чтобы продолжить.") {
         super(message);
@@ -49,7 +52,15 @@ const studioSupportedVideoModes = new Set([
     "custom",
     "standard",
 ]);
+const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"]);
 const studioSupportedLanguages = new Set(["en", "ru"]);
+const WORKSPACE_BOOTSTRAP_CACHE_TTL_MS = 5 * 60_000;
+const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
+const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
+const workspaceBootstrapCache = new Map();
+const OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS = 30_000;
+const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
+const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
 const normalizePrompt = (value) => value.replace(/\s+/g, " ").trim();
 const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizeStudioMusicType = (value) => {
@@ -76,6 +87,84 @@ const normalizeStudioVideoMode = (value) => {
 const normalizeStudioLanguage = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedLanguages.has(normalized) ? normalized : "ru";
+};
+const normalizePositiveInteger = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric))
+        return null;
+    const rounded = Math.trunc(numeric);
+    return rounded > 0 ? rounded : null;
+};
+const normalizeNonNegativeInteger = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric))
+        return null;
+    const rounded = Math.trunc(numeric);
+    return rounded >= 0 ? rounded : null;
+};
+const normalizeNumber = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+};
+const normalizeStudioSegmentVideoAction = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return studioSupportedSegmentVideoActions.has(normalized) ? normalized : "original";
+};
+const normalizeStudioSegmentEditorPayload = (value, fallbackProjectId) => {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const record = value;
+    const projectId = normalizePositiveInteger(record.projectId) ?? fallbackProjectId;
+    const rawSegments = Array.isArray(record.segments) ? record.segments : [];
+    if (!projectId || rawSegments.length === 0) {
+        return undefined;
+    }
+    const segments = [];
+    rawSegments.forEach((segment) => {
+        if (!segment || typeof segment !== "object") {
+            return;
+        }
+        const segmentRecord = segment;
+        const index = normalizeNonNegativeInteger(segmentRecord.index);
+        if (index === null) {
+            return;
+        }
+        const videoAction = normalizeStudioSegmentVideoAction(segmentRecord.videoAction);
+        const customVideoFileDataUrl = String(segmentRecord.customVideoFileDataUrl ?? "").trim() || undefined;
+        const customVideoFileMimeType = String(segmentRecord.customVideoFileMimeType ?? "").trim() || undefined;
+        const customVideoFileName = String(segmentRecord.customVideoFileName ?? "").trim() || undefined;
+        const startTime = normalizeNumber(segmentRecord.startTime) ?? undefined;
+        const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
+        const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
+        if (videoAction === "custom" && (!customVideoFileDataUrl || !customVideoFileName)) {
+            throw new Error(`Upload a custom video for segment ${index + 1} or choose a different source.`);
+        }
+        segments.push({
+            customVideoFileDataUrl: videoAction === "custom" ? customVideoFileDataUrl : undefined,
+            customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
+            customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
+            duration,
+            endTime,
+            index,
+            startTime,
+            text: normalizeGenerationText(String(segmentRecord.text ?? "")),
+            videoAction,
+        });
+    });
+    if (segments.length === 0) {
+        return undefined;
+    }
+    if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+        throw new Error(`Segment editor requires at least ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} segment.`);
+    }
+    if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
+        throw new Error(`Segment editor supports up to ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} segments.`);
+    }
+    return {
+        projectId,
+        segments,
+    };
 };
 const parseJson = (value) => {
     try {
@@ -234,6 +323,39 @@ const parseGenerationHashtags = (value) => {
         .filter(Boolean)
         .map((item) => `#${item.replace(/^#+/, "")}`)));
 };
+const cloneStudioGeneration = (generation) => ({
+    ...generation,
+    hashtags: [...generation.hashtags],
+});
+const cloneStudioGenerationStatus = (status) => ({
+    ...status,
+    generation: status.generation ? cloneStudioGeneration(status.generation) : undefined,
+});
+const cloneWorkspaceBootstrap = (bootstrap) => ({
+    latestGeneration: bootstrap.latestGeneration ? cloneStudioGenerationStatus(bootstrap.latestGeneration) : null,
+    profile: { ...bootstrap.profile },
+    studioOptions: {
+        subtitleColors: bootstrap.studioOptions.subtitleColors.map((color) => ({ ...color })),
+        subtitleStyles: bootstrap.studioOptions.subtitleStyles.map((style) => ({ ...style })),
+    },
+});
+const getCachedWorkspaceBootstrap = (cacheKey) => {
+    const cachedEntry = workspaceBootstrapCache.get(cacheKey);
+    if (!cachedEntry) {
+        return null;
+    }
+    if (cachedEntry.expiresAt <= Date.now()) {
+        workspaceBootstrapCache.delete(cacheKey);
+        return null;
+    }
+    return cloneWorkspaceBootstrap(cachedEntry.bootstrap);
+};
+const setCachedWorkspaceBootstrap = (cacheKey, bootstrap) => {
+    workspaceBootstrapCache.set(cacheKey, {
+        bootstrap: cloneWorkspaceBootstrap(bootstrap),
+        expiresAt: Date.now() + WORKSPACE_BOOTSTRAP_CACHE_TTL_MS,
+    });
+};
 const assertAdsflowConfigured = () => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         throw new Error("AdsFlow API is not configured.");
@@ -267,11 +389,28 @@ const isPlayableStudioVideoPath = (value) => {
             return false;
         }
         return (pathname.includes("/api/video/download/") ||
+            pathname.includes("/api/web/video/") ||
             /\.(mp4|mov|webm|m4v)$/i.test(pathname));
     }
     catch {
         return false;
     }
+};
+const buildTrustedStudioVideoTarget = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        throw new Error("Video path is required.");
+    }
+    const upstreamUrl = buildAdsflowUrl(normalized);
+    const hostname = upstreamUrl.hostname.toLowerCase();
+    if (hostname === "youtu.be" || hostname.endsWith(".youtube.com") || hostname === "youtube.com") {
+        throw new Error("Video path is not a direct media file.");
+    }
+    const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl);
+    if (upstreamUrl.origin === adsflowBaseUrl.origin) {
+        upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+    }
+    return upstreamUrl;
 };
 const buildStudioVideoProxyUrl = (value) => {
     const normalized = normalizeGenerationText(value);
@@ -286,11 +425,638 @@ const buildStudioVideoProxyUrl = (value) => {
     proxyUrl.searchParams.set("path", upstreamUrl.toString());
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
+const buildStudioJobVideoProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/video/${encodeURIComponent(normalizedJobId)}`, env.appUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioSegmentAiVideoJobVideoProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/segment-ai-video/jobs/${encodeURIComponent(normalizedJobId)}/video`, env.appUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioSegmentAiVideoJobPosterProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/segment-ai-video/jobs/${encodeURIComponent(normalizedJobId)}/poster`, env.appUrl);
+    proxyUrl.searchParams.set("v", normalizedJobId);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioSegmentPhotoAnimationJobVideoProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/segment-photo-animation/jobs/${encodeURIComponent(normalizedJobId)}/video`, env.appUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioSegmentPhotoAnimationJobPosterProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/segment-photo-animation/jobs/${encodeURIComponent(normalizedJobId)}/poster`, env.appUrl);
+    proxyUrl.searchParams.set("v", normalizedJobId);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioPlaybackUrl = (jobId, version) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const playbackUrl = new URL(`/api/studio/playback/${encodeURIComponent(normalizedJobId)}`, env.appUrl);
+    const normalizedVersion = normalizeGenerationText(version);
+    if (normalizedVersion) {
+        playbackUrl.searchParams.set("v", normalizedVersion);
+    }
+    return `${playbackUrl.pathname}${playbackUrl.search}`;
+};
+const buildStudioGenerationVideoUrls = (options) => {
+    const videoFallbackUrl = buildStudioVideoProxyUrl(options.downloadPath);
+    const videoUrl = buildStudioPlaybackUrl(options.jobId, options.generatedAt);
+    if (!videoFallbackUrl || !videoUrl) {
+        return null;
+    }
+    return {
+        videoFallbackUrl,
+        videoUrl,
+    };
+};
 const buildWorkspaceProfile = (payload) => ({
     balance: Math.max(0, Number(payload?.balance ?? 0)),
     expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
     plan: String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE",
 });
+const normalizeStudioGeneratedImageMimeType = (value, fallback = "image/png") => {
+    const normalized = normalizeGenerationText(value).toLowerCase().split(";")[0]?.trim() ?? "";
+    if (normalized.startsWith("image/")) {
+        return normalized;
+    }
+    return fallback;
+};
+const getStudioGeneratedImageExtension = (mimeType) => {
+    const normalized = normalizeStudioGeneratedImageMimeType(mimeType);
+    if (normalized === "image/jpeg")
+        return ".jpg";
+    if (normalized === "image/webp")
+        return ".webp";
+    if (normalized === "image/avif")
+        return ".avif";
+    if (normalized === "image/gif")
+        return ".gif";
+    return ".png";
+};
+const extractMimeTypeFromDataUrl = (value) => {
+    const match = /^data:(?<mime>[^;,]+);base64,/i.exec(value.trim());
+    return normalizeStudioGeneratedImageMimeType(match?.groups?.mime ?? "");
+};
+const decodeDataUrlBytes = (value) => {
+    const match = /^data:(?<mime>[^;,]+);base64,(?<data>.+)$/i.exec(value.trim());
+    if (!match?.groups?.data) {
+        throw new Error("Generated image data URL is invalid.");
+    }
+    return {
+        bytes: Buffer.from(match.groups.data, "base64"),
+        mimeType: extractMimeTypeFromDataUrl(value),
+    };
+};
+const buildDataUrlFromBytes = (bytes, mimeType) => `data:${normalizeStudioGeneratedImageMimeType(mimeType)};base64,${bytes.toString("base64")}`;
+const inferStudioGeneratedImageMimeType = (mimeType, fileName, urlValue) => {
+    const normalizedMimeType = normalizeStudioGeneratedImageMimeType(mimeType, "");
+    if (normalizedMimeType) {
+        return normalizedMimeType;
+    }
+    const target = `${normalizeGenerationText(fileName)} ${normalizeGenerationText(urlValue)}`.toLowerCase();
+    if (target.endsWith(".jpg") || target.endsWith(".jpeg"))
+        return "image/jpeg";
+    if (target.endsWith(".webp"))
+        return "image/webp";
+    if (target.endsWith(".avif"))
+        return "image/avif";
+    if (target.endsWith(".gif"))
+        return "image/gif";
+    return "image/png";
+};
+const normalizeStudioGeneratedImageFileName = (fileName, mimeType) => {
+    const normalized = String(fileName ?? "").trim().split(/[\\/]/).pop() ?? "";
+    if (normalized) {
+        return normalized;
+    }
+    return `segment-ai-photo${getStudioGeneratedImageExtension(mimeType)}`;
+};
+const resolveAdsflowAssetUrl = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        return null;
+    }
+    if (/^https?:\/\//i.test(normalized)) {
+        return new URL(normalized);
+    }
+    if (normalized.startsWith("/")) {
+        return buildAdsflowUrl(normalized);
+    }
+    return null;
+};
+const DEAPI_IMAGE_API_URL = "https://api.deapi.ai/api/v1/client/txt2img";
+const DEAPI_IMAGE_STATUS_URL = "https://api.deapi.ai/api/v1/client/request-status";
+const DEAPI_IMAGE_MODEL_SLUG = "ZImageTurbo_INT8";
+const DEAPI_IMAGE_WIDTH = 768;
+const DEAPI_IMAGE_HEIGHT = 1280;
+const DEAPI_IMAGE_STEPS = 8;
+const DEAPI_IMAGE_TIMEOUT_MS = 120_000;
+const DEAPI_IMAGE_POLL_INITIAL_MS = 1_000;
+const DEAPI_IMAGE_POLL_MAX_MS = 2_500;
+const DEAPI_NO_TEXT_POSITIVE_CLAUSE = "no text, no letters, no words, no captions, no subtitles, no logos, no watermark, no signature, no signage";
+const DEAPI_PERSON_APPEARANCE_CLAUSE = "European appearance, Caucasian ethnicity";
+const DEAPI_NO_TEXT_NEGATIVE_PROMPT = "text, letters, words, numbers, writing, caption, subtitle, typography, font, watermark, signature, logo, inscription, label, stamp, banner, headline, title, sign, signage, road sign, poster, magazine cover, newspaper, book page, ui, interface, chat bubble, speech bubble, handwriting, hieroglyphs, kanji, chinese, japanese, korean, cyrillic, latin characters, alphabet, symbols";
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sanitizeStudioSegmentAiPhotoPromptEnhancementOutput = (value) => String(value ?? "")
+    .replace(/^```[\w-]*\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .replace(/^prompt\s*:\s*/i, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+const buildStudioSegmentAiPhotoPromptEnhancementFallback = (value, language) => {
+    const normalizedPrompt = normalizePrompt(value).replace(/[.!?]+$/g, "");
+    if (!normalizedPrompt) {
+        return "";
+    }
+    const descriptors = language === "en"
+        ? [
+            "cinematic vertical 9:16 composition",
+            "photorealistic",
+            "dramatic lighting",
+            "clear focal subject",
+            "high detail",
+        ]
+        : [
+            "кинематографичная вертикальная композиция 9:16",
+            "фотореализм",
+            "драматичный свет",
+            "четкий главный объект",
+            "высокая детализация",
+        ];
+    return [normalizedPrompt.charAt(0).toUpperCase() + normalizedPrompt.slice(1), ...descriptors].join(", ");
+};
+const buildStudioSegmentAiPhotoPromptEnhancementSystemPrompt = (language) => language === "en"
+    ? [
+        "You are an expert prompt engineer for AI image generation.",
+        "Rewrite the user's rough scene description into one strong production-ready prompt for a vertical 9:16 image.",
+        "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
+        "Focus only on visible details: subject, action, setting, composition, camera framing, lighting, mood, textures, and product visibility when relevant.",
+        "Prefer cinematic, realistic, premium-looking imagery unless the user explicitly asks for fantasy, stylization, or surrealism.",
+        "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 320 characters.",
+        "Do not mention captions, subtitles, logos, watermarks, UI, split screens, or multiple unrelated scenes.",
+    ].join(" ")
+    : [
+        "Ты эксперт по созданию промтов для генерации изображений.",
+        "Преобразуй черновое описание пользователя в один сильный готовый промт для вертикального изображения 9:16.",
+        "Верни ровно один промт на русском языке без кавычек, меток, markdown и пояснений.",
+        "Описывай только видимые детали: главный объект, действие, окружение, композицию, ракурс, свет, атмосферу, фактуры и продукт, если он важен.",
+        "По умолчанию делай сцену кинематографичной, реалистичной и визуально дорогой, если пользователь явно не просит фантазию или стилизацию.",
+        "Промт должен быть компактным и ясным: одно предложение или плотная фраза до 320 символов.",
+        "Не упоминай титры, текст на экране, логотипы, водяные знаки, интерфейсы, коллажи и несколько несвязанных сцен.",
+    ].join(" ");
+const buildStudioSegmentAiPhotoPromptEnhancementUserPrompt = (prompt, language) => language === "en"
+    ? [`Raw scene description:`, prompt, "", `Return only the final prompt.`].join("\n")
+    : [`Черновое описание сцены:`, prompt, "", `Верни только итоговый промт.`].join("\n");
+const extractOpenRouterChatCompletionText = (payload) => {
+    const message = payload?.choices?.[0]?.message;
+    if (!message) {
+        return "";
+    }
+    if (typeof message.content === "string") {
+        return message.content;
+    }
+    if (!Array.isArray(message.content)) {
+        return "";
+    }
+    return message.content
+        .map((part) => (part?.type === "text" || !part?.type ? String(part?.text ?? "") : ""))
+        .join(" ")
+        .trim();
+};
+const extractOpenRouterErrorMessage = (payload) => {
+    if (typeof payload?.error === "string") {
+        return payload.error.trim();
+    }
+    return String(payload?.error?.message ?? "").trim();
+};
+const getStudioLanguageLabel = (language) => (language === "en" ? "English" : "Russian");
+const sanitizeStudioTranslationResponseText = (value) => value
+    .replace(/^```[\w-]*\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+const parseStudioTextTranslationResponse = (value, expectedCount) => {
+    const normalizedValue = sanitizeStudioTranslationResponseText(value);
+    const jsonCandidate = normalizedValue.startsWith("{")
+        ? normalizedValue
+        : normalizedValue.slice(Math.max(0, normalizedValue.indexOf("{")), normalizedValue.lastIndexOf("}") >= 0 ? normalizedValue.lastIndexOf("}") + 1 : normalizedValue.length);
+    const parsed = JSON.parse(jsonCandidate);
+    const items = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : null;
+    if (!items || items.length !== expectedCount) {
+        throw new Error("OpenRouter returned an invalid translation payload.");
+    }
+    return items.map((item) => String(item ?? ""));
+};
+const buildStudioTextTranslationSystemPrompt = (sourceLanguage, targetLanguage) => [
+    "You are a precise translator for short-form video scripts and subtitle lines.",
+    `Translate each item from ${getStudioLanguageLabel(sourceLanguage)} to ${getStudioLanguageLabel(targetLanguage)}.`,
+    "Return strict JSON only in the format {\"items\":[\"...\"]}.",
+    "Keep the same item count and order.",
+    "Preserve meaning, CTA intent, brand names, numbers, and concise short-video rhythm.",
+    "Do not add explanations, notes, markdown, or extra keys.",
+    "If an item is empty, return an empty string for that item.",
+].join(" ");
+const buildStudioTextTranslationUserPrompt = (texts) => JSON.stringify({
+    items: texts,
+}, null, 2);
+const detectStudioPromptLanguage = (prompt, fallbackLanguage) => {
+    if (/[А-Яа-яЁё]/.test(prompt)) {
+        return "ru";
+    }
+    if (/[A-Za-z]/.test(prompt)) {
+        return "en";
+    }
+    return normalizeStudioLanguage(fallbackLanguage);
+};
+const getStudioOpenRouterModelCandidates = () => Array.from(new Set([env.openrouterMainModel, env.openrouterFallbackModel]
+    .map((model) => normalizePrompt(model ?? ""))
+    .filter(Boolean)));
+const buildStudioVisualPromptEnglishTranslationSystemPrompt = (sourceLanguage) => [
+    "You are an expert translator for AI image and AI video generation prompts.",
+    `Translate the user's visual prompt from ${getStudioLanguageLabel(sourceLanguage)} to English.`,
+    "Return exactly one English prompt with no quotes, markdown, labels, or explanations.",
+    "Preserve the original intent, prompt structure, camera/style terms, pacing, and prompt-engineering phrasing when useful.",
+    "Preserve brand names, product names, proper nouns, character names, shot types, aspect ratios, and technical keywords.",
+    "Do not add unrelated details, safety notes, or extra explanation.",
+].join(" ");
+const buildStudioVisualPromptEnglishTranslationUserPrompt = (prompt) => [`Visual generation prompt:`, prompt, "", `Return only the final English prompt.`].join("\n");
+const sanitizeStudioVisualPromptEnglishTranslationOutput = (value) => sanitizeStudioTranslationResponseText(value).replace(/^["'`]+|["'`]+$/g, "").trim();
+const requestStudioSegmentAiPhotoPromptEnhancement = async (prompt, language, model) => {
+    const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${env.openrouterApiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+            "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                {
+                    role: "system",
+                    content: buildStudioSegmentAiPhotoPromptEnhancementSystemPrompt(language),
+                },
+                {
+                    role: "user",
+                    content: buildStudioSegmentAiPhotoPromptEnhancementUserPrompt(prompt, language),
+                },
+            ],
+            temperature: 0.35,
+            max_tokens: 220,
+        }),
+        signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+    });
+    const payload = (await response.json().catch(() => null));
+    if (!response.ok) {
+        throw new Error(extractOpenRouterErrorMessage(payload) || `OpenRouter prompt enhancement failed (${response.status}).`);
+    }
+    const improvedPrompt = sanitizeStudioSegmentAiPhotoPromptEnhancementOutput(extractOpenRouterChatCompletionText(payload));
+    if (!improvedPrompt) {
+        throw new Error("OpenRouter returned an empty prompt.");
+    }
+    return improvedPrompt;
+};
+const requestStudioVisualPromptEnglishTranslation = async (prompt, sourceLanguage, model) => {
+    const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${env.openrouterApiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+            "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                {
+                    role: "system",
+                    content: buildStudioVisualPromptEnglishTranslationSystemPrompt(sourceLanguage),
+                },
+                {
+                    role: "user",
+                    content: buildStudioVisualPromptEnglishTranslationUserPrompt(prompt),
+                },
+            ],
+            temperature: 0.1,
+            max_tokens: 260,
+        }),
+        signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+    });
+    const payload = (await response.json().catch(() => null));
+    if (!response.ok) {
+        throw new Error(extractOpenRouterErrorMessage(payload) || `OpenRouter visual prompt translation failed (${response.status}).`);
+    }
+    const translatedPrompt = sanitizeStudioVisualPromptEnglishTranslationOutput(extractOpenRouterChatCompletionText(payload));
+    if (!translatedPrompt) {
+        throw new Error("OpenRouter returned an empty translated prompt.");
+    }
+    return translatedPrompt;
+};
+const requestStudioTextTranslation = async (texts, sourceLanguage, targetLanguage, model) => {
+    const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${env.openrouterApiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+            "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                {
+                    role: "system",
+                    content: buildStudioTextTranslationSystemPrompt(sourceLanguage, targetLanguage),
+                },
+                {
+                    role: "user",
+                    content: buildStudioTextTranslationUserPrompt(texts),
+                },
+            ],
+            temperature: 0.1,
+            max_tokens: Math.max(240, Math.min(1600, texts.length * 160)),
+        }),
+        signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+    });
+    const payload = (await response.json().catch(() => null));
+    if (!response.ok) {
+        throw new Error(extractOpenRouterErrorMessage(payload) || `OpenRouter translation failed (${response.status}).`);
+    }
+    return parseStudioTextTranslationResponse(extractOpenRouterChatCompletionText(payload), texts.length);
+};
+const translateStudioGenerationPromptToEnglish = async (prompt, options) => {
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        return "";
+    }
+    const sourceLanguage = detectStudioPromptLanguage(normalizedPrompt, options?.sourceLanguage);
+    if (sourceLanguage === "en") {
+        return normalizedPrompt;
+    }
+    const modelCandidates = getStudioOpenRouterModelCandidates();
+    let lastError = null;
+    if (env.openrouterApiKey && modelCandidates.length > 0) {
+        for (const model of modelCandidates) {
+            try {
+                return await requestStudioVisualPromptEnglishTranslation(normalizedPrompt, sourceLanguage, model);
+            }
+            catch (error) {
+                lastError = error instanceof Error ? error : new Error("OpenRouter visual prompt translation failed.");
+                console.warn(`[studio] Failed to translate visual prompt with ${model}`, lastError);
+            }
+        }
+    }
+    if (lastError) {
+        console.warn("[studio] Falling back to original visual prompt because English translation is unavailable.");
+    }
+    return normalizedPrompt;
+};
+const sanitizeDirectStudioAiPhotoPrompt = (value) => {
+    let cleaned = String(value ?? "").replace(/\r/g, " ").replace(/\n/g, " ");
+    cleaned = cleaned.replace(/\s+/g, " ").trim().replace(/^["'`]+|["'`]+$/g, "").replace(/[,. ]+$/g, "");
+    if (!cleaned) {
+        return "";
+    }
+    if (!cleaned.toLowerCase().includes("european appearance")) {
+        cleaned = `${cleaned}, ${DEAPI_PERSON_APPEARANCE_CLAUSE}`;
+    }
+    if (!cleaned.toLowerCase().includes("no text")) {
+        cleaned = `${cleaned}, ${DEAPI_NO_TEXT_POSITIVE_CLAUSE}`;
+    }
+    return cleaned;
+};
+const parseStudioJsonPayload = async (response) => {
+    return (await response.json().catch(() => null));
+};
+const extractDirectDeapiRequestId = (payload) => {
+    const inner = payload && typeof payload.data === "object" && payload.data ? payload.data : payload;
+    return ((inner && typeof inner.request_id === "string" ? inner.request_id : null) ||
+        (payload && typeof payload.request_id === "string" ? payload.request_id : null) ||
+        null);
+};
+const extractDirectDeapiImageUrl = (payload) => {
+    const root = payload ?? {};
+    const inner = typeof root.data === "object" && root.data ? root.data : root;
+    const directUrl = (typeof inner.result_url === "string" && inner.result_url) ||
+        (typeof inner.output_url === "string" && inner.output_url) ||
+        (typeof inner.output === "string" && inner.output) ||
+        (typeof inner.image_url === "string" && inner.image_url) ||
+        (typeof inner.url === "string" && inner.url) ||
+        (typeof root.result_url === "string" && root.result_url) ||
+        (typeof root.output_url === "string" && root.output_url);
+    if (directUrl) {
+        return directUrl;
+    }
+    const outputs = Array.isArray(inner.outputs) ? inner.outputs : Array.isArray(root.outputs) ? root.outputs : [];
+    const firstOutput = outputs[0];
+    if (typeof firstOutput === "string" && firstOutput) {
+        return firstOutput;
+    }
+    if (firstOutput &&
+        typeof firstOutput === "object" &&
+        "url" in firstOutput &&
+        typeof firstOutput.url === "string") {
+        return firstOutput.url;
+    }
+    return null;
+};
+const extractDirectDeapiError = (payload) => {
+    const inner = payload && typeof payload.data === "object" && payload.data ? payload.data : payload;
+    return ((inner && typeof inner.error === "string" ? inner.error : null) ||
+        (payload && typeof payload.error === "string" ? payload.error : null) ||
+        null);
+};
+const pollDirectDeapiImageUrl = async (requestId) => {
+    const startedAt = Date.now();
+    let delayMs = DEAPI_IMAGE_POLL_INITIAL_MS;
+    while (Date.now() - startedAt < DEAPI_IMAGE_TIMEOUT_MS) {
+        const response = await fetch(`${DEAPI_IMAGE_STATUS_URL}/${encodeURIComponent(requestId)}`, {
+            headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${env.deapiApiKey}`,
+            },
+            signal: AbortSignal.timeout(15_000),
+        });
+        if (response.status === 429) {
+            await sleep(Math.min(30_000, delayMs * 2));
+            continue;
+        }
+        if (!response.ok) {
+            await sleep(delayMs);
+            delayMs = Math.min(DEAPI_IMAGE_POLL_MAX_MS, Math.round(delayMs * 1.2));
+            continue;
+        }
+        const payload = await parseStudioJsonPayload(response);
+        const inner = payload && typeof payload.data === "object" && payload.data ? payload.data : payload;
+        const status = (inner && typeof inner.status === "string" ? inner.status : null) ||
+            (payload && typeof payload.status === "string" ? payload.status : null) ||
+            "";
+        if (status === "completed" || status === "done") {
+            return extractDirectDeapiImageUrl(payload);
+        }
+        if (status === "failed" || status === "error") {
+            throw new Error(extractDirectDeapiError(payload) || "DEAPI image generation failed.");
+        }
+        await sleep(delayMs);
+        delayMs = Math.min(DEAPI_IMAGE_POLL_MAX_MS, Math.round(delayMs * 1.2));
+    }
+    throw new Error("DEAPI image generation timed out.");
+};
+const generateDirectStudioSegmentAiPhoto = async (prompt, options) => {
+    if (!env.deapiApiKey) {
+        throw new Error("DEAPI image fallback is not configured.");
+    }
+    const sanitizedPrompt = sanitizeDirectStudioAiPhotoPrompt(prompt);
+    if (!sanitizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const createResponse = await fetch(DEAPI_IMAGE_API_URL, {
+        body: JSON.stringify({
+            prompt: sanitizedPrompt,
+            negative_prompt: DEAPI_NO_TEXT_NEGATIVE_PROMPT,
+            model: DEAPI_IMAGE_MODEL_SLUG,
+            width: DEAPI_IMAGE_WIDTH,
+            height: DEAPI_IMAGE_HEIGHT,
+            seed: Math.max(1, Math.floor(Math.random() * 2_147_483_647)),
+            steps: DEAPI_IMAGE_STEPS,
+        }),
+        headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${env.deapiApiKey}`,
+            "Content-Type": "application/json",
+        },
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+    });
+    const createPayload = await parseStudioJsonPayload(createResponse);
+    if (!createResponse.ok) {
+        throw new Error(extractDirectDeapiError(createPayload) || `DEAPI image request failed (${createResponse.status}).`);
+    }
+    const directUrl = extractDirectDeapiImageUrl(createPayload);
+    const requestId = extractDirectDeapiRequestId(createPayload);
+    const imageUrl = directUrl || (requestId ? await pollDirectDeapiImageUrl(requestId) : null);
+    if (!imageUrl) {
+        throw new Error("DEAPI did not return an image URL.");
+    }
+    const downloadResponse = await fetch(imageUrl, {
+        headers: {
+            Accept: "image/*,application/octet-stream",
+        },
+        signal: AbortSignal.timeout(60_000),
+    });
+    if (!downloadResponse.ok) {
+        throw new Error(`Failed to download generated image (${downloadResponse.status}).`);
+    }
+    const bytes = Buffer.from(await downloadResponse.arrayBuffer());
+    if (!bytes.length) {
+        throw new Error("Generated image is empty.");
+    }
+    const mimeType = inferStudioGeneratedImageMimeType(downloadResponse.headers.get("content-type"), null, imageUrl);
+    return {
+        dataUrl: buildDataUrlFromBytes(bytes, mimeType),
+        fileName: `segment-ai-photo-${(options?.segmentIndex ?? 0) + 1}${getStudioGeneratedImageExtension(mimeType)}`,
+        fileSize: bytes.length,
+        mimeType,
+    };
+};
+const fetchRemoteStudioGeneratedImage = async (url) => {
+    const response = await fetch(url, {
+        signal: AbortSignal.timeout(ADSFLOW_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+        throw new Error(`Failed to download generated image (${response.status}).`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return {
+        bytes: Buffer.from(arrayBuffer),
+        mimeType: normalizeStudioGeneratedImageMimeType(response.headers.get("content-type")),
+    };
+};
+const normalizeAdsflowSegmentAiPhotoAsset = async (payload) => {
+    const inlineDataUrl = normalizeGenerationText(payload?.data_url);
+    const remoteUrl = resolveAdsflowAssetUrl(payload?.remote_url ?? payload?.download_url ?? payload?.url);
+    if (!inlineDataUrl && !remoteUrl) {
+        throw new Error("AdsFlow did not return a generated image.");
+    }
+    let bytes;
+    let mimeType;
+    if (inlineDataUrl) {
+        const decoded = decodeDataUrlBytes(inlineDataUrl);
+        bytes = decoded.bytes;
+        mimeType = inferStudioGeneratedImageMimeType(decoded.mimeType, payload?.file_name, payload?.remote_url ?? payload?.download_url ?? payload?.url);
+    }
+    else if (remoteUrl) {
+        const downloaded = await fetchRemoteStudioGeneratedImage(remoteUrl);
+        bytes = downloaded.bytes;
+        mimeType = inferStudioGeneratedImageMimeType(downloaded.mimeType, payload?.file_name, remoteUrl.toString());
+    }
+    else {
+        throw new Error("Generated image is unavailable.");
+    }
+    if (!bytes.length) {
+        throw new Error("Generated image is empty.");
+    }
+    const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
+    return {
+        dataUrl: inlineDataUrl || buildDataUrlFromBytes(bytes, mimeType),
+        fileName,
+        fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),
+        mimeType,
+    };
+};
+const normalizeAdsflowSegmentAiVideoAsset = (jobId, payload) => {
+    const remoteUrl = buildStudioSegmentAiVideoJobVideoProxyUrl(jobId);
+    const posterUrl = buildStudioSegmentAiVideoJobPosterProxyUrl(jobId);
+    if (!remoteUrl || !posterUrl) {
+        throw new Error("Generated video is unavailable.");
+    }
+    return {
+        fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
+        fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
+        posterUrl,
+        remoteUrl,
+    };
+};
+const normalizeAdsflowSegmentPhotoAnimationAsset = (jobId, payload) => {
+    const remoteUrl = buildStudioSegmentPhotoAnimationJobVideoProxyUrl(jobId);
+    const posterUrl = buildStudioSegmentPhotoAnimationJobPosterProxyUrl(jobId);
+    if (!remoteUrl || !posterUrl) {
+        throw new Error("Generated video is unavailable.");
+    }
+    return {
+        fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
+        fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
+        posterUrl,
+        remoteUrl,
+    };
+};
 const buildWorkspaceStudioOptions = (payload) => {
     const subtitleStyles = Array.isArray(payload?.subtitle_styles)
         ? payload.subtitle_styles
@@ -392,8 +1158,12 @@ const buildStudioGeneration = (payload) => {
     const description = normalizeGenerationText(payload.description);
     const hashtags = parseGenerationHashtags(payload.hashtags);
     const title = normalizeGenerationText(payload.title);
-    const videoUrl = buildStudioVideoProxyUrl(payload.download_path);
-    if (!videoUrl) {
+    const videoUrls = buildStudioGenerationVideoUrls({
+        downloadPath: payload.download_path,
+        generatedAt: payload.generated_at,
+        jobId,
+    });
+    if (!videoUrls) {
         return null;
     }
     return {
@@ -403,21 +1173,33 @@ const buildStudioGeneration = (payload) => {
         title,
         description,
         hashtags,
-        videoUrl,
+        videoFallbackUrl: videoUrls.videoFallbackUrl,
+        videoUrl: videoUrls.videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
         aspectRatio: "9:16",
         generatedAt: payload.generated_at ?? new Date().toISOString(),
     };
 };
+const isAdsflowLatestVideoGenerationTask = (value) => {
+    const normalized = normalizeGenerationText(value).toLowerCase();
+    return !normalized || normalized === "video.generate" || normalized === "video.edit";
+};
 const buildStudioGenerationFromLatest = (payload) => {
+    if (!isAdsflowLatestVideoGenerationTask(payload.task_type)) {
+        return null;
+    }
     const prompt = normalizePrompt(payload.prompt ?? "");
     const jobId = String(payload.job_id ?? "");
     const description = normalizeGenerationText(payload.description);
     const hashtags = parseGenerationHashtags(payload.hashtags);
     const title = normalizeGenerationText(payload.title);
-    const videoUrl = buildStudioVideoProxyUrl(payload.download_path);
-    if (!videoUrl) {
+    const videoUrls = buildStudioGenerationVideoUrls({
+        downloadPath: payload.download_path,
+        generatedAt: payload.generated_at,
+        jobId,
+    });
+    if (!videoUrls) {
         return null;
     }
     return {
@@ -427,7 +1209,8 @@ const buildStudioGenerationFromLatest = (payload) => {
         title,
         description,
         hashtags,
-        videoUrl,
+        videoFallbackUrl: videoUrls.videoFallbackUrl,
+        videoUrl: videoUrls.videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
         aspectRatio: "9:16",
@@ -450,11 +1233,49 @@ const buildStudioGenerationFromWorkspaceProject = (project) => {
         modelLabel: "AdsFlow pipeline",
         prompt: normalizePrompt(project.prompt),
         title: normalizeGenerationText(project.title),
+        videoFallbackUrl: project.videoFallbackUrl,
         videoUrl,
+    };
+};
+const buildStudioGenerationFromHistoryEntry = (entry) => {
+    const jobId = normalizeGenerationText(entry.jobId);
+    if (!jobId) {
+        return null;
+    }
+    const normalizedStatus = normalizeGenerationText(entry.status).toLowerCase();
+    if (!["completed", "done", "ready"].includes(normalizedStatus)) {
+        return null;
+    }
+    const videoUrls = buildStudioGenerationVideoUrls({
+        downloadPath: entry.downloadPath,
+        generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
+        jobId,
+    });
+    if (!videoUrls) {
+        return null;
+    }
+    const prompt = normalizePrompt(entry.prompt);
+    const description = normalizeGenerationText(entry.description);
+    return {
+        adId: entry.adId,
+        aspectRatio: "9:16",
+        description,
+        durationLabel: "Ready",
+        generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
+        hashtags: [],
+        id: jobId,
+        modelLabel: "AdsFlow pipeline",
+        prompt,
+        title: normalizeGenerationText(entry.title) || description || prompt || "Готовое видео",
+        videoFallbackUrl: videoUrls.videoFallbackUrl,
+        videoUrl: videoUrls.videoUrl,
     };
 };
 const buildLatestGenerationStatus = (payload) => {
     if (!payload?.job_id) {
+        return null;
+    }
+    if (!isAdsflowLatestVideoGenerationTask(payload.task_type)) {
         return null;
     }
     const status = String(payload.status ?? "queued");
@@ -465,6 +1286,147 @@ const buildLatestGenerationStatus = (payload) => {
         jobId: String(payload.job_id),
         status,
     };
+};
+const STUDIO_VIDEO_PROBE_RANGE = "bytes=0-1";
+const extractStudioVideoPathFromProxyUrl = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        return null;
+    }
+    try {
+        const baseUrl = env.appUrl ? new URL(env.appUrl) : new URL("http://localhost");
+        const resolvedUrl = new URL(normalized, baseUrl);
+        return normalizeGenerationText(resolvedUrl.searchParams.get("path")) || null;
+    }
+    catch {
+        return null;
+    }
+};
+const isStudioJobVideoProxyUrl = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        return false;
+    }
+    try {
+        const baseUrl = env.appUrl ? new URL(env.appUrl) : new URL("http://localhost");
+        const resolvedUrl = new URL(normalized, baseUrl);
+        return /^\/api\/studio\/video\/[^/]+$/i.test(resolvedUrl.pathname);
+    }
+    catch {
+        return false;
+    }
+};
+const isStudioPlaybackUrl = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        return false;
+    }
+    try {
+        const baseUrl = env.appUrl ? new URL(env.appUrl) : new URL("http://localhost");
+        const resolvedUrl = new URL(normalized, baseUrl);
+        return /^\/api\/studio\/playback\/[^/]+$/i.test(resolvedUrl.pathname);
+    }
+    catch {
+        return false;
+    }
+};
+const isWorkspaceProjectPlaybackUrl = (value) => {
+    const normalized = normalizeGenerationText(value);
+    if (!normalized) {
+        return false;
+    }
+    try {
+        const baseUrl = env.appUrl ? new URL(env.appUrl) : new URL("http://localhost");
+        const resolvedUrl = new URL(normalized, baseUrl);
+        return /^\/api\/workspace\/projects\/[^/]+\/playback$/i.test(resolvedUrl.pathname);
+    }
+    catch {
+        return false;
+    }
+};
+const isStudioVideoTargetReachable = async (upstreamUrl) => {
+    try {
+        const response = await fetch(upstreamUrl, {
+            headers: {
+                Range: STUDIO_VIDEO_PROBE_RANGE,
+            },
+        });
+        if (!response.ok) {
+            void response.body?.cancel();
+            return false;
+        }
+        const contentType = normalizeGenerationText(response.headers.get("content-type")).toLowerCase();
+        void response.body?.cancel();
+        return !contentType || contentType.startsWith("video/");
+    }
+    catch {
+        return false;
+    }
+};
+const isStudioGenerationReachable = async (generation) => {
+    if (!generation?.videoUrl) {
+        return false;
+    }
+    if (isStudioJobVideoProxyUrl(generation.videoUrl) ||
+        isStudioPlaybackUrl(generation.videoUrl) ||
+        isWorkspaceProjectPlaybackUrl(generation.videoUrl)) {
+        return true;
+    }
+    const upstreamPath = extractStudioVideoPathFromProxyUrl(generation.videoUrl);
+    if (!upstreamPath) {
+        return false;
+    }
+    try {
+        return await isStudioVideoTargetReachable(getStudioVideoProxyTargetByPath(upstreamPath));
+    }
+    catch {
+        return false;
+    }
+};
+const findReachableWorkspaceFallbackGeneration = async (user, excludedVideoUrls = []) => {
+    const excludedVideoUrlSet = new Set(excludedVideoUrls
+        .map((value) => normalizeGenerationText(value))
+        .filter(Boolean));
+    const projects = await getWorkspaceProjects(user);
+    for (const project of projects) {
+        if (project.status !== "ready" || !project.videoUrl) {
+            continue;
+        }
+        const fallbackGeneration = buildStudioGenerationFromWorkspaceProject(project);
+        if (!fallbackGeneration) {
+            continue;
+        }
+        if (excludedVideoUrlSet.has(fallbackGeneration.videoUrl)) {
+            continue;
+        }
+        if (await isStudioGenerationReachable(fallbackGeneration)) {
+            return {
+                fallbackGeneration,
+                fallbackProject: project,
+            };
+        }
+    }
+    return {
+        fallbackGeneration: null,
+        fallbackProject: null,
+    };
+};
+const findWorkspaceHistoryFallbackGeneration = async (user, excludedVideoUrls = []) => {
+    const excludedVideoUrlSet = new Set(excludedVideoUrls
+        .map((value) => normalizeGenerationText(value))
+        .filter(Boolean));
+    const historyEntries = await listWorkspaceGenerationHistory(user, 60);
+    for (const historyEntry of historyEntries) {
+        const fallbackGeneration = buildStudioGenerationFromHistoryEntry(historyEntry);
+        if (!fallbackGeneration) {
+            continue;
+        }
+        if (excludedVideoUrlSet.has(normalizeGenerationText(fallbackGeneration.videoUrl))) {
+            continue;
+        }
+        return fallbackGeneration;
+    }
+    return null;
 };
 const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 504]);
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
@@ -481,32 +1443,34 @@ const describeAdsflowFetchFailure = (url, error) => {
     const detail = causeCode || causeMessage || error.message || "Network error";
     return `AdsFlow unavailable for ${target}: ${detail}.`;
 };
-const fetchAdsflowResponse = async (url, init) => {
+const fetchAdsflowResponse = async (url, init, options) => {
     let lastError = null;
-    for (let attempt = 0; attempt <= ADSFLOW_FETCH_RETRY_DELAYS_MS.length; attempt += 1) {
+    const retryDelaysMs = options?.retryDelaysMs ?? ADSFLOW_FETCH_RETRY_DELAYS_MS;
+    const timeoutMs = options?.timeoutMs ?? ADSFLOW_FETCH_TIMEOUT_MS;
+    for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
         try {
             const response = await fetch(url, {
                 ...init,
-                signal: AbortSignal.timeout(ADSFLOW_FETCH_TIMEOUT_MS),
+                signal: AbortSignal.timeout(timeoutMs),
             });
-            if (!ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(response.status) || attempt === ADSFLOW_FETCH_RETRY_DELAYS_MS.length) {
+            if (!ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(response.status) || attempt === retryDelaysMs.length) {
                 return response;
             }
-            console.warn(`[studio] AdsFlow responded with ${response.status} for ${url.pathname}, retry ${attempt + 1}/${ADSFLOW_FETCH_RETRY_DELAYS_MS.length}`);
+            console.warn(`[studio] AdsFlow responded with ${response.status} for ${url.pathname}, retry ${attempt + 1}/${retryDelaysMs.length}`);
         }
         catch (error) {
             lastError = error;
-            if (attempt === ADSFLOW_FETCH_RETRY_DELAYS_MS.length) {
+            if (attempt === retryDelaysMs.length) {
                 throw new Error(describeAdsflowFetchFailure(url, error));
             }
-            console.warn(`[studio] AdsFlow fetch error for ${url.pathname}, retry ${attempt + 1}/${ADSFLOW_FETCH_RETRY_DELAYS_MS.length}`, error);
+            console.warn(`[studio] AdsFlow fetch error for ${url.pathname}, retry ${attempt + 1}/${retryDelaysMs.length}`, error);
         }
-        await wait(ADSFLOW_FETCH_RETRY_DELAYS_MS[attempt] ?? 0);
+        await wait(retryDelaysMs[attempt] ?? 0);
     }
     throw new Error(lastError ? describeAdsflowFetchFailure(url, lastError) : `AdsFlow unavailable for ${url.origin}${url.pathname}.`);
 };
-const fetchAdsflowJson = async (url, init) => {
-    const response = await fetchAdsflowResponse(url, init);
+const fetchAdsflowJson = async (url, init, options) => {
+    const response = await fetchAdsflowResponse(url, init, options);
     const payload = (await response.json().catch(() => null));
     if (!response.ok) {
         const detail = payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string"
@@ -522,7 +1486,7 @@ const fetchAdsflowJson = async (url, init) => {
     }
     return payload;
 };
-const postAdsflowText = async (path, body) => {
+const postAdsflowText = async (path, body, options) => {
     assertAdsflowConfigured();
     const response = await fetchAdsflowResponse(buildAdsflowUrl(path), {
         method: "POST",
@@ -530,7 +1494,7 @@ const postAdsflowText = async (path, body) => {
             "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-    });
+    }, options);
     const payload = await response.text();
     if (!response.ok) {
         const detail = extractErrorDetail(payload) ?? `AdsFlow request failed (${response.status}).`;
@@ -544,7 +1508,7 @@ const postAdsflowText = async (path, body) => {
     }
     return payload;
 };
-const postAdsflowJson = async (path, body) => {
+const postAdsflowJson = async (path, body, options) => {
     assertAdsflowConfigured();
     return fetchAdsflowJson(buildAdsflowUrl(path), {
         method: "POST",
@@ -552,7 +1516,7 @@ const postAdsflowJson = async (path, body) => {
             "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-    });
+    }, options);
 };
 const fetchAdsflowJobStatus = async (jobId, user) => {
     assertAdsflowConfigured();
@@ -562,6 +1526,42 @@ const fetchAdsflowJobStatus = async (jobId, user) => {
     }
     const externalUserId = await resolveStudioExternalUserId(user);
     return fetchAdsflowJson(buildAdsflowUrl(`/api/web/generations/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowSegmentAiPhotoJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowSegmentAiVideoJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowSegmentPhotoAnimationJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-photo-animation/jobs/${encodeURIComponent(safeJobId)}`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     }));
@@ -616,67 +1616,95 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
 };
 export async function getWorkspaceBootstrap(user) {
     const externalUserId = await resolveStudioExternalUserId(user);
-    const payloadText = await postAdsflowText("/api/web/bootstrap", {
-        admin_token: env.adsflowAdminToken,
-        external_user_id: externalUserId,
-        language: "ru",
-        referral_source: "landing_site",
-        user_email: user.email ?? undefined,
-        user_name: user.name ?? undefined,
-    });
-    const payload = parseJson(payloadText);
-    if (!payload?.user) {
-        throw new Error("AdsFlow did not return web user profile.");
-    }
-    const profile = await enrichWorkspaceProfile(payload.user, {
-        rawUserId: extractAdsflowUserId(payloadText),
-    });
-    if (payload.latest_generation?.job_id) {
-        try {
-            await saveWorkspaceGenerationHistory(user, {
-                adId: payload.latest_generation.ad_id ?? null,
-                description: payload.latest_generation.description ?? payload.latest_generation.prompt ?? "",
-                downloadPath: payload.latest_generation.download_path ?? null,
-                error: payload.latest_generation.error ?? null,
-                generatedAt: payload.latest_generation.generated_at ?? null,
-                jobId: payload.latest_generation.job_id,
-                prompt: payload.latest_generation.prompt ?? "",
-                status: payload.latest_generation.status ?? "queued",
-                title: payload.latest_generation.title ?? payload.latest_generation.prompt ?? "",
-                updatedAt: payload.latest_generation.generated_at ?? new Date().toISOString(),
-            });
+    const cachedBootstrap = getCachedWorkspaceBootstrap(externalUserId);
+    try {
+        const payloadText = await postAdsflowText("/api/web/bootstrap", {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            language: "ru",
+            referral_source: "landing_site",
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+        }, {
+            retryDelaysMs: [],
+            timeoutMs: 5_000,
+        });
+        const payload = parseJson(payloadText);
+        if (!payload?.user) {
+            throw new Error("AdsFlow did not return web user profile.");
         }
-        catch (error) {
-            console.error("[studio] Failed to sync workspace history from bootstrap", error);
+        const profile = await enrichWorkspaceProfile(payload.user, {
+            rawUserId: extractAdsflowUserId(payloadText),
+        });
+        let latestGeneration = buildLatestGenerationStatus(payload.latest_generation);
+        const excludedFallbackVideoUrls = [];
+        if (latestGeneration?.generation && !(await isStudioGenerationReachable(latestGeneration.generation))) {
+            excludedFallbackVideoUrls.push(latestGeneration.generation.videoUrl);
+            latestGeneration = {
+                ...latestGeneration,
+                generation: undefined,
+            };
         }
-    }
-    let latestGeneration = buildLatestGenerationStatus(payload.latest_generation);
-    if (!latestGeneration?.generation && (!latestGeneration || latestGeneration.status === "done")) {
-        try {
-            const fallbackProject = (await getWorkspaceProjects(user)).find((project) => project.status === "ready" && Boolean(project.videoUrl));
-            const fallbackGeneration = fallbackProject ? buildStudioGenerationFromWorkspaceProject(fallbackProject) : null;
-            if (fallbackGeneration) {
-                latestGeneration = latestGeneration
-                    ? {
-                        ...latestGeneration,
-                        generation: fallbackGeneration,
-                    }
-                    : {
-                        generation: fallbackGeneration,
-                        jobId: fallbackProject?.jobId ?? fallbackProject?.id ?? fallbackGeneration.id,
-                        status: "done",
-                    };
+        if (!latestGeneration?.generation && (!latestGeneration || latestGeneration.status === "done")) {
+            try {
+                const { fallbackGeneration, fallbackProject } = await findReachableWorkspaceFallbackGeneration(user, excludedFallbackVideoUrls);
+                if (fallbackGeneration) {
+                    latestGeneration = latestGeneration
+                        ? {
+                            ...latestGeneration,
+                            generation: fallbackGeneration,
+                        }
+                        : {
+                            generation: fallbackGeneration,
+                            jobId: fallbackProject?.jobId ?? fallbackProject?.id ?? fallbackGeneration.id,
+                            status: "done",
+                        };
+                }
+            }
+            catch (error) {
+                console.error("[studio] Failed to backfill latest generation from workspace projects", error);
             }
         }
-        catch (error) {
-            console.error("[studio] Failed to backfill latest generation from workspace projects", error);
+        const bootstrap = {
+            latestGeneration,
+            profile,
+            studioOptions: buildWorkspaceStudioOptions(payload.studio_options),
+        };
+        if (latestGeneration?.generation) {
+            warmStudioGenerationPlayback(latestGeneration.generation, user);
         }
+        setCachedWorkspaceBootstrap(externalUserId, bootstrap);
+        return bootstrap;
     }
-    return {
-        latestGeneration,
-        profile,
-        studioOptions: buildWorkspaceStudioOptions(payload.studio_options),
-    };
+    catch (error) {
+        console.error("[studio] Falling back to local workspace bootstrap", error);
+        let latestGeneration = cachedBootstrap?.latestGeneration ?? null;
+        const excludedFallbackVideoUrls = latestGeneration?.generation ? [latestGeneration.generation.videoUrl] : [];
+        if (!latestGeneration?.generation) {
+            try {
+                const historyGeneration = await findWorkspaceHistoryFallbackGeneration(user, excludedFallbackVideoUrls);
+                if (historyGeneration) {
+                    latestGeneration = {
+                        error: latestGeneration?.error,
+                        generation: historyGeneration,
+                        jobId: historyGeneration.id,
+                        status: "done",
+                    };
+                }
+            }
+            catch (historyError) {
+                console.error("[studio] Failed to load workspace history fallback generation", historyError);
+            }
+        }
+        if (latestGeneration?.generation) {
+            warmStudioGenerationPlayback(latestGeneration.generation, user);
+        }
+        return {
+            latestGeneration,
+            profile: cachedBootstrap?.profile ?? buildWorkspaceProfile(),
+            studioOptions: cachedBootstrap?.studioOptions ?? fallbackWorkspaceStudioOptions,
+        };
+    }
 }
 export async function createStudioGenerationJob(prompt, user, options) {
     assertAdsflowConfigured();
@@ -685,27 +1713,42 @@ export async function createStudioGenerationJob(prompt, user, options) {
         throw new Error("Prompt is required.");
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+        sourceLanguage: normalizedLanguage,
+    });
     const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
-    const requiredCredits = normalizedVideoMode === "ai_video" ? 3 : 1;
+    const requiredCredits = 10;
     const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
     const externalUserId = await resolveStudioExternalUserId(user);
     const shouldAddWatermark = creditReservation.profile.plan === "FREE" &&
         creditReservation.consumed.subscription > 0 &&
         creditReservation.consumed.purchased <= 0;
-    const normalizedVoiceId = String(options?.voiceId ?? "").trim() || undefined;
+    const isVoiceEnabled = options?.voiceEnabled !== false;
+    const normalizedVoiceId = isVoiceEnabled ? String(options?.voiceId ?? "").trim() || undefined : undefined;
     const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
-    const normalizedSubtitleStyleId = normalizeStudioSubtitleStyle(options?.subtitleStyleId);
-    const normalizedSubtitleColorId = normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId));
+    const isSubtitleEnabled = options?.subtitleEnabled !== false;
+    const normalizedSubtitleStyleId = isSubtitleEnabled ? normalizeStudioSubtitleStyle(options?.subtitleStyleId) : undefined;
+    const normalizedSubtitleColorId = isSubtitleEnabled && normalizedSubtitleStyleId
+        ? normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId))
+        : undefined;
     const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
     const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
     const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
     const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
     if (normalizedMusicType === "custom" && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
         throw new Error("Upload a custom music track or choose a different music mode.");
     }
     if (normalizedVideoMode === "custom" && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
         throw new Error("Upload a custom video or choose a different video mode.");
+    }
+    if (normalizedSegmentEditor && !options?.isRegeneration) {
+        throw new Error("Segment editor can only be used during regeneration.");
+    }
+    if (normalizedSegmentEditor && !normalizedProjectId) {
+        throw new Error("Project id is required for segment editor regeneration.");
     }
     let jobCreated = false;
     try {
@@ -717,7 +1760,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
             body: JSON.stringify({
                 admin_token: env.adsflowAdminToken,
                 external_user_id: externalUserId,
-                prompt: normalizedPrompt,
+                prompt: upstreamPrompt,
                 user_email: user.email ?? undefined,
                 user_name: user.name ?? undefined,
                 language: normalizedLanguage,
@@ -728,11 +1771,29 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 custom_video_original_name: normalizedVideoMode === "custom" ? normalizedCustomVideoFileName : undefined,
                 is_regeneration: Boolean(options?.isRegeneration),
                 music_type: normalizedMusicType,
+                project_id: normalizedProjectId,
+                segment_editor: normalizedSegmentEditor
+                    ? {
+                        segments: normalizedSegmentEditor.segments.map((segment) => ({
+                            custom_video_data_url: segment.customVideoFileDataUrl,
+                            custom_video_mime_type: segment.customVideoFileMimeType,
+                            custom_video_original_name: segment.customVideoFileName,
+                            duration: segment.duration,
+                            end_time: segment.endTime,
+                            index: segment.index,
+                            start_time: segment.startTime,
+                            text: segment.text,
+                            video_action: segment.videoAction,
+                        })),
+                    }
+                    : undefined,
                 custom_music_data_url: normalizedMusicType === "custom" ? normalizedCustomMusicFileDataUrl : undefined,
                 custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : undefined,
+                subtitle_type: isSubtitleEnabled ? undefined : "none",
                 subtitle_color: normalizedSubtitleColorId,
                 subtitle_style: normalizedSubtitleStyleId,
                 video_mode: normalizedVideoMode,
+                voice_type: isVoiceEnabled ? undefined : "none",
                 voice_code: normalizedVoiceId,
             }),
         });
@@ -775,6 +1836,288 @@ export async function createStudioGenerationJob(prompt, user, options) {
         throw error;
     }
 }
+export async function generateStudioSegmentAiPhoto(prompt, user, options) {
+    assertAdsflowConfigured();
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+        sourceLanguage: normalizedLanguage,
+    });
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const creditReservation = await consumeWorkspaceGenerationCredit(user, 1, normalizedLanguage);
+    const externalUserId = await resolveStudioExternalUserId(user);
+    let assetReady = false;
+    try {
+        const payload = await postAdsflowJson("/api/web/segment-ai-photo/generate", {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            language: normalizedLanguage,
+            project_id: normalizedProjectId,
+            prompt: upstreamPrompt,
+            segment_index: normalizedSegmentIndex,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+        });
+        const asset = await normalizeAdsflowSegmentAiPhotoAsset(payload.asset);
+        assetReady = true;
+        return {
+            asset,
+            profile: creditReservation.profile,
+        };
+    }
+    catch (error) {
+        if (!(error instanceof WorkspaceCreditLimitError)) {
+            try {
+                const fallbackAsset = await generateDirectStudioSegmentAiPhoto(upstreamPrompt, {
+                    segmentIndex: normalizedSegmentIndex,
+                });
+                assetReady = true;
+                return {
+                    asset: fallbackAsset,
+                    profile: creditReservation.profile,
+                };
+            }
+            catch (fallbackError) {
+                const upstreamMessage = error instanceof Error ? error.message : "AdsFlow fallback failed.";
+                const directMessage = fallbackError instanceof Error ? fallbackError.message : "Direct image fallback failed.";
+                error = new Error(`Не удалось сгенерировать ИИ фото. AdsFlow: ${upstreamMessage}. DEAPI: ${directMessage}.`);
+            }
+        }
+        if (!assetReady) {
+            try {
+                await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+            }
+            catch (refundError) {
+                console.error("[studio] Failed to refund AI photo credits", refundError);
+            }
+        }
+        throw error;
+    }
+}
+export async function improveStudioSegmentAiPhotoPrompt(prompt, options) {
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const modelCandidates = getStudioOpenRouterModelCandidates();
+    let lastError = null;
+    if (env.openrouterApiKey && modelCandidates.length > 0) {
+        for (const model of modelCandidates) {
+            try {
+                const improvedPrompt = await requestStudioSegmentAiPhotoPromptEnhancement(normalizedPrompt, normalizedLanguage, model);
+                return {
+                    prompt: improvedPrompt,
+                };
+            }
+            catch (error) {
+                lastError = error instanceof Error ? error : new Error("OpenRouter prompt enhancement failed.");
+                console.warn(`[studio] Failed to improve segment AI photo prompt with ${model}`, lastError);
+            }
+        }
+    }
+    const fallbackPrompt = buildStudioSegmentAiPhotoPromptEnhancementFallback(normalizedPrompt, normalizedLanguage);
+    if (fallbackPrompt) {
+        return {
+            prompt: fallbackPrompt,
+        };
+    }
+    throw lastError ?? new Error("Failed to improve segment AI photo prompt.");
+}
+export async function translateStudioTexts(texts, options) {
+    const normalizedTexts = texts.map((text) => String(text ?? ""));
+    if (normalizedTexts.length === 0) {
+        return {
+            texts: [],
+        };
+    }
+    const normalizedSourceLanguage = normalizeStudioLanguage(options?.sourceLanguage);
+    const normalizedTargetLanguage = normalizeStudioLanguage(options?.targetLanguage);
+    if (normalizedSourceLanguage === normalizedTargetLanguage) {
+        return {
+            texts: normalizedTexts,
+        };
+    }
+    const modelCandidates = getStudioOpenRouterModelCandidates();
+    let lastError = null;
+    if (env.openrouterApiKey && modelCandidates.length > 0) {
+        for (const model of modelCandidates) {
+            try {
+                const translatedTexts = await requestStudioTextTranslation(normalizedTexts, normalizedSourceLanguage, normalizedTargetLanguage, model);
+                return {
+                    texts: translatedTexts,
+                };
+            }
+            catch (error) {
+                lastError = error instanceof Error ? error : new Error("OpenRouter text translation failed.");
+                console.warn(`[studio] Failed to translate segment texts with ${model}`, lastError);
+            }
+        }
+    }
+    throw lastError ?? new Error("Text translation is unavailable.");
+}
+export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
+    assertAdsflowConfigured();
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+        sourceLanguage: normalizedLanguage,
+    });
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: normalizedLanguage,
+        project_id: normalizedProjectId,
+        prompt: upstreamPrompt,
+        segment_index: normalizedSegmentIndex,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+    });
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a segment AI photo job id.");
+    }
+    return {
+        jobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status: String(payload.status ?? "queued"),
+    };
+}
+export async function createStudioSegmentAiVideoJob(prompt, user, options) {
+    assertAdsflowConfigured();
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+        sourceLanguage: normalizedLanguage,
+    });
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const payload = await postAdsflowJson("/api/web/segment-ai-video/jobs", {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: normalizedLanguage,
+        project_id: normalizedProjectId,
+        prompt: upstreamPrompt,
+        segment_index: normalizedSegmentIndex,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+    });
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a segment AI video job id.");
+    }
+    return {
+        jobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status: String(payload.status ?? "queued"),
+    };
+}
+export async function createStudioSegmentPhotoAnimationJob(prompt, user, options) {
+    assertAdsflowConfigured();
+    const normalizedPrompt = normalizePrompt(prompt);
+    if (!normalizedPrompt) {
+        throw new Error("Prompt is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+        sourceLanguage: normalizedLanguage,
+    });
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const payload = await postAdsflowJson("/api/web/segment-photo-animation/jobs", {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: normalizedLanguage,
+        project_id: normalizedProjectId,
+        prompt: upstreamPrompt,
+        segment_index: normalizedSegmentIndex,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+    });
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a segment photo animation job id.");
+    }
+    return {
+        jobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status: String(payload.status ?? "queued"),
+    };
+}
+export async function getStudioSegmentAiPhotoJobStatus(jobId, user) {
+    const payload = await fetchAdsflowSegmentAiPhotoJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+    const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: safeJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status,
+    };
+}
+export async function getStudioSegmentAiVideoJobStatus(jobId, user) {
+    const payload = await fetchAdsflowSegmentAiVideoJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+    const asset = payload.asset ? normalizeAdsflowSegmentAiVideoAsset(safeJobId, payload.asset) : undefined;
+    if (asset) {
+        warmStudioGeneratedVideoPlayback("segment-ai-video", safeJobId, user);
+        warmStudioGeneratedVideoPoster("segment-ai-video", safeJobId, user);
+    }
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: safeJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status,
+    };
+}
+export async function getStudioSegmentPhotoAnimationJobStatus(jobId, user) {
+    const payload = await fetchAdsflowSegmentPhotoAnimationJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+    const asset = payload.asset ? normalizeAdsflowSegmentPhotoAnimationAsset(safeJobId, payload.asset) : undefined;
+    if (asset) {
+        warmStudioGeneratedVideoPlayback("segment-photo-animation", safeJobId, user);
+        warmStudioGeneratedVideoPoster("segment-photo-animation", safeJobId, user);
+    }
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: safeJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        status,
+    };
+}
 export async function getStudioGenerationStatus(jobId, user) {
     const payload = await fetchAdsflowJobStatus(jobId, user);
     const status = String(payload.status ?? "queued");
@@ -802,12 +2145,19 @@ export async function getStudioGenerationStatus(jobId, user) {
         }
         const generation = buildStudioGeneration(payload);
         if (!generation) {
+            console.warn("[studio] Done generation is missing playable preview metadata", {
+                adId: payload.ad_id ?? null,
+                downloadPath: payload.download_path ?? null,
+                jobId: safeJobId,
+                status,
+            });
             return {
                 jobId: safeJobId,
                 status,
                 error: "Готовое видео недоступно как прямой media-файл.",
             };
         }
+        warmStudioGenerationPlayback(generation, user);
         return {
             jobId: safeJobId,
             status,
@@ -831,26 +2181,185 @@ export function getStudioVideoProxyTargetByPath(value) {
     if (!isPlayableStudioVideoPath(normalized)) {
         throw new Error("Video path is not a direct media file.");
     }
-    const upstreamUrl = buildAdsflowUrl(normalized);
-    const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl);
-    if (upstreamUrl.origin === adsflowBaseUrl.origin) {
-        upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
-    }
-    return upstreamUrl;
+    return buildTrustedStudioVideoTarget(normalized);
 }
-export async function getStudioVideoProxyTarget(jobId, user) {
-    const payload = await fetchAdsflowJobStatus(jobId, user);
-    if (String(payload.status ?? "") !== "done") {
-        throw new Error("Video is not ready yet.");
+const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user) => {
+    const safeJobId = normalizeGenerationText(jobId);
+    if (!safeJobId) {
+        return null;
     }
-    const downloadPath = String(payload.download_path ?? "").trim();
+    const historyEntries = await listWorkspaceGenerationHistory(user, 200);
+    const historyEntry = historyEntries.find((entry) => normalizeGenerationText(entry.jobId) === safeJobId) ?? null;
+    const downloadPath = normalizeGenerationText(historyEntry?.downloadPath);
     if (!downloadPath) {
-        throw new Error("AdsFlow did not return a download path.");
+        return null;
     }
-    if (!isPlayableStudioVideoPath(downloadPath)) {
-        throw new Error("AdsFlow returned a non-playable video path.");
+    return buildTrustedStudioVideoTarget(downloadPath);
+};
+export async function getStudioVideoProxyTarget(jobId, user) {
+    let fallbackError = null;
+    try {
+        const payload = await fetchAdsflowJobStatus(jobId, user);
+        if (String(payload.status ?? "") !== "done") {
+            throw new Error("Video is not ready yet.");
+        }
+        const downloadPath = String(payload.download_path ?? "").trim();
+        if (!downloadPath) {
+            throw new Error("AdsFlow did not return a download path.");
+        }
+        return buildTrustedStudioVideoTarget(downloadPath);
     }
-    return buildAdsflowUrl(downloadPath, {
+    catch (error) {
+        fallbackError = error instanceof Error ? error : new Error("Failed to resolve generated video.");
+    }
+    try {
+        const fallbackTarget = await getStudioVideoProxyTargetFromWorkspaceHistory(jobId, user);
+        if (fallbackTarget) {
+            return fallbackTarget;
+        }
+    }
+    catch (error) {
+        console.error("[studio] Failed to resolve generated video from workspace history", error);
+    }
+    throw fallbackError ?? new Error("Failed to resolve generated video.");
+}
+export async function getStudioSegmentAiVideoJobFileProxyTarget(jobId, user) {
+    assertAdsflowConfigured();
+    const safeJobId = normalizeGenerationText(jobId);
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return buildAdsflowUrl(`/api/web/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}/file`, {
         admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
     });
+}
+export async function getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId, user) {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return buildAdsflowUrl(`/api/web/segment-photo-animation/jobs/${encodeURIComponent(safeJobId)}/file`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    });
+}
+const getStudioGeneratedVideoPlaybackSource = async (kind, jobId, user) => {
+    const safeJobId = normalizeGenerationText(jobId);
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const upstreamUrl = kind === "segment-ai-video"
+        ? await getStudioSegmentAiVideoJobFileProxyTarget(safeJobId, user)
+        : await getStudioSegmentPhotoAnimationJobFileProxyTarget(safeJobId, user);
+    return {
+        cacheKey: getWorkspaceProjectPlaybackCacheKey({
+            projectId: `${kind}:${safeJobId}`,
+            targetUrl: upstreamUrl,
+            updatedAt: safeJobId,
+        }),
+        projectId: `${kind}:${safeJobId}`,
+        upstreamUrl,
+    };
+};
+const warmStudioGeneratedVideoPlayback = (kind, jobId, user) => {
+    void getStudioGeneratedVideoPlaybackSource(kind, jobId, user)
+        .then((playbackSource) => warmWorkspaceProjectPlayback(playbackSource))
+        .catch((error) => {
+        console.error("[studio] Failed to warm generated segment video playback cache", {
+            error: error instanceof Error ? error.message : "Unknown generated segment video playback warmup error.",
+            jobId,
+            kind,
+        });
+    });
+};
+const getStudioGeneratedVideoPlaybackAsset = async (kind, jobId, user) => {
+    return ensureWorkspaceProjectPlayback(await getStudioGeneratedVideoPlaybackSource(kind, jobId, user));
+};
+const getStudioGeneratedVideoPosterSource = async (kind, jobId, user) => {
+    const safeJobId = normalizeGenerationText(jobId);
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const playbackAsset = await getStudioGeneratedVideoPlaybackAsset(kind, safeJobId, user);
+    return {
+        cacheKey: getWorkspaceVideoPosterCacheKey({
+            posterId: `${kind}:${safeJobId}`,
+            targetUrl: pathToFileURL(playbackAsset.absolutePath),
+            version: safeJobId,
+        }),
+        posterId: `${kind}:${safeJobId}`,
+        upstreamUrl: pathToFileURL(playbackAsset.absolutePath),
+    };
+};
+const warmStudioGeneratedVideoPoster = (kind, jobId, user) => {
+    void getStudioGeneratedVideoPosterSource(kind, jobId, user)
+        .then((posterSource) => warmWorkspaceVideoPoster(posterSource))
+        .catch((error) => {
+        console.error("[studio] Failed to warm generated video poster", {
+            error: error instanceof Error ? error.message : "Unknown generated video poster warmup error.",
+            jobId,
+            kind,
+        });
+    });
+};
+export async function getStudioSegmentAiVideoJobPosterPath(jobId, user) {
+    return ensureWorkspaceVideoPoster(await getStudioGeneratedVideoPosterSource("segment-ai-video", jobId, user));
+}
+export async function getStudioSegmentPhotoAnimationJobPosterPath(jobId, user) {
+    return ensureWorkspaceVideoPoster(await getStudioGeneratedVideoPosterSource("segment-photo-animation", jobId, user));
+}
+export async function getStudioSegmentAiVideoPlaybackAsset(jobId, user) {
+    return getStudioGeneratedVideoPlaybackAsset("segment-ai-video", jobId, user);
+}
+export async function getStudioSegmentPhotoAnimationPlaybackAsset(jobId, user) {
+    return getStudioGeneratedVideoPlaybackAsset("segment-photo-animation", jobId, user);
+}
+const getStudioPlaybackSource = async (options, user) => {
+    const safeJobId = normalizeGenerationText(options.jobId);
+    if (!safeJobId) {
+        throw new Error("Studio job id is required.");
+    }
+    const upstreamUrl = options.preferredPath
+        ? getStudioVideoProxyTargetByPath(options.preferredPath)
+        : await getStudioVideoProxyTarget(safeJobId, user);
+    return {
+        cacheKey: getWorkspaceProjectPlaybackCacheKey({
+            projectId: `studio:${safeJobId}`,
+            targetUrl: upstreamUrl,
+            updatedAt: normalizeGenerationText(options.version) || safeJobId,
+        }),
+        projectId: `studio:${safeJobId}`,
+        upstreamUrl,
+    };
+};
+const warmStudioGenerationPlayback = (generation, user) => {
+    const safeJobId = normalizeGenerationText(generation?.id);
+    if (!safeJobId || !generation?.videoUrl || !isStudioPlaybackUrl(generation.videoUrl)) {
+        return;
+    }
+    const preferredPath = extractStudioVideoPathFromProxyUrl(generation.videoFallbackUrl ?? generation.videoUrl);
+    void getStudioPlaybackSource({
+        jobId: safeJobId,
+        preferredPath,
+        version: generation.generatedAt,
+    }, user)
+        .then((playbackSource) => warmWorkspaceProjectPlayback(playbackSource))
+        .catch((error) => {
+        console.error("[studio] Failed to warm studio playback cache", {
+            error: error instanceof Error ? error.message : "Unknown studio playback warmup error.",
+            jobId: safeJobId,
+        });
+    });
+};
+export async function getStudioPlaybackAsset(jobId, user, options) {
+    const playbackSource = await getStudioPlaybackSource({
+        jobId,
+        preferredPath: options?.preferredPath,
+        version: options?.version,
+    }, user);
+    return ensureWorkspaceProjectPlayback(playbackSource);
 }

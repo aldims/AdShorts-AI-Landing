@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { AgencyContactModal } from "../components/AgencyContactModal";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
+import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type Session = {
   name: string;
@@ -33,7 +35,7 @@ type PricingPlan = {
   price: string;
   billing: string;
   credits: string;
-  subnote: string;
+  subnote?: string;
   features: string[];
   badge?: string;
   featured?: boolean;
@@ -66,7 +68,6 @@ type PricingFAQ = {
 };
 
 const PENDING_CHECKOUT_STORAGE_KEY = "adshorts.pending-checkout-plan";
-const ENTERPRISE_CONTACT_EMAIL = "adsflowai@gmail.com";
 const PACKAGE_RESTRICTION_ERROR_FRAGMENT = "PRO and ULTRA";
 const CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
@@ -75,10 +76,11 @@ const pricingPlans: PricingPlan[] = [
     checkoutProductId: "start",
     name: "START",
     audience: "Для первого запуска",
+    audienceLines: ["Для первого", "запуска"],
     price: "390 ₽",
     billing: "",
-    credits: "5 кредитов",
-    subnote: "Доступен один раз",
+    credits: "50 кредитов",
+    subnote: "До 5 видео, доступен один раз",
     features: [
       "Автопубликация в YouTube",
       "Брендинг на видео",
@@ -94,8 +96,8 @@ const pricingPlans: PricingPlan[] = [
     audienceLines: ["Для регулярного", "контент-потока"],
     price: "1 490 ₽",
     billing: "",
-    credits: "25 кредитов",
-    subnote: "1 кредит = 1 видео",
+    credits: "250 кредитов",
+    subnote: "До 25 видео",
     features: [
       "Всё из START",
       "Приоритетная генерация",
@@ -113,8 +115,8 @@ const pricingPlans: PricingPlan[] = [
     audienceLines: ["Для максимального", "объёма"],
     price: "4 990 ₽",
     billing: "",
-    credits: "100 кредитов",
-    subnote: "1 кредит = 1 видео",
+    credits: "1000 кредитов",
+    subnote: "До 100 видео",
     features: [
       "Всё из PRO",
       "Максимальный приоритет",
@@ -132,32 +134,32 @@ const DEFAULT_FEATURED_PLAN_ID: PlanCheckoutProductId =
 const pricingPacks: PricingPack[] = [
   {
     checkoutProductId: "package_10",
-    name: "Pack 10",
-    credits: "10 кредитов",
+    name: "Pack 100",
+    credits: "100 кредитов",
     price: "690 ₽",
-    subnote: "~69 ₽/кредит",
+    subnote: "~6,9 ₽/кредит",
   },
   {
     checkoutProductId: "package_50",
-    name: "Pack 50",
-    credits: "50 кредитов",
+    name: "Pack 500",
+    credits: "500 кредитов",
     price: "2 750 ₽",
-    subnote: "~55 ₽/кредит",
+    subnote: "~5,5 ₽/кредит",
     badge: "Выгодно",
   },
   {
     checkoutProductId: "package_100",
-    name: "Pack 100",
-    credits: "100 кредитов",
+    name: "Pack 1000",
+    credits: "1000 кредитов",
     price: "4 990 ₽",
-    subnote: "~50 ₽/кредит",
+    subnote: "~5 ₽/кредит",
   },
 ];
 
 const pricingFaqs: PricingFAQ[] = [
   {
-    question: "1 кредит = 1 видео",
-    answer: "Каждая генерация Shorts списывает 1 кредит. Это единая логика для всех тарифов.",
+    question: "1 видео = 10 кредитов",
+    answer: "Каждая генерация Shorts списывает 10 кредитов. Это единая логика для всех тарифов.",
   },
   {
     question: "Срок действия функций",
@@ -180,6 +182,7 @@ export function PricingPage({
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
+  const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const addonsEligibilityNote = canPurchaseAddonCredits
@@ -195,6 +198,14 @@ export function PricingPage({
     }
 
     onOpenSignup();
+  };
+
+  const openStudioSection = (section: StudioEntryIntentSection) => {
+    if (session) {
+      writeStudioEntryIntent({ section });
+    }
+
+    openPrimaryFlow();
   };
 
   const requestCheckout = async (productId: CheckoutProductId) => {
@@ -303,7 +314,7 @@ export function PricingPage({
             <span>AdShorts AI</span>
           </Link>
 
-          <PrimarySiteNav activeItem="pricing" onOpenStudio={openPrimaryFlow} />
+          <PrimarySiteNav activeItem="pricing" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
             {session ? (
@@ -388,7 +399,7 @@ export function PricingPage({
 
                     <div className="pricing-max-card__output">
                       <span>{plan.credits}</span>
-                      <small>{plan.subnote}</small>
+                      {plan.subnote ? <small>{plan.subnote}</small> : null}
                     </div>
 
                     <ul className="pricing-max-card__features">
@@ -409,10 +420,14 @@ export function PricingPage({
                 );
               })}
 
-              <article
+              <button
                 className="pricing-max-enterprise"
+                type="button"
+                aria-controls="agency-contact-modal"
+                aria-haspopup="dialog"
+                onClick={() => setIsAgencyModalOpen(true)}
                 onMouseEnter={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
-                onFocusCapture={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
+                onFocus={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
               >
                 <div className="pricing-max-enterprise__copy">
                   <span className="pricing-max-enterprise__eyebrow">Agency / Teams</span>
@@ -429,13 +444,10 @@ export function PricingPage({
                   <li>Путь апгрейда от solo creator к team workflow</li>
                 </ul>
 
-                <a
-                  className="btn pricing-max-button pricing-max-button--ghost"
-                  href={`mailto:${ENTERPRISE_CONTACT_EMAIL}?subject=Enterprise%20plan%20AdShorts%20AI`}
-                >
+                <span className="btn pricing-max-button pricing-max-button--ghost pricing-max-enterprise__cta">
                   Оставить заявку
-                </a>
-              </article>
+                </span>
+              </button>
             </div>
 
           </div>
@@ -501,6 +513,13 @@ export function PricingPage({
           </div>
         </section>
       </main>
+
+      <AgencyContactModal
+        isOpen={isAgencyModalOpen}
+        onClose={() => setIsAgencyModalOpen(false)}
+        defaultEmail={session?.email ?? null}
+        defaultName={session?.name ?? null}
+      />
     </div>
   );
 }

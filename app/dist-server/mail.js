@@ -57,6 +57,7 @@ export async function sendAppEmail(payload) {
     const info = await transporter.sendMail({
         from,
         html: payload.html,
+        replyTo: payload.replyTo,
         subject: payload.subject,
         text: payload.text,
         to: payload.to,

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
+import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type Session = {
   name: string;
@@ -125,6 +126,14 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     onOpenSignup();
   };
 
+  const openStudioSection = (section: StudioEntryIntentSection) => {
+    if (session) {
+      writeStudioEntryIntent({ section });
+    }
+
+    openPrimaryFlow();
+  };
+
   return (
     <div className="route-page">
       <header className="site-header" id="top">
@@ -134,7 +143,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             <span>AdShorts AI</span>
           </Link>
 
-          <PrimarySiteNav activeItem="home" onOpenStudio={openPrimaryFlow} />
+          <PrimarySiteNav activeItem="home" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
             <a
@@ -508,11 +517,11 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section section--dark" id="pricing">
           <div className="container pricing-shell">
             <div className="pricing-shell__copy">
-              <p className="eyebrow">ВЫБЕРИТЕ СВОЙ СЦЕНАРИЙ ЗАПУСКА</p>
-              <h2>Выберите формат запуска под вашу задачу</h2>
+              <p className="eyebrow">ТАРИФЫ ADSHORTS AI</p>
+              <h2>Выберите тариф под свой объём Shorts</h2>
               <p>
-                Начните с веб-студии, если хотите быстро получить готовый Shorts в одном интерфейсе. Используйте
-                Telegram-бот как дополнительный инструмент для масштабирования контента.
+                Все тарифы работают через баланс кредитов в веб-студии. 1 видео списывает 10 кредитов: START подходит
+                для теста, PRO для регулярного выпуска, ULTRA для масштабирования.
               </p>
 
               <div className="pricing-shell__actions">
@@ -532,24 +541,38 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
             <div className="plan-grid">
               <article className="plan-card">
-                <span className="plan-card__label">СТАРТ</span>
-                <h3>Быстрый тест идеи</h3>
-                <p>Для авторов, фаундеров и маркетологов, которым нужно быстро проверить идею в формате Shorts.</p>
+                <span className="plan-card__label">START</span>
+                <strong>390 ₽</strong>
+                <h3>50 кредитов</h3>
+                <p>До 5 видео для первого запуска и проверки идеи.</p>
                 <ul className="plan-card__list">
-                  <li>Сценарий, озвучка и визуал</li>
-                  <li>Предпросмотр нескольких вариантов</li>
-                  <li>Готовый ролик в формате 9:16</li>
+                  <li>Быстрый старт без лишних настроек</li>
+                  <li>Сценарий, озвучка и визуал в одном потоке</li>
+                  <li>Подходит для первого теста гипотезы</li>
                 </ul>
               </article>
 
               <article className="plan-card plan-card--accent">
-                <span className="plan-card__label">РОСТ</span>
-                <h3>Система для контент-команды</h3>
-                <p>Для агентств и команд, которым нужен единый процесс создания коротких видео без ручной сборки.</p>
+                <span className="plan-card__label">PRO</span>
+                <strong>1 490 ₽</strong>
+                <h3>250 кредитов</h3>
+                <p>До 25 видео для стабильного контент-потока.</p>
                 <ul className="plan-card__list">
-                  <li>Переиспользуемые стили и шаблоны</li>
-                  <li>Управление подачей и тоном озвучки</li>
-                  <li>Пайплайн для серийного выпуска роликов</li>
+                  <li>Регулярный выпуск Shorts без ручной сборки</li>
+                  <li>Приоритетная генерация</li>
+                  <li>Можно докупать кредиты</li>
+                </ul>
+              </article>
+
+              <article className="plan-card">
+                <span className="plan-card__label">ULTRA</span>
+                <strong>4 990 ₽</strong>
+                <h3>1000 кредитов</h3>
+                <p>До 100 видео для серийного производства и команд.</p>
+                <ul className="plan-card__list">
+                  <li>Максимальный объём под масштабирование</li>
+                  <li>Максимальный приоритет</li>
+                  <li>Ранний доступ к новым функциям</li>
                 </ul>
               </article>
             </div>
