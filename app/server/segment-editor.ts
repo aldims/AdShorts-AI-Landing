@@ -153,6 +153,7 @@ const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[
 };
 
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
+const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
 const SEGMENT_EDITOR_SESSION_TIMEOUT_MS = 15_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
@@ -160,6 +161,8 @@ const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаю�
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map<string, number>();
+const segmentEditorSessionCache = new Map<string, { expiresAt: number; session: WorkspaceSegmentEditorSession }>();
+const segmentEditorSessionInFlight = new Map<string, Promise<WorkspaceSegmentEditorSession>>();
 
 const assertAdsflowConfigured = () => {
   if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
@@ -203,6 +206,84 @@ const cacheProjectAccess = (user: SegmentEditorUser, projectId: number) => {
   }
 
   projectAccessCache.set(cacheKey, Date.now() + PROJECT_ACCESS_CACHE_TTL_MS);
+};
+
+const getSegmentEditorSessionCacheKey = (user: SegmentEditorUser, projectId: number) => {
+  const userId = normalizeText(user.id);
+  if (userId) {
+    return `user:${userId}:segment-editor:${projectId}`;
+  }
+
+  const email = normalizeText(user.email).toLowerCase();
+  return email ? `email:${email}:segment-editor:${projectId}` : null;
+};
+
+const getCachedSegmentEditorSession = (user: SegmentEditorUser, projectId: number) => {
+  const cacheKey = getSegmentEditorSessionCacheKey(user, projectId);
+  if (!cacheKey) {
+    return null;
+  }
+
+  const cachedEntry = segmentEditorSessionCache.get(cacheKey);
+  if (!cachedEntry) {
+    return null;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    segmentEditorSessionCache.delete(cacheKey);
+    return null;
+  }
+
+  return cachedEntry.session;
+};
+
+const setCachedSegmentEditorSession = (
+  user: SegmentEditorUser,
+  projectId: number,
+  session: WorkspaceSegmentEditorSession,
+) => {
+  const cacheKey = getSegmentEditorSessionCacheKey(user, projectId);
+  if (!cacheKey) {
+    return;
+  }
+
+  segmentEditorSessionCache.set(cacheKey, {
+    expiresAt: Date.now() + SEGMENT_EDITOR_SESSION_CACHE_TTL_MS,
+    session,
+  });
+};
+
+export const invalidateWorkspaceSegmentEditorSessionCache = (user: SegmentEditorUser, projectId?: number) => {
+  const exactCacheKey =
+    typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
+      ? getSegmentEditorSessionCacheKey(user, projectId)
+      : null;
+
+  if (exactCacheKey) {
+    segmentEditorSessionCache.delete(exactCacheKey);
+    segmentEditorSessionInFlight.delete(exactCacheKey);
+    return;
+  }
+
+  const userId = normalizeText(user.id);
+  const email = normalizeText(user.email).toLowerCase();
+  const cachePrefix = userId ? `user:${userId}:segment-editor:` : email ? `email:${email}:segment-editor:` : null;
+
+  if (!cachePrefix) {
+    return;
+  }
+
+  for (const key of segmentEditorSessionCache.keys()) {
+    if (key.startsWith(cachePrefix)) {
+      segmentEditorSessionCache.delete(key);
+    }
+  }
+
+  for (const key of segmentEditorSessionInFlight.keys()) {
+    if (key.startsWith(cachePrefix)) {
+      segmentEditorSessionInFlight.delete(key);
+    }
+  }
 };
 
 const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
@@ -366,13 +447,8 @@ const buildWorkspaceSegmentEditorSegment = (
   };
 };
 
-export async function getWorkspaceSegmentEditorSession(
-  user: SegmentEditorUser,
-  projectId: number,
-): Promise<WorkspaceSegmentEditorSession> {
+const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<WorkspaceSegmentEditorSession> => {
   assertAdsflowConfigured();
-  await assertWorkspaceProjectAccess(user, projectId);
-
   let payload: AdsflowSegmentEditorResponse;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SEGMENT_EDITOR_SESSION_TIMEOUT_MS);
@@ -434,6 +510,75 @@ export async function getWorkspaceSegmentEditorSession(
     title: normalizeText(payload.title) || `Проект #${normalizedProjectId}`,
     voiceType: normalizeText(payload.voice_type),
   };
+};
+
+const getWorkspaceSegmentEditorSessionInternal = async (
+  user: SegmentEditorUser,
+  projectId: number,
+  options?: {
+    bypassCache?: boolean;
+    skipProjectAccessCheck?: boolean;
+  },
+): Promise<WorkspaceSegmentEditorSession> => {
+  const shouldBypassCache = Boolean(options?.bypassCache);
+  const cacheKey = getSegmentEditorSessionCacheKey(user, projectId);
+  const shouldTrackInFlight = Boolean(cacheKey && !shouldBypassCache);
+
+  if (!shouldBypassCache) {
+    const cachedSession = getCachedSegmentEditorSession(user, projectId);
+    if (cachedSession) {
+      return cachedSession;
+    }
+
+    if (cacheKey) {
+      const inFlightRequest = segmentEditorSessionInFlight.get(cacheKey);
+      if (inFlightRequest) {
+        return inFlightRequest;
+      }
+    }
+  }
+
+  const request = (async () => {
+    if (!options?.skipProjectAccessCheck) {
+      await assertWorkspaceProjectAccess(user, projectId);
+    }
+
+    return loadWorkspaceSegmentEditorSession(projectId);
+  })();
+
+  if (shouldTrackInFlight && cacheKey) {
+    segmentEditorSessionInFlight.set(cacheKey, request);
+  }
+
+  try {
+    const session = await request;
+    setCachedSegmentEditorSession(user, projectId, session);
+    return session;
+  } finally {
+    if (shouldTrackInFlight && cacheKey) {
+      segmentEditorSessionInFlight.delete(cacheKey);
+    }
+  }
+};
+
+export async function getWorkspaceSegmentEditorSession(
+  user: SegmentEditorUser,
+  projectId: number,
+): Promise<WorkspaceSegmentEditorSession> {
+  return getWorkspaceSegmentEditorSessionInternal(user, projectId);
+}
+
+export async function getWorkspaceSegmentEditorSessionForAccessibleProject(
+  user: SegmentEditorUser,
+  projectId: number,
+  options?: {
+    bypassCache?: boolean;
+  },
+): Promise<WorkspaceSegmentEditorSession> {
+  return getWorkspaceSegmentEditorSessionInternal(user, projectId, {
+    bypassCache: options?.bypassCache,
+    skipProjectAccessCheck: true,
+  });
 }
 
 export async function getWorkspaceProjectSegmentVideoProxyTarget(

@@ -165,8 +165,22 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </button>
             )}
             {!session ? (
-              <button className="btn btn--header route-button" type="button" onClick={openPrimaryFlow}>
-                Создать видео бесплатно
+              <button className="btn btn--header btn--premium-cta btn--premium-cta--compact route-button" type="button" onClick={openPrimaryFlow}>
+                <span className="btn--premium-cta__label">Создать видео бесплатно</span>
+                <svg
+                  className="btn--premium-cta__arrow"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
               </button>
             ) : null}
           </div>
@@ -197,9 +211,9 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </p>
 
               <div className="hero__actions">
-                <button className="btn btn--primary btn--hero route-button" type="button" onClick={openPrimaryFlow}>
-                  <span>Создать Shorts бесплатно</span>
-                  <svg className="btn--hero__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <button className="btn btn--primary btn--hero btn--premium-cta route-button" type="button" onClick={openPrimaryFlow}>
+                  <span className="btn--premium-cta__label">Создать Shorts бесплатно</span>
+                  <svg className="btn--premium-cta__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -525,8 +539,22 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </p>
 
               <div className="pricing-shell__actions">
-                <button className="btn btn--primary route-button" type="button" onClick={openPrimaryFlow}>
-                  Создать Shorts бесплатно
+                <button className="btn btn--primary btn--premium-cta route-button" type="button" onClick={openPrimaryFlow}>
+                  <span className="btn--premium-cta__label">Создать Shorts бесплатно</span>
+                  <svg
+                    className="btn--premium-cta__arrow"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
                 </button>
               </div>
               <a

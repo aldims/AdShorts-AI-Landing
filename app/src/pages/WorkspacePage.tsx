@@ -6,6 +6,14 @@ import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
+import {
+  createWorkspaceMediaLibraryItem,
+  getWorkspaceImageDownloadName,
+  getWorkspaceProjectDisplayTitle,
+  getWorkspaceVideoDownloadName,
+  type WorkspaceMediaLibraryItem,
+  type WorkspaceMediaLibraryItemKind,
+} from "../lib/workspaceMediaLibrary";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 
@@ -150,12 +158,85 @@ type WorkspaceProjectsResponse = {
   error?: string;
 };
 
+type WorkspaceMediaLibraryPayload = {
+  items: WorkspaceMediaLibraryItem[];
+};
+
+type WorkspaceMediaLibraryResponse = {
+  data?: WorkspaceMediaLibraryPayload;
+  error?: string;
+};
+
 type WorkspaceProjectDeletePayload = {
   projectId: string;
 };
 
 type WorkspaceProjectDeleteResponse = {
   data?: WorkspaceProjectDeletePayload;
+  error?: string;
+};
+
+type WorkspaceContentPlanIdea = {
+  createdAt: string;
+  id: string;
+  isUsed: boolean;
+  planId: string;
+  position: number;
+  prompt: string;
+  summary: string;
+  title: string;
+  updatedAt: string;
+  usedAt: string | null;
+};
+
+type WorkspaceContentPlan = {
+  createdAt: string;
+  id: string;
+  ideas: WorkspaceContentPlanIdea[];
+  language: "en" | "ru";
+  query: string;
+  updatedAt: string;
+};
+
+type WorkspaceContentPlansPayload = {
+  plans: WorkspaceContentPlan[];
+};
+
+type WorkspaceContentPlansResponse = {
+  data?: WorkspaceContentPlansPayload;
+  error?: string;
+};
+
+type WorkspaceContentPlanPayload = {
+  plan: WorkspaceContentPlan;
+};
+
+type WorkspaceContentPlanResponse = {
+  data?: WorkspaceContentPlanPayload;
+  error?: string;
+};
+
+type WorkspaceContentPlanIdeaUpdatePayload = {
+  ideaId: string;
+  isUsed: boolean;
+  planId: string;
+  updatedAt: string;
+  usedAt: string | null;
+};
+
+type WorkspaceContentPlanIdeaUpdateResponse = {
+  data?: WorkspaceContentPlanIdeaUpdatePayload;
+  error?: string;
+};
+
+type WorkspaceContentPlanIdeaDeletePayload = {
+  ideaId: string;
+  planId: string;
+  updatedAt: string;
+};
+
+type WorkspaceContentPlanIdeaDeleteResponse = {
+  data?: WorkspaceContentPlanIdeaDeletePayload;
   error?: string;
 };
 
@@ -166,25 +247,42 @@ type WorkspaceLocalExampleSource = {
   videoUrl: string;
 };
 
-type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation";
-type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
+type WorkspaceContentPlanComposerSource = {
+  ideaId: string;
+  planId: string;
+  prompt: string;
+  title: string;
+};
 
-type WorkspaceMediaLibraryItem = {
-  downloadName: string;
-  downloadUrl: string | null;
-  dedupeKey: string;
-  kind: WorkspaceMediaLibraryItemKind;
-  itemKey: string;
-  previewKind: WorkspaceSegmentPreviewKind;
-  previewPosterUrl: string | null;
-  previewUrl: string;
-  project: WorkspaceProject;
-  projectId: number;
-  projectTitle: string;
-  segment: WorkspaceSegmentEditorDraftSegment;
-  segmentListIndex: number;
-  segmentNumber: number;
-  source: WorkspaceMediaLibraryItemSource;
+type WorkspaceContentPlanIdeaMutation = {
+  ideaId: string;
+  ideaUpdatedAt: string;
+  isUsed: boolean;
+  planId: string;
+  planUpdatedAt: string;
+  usedAt: string | null;
+};
+
+const WORKSPACE_CONTENT_PLAN_IDEA_COUNT_DEFAULT = 5;
+
+const formatWorkspaceContentPlanIdeaCount = (value: number) => {
+  const count = Math.max(1, Math.trunc(value));
+  const normalized = Math.abs(count) % 100;
+  const tail = normalized % 10;
+
+  if (normalized >= 11 && normalized <= 19) {
+    return `${count} идей`;
+  }
+
+  if (tail === 1) {
+    return `${count} идея`;
+  }
+
+  if (tail >= 2 && tail <= 4) {
+    return `${count} идеи`;
+  }
+
+  return `${count} идей`;
 };
 
 type WorkspaceGeneratedMediaLibraryEntry = {
@@ -380,6 +478,7 @@ type WorkspaceSegmentAiVideoJobStatusResponse = {
 type WorkspaceSegmentPreviewCardMediaProps = {
   autoplay?: boolean;
   fallbackPosterUrl?: string | null;
+  imageLoading?: "eager" | "lazy";
   isPlaybackRequested?: boolean;
   loop?: boolean;
   mediaKey: string;
@@ -390,6 +489,7 @@ type WorkspaceSegmentPreviewCardMediaProps = {
   onVideoPause?: () => void;
   onVideoPlay?: () => void;
   posterUrl?: string | null;
+  preferPosterFrame?: boolean;
   preload?: "auto" | "metadata" | "none";
   primePausedFrame?: boolean;
   previewKind: WorkspaceSegmentPreviewKind;
@@ -614,6 +714,15 @@ const STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS = [
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS = 2.4;
+const WORKSPACE_SEGMENT_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
+
+const normalizeWorkspaceSegmentGenerationJobStatus = (value: unknown) => String(value ?? "").trim().toLowerCase();
+
+const isWorkspaceSegmentGenerationJobDoneStatus = (value: unknown) =>
+  ["completed", "done", "ready", "success", "succeeded"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
+
+const isWorkspaceSegmentGenerationJobFailedStatus = (value: unknown) =>
+  ["canceled", "cancelled", "error", "failed", "timeout"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
 
 const studioPromptChips = ["Видео", "Субтитры", "Озвучка", "Музыка", "Язык"];
 const rgbFromHex = (value: string) => {
@@ -1945,8 +2054,8 @@ const PROJECT_POSTER_CAPTURE_MAX_DIMENSION = 1280;
 const PROJECT_POSTER_CAPTURE_QUALITY = 0.9;
 let activeProjectPosterCaptureCount = 0;
 const PROJECTS_REQUEST_TIMEOUT_MS = 25_000;
+const MEDIA_LIBRARY_REQUEST_TIMEOUT_MS = 25_000;
 const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 20_000;
-const FALLBACK_VIDEO_DOWNLOAD_NAME = "adshorts-video";
 
 const getStudioCompactMenuStyle = ({
   estimatedMenuHeight,
@@ -3094,11 +3203,61 @@ const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, ri
 
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
+const STUDIO_CONTENT_PLAN_VISIBILITY_STORAGE_KEY_PREFIX = "adshorts.content-plan-visible:";
 
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
+const sanitizeWorkspaceContentPlanIdeaPrompt = (value: unknown) => {
+  const fallbackPrompt = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!fallbackPrompt) {
+    return "";
+  }
+
+  let normalized = fallbackPrompt.replace(/^["'`]+|["'`]+$/g, "").trim();
+  const leadingInstructionPatterns = [
+    /^(?:напиши|создай|сделай)\s+(?:мне\s+)?(?:сценарий\s+)?(?:для\s+)?(?:shorts|шортс)(?:\s+(?:ролика|видео))?\s*(?:[,:-]\s*)?(?:где\s+|про\s+|о\s+|об\s+|на\s+тему\s+)?/i,
+    /^(?:создай|сделай)\s+(?:мне\s+)?(?:shorts|шортс|ролик|видео)(?:\s+(?:о|об|про|на\s+тему))?\s*(?:[,:-]\s*)?/i,
+    /^write\s+(?:a\s+)?(?:shorts?\s+)?script(?:\s+for\s+(?:a\s+)?)?(?:shorts?\s+video)?\s*(?:[,:-]\s*)?(?:about\s+|on\s+|where\s+)?/i,
+    /^(?:create|make)\s+(?:a\s+)?shorts?(?:\s+video)?\s*(?:[,:-]\s*)?(?:about\s+|on\s+)?/i,
+  ];
+
+  for (const pattern of leadingInstructionPatterns) {
+    const nextValue = normalized.replace(pattern, "").trim();
+    if (nextValue && nextValue !== normalized) {
+      normalized = nextValue;
+      break;
+    }
+  }
+
+  normalized = normalized.replace(/^[\s,.:;-]+/, "").replace(/^["'`]+|["'`]+$/g, "").trim();
+  return normalized || fallbackPrompt;
+};
+
+const normalizeWorkspaceContentPlanSourceMatchText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim()
+    .toLocaleLowerCase();
+
+const isWorkspaceContentPlanSourceIdeaSynchronized = (
+  prompt: string,
+  sourceIdea: WorkspaceContentPlanComposerSource | null | undefined,
+) => {
+  if (!sourceIdea) {
+    return false;
+  }
+
+  const normalizedPrompt = normalizeWorkspaceContentPlanSourceMatchText(prompt);
+  const normalizedSourcePrompt = normalizeWorkspaceContentPlanSourceMatchText(sourceIdea.prompt);
+  return Boolean(normalizedPrompt) && normalizedPrompt === normalizedSourcePrompt;
+};
+
 const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
+const getStudioContentPlanVisibilityStorageKey = (email: string) =>
+  `${STUDIO_CONTENT_PLAN_VISIBILITY_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceMediaLibraryItemStorageKey = (item: WorkspaceMediaLibraryItem) => item.itemKey;
 
@@ -3119,118 +3278,6 @@ const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) 
 const getWorkspaceMediaLibraryItemMimeType = (item: WorkspaceMediaLibraryItem) =>
   item.previewKind === "video" ? "video/mp4" : "image/jpeg";
 
-const hashWorkspaceMediaLibraryValue = (value: string) => {
-  let hash = 5381;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 33) ^ value.charCodeAt(index);
-  }
-
-  return (hash >>> 0).toString(36);
-};
-
-const getWorkspaceMediaLibraryAssetIdentity = (value: string | null | undefined) => {
-  const normalizedValue = String(value ?? "").trim();
-  if (!normalizedValue) {
-    return "missing";
-  }
-
-  const marker = getWorkspaceMediaLibraryUrlMarker(normalizedValue);
-  if (marker) {
-    return `marker:${marker}`;
-  }
-
-  if (normalizedValue.startsWith("data:")) {
-    return `data:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
-  }
-
-  if (normalizedValue.startsWith("blob:")) {
-    return `blob:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
-  }
-
-  return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
-};
-
-const buildWorkspaceMediaLibraryItemDedupeKey = (options: {
-  kind: WorkspaceMediaLibraryItemKind;
-  previewUrl: string;
-  projectId: number;
-  segmentIndex: number;
-}) =>
-  `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(
-    options.previewUrl,
-  )}`;
-
-const buildWorkspaceMediaLibraryItemKey = (
-  source: WorkspaceMediaLibraryItemSource,
-  options: {
-    kind: WorkspaceMediaLibraryItemKind;
-    previewUrl: string;
-    projectId: number;
-    segmentIndex: number;
-    sourceJobId?: string | null;
-  },
-) => {
-  if (source === "live" && options.sourceJobId) {
-    return `live:${options.kind}:job:${options.sourceJobId}`;
-  }
-
-  return `${source}:${buildWorkspaceMediaLibraryItemDedupeKey({
-    kind: options.kind,
-    previewUrl: options.previewUrl,
-    projectId: options.projectId,
-    segmentIndex: options.segmentIndex,
-  })}`;
-};
-
-const createWorkspaceMediaLibraryItem = (options: {
-  downloadName: string;
-  downloadUrl: string | null;
-  kind: WorkspaceMediaLibraryItemKind;
-  previewKind: WorkspaceSegmentPreviewKind;
-  previewPosterUrl: string | null;
-  previewUrl: string;
-  project: WorkspaceProject;
-  projectId: number;
-  projectTitle: string;
-  segment: WorkspaceSegmentEditorDraftSegment;
-  segmentListIndex: number;
-  source: WorkspaceMediaLibraryItemSource;
-  sourceJobId?: string | null;
-}) => {
-  const segmentNumber = options.segmentListIndex + 1;
-  const dedupeKey = buildWorkspaceMediaLibraryItemDedupeKey({
-    kind: options.kind,
-    previewUrl: options.previewUrl,
-    projectId: options.projectId,
-    segmentIndex: options.segment.index,
-  });
-
-  return {
-    dedupeKey,
-    downloadName: options.downloadName,
-    downloadUrl: options.downloadUrl,
-    itemKey: buildWorkspaceMediaLibraryItemKey(options.source, {
-      kind: options.kind,
-      previewUrl: options.previewUrl,
-      projectId: options.projectId,
-      segmentIndex: options.segment.index,
-      sourceJobId: options.sourceJobId,
-    }),
-    kind: options.kind,
-    previewKind: options.previewKind,
-    previewPosterUrl: options.previewPosterUrl,
-    previewUrl: options.previewUrl,
-    project: options.project,
-    projectId: options.projectId,
-    projectTitle: options.projectTitle,
-    segment: options.segment,
-    segmentListIndex: options.segmentListIndex,
-    segmentNumber,
-    source: options.source,
-  } satisfies WorkspaceMediaLibraryItem;
-};
-
 const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLibraryItem): StudioCustomVideoFile => ({
   fileName: item.downloadName,
   fileSize: 0,
@@ -3240,31 +3287,6 @@ const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLib
   remoteUrl: getWorkspaceMediaLibraryItemRemoteUrl(item),
   source: "media-library",
 });
-
-const getWorkspaceMediaLibraryUrlMarker = (value: string | null | undefined) => {
-  const normalizedValue = String(value ?? "").trim();
-  if (!normalizedValue) {
-    return "";
-  }
-
-  try {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost";
-    const resolvedUrl = new URL(normalizedValue, baseUrl);
-    return String(resolvedUrl.searchParams.get("v") ?? "").trim();
-  } catch {
-    return "";
-  }
-};
-
-const areWorkspaceMediaLibraryUrlsEqual = (left: string | null | undefined, right: string | null | undefined) => {
-  const leftMarker = getWorkspaceMediaLibraryUrlMarker(left);
-  const rightMarker = getWorkspaceMediaLibraryUrlMarker(right);
-  if (leftMarker || rightMarker) {
-    return leftMarker === rightMarker;
-  }
-
-  return String(left ?? "").trim() === String(right ?? "").trim();
-};
 
 const getStudioPreviewDismissKey = (
   generation: Pick<StudioGeneration, "adId" | "id" | "videoUrl"> | null | undefined,
@@ -3358,6 +3380,57 @@ const readHiddenMediaLibraryItemKeys = (email: string | null | undefined) => {
   }
 };
 
+const getDefaultStudioContentPlanVisibility = () => {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return true;
+  }
+
+  return !window.matchMedia("(max-width: 1100px)").matches;
+};
+
+const readStudioContentPlanVisibility = (email: string | null | undefined) => {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return getDefaultStudioContentPlanVisibility();
+  }
+
+  try {
+    const storageValue = window.localStorage.getItem(getStudioContentPlanVisibilityStorageKey(normalizedEmail));
+    if (storageValue === "1" || storageValue === "true") {
+      return true;
+    }
+
+    if (storageValue === "0" || storageValue === "false") {
+      return false;
+    }
+  } catch {
+    return getDefaultStudioContentPlanVisibility();
+  }
+
+  return getDefaultStudioContentPlanVisibility();
+};
+
+const persistStudioContentPlanVisibility = (email: string | null | undefined, isVisible: boolean) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getStudioContentPlanVisibilityStorageKey(normalizedEmail), isVisible ? "1" : "0");
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
 const persistHiddenMediaLibraryItemKeys = (email: string | null | undefined, keys: string[]) => {
   if (typeof window === "undefined") {
     return;
@@ -3389,25 +3462,49 @@ const persistHiddenMediaLibraryItemKeys = (email: string | null | undefined, key
   }
 };
 
-const getDownloadBaseName = (value: string) => {
-  const normalizedValue = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9а-яё]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
+const applyWorkspaceContentPlanIdeaUpdate = (
+  plans: WorkspaceContentPlan[],
+  payload: WorkspaceContentPlanIdeaMutation,
+) =>
+  plans.map((plan) =>
+    plan.id === payload.planId
+      ? {
+          ...plan,
+          ideas: plan.ideas.map((idea) =>
+            idea.id === payload.ideaId
+              ? {
+                  ...idea,
+                  isUsed: payload.isUsed,
+                  updatedAt: payload.ideaUpdatedAt,
+                  usedAt: payload.usedAt,
+                }
+              : idea,
+          ),
+          updatedAt: payload.planUpdatedAt,
+        }
+      : plan,
+  );
 
-  return normalizedValue || FALLBACK_VIDEO_DOWNLOAD_NAME;
-};
+const removeWorkspaceContentPlanIdea = (
+  plans: WorkspaceContentPlan[],
+  payload: {
+    ideaId: string;
+    planId: string;
+    updatedAt: string;
+  },
+) =>
+  plans.map((plan) =>
+    plan.id !== payload.planId
+      ? plan
+      : {
+          ...plan,
+          ideas: plan.ideas.filter((idea) => idea.id !== payload.ideaId),
+          updatedAt: payload.updatedAt,
+        },
+  );
 
-const getVideoDownloadName = (value: string) => {
-  const normalizedValue = getDownloadBaseName(value);
-  return `${normalizedValue}.mp4`;
-};
-
-const getImageDownloadName = (value: string) => {
-  const normalizedValue = getDownloadBaseName(value);
-  return `${normalizedValue}.jpg`;
-};
+const getVideoDownloadName = getWorkspaceVideoDownloadName;
+const getImageDownloadName = getWorkspaceImageDownloadName;
 
 const buildStudioGenerationFromProject = (project: WorkspaceProject): StudioGeneration | null => {
   if (!project.videoUrl) return null;
@@ -3513,23 +3610,6 @@ const getProjectPreviewNote = (project: WorkspaceProject) => {
   }
 };
 
-const getWorkspaceProjectDisplayTitle = (project: Pick<WorkspaceProject, "title" | "adId" | "jobId">) => {
-  const normalizedTitle = project.title.trim();
-  if (normalizedTitle) {
-    return normalizedTitle;
-  }
-
-  if (project.adId !== null) {
-    return `Проект #${project.adId}`;
-  }
-
-  if (project.jobId) {
-    return `Job ${project.jobId.slice(0, 8)}`;
-  }
-
-  return "Без названия";
-};
-
 const WORKSPACE_MEDIA_LIBRARY_FALLBACK_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 
 const createWorkspaceMediaLibraryProjectFromDraft = (
@@ -3568,108 +3648,6 @@ const createWorkspaceMediaLibraryProjectFromDraft = (
   };
 };
 
-const buildWorkspaceMediaLibraryItems = (
-  project: WorkspaceProject,
-  session: WorkspaceSegmentEditorSession,
-): WorkspaceMediaLibraryItem[] => {
-  const normalizedSession = normalizeWorkspaceSegmentEditorSession(session);
-  const draft = createWorkspaceSegmentEditorDraftSession(normalizedSession);
-  const projectId = project.adId ?? normalizedSession.projectId;
-  const projectTitle = getWorkspaceProjectDisplayTitle(project);
-  const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
-
-  return draft.segments.flatMap((segment, segmentListIndex) => {
-    const originalPreviewUrl = segment.originalPreviewUrl;
-    const originalPlaybackUrl = segment.originalPlaybackUrl ?? segment.originalPreviewUrl;
-    const currentPreviewUrl = segment.currentPreviewUrl ?? segment.currentPlaybackUrl;
-    const currentPlaybackUrl = segment.currentPlaybackUrl ?? segment.currentPreviewUrl;
-    const items: WorkspaceMediaLibraryItem[] = [];
-
-    if (segment.mediaType !== "photo") {
-      const hasAiVideoVariant =
-        Boolean(currentPreviewUrl || currentPlaybackUrl) &&
-        (!originalPreviewUrl ||
-          !originalPlaybackUrl ||
-          !areWorkspaceMediaLibraryUrlsEqual(currentPreviewUrl, originalPreviewUrl) ||
-          !areWorkspaceMediaLibraryUrlsEqual(currentPlaybackUrl, originalPlaybackUrl));
-
-      if (hasAiVideoVariant) {
-        const aiVideoPreviewUrl = currentPlaybackUrl ?? currentPreviewUrl;
-        if (aiVideoPreviewUrl) {
-          items.push(createWorkspaceMediaLibraryItem({
-            downloadName: getVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-video`),
-            downloadUrl: appendUrlToken(
-              currentPlaybackUrl ?? aiVideoPreviewUrl,
-              "download",
-              `${downloadToken}:${segment.index}:ai-video`,
-            ),
-            kind: "ai_video",
-            previewKind: "video",
-            previewPosterUrl: currentPreviewUrl ?? originalPreviewUrl,
-            previewUrl: aiVideoPreviewUrl,
-            project,
-            projectId,
-            projectTitle,
-            segment,
-            segmentListIndex,
-            source: "persisted",
-          }));
-        }
-      }
-
-      return items;
-    }
-
-    if (originalPreviewUrl) {
-      items.push(createWorkspaceMediaLibraryItem({
-        downloadName: getImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
-        downloadUrl: appendUrlToken(originalPreviewUrl, "download", `${downloadToken}:${segment.index}:original`),
-        kind: "ai_photo",
-        previewKind: "image",
-        previewPosterUrl: originalPreviewUrl,
-        previewUrl: originalPreviewUrl,
-        project,
-        projectId,
-        projectTitle,
-        segment,
-        segmentListIndex,
-        source: "persisted",
-      }));
-    }
-
-    const hasAnimatedVariant =
-      Boolean(currentPreviewUrl || currentPlaybackUrl) &&
-      (!areWorkspaceMediaLibraryUrlsEqual(currentPreviewUrl, originalPreviewUrl) ||
-        !areWorkspaceMediaLibraryUrlsEqual(currentPlaybackUrl, originalPlaybackUrl));
-
-    if (hasAnimatedVariant) {
-      const animatedPreviewUrl = currentPreviewUrl ?? currentPlaybackUrl;
-      if (animatedPreviewUrl) {
-        items.push(createWorkspaceMediaLibraryItem({
-          downloadName: getVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
-          downloadUrl: appendUrlToken(
-            currentPlaybackUrl ?? animatedPreviewUrl,
-            "download",
-            `${downloadToken}:${segment.index}:animation`,
-          ),
-          kind: "photo_animation",
-          previewKind: "video",
-          previewPosterUrl: originalPreviewUrl ?? animatedPreviewUrl,
-          previewUrl: animatedPreviewUrl,
-          project,
-          projectId,
-          projectTitle,
-          segment,
-          segmentListIndex,
-          source: "persisted",
-        }));
-      }
-    }
-
-    return items;
-  });
-};
-
 const buildWorkspaceMediaLibraryDraftItems = (
   project: WorkspaceProject,
   draft: WorkspaceSegmentEditorDraftSession,
@@ -3696,10 +3674,9 @@ const buildWorkspaceMediaLibraryDraftItems = (
         previewKind: "image",
         previewPosterUrl: aiPhotoPreviewUrl,
         previewUrl: aiPhotoPreviewUrl,
-        project,
         projectId,
         projectTitle,
-        segment,
+        segmentIndex: segment.index,
         segmentListIndex,
         source: "draft",
       }));
@@ -3713,10 +3690,9 @@ const buildWorkspaceMediaLibraryDraftItems = (
         previewKind: "video",
         previewPosterUrl: aiVideoPosterUrl,
         previewUrl: aiVideoPreviewUrl,
-        project,
         projectId,
         projectTitle,
-        segment,
+        segmentIndex: segment.index,
         segmentListIndex,
         source: "draft",
       }));
@@ -3730,10 +3706,9 @@ const buildWorkspaceMediaLibraryDraftItems = (
         previewKind: "video",
         previewPosterUrl: aiVideoPosterUrl,
         previewUrl: aiVideoPreviewUrl,
-        project,
         projectId,
         projectTitle,
-        segment,
+        segmentIndex: segment.index,
         segmentListIndex,
         source: "draft",
       }));
@@ -3786,10 +3761,9 @@ const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
     previewKind,
     previewPosterUrl,
     previewUrl,
-    project,
     projectId,
     projectTitle,
-    segment,
+    segmentIndex: segment.index,
     segmentListIndex: options.segmentListIndex,
     source: "live",
     sourceJobId: options.sourceJobId,
@@ -4226,8 +4200,11 @@ const formatProjectDate = (value: string) => {
   }
 
   return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(parsed);
 };
 
@@ -5209,6 +5186,7 @@ function StudioVoiceSelectorChip({
 function WorkspaceSegmentPreviewCardMedia({
   autoplay = true,
   fallbackPosterUrl,
+  imageLoading = "eager",
   isPlaybackRequested = false,
   loop,
   mediaKey,
@@ -5219,6 +5197,7 @@ function WorkspaceSegmentPreviewCardMedia({
   onVideoPause,
   onVideoPlay,
   posterUrl,
+  preferPosterFrame = false,
   preload = "metadata",
   primePausedFrame = false,
   previewKind,
@@ -5379,7 +5358,21 @@ function WorkspaceSegmentPreviewCardMedia({
   }, [autoplay, preload, previewKind, previewUrl, primePausedFrame]);
 
   if (previewKind === "image") {
-    return <img key={mediaKey} src={previewUrl} alt="" loading="eager" decoding="async" draggable={false} />;
+    return <img key={mediaKey} src={previewUrl} alt="" loading={imageLoading} decoding="async" draggable={false} />;
+  }
+
+  if (preferPosterFrame && resolvedPosterUrl) {
+    return (
+      <img
+        key={`${mediaKey}:poster`}
+        src={resolvedPosterUrl}
+        alt=""
+        loading={imageLoading}
+        decoding="async"
+        draggable={false}
+        aria-hidden="true"
+      />
+    );
   }
 
   return (
@@ -5424,7 +5417,7 @@ function WorkspaceSegmentPreviewCardMedia({
           className="studio-segment-preview-card-media__poster"
           src={resolvedPosterUrl}
           alt=""
-          loading="eager"
+          loading={imageLoading}
           decoding="async"
           draggable={false}
           aria-hidden="true"
@@ -6152,6 +6145,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [studioView, setStudioView] = useState<StudioView>("create");
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const [topicInput, setTopicInput] = useState("");
+  const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
+  const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>("ru");
   const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([]);
   const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([]);
@@ -6234,9 +6229,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [hasLoadedProjects, setHasLoadedProjects] = useState(false);
   const [generatedMediaLibraryEntries, setGeneratedMediaLibraryEntries] = useState<WorkspaceGeneratedMediaLibraryEntry[]>([]);
   const [mediaLibraryItems, setMediaLibraryItems] = useState<WorkspaceMediaLibraryItem[]>([]);
+  const [loadedMediaLibraryFingerprint, setLoadedMediaLibraryFingerprint] = useState<string | null>(null);
+  const [loadedMediaLibraryReloadToken, setLoadedMediaLibraryReloadToken] = useState(-1);
   const [mediaLibraryError, setMediaLibraryError] = useState<string | null>(null);
   const [isMediaLibraryLoading, setIsMediaLibraryLoading] = useState(false);
   const [mediaLibraryReloadToken, setMediaLibraryReloadToken] = useState(0);
+  const [contentPlans, setContentPlans] = useState<WorkspaceContentPlan[]>([]);
+  const [contentPlansError, setContentPlansError] = useState<string | null>(null);
+  const [hasLoadedContentPlans, setHasLoadedContentPlans] = useState(false);
+  const [isContentPlansLoading, setIsContentPlansLoading] = useState(false);
+  const [isContentPlanGenerating, setIsContentPlanGenerating] = useState(false);
+  const [contentPlanDeletingPlanId, setContentPlanDeletingPlanId] = useState<string | null>(null);
+  const [contentPlanDeletingIdeaId, setContentPlanDeletingIdeaId] = useState<string | null>(null);
+  const [contentPlanUpdatingIdeaId, setContentPlanUpdatingIdeaId] = useState<string | null>(null);
+  const [isContentPlanVisible, setIsContentPlanVisible] = useState<boolean>(() =>
+    readStudioContentPlanVisibility(session.email),
+  );
+  const [activeContentPlanId, setActiveContentPlanId] = useState<string | null>(null);
+  const [expandedContentPlanUsedIdeasPlanId, setExpandedContentPlanUsedIdeasPlanId] = useState<string | null>(null);
+  const [selectedContentPlanIdeaId, setSelectedContentPlanIdeaId] = useState<string | null>(null);
+  const [composerSourceIdea, setComposerSourceIdea] = useState<WorkspaceContentPlanComposerSource | null>(null);
   const [activeProjectPreviewId, setActiveProjectPreviewId] = useState<string | null>(null);
   const [projectPreviewModal, setProjectPreviewModal] = useState<WorkspaceProject | null>(null);
   const [previewModalOpenToken, setPreviewModalOpenToken] = useState<number>(0);
@@ -6330,6 +6342,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     (dismissKey: string | null) => {
       setDismissedStudioPreviewKey(dismissKey);
       persistDismissedStudioPreviewKey(session.email, dismissKey);
+    },
+    [session.email],
+  );
+  const updateContentPlanVisibility = useCallback(
+    (nextValue: boolean) => {
+      setIsContentPlanVisible(nextValue);
+      persistStudioContentPlanVisibility(session.email, nextValue);
     },
     [session.email],
   );
@@ -6604,9 +6623,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setHasLoadedProjects(false);
     setGeneratedMediaLibraryEntries([]);
     setMediaLibraryItems([]);
+    setLoadedMediaLibraryFingerprint(null);
+    setLoadedMediaLibraryReloadToken(-1);
     setMediaLibraryError(null);
     setIsMediaLibraryLoading(false);
     setMediaLibraryReloadToken(0);
+    setContentPlans([]);
+    setContentPlansError(null);
+    setHasLoadedContentPlans(false);
+    setIsContentPlansLoading(false);
+    setIsContentPlanGenerating(false);
+    setContentPlanDeletingPlanId(null);
+    setContentPlanDeletingIdeaId(null);
+    setContentPlanUpdatingIdeaId(null);
+    setActiveContentPlanId(null);
+    setExpandedContentPlanUsedIdeasPlanId(null);
+    setSelectedContentPlanIdeaId(null);
+    setComposerSourceIdea(null);
+    setContentPlanQueryInput("");
+    setHasEditedContentPlanQueryInput(false);
+    setIsContentPlanVisible(readStudioContentPlanVisibility(session.email));
     setActiveProjectPreviewId(null);
     setFailedStudioVideoUrls([]);
     setDismissedStudioPreviewKey(readDismissedStudioPreviewKey(session.email));
@@ -6646,6 +6682,47 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorPanelHeightLock(null);
     setActiveSegmentIndex(0);
   }, [session.email]);
+
+  useEffect(() => {
+    if (activeTab !== "studio" || studioView !== "create" || createMode === "segment-editor") {
+      return;
+    }
+
+    if (hasEditedContentPlanQueryInput) {
+      return;
+    }
+
+    const normalizedTopic = topicInput.trim();
+    if (!normalizedTopic) {
+      return;
+    }
+
+    setContentPlanQueryInput((current) => (current.trim() ? current : normalizedTopic));
+  }, [activeTab, createMode, hasEditedContentPlanQueryInput, studioView, topicInput]);
+
+  useEffect(() => {
+    if (contentPlans.length === 0) {
+      setActiveContentPlanId((current) => (current === null ? current : null));
+      return;
+    }
+
+    setActiveContentPlanId((current) =>
+      current && contentPlans.some((plan) => plan.id === current) ? current : contentPlans[0]?.id ?? null,
+    );
+  }, [contentPlans]);
+
+  useEffect(() => {
+    if (!composerSourceIdea) {
+      return;
+    }
+
+    if (isWorkspaceContentPlanSourceIdeaSynchronized(topicInput, composerSourceIdea)) {
+      return;
+    }
+
+    setComposerSourceIdea(null);
+    setSelectedContentPlanIdeaId((current) => (current === composerSourceIdea.ideaId ? null : current));
+  }, [composerSourceIdea, topicInput]);
 
   useEffect(() => {
     if (activeTab === "studio" && studioView === "create") {
@@ -7016,10 +7093,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setGeneratedVideo(fallbackGeneration);
     setGenerateError(null);
 
-    if (!preserveExamplePrefillRef.current && !topicInput.trim() && fallbackGeneration.prompt.trim()) {
-      setTopicInput(fallbackGeneration.prompt);
-    }
-  }, [failedStudioVideoUrls, generatedVideo?.videoUrl, isWorkspaceBootstrapPending, projects, topicInput]);
+  }, [failedStudioVideoUrls, generatedVideo?.videoUrl, isWorkspaceBootstrapPending, projects]);
 
   useEffect(() => {
     const nextPreviewVideoUrl = String(generatedVideo?.videoUrl ?? "").trim() || null;
@@ -7075,6 +7149,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           project.status === "ready" && typeof project.adId === "number" && project.adId > 0,
       ),
     [projects],
+  );
+  const mediaLibraryProjectsFingerprint = useMemo(
+    () =>
+      mediaLibraryProjects
+        .map(
+          (project) =>
+            `${project.adId}:${project.updatedAt}:${project.generatedAt ?? ""}:${project.createdAt}:${project.videoUrl ?? ""}`,
+        )
+        .join("|"),
+    [mediaLibraryProjects],
   );
   const isStudioVideoMarkedFailed = (value: string | null | undefined) => {
     const normalized = String(value ?? "").trim();
@@ -7141,86 +7225,164 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     };
   }, [shouldLoadProjects]);
 
-  const shouldLoadMediaLibrary =
-    activeTab === "studio" &&
-    (studioView === "media" || (createMode === "segment-editor" && isSegmentAiPhotoModalOpen && segmentAiPhotoModalTab === "library"));
+  const shouldLoadContentPlans = activeTab === "studio" && studioView === "create" && createMode !== "segment-editor";
 
   useEffect(() => {
-    if (!shouldLoadMediaLibrary) {
+    if (!shouldLoadContentPlans) {
+      setIsContentPlansLoading(false);
+      return;
+    }
+
+    if (hasLoadedContentPlans) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsContentPlansLoading(true);
+    setContentPlansError(null);
+
+    const loadContentPlans = async () => {
+      try {
+        const response = await fetch("/api/workspace/content-plans");
+        const payload = (await response.json().catch(() => null)) as WorkspaceContentPlansResponse | null;
+
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error ?? "Не удалось загрузить контент-планы.");
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setContentPlans(payload.data.plans);
+        setActiveContentPlanId((current) =>
+          current && payload.data?.plans.some((plan) => plan.id === current)
+            ? current
+            : payload.data?.plans[0]?.id ?? null,
+        );
+        setHasLoadedContentPlans(true);
+        setIsContentPlansLoading(false);
+      } catch (error) {
+        if (cancelled || isAbortLikeError(error)) {
+          return;
+        }
+
+        setContentPlansError(error instanceof Error ? error.message : "Не удалось загрузить контент-планы.");
+        setHasLoadedContentPlans(true);
+        setIsContentPlansLoading(false);
+      }
+    };
+
+    void loadContentPlans();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasLoadedContentPlans, shouldLoadContentPlans]);
+
+  const shouldPrefetchMediaLibrary = activeTab === "studio";
+
+  useEffect(() => {
+    if (!shouldPrefetchMediaLibrary) {
+      setIsMediaLibraryLoading(false);
       return;
     }
 
     if (!hasLoadedProjects || isProjectsLoading) {
-      setIsMediaLibraryLoading(true);
-      setMediaLibraryError(null);
+      const hasPersistedSnapshot = loadedMediaLibraryFingerprint !== null;
+      setIsMediaLibraryLoading(!hasPersistedSnapshot);
+      if (!hasPersistedSnapshot) {
+        setMediaLibraryError(null);
+      }
       return;
     }
 
     if (!mediaLibraryProjects.length) {
       setMediaLibraryItems([]);
+      setLoadedMediaLibraryFingerprint(mediaLibraryProjectsFingerprint);
+      setLoadedMediaLibraryReloadToken(mediaLibraryReloadToken);
       setMediaLibraryError(null);
       setIsMediaLibraryLoading(false);
       return;
     }
 
+    const shouldBypassMediaLibraryCache = mediaLibraryReloadToken !== loadedMediaLibraryReloadToken;
+    const shouldFetchMediaLibrary =
+      shouldBypassMediaLibraryCache || loadedMediaLibraryFingerprint !== mediaLibraryProjectsFingerprint;
+
+    if (!shouldFetchMediaLibrary) {
+      setIsMediaLibraryLoading(false);
+      return;
+    }
+
     let cancelled = false;
-    const controllers: AbortController[] = [];
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort("media-library-timeout"), MEDIA_LIBRARY_REQUEST_TIMEOUT_MS);
     setIsMediaLibraryLoading(true);
     setMediaLibraryError(null);
 
     const loadMediaLibrary = async () => {
-      const results = await Promise.allSettled(
-        mediaLibraryProjects.map(async (project) => {
-          const controller = new AbortController();
-          controllers.push(controller);
+      try {
+        const requestUrl = shouldBypassMediaLibraryCache ? "/api/workspace/media-library?reload=1" : "/api/workspace/media-library";
+        const response = await fetch(requestUrl, {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceMediaLibraryResponse | null;
 
-          const response = await fetch(`/api/workspace/projects/${project.adId}/segment-editor`, {
-            signal: controller.signal,
-          });
-          const payload = (await response.json().catch(() => null)) as WorkspaceSegmentEditorResponse | null;
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error ?? "Не удалось загрузить медиатеку.");
+        }
 
-          if (!response.ok || !payload?.data) {
-            throw new Error(payload?.error ?? "Не удалось загрузить сегменты проекта.");
+        if (cancelled) {
+          return;
+        }
+
+        setMediaLibraryItems(payload.data.items);
+        setLoadedMediaLibraryFingerprint(mediaLibraryProjectsFingerprint);
+        setLoadedMediaLibraryReloadToken(mediaLibraryReloadToken);
+        setMediaLibraryError(null);
+        setIsMediaLibraryLoading(false);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        if (controller.signal.aborted) {
+          if (controller.signal.reason === "media-library-timeout") {
+            setMediaLibraryError(mediaLibraryItems.length > 0 ? null : "Сервер слишком долго отвечает. Попробуйте обновить.");
+            setIsMediaLibraryLoading(false);
           }
+          return;
+        }
 
-          return buildWorkspaceMediaLibraryItems(project, payload.data);
-        }),
-      );
+        if (isAbortLikeError(error)) {
+          return;
+        }
 
-      if (cancelled) {
-        return;
+        setMediaLibraryError(mediaLibraryItems.length > 0 ? null : error instanceof Error ? error.message : "Не удалось загрузить медиатеку.");
+        setIsMediaLibraryLoading(false);
+      } finally {
+        window.clearTimeout(timeoutId);
       }
-
-      const nextItems = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-      const failedResult = results.find((result) => result.status === "rejected");
-      const failedMessage =
-        failedResult?.status === "rejected"
-          ? failedResult.reason instanceof Error
-            ? failedResult.reason.message
-            : "Не удалось загрузить медиатеку сегментов."
-          : null;
-
-      setMediaLibraryItems(nextItems);
-      setMediaLibraryError(nextItems.length > 0 ? null : failedMessage);
-      setIsMediaLibraryLoading(false);
     };
 
     void loadMediaLibrary();
 
     return () => {
       cancelled = true;
-      controllers.forEach((controller) => controller.abort());
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [
-    createMode,
     hasLoadedProjects,
-    isSegmentAiPhotoModalOpen,
     isProjectsLoading,
+    loadedMediaLibraryFingerprint,
+    loadedMediaLibraryReloadToken,
+    mediaLibraryItems.length,
     mediaLibraryProjects,
+    mediaLibraryProjectsFingerprint,
     mediaLibraryReloadToken,
-    segmentAiPhotoModalTab,
-    shouldLoadMediaLibrary,
-    studioView,
+    shouldPrefetchMediaLibrary,
   ]);
 
   const header = tabCopy[activeTab];
@@ -7556,9 +7718,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ? segmentAiPhotoModalPreviewPosterUrl
       : getWorkspaceSegmentDraftVideoUrl(segmentAiPhotoModalSegment)
     : null;
-  const segmentAiPhotoModalSourceLabel = segmentAiPhotoModalSegment
+  const segmentAiPhotoModalSourceBaseLabel = segmentAiPhotoModalSegment
     ? getWorkspaceSegmentDraftSourceLabel(segmentAiPhotoModalSegment)
     : "Сток";
+  const segmentAiPhotoModalSourceLabel =
+    segmentAiPhotoModalSourceBaseLabel === "ИИ фото" ? "Фото" : segmentAiPhotoModalSourceBaseLabel;
   const segmentAiPhotoModalFormatLabel = segmentAiPhotoModalPreviewKind === "image" ? "Фото" : "Видео";
   const segmentAiPhotoModalAiVideoStatus = createSegmentAiPhotoModalStatus({
     isBusy: isSegmentAiVideoModalGeneratingCurrentSegment,
@@ -9219,9 +9383,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     let latestStatus = initialStatus;
+    const startedAt = Date.now();
 
     try {
       while (segmentAiPhotoRunRef.current === options.runId) {
+        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_GENERATION_JOB_TIMEOUT_MS) {
+          throw new Error("ИИ фото генерируется слишком долго. Попробуйте запустить ещё раз.");
+        }
+
         const response = await fetch(`/api/studio/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`);
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
 
@@ -9233,7 +9402,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        latestStatus = payload.data.status;
+        latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
@@ -9254,11 +9423,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        if (latestStatus === "failed") {
+        if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Не удалось сгенерировать ИИ фото.");
         }
 
-        if (latestStatus === "done") {
+        if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Сгенерированное ИИ фото недоступно.");
         }
 
@@ -9288,9 +9457,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     let latestStatus = initialStatus;
+    const startedAt = Date.now();
 
     try {
       while (segmentAiVideoRunRef.current === options.runId) {
+        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_GENERATION_JOB_TIMEOUT_MS) {
+          throw new Error("ИИ видео генерируется слишком долго. Попробуйте запустить ещё раз.");
+        }
+
         const response = await fetch(`/api/studio/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}`);
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobStatusResponse | null;
 
@@ -9302,7 +9476,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        latestStatus = payload.data.status;
+        latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
@@ -9325,11 +9499,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        if (latestStatus === "failed") {
+        if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Не удалось сгенерировать ИИ видео.");
         }
 
-        if (latestStatus === "done") {
+        if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Сгенерированное ИИ видео недоступно.");
         }
 
@@ -9359,9 +9533,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     let latestStatus = initialStatus;
+    const startedAt = Date.now();
 
     try {
       while (segmentPhotoAnimationRunRef.current === options.runId) {
+        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_GENERATION_JOB_TIMEOUT_MS) {
+          throw new Error("ИИ анимация фото генерируется слишком долго. Попробуйте запустить ещё раз.");
+        }
+
         const response = await fetch(`/api/studio/segment-photo-animation/jobs/${encodeURIComponent(safeJobId)}`);
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobStatusResponse | null;
 
@@ -9373,7 +9552,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        latestStatus = payload.data.status;
+        latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
@@ -9396,11 +9575,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           return;
         }
 
-        if (latestStatus === "failed") {
+        if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Не удалось анимировать фото сегмента.");
         }
 
-        if (latestStatus === "done") {
+        if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           throw new Error(payload.data.error ?? "Сгенерированная ИИ анимация фото недоступна.");
         }
 
@@ -10389,7 +10568,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           setGeneratedVideo(statusPayload.data.generation);
           updateDismissedStudioPreviewKey(null);
           setGenerateError(statusPayload.data.error ?? null);
-          setTopicInput(statusPayload.data.generation.prompt);
           if (options?.invalidateSegmentEditorOnSuccess) {
             setSegmentEditorLoadedSession(null);
           }
@@ -10447,6 +10625,273 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         setIsGenerating(false);
       }
     }
+  };
+
+  const handleContentPlanQueryInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setHasEditedContentPlanQueryInput(true);
+    setContentPlanQueryInput(event.target.value);
+  };
+
+  const handleToggleContentPlanVisibility = () => {
+    updateContentPlanVisibility(!isContentPlanVisible);
+  };
+
+  const handleClearComposerSourceIdea = () => {
+    setComposerSourceIdea(null);
+    setSelectedContentPlanIdeaId(null);
+  };
+
+  const handleSelectContentPlanIdea = (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
+    const nextPrompt = sanitizeWorkspaceContentPlanIdeaPrompt(idea.prompt);
+    setTopicInput(nextPrompt);
+    setGenerateError(null);
+    setActiveContentPlanId(plan.id);
+    setSelectedContentPlanIdeaId(idea.id);
+    setComposerSourceIdea({
+      ideaId: idea.id,
+      planId: plan.id,
+      prompt: nextPrompt,
+      title: idea.title,
+    });
+  };
+
+  const persistContentPlanIdeaUsedState = async (
+    plan: WorkspaceContentPlan,
+    idea: WorkspaceContentPlanIdea,
+    nextIsUsed: boolean,
+    options?: {
+      silentError?: boolean;
+      trackBusy?: boolean;
+    },
+  ) => {
+    if (idea.isUsed === nextIsUsed) {
+      return true;
+    }
+
+    const optimisticTimestamp = new Date().toISOString();
+    const rollbackPayload: WorkspaceContentPlanIdeaMutation = {
+      ideaId: idea.id,
+      ideaUpdatedAt: idea.updatedAt,
+      isUsed: idea.isUsed,
+      planId: plan.id,
+      planUpdatedAt: plan.updatedAt,
+      usedAt: idea.usedAt,
+    };
+    const optimisticPayload: WorkspaceContentPlanIdeaMutation = {
+      ideaId: idea.id,
+      ideaUpdatedAt: optimisticTimestamp,
+      isUsed: nextIsUsed,
+      planId: plan.id,
+      planUpdatedAt: optimisticTimestamp,
+      usedAt: nextIsUsed ? optimisticTimestamp : null,
+    };
+
+    setContentPlans((current) => applyWorkspaceContentPlanIdeaUpdate(current, optimisticPayload));
+    if (options?.trackBusy) {
+      setContentPlanUpdatingIdeaId(idea.id);
+    }
+
+    try {
+      const response = await fetch(`/api/workspace/content-plans/${encodeURIComponent(plan.id)}/ideas/${encodeURIComponent(idea.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isUsed: nextIsUsed,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceContentPlanIdeaUpdateResponse | null;
+
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error ?? "Не удалось обновить статус идеи.");
+      }
+
+      const updatedIdea = payload.data;
+      setContentPlans((current) =>
+        applyWorkspaceContentPlanIdeaUpdate(current, {
+          ideaId: updatedIdea.ideaId,
+          ideaUpdatedAt: updatedIdea.updatedAt,
+          isUsed: updatedIdea.isUsed,
+          planId: updatedIdea.planId,
+          planUpdatedAt: updatedIdea.updatedAt,
+          usedAt: updatedIdea.usedAt,
+        }),
+      );
+      return true;
+    } catch (error) {
+      setContentPlans((current) => applyWorkspaceContentPlanIdeaUpdate(current, rollbackPayload));
+      if (!options?.silentError) {
+        setContentPlansError(error instanceof Error ? error.message : "Не удалось обновить статус идеи.");
+      }
+      return false;
+    } finally {
+      if (options?.trackBusy) {
+        setContentPlanUpdatingIdeaId((current) => (current === idea.id ? null : current));
+      }
+    }
+  };
+
+  const handleToggleContentPlanIdeaUsed = async (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
+    setContentPlansError(null);
+    await persistContentPlanIdeaUsedState(plan, idea, !idea.isUsed, {
+      trackBusy: true,
+    });
+  };
+
+  const handleDeleteContentPlanIdea = async (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
+    if (typeof window !== "undefined" && !window.confirm(`Удалить идею «${idea.title}»?`)) {
+      return;
+    }
+
+    const previousPlans = contentPlans;
+    const previousSelectedIdeaId = selectedContentPlanIdeaId;
+    const previousComposerSourceIdea = composerSourceIdea;
+    const optimisticUpdatedAt = new Date().toISOString();
+
+    setContentPlansError(null);
+    setContentPlanDeletingIdeaId(idea.id);
+    setContentPlans((current) =>
+      removeWorkspaceContentPlanIdea(current, {
+        ideaId: idea.id,
+        planId: plan.id,
+        updatedAt: optimisticUpdatedAt,
+      }),
+    );
+
+    if (selectedContentPlanIdeaId === idea.id) {
+      setSelectedContentPlanIdeaId(null);
+    }
+
+    if (composerSourceIdea?.ideaId === idea.id) {
+      setComposerSourceIdea(null);
+    }
+
+    try {
+      const response = await fetch(`/api/workspace/content-plans/${encodeURIComponent(plan.id)}/ideas/${encodeURIComponent(idea.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceContentPlanIdeaDeleteResponse | null;
+
+      if (!response.ok || !payload?.data || payload.data.ideaId !== idea.id || payload.data.planId !== plan.id) {
+        throw new Error(payload?.error ?? "Не удалось удалить идею.");
+      }
+
+      const deletedIdea = payload.data;
+      setContentPlans((current) => removeWorkspaceContentPlanIdea(current, deletedIdea));
+    } catch (error) {
+      setContentPlans(previousPlans);
+      setSelectedContentPlanIdeaId(previousSelectedIdeaId);
+      setComposerSourceIdea(previousComposerSourceIdea);
+      setContentPlansError(error instanceof Error ? error.message : "Не удалось удалить идею.");
+    } finally {
+      setContentPlanDeletingIdeaId((current) => (current === idea.id ? null : current));
+    }
+  };
+
+  const handleDeleteContentPlan = async (plan: WorkspaceContentPlan) => {
+    if (typeof window !== "undefined" && !window.confirm(`Удалить контент-план «${plan.query}»?`)) {
+      return;
+    }
+
+    const previousPlans = contentPlans;
+    const previousActivePlanId = activeContentPlanId;
+    const previousExpandedUsedIdeasPlanId = expandedContentPlanUsedIdeasPlanId;
+    const previousSelectedIdeaId = selectedContentPlanIdeaId;
+    const previousComposerSourceIdea = composerSourceIdea;
+    const nextPlans = contentPlans.filter((item) => item.id !== plan.id);
+
+    setContentPlansError(null);
+    setContentPlanDeletingPlanId(plan.id);
+    setContentPlans(nextPlans);
+    setActiveContentPlanId((current) => (current === plan.id ? nextPlans[0]?.id ?? null : current));
+    setExpandedContentPlanUsedIdeasPlanId((current) => (current === plan.id ? null : current));
+
+    if (composerSourceIdea?.planId === plan.id) {
+      setComposerSourceIdea(null);
+      setSelectedContentPlanIdeaId(null);
+    }
+
+    try {
+      const response = await fetch(`/api/workspace/content-plans/${encodeURIComponent(plan.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as { data?: { planId: string }; error?: string } | null;
+
+      if (!response.ok || payload?.data?.planId !== plan.id) {
+        throw new Error(payload?.error ?? "Не удалось удалить контент-план.");
+      }
+    } catch (error) {
+      setContentPlans(previousPlans);
+      setActiveContentPlanId(previousActivePlanId);
+      setExpandedContentPlanUsedIdeasPlanId(previousExpandedUsedIdeasPlanId);
+      setSelectedContentPlanIdeaId(previousSelectedIdeaId);
+      setComposerSourceIdea(previousComposerSourceIdea);
+      setContentPlansError(error instanceof Error ? error.message : "Не удалось удалить контент-план.");
+    } finally {
+      setContentPlanDeletingPlanId((current) => (current === plan.id ? null : current));
+    }
+  };
+
+  const handleGenerateContentPlan = async (options?: { appendToPlanId?: string; query?: string }) => {
+    const nextQuery = String(options?.query ?? contentPlanQueryInput).trim();
+    const nextCount = WORKSPACE_CONTENT_PLAN_IDEA_COUNT_DEFAULT;
+    const appendToPlanId = String(options?.appendToPlanId ?? "").trim();
+    if (!nextQuery) {
+      setContentPlansError("Введите тему для контент-плана.");
+      return;
+    }
+
+    setHasEditedContentPlanQueryInput(true);
+    setContentPlanQueryInput(nextQuery);
+    setContentPlansError(null);
+    setIsContentPlanGenerating(true);
+
+    try {
+      const response = await fetch("/api/workspace/content-plans/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          count: nextCount,
+          ...(appendToPlanId ? { planId: appendToPlanId } : {}),
+          query: nextQuery,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceContentPlanResponse | null;
+
+      if (!response.ok || !payload?.data?.plan) {
+        throw new Error(payload?.error ?? "Не удалось сгенерировать контент-план.");
+      }
+
+      const nextPlan = payload.data.plan;
+      setContentPlans((current) => [nextPlan, ...current.filter((plan) => plan.id !== nextPlan.id)]);
+      setActiveContentPlanId(nextPlan.id);
+      if (!appendToPlanId) {
+        setExpandedContentPlanUsedIdeasPlanId(null);
+      }
+      setHasLoadedContentPlans(true);
+      updateContentPlanVisibility(true);
+    } catch (error) {
+      setContentPlansError(error instanceof Error ? error.message : "Не удалось сгенерировать контент-план.");
+    } finally {
+      setIsContentPlanGenerating(false);
+    }
+  };
+
+  const handleRegenerateContentPlan = async (plan: WorkspaceContentPlan) => {
+    setHasEditedContentPlanQueryInput(true);
+    setContentPlanQueryInput(plan.query);
+    await handleGenerateContentPlan({
+      appendToPlanId: plan.id,
+      query: plan.query,
+    });
+  };
+
+  const handleRetryContentPlansLoad = () => {
+    setContentPlansError(null);
+    setHasLoadedContentPlans(false);
   };
 
   const handleGenerate = async (
@@ -10541,10 +10986,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const effectiveSubtitleColorId = effectiveSubtitleEnabled ? options?.subtitleColorId ?? selectedSubtitleColorId : undefined;
     const effectiveSubtitleStyleId = effectiveSubtitleEnabled ? options?.subtitleStyleId ?? selectedSubtitleStyleId : undefined;
     const effectiveVoiceId = effectiveVoiceEnabled ? options?.voiceId ?? (resolvedSelectedVoiceId || undefined) : undefined;
+    const currentComposerSourceIdea = isWorkspaceContentPlanSourceIdeaSynchronized(safeTopic, composerSourceIdea)
+      ? composerSourceIdea
+        ? { ...composerSourceIdea }
+        : null
+      : null;
 
     flushSync(() => {
       setTopicInput(safeTopic);
       updateDismissedStudioPreviewKey(null);
+      if (!currentComposerSourceIdea && composerSourceIdea) {
+        setComposerSourceIdea(null);
+        setSelectedContentPlanIdeaId((current) => (current === composerSourceIdea.ideaId ? null : current));
+      }
       if (!shouldPreserveCurrentPreview) {
         setGeneratedVideo(null);
         setSegmentEditorLoadedSession(null);
@@ -10649,6 +11103,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      if (currentComposerSourceIdea) {
+        const sourcePlan = contentPlans.find((plan) => plan.id === currentComposerSourceIdea.planId) ?? null;
+        const sourceIdea = sourcePlan?.ideas.find((idea) => idea.id === currentComposerSourceIdea.ideaId) ?? null;
+        if (sourcePlan && sourceIdea) {
+          void persistContentPlanIdeaUsedState(sourcePlan, sourceIdea, true, {
+            silentError: true,
+          });
+        }
+      }
       await pollGenerationJob(payload.data.jobId, payload.data.status, {
         clearAppliedSegmentEditorOnSuccess: Boolean(options?.clearAppliedSegmentEditorOnSuccess),
         invalidateSegmentEditorOnSuccess: Boolean(options?.isRegeneration && options?.projectId),
@@ -10795,7 +11258,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    const matchedSegmentIndex = draft.segments.findIndex((segment) => segment.index === item.segment.index);
+    const matchedSegmentIndex = draft.segments.findIndex((segment) => segment.index === item.segmentIndex);
     const initialSegmentIndex =
       matchedSegmentIndex >= 0
         ? matchedSegmentIndex
@@ -11580,9 +12043,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         if (latestGeneration.generation) {
           setGeneratedVideo(latestGeneration.generation);
           setGenerateError(latestGeneration.error ?? null);
-          if (!preserveExamplePrefillRef.current) {
-          setTopicInput(latestGeneration.generation.prompt);
-          }
         }
 
         if (latestGeneration.status === "done") {
@@ -11688,6 +12148,263 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     ? publishError
     : getYouTubePublicationMetaLabel(effectivePublishPublication) ||
       (publishMode === "schedule" ? publishScheduleSummary : "Сразу после подтверждения");
+  const activeContentPlan = contentPlans.find((plan) => plan.id === activeContentPlanId) ?? contentPlans[0] ?? null;
+  const historyContentPlans = activeContentPlan
+    ? contentPlans.filter((plan) => plan.id !== activeContentPlan.id)
+    : [];
+  const activeContentPlanIdeas = activeContentPlan
+    ? activeContentPlan.ideas.slice().sort((left, right) => left.position - right.position)
+    : [];
+  const activeContentPlanUnusedIdeas = activeContentPlanIdeas.filter((idea) => !idea.isUsed);
+  const activeContentPlanUsedIdeas = activeContentPlanIdeas.filter((idea) => idea.isUsed);
+  const isContentPlanUsedIdeasExpanded = activeContentPlan
+    ? expandedContentPlanUsedIdeasPlanId === activeContentPlan.id
+    : false;
+  const shouldShowStudioContentPlanRail = createMode !== "segment-editor" && isContentPlanVisible;
+  const renderContentPlanIdeaCard = (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
+    const isSelectedIdea = selectedContentPlanIdeaId === idea.id;
+    const isDeletingIdea = contentPlanDeletingIdeaId === idea.id;
+    const isUpdatingIdea = contentPlanUpdatingIdeaId === idea.id;
+
+    return (
+      <article
+        key={idea.id}
+        className={`studio-content-plan__idea${idea.isUsed ? " is-used" : ""}${isSelectedIdea ? " is-selected" : ""}`}
+      >
+        <div className="studio-content-plan__idea-meta">
+          <button
+            className={`studio-content-plan__idea-status${idea.isUsed ? " is-active" : ""}`}
+            type="button"
+            aria-pressed={idea.isUsed}
+            aria-label={idea.isUsed ? "Пометить как неиспользованную" : "Пометить как использованную"}
+            aria-busy={isUpdatingIdea || isDeletingIdea}
+            disabled={isUpdatingIdea || isDeletingIdea}
+            onClick={() => void handleToggleContentPlanIdeaUsed(plan, idea)}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M3.25 8.25 6.2 11.2l6.55-6.55"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <button
+          className="studio-content-plan__idea-main"
+          type="button"
+          aria-pressed={isSelectedIdea}
+          disabled={isDeletingIdea}
+          onClick={() => handleSelectContentPlanIdea(plan, idea)}
+        >
+          <strong>{idea.title}</strong>
+          <p className="studio-content-plan__idea-summary">{idea.summary}</p>
+        </button>
+
+        <div className="studio-content-plan__idea-actions">
+          <button
+            className="studio-content-plan__idea-delete"
+            type="button"
+            aria-label={`Удалить идею ${idea.title}`}
+            disabled={isDeletingIdea}
+            onClick={() => void handleDeleteContentPlanIdea(plan, idea)}
+          >
+            {isDeletingIdea ? (
+              <span className="studio-canvas-prompt__btn-spinner" aria-hidden="true"></span>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M4 7h16" strokeLinecap="round" />
+                <path d="M9.5 4h5l1 2h4" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 7l.8 11a2 2 0 0 0 2 1.86h2.4a2 2 0 0 0 2-1.86L16 7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 10.5v5.5M14 10.5v5.5" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </article>
+    );
+  };
+  const contentPlanPanel = createMode !== "segment-editor" ? (
+    <aside
+      className={`studio-content-plan${shouldShowStudioContentPlanRail ? " is-visible" : ""}`}
+      aria-label="Контент-план"
+      hidden={!shouldShowStudioContentPlanRail}
+    >
+      <div className="studio-content-plan__header">
+        <div className="studio-content-plan__copy">
+          <strong>Контент-план</strong>
+        </div>
+        <button
+          className="studio-content-plan__collapse-btn"
+          type="button"
+          aria-label="Скрыть контент-план"
+          onClick={handleToggleContentPlanVisibility}
+        >
+          <span aria-hidden="true">−</span>
+        </button>
+      </div>
+
+      <div className="studio-content-plan__composer">
+        <div className="studio-content-plan__composer-row">
+          <input
+            id="studio-content-plan-query"
+            className="studio-content-plan__input"
+            type="text"
+            placeholder="Введите тему для контент-плана"
+            value={contentPlanQueryInput}
+            onChange={handleContentPlanQueryInputChange}
+          />
+          <button
+            className="studio-content-plan__primary-btn"
+            type="button"
+            aria-label="Создать контент-план"
+            disabled={isContentPlanGenerating || isContentPlansLoading}
+            onClick={() => void handleGenerateContentPlan()}
+          >
+            {isContentPlanGenerating ? (
+              <span className="studio-canvas-prompt__btn-spinner" aria-hidden="true"></span>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {contentPlansError ? (
+        <div className="studio-content-plan__error">
+          <p className="studio-content-plan__notice is-error" role="alert">
+            {contentPlansError}
+          </p>
+          <button className="studio-content-plan__ghost-btn" type="button" onClick={handleRetryContentPlansLoad}>
+            Повторить
+          </button>
+        </div>
+      ) : null}
+
+      <div className="studio-content-plan__body">
+        {isContentPlansLoading ? (
+          <div className="studio-content-plan__state">
+            <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+            <p>Загружаем контент-планы...</p>
+          </div>
+        ) : !activeContentPlan ? (
+          <div className="studio-content-plan__state">
+            <strong>Планов пока нет</strong>
+            <p>Введите тему и получите готовые идеи для Shorts.</p>
+          </div>
+        ) : (
+          <>
+            <section className="studio-content-plan__section">
+              <div className="studio-content-plan__section-head">
+                <span className="studio-content-plan__section-label">Текущий план</span>
+                <span className="studio-content-plan__section-meta">
+                  {activeContentPlanUnusedIdeas.length} новых из {activeContentPlan.ideas.length}
+                </span>
+              </div>
+
+              <div className="studio-content-plan__plan studio-content-plan__plan--active">
+                <div className="studio-content-plan__ideas-group">
+                  {activeContentPlanUnusedIdeas.length > 0 ? (
+                    <div className="studio-content-plan__ideas">
+                      {activeContentPlanUnusedIdeas.map((idea) => renderContentPlanIdeaCard(activeContentPlan, idea))}
+                    </div>
+                  ) : (
+                    <div className="studio-content-plan__state is-compact">
+                      <p>В этом плане не осталось новых идей. Можно открыть использованные ниже или сгенерировать ещё.</p>
+                    </div>
+                  )}
+                </div>
+
+                {activeContentPlanUsedIdeas.length > 0 ? (
+                  <section className={`studio-content-plan__used-group${isContentPlanUsedIdeasExpanded ? " is-expanded" : ""}`}>
+                    <button
+                      className={`studio-content-plan__used-toggle${isContentPlanUsedIdeasExpanded ? " is-expanded" : ""}`}
+                      type="button"
+                      aria-expanded={isContentPlanUsedIdeasExpanded}
+                      onClick={() =>
+                        setExpandedContentPlanUsedIdeasPlanId((current) =>
+                          current === activeContentPlan.id ? null : activeContentPlan.id,
+                        )
+                      }
+                    >
+                      <span>Использованные</span>
+                      <span>{formatWorkspaceContentPlanIdeaCount(activeContentPlanUsedIdeas.length)}</span>
+                    </button>
+
+                    {isContentPlanUsedIdeasExpanded ? (
+                      <div className="studio-content-plan__ideas">
+                        {activeContentPlanUsedIdeas.map((idea) => renderContentPlanIdeaCard(activeContentPlan, idea))}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                <div className="studio-content-plan__plan-actions studio-content-plan__plan-actions--footer">
+                  <button
+                    className="studio-content-plan__ghost-btn"
+                    type="button"
+                    disabled={contentPlanDeletingPlanId === activeContentPlan.id || isContentPlanGenerating}
+                    onClick={() => void handleRegenerateContentPlan(activeContentPlan)}
+                  >
+                    {isContentPlanGenerating ? "Создаём..." : "Создать еще"}
+                  </button>
+                  <button
+                    className="studio-content-plan__ghost-btn is-danger"
+                    type="button"
+                    disabled={contentPlanDeletingPlanId === activeContentPlan.id}
+                    onClick={() => void handleDeleteContentPlan(activeContentPlan)}
+                  >
+                    {contentPlanDeletingPlanId === activeContentPlan.id ? "Удаляем..." : "Удалить"}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="studio-content-plan__section studio-content-plan__history">
+              <div className="studio-content-plan__section-head">
+                <span className="studio-content-plan__section-label">История планов</span>
+                <span className="studio-content-plan__section-meta">{historyContentPlans.length}</span>
+              </div>
+
+              {historyContentPlans.length > 0 ? (
+                <div className="studio-content-plan__history-list">
+                  {historyContentPlans.map((plan) => {
+                    const unusedIdeasCount = plan.ideas.filter((idea) => !idea.isUsed).length;
+
+                    return (
+                      <button
+                        key={plan.id}
+                        className="studio-content-plan__history-item"
+                        type="button"
+                        onClick={() => setActiveContentPlanId(plan.id)}
+                      >
+                        <div className="studio-content-plan__history-item-copy">
+                          <strong>{plan.query}</strong>
+                          <span>{formatProjectDate(plan.updatedAt)}</span>
+                        </div>
+                        <span className="studio-content-plan__history-item-stats">
+                          {unusedIdeasCount}/{plan.ideas.length} новых
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="studio-content-plan__state is-compact">
+                  <p>Следующие сохранённые планы появятся здесь.</p>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    </aside>
+  ) : null;
   const handlePublishModeChange = (nextMode: "now" | "schedule") => {
     setPublishMode(nextMode);
 
@@ -11887,16 +12604,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               </div>
             ) : null}
 
-            <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-              {createMode === "default" && segmentEditorError ? (
-                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-                  {segmentEditorError}
-                </div>
-              ) : null}
-              <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-                {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
-                  <div className="studio-segment-editor">
-                    <div className="studio-segment-editor__layout">
+	            <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}${shouldShowStudioContentPlanRail ? " has-content-plan" : ""}`}>
+	              {createMode === "default" && segmentEditorError ? (
+	                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
+	                  {segmentEditorError}
+	                </div>
+	              ) : null}
+                <div className={`studio-canvas-create-layout${shouldShowStudioContentPlanRail ? " has-content-plan" : ""}`}>
+	              <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
+	                {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
+	                  <div className="studio-segment-editor">
+	                    <div className="studio-segment-editor__layout">
                       <div className="studio-segment-editor__preview-column">
                         <div className="studio-segment-editor__header studio-segment-editor__header--aside">
                           <div className="studio-segment-editor__header-stack">
@@ -12636,26 +13354,37 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         <strong>Создайте свой Shorts</strong>
                         <p>Введите тему и нажмите «Создать»</p>
                       </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+	                    )}
+	                  </div>
+	                )}
+	              </div>
+                  {contentPlanPanel}
+                </div>
+	            </div>
 
-            {createMode !== "segment-editor" ? (
-            <div className="studio-canvas-prompt">
-              <div
+	            {createMode !== "segment-editor" ? (
+	            <div className="studio-canvas-prompt">
+	              <div
                 ref={promptInnerRef}
-                className="studio-canvas-prompt__inner"
-                style={segmentEditorPromptInnerStyle}
-              >
-                <div className="studio-canvas-prompt__editor-layout">
-                  <div className="studio-canvas-prompt__editor-pane">
-                    <>
-                        {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
-                        {hasAppliedSegmentEditorSession ? (
-                          <p className="studio-canvas-prompt__notice">
-                            Сегменты сохранены: {currentAppliedSegmentEditorSession?.segments.length ?? 0}. Следующий запуск обновит текущий проект.
+	                className="studio-canvas-prompt__inner"
+	                style={segmentEditorPromptInnerStyle}
+	              >
+	                <div className="studio-canvas-prompt__editor-layout">
+	                  <div className="studio-canvas-prompt__editor-pane">
+	                    <>
+                          {composerSourceIdea ? (
+                            <div className="studio-canvas-prompt__source">
+                              <span className="studio-canvas-prompt__source-label">Из контент-плана</span>
+                              <strong>{composerSourceIdea.title}</strong>
+                              <button type="button" onClick={handleClearComposerSourceIdea}>
+                                Сбросить
+                              </button>
+                            </div>
+                          ) : null}
+	                        {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
+	                        {hasAppliedSegmentEditorSession ? (
+	                          <p className="studio-canvas-prompt__notice">
+	                            Сегменты сохранены: {currentAppliedSegmentEditorSession?.segments.length ?? 0}. Следующий запуск обновит текущий проект.
                           </p>
                         ) : null}
                         <textarea
@@ -12664,12 +13393,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           value={topicInput}
                           onChange={(event) => setTopicInput(event.target.value)}
                           rows={1}
-                        />
-                        <div className="studio-canvas-prompt__footer">
-                          <div className="studio-canvas-prompt__chips">
-                            {studioPromptChips.map((chip) =>
-                              chip === "Видео" ? (
-                                <StudioVideoSelectorChip
+	                        />
+		                        <div className="studio-canvas-prompt__footer">
+	                          <div className="studio-canvas-prompt__chips">
+		                            {studioPromptChips.map((chip) =>
+		                              chip === "Видео" ? (
+		                                <StudioVideoSelectorChip
                                   key={chip}
                                   customVideoFile={selectedCustomVideo}
                                   isPreparingCustomVideo={isPreparingCustomVideo}
@@ -12717,14 +13446,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   selectedLanguage={selectedLanguage}
                                   onSelect={setSelectedLanguage}
                                 />
-                              ) : (
-                                <span className="studio-canvas-prompt__chip" key={chip}>
-                                  {chip}
-                                </span>
-                              ),
-                            )}
-                          </div>
-                          <button
+		                              ) : (
+		                                <span className="studio-canvas-prompt__chip" key={chip}>
+		                                  {chip}
+		                                </span>
+		                              ),
+		                            )}
+                              <button
+                                className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isContentPlanVisible ? " is-active" : ""}`}
+                                type="button"
+                                onClick={handleToggleContentPlanVisibility}
+                              >
+                                План
+                              </button>
+	                          </div>
+	                          <button
                             className={`studio-canvas-prompt__btn${isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
                             type="button"
                             disabled={isGenerating || isPreparingCustomVideo || isPreparingCustomMusic}
@@ -12819,7 +13555,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <div className="studio-media-library__head">
                     <div className="studio-media-library__copy">
                       <strong>Медиатека ИИ визуалов</strong>
-                      <p>Все ИИ фото, ИИ видео и анимации фото из текущей сессии и готовых проектов. Нажмите на карточку, чтобы открыть нужный сегмент в редакторе.</p>
                     </div>
                     <div className="studio-media-library__pills">
                       <span>ИИ фото: {visibleAiPhotoMediaItemsCount}</span>
@@ -12853,8 +13588,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <span className="studio-media-library__media">
                                 <WorkspaceSegmentPreviewCardMedia
                                   autoplay={false}
-                                  mediaKey={`media-library:${item.projectId}:${item.segment.index}:${item.previewUrl}:${item.previewPosterUrl ?? "no-poster"}`}
+                                  imageLoading="lazy"
+                                  mediaKey={`media-library:${item.projectId}:${item.segmentIndex}:${item.previewUrl}:${item.previewPosterUrl ?? "no-poster"}`}
                                   posterUrl={item.previewKind === "video" ? item.previewPosterUrl : null}
+                                  preferPosterFrame
+                                  preload="none"
                                   previewUrl={item.previewUrl}
                                   previewKind={item.previewKind}
                                 />
@@ -13289,16 +14027,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           </div>
                         </div>
 
-                        <div className="studio-ai-photo-modal__preview-meta">
-                          <div className="studio-ai-photo-modal__preview-card">
-                            <span>Активный визуал</span>
-                            <strong>{segmentAiPhotoModalSourceLabel}</strong>
-                          </div>
-                          <div className="studio-ai-photo-modal__preview-card">
-                            <span>Формат</span>
-                            <strong>{segmentAiPhotoModalFormatLabel}</strong>
-                          </div>
-                        </div>
                       </div>
                     </section>
 
@@ -13383,7 +14111,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           }}
                         >
                           <span className="studio-ai-photo-modal__source-copy">
-                            <strong>ИИ фото</strong>
+                            <strong>Фото</strong>
                             <span>Сцена по описанию</span>
                           </span>
                           {segmentAiPhotoModalAiPhotoStatus ? (
@@ -13582,7 +14310,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "ai_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>ИИ фото</strong>
+                            <strong>Фото</strong>
                             <p>Короткое точное описание работает лучше.</p>
                           </div>
 
@@ -13660,7 +14388,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                           {segmentAiPhotoModalLibraryItems.length > 0 ? (
                             <div className="studio-ai-photo-modal__library-pills" aria-hidden="true">
-                              <span>ИИ фото: {visibleAiPhotoMediaItemsCount}</span>
+                              <span>Фото: {visibleAiPhotoMediaItemsCount}</span>
                               <span>ИИ видео: {visibleAiVideoMediaItemsCount}</span>
                               <span>Анимации: {visiblePhotoAnimationMediaItemsCount}</span>
                             </div>
@@ -13699,7 +14427,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <div className="studio-ai-photo-modal__library-grid">
                               {segmentAiPhotoModalLibraryItems.map((item) => {
                                 const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
-                                const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
+                                const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
+                                const itemKindLabel = rawItemKindLabel === "ИИ фото" ? "Фото" : rawItemKindLabel;
                                 const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
 
                                 return (
@@ -13707,6 +14436,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     key={`segment-modal-library:${itemKey}`}
                                     className={`studio-ai-photo-modal__library-card${isSelectedLibraryItem ? " is-selected" : ""}`}
                                     type="button"
+                                    aria-label={`Выбрать ${itemKindLabel} из медиатеки`}
                                     disabled={isSegmentEditorStructureActionBusy}
                                     onClick={() => {
                                       setSegmentEditorVideoError(null);
@@ -13722,16 +14452,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     <span className="studio-ai-photo-modal__library-media">
                                       <WorkspaceSegmentPreviewCardMedia
                                         autoplay={false}
+                                        imageLoading="lazy"
                                         mediaKey={`segment-modal-library:${itemKey}:${item.previewPosterUrl ?? "no-poster"}`}
                                         muted
                                         posterUrl={item.previewKind === "video" ? item.previewPosterUrl : null}
-                                        preload="metadata"
+                                        preferPosterFrame
+                                        preload="none"
                                         previewKind={item.previewKind}
                                         previewUrl={item.previewUrl}
                                       />
-                                    </span>
-                                    <span className="studio-ai-photo-modal__library-copy">
-                                      <strong>{itemKindLabel}</strong>
                                     </span>
                                   </button>
                                 );

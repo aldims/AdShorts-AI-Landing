@@ -6,7 +6,7 @@
     "lib": ["ES2023"],
     "types": ["node"],
     "outDir": "dist-server",
-    "rootDir": "server",
+    "rootDir": ".",
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,

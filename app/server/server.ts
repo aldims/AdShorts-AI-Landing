@@ -10,6 +10,15 @@ import { authDatabaseConfig } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
 import {
+  appendWorkspaceContentPlanIdeas,
+  createWorkspaceContentPlan,
+  deleteWorkspaceContentPlanIdea,
+  deleteWorkspaceContentPlan,
+  getWorkspaceContentPlan,
+  listWorkspaceContentPlans,
+  updateWorkspaceContentPlanIdeaUsedState,
+} from "./content-plans.js";
+import {
   disconnectWorkspaceYoutubeChannel,
   getWorkspacePublishBootstrap,
   getWorkspacePublishJobStatus,
@@ -29,19 +38,22 @@ import {
   getWorkspaceProjectSegmentVideoProxyTarget,
   WorkspaceSegmentEditorError,
   getWorkspaceSegmentEditorSession,
+  invalidateWorkspaceSegmentEditorSessionCache,
   type WorkspaceSegmentEditorVideoDelivery,
   type WorkspaceSegmentEditorVideoSource,
 } from "./segment-editor.js";
+import { getWorkspaceMediaLibraryItems, invalidateWorkspaceMediaLibraryCache } from "./media-library.js";
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
   createStudioSegmentAiPhotoJob,
   createStudioSegmentAiVideoJob,
   createStudioSegmentPhotoAnimationJob,
-  createStudioGenerationJob,
-  generateStudioSegmentAiPhoto,
-  getStudioSegmentAiPhotoJobStatus,
-  getStudioSegmentAiVideoPlaybackAsset,
-  getStudioSegmentAiVideoJobPosterPath,
+    createStudioGenerationJob,
+    generateStudioSegmentAiPhoto,
+    generateStudioContentPlanIdeas,
+    getStudioSegmentAiPhotoJobStatus,
+    getStudioSegmentAiVideoPlaybackAsset,
+    getStudioSegmentAiVideoJobPosterPath,
   getStudioSegmentAiVideoJobStatus,
   getStudioSegmentPhotoAnimationPlaybackAsset,
   getStudioSegmentPhotoAnimationJobPosterPath,
@@ -774,6 +786,236 @@ app.get("/api/workspace/projects", async (req, res) => {
   }
 });
 
+app.get("/api/workspace/media-library", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const shouldReload = typeof req.query.reload === "string" && req.query.reload.trim() === "1";
+
+  try {
+    if (shouldReload) {
+      await invalidateWorkspaceProjectsCache(session.user);
+      invalidateWorkspaceMediaLibraryCache(session.user);
+      invalidateWorkspaceSegmentEditorSessionCache(session.user);
+    }
+
+    const items = await getWorkspaceMediaLibraryItems(session.user, {
+      bypassCache: shouldReload,
+    });
+    res.json({ data: { items } });
+  } catch (error) {
+    console.error("[workspace] Failed to load media library", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to load media library.",
+    });
+  }
+});
+
+app.get("/api/workspace/content-plans", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const plans = await listWorkspaceContentPlans(session.user);
+    res.json({ data: { plans } });
+  } catch (error) {
+    console.error("[workspace] Failed to load content plans", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load content plans.",
+    });
+  }
+});
+
+app.post("/api/workspace/content-plans/generate", express.json(), async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const query = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  const requestedCount =
+    typeof req.body?.count === "number"
+      ? req.body.count
+      : typeof req.body?.count === "string" && req.body.count.trim()
+        ? Number(req.body.count)
+        : undefined;
+  const planId = typeof req.body?.planId === "string" ? req.body.planId.trim() : "";
+  if (!query) {
+    res.status(400).json({ error: "Query is required." });
+    return;
+  }
+
+  try {
+    const existingPlan = planId ? await getWorkspaceContentPlan(session.user, planId) : null;
+    if (planId && !existingPlan) {
+      res.status(404).json({ error: "Content plan not found." });
+      return;
+    }
+
+    const generatedPlan = await generateStudioContentPlanIdeas(query, {
+      count: requestedCount,
+      existingIdeas: existingPlan?.ideas.map((idea) => ({
+        prompt: idea.prompt,
+        summary: idea.summary,
+        title: idea.title,
+      })),
+      language: typeof req.body?.language === "string" ? req.body.language : undefined,
+    });
+    const plan = existingPlan
+      ? await appendWorkspaceContentPlanIdeas(session.user, {
+          ideas: generatedPlan.ideas,
+          planId: existingPlan.id,
+        })
+      : await createWorkspaceContentPlan(session.user, {
+          ideas: generatedPlan.ideas,
+          language: generatedPlan.language,
+          query,
+        });
+
+    if (!plan) {
+      res.status(404).json({ error: "Content plan not found." });
+      return;
+    }
+
+    res.json({ data: { plan } });
+  } catch (error) {
+    console.error("[workspace] Failed to generate content plan", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to generate content plan.",
+    });
+  }
+});
+
+app.patch("/api/workspace/content-plans/:planId/ideas/:ideaId", express.json(), async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const planId = typeof req.params.planId === "string" ? req.params.planId.trim() : "";
+  const ideaId = typeof req.params.ideaId === "string" ? req.params.ideaId.trim() : "";
+  const isUsed = req.body?.isUsed;
+
+  if (!planId || !ideaId) {
+    res.status(400).json({ error: "Plan id and idea id are required." });
+    return;
+  }
+
+  if (typeof isUsed !== "boolean") {
+    res.status(400).json({ error: "isUsed must be a boolean." });
+    return;
+  }
+
+  try {
+    const result = await updateWorkspaceContentPlanIdeaUsedState(session.user, {
+      ideaId,
+      isUsed,
+      planId,
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Content plan idea not found." });
+      return;
+    }
+
+    res.json({ data: result });
+  } catch (error) {
+    console.error("[workspace] Failed to update content plan idea", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to update content plan idea.",
+    });
+  }
+});
+
+app.delete("/api/workspace/content-plans/:planId/ideas/:ideaId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const planId = typeof req.params.planId === "string" ? req.params.planId.trim() : "";
+  const ideaId = typeof req.params.ideaId === "string" ? req.params.ideaId.trim() : "";
+  if (!planId || !ideaId) {
+    res.status(400).json({ error: "Plan id and idea id are required." });
+    return;
+  }
+
+  try {
+    const result = await deleteWorkspaceContentPlanIdea(session.user, {
+      ideaId,
+      planId,
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Content plan idea not found." });
+      return;
+    }
+
+    res.json({ data: result });
+  } catch (error) {
+    console.error("[workspace] Failed to delete content plan idea", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to delete content plan idea.",
+    });
+  }
+});
+
+app.delete("/api/workspace/content-plans/:planId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const planId = typeof req.params.planId === "string" ? req.params.planId.trim() : "";
+  if (!planId) {
+    res.status(400).json({ error: "Plan id is required." });
+    return;
+  }
+
+  try {
+    const deleted = await deleteWorkspaceContentPlan(session.user, planId);
+    if (!deleted) {
+      res.status(404).json({ error: "Content plan not found." });
+      return;
+    }
+
+    res.json({ data: { planId } });
+  } catch (error) {
+    console.error("[workspace] Failed to delete content plan", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to delete content plan.",
+    });
+  }
+});
+
 app.get("/api/workspace/projects/:projectId/poster", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -861,6 +1103,7 @@ app.delete("/api/workspace/projects/:projectId", async (req, res) => {
 
   try {
     await deleteWorkspaceProject(session.user, projectId);
+    invalidateWorkspaceMediaLibraryCache(session.user);
     res.json({ data: { projectId } });
   } catch (error) {
     if (error instanceof WorkspaceProjectNotFoundError) {

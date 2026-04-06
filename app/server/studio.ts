@@ -254,6 +254,17 @@ export type StudioSegmentTextTranslateResult = {
   texts: string[];
 };
 
+export type StudioContentPlanIdea = {
+  prompt: string;
+  summary: string;
+  title: string;
+};
+
+export type StudioContentPlanGenerationResult = {
+  ideas: StudioContentPlanIdea[];
+  language: "en" | "ru";
+};
+
 export type WorkspaceSubtitleStyleOption = {
   defaultColorId: string;
   description: string;
@@ -405,6 +416,37 @@ const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
 const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
 
 const normalizePrompt = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const sanitizeStudioContentPlanIdeaPrompt = (value: unknown) => {
+  const fallbackPrompt = normalizePrompt(String(value ?? ""));
+  if (!fallbackPrompt) {
+    return "";
+  }
+
+  let normalized = fallbackPrompt
+    .replace(/^```[\w-]*\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+
+  const leadingInstructionPatterns = [
+    /^(?:напиши|создай|сделай)\s+(?:мне\s+)?(?:сценарий\s+)?(?:для\s+)?(?:shorts|шортс)(?:\s+(?:ролика|видео))?\s*(?:[,:-]\s*)?(?:где\s+|про\s+|о\s+|об\s+|на\s+тему\s+)?/i,
+    /^(?:создай|сделай)\s+(?:мне\s+)?(?:shorts|шортс|ролик|видео)(?:\s+(?:о|об|про|на\s+тему))?\s*(?:[,:-]\s*)?/i,
+    /^write\s+(?:a\s+)?(?:shorts?\s+)?script(?:\s+for\s+(?:a\s+)?)?(?:shorts?\s+video)?\s*(?:[,:-]\s*)?(?:about\s+|on\s+|where\s+)?/i,
+    /^(?:create|make)\s+(?:a\s+)?shorts?(?:\s+video)?\s*(?:[,:-]\s*)?(?:about\s+|on\s+)?/i,
+  ];
+
+  for (const pattern of leadingInstructionPatterns) {
+    const nextValue = normalized.replace(pattern, "").trim();
+    if (nextValue && nextValue !== normalized) {
+      normalized = nextValue;
+      break;
+    }
+  }
+
+  normalized = normalized.replace(/^[\s,.:;-]+/, "").replace(/^["'`]+|["'`]+$/g, "").trim();
+  return normalized || fallbackPrompt;
+};
 
 const normalizeGenerationText = (value: string | null | undefined) => String(value ?? "").replace(/\s+/g, " ").trim();
 
@@ -1146,11 +1188,61 @@ const extractOpenRouterErrorMessage = (payload: OpenRouterChatCompletionResponse
 
 const getStudioLanguageLabel = (language: "en" | "ru") => (language === "en" ? "English" : "Russian");
 
+const STUDIO_CONTENT_PLAN_IDEA_COUNT_MIN = 3;
+const STUDIO_CONTENT_PLAN_IDEA_COUNT_MAX = 30;
+const STUDIO_CONTENT_PLAN_IDEA_COUNT_DEFAULT = 10;
+
+const normalizeStudioContentPlanIdeaCount = (value: unknown) => {
+  const parsed = Math.trunc(Number(value));
+  if (!Number.isFinite(parsed)) {
+    return STUDIO_CONTENT_PLAN_IDEA_COUNT_DEFAULT;
+  }
+
+  return Math.max(STUDIO_CONTENT_PLAN_IDEA_COUNT_MIN, Math.min(STUDIO_CONTENT_PLAN_IDEA_COUNT_MAX, parsed));
+};
+
 const sanitizeStudioTranslationResponseText = (value: string) =>
   value
     .replace(/^```[\w-]*\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
+
+const parseStudioContentPlanResponse = (value: string, expectedCount: number) => {
+  const normalizedValue = sanitizeStudioTranslationResponseText(value);
+  const jsonCandidate = normalizedValue.startsWith("{")
+    ? normalizedValue
+    : normalizedValue.slice(
+        Math.max(0, normalizedValue.indexOf("{")),
+        normalizedValue.lastIndexOf("}") >= 0 ? normalizedValue.lastIndexOf("}") + 1 : normalizedValue.length,
+      );
+  const parsed = JSON.parse(jsonCandidate) as
+    | {
+        ideas?: unknown;
+      }
+    | null;
+  const ideas = Array.isArray(parsed?.ideas) ? parsed.ideas : null;
+
+  if (!ideas || ideas.length !== expectedCount) {
+    throw new Error("OpenRouter returned an invalid content plan payload.");
+  }
+
+  return ideas.map((idea, index) => {
+    const record = idea && typeof idea === "object" ? (idea as Record<string, unknown>) : null;
+    const title = normalizePrompt(String(record?.title ?? ""));
+    const summary = normalizePrompt(String(record?.summary ?? ""));
+    const prompt = sanitizeStudioContentPlanIdeaPrompt(record?.prompt);
+
+    if (!title || !summary || !prompt) {
+      throw new Error(`OpenRouter returned an invalid content plan idea at position ${index + 1}.`);
+    }
+
+    return {
+      prompt,
+      summary,
+      title,
+    } satisfies StudioContentPlanIdea;
+  });
+};
 
 const parseStudioTextTranslationResponse = (value: string, expectedCount: number) => {
   const normalizedValue = sanitizeStudioTranslationResponseText(value);
@@ -1194,6 +1286,71 @@ const buildStudioTextTranslationUserPrompt = (texts: string[]) =>
     {
       items: texts,
     },
+    null,
+    2,
+  );
+
+const buildStudioContentPlanSystemPrompt = (language: "en" | "ru", count: number, hasExistingIdeas: boolean) =>
+  language === "en"
+    ? [
+        "You are a senior strategist for viral short-form vertical videos.",
+        `Generate exactly ${count} distinct Shorts ideas for the user's topic.`,
+        "Return strict JSON only in the format {\"ideas\":[{\"title\":\"...\",\"summary\":\"...\",\"prompt\":\"...\"}]} with no markdown or extra keys.",
+        "Write every field in English.",
+        "Each title must be short and scannable.",
+        "Each summary must be one concise sentence explaining the hook or angle.",
+        "Each prompt must be only the raw idea or angle ready for the generator field, not an instruction to the model.",
+        "Do not start prompt with verbs like write, create, make or phrases like 'Write a Shorts script about'.",
+        "Keep the ideas concrete, varied, non-repetitive, and useful for real content production.",
+        hasExistingIdeas ? "Do not repeat, rephrase, or lightly remix the existing ideas already provided by the user." : "",
+        "Do not number the ideas, do not add explanations, and do not wrap the JSON in code fences.",
+      ].join(" ")
+    : [
+        "Ты senior-стратег по viral short-form вертикальным видео.",
+        `Сгенерируй ровно ${count} разных идей для Shorts по теме пользователя.`,
+        "Верни только строгий JSON в формате {\"ideas\":[{\"title\":\"...\",\"summary\":\"...\",\"prompt\":\"...\"}]} без markdown и без лишних ключей.",
+        "Пиши все поля на русском языке.",
+        "Каждый title должен быть коротким и удобным для быстрого просмотра.",
+        "Каждый summary должен быть одним коротким предложением с углом подачи или хуком.",
+        "Каждый prompt должен быть не командой модели, а чистой формулировкой идеи или угла подачи для поля генерации.",
+        "Не начинай prompt со слов 'напиши', 'создай', 'сделай', 'write', 'create', 'make' и не пиши фразы вроде 'Напиши сценарий Shorts о...'.",
+        "Идеи должны быть конкретными, разнообразными, без повторов и пригодными для реального контент-плана.",
+        hasExistingIdeas ? "Не повторяй, не перефразируй и не делай слегка изменённые версии уже существующих идей пользователя." : "",
+        "Не нумеруй идеи, не добавляй пояснения и не оборачивай JSON в code fences.",
+      ].join(" ");
+
+const buildStudioContentPlanUserPrompt = (
+  query: string,
+  language: "en" | "ru",
+  count: number,
+  existingIdeas: StudioContentPlanIdea[] = [],
+) =>
+  JSON.stringify(
+    language === "en"
+      ? {
+          avoid_ideas:
+            existingIdeas.length > 0
+              ? existingIdeas.slice(0, 24).map((idea) => ({
+                  prompt: idea.prompt,
+                  title: idea.title,
+                }))
+              : undefined,
+          count,
+          topic: query,
+          task: `Generate ${count} Shorts ideas for this topic. In prompt, store only the raw idea or angle without imperative wording.`,
+        }
+      : {
+          avoid_ideas:
+            existingIdeas.length > 0
+              ? existingIdeas.slice(0, 24).map((idea) => ({
+                  prompt: idea.prompt,
+                  title: idea.title,
+                }))
+              : undefined,
+          count,
+          task: `Сгенерируй ${count} идей для Shorts по этой теме. В поле prompt сохрани только саму идею или угол подачи без командной формы.`,
+          topic: query,
+        },
     null,
     2,
   );
@@ -1370,6 +1527,50 @@ const requestStudioTextTranslation = async (
   }
 
   return parseStudioTextTranslationResponse(extractOpenRouterChatCompletionText(payload), texts.length);
+};
+
+const requestStudioContentPlanIdeas = async (
+  query: string,
+  language: "en" | "ru",
+  count: number,
+  model: string,
+  existingIdeas: StudioContentPlanIdea[] = [],
+) => {
+  const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${env.openrouterApiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+      "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: buildStudioContentPlanSystemPrompt(language, count, existingIdeas.length > 0),
+        },
+        {
+          role: "user",
+          content: buildStudioContentPlanUserPrompt(query, language, count, existingIdeas),
+        },
+      ],
+      temperature: 0.8,
+      max_tokens: Math.max(1200, Math.min(3200, 320 + count * 170)),
+    }),
+    signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+  });
+
+  const payload = (await response.json().catch(() => null)) as OpenRouterChatCompletionResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractOpenRouterErrorMessage(payload) || `OpenRouter content plan generation failed (${response.status}).`,
+    );
+  }
+
+  return parseStudioContentPlanResponse(extractOpenRouterChatCompletionText(payload), count);
 };
 
 const translateStudioGenerationPromptToEnglish = async (
@@ -2791,6 +2992,48 @@ export async function improveStudioSegmentAiPhotoPrompt(
   }
 
   throw lastError ?? new Error("Failed to improve segment AI photo prompt.");
+}
+
+export async function generateStudioContentPlanIdeas(
+  query: string,
+  options?: {
+    count?: number;
+    existingIdeas?: StudioContentPlanIdea[];
+    language?: string;
+  },
+): Promise<StudioContentPlanGenerationResult> {
+  const normalizedQuery = normalizePrompt(query);
+  if (!normalizedQuery) {
+    throw new Error("Query is required.");
+  }
+
+  const normalizedLanguage = detectStudioPromptLanguage(normalizedQuery, options?.language);
+  const requestedCount = normalizeStudioContentPlanIdeaCount(options?.count);
+  const modelCandidates = getStudioOpenRouterModelCandidates();
+  let lastError: Error | null = null;
+
+  if (env.openrouterApiKey && modelCandidates.length > 0) {
+    for (const model of modelCandidates) {
+      try {
+        const ideas = await requestStudioContentPlanIdeas(
+          normalizedQuery,
+          normalizedLanguage,
+          requestedCount,
+          model,
+          options?.existingIdeas ?? [],
+        );
+        return {
+          ideas,
+          language: normalizedLanguage,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error("OpenRouter content plan generation failed.");
+        console.warn(`[studio] Failed to generate content plan with ${model}`, lastError);
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Не удалось сгенерировать контент-план.");
 }
 
 export async function translateStudioTexts(

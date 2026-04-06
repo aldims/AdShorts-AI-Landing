@@ -9,7 +9,7 @@
     "dev:web": "vite",
     "build": "tsc && tsc -p tsconfig.server.json && vite build",
     "preview": "vite preview",
-    "start:server": "node dist-server/server.js",
+    "start:server": "node dist-server/server/server.js",
     "auth:generate": "npx auth@latest generate --config ./server/auth.ts --yes",
     "auth:migrate": "npx auth@latest migrate --config ./server/auth.ts --yes",
     "auth:sync-legacy": "tsx server/migrate-auth-data.ts",

@@ -223,7 +223,11 @@ export async function saveWorkspaceGenerationHistory(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (job_id) DO UPDATE SET
           owner_key = EXCLUDED.owner_key,
-          prompt = CASE WHEN EXCLUDED.prompt <> '' THEN EXCLUDED.prompt ELSE workspace_generation_history.prompt END,
+          prompt = CASE
+            WHEN workspace_generation_history.prompt <> '' THEN workspace_generation_history.prompt
+            WHEN EXCLUDED.prompt <> '' THEN EXCLUDED.prompt
+            ELSE workspace_generation_history.prompt
+          END,
           title = CASE WHEN EXCLUDED.title <> '' THEN EXCLUDED.title ELSE workspace_generation_history.title END,
           description = CASE
             WHEN EXCLUDED.description <> '' THEN EXCLUDED.description
@@ -254,7 +258,11 @@ export async function saveWorkspaceGenerationHistory(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id) DO UPDATE SET
           owner_key = excluded.owner_key,
-          prompt = CASE WHEN excluded.prompt <> '' THEN excluded.prompt ELSE workspace_generation_history.prompt END,
+          prompt = CASE
+            WHEN workspace_generation_history.prompt <> '' THEN workspace_generation_history.prompt
+            WHEN excluded.prompt <> '' THEN excluded.prompt
+            ELSE workspace_generation_history.prompt
+          END,
           title = CASE WHEN excluded.title <> '' THEN excluded.title ELSE workspace_generation_history.title END,
           description = CASE
             WHEN excluded.description <> '' THEN excluded.description
