@@ -4,6 +4,12 @@ import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
+import { getInsufficientCreditsPricingNotice } from "../lib/insufficient-credits";
+import {
+  clearPricingEntryIntent,
+  readPricingEntryIntent,
+  type PricingEntryIntent,
+} from "../lib/pricing-entry-intent";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type Session = {
@@ -183,13 +189,22 @@ export function PricingPage({
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
+  const [entryIntent, setEntryIntent] = useState<PricingEntryIntent | null>(null);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const addonsEligibilityNote = canPurchaseAddonCredits
     ? `На тарифе ${currentPlanLabel} вам доступны пакеты дополнительных кредитов. Нажмите на нужный пакет, чтобы перейти к оплате.`
-    : currentPlanLabel
-      ? `На тарифе ${currentPlanLabel} пакеты недоступны. Дополнительные кредиты можно покупать только на PRO и ULTRA.`
-      : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
+      : currentPlanLabel
+        ? `На тарифе ${currentPlanLabel} пакеты недоступны. Дополнительные кредиты можно покупать только на PRO и ULTRA.`
+        : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
+  const plansEntryNotice =
+    entryIntent?.source === "insufficient-credits" && entryIntent.section === "plans"
+      ? getInsufficientCreditsPricingNotice("plans")
+      : null;
+  const addonsEntryNotice =
+    entryIntent?.source === "insufficient-credits" && entryIntent.section === "addons"
+      ? getInsufficientCreditsPricingNotice("addons")
+      : null;
 
   const openPrimaryFlow = () => {
     if (session) {
@@ -285,6 +300,16 @@ export function PricingPage({
   };
 
   useEffect(() => {
+    const nextEntryIntent = readPricingEntryIntent();
+    if (!nextEntryIntent) {
+      return;
+    }
+
+    setEntryIntent(nextEntryIntent);
+    clearPricingEntryIntent();
+  }, []);
+
+  useEffect(() => {
     if (!session || typeof window === "undefined") {
       return;
     }
@@ -358,6 +383,11 @@ export function PricingPage({
 
         <section className="section pricing-max-plans" id="plans">
           <div className="container">
+            {plansEntryNotice ? (
+              <p className="pricing-max-section__status pricing-max-section__status--info" role="status">
+                {plansEntryNotice}
+              </p>
+            ) : null}
             <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}>
               {pricingPlans.map((plan) => {
                 const isActivePlan = plan.checkoutProductId === activePlanId;
@@ -462,6 +492,12 @@ export function PricingPage({
               </div>
             </div>
 
+            {addonsEntryNotice ? (
+              <p className="pricing-max-section__status pricing-max-section__status--info" role="status">
+                {addonsEntryNotice}
+              </p>
+            ) : null}
+
             {checkoutError ? (
               <p className="pricing-max-addons__status" role="alert">
                 {checkoutError}
@@ -480,7 +516,7 @@ export function PricingPage({
                     className="btn pricing-max-card__cta pricing-max-card__cta--secondary pricing-max-pack__cta route-button"
                     type="button"
                     onClick={() => handleAddonPackAction(pack)}
-                    disabled={activeCheckoutProductId === pack.checkoutProductId}
+                    disabled={activeCheckoutProductId === pack.checkoutProductId || !canPurchaseAddonCredits}
                   >
                     {activeCheckoutProductId === pack.checkoutProductId
                       ? "Открываем оплату..."

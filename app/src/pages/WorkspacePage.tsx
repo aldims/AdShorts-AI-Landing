@@ -2,9 +2,17 @@ import { Fragment, type CSSProperties, type ChangeEvent, type FocusEvent as Reac
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { InsufficientCreditsModal } from "../components/InsufficientCreditsModal";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
+import {
+  canPurchaseAddonCredits,
+  formatCreditsCountLabel,
+  getInsufficientCreditsPricingSection,
+  type InsufficientCreditsContext,
+} from "../lib/insufficient-credits";
+import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import {
   createWorkspaceMediaLibraryItem,
@@ -14,6 +22,13 @@ import {
   type WorkspaceMediaLibraryItem,
   type WorkspaceMediaLibraryItemKind,
 } from "../lib/workspaceMediaLibrary";
+import {
+  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
+  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
+  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
+  STUDIO_VIDEO_GENERATION_CREDIT_COST,
+  type StudioCreditAction,
+} from "../../shared/studio-credit-costs";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 
@@ -626,8 +641,6 @@ type StudioVideoOption = {
   id: StudioVideoMode;
   label: string;
 };
-
-const STUDIO_VIDEO_GENERATION_CREDIT_COST = 10;
 
 type StudioCustomVideoFile = {
   dataUrl?: string;
@@ -1989,19 +2002,19 @@ const studioVideoOptions: StudioVideoOption[] = [
     id: "standard",
     label: "Стандартный",
     description: "Анимированные ИИ фото + стоки",
-    costLabel: "10 кредитов",
+    costLabel: formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST),
   },
   {
     id: "ai_photo",
     label: "Только ИИ фото",
     description: "Только анимированные ИИ фото, без стоков",
-    costLabel: "10 кредитов",
+    costLabel: formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST),
   },
   {
     id: "ai_video",
     label: "ИИ видео",
     description: "Полностью ИИ-режим с Wan I2V для всех сцен",
-    costLabel: "10 кредитов",
+    costLabel: formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST),
   },
   {
     id: "custom",
@@ -4419,6 +4432,41 @@ const workspaceCreditTopupPacks: WorkspaceCreditTopupPack[] = [
 type StudioView = "create" | "projects" | "media";
 type StudioCreateMode = "default" | "segment-editor";
 
+const getStudioRouteSection = (search: string): StudioEntryIntentSection => {
+  const section = new URLSearchParams(search).get("section");
+
+  if (section === "projects" || section === "media") {
+    return section;
+  }
+
+  return "create";
+};
+
+const getStudioViewFromRouteSection = (section: StudioEntryIntentSection): StudioView => {
+  if (section === "projects") {
+    return "projects";
+  }
+
+  if (section === "media") {
+    return "media";
+  }
+
+  return "create";
+};
+
+const buildStudioRouteUrl = (search: string, section: StudioEntryIntentSection) => {
+  const searchParams = new URLSearchParams(search);
+
+  if (section === "projects" || section === "media") {
+    searchParams.set("section", section);
+  } else {
+    searchParams.delete("section");
+  }
+
+  const nextSearch = searchParams.toString();
+  return nextSearch ? `/app/studio?${nextSearch}` : "/app/studio";
+};
+
 type StudioSubtitleSelectorChipProps = {
   isEnabled: boolean;
   onSelectColor: (colorId: StudioSubtitleColorOption["id"]) => void;
@@ -6142,7 +6190,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const initialStudioEntryIntentRef = useRef(readStudioEntryIntent());
   const preserveExamplePrefillRef = useRef(Boolean(initialExamplePrefillRef.current));
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(defaultTab);
-  const [studioView, setStudioView] = useState<StudioView>("create");
+  const [studioView, setStudioView] = useState<StudioView>(() =>
+    defaultTab === "studio" ? getStudioViewFromRouteSection(getStudioRouteSection(location.search)) : "create",
+  );
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const [topicInput, setTopicInput] = useState("");
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
@@ -6192,6 +6242,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [isSavingLocalExample, setIsSavingLocalExample] = useState(false);
   const [localExampleSaveError, setLocalExampleSaveError] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [insufficientCreditsContext, setInsufficientCreditsContext] = useState<InsufficientCreditsContext | null>(null);
   const [segmentEditorLoadedSession, setSegmentEditorLoadedSession] = useState<WorkspaceSegmentEditorSession | null>(null);
   const [segmentEditorDraft, setSegmentEditorDraft] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const [segmentEditorAppliedSession, setSegmentEditorAppliedSession] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
@@ -6207,6 +6258,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentAiPhotoModalPrompt, setSegmentAiPhotoModalPrompt] = useState("");
   const [segmentAiVideoModalPrompt, setSegmentAiVideoModalPrompt] = useState("");
   const [segmentAiPhotoModalTab, setSegmentAiPhotoModalTab] = useState<WorkspaceSegmentVisualModalTab>("ai_video");
+  const [isSegmentAiPhotoModalPreviewPlaying, setIsSegmentAiPhotoModalPreviewPlaying] = useState(false);
+  const [isSegmentAiPhotoModalPreviewPlaybackRequested, setIsSegmentAiPhotoModalPreviewPlaybackRequested] = useState(false);
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
   const [isSegmentAiPhotoPromptImproved, setIsSegmentAiPhotoPromptImproved] = useState(false);
   const [isSegmentAiPhotoPromptHighlighted, setIsSegmentAiPhotoPromptHighlighted] = useState(false);
@@ -6281,6 +6334,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const segmentAiPhotoModalPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoPromptImproveRunRef = useRef(0);
   const segmentEditorLanguageTranslateRunRef = useRef(0);
@@ -6399,6 +6453,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setActiveTab(defaultTab);
   }, [defaultTab]);
 
+  const syncStudioRouteSection = (section: StudioEntryIntentSection, options?: { replace?: boolean }) => {
+    const baseSearch = location.pathname.startsWith("/app/studio") ? location.search : "";
+    const nextUrl = buildStudioRouteUrl(baseSearch, section);
+    const currentUrl = `${location.pathname}${location.search}`;
+
+    if (currentUrl === nextUrl) {
+      return;
+    }
+
+    navigate(nextUrl, { replace: options?.replace ?? false });
+  };
+
+  useEffect(() => {
+    if (!location.pathname.startsWith("/app/studio")) {
+      return;
+    }
+
+    const routeStudioView = getStudioViewFromRouteSection(getStudioRouteSection(location.search));
+    setStudioView((current) => (current === routeStudioView ? current : routeStudioView));
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     return () => {
       cancelSegmentEditorSyntheticPlayback();
@@ -6417,6 +6492,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (!pendingExamplePrefill) return;
 
     setStudioView("create");
+    syncStudioRouteSection("create", { replace: true });
     setTopicInput(pendingExamplePrefill.prompt);
     clearExamplePrefillIntent();
     initialExamplePrefillRef.current = null;
@@ -6428,9 +6504,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (new URLSearchParams(location.search).has("section")) {
+      clearStudioEntryIntent();
+      initialStudioEntryIntentRef.current = null;
+      return;
+    }
+
     setActiveTab("studio");
     clearStudioEntryIntent();
     initialStudioEntryIntentRef.current = null;
+    syncStudioRouteSection(pendingStudioEntryIntent.section, { replace: true });
 
     if (pendingStudioEntryIntent.section === "projects") {
       setStudioView("projects");
@@ -6454,7 +6537,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const isAnyPreviewModalOpen = isPreviewModalOpen || Boolean(projectPreviewModal) || isPublishModalOpen;
   const isAnyWorkspaceModalOpen =
-    isAnyPreviewModalOpen || isSegmentAiPhotoModalOpen || isLocalExampleModalOpen || Boolean(projectPendingDelete);
+    isAnyPreviewModalOpen ||
+    isSegmentAiPhotoModalOpen ||
+    isLocalExampleModalOpen ||
+    Boolean(projectPendingDelete) ||
+    Boolean(insufficientCreditsContext);
 
   const stopPreviewModalVideoElement = (element: HTMLVideoElement | null) => {
     if (!element) {
@@ -6521,6 +6608,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setProjectPendingDelete(null);
   };
 
+  const closeInsufficientCreditsModal = () => {
+    setInsufficientCreditsContext(null);
+  };
+
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
 
@@ -6548,6 +6639,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (insufficientCreditsContext) {
+          closeInsufficientCreditsModal();
+          return;
+        }
         if (projectPendingDelete) {
           closeProjectDeleteModal();
           return;
@@ -6571,6 +6666,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
+    insufficientCreditsContext,
     isAnyWorkspaceModalOpen,
     isLocalExampleModalOpen,
     isPublishModalOpen,
@@ -6581,6 +6677,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   useEffect(() => {
     if (activeTab !== "studio" && isAnyWorkspaceModalOpen) {
+      closeInsufficientCreditsModal();
       setProjectPendingDelete(null);
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
@@ -6612,6 +6709,44 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       onProfileChange?.(nextProfile);
     }
   };
+
+  const openInsufficientCreditsModal = useCallback(
+    (action: StudioCreditAction, requiredCredits: number) => {
+      setInsufficientCreditsContext({
+        action,
+        balance: normalizeWorkspaceBalance(workspaceProfile?.balance),
+        plan: normalizeWorkspacePlan(workspaceProfile?.plan),
+        requiredCredits,
+      });
+    },
+    [workspaceProfile],
+  );
+
+  useEffect(() => {
+    if (!insufficientCreditsContext) {
+      return;
+    }
+
+    const nextBalance = normalizeWorkspaceBalance(workspaceProfile?.balance);
+    const nextPlan = normalizeWorkspacePlan(workspaceProfile?.plan);
+
+    if (nextBalance !== null && nextBalance >= insufficientCreditsContext.requiredCredits) {
+      setInsufficientCreditsContext(null);
+      return;
+    }
+
+    if (nextBalance !== insufficientCreditsContext.balance || nextPlan !== insufficientCreditsContext.plan) {
+      setInsufficientCreditsContext((current) =>
+        current
+          ? {
+              ...current,
+              balance: nextBalance,
+              plan: nextPlan,
+            }
+          : current,
+      );
+    }
+  }, [insufficientCreditsContext, workspaceProfile]);
 
   useEffect(() => {
     setProjects([]);
@@ -7390,7 +7525,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const workspacePlan = normalizeWorkspacePlan(workspaceProfile?.plan);
   const workspacePlanLabel = workspacePlan ?? "…";
   const workspaceBalance = normalizeWorkspaceBalance(workspaceProfile?.balance);
-  const workspaceCanPurchaseCreditPacks = workspacePlan === "PRO" || workspacePlan === "ULTRA";
+  const workspaceCanPurchaseCreditPacks = canPurchaseAddonCredits(workspacePlan);
   const workspaceBillingDescription = workspaceCanPurchaseCreditPacks
     ? `На тарифе ${workspacePlanLabel} можно докупать кредиты пакетами.`
     : "Покупка дополнительных кредитов доступна только на тарифах PRO и ULTRA.";
@@ -7418,6 +7553,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : generatedVideoDescription;
   const openWorkspaceCreditPacks = () => {
     navigate(workspaceCanPurchaseCreditPacks ? "/pricing#addons" : "/pricing#plans");
+  };
+  const handleInsufficientCreditsAction = () => {
+    const targetSection = getInsufficientCreditsPricingSection(insufficientCreditsContext?.plan ?? workspacePlan);
+    closeInsufficientCreditsModal();
+    writePricingEntryIntent({
+      section: targetSection,
+      source: "insufficient-credits",
+    });
+    navigate(`/pricing#${targetSection}`);
   };
   const previewModalHashtags = isProjectPreviewModalOpen ? projectPreviewModal?.hashtags ?? [] : generatedVideoHashtags;
   const generatedVideoPlaybackUrl = String(generatedVideo?.videoUrl ?? "").trim() || null;
@@ -8128,6 +8272,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [isSegmentAiPhotoModalOpen]);
 
   useEffect(() => {
+    const element = segmentAiPhotoModalPreviewVideoRef.current;
+
+    setIsSegmentAiPhotoModalPreviewPlaying(false);
+    setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+
+    if (!element) {
+      return;
+    }
+
+    element.pause();
+    element.muted = true;
+    element.defaultMuted = true;
+
+    try {
+      element.currentTime = 0;
+    } catch {
+      // Ignore timing reset until metadata is ready.
+    }
+  }, [isSegmentAiPhotoModalOpen, segmentAiPhotoModalPreviewKind, segmentAiPhotoModalPreviewUrl]);
+
+  useEffect(() => {
     cancelSegmentEditorSyntheticPlayback();
     Object.values(segmentEditorPreviewVideoRefs.current).forEach((element) => {
       if (!element) return;
@@ -8554,6 +8719,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const handleStudioTopMenuSelect = (section: StudioEntryIntentSection) => {
     setActiveTab("studio");
+    syncStudioRouteSection(section);
 
     if (section === "projects") {
       setStudioView("projects");
@@ -9626,17 +9792,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       videoAction: "ai_photo",
     }));
 
-    cancelPendingSegmentAiVideoRun(targetSegmentIndex);
-
-    if (options?.shouldCloseModal) {
-      closeSegmentAiPhotoModal();
+    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST) {
+      setSegmentEditorVideoError(null);
+      openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
+      return;
     }
+
+    cancelPendingSegmentAiVideoRun(targetSegmentIndex);
 
     const runId = segmentAiPhotoRunRef.current + 1;
     segmentAiPhotoRunRef.current = runId;
     setIsSegmentEditorGeneratingAiPhoto(true);
     setSegmentEditorGeneratingAiPhotoSegmentIndex(targetSegmentIndex);
     setSegmentEditorVideoError(null);
+    setInsufficientCreditsContext(null);
 
     let pollStarted = false;
 
@@ -9660,7 +9829,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           setIsSegmentEditorGeneratingAiPhoto(false);
           setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
         }
-        navigate("/pricing");
+        openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
         return;
       }
 
@@ -9673,6 +9842,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      if (options?.shouldCloseModal) {
+        closeSegmentAiPhotoModal();
+      }
       pollStarted = true;
       await pollSegmentEditorAiPhotoJob(payload.data.jobId, payload.data.status, {
         prompt: normalizedPrompt,
@@ -9725,18 +9897,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       videoAction: "ai",
     }));
 
+    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST) {
+      setSegmentEditorVideoError(null);
+      openInsufficientCreditsModal("ai_video", STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST);
+      return;
+    }
+
     cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
-
-    if (options?.shouldCloseModal) {
-      closeSegmentAiPhotoModal();
-    }
 
     const runId = segmentAiVideoRunRef.current + 1;
     segmentAiVideoRunRef.current = runId;
     setIsSegmentEditorGeneratingAiVideo(true);
     setSegmentEditorGeneratingAiVideoSegmentIndex(targetSegmentIndex);
     setSegmentEditorVideoError(null);
+    setInsufficientCreditsContext(null);
 
     let pollStarted = false;
 
@@ -9760,7 +9935,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           setIsSegmentEditorGeneratingAiVideo(false);
           setSegmentEditorGeneratingAiVideoSegmentIndex(null);
         }
-        navigate("/pricing");
+        openInsufficientCreditsModal("ai_video", STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST);
         return;
       }
 
@@ -9773,6 +9948,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      if (options?.shouldCloseModal) {
+        closeSegmentAiPhotoModal();
+      }
       pollStarted = true;
       await pollSegmentEditorAiVideoJob(payload.data.jobId, payload.data.status, {
         prompt: normalizedPrompt,
@@ -9830,18 +10008,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       videoAction: "photo_animation",
     }));
 
+    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST) {
+      setSegmentEditorVideoError(null);
+      openInsufficientCreditsModal("photo_animation", STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST);
+      return;
+    }
+
     cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
     cancelPendingSegmentAiVideoRun(targetSegmentIndex);
-
-    if (options?.shouldCloseModal) {
-      closeSegmentAiPhotoModal();
-    }
 
     const runId = segmentPhotoAnimationRunRef.current + 1;
     segmentPhotoAnimationRunRef.current = runId;
     setIsSegmentEditorGeneratingPhotoAnimation(true);
     setSegmentEditorGeneratingPhotoAnimationSegmentIndex(targetSegmentIndex);
     setSegmentEditorVideoError(null);
+    setInsufficientCreditsContext(null);
 
     let pollStarted = false;
 
@@ -9865,7 +10046,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           setIsSegmentEditorGeneratingPhotoAnimation(false);
           setSegmentEditorGeneratingPhotoAnimationSegmentIndex(null);
         }
-        navigate("/pricing");
+        openInsufficientCreditsModal("photo_animation", STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST);
         return;
       }
 
@@ -9878,6 +10059,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      if (options?.shouldCloseModal) {
+        closeSegmentAiPhotoModal();
+      }
       pollStarted = true;
       await pollSegmentEditorPhotoAnimationJob(payload.data.jobId, payload.data.status, {
         prompt: normalizedPrompt,
@@ -10914,7 +11098,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const requiredCredits = getRequiredCreditsForVideoMode(selectedVideoMode);
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
-      navigate("/pricing");
+      setGenerateError(null);
+      setStatus("Credits required");
+      openInsufficientCreditsModal("video_generation", requiredCredits);
       return;
     }
 
@@ -11007,6 +11193,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setIsGenerating(true);
       setIsPreviewModalOpen(false);
       setGenerateError(null);
+      setInsufficientCreditsContext(null);
       setVideoSelectionError(null);
       setMusicSelectionError(null);
       setSegmentEditorError(null);
@@ -11094,7 +11281,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       if (response.status === 402) {
         setIsGenerating(false);
-        navigate("/pricing");
+        setStatus("Credits required");
+        openInsufficientCreditsModal("video_generation", requiredCredits);
         return;
       }
 
@@ -11245,11 +11433,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     setStudioView("create");
+    syncStudioRouteSection("create");
     await ensureSegmentEditorDraftForProject(project.adId);
   };
 
   const handleOpenMediaLibraryItem = async (item: WorkspaceMediaLibraryItem) => {
     setStudioView("create");
+    syncStudioRouteSection("create");
     const draft = await ensureSegmentEditorDraftForProject(item.projectId, {
       openDraft: false,
     });
@@ -11433,6 +11623,63 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     delete segmentEditorPreviewVideoRefs.current[segmentIndex];
+  };
+
+  const handleSegmentAiPhotoModalPreviewVideoRef = useCallback((element: HTMLVideoElement | null) => {
+    segmentAiPhotoModalPreviewVideoRef.current = element;
+  }, []);
+
+  const handleSegmentAiPhotoModalPreviewTogglePlayback = async () => {
+    if (segmentAiPhotoModalPreviewKind !== "video") {
+      return;
+    }
+
+    const element = segmentAiPhotoModalPreviewVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    if (!element.paused && !element.ended) {
+      setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+      element.pause();
+      return;
+    }
+
+    const duration =
+      typeof element.duration === "number" && Number.isFinite(element.duration) ? Math.max(0, element.duration) : 0;
+    const isPreviewPrimed = element.dataset.previewPrimed === "true";
+    const shouldResetToStart =
+      isPreviewPrimed || element.ended || (duration > 0 && element.currentTime >= duration - 0.12);
+
+    if (shouldResetToStart) {
+      try {
+        element.currentTime = 0;
+      } catch {
+        // Ignore timing reset until metadata is ready.
+      }
+    }
+
+    if (isPreviewPrimed) {
+      delete element.dataset.previewPrimed;
+    }
+
+    element.muted = true;
+    element.defaultMuted = true;
+    setIsSegmentAiPhotoModalPreviewPlaybackRequested(true);
+    await playVideoElement(element, true);
+
+    if (element.paused || element.ended) {
+      setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+    }
+  };
+
+  const handleSegmentAiPhotoModalPreviewKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (segmentAiPhotoModalPreviewKind !== "video" || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+
+    event.preventDefault();
+    void handleSegmentAiPhotoModalPreviewTogglePlayback();
   };
 
   const setSegmentEditorPreviewTime = (segmentIndex: number, nextTime: number) => {
@@ -12101,7 +12348,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       targetProject?.title ?? "Публикация в YouTube",
       youtubeError ?? null,
     );
-    navigate("/app/studio", { replace: true });
+    searchParams.delete("publish");
+    searchParams.delete("youtube_error");
+    navigate(buildStudioRouteUrl(`?${searchParams.toString()}`, "create"), { replace: true });
   }, [hasLoadedProjects, isProjectsLoading, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
@@ -13522,7 +13771,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <button
                     className="studio-projects__create"
                     type="button"
-                    onClick={() => setStudioView("create")}
+                    onClick={() => {
+                      setStudioView("create");
+                      syncStudioRouteSection("create");
+                    }}
                   >
                     Создать Shorts
                   </button>
@@ -13682,6 +13934,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     type="button"
                     onClick={() => {
                       setStudioView("create");
+                      syncStudioRouteSection("create");
                       void handleStudioCreateModeSwitch("default");
                     }}
                   >
@@ -13764,6 +14017,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   </small>
                 </span>
               </div>,
+              document.body,
+            )
+          : null}
+
+        {insufficientCreditsContext && typeof document !== "undefined"
+          ? createPortal(
+              <InsufficientCreditsModal
+                context={insufficientCreditsContext}
+                onAction={handleInsufficientCreditsAction}
+                onClose={closeInsufficientCreditsModal}
+              />,
               document.body,
             )
           : null}
@@ -13982,13 +14246,36 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <div className="studio-ai-photo-modal__layout">
                     <section className="studio-ai-photo-modal__preview-pane" aria-label="Превью сегмента">
                       <div className="studio-ai-photo-modal__preview-shell">
-                        <div className="studio-ai-photo-modal__preview-frame">
+                        <div
+                          className={`studio-ai-photo-modal__preview-frame${
+                            segmentAiPhotoModalPreviewKind === "video" ? " is-interactive" : ""
+                          }${isSegmentAiPhotoModalPreviewPlaying ? " is-playing" : ""}`}
+                          role={segmentAiPhotoModalPreviewKind === "video" ? "button" : undefined}
+                          tabIndex={segmentAiPhotoModalPreviewKind === "video" ? 0 : undefined}
+                          aria-label={
+                            segmentAiPhotoModalPreviewKind === "video"
+                              ? isSegmentAiPhotoModalPreviewPlaying
+                                ? "Поставить превью на паузу"
+                                : "Воспроизвести превью сегмента"
+                              : undefined
+                          }
+                          aria-pressed={segmentAiPhotoModalPreviewKind === "video" ? isSegmentAiPhotoModalPreviewPlaying : undefined}
+                          onClick={
+                            segmentAiPhotoModalPreviewKind === "video"
+                              ? () => {
+                                  void handleSegmentAiPhotoModalPreviewTogglePlayback();
+                                }
+                              : undefined
+                          }
+                          onKeyDown={segmentAiPhotoModalPreviewKind === "video" ? handleSegmentAiPhotoModalPreviewKeyDown : undefined}
+                        >
                           {segmentAiPhotoModalPreviewUrl ? (
                             <WorkspaceSegmentPreviewCardMedia
-                              autoplay={segmentAiPhotoModalPreviewKind === "video"}
+                              autoplay={false}
                               fallbackPosterUrl={
                                 segmentAiPhotoModalPreviewKind === "video" ? segmentAiPhotoModalFallbackPosterUrl : null
                               }
+                              isPlaybackRequested={isSegmentAiPhotoModalPreviewPlaybackRequested}
                               loop={segmentAiPhotoModalPreviewKind === "video"}
                               mediaKey={`segment-visual-modal:${segmentAiPhotoModalSegment.index}:${segmentAiPhotoModalPreviewKind}:${segmentAiPhotoModalPreviewUrl}:${
                                 segmentAiPhotoModalPreviewPosterUrl ?? "no-poster"
@@ -13998,6 +14285,23 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               preload="auto"
                               previewKind={segmentAiPhotoModalPreviewKind}
                               previewUrl={segmentAiPhotoModalPreviewUrl}
+                              videoRef={segmentAiPhotoModalPreviewKind === "video" ? handleSegmentAiPhotoModalPreviewVideoRef : undefined}
+                              onVideoEnded={() => {
+                                setIsSegmentAiPhotoModalPreviewPlaying(false);
+                                setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+                              }}
+                              onVideoError={() => {
+                                setIsSegmentAiPhotoModalPreviewPlaying(false);
+                                setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+                              }}
+                              onVideoPause={() => {
+                                setIsSegmentAiPhotoModalPreviewPlaying(false);
+                                setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+                              }}
+                              onVideoPlay={() => {
+                                setIsSegmentAiPhotoModalPreviewPlaying(true);
+                                setIsSegmentAiPhotoModalPreviewPlaybackRequested(false);
+                              }}
                             />
                           ) : (
                             <div className="studio-ai-photo-modal__preview-placeholder">
@@ -14011,6 +14315,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <p>Выберите источник, чтобы обновить визуал сегмента.</p>
                             </div>
                           )}
+
+                          {segmentAiPhotoModalPreviewKind === "video" && segmentAiPhotoModalPreviewUrl ? (
+                            <div
+                              className={`studio-ai-photo-modal__preview-control${isSegmentAiPhotoModalPreviewPlaying ? " is-playing" : ""}`}
+                              aria-hidden="true"
+                            >
+                              {isSegmentAiPhotoModalPreviewPlaying ? (
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                  <rect x="5" y="4.25" width="3.25" height="11.5" rx="1.2" fill="currentColor" />
+                                  <rect x="11.75" y="4.25" width="3.25" height="11.5" rx="1.2" fill="currentColor" />
+                                </svg>
+                              ) : (
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                  <path d="M7 5.25v9.5l7.5-4.75L7 5.25Z" fill="currentColor" />
+                                </svg>
+                              )}
+                            </div>
+                          ) : null}
 
                           <div className="studio-ai-photo-modal__preview-overlay">
                             <div className="studio-ai-photo-modal__preview-badges">
@@ -14232,7 +14554,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 void handleSegmentAiVideoModalGenerate();
                               }}
                             >
-                              {isSegmentAiVideoModalGeneratingCurrentSegment ? "Генерируем..." : "Сгенерировать видео(7 кредитов)"}
+                              {isSegmentAiVideoModalGeneratingCurrentSegment
+                                ? "Генерируем..."
+                                : `Сгенерировать видео (${formatCreditsCountLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)})`}
                             </button>
                           </div>
                         </div>
@@ -14303,7 +14627,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 void handleSegmentPhotoAnimationModalGenerate();
                               }}
                             >
-                              {isSegmentPhotoAnimationModalGeneratingCurrentSegment ? "Анимируем..." : "Анимировать фото(5 кредитов)"}
+                              {isSegmentPhotoAnimationModalGeneratingCurrentSegment
+                                ? "Анимируем..."
+                                : `Анимировать фото (${formatCreditsCountLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)})`}
                             </button>
                           </div>
                         </div>
@@ -14375,7 +14701,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 void handleSegmentAiPhotoModalGenerateScene();
                               }}
                             >
-                              {isSegmentAiPhotoModalGeneratingCurrentSegment ? "Генерируем..." : "Сгенерировать фото(2 кредита)"}
+                              {isSegmentAiPhotoModalGeneratingCurrentSegment
+                                ? "Генерируем..."
+                                : `Сгенерировать фото (${formatCreditsCountLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)})`}
                             </button>
                           </div>
                         </div>
@@ -14508,7 +14836,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           </div>
                         </div>
                       )}
-
                       {segmentEditorVideoError ? <p className="studio-ai-photo-modal__error">{segmentEditorVideoError}</p> : null}
                     </section>
                   </div>
@@ -15459,7 +15786,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <strong>{pack.credits}</strong>
                             <span className="account-topup__price">{pack.price}</span>
                             <small>{pack.subnote}</small>
-                            <button className="account-topup__cta" type="button" onClick={openWorkspaceCreditPacks}>
+                            <button
+                              className="account-topup__cta"
+                              type="button"
+                              onClick={openWorkspaceCreditPacks}
+                              disabled={!workspaceCanPurchaseCreditPacks}
+                            >
                               {workspaceCanPurchaseCreditPacks ? "Выбрать пакет" : "Нужен PRO / ULTRA"}
                             </button>
                           </article>

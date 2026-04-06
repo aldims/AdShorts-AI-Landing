@@ -1,14 +1,11 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { pathToFileURL } from "node:url";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorkspaceVideoPoster, } from "./project-posters.js";
 import { getWorkspaceProjects } from "./projects.js";
 import { listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
-const STUDIO_GENERATION_CREDIT_COST = 10;
-const STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST = 7;
-const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST = 5;
-const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = 2;
 export class WorkspaceCreditLimitError extends Error {
     constructor(message = "На тарифе FREE доступна 1 бесплатная генерация. Обновите тариф, чтобы продолжить.") {
         super(message);
