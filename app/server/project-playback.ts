@@ -1,24 +1,23 @@
 import { execFile } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { constants as fsConstants } from "node:fs";
-import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import {
-  access,
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 import { extname, join } from "node:path";
+import { mkdir, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 
+import { createAssetPreparationQueue, type AssetPreparationPriority } from "./asset-preparation-queue.js";
 import { env } from "./env.js";
+import { logServerEvent } from "./logger.js";
+import {
+  createPreparedAssetStore,
+  type PreparedAssetMetadata,
+} from "./prepared-asset-store.js";
+import {
+  fetchUpstreamResponse,
+  upstreamPolicies,
+} from "./upstream-client.js";
 
 export type WorkspaceProjectPlaybackSource = {
   cacheKey: string;
@@ -31,53 +30,56 @@ export type WorkspaceProjectPlaybackAsset = {
   contentType: string;
 };
 
-type WorkspaceProjectPlaybackPriority = "background" | "interactive";
-
-type WorkspaceProjectPlaybackTask = {
-  priority: WorkspaceProjectPlaybackPriority;
-  promise: Promise<WorkspaceProjectPlaybackAsset>;
-  reject: (error: unknown) => void;
-  resolve: (asset: WorkspaceProjectPlaybackAsset) => void;
-  run: () => void;
-  source: WorkspaceProjectPlaybackSource;
-  started: boolean;
-};
-
-type WorkspaceProjectPlaybackMetadata = {
-  contentType: string;
-  fileName: string;
-  savedAt: string;
-};
+type WorkspaceProjectPlaybackMetadata = PreparedAssetMetadata;
 
 const execFileAsync = promisify(execFile);
 
-const PROJECT_PLAYBACK_ROOT_DIR = join(env.dataDir, "project-playback");
 const PROJECT_PLAYBACK_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const PROJECT_PLAYBACK_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-const PROJECT_PLAYBACK_DOWNLOAD_TIMEOUT_MS = 120_000;
-const PROJECT_PLAYBACK_FFMPEG_TIMEOUT_MS = 120_000;
 const PROJECT_PLAYBACK_FFMPEG_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+const PROJECT_PLAYBACK_WARM_FAILURE_TTL_MS = 10 * 60 * 1000;
 const PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY = 2;
 const PROJECT_PLAYBACK_BACKGROUND_CONCURRENCY = 1;
-const projectPlaybackInteractiveQueue: WorkspaceProjectPlaybackTask[] = [];
-const projectPlaybackBackgroundQueue: WorkspaceProjectPlaybackTask[] = [];
-const projectPlaybackTasks = new Map<string, WorkspaceProjectPlaybackTask>();
-let activeProjectPlaybackInteractiveCount = 0;
-let activeProjectPlaybackBackgroundCount = 0;
-let projectPlaybackCleanupPromise: Promise<void> | null = null;
-let lastProjectPlaybackCleanupAt = 0;
+const PROJECT_PLAYBACK_ROOT_DIR = join(env.assetCacheDir, "project-playback");
+const PROJECT_PLAYBACK_FFMPEG_TIMEOUT_MS = env.upstreamPlaybackPreparationTimeoutMs;
 const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
+
+const playbackStore = createPreparedAssetStore({
+  cleanupIntervalMs: PROJECT_PLAYBACK_CLEANUP_INTERVAL_MS,
+  maxAgeMs: PROJECT_PLAYBACK_MAX_AGE_MS,
+  name: "project-playback",
+  rootDir: PROJECT_PLAYBACK_ROOT_DIR,
+});
+const playbackQueue = createAssetPreparationQueue<WorkspaceProjectPlaybackAsset>({
+  backgroundConcurrency: PROJECT_PLAYBACK_BACKGROUND_CONCURRENCY,
+  interactiveConcurrency: PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY,
+  name: "project-playback",
+});
+const projectPlaybackWarmFailures = new Map<string, number>();
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
-const getWorkspaceProjectPlaybackHash = (cacheKey: string) =>
-  createHash("sha256").update(cacheKey).digest("hex");
+const hasRecentWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
+  const expiresAt = projectPlaybackWarmFailures.get(cacheKey);
+  if (!expiresAt) {
+    return false;
+  }
 
-const getWorkspaceProjectPlaybackMetadataPath = (cacheKey: string) =>
-  join(PROJECT_PLAYBACK_ROOT_DIR, `${getWorkspaceProjectPlaybackHash(cacheKey)}.json`);
+  if (expiresAt <= Date.now()) {
+    projectPlaybackWarmFailures.delete(cacheKey);
+    return false;
+  }
 
-const getWorkspaceProjectPlaybackAbsolutePath = (cacheKey: string, fileName: string) =>
-  join(PROJECT_PLAYBACK_ROOT_DIR, `${getWorkspaceProjectPlaybackHash(cacheKey)}-${fileName}`);
+  return true;
+};
+
+const markWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
+  projectPlaybackWarmFailures.set(cacheKey, Date.now() + PROJECT_PLAYBACK_WARM_FAILURE_TTL_MS);
+};
+
+const clearWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
+  projectPlaybackWarmFailures.delete(cacheKey);
+};
 
 const inferWorkspaceProjectPlaybackContentType = (value: string | null | undefined, upstreamUrl: URL) => {
   const normalized = normalizeText(value).toLowerCase();
@@ -120,139 +122,21 @@ const inferWorkspaceProjectPlaybackExtension = (contentType: string, upstreamUrl
   return ".mp4";
 };
 
-const touchWorkspaceProjectPlaybackFile = async (absolutePath: string, metadataPath: string) => {
-  const nextTimestamp = new Date();
-  await Promise.allSettled([
-    utimes(absolutePath, nextTimestamp, nextTimestamp),
-    utimes(metadataPath, nextTimestamp, nextTimestamp),
-  ]);
-};
-
-const readWorkspaceProjectPlaybackMetadata = async (
-  cacheKey: string,
-): Promise<WorkspaceProjectPlaybackAsset | null> => {
-  const metadataPath = getWorkspaceProjectPlaybackMetadataPath(cacheKey);
-
-  try {
-    const rawValue = await readFile(metadataPath, "utf8");
-    const payload = JSON.parse(rawValue) as WorkspaceProjectPlaybackMetadata | null;
-    const fileName = normalizeText(payload?.fileName);
-    const contentType = normalizeText(payload?.contentType);
-    if (!fileName || !contentType) {
-      return null;
-    }
-
-    const absolutePath = getWorkspaceProjectPlaybackAbsolutePath(cacheKey, fileName);
-    await access(absolutePath, fsConstants.R_OK);
-    await touchWorkspaceProjectPlaybackFile(absolutePath, metadataPath).catch(() => undefined);
-
-    return {
-      absolutePath,
-      contentType,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const writeWorkspaceProjectPlaybackMetadata = async (
-  cacheKey: string,
-  metadata: WorkspaceProjectPlaybackMetadata,
-) => {
-  const metadataPath = getWorkspaceProjectPlaybackMetadataPath(cacheKey);
-  const tempMetadataPath = `${metadataPath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempMetadataPath, JSON.stringify(metadata, null, 2), "utf8");
-  await rename(tempMetadataPath, metadataPath);
-};
-
-const removeWorkspaceProjectPlaybackTaskFromQueue = (
-  queue: WorkspaceProjectPlaybackTask[],
-  task: WorkspaceProjectPlaybackTask,
-) => {
-  const taskIndex = queue.indexOf(task);
-  if (taskIndex >= 0) {
-    queue.splice(taskIndex, 1);
-  }
-};
-
-const flushWorkspaceProjectPlaybackQueues = () => {
-  while (
-    activeProjectPlaybackInteractiveCount < PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY &&
-    projectPlaybackInteractiveQueue.length > 0
-  ) {
-    const nextTask = projectPlaybackInteractiveQueue.shift();
-    if (!nextTask) {
-      break;
-    }
-
-    activeProjectPlaybackInteractiveCount += 1;
-    nextTask.run();
-  }
-
-  while (
-    activeProjectPlaybackBackgroundCount < PROJECT_PLAYBACK_BACKGROUND_CONCURRENCY &&
-    projectPlaybackBackgroundQueue.length > 0 &&
-    projectPlaybackInteractiveQueue.length === 0
-  ) {
-    const nextTask = projectPlaybackBackgroundQueue.shift();
-    if (!nextTask) {
-      break;
-    }
-
-    activeProjectPlaybackBackgroundCount += 1;
-    nextTask.run();
-  }
-};
-
-const scheduleWorkspaceProjectPlaybackCleanup = () => {
-  const now = Date.now();
-  if (
-    projectPlaybackCleanupPromise ||
-    lastProjectPlaybackCleanupAt > 0 && now - lastProjectPlaybackCleanupAt < PROJECT_PLAYBACK_CLEANUP_INTERVAL_MS
-  ) {
-    return;
-  }
-
-  lastProjectPlaybackCleanupAt = now;
-  projectPlaybackCleanupPromise = (async () => {
-    await mkdir(PROJECT_PLAYBACK_ROOT_DIR, { recursive: true });
-
-    const entries = await readdir(PROJECT_PLAYBACK_ROOT_DIR, { withFileTypes: true });
-    const expirationThreshold = Date.now() - PROJECT_PLAYBACK_MAX_AGE_MS;
-
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (!entry.isFile()) {
-          return;
-        }
-
-        const absolutePath = join(PROJECT_PLAYBACK_ROOT_DIR, entry.name);
-        try {
-          const fileStats = await stat(absolutePath);
-          if (fileStats.mtimeMs < expirationThreshold) {
-            await rm(absolutePath, { force: true });
-          }
-        } catch {
-          // Ignore cleanup failures for individual files.
-        }
-      }),
-    );
-  })()
-    .catch((error) => {
-      console.error("[workspace] Failed to cleanup project playback cache", error);
-    })
-    .finally(() => {
-      projectPlaybackCleanupPromise = null;
-    });
-};
-
 const downloadWorkspaceProjectPlaybackSource = async (source: WorkspaceProjectPlaybackSource) => {
-  const response = await fetch(source.upstreamUrl, {
-    headers: {
-      connection: "close",
+  const response = await fetchUpstreamResponse(
+    source.upstreamUrl,
+    {
+      headers: {
+        connection: "close",
+      },
     },
-    signal: AbortSignal.timeout(PROJECT_PLAYBACK_DOWNLOAD_TIMEOUT_MS),
-  });
+    upstreamPolicies.playbackPreparation,
+    {
+      assetKind: "playback",
+      endpoint: "playback.prepare.download",
+      projectId: source.projectId,
+    },
+  );
 
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download project playback source (${response.status}).`);
@@ -265,7 +149,7 @@ const downloadWorkspaceProjectPlaybackSource = async (source: WorkspaceProjectPl
   const sourceExtension = inferWorkspaceProjectPlaybackExtension(contentType, source.upstreamUrl);
   const tempBasePath = join(
     PROJECT_PLAYBACK_ROOT_DIR,
-    `${getWorkspaceProjectPlaybackHash(source.cacheKey)}-${process.pid}-${Date.now()}-${randomUUID()}`,
+    `${process.pid}-${Date.now()}-${randomUUID()}`,
   );
   const tempDownloadPath = `${tempBasePath}-download${sourceExtension}`;
 
@@ -301,8 +185,8 @@ const remuxWorkspaceProjectPlaybackFile = async (inputPath: string, outputPath: 
       outputPath,
     ],
     {
-      timeout: PROJECT_PLAYBACK_FFMPEG_TIMEOUT_MS,
       maxBuffer: PROJECT_PLAYBACK_FFMPEG_MAX_BUFFER_BYTES,
+      timeout: PROJECT_PLAYBACK_FFMPEG_TIMEOUT_MS,
     },
   );
 };
@@ -310,9 +194,16 @@ const remuxWorkspaceProjectPlaybackFile = async (inputPath: string, outputPath: 
 const prepareWorkspaceProjectPlaybackAsset = async (
   source: WorkspaceProjectPlaybackSource,
 ): Promise<WorkspaceProjectPlaybackAsset> => {
+  playbackStore.scheduleCleanup();
   await mkdir(PROJECT_PLAYBACK_ROOT_DIR, { recursive: true });
-  const cachedAsset = await readWorkspaceProjectPlaybackMetadata(source.cacheKey);
+  const cachedAsset = await peekWorkspaceProjectPlaybackAsset(source.cacheKey);
   if (cachedAsset) {
+    logServerEvent("info", "prepared-asset.cache-hit", {
+      assetKind: "playback",
+      cacheHit: true,
+      cacheKey: source.cacheKey,
+      projectId: source.projectId,
+    });
     return cachedAsset;
   }
 
@@ -330,116 +221,57 @@ const prepareWorkspaceProjectPlaybackAsset = async (
     tempOutputPath = tempRemuxPath;
     await rm(downloadedSource.tempDownloadPath, { force: true }).catch(() => undefined);
   } catch (error) {
-    console.warn("[workspace] Failed to remux project playback source, using raw file fallback", {
-      error: error instanceof Error ? error.message : "Unknown project playback remux error.",
+    logServerEvent("warn", "playback.remux-fallback", {
+      assetKind: "playback",
+      error,
       projectId: source.projectId,
     });
     await rm(tempRemuxPath, { force: true }).catch(() => undefined);
   }
 
-  const finalAbsolutePath = getWorkspaceProjectPlaybackAbsolutePath(source.cacheKey, finalFileName);
-
-  try {
-    await rename(tempOutputPath, finalAbsolutePath);
-  } catch (error) {
-    await rm(tempOutputPath, { force: true }).catch(() => undefined);
-    throw error;
-  }
-
-  try {
-    await writeWorkspaceProjectPlaybackMetadata(source.cacheKey, {
+  const finalPath = await playbackStore.commitFile<WorkspaceProjectPlaybackMetadata>(
+    source.cacheKey,
+    tempOutputPath,
+    {
       contentType: finalContentType,
       fileName: finalFileName,
       savedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    await rm(finalAbsolutePath, { force: true }).catch(() => undefined);
-    throw error;
-  }
+    },
+  );
 
   return {
-    absolutePath: finalAbsolutePath,
+    absolutePath: finalPath,
     contentType: finalContentType,
   };
 };
 
-const createWorkspaceProjectPlaybackTask = (
-  source: WorkspaceProjectPlaybackSource,
-  priority: WorkspaceProjectPlaybackPriority,
-): WorkspaceProjectPlaybackTask => {
-  let resolveTask!: (asset: WorkspaceProjectPlaybackAsset) => void;
-  let rejectTask!: (error: unknown) => void;
-  const promise = new Promise<WorkspaceProjectPlaybackAsset>((resolve, reject) => {
-    resolveTask = resolve;
-    rejectTask = reject;
-  });
-
-  const task: WorkspaceProjectPlaybackTask = {
-    priority,
-    promise,
-    reject: rejectTask,
-    resolve: resolveTask,
-    run: () => {
-      task.started = true;
-
-      void prepareWorkspaceProjectPlaybackAsset(source)
-        .then(task.resolve)
-        .catch(task.reject)
-        .finally(() => {
-          projectPlaybackTasks.delete(source.cacheKey);
-
-          if (task.priority === "interactive") {
-            activeProjectPlaybackInteractiveCount = Math.max(0, activeProjectPlaybackInteractiveCount - 1);
-          } else {
-            activeProjectPlaybackBackgroundCount = Math.max(0, activeProjectPlaybackBackgroundCount - 1);
-          }
-
-          flushWorkspaceProjectPlaybackQueues();
-        });
-    },
-    source,
-    started: false,
-  };
-
-  return task;
-};
-
-const promoteWorkspaceProjectPlaybackTaskToInteractive = (task: WorkspaceProjectPlaybackTask) => {
-  if (task.started || task.priority === "interactive") {
-    return;
-  }
-
-  removeWorkspaceProjectPlaybackTaskFromQueue(projectPlaybackBackgroundQueue, task);
-  task.priority = "interactive";
-  projectPlaybackInteractiveQueue.push(task);
-  flushWorkspaceProjectPlaybackQueues();
-};
-
 const ensureWorkspaceProjectPlaybackQueued = (
   source: WorkspaceProjectPlaybackSource,
-  priority: WorkspaceProjectPlaybackPriority,
-) => {
-  const existingTask = projectPlaybackTasks.get(source.cacheKey);
-  if (existingTask) {
-    if (priority === "interactive") {
-      promoteWorkspaceProjectPlaybackTaskToInteractive(existingTask);
+  priority: AssetPreparationPriority,
+) =>
+  playbackQueue.schedule(source.cacheKey, priority, async () => {
+    const startedAt = Date.now();
+    try {
+      const asset = await prepareWorkspaceProjectPlaybackAsset(source);
+      logServerEvent("info", "prepared-asset.ready", {
+        assetKind: "playback",
+        cacheHit: false,
+        cacheKey: source.cacheKey,
+        elapsedMs: Date.now() - startedAt,
+        projectId: source.projectId,
+      });
+      return asset;
+    } catch (error) {
+      logServerEvent("warn", "prepared-asset.failed", {
+        assetKind: "playback",
+        cacheKey: source.cacheKey,
+        elapsedMs: Date.now() - startedAt,
+        error,
+        projectId: source.projectId,
+      });
+      throw error;
     }
-
-    return existingTask.promise;
-  }
-
-  const nextTask = createWorkspaceProjectPlaybackTask(source, priority);
-  projectPlaybackTasks.set(source.cacheKey, nextTask);
-
-  if (priority === "interactive") {
-    projectPlaybackInteractiveQueue.push(nextTask);
-  } else {
-    projectPlaybackBackgroundQueue.push(nextTask);
-  }
-
-  flushWorkspaceProjectPlaybackQueues();
-  return nextTask.promise;
-};
+  });
 
 export const getWorkspaceProjectPlaybackCacheKey = (source: {
   projectId: string;
@@ -454,26 +286,59 @@ export const getWorkspaceProjectPlaybackCacheKey = (source: {
   return `${normalizedProjectId}:${normalizedUpdatedAt}:${normalizedTargetUrl.toString()}`;
 };
 
+export async function peekWorkspaceProjectPlaybackAsset(
+  cacheKey: string,
+): Promise<WorkspaceProjectPlaybackAsset | null> {
+  playbackStore.scheduleCleanup();
+  const cachedAsset = await playbackStore.read<WorkspaceProjectPlaybackMetadata>(cacheKey);
+  if (!cachedAsset) {
+    return null;
+  }
+
+  return {
+    absolutePath: cachedAsset.absolutePath,
+    contentType: cachedAsset.metadata.contentType,
+  };
+}
+
 export async function ensureWorkspaceProjectPlayback(
   source: WorkspaceProjectPlaybackSource,
 ): Promise<WorkspaceProjectPlaybackAsset> {
-  scheduleWorkspaceProjectPlaybackCleanup();
+  playbackStore.scheduleCleanup();
 
-  const cachedAsset = await readWorkspaceProjectPlaybackMetadata(source.cacheKey);
+  const cachedAsset = await peekWorkspaceProjectPlaybackAsset(source.cacheKey);
   if (cachedAsset) {
+    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
     return cachedAsset;
   }
 
-  return ensureWorkspaceProjectPlaybackQueued(source, "interactive");
+  const asset = await ensureWorkspaceProjectPlaybackQueued(source, "interactive");
+  clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+  return asset;
 }
 
 export async function warmWorkspaceProjectPlayback(source: WorkspaceProjectPlaybackSource): Promise<void> {
-  scheduleWorkspaceProjectPlaybackCleanup();
-
-  const cachedAsset = await readWorkspaceProjectPlaybackMetadata(source.cacheKey);
-  if (cachedAsset) {
+  if (env.disableBackgroundWarming) {
     return;
   }
 
-  await ensureWorkspaceProjectPlaybackQueued(source, "background");
+  playbackStore.scheduleCleanup();
+
+  if (hasRecentWorkspaceProjectPlaybackWarmFailure(source.cacheKey)) {
+    return;
+  }
+
+  const cachedAsset = await peekWorkspaceProjectPlaybackAsset(source.cacheKey);
+  if (cachedAsset) {
+    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    return;
+  }
+
+  try {
+    await ensureWorkspaceProjectPlaybackQueued(source, "background");
+    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+  } catch (error) {
+    markWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    throw error;
+  }
 }

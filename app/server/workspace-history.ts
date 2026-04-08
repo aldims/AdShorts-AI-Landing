@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 
 import { database, type AuthDatabase } from "./database.js";
+import { parseGenerationHashtags, serializeGenerationHashtags } from "./generation-metadata.js";
 
 type WorkspaceHistoryUser = {
   email?: string | null;
@@ -16,6 +17,7 @@ export type WorkspaceGenerationHistoryEntry = {
   downloadPath: string | null;
   error: string | null;
   generatedAt: string | null;
+  hashtags: string[];
   jobId: string;
   prompt: string;
   status: string;
@@ -30,6 +32,7 @@ type WorkspaceGenerationHistorySnapshot = {
   downloadPath?: string | null;
   error?: string | null;
   generatedAt?: string | null;
+  hashtags?: string[] | string | null;
   jobId: string;
   prompt?: string | null;
   status?: string | null;
@@ -117,6 +120,7 @@ const ensureWorkspaceHistoryTable = async () => {
         status TEXT NOT NULL DEFAULT 'queued',
         error TEXT,
         ad_id BIGINT,
+        hashtags TEXT NOT NULL DEFAULT '',
         download_path TEXT,
         generated_at TEXT,
         created_at TEXT NOT NULL,
@@ -127,13 +131,30 @@ const ensureWorkspaceHistoryTable = async () => {
       CREATE INDEX IF NOT EXISTS workspace_generation_history_owner_updated_idx
       ON workspace_generation_history (owner_key, updated_at DESC)
     `;
+    const addHashtagsColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN hashtags TEXT NOT NULL DEFAULT ''
+    `;
+    const addHashtagsColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS hashtags TEXT NOT NULL DEFAULT ''
+    `;
 
     if (isPgPool(database)) {
       await database.query(createTableSql);
       await database.query(createIndexSql);
+      await database.query(addHashtagsColumnIfNotExistsSql);
     } else {
       database.exec(createTableSql);
       database.exec(createIndexSql);
+      try {
+        database.exec(addHashtagsColumnSql);
+      } catch (error) {
+        const message = error instanceof Error ? error.message.toLowerCase() : "";
+        if (!message.includes("duplicate column name")) {
+          throw error;
+        }
+      }
     }
 
     workspaceHistoryTableReady = true;
@@ -203,6 +224,7 @@ export async function saveWorkspaceGenerationHistory(
   const adId = toNullableInteger(snapshot.adId);
   const downloadPath = normalizeText(snapshot.downloadPath) || null;
   const generatedAt = normalizeText(snapshot.generatedAt) ? normalizeIsoString(snapshot.generatedAt) : null;
+  const hashtags = serializeGenerationHashtags(snapshot.hashtags);
 
   const sql = isPgPool(database)
     ? `
@@ -215,12 +237,13 @@ export async function saveWorkspaceGenerationHistory(
           status,
           error,
           ad_id,
+          hashtags,
           download_path,
           generated_at,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (job_id) DO UPDATE SET
           owner_key = EXCLUDED.owner_key,
           prompt = CASE
@@ -232,6 +255,10 @@ export async function saveWorkspaceGenerationHistory(
           description = CASE
             WHEN EXCLUDED.description <> '' THEN EXCLUDED.description
             ELSE workspace_generation_history.description
+          END,
+          hashtags = CASE
+            WHEN EXCLUDED.hashtags <> '' THEN EXCLUDED.hashtags
+            ELSE workspace_generation_history.hashtags
           END,
           status = EXCLUDED.status,
           error = EXCLUDED.error,
@@ -250,12 +277,13 @@ export async function saveWorkspaceGenerationHistory(
           status,
           error,
           ad_id,
+          hashtags,
           download_path,
           generated_at,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id) DO UPDATE SET
           owner_key = excluded.owner_key,
           prompt = CASE
@@ -267,6 +295,10 @@ export async function saveWorkspaceGenerationHistory(
           description = CASE
             WHEN excluded.description <> '' THEN excluded.description
             ELSE workspace_generation_history.description
+          END,
+          hashtags = CASE
+            WHEN excluded.hashtags <> '' THEN excluded.hashtags
+            ELSE workspace_generation_history.hashtags
           END,
           status = excluded.status,
           error = excluded.error,
@@ -285,6 +317,7 @@ export async function saveWorkspaceGenerationHistory(
     status,
     error,
     adId,
+    hashtags,
     downloadPath,
     generatedAt,
     createdAt,
@@ -312,6 +345,7 @@ export async function listWorkspaceGenerationHistory(
           status AS "status",
           error AS "error",
           ad_id AS "adId",
+          hashtags AS "hashtags",
           download_path AS "downloadPath",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
@@ -330,6 +364,7 @@ export async function listWorkspaceGenerationHistory(
           status AS "status",
           error AS "error",
           ad_id AS "adId",
+          hashtags AS "hashtags",
           download_path AS "downloadPath",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
@@ -340,7 +375,7 @@ export async function listWorkspaceGenerationHistory(
         LIMIT ?
       `;
 
-  const rows = await queryRows<WorkspaceGenerationHistoryEntry>(sql, [ownerKey, safeLimit]);
+  const rows = await queryRows<QueryRow>(sql, [ownerKey, safeLimit]);
   return rows.map((row) => ({
     adId: toNullableInteger(row.adId),
     createdAt: normalizeIsoString(row.createdAt),
@@ -348,12 +383,85 @@ export async function listWorkspaceGenerationHistory(
     downloadPath: normalizeText(row.downloadPath) || null,
     error: normalizeText(row.error) || null,
     generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
+    hashtags: parseGenerationHashtags(row.hashtags as string | null | undefined),
     jobId: normalizeText(row.jobId),
     prompt: normalizeText(row.prompt),
     status: normalizeText(row.status) || "queued",
     title: normalizeText(row.title),
     updatedAt: normalizeIsoString(row.updatedAt, normalizeIsoString(row.createdAt)),
   }));
+}
+
+export async function getWorkspaceGenerationHistoryEntry(
+  user: WorkspaceHistoryUser,
+  jobId: string,
+): Promise<WorkspaceGenerationHistoryEntry | null> {
+  const ownerKey = getWorkspaceHistoryOwnerKey(user);
+  const safeJobId = normalizeText(jobId);
+  if (!ownerKey || !safeJobId) {
+    return null;
+  }
+
+  await ensureWorkspaceHistoryTable();
+
+  const sql = isPgPool(database)
+    ? `
+        SELECT
+          job_id AS "jobId",
+          prompt AS "prompt",
+          title AS "title",
+          description AS "description",
+          status AS "status",
+          error AS "error",
+          ad_id AS "adId",
+          hashtags AS "hashtags",
+          download_path AS "downloadPath",
+          generated_at AS "generatedAt",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM workspace_generation_history
+        WHERE owner_key = $1 AND job_id = $2
+        LIMIT 1
+      `
+    : `
+        SELECT
+          job_id AS "jobId",
+          prompt AS "prompt",
+          title AS "title",
+          description AS "description",
+          status AS "status",
+          error AS "error",
+          ad_id AS "adId",
+          hashtags AS "hashtags",
+          download_path AS "downloadPath",
+          generated_at AS "generatedAt",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM workspace_generation_history
+        WHERE owner_key = ? AND job_id = ?
+        LIMIT 1
+      `;
+
+  const rows = await queryRows<QueryRow>(sql, [ownerKey, safeJobId]);
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    adId: toNullableInteger(row.adId),
+    createdAt: normalizeIsoString(row.createdAt),
+    description: normalizeText(row.description),
+    downloadPath: normalizeText(row.downloadPath) || null,
+    error: normalizeText(row.error) || null,
+    generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
+    hashtags: parseGenerationHashtags(row.hashtags as string | null | undefined),
+    jobId: normalizeText(row.jobId),
+    prompt: normalizeText(row.prompt),
+    status: normalizeText(row.status) || "queued",
+    title: normalizeText(row.title),
+    updatedAt: normalizeIsoString(row.updatedAt, normalizeIsoString(row.createdAt)),
+  };
 }
 
 export async function markWorkspaceProjectDeleted(

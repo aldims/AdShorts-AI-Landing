@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import express from "express";
@@ -11,21 +12,50 @@ import { appendWorkspaceContentPlanIdeas, createWorkspaceContentPlan, deleteWork
 import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, startWorkspaceYoutubePublish, } from "./publish.js";
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
-import { getWorkspaceMediaLibraryItems, invalidateWorkspaceMediaLibraryCache } from "./media-library.js";
+import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioSegmentAiVideoJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoPlaybackAsset, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentAiVideoPlaybackAsset, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview } from "./voice-preview.js";
 import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
-import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, saveLocalExample, } from "./local-examples.js";
+import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
+import { fetchUpstreamResponse, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
+import { initServerLogging } from "./logger.js";
+initServerLogging();
 const app = express();
-const VIDEO_PROXY_UPSTREAM_FETCH_TIMEOUT_MS = 15_000;
-const VIDEO_PROXY_UPSTREAM_MAX_ATTEMPTS = 3;
-const VIDEO_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS = 180;
+const validateServerStartup = () => {
+    if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
+        console.warn("[server] AdsFlow environment variables are missing. Studio and workspace media features will fail.");
+    }
+    if (env.redisUrl) {
+        console.warn("[server] REDIS_URL is configured, but the current asset queue adapter still uses in-memory execution.");
+    }
+    const ffmpegBinary = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
+    const ffmpegCheck = spawnSync(ffmpegBinary, ["-version"], {
+        encoding: "utf8",
+        stdio: "ignore",
+    });
+    if (ffmpegCheck.error || ffmpegCheck.status !== 0) {
+        console.warn(`[server] ffmpeg is unavailable via "${ffmpegBinary}". Playback remuxing and poster capture will fail.`);
+    }
+};
+const getServerErrorMessage = (error, fallback) => error instanceof Error && error.message.trim() ? error.message : fallback;
+const allowedCorsOrigins = Array.from(new Set([
+    env.appUrl,
+    env.authBaseUrl,
+    env.isProduction ? null : "http://localhost:4174",
+    env.isProduction ? null : "http://127.0.0.1:4174",
+].filter((value) => Boolean(value))));
 app.set("trust proxy", true);
 app.use(cors({
     credentials: true,
-    origin: env.appUrl,
+    origin(origin, callback) {
+        if (!origin || allowedCorsOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error(`CORS origin is not allowed: ${origin}`));
+    },
 }));
 const buildVideoProxyRequestHeaders = (req) => {
     const headers = {};
@@ -61,63 +91,30 @@ const isVideoProxyStreamAbortLikeError = (error) => {
     }
     return false;
 };
-const isVideoProxyUpstreamRetryableError = (error) => {
-    if (isVideoProxyStreamAbortLikeError(error)) {
-        return true;
-    }
-    let current = error;
-    const visited = new Set();
-    while (current && typeof current === "object" && !visited.has(current)) {
-        visited.add(current);
-        const code = "code" in current ? String(current.code ?? "") : "";
-        const message = "message" in current ? String(current.message ?? "").toLowerCase() : "";
-        if (code === "ETIMEDOUT" ||
-            code === "UND_ERR_CONNECT_TIMEOUT" ||
-            code === "UND_ERR_HEADERS_TIMEOUT" ||
-            code === "EPIPE" ||
-            message.includes("timeout")) {
-            return true;
-        }
-        current = "cause" in current ? current.cause : null;
-    }
-    return false;
-};
-const waitForVideoProxyRetry = async (attempt) => {
-    const delayMs = VIDEO_PROXY_UPSTREAM_RETRY_BASE_DELAY_MS * attempt;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-};
 const fetchVideoProxyUpstream = async (req, upstreamUrl, upstreamHeaders) => {
-    let lastError = null;
-    for (let attempt = 1; attempt <= VIDEO_PROXY_UPSTREAM_MAX_ATTEMPTS; attempt += 1) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), VIDEO_PROXY_UPSTREAM_FETCH_TIMEOUT_MS);
-            try {
-                return await fetch(upstreamUrl, {
-                    headers: {
-                        ...buildVideoProxyRequestHeaders(req),
-                        ...(upstreamHeaders ?? {}),
-                        connection: "close",
-                    },
-                    signal: controller.signal,
-                });
-            }
-            finally {
-                clearTimeout(timeoutId);
-            }
-        }
-        catch (error) {
-            lastError = error;
-            if (attempt >= VIDEO_PROXY_UPSTREAM_MAX_ATTEMPTS || !isVideoProxyUpstreamRetryableError(error)) {
-                throw error;
-            }
-            await waitForVideoProxyRetry(attempt);
-        }
-    }
-    throw lastError ?? new Error("Failed to fetch upstream video.");
+    return fetchUpstreamResponse(upstreamUrl, {
+        headers: {
+            ...buildVideoProxyRequestHeaders(req),
+            ...(upstreamHeaders ?? {}),
+            connection: "close",
+        },
+    }, upstreamPolicies.proxyInteractive, {
+        assetKind: "video-proxy",
+        endpoint: req.path,
+    });
 };
 const proxyVideoResponse = async (req, res, upstreamUrl, fallbackMessage, upstreamHeaders) => {
-    const upstreamResponse = await fetchVideoProxyUpstream(req, upstreamUrl, upstreamHeaders);
+    let upstreamResponse;
+    try {
+        upstreamResponse = await fetchVideoProxyUpstream(req, upstreamUrl, upstreamHeaders);
+    }
+    catch (error) {
+        const statusCode = error instanceof UpstreamFetchError && error.isTimeout ? 504 : 502;
+        res.status(statusCode).json({
+            error: error instanceof Error && error.message.trim() ? error.message : fallbackMessage,
+        });
+        return;
+    }
     if (!upstreamResponse.ok || !upstreamResponse.body) {
         const detail = await upstreamResponse.text().catch(() => "");
         res.status(upstreamResponse.status || 502).json({
@@ -430,12 +427,8 @@ app.get("/api/examples/local", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
     });
-    if (!session?.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     try {
-        const data = await getLocalExamplesState(session.user);
+        const data = await getLocalExamplesState(session?.user ?? null);
         res.json({ data });
     }
     catch (error) {
@@ -477,6 +470,10 @@ app.post("/api/examples/local", express.json(), async (req, res) => {
         res.status(201).json({ data: { item } });
     }
     catch (error) {
+        if (error instanceof LocalExamplesPermissionError) {
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+        }
         console.error("[examples] Failed to save local example", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to save local example.",
@@ -501,6 +498,10 @@ app.delete("/api/examples/local/:exampleId", async (req, res) => {
         res.json({ data });
     }
     catch (error) {
+        if (error instanceof LocalExamplesPermissionError) {
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+        }
         console.error("[examples] Failed to delete local example", error);
         res.status(404).json({
             error: error instanceof Error ? error.message : "Failed to delete local example.",
@@ -511,12 +512,8 @@ app.get("/api/examples/local-video/:exampleId", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
     });
-    if (!session?.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     try {
-        const asset = await getLocalExampleVideoAsset(session.user, req.params.exampleId);
+        const asset = await getLocalExampleVideoAsset(session?.user ?? null, req.params.exampleId);
         res.setHeader("Cache-Control", "private, no-store");
         res.type(asset.contentType);
         await new Promise((resolve, reject) => {
@@ -598,21 +595,67 @@ app.get("/api/workspace/media-library", async (req, res) => {
         return;
     }
     const shouldReload = typeof req.query.reload === "string" && req.query.reload.trim() === "1";
+    const cursor = typeof req.query.cursor === "string" ? req.query.cursor.trim() : null;
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
     try {
         if (shouldReload) {
             await invalidateWorkspaceProjectsCache(session.user);
             invalidateWorkspaceMediaLibraryCache(session.user);
             invalidateWorkspaceSegmentEditorSessionCache(session.user);
         }
-        const items = await getWorkspaceMediaLibraryItems(session.user, {
+        const page = await getWorkspaceMediaLibraryItems(session.user, {
             bypassCache: shouldReload,
+            cursor,
+            limit,
         });
-        res.json({ data: { items } });
+        res.json({ data: page });
     }
     catch (error) {
         console.error("[workspace] Failed to load media library", error);
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load media library.",
+        });
+    }
+});
+app.get("/api/workspace/media-library-preview", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = Number(req.query.projectId ?? 0);
+    const segmentIndex = Number(req.query.segmentIndex ?? -1);
+    const kind = typeof req.query.kind === "string" ? req.query.kind.trim() : "";
+    const version = typeof req.query.v === "string" ? req.query.v.trim() : null;
+    try {
+        const previewPath = await getWorkspaceMediaLibraryPreviewPath(session.user, {
+            kind: kind,
+            projectId,
+            segmentIndex,
+            version,
+        });
+        res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+        res.sendFile(previewPath);
+    }
+    catch (error) {
+        if (error instanceof WorkspaceMediaLibraryPreviewError) {
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+        }
+        if (error instanceof WorkspaceSegmentEditorError) {
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+        }
+        console.error("[workspace] Failed to load media library preview", {
+            error: getServerErrorMessage(error, "Failed to load media library preview."),
+            kind,
+            projectId,
+            segmentIndex,
+        });
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load media library preview.",
         });
     }
 });
@@ -814,7 +857,10 @@ app.get("/api/workspace/projects/:projectId/poster", async (req, res) => {
             res.status(404).json({ error: "Project not found." });
             return;
         }
-        console.error("[workspace] Failed to load project poster", error);
+        console.error("[workspace] Failed to load project poster", {
+            error: getServerErrorMessage(error, "Failed to load project poster."),
+            projectId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load project poster.",
         });
@@ -845,7 +891,10 @@ app.get("/api/workspace/projects/:projectId/playback", async (req, res) => {
             res.status(404).json({ error: "Project not found." });
             return;
         }
-        console.error("[workspace] Failed to load project playback cache", error);
+        console.error("[workspace] Failed to load project playback cache", {
+            error: getServerErrorMessage(error, "Failed to load project playback."),
+            projectId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load project playback.",
         });
@@ -1312,6 +1361,119 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
         });
     }
 });
+app.post("/api/studio/segment-image-upscale/jobs", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
+    const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
+    const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const projectId = Number(req.body?.projectId ?? 0);
+    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    if (!imageDataUrl) {
+        res.status(400).json({ error: "Image data URL is required." });
+        return;
+    }
+    try {
+        const job = await createStudioSegmentImageUpscaleJob(imageDataUrl, session.user, {
+            fileName: imageFileName || undefined,
+            language,
+            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+        });
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create segment image upscale job", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to create segment image upscale job.",
+        });
+    }
+});
+app.get("/api/studio/segment-image-upscale/jobs/:jobId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const status = await getStudioSegmentImageUpscaleJobStatus(req.params.jobId, session.user);
+        res.json({ data: status });
+    }
+    catch (error) {
+        console.error("[studio] Failed to get segment image upscale status", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to get segment image upscale status.",
+        });
+    }
+});
+app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
+    const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
+    const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const projectId = Number(req.body?.projectId ?? 0);
+    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    if (!prompt) {
+        res.status(400).json({ error: "Prompt is required." });
+        return;
+    }
+    if (!imageDataUrl) {
+        res.status(400).json({ error: "Image data URL is required." });
+        return;
+    }
+    try {
+        const job = await createStudioSegmentImageEditJob(prompt, imageDataUrl, session.user, {
+            fileName: imageFileName || undefined,
+            language,
+            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+        });
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create segment image edit job", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to create segment image edit job.",
+        });
+    }
+});
+app.get("/api/studio/segment-image-edit/jobs/:jobId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const status = await getStudioSegmentImageEditJobStatus(req.params.jobId, session.user);
+        res.json({ data: status });
+    }
+    catch (error) {
+        console.error("[studio] Failed to get segment image edit status", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to get segment image edit status.",
+        });
+    }
+});
 app.post("/api/studio/segment-ai-photo/improve-prompt", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -1482,7 +1644,10 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId/video", async (req, res) => {
         res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to load segment AI video playback cache", error);
+        console.error("[studio] Failed to load segment AI video playback cache", {
+            error: getServerErrorMessage(error, "Failed to load generated segment AI video playback."),
+            jobId: req.params.jobId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment AI video playback.",
         });
@@ -1503,7 +1668,10 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId/poster", async (req, res) => {
         res.sendFile(posterPath);
     }
     catch (error) {
-        console.error("[studio] Failed to load generated segment AI video poster", error);
+        console.error("[studio] Failed to load generated segment AI video poster", {
+            error: getServerErrorMessage(error, "Failed to load generated segment AI video poster."),
+            jobId: req.params.jobId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment AI video poster.",
         });
@@ -1519,6 +1687,9 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     }
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
+    const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
+    const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -1527,6 +1698,9 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     }
     try {
         const job = await createStudioSegmentPhotoAnimationJob(prompt, session.user, {
+            customVideoFileDataUrl: customVideoFileDataUrl || undefined,
+            customVideoFileMimeType: customVideoFileMimeType || undefined,
+            customVideoFileName: customVideoFileName || undefined,
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
@@ -1576,7 +1750,10 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/video", async (req, res
         res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to load segment photo animation playback cache", error);
+        console.error("[studio] Failed to load segment photo animation playback cache", {
+            error: getServerErrorMessage(error, "Failed to load generated segment photo animation playback."),
+            jobId: req.params.jobId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment photo animation playback.",
         });
@@ -1597,7 +1774,10 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/poster", async (req, re
         res.sendFile(posterPath);
     }
     catch (error) {
-        console.error("[studio] Failed to load generated segment photo animation poster", error);
+        console.error("[studio] Failed to load generated segment photo animation poster", {
+            error: getServerErrorMessage(error, "Failed to load generated segment photo animation poster."),
+            jobId: req.params.jobId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment photo animation poster.",
         });
@@ -1615,6 +1795,8 @@ app.get("/api/studio/generations/:jobId", async (req, res) => {
         const status = await getStudioGenerationStatus(req.params.jobId, session.user);
         if (status.generation) {
             await invalidateWorkspaceProjectsCache(session.user);
+            invalidateWorkspaceMediaLibraryCache(session.user);
+            invalidateWorkspaceSegmentEditorSessionCache(session.user);
         }
         res.json({ data: status });
     }
@@ -1649,7 +1831,10 @@ app.get("/api/studio/playback/:jobId", async (req, res) => {
         res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to load playback cache", error);
+        console.error("[studio] Failed to load playback cache", {
+            error: getServerErrorMessage(error, "Failed to load generated video playback."),
+            jobId,
+        });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated video playback.",
         });
@@ -1699,6 +1884,7 @@ app.get("/api/studio/video", async (req, res) => {
     }
 });
 const startServer = async () => {
+    validateServerStartup();
     await ensureAuthSchema();
     app.listen(env.authServerPort, () => {
         console.info(`[auth] Better Auth server listening on ${env.authServerPort}`);

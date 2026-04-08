@@ -20,6 +20,12 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
   const actionLabel = getInsufficientCreditsContextActionLabel(context.action);
   const missingCredits = Math.max(0, context.requiredCredits - (numericBalance ?? 0));
   const missingLabel = formatCreditsCountLabel(missingCredits);
+  const progressPercent =
+    context.requiredCredits > 0
+      ? numericBalance === null
+        ? 12
+        : Math.max(8, Math.min(100, Math.round((numericBalance / context.requiredCredits) * 100)))
+      : 100;
 
   return (
     <div className="studio-credits-modal" role="dialog" aria-modal="true" aria-labelledby="studio-credits-modal-title">
@@ -31,21 +37,22 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
       />
 
       <div className="studio-credits-modal__panel" role="document">
-        <div className="studio-credits-modal__halo studio-credits-modal__halo--lime" aria-hidden="true"></div>
-        <div className="studio-credits-modal__halo studio-credits-modal__halo--sun" aria-hidden="true"></div>
+        <div className="studio-credits-modal__panel-glow" aria-hidden="true"></div>
 
-        <button
-          className="studio-credits-modal__close route-close"
-          type="button"
-          aria-label="Закрыть окно пополнения кредитов"
-          onClick={onClose}
-        >
-          ×
-        </button>
+        <div className="studio-credits-modal__header">
+          <div className="studio-credits-modal__topline">
+            <span className="studio-credits-modal__chip studio-credits-modal__chip--alert">Недостаточно кредитов</span>
+            <span className="studio-credits-modal__chip">Пополнение в 1 шаг</span>
+          </div>
 
-        <div className="studio-credits-modal__topline">
-          <span className="studio-credits-modal__chip studio-credits-modal__chip--alert">Кредиты закончились</span>
-          <span className="studio-credits-modal__chip">Продолжите без паузы</span>
+          <button
+            className="studio-credits-modal__close route-close"
+            type="button"
+            aria-label="Закрыть окно пополнения кредитов"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
         <div className="studio-credits-modal__hero">
@@ -53,44 +60,44 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
             <span className="studio-credits-modal__eyebrow">Пополнение</span>
             <strong id="studio-credits-modal-title">{copy.title}</strong>
             <p>{copy.text}</p>
-          </div>
 
-          <div className="studio-credits-modal__accent" aria-hidden="true">
-            <div className="studio-credits-modal__accent-core">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12.6 2.75 6.65 12h4.05l-.95 9.25L17.35 12H13.3l1.3-9.25Z"
-                  fill="currentColor"
-                />
-              </svg>
+            <div className="studio-credits-modal__details">
+              <div className="studio-credits-modal__detail">
+                <span>Действие</span>
+                <strong>{actionLabel}</strong>
+              </div>
+              <div className="studio-credits-modal__detail">
+                <span>Текущий тариф</span>
+                <strong>{planLabel}</strong>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="studio-credits-modal__summary">
-          <div className="studio-credits-modal__metric">
-            <span>На балансе</span>
-            <strong>{balanceLabel}</strong>
-          </div>
-          <div className="studio-credits-modal__metric is-deficit">
-            <span>Не хватает</span>
-            <strong>{missingLabel}</strong>
-          </div>
-          <div className="studio-credits-modal__metric is-accent">
-            <span>Нужно сейчас</span>
-            <strong>{requiredLabel}</strong>
-          </div>
-        </div>
+          <aside className="studio-credits-modal__aside">
+            <div className="studio-credits-modal__balance-card">
+              <div className="studio-credits-modal__balance-head">
+                <span>Текущий баланс</span>
+                <strong>{balanceLabel}</strong>
+              </div>
+              <div className="studio-credits-modal__balance-bar" aria-hidden="true">
+                <span style={{ width: `${progressPercent}%` }}></span>
+              </div>
+              <p className="studio-credits-modal__balance-caption">
+                Для этого действия нужно {requiredLabel}. После пополнения можно сразу продолжить.
+              </p>
+            </div>
 
-        <div className="studio-credits-modal__details">
-          <div className="studio-credits-modal__detail">
-            <span>Действие</span>
-            <strong>{actionLabel}</strong>
-          </div>
-          <div className="studio-credits-modal__detail">
-            <span>Текущий тариф</span>
-            <strong>{planLabel}</strong>
-          </div>
+            <div className="studio-credits-modal__summary">
+              <div className="studio-credits-modal__metric is-deficit">
+                <span>Не хватает</span>
+                <strong>{missingLabel}</strong>
+              </div>
+              <div className="studio-credits-modal__metric is-accent">
+                <span>Нужно сейчас</span>
+                <strong>{requiredLabel}</strong>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <p className="studio-credits-modal__note">{copy.note}</p>

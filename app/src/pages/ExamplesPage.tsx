@@ -54,6 +54,7 @@ type ExampleVideoPreviewProps = {
 
 type LocalExamplesResponse = {
   data?: {
+    canManage?: boolean;
     enabled: boolean;
     items: ExampleItem[];
   };
@@ -315,6 +316,7 @@ export function ExamplesPage({
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
   const [activeFilter, setActiveFilter] = useState<ExampleFilter>("all");
   const [localExamples, setLocalExamples] = useState<ExampleItem[]>([]);
+  const [canManageLocalExamples, setCanManageLocalExamples] = useState(false);
   const [deletingLocalExampleId, setDeletingLocalExampleId] = useState<string | null>(null);
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
   const allExamples = [...localExamples, ...exampleItems];
@@ -341,12 +343,6 @@ export function ExamplesPage({
   }, [navigate, session]);
 
   useEffect(() => {
-    if (!session) {
-      setLocalExamples([]);
-      setLocalExampleDeleteError(null);
-      return;
-    }
-
     let cancelled = false;
 
     const loadLocalExamples = async () => {
@@ -356,6 +352,7 @@ export function ExamplesPage({
         if (!response.ok || !payload?.data?.enabled) {
           if (!cancelled) {
             setLocalExamples([]);
+            setCanManageLocalExamples(false);
             setLocalExampleDeleteError(null);
           }
           return;
@@ -363,11 +360,13 @@ export function ExamplesPage({
 
         if (!cancelled) {
           setLocalExamples(Array.isArray(payload.data.items) ? payload.data.items : []);
+          setCanManageLocalExamples(Boolean(payload.data.canManage && session));
           setLocalExampleDeleteError(null);
         }
       } catch {
         if (!cancelled) {
           setLocalExamples([]);
+          setCanManageLocalExamples(false);
         }
       }
     };
@@ -423,7 +422,7 @@ export function ExamplesPage({
   };
 
   const handleDeleteLocalExample = async (exampleId: string) => {
-    if (!session || deletingLocalExampleId) {
+    if (!session || !canManageLocalExamples || deletingLocalExampleId) {
       return;
     }
 
@@ -561,12 +560,12 @@ export function ExamplesPage({
             <div className="examples-modern__grid">
               {visibleExamples.map((example, index) => (
                 <article key={example.id} className="examples-modern__card">
-                  {example.isLocal ? (
+                  {example.isLocal && canManageLocalExamples ? (
                     <button
                       className="examples-modern__delete"
                       type="button"
-                      aria-label="Удалить локальный пример"
-                      title="Удалить только у меня"
+                      aria-label="Удалить общий пример"
+                      title="Удалить из общей базы примеров"
                       disabled={deletingLocalExampleId === example.id}
                       onClick={(event) => {
                         event.stopPropagation();

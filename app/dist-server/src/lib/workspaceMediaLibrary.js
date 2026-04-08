@@ -67,6 +67,10 @@ const getWorkspaceMediaLibraryAssetIdentity = (value) => {
     }
     return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
 };
+export const getWorkspaceMediaLibraryAssetIdentityKey = (value) => getWorkspaceMediaLibraryAssetIdentity(value);
+export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => item.kind === "photo_animation" && item.previewPosterUrl
+    ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
+    : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options) => `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(options.previewUrl)}`;
 export const buildWorkspaceMediaLibraryItemKey = (source, options) => {
     if (source === "live" && options.sourceJobId) {

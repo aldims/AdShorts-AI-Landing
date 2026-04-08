@@ -1,5 +1,13 @@
 import { env } from "./env.js";
 import { getWorkspaceProjects } from "./projects.js";
+import {
+  assertAdsflowConfigured,
+  buildAdsflowUrl,
+  fetchAdsflowJson as fetchAdsflowJsonWithPolicy,
+  UpstreamFetchError,
+  UpstreamHttpError,
+  upstreamPolicies,
+} from "./upstream-client.js";
 import { listWorkspaceGenerationHistory } from "./workspace-history.js";
 
 type SegmentEditorUser = {
@@ -42,8 +50,32 @@ type AdsflowSegmentEditorResponse = {
   voice_type?: string | null;
 };
 
+type AdsflowProjectMediaEntryPayload = {
+  download_url?: string | null;
+  id?: number | string | null;
+  local_path?: string | null;
+  media_type?: string | null;
+  preview?: string | null;
+  source?: string | null;
+  url?: string | null;
+};
+
+type AdsflowProjectGenerationSettingsPayload = {
+  background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  original_videos?: AdsflowProjectMediaEntryPayload[] | null;
+  video_urls?: AdsflowProjectMediaEntryPayload[] | null;
+};
+
+type AdsflowProjectDetailsResponse = {
+  background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  generation_settings?: AdsflowProjectGenerationSettingsPayload | null;
+  source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  video_urls?: AdsflowProjectMediaEntryPayload[] | null;
+};
+
 export type WorkspaceSegmentEditorVideoSource = "current" | "original";
 export type WorkspaceSegmentEditorVideoDelivery = "preview" | "playback";
+export type WorkspaceSegmentEditorSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 
 export type WorkspaceSegmentEditorSpeechWord = {
   confidence: number;
@@ -55,14 +87,20 @@ export type WorkspaceSegmentEditorSpeechWord = {
 export type WorkspaceSegmentEditorMediaType = "photo" | "video";
 
 export type WorkspaceSegmentEditorSegment = {
+  currentExternalPlaybackUrl: string | null;
+  currentExternalPreviewUrl: string | null;
   currentPlaybackUrl: string | null;
   currentPreviewUrl: string | null;
+  currentSourceKind: WorkspaceSegmentEditorSourceKind;
   duration: number;
   endTime: number;
   index: number;
   mediaType: WorkspaceSegmentEditorMediaType;
+  originalExternalPlaybackUrl: string | null;
+  originalExternalPreviewUrl: string | null;
   originalPlaybackUrl: string | null;
   originalPreviewUrl: string | null;
+  originalSourceKind: WorkspaceSegmentEditorSourceKind;
   speechDuration: number | null;
   speechEndTime: number | null;
   speechStartTime: number | null;
@@ -93,16 +131,6 @@ export class WorkspaceSegmentEditorError extends Error {
   }
 }
 
-class AdsflowRequestError extends Error {
-  statusCode: number;
-
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.name = "AdsflowRequestError";
-    this.statusCode = statusCode;
-  }
-}
-
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
 const normalizeInteger = (value: unknown) => {
@@ -120,6 +148,133 @@ const normalizeNumber = (value: unknown) => {
 
 const normalizeMediaType = (value: unknown): WorkspaceSegmentEditorMediaType =>
   String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
+
+const normalizeUrl = (value: unknown) => {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || null;
+};
+
+const isWorkspaceRenderableMediaUrl = (value: string | null | undefined) => {
+  const normalized = normalizeUrl(value);
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.startsWith("/")) {
+    return true;
+  }
+
+  try {
+    const resolvedUrl = new URL(normalized);
+    return (
+      resolvedUrl.protocol === "http:" ||
+      resolvedUrl.protocol === "https:" ||
+      resolvedUrl.protocol === "file:"
+    );
+  } catch {
+    return false;
+  }
+};
+
+const pickWorkspaceRenderableMediaUrl = (...candidates: Array<string | null | undefined>) => {
+  for (const candidate of candidates) {
+    if (isWorkspaceRenderableMediaUrl(candidate)) {
+      return normalizeUrl(candidate);
+    }
+  }
+
+  return null;
+};
+
+const normalizeProjectMediaEntries = (value: unknown): AdsflowProjectMediaEntryPayload[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is AdsflowProjectMediaEntryPayload => Boolean(item && typeof item === "object"));
+};
+
+const pickProjectMediaEntries = (...candidates: unknown[]) => {
+  for (const candidate of candidates) {
+    const entries = normalizeProjectMediaEntries(candidate);
+    if (entries.length > 0) {
+      return entries;
+    }
+  }
+
+  return [] as AdsflowProjectMediaEntryPayload[];
+};
+
+const detectWorkspaceSegmentSourceKind = (
+  entry?: AdsflowProjectMediaEntryPayload | null,
+): WorkspaceSegmentEditorSourceKind => {
+  const source = normalizeText(entry?.source).toLowerCase();
+  if (source === "ai_generated" || source === "ai" || source === "generated") {
+    return "ai_generated";
+  }
+
+  if (
+    source === "pexels" ||
+    source === "pixabay" ||
+    source === "stock" ||
+    source === "stock_photo" ||
+    source === "stock_video" ||
+    source === "unsplash"
+  ) {
+    return "stock";
+  }
+
+  if (
+    source.includes("upload") ||
+    source.includes("telegram") ||
+    source.includes("user") ||
+    source.includes("library")
+  ) {
+    return "upload";
+  }
+
+  const identifier = normalizeText(entry?.id).toLowerCase();
+  const localPath = normalizeText(entry?.local_path).toLowerCase();
+  const joinedUrls = [entry?.url, entry?.download_url, entry?.preview].map((value) => normalizeText(value).toLowerCase()).join(" ");
+
+  if (identifier.startsWith("aiimg_") || localPath.includes("wavespeed") || localPath.includes("deapi")) {
+    return "ai_generated";
+  }
+
+  if (joinedUrls.includes("pexels.com") || joinedUrls.includes("pixabay.com") || joinedUrls.includes("unsplash.com")) {
+    return "stock";
+  }
+
+  return "unknown";
+};
+
+const getProjectMediaEntryPreviewUrl = (entry?: AdsflowProjectMediaEntryPayload | null) =>
+  pickWorkspaceRenderableMediaUrl(entry?.preview, entry?.download_url, entry?.url);
+
+const getProjectMediaEntryPlaybackUrl = (entry?: AdsflowProjectMediaEntryPayload | null) =>
+  pickWorkspaceRenderableMediaUrl(entry?.download_url, entry?.url, entry?.preview);
+
+const getProjectOriginalMediaEntries = (payload: AdsflowProjectDetailsResponse | null | undefined) =>
+  pickProjectMediaEntries(
+    payload?.source_video_urls,
+    payload?.generation_settings?.original_videos,
+    payload?.generation_settings?.video_urls,
+    payload?.generation_settings?.background_urls,
+    payload?.video_urls,
+    payload?.background_urls,
+  );
+
+const getProjectCurrentMediaEntries = (
+  payload: AdsflowProjectDetailsResponse | null | undefined,
+  originalEntries: AdsflowProjectMediaEntryPayload[],
+) =>
+  pickProjectMediaEntries(
+    payload?.video_urls,
+    payload?.background_urls,
+    payload?.generation_settings?.video_urls,
+    payload?.generation_settings?.background_urls,
+    originalEntries,
+  );
 
 const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[] => {
   if (!Array.isArray(value)) {
@@ -155,7 +310,6 @@ const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
 const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
-const SEGMENT_EDITOR_SESSION_TIMEOUT_MS = 15_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
@@ -163,12 +317,6 @@ const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map<string, number>();
 const segmentEditorSessionCache = new Map<string, { expiresAt: number; session: WorkspaceSegmentEditorSession }>();
 const segmentEditorSessionInFlight = new Map<string, Promise<WorkspaceSegmentEditorSession>>();
-
-const assertAdsflowConfigured = () => {
-  if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
-    throw new Error("AdsFlow API is not configured.");
-  }
-};
 
 const getProjectAccessCacheKey = (user: SegmentEditorUser, projectId: number) => {
   const userId = normalizeText(user.id);
@@ -286,45 +434,6 @@ export const invalidateWorkspaceSegmentEditorSessionCache = (user: SegmentEditor
   }
 };
 
-const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
-  assertAdsflowConfigured();
-
-  const url = new URL(path, env.adsflowApiBaseUrl);
-  Object.entries(params ?? {}).forEach(([key, value]) => {
-    if (value) {
-      url.searchParams.set(key, value);
-    }
-  });
-
-  return url;
-};
-
-const fetchAdsflowJson = async <T>(url: URL, init?: RequestInit): Promise<T> => {
-  const response = await fetch(url, init);
-  const payload = (await response.json().catch(() => null)) as T | { detail?: string; error?: string } | null;
-
-  if (!response.ok) {
-    const payloadRecord =
-      payload && typeof payload === "object" ? (payload as { detail?: string; error?: string }) : null;
-    const detail =
-      payloadRecord
-        ? typeof payloadRecord.detail === "string" && payloadRecord.detail.trim()
-          ? payloadRecord.detail.trim()
-          : typeof payloadRecord.error === "string" && payloadRecord.error.trim()
-            ? payloadRecord.error.trim()
-            : ""
-        : "";
-
-    throw new AdsflowRequestError(detail || `AdsFlow request failed (${response.status}).`, response.status);
-  }
-
-  if (!payload) {
-    throw new Error("AdsFlow returned an empty response.");
-  }
-
-  return payload as T;
-};
-
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -400,6 +509,10 @@ const buildWorkspaceSegmentEditorVideoUrl = (
 const buildWorkspaceSegmentEditorSegment = (
   projectId: number,
   payload: AdsflowSegmentEditorSegmentPayload,
+  projectSources?: {
+    currentEntries: AdsflowProjectMediaEntryPayload[];
+    originalEntries: AdsflowProjectMediaEntryPayload[];
+  },
 ): WorkspaceSegmentEditorSegment | null => {
   const index = normalizeInteger(payload.index);
   if (index === null) {
@@ -419,24 +532,32 @@ const buildWorkspaceSegmentEditorSegment = (
   const originalVideoMarker = normalizeText(payload.original_video);
   const hasCurrentVideo = Boolean(currentVideoMarker);
   const hasOriginalVideo = Boolean(originalVideoMarker);
+  const currentEntry = projectSources?.currentEntries[index] ?? null;
+  const originalEntry = projectSources?.originalEntries[index] ?? currentEntry;
 
   return {
+    currentExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(currentEntry),
+    currentExternalPreviewUrl: getProjectMediaEntryPreviewUrl(currentEntry),
     currentPlaybackUrl: hasCurrentVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "playback", currentVideoMarker)
       : null,
     currentPreviewUrl: hasCurrentVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "preview", currentVideoMarker)
       : null,
+    currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
     duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
     endTime,
     index,
     mediaType: normalizeMediaType(payload.media_type),
+    originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),
+    originalExternalPreviewUrl: getProjectMediaEntryPreviewUrl(originalEntry),
     originalPlaybackUrl: hasOriginalVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "playback", originalVideoMarker)
       : null,
     originalPreviewUrl: hasOriginalVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
       : null,
+    originalSourceKind: detectWorkspaceSegmentSourceKind(originalEntry),
     speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
     speechEndTime:
       speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
@@ -450,25 +571,47 @@ const buildWorkspaceSegmentEditorSegment = (
 const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<WorkspaceSegmentEditorSession> => {
   assertAdsflowConfigured();
   let payload: AdsflowSegmentEditorResponse;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SEGMENT_EDITOR_SESSION_TIMEOUT_MS);
+  let projectDetailsPayload: AdsflowProjectDetailsResponse | null = null;
 
   try {
-    payload = await fetchAdsflowJson<AdsflowSegmentEditorResponse>(
-      buildAdsflowUrl(`/api/projects/${projectId}/segment-editor`),
-      {
-        headers: {
-          "X-Admin-Token": env.adsflowAdminToken ?? "",
+    const [segmentEditorPayload, projectPayload] = await Promise.all([
+      fetchAdsflowJsonWithPolicy<AdsflowSegmentEditorResponse>({
+        context: {
+          endpoint: "segment-editor.session",
+          projectId,
         },
-        signal: controller.signal,
-      },
-    );
+        init: {
+          headers: {
+            "X-Admin-Token": env.adsflowAdminToken ?? "",
+          },
+        },
+        path: `/api/projects/${projectId}/segment-editor`,
+        policy: upstreamPolicies.adsflowMetadata,
+      }),
+      fetchAdsflowJsonWithPolicy<AdsflowProjectDetailsResponse>({
+        context: {
+          endpoint: "segment-editor.project-details",
+          projectId,
+        },
+        params: {
+          admin_token: env.adsflowAdminToken ?? "",
+        },
+        path: `/api/projects/${projectId}`,
+        policy: upstreamPolicies.adsflowMetadata,
+      }).catch((error) => {
+        console.warn(`[segment-editor] Failed to load source metadata for project ${projectId}`, error);
+        return null;
+      }),
+    ]);
+
+    payload = segmentEditorPayload;
+    projectDetailsPayload = projectPayload;
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (error instanceof UpstreamFetchError && error.isTimeout) {
       throw new WorkspaceSegmentEditorError(SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE, 504);
     }
 
-    if (error instanceof AdsflowRequestError && error.statusCode === 404) {
+    if (error instanceof UpstreamHttpError && error.statusCode === 404) {
       throw new WorkspaceSegmentEditorError("Для этого проекта сегменты пока недоступны.", 404);
     }
 
@@ -478,13 +621,18 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
     }
 
     throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
 
   const normalizedProjectId = normalizeInteger(payload.project_id) ?? projectId;
+  const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
+  const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
   const segments = (payload.segments ?? [])
-    .map((segment) => buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment))
+    .map((segment) =>
+      buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment, {
+        currentEntries,
+        originalEntries,
+      }),
+    )
     .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
     .sort((left, right) => left.index - right.index);
 

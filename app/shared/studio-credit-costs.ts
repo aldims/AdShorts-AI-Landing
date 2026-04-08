@@ -1,13 +1,23 @@
-export type StudioCreditAction = "video_generation" | "ai_photo" | "ai_video" | "photo_animation";
+export type StudioCreditAction =
+  | "video_generation"
+  | "ai_photo"
+  | "ai_video"
+  | "photo_animation"
+  | "image_edit"
+  | "image_upscale";
 
 export const STUDIO_VIDEO_GENERATION_CREDIT_COST = 10;
 export const STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST = 7;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST = 5;
+export const STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST = 5;
 export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = 2;
+export const STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST = 1;
 
 export const STUDIO_CREDIT_COST_BY_ACTION: Record<StudioCreditAction, number> = {
   video_generation: STUDIO_VIDEO_GENERATION_CREDIT_COST,
   ai_photo: STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   ai_video: STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
   photo_animation: STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
+  image_edit: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
+  image_upscale: STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
 };

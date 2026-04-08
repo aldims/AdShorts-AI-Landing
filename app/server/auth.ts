@@ -7,7 +7,28 @@ import { authProviderStatus, env } from "./env.js";
 import { sendAppEmail } from "./mail.js";
 
 const appName = "AdShorts AI";
-const appOrigin = env.appUrl;
+const normalizeOrigin = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+};
+
+const trustedOrigins = Array.from(
+  new Set(
+    [
+      normalizeOrigin(env.appUrl),
+      normalizeOrigin(env.authBaseUrl),
+      env.isProduction ? null : "http://localhost:4174",
+      env.isProduction ? null : "http://127.0.0.1:4174",
+    ].filter((value): value is string => Boolean(value)),
+  ),
+);
 
 export const auth = betterAuth({
   baseURL: env.authBaseUrl,
@@ -86,7 +107,7 @@ export const auth = betterAuth({
         }
       : {}),
   },
-  trustedOrigins: [appOrigin],
+  trustedOrigins,
 });
 
 let authSchemaPromise: Promise<void> | null = null;
@@ -217,7 +238,7 @@ export async function signInWithTelegram(
     httpOnly: true,
     secure: env.isProduction,
     sameSite: "lax",
-    path: "/",
+    path: "/api/auth",
     expires: expiresAt,
   });
 

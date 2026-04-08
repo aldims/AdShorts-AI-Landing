@@ -11,7 +11,10 @@ import { getStudioVideoProxyTarget, getStudioVideoProxyTargetByPath } from "./st
 const LOCAL_EXAMPLES_ROOT_DIR = join(env.dataDir, "local-examples");
 const LOCAL_EXAMPLES_INDEX_PATH = join(LOCAL_EXAMPLES_ROOT_DIR, "examples.json");
 const LOCAL_EXAMPLE_FETCH_TIMEOUT_MS = 60_000;
+const LOCAL_EXAMPLES_ADMIN_EMAIL = "adshortsai@gmail.com";
+const LOCAL_EXAMPLES_SHARED_OWNER_KEY = `email:${LOCAL_EXAMPLES_ADMIN_EMAIL}`;
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLowerCase();
 const normalizeLocalExampleGoal = (value) => {
     const normalized = normalizeText(value);
     switch (normalized) {
@@ -35,6 +38,7 @@ const normalizeLocalExampleGoal = (value) => {
     }
 };
 const isLocalExamplesEnabled = () => !env.isProduction;
+const isLocalExamplesAdmin = (user) => normalizeLocalExamplesAdminEmail(user?.email) === LOCAL_EXAMPLES_ADMIN_EMAIL;
 const resolveLocalExamplesOwnerKey = (user) => {
     const normalizedId = normalizeText(user.id);
     if (normalizedId) {
@@ -49,6 +53,15 @@ const resolveLocalExamplesOwnerKey = (user) => {
 const buildLocalExamplesOwnerDir = (ownerKey) => join(LOCAL_EXAMPLES_ROOT_DIR, createHash("sha1").update(ownerKey).digest("hex").slice(0, 16));
 const ensureLocalExamplesStorage = async () => {
     await mkdir(LOCAL_EXAMPLES_ROOT_DIR, { recursive: true });
+};
+const moveLocalExampleMediaFile = async (sourcePath, destinationPath) => {
+    try {
+        await rename(sourcePath, destinationPath);
+    }
+    catch (error) {
+        await copyFile(sourcePath, destinationPath);
+        await rm(sourcePath, { force: true }).catch(() => undefined);
+    }
 };
 const readLocalExamplesIndex = async () => {
     await ensureLocalExamplesStorage();
@@ -69,6 +82,57 @@ const readLocalExamplesIndex = async () => {
 const writeLocalExamplesIndex = async (payload) => {
     await ensureLocalExamplesStorage();
     await writeFile(LOCAL_EXAMPLES_INDEX_PATH, JSON.stringify(payload, null, 2), "utf8");
+};
+const getLegacyLocalExampleOwnerKeys = (index) => Array.from(new Set(index.items
+    .map((item) => normalizeText(item.ownerKey))
+    .filter((ownerKey) => ownerKey && ownerKey !== LOCAL_EXAMPLES_SHARED_OWNER_KEY)));
+export class LocalExamplesPermissionError extends Error {
+    statusCode;
+    constructor(message = "Only the admin account can manage shared examples.", statusCode = 403) {
+        super(message);
+        this.name = "LocalExamplesPermissionError";
+        this.statusCode = statusCode;
+    }
+}
+const assertLocalExamplesAdmin = (user) => {
+    if (!isLocalExamplesAdmin(user)) {
+        throw new LocalExamplesPermissionError("Только админ может добавлять и удалять примеры.");
+    }
+};
+const migrateAdminExamplesToSharedOwner = async (index, user) => {
+    if (!user || !isLocalExamplesAdmin(user)) {
+        return index;
+    }
+    const legacyOwnerKeys = new Set();
+    const currentOwnerKey = resolveLocalExamplesOwnerKey(user);
+    if (currentOwnerKey && currentOwnerKey !== LOCAL_EXAMPLES_SHARED_OWNER_KEY) {
+        legacyOwnerKeys.add(currentOwnerKey);
+    }
+    const hasSharedExamples = index.items.some((item) => item.ownerKey === LOCAL_EXAMPLES_SHARED_OWNER_KEY);
+    if (!hasSharedExamples) {
+        const availableLegacyOwnerKeys = getLegacyLocalExampleOwnerKeys(index);
+        if (availableLegacyOwnerKeys.length === 1) {
+            legacyOwnerKeys.add(availableLegacyOwnerKeys[0] ?? "");
+        }
+    }
+    if (!legacyOwnerKeys.size) {
+        return index;
+    }
+    const itemsToMigrate = index.items.filter((item) => legacyOwnerKeys.has(item.ownerKey));
+    if (!itemsToMigrate.length) {
+        return index;
+    }
+    const sharedOwnerDir = buildLocalExamplesOwnerDir(LOCAL_EXAMPLES_SHARED_OWNER_KEY);
+    await mkdir(sharedOwnerDir, { recursive: true });
+    for (const item of itemsToMigrate) {
+        const legacyOwnerDir = buildLocalExamplesOwnerDir(item.ownerKey);
+        const sourcePath = join(legacyOwnerDir, item.mediaFileName);
+        const destinationPath = join(sharedOwnerDir, item.mediaFileName);
+        await moveLocalExampleMediaFile(sourcePath, destinationPath).catch(() => undefined);
+        item.ownerKey = LOCAL_EXAMPLES_SHARED_OWNER_KEY;
+    }
+    await writeLocalExamplesIndex(index);
+    return index;
 };
 const truncateText = (value, maxLength) => {
     if (value.length <= maxLength) {
@@ -227,16 +291,17 @@ const toLocalExampleClientItem = (item) => ({
 export const getLocalExamplesState = async (user) => {
     if (!isLocalExamplesEnabled()) {
         return {
+            canManage: false,
             enabled: false,
             items: [],
         };
     }
-    const ownerKey = resolveLocalExamplesOwnerKey(user);
-    const index = await readLocalExamplesIndex();
+    const index = await migrateAdminExamplesToSharedOwner(await readLocalExamplesIndex(), user);
     return {
+        canManage: isLocalExamplesAdmin(user),
         enabled: true,
         items: index.items
-            .filter((item) => item.ownerKey === ownerKey)
+            .filter((item) => item.ownerKey === LOCAL_EXAMPLES_SHARED_OWNER_KEY)
             .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
             .map(toLocalExampleClientItem),
     };
@@ -245,7 +310,8 @@ export const saveLocalExample = async (user, input) => {
     if (!isLocalExamplesEnabled()) {
         throw new Error("Local examples are disabled.");
     }
-    const ownerKey = resolveLocalExamplesOwnerKey(user);
+    assertLocalExamplesAdmin(user);
+    const ownerKey = LOCAL_EXAMPLES_SHARED_OWNER_KEY;
     const goal = normalizeLocalExampleGoal(input.goal);
     const prompt = normalizeText(input.prompt);
     const title = sanitizeLocalExampleTitle(input.title, prompt);
@@ -261,7 +327,7 @@ export const saveLocalExample = async (user, input) => {
         ownerKey,
         source,
     });
-    const index = await readLocalExamplesIndex();
+    const index = await migrateAdminExamplesToSharedOwner(await readLocalExamplesIndex(), user);
     const nextItem = {
         createdAt: new Date().toISOString(),
         goal,
@@ -285,13 +351,12 @@ export const getLocalExampleVideoAsset = async (user, exampleId) => {
     if (!normalizedExampleId) {
         throw new Error("Local example id is required.");
     }
-    const ownerKey = resolveLocalExamplesOwnerKey(user);
-    const index = await readLocalExamplesIndex();
-    const item = index.items.find((entry) => entry.id === normalizedExampleId && entry.ownerKey === ownerKey) ?? null;
+    const index = await migrateAdminExamplesToSharedOwner(await readLocalExamplesIndex(), user);
+    const item = index.items.find((entry) => entry.id === normalizedExampleId && entry.ownerKey === LOCAL_EXAMPLES_SHARED_OWNER_KEY) ?? null;
     if (!item) {
         throw new Error("Local example not found.");
     }
-    const ownerDir = buildLocalExamplesOwnerDir(ownerKey);
+    const ownerDir = buildLocalExamplesOwnerDir(LOCAL_EXAMPLES_SHARED_OWNER_KEY);
     const absolutePath = join(ownerDir, item.mediaFileName);
     await stat(absolutePath);
     return {
@@ -304,12 +369,13 @@ export const deleteLocalExample = async (user, exampleId) => {
     if (!isLocalExamplesEnabled()) {
         throw new Error("Local examples are disabled.");
     }
+    assertLocalExamplesAdmin(user);
     const normalizedExampleId = normalizeText(exampleId);
     if (!normalizedExampleId) {
         throw new Error("Local example id is required.");
     }
-    const ownerKey = resolveLocalExamplesOwnerKey(user);
-    const index = await readLocalExamplesIndex();
+    const ownerKey = LOCAL_EXAMPLES_SHARED_OWNER_KEY;
+    const index = await migrateAdminExamplesToSharedOwner(await readLocalExamplesIndex(), user);
     const itemIndex = index.items.findIndex((entry) => entry.id === normalizedExampleId && entry.ownerKey === ownerKey);
     if (itemIndex < 0) {
         throw new Error("Local example not found.");

@@ -1,9 +1,10 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
-import { pathToFileURL } from "node:url";
 import {
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
+  STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
+  STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
   STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST,
 } from "../shared/studio-credit-costs.js";
@@ -20,12 +21,14 @@ import {
   warmWorkspaceVideoPoster,
   type WorkspaceVideoPosterSource,
 } from "./project-posters.js";
-import { getWorkspaceProjects, type WorkspaceProject } from "./projects.js";
 import {
+  getWorkspaceGenerationHistoryEntry,
   listWorkspaceGenerationHistory,
   saveWorkspaceGenerationHistory,
   type WorkspaceGenerationHistoryEntry,
 } from "./workspace-history.js";
+import { resolveGenerationPresentation } from "./generation-metadata.js";
+import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
 
 type StudioUser = {
   email?: string | null;
@@ -305,6 +308,11 @@ type WorkspaceBootstrapCacheEntry = {
   expiresAt: number;
 };
 
+type WorkspaceSubscriptionExpiryCacheEntry = {
+  expiresAt: number;
+  value: string | null;
+};
+
 export class WorkspaceCreditLimitError extends Error {
   constructor(message = "На тарифе FREE доступна 1 бесплатная генерация. Обновите тариф, чтобы продолжить.") {
     super(message);
@@ -409,9 +417,13 @@ const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"])
 
 const studioSupportedLanguages = new Set(["en", "ru"]);
 const WORKSPACE_BOOTSTRAP_CACHE_TTL_MS = 5 * 60_000;
+const WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS = 10 * 60_000;
+const WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS = 5_000;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const workspaceBootstrapCache = new Map<string, WorkspaceBootstrapCacheEntry>();
+const workspaceSubscriptionExpiryCache = new Map<string, WorkspaceSubscriptionExpiryCacheEntry>();
+const workspaceSubscriptionExpiryInFlight = new Map<string, Promise<string | null>>();
 const OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS = 30_000;
 const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
 const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
@@ -745,26 +757,6 @@ const fallbackWorkspaceStudioOptions: WorkspaceStudioOptions = {
   ],
 };
 
-const parseGenerationHashtags = (value: string | null | undefined) => {
-  const rawValue = normalizeGenerationText(value);
-  if (!rawValue) return [];
-
-  const explicitTags = rawValue.match(/#[^\s#]+/g);
-  if (explicitTags?.length) {
-    return Array.from(new Set(explicitTags));
-  }
-
-  return Array.from(
-    new Set(
-      rawValue
-        .split(/[\s,]+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .map((item) => `#${item.replace(/^#+/, "")}`),
-    ),
-  );
-};
-
 const cloneStudioGeneration = (generation: StudioGeneration): StudioGeneration => ({
   ...generation,
   hashtags: [...generation.hashtags],
@@ -802,6 +794,42 @@ const setCachedWorkspaceBootstrap = (cacheKey: string, bootstrap: WorkspaceBoots
   workspaceBootstrapCache.set(cacheKey, {
     bootstrap: cloneWorkspaceBootstrap(bootstrap),
     expiresAt: Date.now() + WORKSPACE_BOOTSTRAP_CACHE_TTL_MS,
+  });
+};
+
+const getWorkspaceSubscriptionExpiryCacheKey = (userId: string | number | null | undefined) => {
+  const normalizedUserId = String(userId ?? "").trim();
+  return /^\d+$/.test(normalizedUserId) ? normalizedUserId : null;
+};
+
+const getCachedWorkspaceSubscriptionExpiry = (userId: string | number | null | undefined) => {
+  const cacheKey = getWorkspaceSubscriptionExpiryCacheKey(userId);
+  if (!cacheKey) {
+    return undefined;
+  }
+
+  const cachedEntry = workspaceSubscriptionExpiryCache.get(cacheKey);
+  if (!cachedEntry) {
+    return undefined;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    workspaceSubscriptionExpiryCache.delete(cacheKey);
+    return undefined;
+  }
+
+  return cachedEntry.value;
+};
+
+const setCachedWorkspaceSubscriptionExpiry = (userId: string | number | null | undefined, value: string | null) => {
+  const cacheKey = getWorkspaceSubscriptionExpiryCacheKey(userId);
+  if (!cacheKey) {
+    return;
+  }
+
+  workspaceSubscriptionExpiryCache.set(cacheKey, {
+    expiresAt: Date.now() + WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS,
+    value,
   });
 };
 
@@ -1041,6 +1069,21 @@ const normalizeStudioGeneratedImageFileName = (fileName: string | null | undefin
   }
 
   return `segment-ai-photo${getStudioGeneratedImageExtension(mimeType)}`;
+};
+
+const buildStudioUpscaledImageFileName = (
+  fileName: string | null | undefined,
+  mimeType: string,
+  options?: { segmentIndex?: number | null },
+) => {
+  const normalized = String(fileName ?? "").trim().split(/[\\/]/).pop() ?? "";
+  const extension = getStudioGeneratedImageExtension(mimeType);
+  const fallbackBaseName =
+    typeof options?.segmentIndex === "number" && options.segmentIndex >= 0
+      ? `segment-${options.segmentIndex + 1}`
+      : "segment-image";
+  const baseName = (normalized ? normalized.replace(/\.[^.]+$/u, "") : fallbackBaseName).trim() || fallbackBaseName;
+  return `${baseName}-upscaled${extension}`;
 };
 
 const resolveAdsflowAssetUrl = (value: string | null | undefined) => {
@@ -1940,50 +1983,76 @@ const buildWorkspaceStudioOptions = (payload?: AdsflowStudioOptionsPayload | nul
 };
 
 const fetchAdsflowSubscriptionExpiry = async (userId: string | number | null | undefined) => {
-  const normalizedUserId = String(userId ?? "").trim();
-  if (!/^\d+$/.test(normalizedUserId)) {
+  const cacheKey = getWorkspaceSubscriptionExpiryCacheKey(userId);
+  if (!cacheKey) {
     return null;
   }
 
-  const payload = await fetchAdsflowJson<AdsflowAdminUserDetailsResponse>(
-    buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(normalizedUserId)}`),
-    {
-      headers: {
-        "X-Admin-Token": env.adsflowAdminToken ?? "",
+  const cachedValue = getCachedWorkspaceSubscriptionExpiry(cacheKey);
+  if (cachedValue !== undefined) {
+    return cachedValue;
+  }
+
+  const inFlightRequest = workspaceSubscriptionExpiryInFlight.get(cacheKey);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const request = (async () => {
+    const payload = await fetchAdsflowJson<AdsflowAdminUserDetailsResponse>(
+      buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(cacheKey)}`),
+      {
+        headers: {
+          "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
       },
-    },
-  );
+      {
+        retryDelaysMs: [],
+        timeoutMs: WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS,
+      },
+    );
 
-  const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
-  if (directExpiry) {
-    return directExpiry;
-  }
+    const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
+    if (directExpiry) {
+      setCachedWorkspaceSubscriptionExpiry(cacheKey, directExpiry);
+      return directExpiry;
+    }
 
-  const currentPlan = String(payload.user?.subscription_type ?? "").trim().toLowerCase();
-  const planDurationDays =
-    currentPlan === "start" ? 30 : currentPlan === "pro" ? 30 : currentPlan === "ultra" ? 30 : 0;
-  if (!planDurationDays || !Array.isArray(payload.payments)) {
-    return null;
-  }
+    const currentPlan = String(payload.user?.subscription_type ?? "").trim().toLowerCase();
+    const planDurationDays =
+      currentPlan === "start" ? 30 : currentPlan === "pro" ? 30 : currentPlan === "ultra" ? 30 : 0;
+    if (!planDurationDays || !Array.isArray(payload.payments)) {
+      setCachedWorkspaceSubscriptionExpiry(cacheKey, null);
+      return null;
+    }
 
-  const latestSuccessfulPayment = payload.payments
-    .filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
-    .filter((payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === currentPlan)
-    .map((payment) => {
-      const paidAt = normalizeGenerationText(payment.paid_at);
-      const parsedPaidAt = paidAt ? new Date(paidAt) : null;
-      return Number.isNaN(parsedPaidAt?.getTime?.() ?? Number.NaN) ? null : parsedPaidAt;
-    })
-    .filter((value): value is Date => value instanceof Date)
-    .sort((left, right) => right.getTime() - left.getTime())[0];
+    const latestSuccessfulPayment = payload.payments
+      .filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
+      .filter((payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === currentPlan)
+      .map((payment) => {
+        const paidAt = normalizeGenerationText(payment.paid_at);
+        const parsedPaidAt = paidAt ? new Date(paidAt) : null;
+        return Number.isNaN(parsedPaidAt?.getTime?.() ?? Number.NaN) ? null : parsedPaidAt;
+      })
+      .filter((value): value is Date => value instanceof Date)
+      .sort((left, right) => right.getTime() - left.getTime())[0];
 
-  if (!latestSuccessfulPayment) {
-    return null;
-  }
+    if (!latestSuccessfulPayment) {
+      setCachedWorkspaceSubscriptionExpiry(cacheKey, null);
+      return null;
+    }
 
-  const derivedExpiry = new Date(latestSuccessfulPayment.getTime());
-  derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
-  return derivedExpiry.toISOString();
+    const derivedExpiry = new Date(latestSuccessfulPayment.getTime());
+    derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
+    const derivedValue = derivedExpiry.toISOString();
+    setCachedWorkspaceSubscriptionExpiry(cacheKey, derivedValue);
+    return derivedValue;
+  })().finally(() => {
+    workspaceSubscriptionExpiryInFlight.delete(cacheKey);
+  });
+
+  workspaceSubscriptionExpiryInFlight.set(cacheKey, request);
+  return request;
 };
 
 const enrichWorkspaceProfile = async (
@@ -2001,18 +2070,28 @@ const enrichWorkspaceProfile = async (
       ...profile,
       expiresAt,
     };
-  } catch (error) {
-    console.error("[studio] Failed to enrich workspace profile with expiry", error);
+  } catch {
     return profile;
   }
 };
 
-const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGeneration | null => {
-  const prompt = normalizePrompt(payload.prompt ?? "");
+const buildStudioGeneration = (
+  payload: AdsflowJobStatusResponse,
+  options?: {
+    description?: string | null;
+    hashtags?: string[] | string | null;
+    prompt?: string | null;
+    title?: string | null;
+  },
+): StudioGeneration | null => {
+  const metadata = resolveGenerationPresentation({
+    description: options?.description ?? payload.description,
+    fallbackTitle: "Готовое видео",
+    hashtags: options?.hashtags ?? payload.hashtags,
+    prompt: options?.prompt ?? payload.prompt,
+    title: options?.title ?? payload.title,
+  });
   const jobId = String(payload.job_id ?? "");
-  const description = normalizeGenerationText(payload.description);
-  const hashtags = parseGenerationHashtags(payload.hashtags);
-  const title = normalizeGenerationText(payload.title);
   const videoUrls = buildStudioGenerationVideoUrls({
     downloadPath: payload.download_path,
     generatedAt: payload.generated_at,
@@ -2026,10 +2105,10 @@ const buildStudioGeneration = (payload: AdsflowJobStatusResponse): StudioGenerat
   return {
     adId: payload.ad_id ?? null,
     id: jobId,
-    prompt,
-    title,
-    description,
-    hashtags,
+    prompt: metadata.prompt,
+    title: metadata.title,
+    description: metadata.description,
+    hashtags: metadata.hashtags,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
@@ -2044,16 +2123,22 @@ const isAdsflowLatestVideoGenerationTask = (value: string | null | undefined) =>
   return !normalized || normalized === "video.generate" || normalized === "video.edit";
 };
 
-const buildStudioGenerationFromLatest = (payload: AdsflowLatestGenerationPayload): StudioGeneration | null => {
+const buildStudioGenerationFromLatest = (
+  payload: AdsflowLatestGenerationPayload,
+  historyEntry?: WorkspaceGenerationHistoryEntry | null,
+): StudioGeneration | null => {
   if (!isAdsflowLatestVideoGenerationTask(payload.task_type)) {
     return null;
   }
 
-  const prompt = normalizePrompt(payload.prompt ?? "");
+  const metadata = resolveGenerationPresentation({
+    description: historyEntry?.description || payload.description,
+    fallbackTitle: "Готовое видео",
+    hashtags: historyEntry?.hashtags.length ? historyEntry.hashtags : payload.hashtags,
+    prompt: historyEntry?.prompt || payload.prompt,
+    title: historyEntry?.title || payload.title,
+  });
   const jobId = String(payload.job_id ?? "");
-  const description = normalizeGenerationText(payload.description);
-  const hashtags = parseGenerationHashtags(payload.hashtags);
-  const title = normalizeGenerationText(payload.title);
   const videoUrls = buildStudioGenerationVideoUrls({
     downloadPath: payload.download_path,
     generatedAt: payload.generated_at,
@@ -2067,39 +2152,16 @@ const buildStudioGenerationFromLatest = (payload: AdsflowLatestGenerationPayload
   return {
     adId: payload.ad_id ?? null,
     id: jobId,
-    prompt,
-    title,
-    description,
-    hashtags,
+    prompt: metadata.prompt,
+    title: metadata.title,
+    description: metadata.description,
+    hashtags: metadata.hashtags,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
     modelLabel: "AdsFlow pipeline",
     aspectRatio: "9:16",
     generatedAt: payload.generated_at ?? new Date().toISOString(),
-  };
-};
-
-const buildStudioGenerationFromWorkspaceProject = (project: WorkspaceProject): StudioGeneration | null => {
-  const videoUrl = normalizeGenerationText(project.videoUrl);
-
-  if (!videoUrl) {
-    return null;
-  }
-
-  return {
-    adId: project.adId,
-    aspectRatio: "9:16",
-    description: normalizeGenerationText(project.description),
-    durationLabel: "Ready",
-    generatedAt: project.generatedAt ?? project.updatedAt ?? project.createdAt,
-    hashtags: [...project.hashtags],
-    id: normalizeGenerationText(project.jobId) || project.id,
-    modelLabel: "AdsFlow pipeline",
-    prompt: normalizePrompt(project.prompt),
-    title: normalizeGenerationText(project.title),
-    videoFallbackUrl: project.videoFallbackUrl,
-    videoUrl,
   };
 };
 
@@ -2123,20 +2185,25 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
     return null;
   }
 
-  const prompt = normalizePrompt(entry.prompt);
-  const description = normalizeGenerationText(entry.description);
+  const metadata = resolveGenerationPresentation({
+    description: entry.description,
+    fallbackTitle: "Готовое видео",
+    hashtags: entry.hashtags,
+    prompt: entry.prompt,
+    title: entry.title,
+  });
 
   return {
     adId: entry.adId,
     aspectRatio: "9:16",
-    description,
+    description: metadata.description,
     durationLabel: "Ready",
     generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
-    hashtags: [],
+    hashtags: metadata.hashtags,
     id: jobId,
     modelLabel: "AdsFlow pipeline",
-    prompt,
-    title: normalizeGenerationText(entry.title) || description || prompt || "Готовое видео",
+    prompt: metadata.prompt,
+    title: metadata.title,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
   };
@@ -2144,6 +2211,7 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
 
 const buildLatestGenerationStatus = (
   payload?: AdsflowLatestGenerationPayload | null,
+  historyEntry?: WorkspaceGenerationHistoryEntry | null,
 ): StudioGenerationStatus | null => {
   if (!payload?.job_id) {
     return null;
@@ -2154,7 +2222,7 @@ const buildLatestGenerationStatus = (
   }
 
   const status = String(payload.status ?? "queued");
-  const generation = status === "done" ? buildStudioGenerationFromLatest(payload) : null;
+  const generation = status === "done" ? buildStudioGenerationFromLatest(payload, historyEntry) : null;
 
   return {
     error: payload.error ?? undefined,
@@ -2163,8 +2231,6 @@ const buildLatestGenerationStatus = (
     status,
   };
 };
-
-const STUDIO_VIDEO_PROBE_RANGE = "bytes=0-1";
 
 const extractStudioVideoPathFromProxyUrl = (value: string | null | undefined) => {
   const normalized = normalizeGenerationText(value);
@@ -2226,91 +2292,6 @@ const isWorkspaceProjectPlaybackUrl = (value: string | null | undefined) => {
   }
 };
 
-const isStudioVideoTargetReachable = async (upstreamUrl: URL) => {
-  try {
-    const response = await fetch(upstreamUrl, {
-      headers: {
-        Range: STUDIO_VIDEO_PROBE_RANGE,
-      },
-    });
-
-    if (!response.ok) {
-      void response.body?.cancel();
-      return false;
-    }
-
-    const contentType = normalizeGenerationText(response.headers.get("content-type")).toLowerCase();
-    void response.body?.cancel();
-    return !contentType || contentType.startsWith("video/");
-  } catch {
-    return false;
-  }
-};
-
-const isStudioGenerationReachable = async (generation: StudioGeneration | null | undefined) => {
-  if (!generation?.videoUrl) {
-    return false;
-  }
-
-  if (
-    isStudioJobVideoProxyUrl(generation.videoUrl) ||
-    isStudioPlaybackUrl(generation.videoUrl) ||
-    isWorkspaceProjectPlaybackUrl(generation.videoUrl)
-  ) {
-    return true;
-  }
-
-  const upstreamPath = extractStudioVideoPathFromProxyUrl(generation.videoUrl);
-  if (!upstreamPath) {
-    return false;
-  }
-
-  try {
-    return await isStudioVideoTargetReachable(getStudioVideoProxyTargetByPath(upstreamPath));
-  } catch {
-    return false;
-  }
-};
-
-const findReachableWorkspaceFallbackGeneration = async (
-  user: StudioUser,
-  excludedVideoUrls: string[] = [],
-) => {
-  const excludedVideoUrlSet = new Set(
-    excludedVideoUrls
-      .map((value) => normalizeGenerationText(value))
-      .filter(Boolean),
-  );
-  const projects = await getWorkspaceProjects(user);
-
-  for (const project of projects) {
-    if (project.status !== "ready" || !project.videoUrl) {
-      continue;
-    }
-
-    const fallbackGeneration = buildStudioGenerationFromWorkspaceProject(project);
-    if (!fallbackGeneration) {
-      continue;
-    }
-
-    if (excludedVideoUrlSet.has(fallbackGeneration.videoUrl)) {
-      continue;
-    }
-
-    if (await isStudioGenerationReachable(fallbackGeneration)) {
-      return {
-        fallbackGeneration,
-        fallbackProject: project,
-      };
-    }
-  }
-
-  return {
-    fallbackGeneration: null,
-    fallbackProject: null,
-  };
-};
-
 const findWorkspaceHistoryFallbackGeneration = async (
   user: StudioUser,
   excludedVideoUrls: string[] = [],
@@ -2341,6 +2322,7 @@ const findWorkspaceHistoryFallbackGeneration = async (
 const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 504]);
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
+const ADSFLOW_MUTATION_TIMEOUT_MS = 90_000;
 
 type AdsflowRequestOptions = {
   retryDelaysMs?: number[];
@@ -2538,6 +2520,42 @@ const fetchAdsflowSegmentPhotoAnimationJobStatus = async (jobId: string, user: S
   );
 };
 
+const fetchAdsflowSegmentImageEditJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return fetchAdsflowJson<AdsflowSegmentAiPhotoJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-image-edit/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
+const fetchAdsflowSegmentImageUpscaleJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return fetchAdsflowJson<AdsflowSegmentAiPhotoJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-image-upscale/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
 const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1, language?: string) => {
   const externalUserId = await resolveStudioExternalUserId(user);
   const payloadText = await postAdsflowText("/api/web/credits/consume", {
@@ -2602,7 +2620,7 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
   const cachedBootstrap = getCachedWorkspaceBootstrap(externalUserId);
 
   try {
-    const payloadText = await postAdsflowText(
+    const payloadText = await postAdsflowTextWithPolicy(
       "/api/web/bootstrap",
       {
         admin_token: env.adsflowAdminToken,
@@ -2612,9 +2630,10 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
       },
+      upstreamPolicies.adsflowBootstrap,
       {
-        retryDelaysMs: [],
-        timeoutMs: 5_000,
+        endpoint: "studio.bootstrap",
+        projectId: externalUserId,
       },
     );
     const payload = parseJson<AdsflowBootstrapResponse>(payloadText);
@@ -2627,40 +2646,10 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
       rawUserId: extractAdsflowUserId(payloadText),
     });
 
-    let latestGeneration = buildLatestGenerationStatus(payload.latest_generation);
-    const excludedFallbackVideoUrls: string[] = [];
-
-    if (latestGeneration?.generation && !(await isStudioGenerationReachable(latestGeneration.generation))) {
-      excludedFallbackVideoUrls.push(latestGeneration.generation.videoUrl);
-      latestGeneration = {
-        ...latestGeneration,
-        generation: undefined,
-      };
-    }
-
-    if (!latestGeneration?.generation && (!latestGeneration || latestGeneration.status === "done")) {
-      try {
-        const { fallbackGeneration, fallbackProject } = await findReachableWorkspaceFallbackGeneration(
-          user,
-          excludedFallbackVideoUrls,
-        );
-
-        if (fallbackGeneration) {
-          latestGeneration = latestGeneration
-            ? {
-                ...latestGeneration,
-                generation: fallbackGeneration,
-              }
-            : {
-                generation: fallbackGeneration,
-                jobId: fallbackProject?.jobId ?? fallbackProject?.id ?? fallbackGeneration.id,
-                status: "done",
-              };
-        }
-      } catch (error) {
-        console.error("[studio] Failed to backfill latest generation from workspace projects", error);
-      }
-    }
+    const latestHistoryEntry = payload.latest_generation?.job_id
+      ? await getWorkspaceGenerationHistoryEntry(user, String(payload.latest_generation.job_id)).catch(() => null)
+      : null;
+    const latestGeneration = buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry);
 
     const bootstrap = {
       latestGeneration,
@@ -2832,6 +2821,11 @@ export async function createStudioGenerationJob(
         voice_type: isVoiceEnabled ? undefined : "none",
         voice_code: normalizedVoiceId,
       }),
+    }, {
+      // This endpoint is not idempotent: a timeout after upstream accepted the request
+      // can create duplicate jobs and double-spend credits on retry.
+      retryDelaysMs: [],
+      timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
     });
 
     const jobId = String(payload.job_id ?? "").trim();
@@ -2845,13 +2839,22 @@ export async function createStudioGenerationJob(
       console.warn("[studio] AdsFlow enqueue warning:", payload.enqueue_error);
     }
 
+    const queuedMetadata = resolveGenerationPresentation({
+      description: normalizedPrompt,
+      fallbackTitle: "Готовое видео",
+      hashtags: null,
+      prompt: normalizedPrompt,
+      title: normalizeGenerationText(payload.title) || normalizedPrompt,
+    });
+
     try {
       await saveWorkspaceGenerationHistory(user, {
-        description: normalizedPrompt,
+        description: queuedMetadata.description,
+        hashtags: queuedMetadata.hashtags,
         jobId,
-        prompt: normalizedPrompt,
+        prompt: queuedMetadata.prompt,
         status: String(payload.status ?? "queued"),
-        title: normalizeGenerationText(payload.title) || normalizedPrompt,
+        title: queuedMetadata.title,
       });
     } catch (error) {
       console.error("[studio] Failed to persist queued generation", error);
@@ -2861,7 +2864,7 @@ export async function createStudioGenerationJob(
       jobId,
       profile: creditReservation.profile,
       status: String(payload.status ?? "queued"),
-      title: normalizeGenerationText(payload.title) || "Studio generation",
+      title: queuedMetadata.title || "Studio generation",
     };
   } catch (error) {
     if (!jobCreated) {
@@ -2950,6 +2953,178 @@ export async function generateStudioSegmentAiPhoto(
 
     throw error;
   }
+}
+
+export async function createStudioSegmentImageEditJob(
+  prompt: string,
+  imageDataUrl: string,
+  user: StudioUser,
+  options?: {
+    fileName?: string;
+    language?: string;
+    projectId?: number;
+    segmentIndex?: number;
+  },
+): Promise<StudioSegmentAiPhotoJob> {
+  assertAdsflowConfigured();
+
+  const normalizedPrompt = normalizePrompt(prompt);
+  if (!normalizedPrompt) {
+    throw new Error("Prompt is required.");
+  }
+
+  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim();
+  if (!normalizedImageDataUrl) {
+    throw new Error("Image data URL is required.");
+  }
+
+  const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
+  if (!decodedImage.bytes.length) {
+    throw new Error("Image data URL is empty.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+    sourceLanguage: normalizedLanguage,
+  });
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedMimeType = inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+  const normalizedFileName =
+    normalizeStudioGeneratedImageFileName(options?.fileName, normalizedMimeType) ||
+    `segment-image-edit-${(normalizedSegmentIndex ?? 0) + 1}${getStudioGeneratedImageExtension(normalizedMimeType)}`;
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-edit/jobs", {
+    admin_token: env.adsflowAdminToken,
+    credit_cost: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
+    external_user_id: externalUserId,
+    image_data_url: normalizedImageDataUrl,
+    image_mime_type: normalizedMimeType,
+    image_original_name: normalizedFileName,
+    language: normalizedLanguage,
+    project_id: normalizedProjectId,
+    prompt: upstreamPrompt,
+    segment_index: normalizedSegmentIndex,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment image edit job id.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    status: String(payload.status ?? "queued"),
+  };
+}
+
+export async function createStudioSegmentImageUpscaleJob(
+  imageDataUrl: string,
+  user: StudioUser,
+  options?: {
+    fileName?: string;
+    language?: string;
+    projectId?: number;
+    segmentIndex?: number;
+  },
+) : Promise<StudioSegmentAiPhotoJob> {
+  assertAdsflowConfigured();
+
+  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim();
+  if (!normalizedImageDataUrl) {
+    throw new Error("Image data URL is required.");
+  }
+
+  const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
+  if (!decodedImage.bytes.length) {
+    throw new Error("Image data URL is empty.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedMimeType = inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+  const normalizedFileName = buildStudioUpscaledImageFileName(options?.fileName, normalizedMimeType, {
+    segmentIndex: normalizedSegmentIndex,
+  });
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-upscale/jobs", {
+    admin_token: env.adsflowAdminToken,
+    credit_cost: STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+    external_user_id: externalUserId,
+    image_data_url: normalizedImageDataUrl,
+    image_mime_type: normalizedMimeType,
+    image_original_name: normalizedFileName,
+    language: normalizedLanguage,
+    project_id: normalizedProjectId,
+    segment_index: normalizedSegmentIndex,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment image upscale job id.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    status: String(payload.status ?? "queued"),
+  };
+}
+
+export async function getStudioSegmentImageUpscaleJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiPhotoJobStatus> {
+  const payload = await fetchAdsflowSegmentImageUpscaleJobStatus(jobId, user);
+  const status = String(payload.status ?? "queued").trim() || "queued";
+  const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+
+  return {
+    asset,
+    error: normalizeGenerationText(payload.error) || undefined,
+    jobId: safeJobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    status,
+  };
+}
+
+export async function getStudioSegmentImageEditJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiPhotoJobStatus> {
+  const payload = await fetchAdsflowSegmentImageEditJobStatus(jobId, user);
+  const status = String(payload.status ?? "queued").trim() || "queued";
+  const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+
+  return {
+    asset,
+    error: normalizeGenerationText(payload.error) || undefined,
+    jobId: safeJobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    status,
+  };
 }
 
 export async function improveStudioSegmentAiPhotoPrompt(
@@ -3186,6 +3361,9 @@ export async function createStudioSegmentPhotoAnimationJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    customVideoFileDataUrl?: string;
+    customVideoFileMimeType?: string;
+    customVideoFileName?: string;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -3202,12 +3380,18 @@ export async function createStudioSegmentPhotoAnimationJob(
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
+  const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+  const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const externalUserId = await resolveStudioExternalUserId(user);
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-photo-animation/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
+    custom_video_data_url: normalizedCustomVideoFileDataUrl,
+    custom_video_mime_type: normalizedCustomVideoFileMimeType,
+    custom_video_original_name: normalizedCustomVideoFileName,
     external_user_id: externalUserId,
     language: normalizedLanguage,
     project_id: normalizedProjectId,
@@ -3215,6 +3399,11 @@ export async function createStudioSegmentPhotoAnimationJob(
     segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
+  }, {
+    // This endpoint is not idempotent: a timeout after upstream accepted the request
+    // can create duplicate jobs and double-spend credits on retry.
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
   });
 
   const jobId = String(payload.job_id ?? "").trim();
@@ -3303,18 +3492,27 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
   const payload = await fetchAdsflowJobStatus(jobId, user);
   const status = String(payload.status ?? "queued");
   const safeJobId = String(payload.job_id ?? jobId).trim();
+  const existingHistoryEntry = await getWorkspaceGenerationHistoryEntry(user, safeJobId).catch(() => null);
+  const resolvedMetadata = resolveGenerationPresentation({
+    description: payload.description ?? existingHistoryEntry?.description ?? "",
+    fallbackTitle: "Готовое видео",
+    hashtags: payload.hashtags ?? existingHistoryEntry?.hashtags ?? [],
+    prompt: existingHistoryEntry?.prompt ?? payload.prompt ?? "",
+    title: payload.title ?? existingHistoryEntry?.title ?? "",
+  });
 
   try {
     await saveWorkspaceGenerationHistory(user, {
       adId: payload.ad_id ?? null,
-      description: payload.description ?? payload.prompt ?? "",
+      description: resolvedMetadata.description,
       downloadPath: payload.download_path ?? null,
       error: payload.error ?? null,
       generatedAt: payload.generated_at ?? null,
+      hashtags: resolvedMetadata.hashtags,
       jobId: safeJobId,
-      prompt: payload.prompt ?? "",
+      prompt: resolvedMetadata.prompt,
       status,
-      title: payload.title ?? payload.prompt ?? "",
+      title: resolvedMetadata.title,
       updatedAt: payload.generated_at ?? new Date().toISOString(),
     });
   } catch (error) {
@@ -3326,7 +3524,7 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       throw new Error("AdsFlow finished the job without a video path.");
     }
 
-    const generation = buildStudioGeneration(payload);
+    const generation = buildStudioGeneration(payload, resolvedMetadata);
     if (!generation) {
       console.warn("[studio] Done generation is missing playable preview metadata", {
         adId: payload.ad_id ?? null,
@@ -3487,7 +3685,16 @@ const warmStudioGeneratedVideoPlayback = (kind: StudioGeneratedVideoPosterKind, 
   void getStudioGeneratedVideoPlaybackSource(kind, jobId, user)
     .then((playbackSource) => warmWorkspaceProjectPlayback(playbackSource))
     .catch((error) => {
-      console.error("[studio] Failed to warm generated segment video playback cache", {
+      const message = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
+      if (
+        message.includes("the operation was aborted due to timeout") ||
+        message.includes("timed out") ||
+        message.includes("timeout")
+      ) {
+        return;
+      }
+
+      console.warn("[studio] Failed to warm generated segment video playback cache", {
         error: error instanceof Error ? error.message : "Unknown generated segment video playback warmup error.",
         jobId,
         kind,
@@ -3513,16 +3720,19 @@ const getStudioGeneratedVideoPosterSource = async (
     throw new Error("Job id is required.");
   }
 
-  const playbackAsset = await getStudioGeneratedVideoPlaybackAsset(kind, safeJobId, user);
+  const upstreamUrl =
+    kind === "segment-ai-video"
+      ? await getStudioSegmentAiVideoJobFileProxyTarget(safeJobId, user)
+      : await getStudioSegmentPhotoAnimationJobFileProxyTarget(safeJobId, user);
 
   return {
     cacheKey: getWorkspaceVideoPosterCacheKey({
       posterId: `${kind}:${safeJobId}`,
-      targetUrl: pathToFileURL(playbackAsset.absolutePath),
+      targetUrl: upstreamUrl,
       version: safeJobId,
     }),
     posterId: `${kind}:${safeJobId}`,
-    upstreamUrl: pathToFileURL(playbackAsset.absolutePath),
+    upstreamUrl,
   };
 };
 
@@ -3530,7 +3740,16 @@ const warmStudioGeneratedVideoPoster = (kind: StudioGeneratedVideoPosterKind, jo
   void getStudioGeneratedVideoPosterSource(kind, jobId, user)
     .then((posterSource) => warmWorkspaceVideoPoster(posterSource))
     .catch((error) => {
-      console.error("[studio] Failed to warm generated video poster", {
+      const message = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
+      if (
+        message.includes("the operation was aborted due to timeout") ||
+        message.includes("timed out") ||
+        message.includes("timeout")
+      ) {
+        return;
+      }
+
+      console.warn("[studio] Failed to warm generated video poster", {
         error: error instanceof Error ? error.message : "Unknown generated video poster warmup error.",
         jobId,
         kind,
@@ -3606,7 +3825,16 @@ const warmStudioGenerationPlayback = (generation: StudioGeneration | null | unde
   )
     .then((playbackSource) => warmWorkspaceProjectPlayback(playbackSource))
     .catch((error) => {
-      console.error("[studio] Failed to warm studio playback cache", {
+      const message = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
+      if (
+        message.includes("the operation was aborted due to timeout") ||
+        message.includes("timed out") ||
+        message.includes("timeout")
+      ) {
+        return;
+      }
+
+      console.warn("[studio] Failed to warm studio playback cache", {
         error: error instanceof Error ? error.message : "Unknown studio playback warmup error.",
         jobId: safeJobId,
       });

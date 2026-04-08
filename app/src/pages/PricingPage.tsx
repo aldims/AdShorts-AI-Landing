@@ -143,7 +143,7 @@ const pricingPacks: PricingPack[] = [
     name: "Pack 100",
     credits: "100 кредитов",
     price: "690 ₽",
-    subnote: "~6,9 ₽/кредит",
+    subnote: "До 10 видео",
   },
   {
     checkoutProductId: "package_50",

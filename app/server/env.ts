@@ -5,7 +5,21 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(serverDir, "..");
+const resolveRootDir = () => {
+  let currentDir = serverDir;
+
+  for (let index = 0; index < 4; index += 1) {
+    if (existsSync(join(currentDir, "package.json"))) {
+      return currentDir;
+    }
+
+    currentDir = join(currentDir, "..");
+  }
+
+  return join(serverDir, "..");
+};
+
+const rootDir = resolveRootDir();
 const envFile = join(rootDir, ".env");
 const dataDir = join(rootDir, "data");
 
@@ -57,6 +71,26 @@ if (existsSync(siblingAdsflowWorkerEnvFile)) {
 mkdirSync(dataDir, { recursive: true });
 
 const trim = (value: string | undefined) => value?.trim() || undefined;
+const toBoolean = (value: string | undefined, fallback: boolean) => {
+  if (value == null) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+};
 const toNumber = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -65,7 +99,7 @@ const toNumber = (value: string | undefined, fallback: number) => {
 const nodeEnv = process.env.NODE_ENV ?? "development";
 const isProduction = nodeEnv === "production";
 
-const appUrl = trim(process.env.APP_URL) ?? "http://127.0.0.1:4174";
+const appUrl = trim(process.env.APP_URL) ?? "http://localhost:4174";
 const authBaseUrl = trim(process.env.BETTER_AUTH_URL) ?? appUrl;
 const authSecret = trim(process.env.BETTER_AUTH_SECRET) ?? "dev-only-secret-change-me";
 
@@ -79,12 +113,16 @@ const smtpUser = trim(process.env.SMTP_USER);
 const smtpPass = trim(process.env.SMTP_PASS);
 const smtpFrom = trim(process.env.SMTP_FROM) ?? "AdShorts AI <no-reply@adshorts.ai>";
 const smtpSecure = process.env.SMTP_SECURE === "true";
+const assetCacheDir = trim(process.env.ASSET_CACHE_DIR) ?? dataDir;
+
+mkdirSync(assetCacheDir, { recursive: true });
 
 export const env = {
   nodeEnv,
   isProduction,
   rootDir,
   dataDir,
+  assetCacheDir,
   appUrl,
   authBaseUrl,
   authSecret,
@@ -118,6 +156,13 @@ export const env = {
   openrouterBaseUrl: trim(process.env.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1",
   openrouterMainModel: trim(process.env.OPENROUTER_MAIN_MODEL) ?? "google/gemini-3-flash-preview",
   openrouterFallbackModel: trim(process.env.OPENROUTER_FALLBACK_MODEL) ?? "openai/gpt-4o-mini",
+  redisUrl: trim(process.env.REDIS_URL),
+  disableBackgroundWarming: toBoolean(process.env.DISABLE_BACKGROUND_WARMING, false),
+  upstreamBootstrapTimeoutMs: toNumber(process.env.UPSTREAM_BOOTSTRAP_TIMEOUT_MS, 5_500),
+  upstreamProjectsTimeoutMs: toNumber(process.env.UPSTREAM_PROJECTS_TIMEOUT_MS, 5_500),
+  upstreamProbeTimeoutMs: toNumber(process.env.UPSTREAM_PROBE_TIMEOUT_MS, 1_800),
+  upstreamProxyTimeoutMs: toNumber(process.env.UPSTREAM_PROXY_TIMEOUT_MS, 8_000),
+  upstreamPlaybackPreparationTimeoutMs: toNumber(process.env.UPSTREAM_PLAYBACK_PREPARATION_TIMEOUT_MS, 20_000),
 };
 
 export const authProviderStatus = {

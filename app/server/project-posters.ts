@@ -1,16 +1,20 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { access } from "node:fs/promises";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { createAssetPreparationQueue, type AssetPreparationPriority } from "./asset-preparation-queue.js";
 import { env } from "./env.js";
+import { logServerEvent } from "./logger.js";
+import {
+  createPreparedAssetStore,
+  type PreparedAssetMetadata,
+} from "./prepared-asset-store.js";
 
 type WorkspacePosterSource = {
   cacheKey: string;
+  upstreamHeaders?: Record<string, string>;
   upstreamUrl: URL;
 };
 
@@ -22,99 +26,109 @@ export type WorkspaceProjectPosterSource = WorkspacePosterSource & {
   projectId: string;
 };
 
+type WorkspacePosterMetadata = PreparedAssetMetadata;
+
 const execFileAsync = promisify(execFile);
 
-const PROJECT_POSTERS_ROOT_DIR = join(env.dataDir, "project-posters");
 const PROJECT_POSTER_CAPTURE_CONCURRENCY = 4;
 const PROJECT_POSTER_CAPTURE_MAX_DIMENSION = 1280;
-const PROJECT_POSTER_FFMPEG_TIMEOUT_MS = 45_000;
+const PROJECT_POSTER_FFMPEG_TIMEOUT_MS = env.upstreamPlaybackPreparationTimeoutMs;
 const PROJECT_POSTER_FFMPEG_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const PROJECT_POSTER_FRAME_TIMES_SECONDS = [0.15, 0];
-const projectPosterGenerationQueue: Array<() => void> = [];
-const projectPosterGenerationRequests = new Map<string, Promise<string>>();
-let activeProjectPosterGenerationCount = 0;
+const PROJECT_POSTER_ROOT_DIR = join(env.assetCacheDir, "project-posters");
+const PROJECT_POSTER_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const PROJECT_POSTER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
+
+const posterStore = createPreparedAssetStore({
+  cleanupIntervalMs: PROJECT_POSTER_CLEANUP_INTERVAL_MS,
+  maxAgeMs: PROJECT_POSTER_MAX_AGE_MS,
+  name: "project-posters",
+  rootDir: PROJECT_POSTER_ROOT_DIR,
+});
+const posterQueue = createAssetPreparationQueue<string>({
+  backgroundConcurrency: 1,
+  interactiveConcurrency: PROJECT_POSTER_CAPTURE_CONCURRENCY,
+  name: "project-posters",
+});
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
-const getProjectPosterFileHash = (cacheKey: string) => createHash("sha256").update(cacheKey).digest("hex");
-
-const getProjectPosterFilePath = (cacheKey: string) =>
-  join(PROJECT_POSTERS_ROOT_DIR, `${getProjectPosterFileHash(cacheKey)}.jpg`);
-
-const projectPosterExists = async (cacheKey: string) => {
-  try {
-    await access(getProjectPosterFilePath(cacheKey), fsConstants.R_OK);
-    return true;
-  } catch {
-    return false;
+const describeProjectPosterError = (error: unknown, fallbackMessage: string) => {
+  if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    return fallbackMessage;
   }
-};
 
-const flushProjectPosterGenerationQueue = () => {
-  while (
-    activeProjectPosterGenerationCount < PROJECT_POSTER_CAPTURE_CONCURRENCY &&
-    projectPosterGenerationQueue.length > 0
-  ) {
-    const nextTask = projectPosterGenerationQueue.shift();
-    if (!nextTask) {
-      break;
+  if (error instanceof Error) {
+    const normalizedMessage = error.message.trim().toLowerCase();
+    if (
+      normalizedMessage.includes("timed out") ||
+      normalizedMessage.includes("timeout") ||
+      normalizedMessage.includes("command failed:")
+    ) {
+      return fallbackMessage;
     }
 
-    activeProjectPosterGenerationCount += 1;
-    nextTask();
+    return error.message.trim() || fallbackMessage;
   }
+
+  return fallbackMessage;
 };
-
-const enqueueProjectPosterGeneration = <T>(task: () => Promise<T>) =>
-  new Promise<T>((resolve, reject) => {
-    const runTask = () => {
-      void task()
-        .then(resolve)
-        .catch(reject)
-        .finally(() => {
-          activeProjectPosterGenerationCount = Math.max(0, activeProjectPosterGenerationCount - 1);
-          flushProjectPosterGenerationQueue();
-        });
-    };
-
-    projectPosterGenerationQueue.push(runTask);
-    flushProjectPosterGenerationQueue();
-  });
 
 const resolvePosterCaptureInput = (upstreamUrl: URL) =>
   upstreamUrl.protocol === "file:" ? fileURLToPath(upstreamUrl) : upstreamUrl.toString();
 
-const runPosterCaptureCommand = async (upstreamUrl: URL, frameTimeSeconds: number) => {
-  const { stdout } = await execFileAsync(
-    FFMPEG_BINARY,
-    [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-ss",
-      String(frameTimeSeconds),
-      "-i",
-      resolvePosterCaptureInput(upstreamUrl),
-      "-frames:v",
-      "1",
-      "-vf",
-      `scale=${PROJECT_POSTER_CAPTURE_MAX_DIMENSION}:${PROJECT_POSTER_CAPTURE_MAX_DIMENSION}:force_original_aspect_ratio=decrease`,
-      "-q:v",
-      "2",
-      "-f",
-      "image2pipe",
-      "-vcodec",
-      "mjpeg",
-      "pipe:1",
-    ],
-    {
-      encoding: "buffer",
-      maxBuffer: PROJECT_POSTER_FFMPEG_MAX_BUFFER_BYTES,
-      timeout: PROJECT_POSTER_FFMPEG_TIMEOUT_MS,
-    },
-  );
+const buildFfmpegHeaderArgs = (upstreamUrl: URL, upstreamHeaders?: Record<string, string>) => {
+  if ((upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") || !upstreamHeaders) {
+    return [] as string[];
+  }
+
+  const headerLines = Object.entries(upstreamHeaders)
+    .map(([key, value]) => [normalizeText(key), normalizeText(value)] as const)
+    .filter(([key, value]) => key && value)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\r\n");
+
+  return headerLines ? ["-headers", `${headerLines}\r\n`] : [];
+};
+
+const runPosterCaptureCommand = async (source: WorkspacePosterSource, frameTimeSeconds: number) => {
+  let stdout: Buffer;
+
+  try {
+    ({ stdout } = await execFileAsync(
+      FFMPEG_BINARY,
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        String(frameTimeSeconds),
+        ...buildFfmpegHeaderArgs(source.upstreamUrl, source.upstreamHeaders),
+        "-i",
+        resolvePosterCaptureInput(source.upstreamUrl),
+        "-frames:v",
+        "1",
+        "-vf",
+        `scale=${PROJECT_POSTER_CAPTURE_MAX_DIMENSION}:${PROJECT_POSTER_CAPTURE_MAX_DIMENSION}:force_original_aspect_ratio=decrease`,
+        "-q:v",
+        "2",
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "mjpeg",
+        "pipe:1",
+      ],
+      {
+        encoding: "buffer",
+        maxBuffer: PROJECT_POSTER_FFMPEG_MAX_BUFFER_BYTES,
+        timeout: PROJECT_POSTER_FFMPEG_TIMEOUT_MS,
+      },
+    ));
+  } catch (error) {
+    throw new Error(describeProjectPosterError(error, "Project poster capture timed out."));
+  }
 
   if (!Buffer.isBuffer(stdout) || stdout.byteLength === 0) {
     throw new Error("Poster capture returned an empty image.");
@@ -123,12 +137,12 @@ const runPosterCaptureCommand = async (upstreamUrl: URL, frameTimeSeconds: numbe
   return stdout;
 };
 
-const capturePosterBuffer = async (upstreamUrl: URL) => {
+const capturePosterBuffer = async (source: WorkspacePosterSource) => {
   let lastError: Error | null = null;
 
   for (const frameTimeSeconds of PROJECT_POSTER_FRAME_TIMES_SECONDS) {
     try {
-      return await runPosterCaptureCommand(upstreamUrl, frameTimeSeconds);
+      return await runPosterCaptureCommand(source, frameTimeSeconds);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("Poster capture failed.");
     }
@@ -137,26 +151,60 @@ const capturePosterBuffer = async (upstreamUrl: URL) => {
   throw lastError ?? new Error("Poster capture failed.");
 };
 
-const generateProjectPosterFile = async (source: WorkspacePosterSource) => {
-  await mkdir(PROJECT_POSTERS_ROOT_DIR, { recursive: true });
+const ensureWorkspacePoster = async (
+  source: WorkspacePosterSource,
+  priority: AssetPreparationPriority,
+  assetKind: string,
+  assetId: string,
+) =>
+  posterQueue.schedule(source.cacheKey, priority, async () => {
+    posterStore.scheduleCleanup();
+    await mkdir(PROJECT_POSTER_ROOT_DIR, { recursive: true });
 
-  const outputPath = getProjectPosterFilePath(source.cacheKey);
-  if (await projectPosterExists(source.cacheKey)) {
-    return outputPath;
-  }
+    const cachedRecord = await posterStore.read<WorkspacePosterMetadata>(source.cacheKey);
+    if (cachedRecord) {
+      logServerEvent("info", "prepared-asset.cache-hit", {
+        assetId,
+        assetKind,
+        cacheHit: true,
+        cacheKey: source.cacheKey,
+      });
+      return cachedRecord.absolutePath;
+    }
 
-  const tempFilePath = `${outputPath}.${process.pid}.${Date.now()}.tmp`;
+    const startedAt = Date.now();
+    try {
+      const posterBuffer = await capturePosterBuffer(source);
+      const absolutePath = await posterStore.writeBufferToFile<WorkspacePosterMetadata>(
+        source.cacheKey,
+        posterBuffer,
+        {
+          contentType: "image/jpeg",
+          fileName: "poster.jpg",
+          savedAt: new Date().toISOString(),
+        },
+      );
 
-  try {
-    const posterBuffer = await capturePosterBuffer(source.upstreamUrl);
-    await writeFile(tempFilePath, posterBuffer);
-    await rename(tempFilePath, outputPath);
-    return outputPath;
-  } catch (error) {
-    await rm(tempFilePath, { force: true }).catch(() => undefined);
-    throw error;
-  }
-};
+      logServerEvent("info", "prepared-asset.ready", {
+        assetId,
+        assetKind,
+        cacheHit: false,
+        cacheKey: source.cacheKey,
+        elapsedMs: Date.now() - startedAt,
+      });
+
+      return absolutePath;
+    } catch (error) {
+      logServerEvent("warn", "prepared-asset.failed", {
+        assetId,
+        assetKind,
+        cacheKey: source.cacheKey,
+        elapsedMs: Date.now() - startedAt,
+        error,
+      });
+      throw error;
+    }
+  });
 
 export const getWorkspaceVideoPosterCacheKey = (source: {
   posterId: string;
@@ -182,32 +230,42 @@ export const getWorkspaceProjectPosterCacheKey = (source: {
     version: source.updatedAt,
   });
 
+export async function peekWorkspaceVideoPosterPath(cacheKey: string): Promise<string | null> {
+  posterStore.scheduleCleanup();
+  const record = await posterStore.read<WorkspacePosterMetadata>(cacheKey);
+  return record?.absolutePath ?? null;
+}
+
 export async function ensureWorkspaceVideoPoster(source: WorkspacePosterSource): Promise<string> {
-  if (await projectPosterExists(source.cacheKey)) {
-    return getProjectPosterFilePath(source.cacheKey);
-  }
-
-  const inFlightRequest = projectPosterGenerationRequests.get(source.cacheKey);
-  if (inFlightRequest) {
-    return inFlightRequest;
-  }
-
-  const request = enqueueProjectPosterGeneration(() => generateProjectPosterFile(source)).finally(() => {
-    projectPosterGenerationRequests.delete(source.cacheKey);
-  });
-
-  projectPosterGenerationRequests.set(source.cacheKey, request);
-  return request;
+  return ensureWorkspacePoster(source, "interactive", "poster", source.cacheKey);
 }
 
 export async function ensureWorkspaceProjectPoster(source: WorkspaceProjectPosterSource): Promise<string> {
-  return ensureWorkspaceVideoPoster(source);
+  return ensureWorkspacePoster(source, "interactive", "project-poster", source.projectId);
 }
 
 export async function warmWorkspaceVideoPoster(source: WorkspacePosterSource): Promise<void> {
-  await ensureWorkspaceVideoPoster(source);
+  if (env.disableBackgroundWarming) {
+    return;
+  }
+
+  const cachedPath = await peekWorkspaceVideoPosterPath(source.cacheKey);
+  if (cachedPath) {
+    return;
+  }
+
+  await ensureWorkspacePoster(source, "background", "poster", source.cacheKey);
 }
 
 export async function warmWorkspaceProjectPoster(source: WorkspaceProjectPosterSource): Promise<void> {
-  await warmWorkspaceVideoPoster(source);
+  if (env.disableBackgroundWarming) {
+    return;
+  }
+
+  const cachedPath = await peekWorkspaceVideoPosterPath(source.cacheKey);
+  if (cachedPath) {
+    return;
+  }
+
+  await ensureWorkspacePoster(source, "background", "project-poster", source.projectId);
 }

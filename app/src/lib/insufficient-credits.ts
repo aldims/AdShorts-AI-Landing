@@ -51,7 +51,11 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
     case "ai_video":
       return "Генерация ИИ видео";
     case "photo_animation":
-      return "Анимация фото";
+      return "ИИ анимация фото";
+    case "image_edit":
+      return "Дорисовать фото";
+    case "image_upscale":
+      return "Улучшение качества изображения";
     case "video_generation":
     default:
       return "Создание Shorts";

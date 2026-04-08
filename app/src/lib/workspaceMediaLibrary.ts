@@ -1,6 +1,6 @@
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
 
-export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation";
+export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
 
@@ -111,6 +111,17 @@ const getWorkspaceMediaLibraryAssetIdentity = (value: string | null | undefined)
 
   return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
 };
+
+export const getWorkspaceMediaLibraryAssetIdentityKey = (value: string | null | undefined) =>
+  getWorkspaceMediaLibraryAssetIdentity(value);
+
+export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
+  WorkspaceMediaLibraryItem,
+  "kind" | "previewPosterUrl" | "previewUrl"
+>) =>
+  item.kind === "photo_animation" && item.previewPosterUrl
+    ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
+    : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
 
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options: {
   kind: WorkspaceMediaLibraryItemKind;
