@@ -28,6 +28,57 @@ type Props = {
 
 const heroPromptText = "Как нейросети меняют маркетинг в 2026";
 const heroChips = ["Видео", "Субтитры", "Озвучка", "9:16"];
+const landingRefineProofs = [
+  {
+    label: "ЛОКАЛЬНОЕ РЕДАКТИРОВАНИЕ",
+    title: "Меняйте только тот фрагмент, который влияет на результат",
+    description: "Финальная доводка остаётся точечной: усиливайте один кадр, не рискуя развалить уже собранный ритм ролика.",
+  },
+  {
+    label: "ВИЗУАЛ ПОД КОНТРОЛЕМ",
+    title: "Кадр, текст и субтитры редактируются в одном контексте",
+    description: "Не нужно переключаться между разрозненными блоками: ключевые правки сцены находятся рядом и читаются как один рабочий экран.",
+  },
+  {
+    label: "ФИНАЛЬНОЕ КАЧЕСТВО",
+    title: "Доводите оффер до точной, профессиональной подачи",
+    description: "Формулировка, визуальный акцент и читаемость субтитров синхронизированы, поэтому финальная сцена выглядит собранно и убедительно.",
+  },
+] as const;
+const landingRefineMetrics = [
+  { value: "3", label: "слоя контроля в одном экране" },
+  { value: "1 сцена", label: "правится без пересборки ролика" },
+  { value: "9:16", label: "превью всегда видно в финальном формате" },
+] as const;
+const landingRefineCarouselCards = [
+  {
+    number: "02",
+    title: "Аргумент",
+    time: "00:05 - 00:10",
+    source: "Сток",
+    tone: "argument",
+    slotClass: "is-side is-left",
+    isEdited: false,
+  },
+  {
+    number: "03",
+    title: "Финальный акцент",
+    time: "00:11 - 00:17",
+    source: "Кастом",
+    tone: "accent",
+    slotClass: "is-active",
+    isEdited: true,
+  },
+  {
+    number: "04",
+    title: "CTA",
+    time: "00:18 - 00:22",
+    source: "AI фото",
+    tone: "cta",
+    slotClass: "is-side is-right",
+    isEdited: false,
+  },
+] as const;
 const landingRevealSelector = [
   ".section-head",
   ".capability",
@@ -39,7 +90,8 @@ const landingRevealSelector = [
   ".plan-card",
   ".guide-card",
   ".guides-strip__cta",
-  ".landing-refine-card",
+  ".landing-refine-proof",
+  ".landing-refine-board__shell",
 ].join(", ");
 
 export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
@@ -317,36 +369,139 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         </section>
 
         <section className="section section--paper section--tight section--landing-refine" aria-labelledby="landing-refine-heading">
-          <div className="container">
-            <div className="section-head">
-              <h2 id="landing-refine-heading">Создавайте видео и доведите его до идеала</h2>
-              <p>Редактируйте каждую сцену и точно реализуйте свою идею</p>
+          <div className="container landing-refine-layout">
+            <div className="landing-refine-copy">
+              <div className="section-head landing-refine-head">
+                <p className="eyebrow eyebrow--dark">ТОЧНАЯ ДОВОДКА В СТУДИИ</p>
+                <h2 id="landing-refine-heading">Доведите каждый сегмент до финального качества</h2>
+                <p>
+                  Первый драфт собирает AI, финальную точность даёте вы: правьте текст, визуал и субтитры сцена за
+                  сценой, пока ролик не будет выглядеть именно так, как нужно.
+                </p>
+              </div>
+
+              <div className="landing-refine-metrics" aria-hidden="true">
+                {landingRefineMetrics.map((metric) => (
+                  <article className="landing-refine-metric" key={metric.label}>
+                    <strong>{metric.value}</strong>
+                    <span>{metric.label}</span>
+                  </article>
+                ))}
+              </div>
+
+              <div className="landing-refine-proof-list">
+                {landingRefineProofs.map((proof, index) => (
+                  <article className="landing-refine-proof" key={proof.title}>
+                    <span className="landing-refine-proof__index">{String(index + 1).padStart(2, "0")}</span>
+                    <div className="landing-refine-proof__copy">
+                      <span className="landing-refine-proof__label">{proof.label}</span>
+                      <h3>{proof.title}</h3>
+                      <p>{proof.description}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
 
-            <div className="landing-refine-grid">
-              <article className="landing-refine-card landing-refine-card--featured">
-                <span className="landing-refine-card__icon" aria-hidden="true">
-                  ✏️
-                </span>
-                <h3>Редактирование по сегментам</h3>
-                <p>Меняйте любую сцену отдельно: текст, визуал, стиль и длительность</p>
-              </article>
+            <div className="landing-refine-board" aria-hidden="true">
+              <div className="landing-refine-board__shell">
+                <div className="landing-refine-board__editor">
+                  <div className="studio-segment-editor__stage">
+                    <div className="studio-segment-editor__carousel">
+                      <button className="studio-segment-editor__arrow" type="button" tabIndex={-1} aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
 
-              <article className="landing-refine-card">
-                <span className="landing-refine-card__icon" aria-hidden="true">
-                  🤖
-                </span>
-                <h3>AI для каждой сцены</h3>
-                <p>Создавайте изображения, анимации и улучшайте сцены с помощью AI</p>
-              </article>
+                      <div className="studio-segment-editor__cards">
+                        {landingRefineCarouselCards.map((card) => {
+                          const isActiveCard = card.slotClass === "is-active";
 
-              <article className="landing-refine-card">
-                <span className="landing-refine-card__icon" aria-hidden="true">
-                  🚀
-                </span>
-                <h3>Авто-публикация</h3>
-                <p>Отправляйте видео на канал в один клик или по расписанию</p>
-              </article>
+                          return (
+                            <article
+                              className={`studio-segment-editor__card ${card.slotClass}${card.isEdited ? " is-visual-edited" : ""}`}
+                              key={card.number}
+                            >
+                              <div className="studio-segment-editor__card-media">
+                                <div className={`landing-refine-board__editor-shot landing-refine-board__editor-shot--${card.tone}`}></div>
+
+                                {isActiveCard ? (
+                                  <>
+                                    <div className="studio-segment-editor__card-visual-meta">
+                                      <span className="studio-segment-editor__card-visual-status">Визуал изменен</span>
+                                      <div className="studio-segment-editor__card-visual-actions">
+                                        <button
+                                          className="studio-segment-editor__card-visual-edit"
+                                          type="button"
+                                          tabIndex={-1}
+                                          aria-hidden="true"
+                                        >
+                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                            <path
+                                              d="M12 20h9"
+                                              stroke="currentColor"
+                                              strokeWidth="1.8"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                            <path
+                                              d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
+                                              stroke="currentColor"
+                                              strokeWidth="1.8"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="landing-refine-board__editor-caption">
+                                      <span>Текст сегмента</span>
+                                      <strong>Каждая сцена может работать точнее</strong>
+                                    </div>
+                                  </>
+                                ) : null}
+
+                                <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
+                                  {isActiveCard ? (
+                                    <div className="studio-segment-editor__card-overlay-footer">
+                                      <div className="studio-segment-editor__card-overlay-main">
+                                        <div className="studio-segment-editor__card-copy">
+                                          <strong>Сегмент {card.number}</strong>
+                                          <span>{card.time}</span>
+                                        </div>
+                                      </div>
+                                      <div className="studio-segment-editor__card-footer-actions">
+                                        <small className="studio-segment-editor__card-badge">{card.source}</small>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="studio-segment-editor__card-overlay-main">
+                                      <div className="studio-segment-editor__card-copy">
+                                        <strong>Сегмент {card.number}</strong>
+                                        <span>{card.time}</span>
+                                      </div>
+                                      <small className="studio-segment-editor__card-badge">{card.source}</small>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+
+                      <button className="studio-segment-editor__arrow" type="button" tabIndex={-1} aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

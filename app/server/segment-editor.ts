@@ -751,3 +751,17 @@ export async function getWorkspaceProjectSegmentVideoProxyTarget(
     }),
   };
 }
+
+export async function getWorkspaceProjectSegmentVideoAsset(
+  user: SegmentEditorUser,
+  options: {
+    delivery: WorkspaceSegmentEditorVideoDelivery;
+    projectId: number;
+    segmentIndex: number;
+    source: WorkspaceSegmentEditorVideoSource;
+  },
+): Promise<null> {
+  void user;
+  void options;
+  return null;
+}

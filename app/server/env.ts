@@ -152,6 +152,7 @@ export const env = {
   paymentLinkPackage100: trim(process.env.PAYMENT_LINK_PACKAGE_100),
   deapiApiKey: trim(process.env.DEAPI_API_KEY),
   deapiVerifySsl: process.env.DEAPI_VERIFY_SSL === "true" || (process.env.DEAPI_VERIFY_SSL == null && isProduction),
+  wavespeedApiKey: trim(process.env.WAVESPEED_API_KEY),
   openrouterApiKey: trim(process.env.OPENROUTER_API_KEY),
   openrouterBaseUrl: trim(process.env.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1",
   openrouterMainModel: trim(process.env.OPENROUTER_MAIN_MODEL) ?? "google/gemini-3-flash-preview",

@@ -5,6 +5,7 @@ import { Agent, request as httpsRequest } from "node:https";
 import { join } from "node:path";
 
 import { env } from "./env.js";
+import { generateWaveSpeedSpeechPreview } from "./wavespeed-worker.js";
 
 type StudioVoicePreviewResult = {
   audio: Buffer;
@@ -17,6 +18,7 @@ const DEAPI_TTS_MODEL_SLUG = "Qwen3_TTS_12Hz_1_7B_CustomVoice";
 const DEAPI_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEAPI_PREVIEW_CACHE_DIR = join(env.dataDir, "voice-previews");
 const DEAPI_PREVIEW_TEXT_EN = "Studio voice preview for an English video ad.";
+const WAVESPEED_PREVIEW_TEXT_RU = "Это быстрый тест русского голоса для вашего видео.";
 
 const deapiPreviewAgent = new Agent({
   rejectUnauthorized: env.deapiVerifySsl,
@@ -38,6 +40,13 @@ const englishVoiceAliases = new Map<string, string>([
   ["sohee", "Sohee"],
 ]);
 
+const russianWaveSpeedVoiceAliases = new Map<string, string>([
+  ["male-qn-jingying", "male-qn-jingying"],
+  ["aleksey", "male-qn-jingying"],
+  ["alexey", "male-qn-jingying"],
+  ["алексей", "male-qn-jingying"],
+]);
+
 mkdirSync(DEAPI_PREVIEW_CACHE_DIR, { recursive: true });
 
 const normalizePreviewLanguage = (value: string | null | undefined) => {
@@ -50,7 +59,12 @@ const normalizeEnglishVoiceId = (value: string | null | undefined) => {
   return englishVoiceAliases.get(normalized) ?? null;
 };
 
-const getPreviewText = (language: string) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : "");
+const normalizeRussianWaveSpeedVoiceId = (value: string | null | undefined) => {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/[-\s]+/g, "-");
+  return russianWaveSpeedVoiceAliases.get(normalized) ?? null;
+};
+
+const getPreviewText = (language: string) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : WAVESPEED_PREVIEW_TEXT_RU);
 
 const getPreviewCachePath = (voiceId: string, language: string, previewText: string) => {
   const hash = createHash("sha1").update(`${voiceId}:${language}:${previewText}`).digest("hex");
@@ -72,6 +86,43 @@ const readCachedPreview = (cachePath: string) => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchAdsflowVoicePreview = async (options: {
+  language: string;
+  voiceId: string;
+}) => {
+  if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
+    throw new Error("AdsFlow voice preview is not configured on this server.");
+  }
+
+  const previewUrl = new URL("/api/web/voice-preview", env.adsflowApiBaseUrl);
+  previewUrl.searchParams.set("admin_token", env.adsflowAdminToken);
+  previewUrl.searchParams.set("language", options.language);
+  previewUrl.searchParams.set("voice_id", options.voiceId);
+
+  const response = await fetch(previewUrl, {
+    headers: {
+      Accept: "audio/wav,audio/mpeg,audio/*,application/octet-stream",
+      "X-Admin-Token": env.adsflowAdminToken,
+    },
+    signal: AbortSignal.timeout(90_000),
+  });
+
+  if (!response.ok) {
+    const errorText = (await response.text()).trim();
+    throw new Error(errorText || `AdsFlow voice preview request failed (${response.status}).`);
+  }
+
+  const audio = Buffer.from(await response.arrayBuffer());
+  if (audio.byteLength <= 0) {
+    throw new Error("AdsFlow voice preview returned an empty audio file.");
+  }
+
+  return {
+    audio,
+    contentType: String(response.headers.get("content-type") || "audio/wav"),
+  };
+};
 
 const requestHttps = (
   urlValue: URL | string,
@@ -222,13 +273,49 @@ export async function getStudioVoicePreview(options?: {
   language?: string | null;
   voiceId?: string | null;
 }): Promise<StudioVoicePreviewResult> {
-  if (!env.deapiApiKey) {
-    throw new Error("DEAPI preview is not configured on this server.");
+  const language = normalizePreviewLanguage(options?.language);
+
+  const previewText = getPreviewText(language);
+
+  if (language === "ru") {
+    const normalizedVoiceId = normalizeRussianWaveSpeedVoiceId(options?.voiceId);
+    if (!normalizedVoiceId) {
+      throw new Error("Unsupported Russian voice.");
+    }
+
+    const cachePath = getPreviewCachePath(normalizedVoiceId, language, previewText);
+    const cachedAudio = readCachedPreview(cachePath);
+    if (cachedAudio) {
+      return {
+        audio: cachedAudio,
+        contentType: "audio/wav",
+      };
+    }
+
+    try {
+      const preview = await fetchAdsflowVoicePreview({
+        language,
+        voiceId: normalizedVoiceId,
+      });
+      writeFileSync(cachePath, preview.audio);
+      return preview;
+    } catch (adsflowError) {
+      console.warn("[workspace] AdsFlow voice preview failed, falling back to direct WaveSpeed", {
+        error: adsflowError instanceof Error ? adsflowError.message : String(adsflowError),
+        voiceId: normalizedVoiceId,
+      });
+    }
+
+    return generateWaveSpeedSpeechPreview({
+      format: "wav",
+      languageBoost: "Russian",
+      text: previewText,
+      voiceId: normalizedVoiceId,
+    });
   }
 
-  const language = normalizePreviewLanguage(options?.language);
-  if (language !== "en") {
-    throw new Error("Live DEAPI preview is available only for English voices.");
+  if (!env.deapiApiKey) {
+    throw new Error("DEAPI preview is not configured on this server.");
   }
 
   const normalizedVoiceId = normalizeEnglishVoiceId(options?.voiceId);
@@ -236,7 +323,6 @@ export async function getStudioVoicePreview(options?: {
     throw new Error("Unsupported DEAPI voice.");
   }
 
-  const previewText = getPreviewText(language);
   const cachePath = getPreviewCachePath(normalizedVoiceId, language, previewText);
   const cachedAudio = readCachedPreview(cachePath);
   if (cachedAudio) {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { filterWorkspaceStillAssetUrls, isLikelyVideoAssetUrl, sanitizeWorkspaceSegmentPosterUrl } from "./workspaceSegmentPreview";
+import {
+  filterWorkspaceStillAssetUrls,
+  getWorkspaceSegmentPausedPreviewTime,
+  isLikelyVideoAssetUrl,
+  sanitizeWorkspaceSegmentPosterUrl,
+} from "./workspaceSegmentPreview";
 
 describe("workspace segment preview helpers", () => {
   it("treats workspace segment proxy routes as video assets", () => {
@@ -32,5 +37,13 @@ describe("workspace segment preview helpers", () => {
       "https://cdn.example.com/segments/2/poster.jpg",
       "https://cdn.example.com/segments/2/frame.png",
     ]);
+  });
+
+  it("samples paused video previews deeper into the clip to avoid identical opening frames", () => {
+    expect(getWorkspaceSegmentPausedPreviewTime(null)).toBe(0.001);
+    expect(getWorkspaceSegmentPausedPreviewTime(0.2)).toBeCloseTo(0.1, 3);
+    expect(getWorkspaceSegmentPausedPreviewTime(0.6)).toBeCloseTo(0.408, 3);
+    expect(getWorkspaceSegmentPausedPreviewTime(2)).toBeCloseTo(1.36, 3);
+    expect(getWorkspaceSegmentPausedPreviewTime(8)).toBeCloseTo(3.2, 3);
   });
 });

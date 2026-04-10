@@ -10,11 +10,11 @@ import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
 import { appendWorkspaceContentPlanIdeas, createWorkspaceContentPlan, deleteWorkspaceContentPlanIdea, deleteWorkspaceContentPlan, getWorkspaceContentPlan, listWorkspaceContentPlans, updateWorkspaceContentPlanIdeaUsedState, } from "./content-plans.js";
 import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, startWorkspaceYoutubePublish, } from "./publish.js";
-import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
+import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobFileProxyTarget, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationJobFileProxyTarget, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview } from "./voice-preview.js";
 import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
 import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
@@ -202,12 +202,56 @@ const buildMultipartFileDataUrl = async (file) => {
     const mimeType = file.type.trim() || "application/octet-stream";
     return `data:${mimeType};base64,${buffer.toString("base64")}`;
 };
-const buildRemoteFileDataUrl = async (remoteUrl, fallbackMimeType) => {
-    const targetUrl = new URL(remoteUrl, env.appUrl || "http://127.0.0.1").toString();
+const isLoopbackHostname = (hostname) => {
+    const normalized = hostname.trim().toLowerCase();
+    return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+};
+const isSameOriginOrEquivalentLoopback = (left, right) => {
+    if (left.origin === right.origin) {
+        return true;
+    }
+    return left.protocol === right.protocol && left.port === right.port && isLoopbackHostname(left.hostname) && isLoopbackHostname(right.hostname);
+};
+const getRequestOriginUrl = (req) => {
+    const host = req.get("host")?.trim();
+    if (!host) {
+        return null;
+    }
+    try {
+        return new URL(`${req.protocol}://${host}`);
+    }
+    catch {
+        return null;
+    }
+};
+const buildRemoteFileDataUrl = async (req, remoteUrl, fallbackMimeType) => {
+    const appOriginUrl = (() => {
+        try {
+            return new URL(env.appUrl || "http://127.0.0.1");
+        }
+        catch {
+            return new URL("http://127.0.0.1");
+        }
+    })();
+    const targetUrl = new URL(remoteUrl, appOriginUrl);
+    const requestOriginUrl = getRequestOriginUrl(req);
+    const shouldForwardAuth = (requestOriginUrl && isSameOriginOrEquivalentLoopback(targetUrl, requestOriginUrl)) ||
+        isSameOriginOrEquivalentLoopback(targetUrl, appOriginUrl);
+    const headers = {
+        Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
+    };
+    if (shouldForwardAuth) {
+        const cookieHeader = req.headers.cookie;
+        const authorizationHeader = req.headers.authorization;
+        if (typeof cookieHeader === "string" && cookieHeader.trim()) {
+            headers.Cookie = cookieHeader;
+        }
+        if (typeof authorizationHeader === "string" && authorizationHeader.trim()) {
+            headers.Authorization = authorizationHeader;
+        }
+    }
     const response = await fetch(targetUrl, {
-        headers: {
-            Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
-        },
+        headers,
         signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) {
@@ -258,7 +302,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     customVideoFileDataUrl: uploadedFile
                         ? await buildMultipartFileDataUrl(uploadedFile)
                         : remoteUrl
-                            ? await buildRemoteFileDataUrl(remoteUrl, fallbackMimeType)
+                            ? await buildRemoteFileDataUrl(req, remoteUrl, fallbackMimeType)
                             : typeof segmentRecord.customVideoFileDataUrl === "string"
                                 ? segmentRecord.customVideoFileDataUrl.trim()
                                 : undefined,
@@ -915,6 +959,16 @@ app.get("/api/workspace/projects/:projectId/playback", async (req, res) => {
     catch (error) {
         if (error instanceof WorkspaceProjectNotFoundError) {
             res.status(404).json({ error: "Project not found." });
+            return;
+        }
+        const fallbackTarget = await getWorkspaceProjectPlaybackProxyTarget(session.user, projectId).catch(() => null);
+        if (fallbackTarget) {
+            console.warn("[workspace] Falling back to direct project playback", {
+                error: getServerErrorMessage(error, "Failed to prepare project playback cache."),
+                projectId,
+            });
+            res.setHeader("Cache-Control", "private, max-age=600, stale-while-revalidate=60");
+            await proxyVideoResponse(req, res, fallbackTarget, "Failed to load project playback.");
             return;
         }
         console.error("[workspace] Failed to load project playback cache", {
@@ -1685,11 +1739,14 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId/video", async (req, res) => {
         return;
     }
     try {
-        const upstreamUrl = await getStudioSegmentAiVideoJobFileProxyTarget(req.params.jobId, session.user);
-        await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment AI video.");
+        const asset = await getStudioSegmentAiVideoPlaybackAsset(req.params.jobId, session.user);
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+        res.type(asset.contentType || "video/mp4");
+        res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to proxy segment AI video", {
+        console.error("[studio] Failed to load segment AI video playback", {
             error: getServerErrorMessage(error, "Failed to load generated segment AI video."),
             jobId: req.params.jobId,
         });
@@ -1788,11 +1845,14 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/video", async (req, res
         return;
     }
     try {
-        const upstreamUrl = await getStudioSegmentPhotoAnimationJobFileProxyTarget(req.params.jobId, session.user);
-        await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment photo animation.");
+        const asset = await getStudioSegmentPhotoAnimationPlaybackAsset(req.params.jobId, session.user);
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+        res.type(asset.contentType || "video/mp4");
+        res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to proxy segment photo animation", {
+        console.error("[studio] Failed to load segment photo animation playback", {
             error: getServerErrorMessage(error, "Failed to load generated segment photo animation."),
             jobId: req.params.jobId,
         });

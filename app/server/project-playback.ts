@@ -30,6 +30,13 @@ export type WorkspaceProjectPlaybackAsset = {
   contentType: string;
 };
 
+export class WorkspaceProjectPlaybackPreparationDeferredError extends Error {
+  constructor() {
+    super("Project playback cache is temporarily unavailable.");
+    this.name = "WorkspaceProjectPlaybackPreparationDeferredError";
+  }
+}
+
 type WorkspaceProjectPlaybackMetadata = PreparedAssetMetadata;
 
 const execFileAsync = promisify(execFile);
@@ -37,7 +44,7 @@ const execFileAsync = promisify(execFile);
 const PROJECT_PLAYBACK_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const PROJECT_PLAYBACK_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const PROJECT_PLAYBACK_FFMPEG_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
-const PROJECT_PLAYBACK_WARM_FAILURE_TTL_MS = 10 * 60 * 1000;
+const PROJECT_PLAYBACK_FAILURE_TTL_MS = 10 * 60 * 1000;
 const PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY = 2;
 const PROJECT_PLAYBACK_BACKGROUND_CONCURRENCY = 1;
 const PROJECT_PLAYBACK_ROOT_DIR = join(env.assetCacheDir, "project-playback");
@@ -55,30 +62,30 @@ const playbackQueue = createAssetPreparationQueue<WorkspaceProjectPlaybackAsset>
   interactiveConcurrency: PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY,
   name: "project-playback",
 });
-const projectPlaybackWarmFailures = new Map<string, number>();
+const projectPlaybackRecentFailures = new Map<string, number>();
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
-const hasRecentWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
-  const expiresAt = projectPlaybackWarmFailures.get(cacheKey);
+const hasRecentWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
+  const expiresAt = projectPlaybackRecentFailures.get(cacheKey);
   if (!expiresAt) {
     return false;
   }
 
   if (expiresAt <= Date.now()) {
-    projectPlaybackWarmFailures.delete(cacheKey);
+    projectPlaybackRecentFailures.delete(cacheKey);
     return false;
   }
 
   return true;
 };
 
-const markWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
-  projectPlaybackWarmFailures.set(cacheKey, Date.now() + PROJECT_PLAYBACK_WARM_FAILURE_TTL_MS);
+const markWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
+  projectPlaybackRecentFailures.set(cacheKey, Date.now() + PROJECT_PLAYBACK_FAILURE_TTL_MS);
 };
 
-const clearWorkspaceProjectPlaybackWarmFailure = (cacheKey: string) => {
-  projectPlaybackWarmFailures.delete(cacheKey);
+const clearWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
+  projectPlaybackRecentFailures.delete(cacheKey);
 };
 
 const inferWorkspaceProjectPlaybackContentType = (value: string | null | undefined, upstreamUrl: URL) => {
@@ -253,6 +260,7 @@ const ensureWorkspaceProjectPlaybackQueued = (
     const startedAt = Date.now();
     try {
       const asset = await prepareWorkspaceProjectPlaybackAsset(source);
+      clearWorkspaceProjectPlaybackFailure(source.cacheKey);
       logServerEvent("info", "prepared-asset.ready", {
         assetKind: "playback",
         cacheHit: false,
@@ -262,6 +270,7 @@ const ensureWorkspaceProjectPlaybackQueued = (
       });
       return asset;
     } catch (error) {
+      markWorkspaceProjectPlaybackFailure(source.cacheKey);
       logServerEvent("warn", "prepared-asset.failed", {
         assetKind: "playback",
         cacheKey: source.cacheKey,
@@ -308,12 +317,16 @@ export async function ensureWorkspaceProjectPlayback(
 
   const cachedAsset = await peekWorkspaceProjectPlaybackAsset(source.cacheKey);
   if (cachedAsset) {
-    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    clearWorkspaceProjectPlaybackFailure(source.cacheKey);
     return cachedAsset;
   }
 
+  if (hasRecentWorkspaceProjectPlaybackFailure(source.cacheKey)) {
+    throw new WorkspaceProjectPlaybackPreparationDeferredError();
+  }
+
   const asset = await ensureWorkspaceProjectPlaybackQueued(source, "interactive");
-  clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+  clearWorkspaceProjectPlaybackFailure(source.cacheKey);
   return asset;
 }
 
@@ -324,21 +337,21 @@ export async function warmWorkspaceProjectPlayback(source: WorkspaceProjectPlayb
 
   playbackStore.scheduleCleanup();
 
-  if (hasRecentWorkspaceProjectPlaybackWarmFailure(source.cacheKey)) {
+  if (hasRecentWorkspaceProjectPlaybackFailure(source.cacheKey)) {
     return;
   }
 
   const cachedAsset = await peekWorkspaceProjectPlaybackAsset(source.cacheKey);
   if (cachedAsset) {
-    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    clearWorkspaceProjectPlaybackFailure(source.cacheKey);
     return;
   }
 
   try {
     await ensureWorkspaceProjectPlaybackQueued(source, "background");
-    clearWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    clearWorkspaceProjectPlaybackFailure(source.cacheKey);
   } catch (error) {
-    markWorkspaceProjectPlaybackWarmFailure(source.cacheKey);
+    markWorkspaceProjectPlaybackFailure(source.cacheKey);
     throw error;
   }
 }

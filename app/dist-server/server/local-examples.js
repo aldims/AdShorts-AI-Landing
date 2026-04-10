@@ -12,6 +12,10 @@ const LOCAL_EXAMPLES_ROOT_DIR = join(env.dataDir, "local-examples");
 const LOCAL_EXAMPLES_INDEX_PATH = join(LOCAL_EXAMPLES_ROOT_DIR, "examples.json");
 const LOCAL_EXAMPLE_FETCH_TIMEOUT_MS = 60_000;
 const LOCAL_EXAMPLES_ADMIN_EMAIL = "adshortsai@gmail.com";
+const LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS = new Set([
+    LOCAL_EXAMPLES_ADMIN_EMAIL,
+    "aldima@mail.com",
+]);
 const LOCAL_EXAMPLES_SHARED_OWNER_KEY = `email:${LOCAL_EXAMPLES_ADMIN_EMAIL}`;
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLowerCase();
@@ -37,8 +41,8 @@ const normalizeLocalExampleGoal = (value) => {
             return null;
     }
 };
-const isLocalExamplesEnabled = () => !env.isProduction;
-const isLocalExamplesAdmin = (user) => normalizeLocalExamplesAdminEmail(user?.email) === LOCAL_EXAMPLES_ADMIN_EMAIL;
+const isLocalExamplesEnabled = () => true;
+const isLocalExamplesAdmin = (user) => LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS.has(normalizeLocalExamplesAdminEmail(user?.email));
 const resolveLocalExamplesOwnerKey = (user) => {
     const normalizedId = normalizeText(user.id);
     if (normalizedId) {

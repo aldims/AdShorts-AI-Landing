@@ -29,6 +29,7 @@ import {
 import {
   deleteWorkspaceProject,
   getWorkspaceProjectPlaybackAsset,
+  getWorkspaceProjectPlaybackProxyTarget,
   getWorkspaceProjectPosterPath,
   getWorkspaceProjectVideoProxyTarget,
   getWorkspaceProjects,
@@ -52,6 +53,7 @@ import {
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
   createStudioSegmentAiPhotoJob,
+  getStudioSegmentAiVideoPlaybackAsset,
   createStudioSegmentAiVideoJob,
   createStudioSegmentImageEditJob,
   createStudioSegmentImageUpscaleJob,
@@ -60,12 +62,11 @@ import {
   generateStudioSegmentAiPhoto,
   generateStudioContentPlanIdeas,
   getStudioSegmentAiPhotoJobStatus,
-  getStudioSegmentAiVideoJobFileProxyTarget,
   getStudioSegmentAiVideoJobPosterPath,
   getStudioSegmentAiVideoJobStatus,
   getStudioSegmentImageEditJobStatus,
   getStudioSegmentImageUpscaleJobStatus,
-  getStudioSegmentPhotoAnimationJobFileProxyTarget,
+  getStudioSegmentPhotoAnimationPlaybackAsset,
   getStudioSegmentPhotoAnimationJobPosterPath,
   getStudioSegmentPhotoAnimationJobStatus,
   getStudioPlaybackAsset,
@@ -360,12 +361,68 @@ const buildMultipartFileDataUrl = async (file: File) => {
   return `data:${mimeType};base64,${buffer.toString("base64")}`;
 };
 
-const buildRemoteFileDataUrl = async (remoteUrl: string, fallbackMimeType?: string) => {
-  const targetUrl = new URL(remoteUrl, env.appUrl || "http://127.0.0.1").toString();
+const isLoopbackHostname = (hostname: string) => {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+};
+
+const isSameOriginOrEquivalentLoopback = (left: URL, right: URL) => {
+  if (left.origin === right.origin) {
+    return true;
+  }
+
+  return left.protocol === right.protocol && left.port === right.port && isLoopbackHostname(left.hostname) && isLoopbackHostname(right.hostname);
+};
+
+const getRequestOriginUrl = (req: express.Request) => {
+  const host = req.get("host")?.trim();
+  if (!host) {
+    return null;
+  }
+
+  try {
+    return new URL(`${req.protocol}://${host}`);
+  } catch {
+    return null;
+  }
+};
+
+const buildRemoteFileDataUrl = async (
+  req: express.Request,
+  remoteUrl: string,
+  fallbackMimeType?: string,
+) => {
+  const appOriginUrl = (() => {
+    try {
+      return new URL(env.appUrl || "http://127.0.0.1");
+    } catch {
+      return new URL("http://127.0.0.1");
+    }
+  })();
+  const targetUrl = new URL(remoteUrl, appOriginUrl);
+  const requestOriginUrl = getRequestOriginUrl(req);
+  const shouldForwardAuth =
+    (requestOriginUrl && isSameOriginOrEquivalentLoopback(targetUrl, requestOriginUrl)) ||
+    isSameOriginOrEquivalentLoopback(targetUrl, appOriginUrl);
+  const headers: Record<string, string> = {
+    Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
+  };
+
+  if (shouldForwardAuth) {
+    const cookieHeader = req.headers.cookie;
+    const authorizationHeader = req.headers.authorization;
+
+    if (typeof cookieHeader === "string" && cookieHeader.trim()) {
+      headers.Cookie = cookieHeader;
+    }
+
+    if (typeof authorizationHeader === "string" && authorizationHeader.trim()) {
+      headers.Authorization = authorizationHeader;
+    }
+  }
+
   const response = await fetch(targetUrl, {
-    headers: {
-      Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
-    },
+    headers,
     signal: AbortSignal.timeout(20_000),
   });
 
@@ -430,7 +487,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                 customVideoFileDataUrl: uploadedFile
                   ? await buildMultipartFileDataUrl(uploadedFile)
                   : remoteUrl
-                    ? await buildRemoteFileDataUrl(remoteUrl, fallbackMimeType)
+                    ? await buildRemoteFileDataUrl(req, remoteUrl, fallbackMimeType)
                   : typeof segmentRecord.customVideoFileDataUrl === "string"
                     ? segmentRecord.customVideoFileDataUrl.trim()
                     : undefined,
@@ -1173,6 +1230,19 @@ app.get("/api/workspace/projects/:projectId/playback", async (req, res) => {
   } catch (error) {
     if (error instanceof WorkspaceProjectNotFoundError) {
       res.status(404).json({ error: "Project not found." });
+      return;
+    }
+
+    const fallbackTarget = await getWorkspaceProjectPlaybackProxyTarget(session.user, projectId).catch(
+      () => null,
+    );
+    if (fallbackTarget) {
+      console.warn("[workspace] Falling back to direct project playback", {
+        error: getServerErrorMessage(error, "Failed to prepare project playback cache."),
+        projectId,
+      });
+      res.setHeader("Cache-Control", "private, max-age=600, stale-while-revalidate=60");
+      await proxyVideoResponse(req, res, fallbackTarget, "Failed to load project playback.");
       return;
     }
 
@@ -2052,10 +2122,13 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId/video", async (req, res) => {
   }
 
   try {
-    const upstreamUrl = await getStudioSegmentAiVideoJobFileProxyTarget(req.params.jobId, session.user);
-    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment AI video.");
+    const asset = await getStudioSegmentAiVideoPlaybackAsset(req.params.jobId, session.user);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.type(asset.contentType || "video/mp4");
+    res.sendFile(asset.absolutePath);
   } catch (error) {
-    console.error("[studio] Failed to proxy segment AI video", {
+    console.error("[studio] Failed to load segment AI video playback", {
       error: getServerErrorMessage(error, "Failed to load generated segment AI video."),
       jobId: req.params.jobId,
     });
@@ -2169,10 +2242,13 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/video", async (req, res
   }
 
   try {
-    const upstreamUrl = await getStudioSegmentPhotoAnimationJobFileProxyTarget(req.params.jobId, session.user);
-    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment photo animation.");
+    const asset = await getStudioSegmentPhotoAnimationPlaybackAsset(req.params.jobId, session.user);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.type(asset.contentType || "video/mp4");
+    res.sendFile(asset.absolutePath);
   } catch (error) {
-    console.error("[studio] Failed to proxy segment photo animation", {
+    console.error("[studio] Failed to load segment photo animation playback", {
       error: getServerErrorMessage(error, "Failed to load generated segment photo animation."),
       jobId: req.params.jobId,
     });

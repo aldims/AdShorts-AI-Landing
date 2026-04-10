@@ -710,6 +710,30 @@ const getWorkspaceHistoryEntrySortTime = (entry: WorkspaceGenerationHistoryEntry
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
+export const applyLatestGenerationHistoryToAdIdIndex = (
+  latestGeneration: AdsflowLatestGenerationPayload | null | undefined,
+  historyEntriesByAdId: Map<number, WorkspaceGenerationHistoryEntry>,
+  historyEntriesByJobId: Map<string, WorkspaceGenerationHistoryEntry>,
+) => {
+  const adId = Number(latestGeneration?.ad_id ?? 0);
+  const safeAdId = Number.isFinite(adId) && adId > 0 ? Math.trunc(adId) : null;
+  const jobId = normalizeText(latestGeneration?.job_id);
+
+  if (safeAdId === null || !jobId) {
+    return;
+  }
+
+  const historyEntry = historyEntriesByJobId.get(jobId);
+  if (!historyEntry) {
+    return;
+  }
+
+  const currentEntry = historyEntriesByAdId.get(safeAdId);
+  if (!currentEntry || getWorkspaceHistoryEntrySortTime(historyEntry) > getWorkspaceHistoryEntrySortTime(currentEntry)) {
+    historyEntriesByAdId.set(safeAdId, historyEntry);
+  }
+};
+
 const isWorkspaceProjectDeleted = (project: WorkspaceProject, deletedProjects: WorkspaceDeletedProjectEntry[]) =>
   deletedProjects.some((deletedProject) => {
     if (deletedProject.projectId && deletedProject.projectId === project.id) {
@@ -787,6 +811,12 @@ const loadWorkspaceProjects = async (user: WorkspaceUser, externalUserId: string
       historyEntriesByAdId.set(adId, entry);
     }
   }
+
+  applyLatestGenerationHistoryToAdIdIndex(
+    bootstrapPayload.latest_generation,
+    historyEntriesByAdId,
+    historyEntriesByJobId,
+  );
 
   if (adminVideos.length > 0) {
     for (const item of adminVideos) {
@@ -913,6 +943,51 @@ export async function getWorkspaceProjectPlaybackAsset(
   }
 
   return ensureWorkspaceProjectPlayback(playbackSource);
+}
+
+export async function getWorkspaceProjectPlaybackAssetByAdId(
+  user: WorkspaceUser,
+  projectAdId: number,
+): Promise<WorkspaceProjectPlaybackAsset> {
+  if (!Number.isFinite(projectAdId) || projectAdId <= 0) {
+    throw new WorkspaceProjectNotFoundError();
+  }
+
+  const projects = await getWorkspaceProjects(user);
+  const project = projects.find((item) => item.adId === projectAdId) ?? null;
+  if (!project) {
+    throw new WorkspaceProjectNotFoundError();
+  }
+
+  const playbackSource = await getWorkspaceProjectPlaybackSource(project, user);
+  if (!playbackSource) {
+    throw new Error("Project playback source is unavailable.");
+  }
+
+  return ensureWorkspaceProjectPlayback(playbackSource);
+}
+
+export async function getWorkspaceProjectPlaybackProxyTarget(
+  user: WorkspaceUser,
+  projectId: string,
+): Promise<URL> {
+  const normalizedProjectId = normalizeText(projectId);
+  if (!normalizedProjectId) {
+    throw new WorkspaceProjectNotFoundError();
+  }
+
+  const projects = await getWorkspaceProjects(user);
+  const project = projects.find((item) => item.id === normalizedProjectId) ?? null;
+  if (!project) {
+    throw new WorkspaceProjectNotFoundError();
+  }
+
+  const playbackSource = await getWorkspaceProjectPlaybackSource(project, user);
+  if (!playbackSource) {
+    throw new Error("Project playback source is unavailable.");
+  }
+
+  return playbackSource.upstreamUrl;
 }
 
 export async function getWorkspaceProjectPosterPath(user: WorkspaceUser, projectId: string): Promise<string> {

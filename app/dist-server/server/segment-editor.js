@@ -466,3 +466,8 @@ export async function getWorkspaceProjectSegmentVideoProxyTarget(user, options) 
         }),
     };
 }
+export async function getWorkspaceProjectSegmentVideoAsset(user, options) {
+    void user;
+    void options;
+    return null;
+}
