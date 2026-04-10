@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties, type ChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type CSSProperties, type ChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
@@ -12,6 +12,7 @@ import {
   shouldLoadWorkspaceMediaLibraryView,
 } from "../features/workspace/hot-path";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
+import { logClientEvent } from "../lib/client-log";
 import {
   canPurchaseAddonCredits,
   formatCreditsCountLabel,
@@ -32,6 +33,12 @@ import {
   type WorkspaceMediaLibraryPreviewKind,
 } from "../lib/workspaceMediaLibrary";
 import {
+  resolveWorkspaceMediaSurface,
+  type WorkspaceResolvedMediaContext,
+  type WorkspaceResolvedMediaSurface,
+} from "../lib/workspaceResolvedMedia";
+import { filterWorkspaceStillAssetUrls, sanitizeWorkspaceSegmentPosterUrl } from "../lib/workspaceSegmentPreview";
+import {
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
@@ -42,6 +49,7 @@ import {
 } from "../../shared/studio-credit-costs";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
+type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
 
 type Session = {
   name: string;
@@ -350,7 +358,7 @@ type WorkspaceSegmentAiVideoMode = "ai_video" | "photo_animation";
 type WorkspaceSegmentMediaType = "photo" | "video";
 type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
-type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "upload" | "library";
+type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "image_upscale" | "upload" | "library";
 
 type WorkspaceSegmentEditorSpeechWord = {
   confidence: number;
@@ -398,6 +406,7 @@ type WorkspaceSegmentEditorPayloadSegment = {
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
+  customVideoRemoteUrl?: string;
   customVideoFileUploadKey?: string;
   duration?: number;
   endTime?: number;
@@ -584,6 +593,7 @@ type WorkspaceSegmentPreviewCardMediaProps = {
   isPlaybackRequested?: boolean;
   loop?: boolean;
   mediaKey: string;
+  mountVideoWhenIdle?: boolean;
   muted?: boolean;
   onVideoError?: () => void;
   onVideoEnded?: () => void;
@@ -2276,6 +2286,52 @@ const getStudioCustomAssetPosterUrl = (
   return posterUrl || null;
 };
 
+const isStudioSegmentPhotoAnimationPosterUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  return normalizedValue.includes("/api/studio/segment-photo-animation/jobs/") && normalizedValue.includes("/poster");
+};
+
+const isStudioSegmentAiVideoPosterUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  return normalizedValue.includes("/api/studio/segment-ai-video/jobs/") && normalizedValue.includes("/poster");
+};
+
+const getWorkspaceAiVideoSourcePosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  getWorkspaceSegmentPreferredStillPreviewUrl(segment);
+
+const getWorkspaceAiVideoPreferredPosterUrl = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
+) => {
+  const assetPosterUrl = getStudioCustomAssetPosterUrl(asset);
+  if (assetPosterUrl && !isStudioSegmentAiVideoPosterUrl(assetPosterUrl)) {
+    return assetPosterUrl;
+  }
+
+  return getWorkspaceAiVideoSourcePosterUrl(segment);
+};
+
+const getWorkspacePhotoAnimationSourcePosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  getStudioCustomAssetPreviewUrl(getWorkspaceSegmentPhotoAnimationSourceAsset(segment)) ??
+  getWorkspaceSegmentPreferredStillPreviewUrl(segment);
+
+const getWorkspacePhotoAnimationPreferredPosterUrl = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
+) => {
+  const sourcePosterUrl = getWorkspacePhotoAnimationSourcePosterUrl(segment);
+  if (sourcePosterUrl) {
+    return sourcePosterUrl;
+  }
+
+  const assetPosterUrl = getStudioCustomAssetPosterUrl(asset);
+  if (!assetPosterUrl || isStudioSegmentPhotoAnimationPosterUrl(assetPosterUrl)) {
+    return null;
+  }
+
+  return assetPosterUrl;
+};
+
 const resolveStudioCustomAssetDataUrl = async (
   asset:
     | Pick<StudioCustomMusicFile, "dataUrl" | "file">
@@ -2630,16 +2686,7 @@ const getWorkspaceSegmentImageEditSource = (segment: WorkspaceSegmentEditorDraft
   }
 
   if (segment.mediaType === "photo") {
-    const remoteUrl =
-      segment.currentPreviewUrl ??
-      segment.originalPreviewUrl ??
-      segment.currentPlaybackUrl ??
-      segment.originalPlaybackUrl ??
-      segment.currentExternalPreviewUrl ??
-      segment.originalExternalPreviewUrl ??
-      segment.currentExternalPlaybackUrl ??
-      segment.originalExternalPlaybackUrl ??
-      "";
+    const remoteUrl = getWorkspaceSegmentPreferredStillPreviewUrl(segment) ?? "";
     if (!remoteUrl) {
       return null;
     }
@@ -2693,16 +2740,7 @@ const getWorkspaceSegmentImageUpscaleSource = (segment: WorkspaceSegmentEditorDr
   }
 
   if (segment.videoAction === "original" && segment.mediaType === "photo") {
-    const remoteUrl =
-      segment.currentPreviewUrl ??
-      segment.originalPreviewUrl ??
-      segment.currentPlaybackUrl ??
-      segment.originalPlaybackUrl ??
-      segment.currentExternalPreviewUrl ??
-      segment.originalExternalPreviewUrl ??
-      segment.currentExternalPlaybackUrl ??
-      segment.originalExternalPlaybackUrl ??
-      "";
+    const remoteUrl = getWorkspaceSegmentPreferredStillPreviewUrl(segment) ?? "";
     if (!remoteUrl) {
       return null;
     }
@@ -2878,6 +2916,44 @@ const getUniqueWorkspaceSegmentPreviewUrls = (values: Array<string | null | unde
         .filter((value): value is string => Boolean(value)),
     ),
   );
+
+const getWorkspaceSegmentStillPreviewUrls = (
+  segment: Pick<
+    WorkspaceSegmentEditorDraftSegment,
+    | "currentExternalPlaybackUrl"
+    | "currentExternalPreviewUrl"
+    | "currentPlaybackUrl"
+    | "currentPreviewUrl"
+    | "originalExternalPlaybackUrl"
+    | "originalExternalPreviewUrl"
+    | "originalPlaybackUrl"
+    | "originalPreviewUrl"
+  >,
+) =>
+  filterWorkspaceStillAssetUrls([
+    segment.currentExternalPreviewUrl,
+    segment.originalExternalPreviewUrl,
+    segment.currentExternalPlaybackUrl,
+    segment.originalExternalPlaybackUrl,
+    segment.currentPreviewUrl,
+    segment.originalPreviewUrl,
+    segment.currentPlaybackUrl,
+    segment.originalPlaybackUrl,
+  ]);
+
+const getWorkspaceSegmentPreferredStillPreviewUrl = (
+  segment: Pick<
+    WorkspaceSegmentEditorDraftSegment,
+    | "currentExternalPlaybackUrl"
+    | "currentExternalPreviewUrl"
+    | "currentPlaybackUrl"
+    | "currentPreviewUrl"
+    | "originalExternalPlaybackUrl"
+    | "originalExternalPreviewUrl"
+    | "originalPlaybackUrl"
+    | "originalPreviewUrl"
+  >,
+) => getWorkspaceSegmentStillPreviewUrls(segment)[0] ?? null;
 
 const normalizeWorkspaceSegmentEditorSetting = (value: unknown) => {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -3629,6 +3705,7 @@ const buildWorkspaceSegmentEditorPayload = async (
           : segment.videoAction;
     let customVideoFileDataUrl: string | undefined;
     let customVideoFileUploadKey: string | undefined;
+    let customVideoRemoteUrl: string | undefined;
 
     if (payloadVideoAction === "custom") {
       if (customVisualAsset?.file) {
@@ -3638,6 +3715,8 @@ const buildWorkspaceSegmentEditorPayload = async (
           file: customVisualAsset.file,
           fileName: customVisualAsset.fileName,
         });
+      } else if (typeof customVisualAsset?.remoteUrl === "string" && customVisualAsset.remoteUrl.trim()) {
+        customVideoRemoteUrl = customVisualAsset.remoteUrl.trim();
       } else {
         customVideoFileDataUrl = await resolveStudioCustomAssetDataUrl(customVisualAsset);
       }
@@ -3647,6 +3726,7 @@ const buildWorkspaceSegmentEditorPayload = async (
       customVideoFileDataUrl,
       customVideoFileMimeType: payloadVideoAction === "custom" ? customVisualAsset?.mimeType : undefined,
       customVideoFileName: payloadVideoAction === "custom" ? customVisualAsset?.fileName : undefined,
+      customVideoRemoteUrl,
       customVideoFileUploadKey,
       duration: segment.duration,
       endTime: segment.endTime,
@@ -3672,14 +3752,6 @@ const isWorkspaceSegmentEditorNotFoundError = (value: string) => {
   return normalized === "not found" || normalized.includes("404");
 };
 
-const getWorkspaceSegmentExternalImageFallbackUrls = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  getUniqueWorkspaceSegmentPreviewUrls([
-    segment.currentExternalPreviewUrl,
-    segment.originalExternalPreviewUrl,
-    segment.currentExternalPlaybackUrl,
-    segment.originalExternalPlaybackUrl,
-  ]);
-
 const getWorkspaceSegmentExternalVideoFallbackUrls = (segment: WorkspaceSegmentEditorDraftSegment) =>
   getUniqueWorkspaceSegmentPreviewUrls([
     segment.currentExternalPlaybackUrl,
@@ -3692,11 +3764,15 @@ const getWorkspaceSegmentPersistedSourceKind = (segment: WorkspaceSegmentEditorD
   segment.currentSourceKind !== "unknown" ? segment.currentSourceKind : segment.originalSourceKind;
 
 const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const preferredStillPreviewUrl = getWorkspaceSegmentPreferredStillPreviewUrl(segment);
   const fallbackStillPreviewUrl =
-    segment.currentPreviewUrl ??
-    segment.originalPreviewUrl ??
-    segment.currentExternalPreviewUrl ??
-    segment.originalExternalPreviewUrl;
+    preferredStillPreviewUrl ??
+    (segment.mediaType === "photo"
+      ? null
+      : segment.currentPreviewUrl ??
+        segment.originalPreviewUrl ??
+        segment.currentExternalPreviewUrl ??
+        segment.originalExternalPreviewUrl);
   const fallbackPreviewUrl =
     fallbackStillPreviewUrl ??
     segment.currentPlaybackUrl ??
@@ -3705,11 +3781,11 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
     segment.originalExternalPlaybackUrl;
 
   if (segment.videoAction === "ai") {
-    return getStudioCustomAssetPosterUrl(segment.aiVideoAsset);
+    return getWorkspaceAiVideoPreferredPosterUrl(segment, segment.aiVideoAsset);
   }
 
   if (segment.videoAction === "photo_animation") {
-    return getStudioCustomAssetPosterUrl(segment.aiVideoAsset) ?? fallbackStillPreviewUrl ?? fallbackPreviewUrl;
+    return getWorkspacePhotoAnimationPreferredPosterUrl(segment, segment.aiVideoAsset) ?? fallbackPreviewUrl;
   }
 
   if (segment.videoAction === "custom") {
@@ -3732,6 +3808,7 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
 
   if (segment.videoAction === "original") {
     return (
+      preferredStillPreviewUrl ??
       segment.originalPreviewUrl ??
       segment.originalExternalPreviewUrl ??
       segment.originalPlaybackUrl ??
@@ -3741,6 +3818,10 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
       segment.currentPlaybackUrl ??
       segment.currentExternalPlaybackUrl
     );
+  }
+
+  if (segment.mediaType === "photo") {
+    return preferredStillPreviewUrl;
   }
 
   return (
@@ -3782,59 +3863,34 @@ const getWorkspaceSegmentDraftPreviewFallbackUrls = (
   previewKind: WorkspaceSegmentPreviewKind,
 ) => {
   if (previewKind === "image") {
+    const stillPreviewFallbackUrls = getWorkspaceSegmentStillPreviewUrls(segment);
+
     if (segment.videoAction === "custom") {
       return getUniqueWorkspaceSegmentPreviewUrls([
         getStudioCustomAssetPreviewUrl(segment.customVideo),
-        segment.currentPreviewUrl,
-        segment.originalPreviewUrl,
-        segment.currentPlaybackUrl,
-        segment.originalPlaybackUrl,
-        ...getWorkspaceSegmentExternalImageFallbackUrls(segment),
+        ...stillPreviewFallbackUrls,
       ]);
     }
 
     if (segment.videoAction === "ai_photo") {
       return getUniqueWorkspaceSegmentPreviewUrls([
         getStudioCustomAssetPreviewUrl(segment.aiPhotoAsset),
-        segment.currentPreviewUrl,
-        segment.originalPreviewUrl,
-        segment.currentPlaybackUrl,
-        segment.originalPlaybackUrl,
-        ...getWorkspaceSegmentExternalImageFallbackUrls(segment),
+        ...stillPreviewFallbackUrls,
       ]);
     }
 
     if (segment.videoAction === "image_edit") {
       return getUniqueWorkspaceSegmentPreviewUrls([
         getStudioCustomAssetPreviewUrl(segment.imageEditAsset),
-        segment.currentPreviewUrl,
-        segment.originalPreviewUrl,
-        segment.currentPlaybackUrl,
-        segment.originalPlaybackUrl,
-        ...getWorkspaceSegmentExternalImageFallbackUrls(segment),
+        ...stillPreviewFallbackUrls,
       ]);
     }
 
     if (segment.videoAction === "original") {
-      return getUniqueWorkspaceSegmentPreviewUrls([
-        segment.originalPreviewUrl,
-        segment.originalExternalPreviewUrl,
-        segment.originalPlaybackUrl,
-        segment.originalExternalPlaybackUrl,
-        segment.currentPreviewUrl,
-        segment.currentPlaybackUrl,
-        segment.currentExternalPreviewUrl,
-        segment.currentExternalPlaybackUrl,
-      ]);
+      return stillPreviewFallbackUrls;
     }
 
-    return getUniqueWorkspaceSegmentPreviewUrls([
-      segment.currentPreviewUrl,
-      segment.originalPreviewUrl,
-      segment.currentPlaybackUrl,
-      segment.originalPlaybackUrl,
-      ...getWorkspaceSegmentExternalImageFallbackUrls(segment),
-    ]);
+    return stillPreviewFallbackUrls;
   }
 
   if (segment.videoAction === "ai" || segment.videoAction === "photo_animation") {
@@ -3958,6 +4014,50 @@ const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditorDraftSe
     segment.originalExternalPreviewUrl
   );
 };
+
+const getWorkspaceSegmentResolvedMediaSurface = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  context: WorkspaceResolvedMediaContext,
+  options?: { isPlaybackRequested?: boolean },
+): WorkspaceResolvedMediaSurface => {
+  const previewKind = getWorkspaceSegmentPreviewKind(segment);
+  const previewUrl = getWorkspaceSegmentDraftPreviewUrl(segment);
+  const viewerUrl = previewKind === "video" ? getWorkspaceSegmentDraftVideoUrl(segment) : previewUrl;
+  const fallbackPosterUrl = previewKind === "video" ? getWorkspaceSegmentDraftFallbackPosterUrl(segment) : null;
+  const fallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(segment, previewKind);
+
+  return resolveWorkspaceMediaSurface({
+    context,
+    displayUrl: previewKind === "image" ? previewUrl : viewerUrl,
+    fallbackPosterUrl,
+    fallbackUrls,
+    forceMountVideoWhenIdle: segment.videoAction === "custom",
+    isGeneratedVideo: segment.videoAction === "ai" || segment.videoAction === "photo_animation",
+    isPlaybackRequested: options?.isPlaybackRequested,
+    posterUrl: previewKind === "video" ? previewUrl : null,
+    previewKind,
+    viewerUrl,
+  });
+};
+
+const getWorkspaceMediaLibraryResolvedPosterUrl = (item: WorkspaceMediaLibraryItem) =>
+  ((item.kind === "photo_animation" && isStudioSegmentPhotoAnimationPosterUrl(item.previewPosterUrl)) ||
+    (item.kind === "ai_video" && isStudioSegmentAiVideoPosterUrl(item.previewPosterUrl)))
+    ? null
+    : item.previewPosterUrl;
+
+const getWorkspaceMediaLibraryResolvedMediaSurface = (
+  item: WorkspaceMediaLibraryItem,
+  context: WorkspaceResolvedMediaContext,
+): WorkspaceResolvedMediaSurface =>
+  resolveWorkspaceMediaSurface({
+    context,
+    displayUrl: item.previewUrl,
+    isGeneratedVideo: item.kind === "ai_video" || item.kind === "photo_animation",
+    posterUrl: item.previewKind === "video" ? getWorkspaceMediaLibraryResolvedPosterUrl(item) : null,
+    previewKind: item.previewKind,
+    viewerUrl: item.previewUrl,
+  });
 
 const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (segment.videoAction === "custom") {
@@ -4136,7 +4236,7 @@ const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLib
   fileSize: 0,
   libraryItemKey: getWorkspaceMediaLibraryItemStorageKey(item),
   mimeType: getWorkspaceMediaLibraryItemMimeType(item),
-  posterUrl: item.previewKind === "video" ? item.previewPosterUrl ?? undefined : undefined,
+  posterUrl: item.previewKind === "video" ? getWorkspaceMediaLibraryResolvedPosterUrl(item) ?? undefined : undefined,
   remoteUrl: getWorkspaceMediaLibraryItemRemoteUrl(item),
   source: "media-library",
 });
@@ -4365,7 +4465,11 @@ const normalizeStoredWorkspaceGeneratedMediaLibraryEntry = (
   item: {
     ...entry.item,
     downloadUrl: entry.item.downloadUrl ?? null,
-    previewPosterUrl: entry.item.previewPosterUrl ?? null,
+    previewPosterUrl:
+      ((entry.item.kind === "photo_animation" && isStudioSegmentPhotoAnimationPosterUrl(entry.item.previewPosterUrl)) ||
+      (entry.item.kind === "ai_video" && isStudioSegmentAiVideoPosterUrl(entry.item.previewPosterUrl)))
+        ? null
+        : entry.item.previewPosterUrl ?? null,
   },
   sourceJobId: String(entry.sourceJobId),
 });
@@ -4634,10 +4738,9 @@ const buildWorkspaceMediaLibraryDraftItems = (
     const imageEditPreviewUrl = getStudioCustomAssetPreviewUrl(segment.imageEditAsset);
     const aiVideoPreviewUrl = getStudioCustomAssetPreviewUrl(segment.aiVideoAsset);
     const aiVideoPosterUrl =
-      getStudioCustomAssetPosterUrl(segment.aiVideoAsset) ??
-      segment.currentPreviewUrl ??
-      segment.originalPreviewUrl ??
-      null;
+      segment.aiVideoGeneratedMode === "photo_animation"
+        ? getWorkspacePhotoAnimationPreferredPosterUrl(segment, segment.aiVideoAsset)
+        : getWorkspaceAiVideoPreferredPosterUrl(segment, segment.aiVideoAsset);
 
     if (aiPhotoPreviewUrl) {
       items.push(createWorkspaceMediaLibraryItem({
@@ -4734,8 +4837,9 @@ const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
   const previewPosterUrl =
     options.kind === "ai_photo" || options.kind === "image_edit"
       ? previewUrl
-      : getStudioCustomAssetPosterUrl(options.asset) ??
-        (options.kind === "photo_animation" ? segment.currentPreviewUrl ?? segment.originalPreviewUrl ?? null : null);
+      : options.kind === "photo_animation"
+        ? getWorkspacePhotoAnimationPreferredPosterUrl(segment, options.asset)
+        : getWorkspaceAiVideoPreferredPosterUrl(segment, options.asset);
   const downloadName =
     options.kind === "ai_photo"
       ? getImageDownloadName(`${projectTitle}-segment-${segmentNumber}-ai-photo`)
@@ -4859,6 +4963,31 @@ const captureProjectPoster = (videoUrl: string, options?: { previewTime?: number
       fail(new Error("Failed to load project preview frame."));
     };
   });
+
+const captureProjectPosterFrameFromVideoElement = (video: HTMLVideoElement) => {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height) {
+    return null;
+  }
+
+  const targetSize = getPosterCaptureSize(width, height);
+  const canvas = document.createElement("canvas");
+  canvas.width = targetSize.width;
+  canvas.height = targetSize.height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  try {
+    context.drawImage(video, 0, 0, targetSize.width, targetSize.height);
+    return canvas.toDataURL("image/jpeg", PROJECT_POSTER_CAPTURE_QUALITY);
+  } catch {
+    return null;
+  }
+};
 
 const captureProjectPosterOnce = (
   videoUrl: string,
@@ -6269,6 +6398,7 @@ function WorkspaceSegmentPreviewCardMedia({
   isPlaybackRequested = false,
   loop,
   mediaKey,
+  mountVideoWhenIdle = true,
   muted = true,
   onVideoError,
   onVideoEnded,
@@ -6285,14 +6415,14 @@ function WorkspaceSegmentPreviewCardMedia({
   videoRef,
 }: WorkspaceSegmentPreviewCardMediaProps) {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [capturedPosterUrl, setCapturedPosterUrl] = useState<string | null>(null);
   const [isPreferredPosterReady, setIsPreferredPosterReady] = useState(false);
+  const [isPosterFrameLoadFailed, setIsPosterFrameLoadFailed] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [previewCandidateIndex, setPreviewCandidateIndex] = useState(0);
   const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
   const normalizedPreviewUrl = previewUrl.trim();
-  const normalizedPosterUrl = typeof posterUrl === "string" ? posterUrl.trim() : "";
-  const normalizedFallbackPosterUrl = typeof fallbackPosterUrl === "string" ? fallbackPosterUrl.trim() : "";
+  const normalizedPosterUrl = sanitizeWorkspaceSegmentPosterUrl(previewKind, normalizedPreviewUrl, posterUrl);
+  const normalizedFallbackPosterUrl = sanitizeWorkspaceSegmentPosterUrl(previewKind, normalizedPreviewUrl, fallbackPosterUrl);
   const normalizedPreviewFallbackUrls = useMemo(
     () => getUniqueWorkspaceSegmentPreviewUrls(previewFallbackUrls),
     [previewFallbackUrls],
@@ -6302,20 +6432,27 @@ function WorkspaceSegmentPreviewCardMedia({
     () => getUniqueWorkspaceSegmentPreviewUrls([normalizedPreviewUrl, ...normalizedPreviewFallbackUrls]),
     [normalizedPreviewFallbackUrls, normalizedPreviewUrl],
   );
+  const resolvedPreviewUrl = previewCandidateUrls[previewCandidateIndex] ?? normalizedPreviewUrl;
+  const segmentPreviewPosterCacheKey = `${resolvedPreviewUrl}::segment-preview-poster`;
+  const [capturedPosterUrl, setCapturedPosterUrl] = useState<string | null>(() =>
+    canCapturePosterInBrowser(resolvedPreviewUrl) ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey) : null,
+  );
   const resolvedPosterUrl =
     (isPreferredPosterReady ? normalizedPosterUrl : normalizedFallbackPosterUrl || normalizedPosterUrl) ||
     capturedPosterUrl;
+  const canUseResolvedPosterFrame = Boolean(resolvedPosterUrl) && !isPosterFrameLoadFailed;
+  const shouldPrimePausedFrame =
+    previewKind === "video" && !autoplay && (primePausedFrame || (preferPosterFrame && !canUseResolvedPosterFrame));
   const imageCandidateUrls = useMemo(
     () =>
       getUniqueWorkspaceSegmentPreviewUrls([
-        preferPosterFrame ? resolvedPosterUrl : null,
+        preferPosterFrame && canUseResolvedPosterFrame ? resolvedPosterUrl : null,
         ...previewCandidateUrls,
-        preferPosterFrame ? null : resolvedPosterUrl,
+        preferPosterFrame ? null : canUseResolvedPosterFrame ? resolvedPosterUrl : null,
       ]),
-    [preferPosterFrame, previewCandidateUrls, resolvedPosterUrl],
+    [canUseResolvedPosterFrame, preferPosterFrame, previewCandidateUrls, resolvedPosterUrl],
   );
   const imageCandidateSignature = imageCandidateUrls.join("|");
-  const resolvedPreviewUrl = previewCandidateUrls[previewCandidateIndex] ?? normalizedPreviewUrl;
   const resolvedImageUrl = imageCandidateUrls[imageCandidateIndex] ?? resolvedPreviewUrl;
 
   const setVideoElementRef = useCallback(
@@ -6324,6 +6461,35 @@ function WorkspaceSegmentPreviewCardMedia({
       videoRef?.(element);
     },
     [videoRef],
+  );
+
+  const cacheMountedVideoPosterFrame = useCallback(
+    (element: HTMLVideoElement | null) => {
+      if (
+        !element ||
+        previewKind !== "video" ||
+        normalizedPosterUrl ||
+        normalizedFallbackPosterUrl ||
+        !canCapturePosterInBrowser(resolvedPreviewUrl)
+      ) {
+        return;
+      }
+
+      const cachedPoster = captureProjectPosterFrameFromVideoElement(element);
+      if (!cachedPoster) {
+        return;
+      }
+
+      setProjectPosterCacheValue(segmentPreviewPosterCacheKey, cachedPoster);
+      setCapturedPosterUrl((current) => current ?? cachedPoster);
+    },
+    [
+      normalizedFallbackPosterUrl,
+      normalizedPosterUrl,
+      previewKind,
+      resolvedPreviewUrl,
+      segmentPreviewPosterCacheKey,
+    ],
   );
 
   const advancePreviewCandidate = useCallback(() => {
@@ -6345,8 +6511,14 @@ function WorkspaceSegmentPreviewCardMedia({
   }, [imageCandidateIndex, imageCandidateUrls.length]);
 
   useEffect(() => {
-    setCapturedPosterUrl(null);
-  }, [posterUrl, resolvedPreviewUrl]);
+    const cachedPoster =
+      canCapturePosterInBrowser(resolvedPreviewUrl) ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey) : null;
+    setCapturedPosterUrl(cachedPoster);
+  }, [resolvedPreviewUrl, segmentPreviewPosterCacheKey]);
+
+  useEffect(() => {
+    setIsPosterFrameLoadFailed(false);
+  }, [normalizedFallbackPosterUrl, normalizedPosterUrl, resolvedPreviewUrl]);
 
   useEffect(() => {
     setIsVideoPlaying(false);
@@ -6397,20 +6569,19 @@ function WorkspaceSegmentPreviewCardMedia({
   }, [normalizedFallbackPosterUrl, normalizedPosterUrl]);
 
   useEffect(() => {
-    if (previewKind !== "video" || posterUrl || preload !== "auto") {
-      return;
-    }
-
-    const normalizedResolvedPreviewUrl = resolvedPreviewUrl.toLowerCase();
-    if (!normalizedResolvedPreviewUrl.startsWith("blob:") && !normalizedResolvedPreviewUrl.startsWith("data:")) {
+    if (
+      previewKind !== "video" ||
+      preload === "none" ||
+      normalizedPosterUrl ||
+      normalizedFallbackPosterUrl ||
+      !canCapturePosterInBrowser(resolvedPreviewUrl)
+    ) {
       return;
     }
 
     let cancelled = false;
-    const posterCacheKey = `${resolvedPreviewUrl}::segment-preview-poster`;
-
     void captureProjectPosterOnce(resolvedPreviewUrl, {
-      cacheKey: posterCacheKey,
+      cacheKey: segmentPreviewPosterCacheKey,
       previewTime: 0.45,
     })
       .then((nextPosterUrl) => {
@@ -6427,10 +6598,10 @@ function WorkspaceSegmentPreviewCardMedia({
     return () => {
       cancelled = true;
     };
-  }, [posterUrl, preload, previewKind, resolvedPreviewUrl]);
+  }, [normalizedFallbackPosterUrl, normalizedPosterUrl, preload, previewKind, resolvedPreviewUrl, segmentPreviewPosterCacheKey]);
 
   useEffect(() => {
-    if (previewKind !== "video" || autoplay || preload !== "auto" || !primePausedFrame) {
+    if (previewKind !== "video" || autoplay || preload === "none" || !shouldPrimePausedFrame) {
       return;
     }
 
@@ -6485,7 +6656,7 @@ function WorkspaceSegmentPreviewCardMedia({
       cancelled = true;
       element.removeEventListener("loadeddata", handleLoadedData);
     };
-  }, [autoplay, preload, previewKind, resolvedPreviewUrl, primePausedFrame]);
+  }, [autoplay, preload, previewKind, resolvedPreviewUrl, shouldPrimePausedFrame]);
 
   if (previewKind === "image") {
     return (
@@ -6503,7 +6674,7 @@ function WorkspaceSegmentPreviewCardMedia({
     );
   }
 
-  if (preferPosterFrame && resolvedPosterUrl) {
+  if (preferPosterFrame && canUseResolvedPosterFrame && resolvedPosterUrl) {
     return (
       <img
         key={`${mediaKey}:poster`}
@@ -6513,8 +6684,32 @@ function WorkspaceSegmentPreviewCardMedia({
         decoding="async"
         draggable={false}
         aria-hidden="true"
+        onError={() => {
+          setIsPosterFrameLoadFailed(true);
+        }}
       />
     );
+  }
+
+  if (previewKind === "video" && !autoplay && !isPlaybackRequested && !mountVideoWhenIdle) {
+    if (canUseResolvedPosterFrame && resolvedPosterUrl) {
+      return (
+        <img
+          key={`${mediaKey}:poster`}
+          src={resolvedPosterUrl}
+          alt=""
+          loading={imageLoading}
+          decoding="async"
+          draggable={false}
+          aria-hidden="true"
+          onError={() => {
+            setIsPosterFrameLoadFailed(true);
+          }}
+        />
+      );
+    }
+
+    return <div className="studio-segment-preview-card-media__idle-placeholder" aria-hidden="true" />;
   }
 
   return (
@@ -6526,7 +6721,7 @@ function WorkspaceSegmentPreviewCardMedia({
         autoPlay={autoplay}
         loop={loop ?? autoplay}
         muted={muted}
-        poster={resolvedPosterUrl ?? undefined}
+        poster={canUseResolvedPosterFrame ? resolvedPosterUrl ?? undefined : undefined}
         playsInline
         preload={preload}
         disablePictureInPicture
@@ -6546,6 +6741,9 @@ function WorkspaceSegmentPreviewCardMedia({
           setIsVideoPlaying(false);
           onVideoEnded?.();
         }}
+        onLoadedData={(event) => {
+          cacheMountedVideoPosterFrame(event.currentTarget);
+        }}
         onLoadedMetadata={(event) => onVideoTimeUpdate?.(event.currentTarget.currentTime)}
         onPause={() => {
           setIsVideoPlaying(false);
@@ -6555,9 +6753,12 @@ function WorkspaceSegmentPreviewCardMedia({
           setIsVideoPlaying(true);
           onVideoPlay?.();
         }}
+        onSeeked={(event) => {
+          cacheMountedVideoPosterFrame(event.currentTarget);
+        }}
         onTimeUpdate={(event) => onVideoTimeUpdate?.(event.currentTarget.currentTime)}
       />
-      {resolvedPosterUrl && !isVideoPlaying && !isPlaybackRequested ? (
+      {canUseResolvedPosterFrame && resolvedPosterUrl && !isVideoPlaying && !isPlaybackRequested ? (
         <img
           className="studio-segment-preview-card-media__poster"
           src={resolvedPosterUrl}
@@ -6566,9 +6767,319 @@ function WorkspaceSegmentPreviewCardMedia({
           decoding="async"
           draggable={false}
           aria-hidden="true"
+          onError={() => {
+            setIsPosterFrameLoadFailed(true);
+          }}
         />
       ) : null}
     </>
+  );
+}
+
+type WorkspaceModalVideoPlayerProps = {
+  autoPlay?: boolean;
+  errorOverlay?: ReactNode;
+  onCanPlay?: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
+  onError?: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
+  onLoadedData?: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
+  onPause?: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
+  onPlay?: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
+  poster?: string | null;
+  preload?: "auto" | "metadata" | "none";
+  preferMutedAutoplay?: boolean;
+  src: string;
+  topActions?: ReactNode;
+  videoKey: string;
+  videoRef?: (element: HTMLVideoElement | null) => void;
+  volume?: number;
+  onVolumeChange?: (nextVolume: number) => void;
+};
+
+const clampWorkspaceModalPlayerVolume = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, value));
+};
+
+const playWorkspaceModalVideoElement = async (element: HTMLVideoElement | null, volume: number) => {
+  if (!element) {
+    return { muted: volume <= 0, played: false };
+  }
+
+  const safeVolume = clampWorkspaceModalPlayerVolume(volume);
+  element.volume = safeVolume;
+  element.muted = safeVolume <= 0;
+  element.defaultMuted = safeVolume <= 0;
+
+  try {
+    await element.play();
+    return { muted: element.muted, played: true };
+  } catch {
+    element.muted = true;
+    element.defaultMuted = true;
+  }
+
+  try {
+    await element.play();
+    return { muted: true, played: true };
+  } catch {
+    element.pause();
+    return { muted: element.muted, played: false };
+  }
+};
+
+function WorkspaceModalVideoPlayer({
+  autoPlay = false,
+  errorOverlay,
+  onCanPlay,
+  onError,
+  onLoadedData,
+  onPause,
+  onPlay,
+  poster,
+  preload = "metadata",
+  preferMutedAutoplay = false,
+  src,
+  topActions,
+  videoKey,
+  videoRef,
+  volume = 0.88,
+  onVolumeChange,
+}: WorkspaceModalVideoPlayerProps) {
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const lastNonZeroVolumeRef = useRef(Math.max(0.2, clampWorkspaceModalPlayerVolume(volume)));
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const shouldPreferMutedAutoplay = autoPlay && preferMutedAutoplay;
+  const [isActuallyMuted, setIsActuallyMuted] = useState(shouldPreferMutedAutoplay || clampWorkspaceModalPlayerVolume(volume) <= 0);
+  const safeVolume = clampWorkspaceModalPlayerVolume(volume);
+  const progressValue = duration > 0 ? Math.min(1000, Math.max(0, Math.round((currentTime / duration) * 1000))) : 0;
+
+  const assignVideoRef = useCallback(
+    (element: HTMLVideoElement | null) => {
+      localVideoRef.current = element;
+      videoRef?.(element);
+    },
+    [videoRef],
+  );
+
+  const updateVolume = useCallback(
+    (nextVolume: number) => {
+      const safeNextVolume = clampWorkspaceModalPlayerVolume(nextVolume);
+      if (safeNextVolume > 0) {
+        lastNonZeroVolumeRef.current = safeNextVolume;
+      }
+      setIsActuallyMuted(safeNextVolume <= 0);
+      onVolumeChange?.(safeNextVolume);
+    },
+    [onVolumeChange],
+  );
+
+  const attemptPlayback = useCallback(async () => {
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    const result = await playWorkspaceModalVideoElement(element, shouldPreferMutedAutoplay ? 0 : safeVolume);
+    setIsActuallyMuted(result.muted);
+  }, [safeVolume, shouldPreferMutedAutoplay]);
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(autoPlay);
+    setIsActuallyMuted(shouldPreferMutedAutoplay || safeVolume <= 0);
+  }, [autoPlay, safeVolume, shouldPreferMutedAutoplay, videoKey]);
+
+  useEffect(() => {
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.volume = safeVolume;
+    if (safeVolume <= 0) {
+      element.muted = true;
+      element.defaultMuted = true;
+      setIsActuallyMuted(true);
+      return;
+    }
+
+    if (!isActuallyMuted) {
+      element.muted = false;
+      element.defaultMuted = false;
+    }
+  }, [isActuallyMuted, safeVolume]);
+
+  const handleTogglePlayback = useCallback(() => {
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    if (element.paused) {
+      void attemptPlayback();
+      return;
+    }
+
+    element.pause();
+  }, [attemptPlayback]);
+
+  const handleToggleMute = useCallback(() => {
+    if (safeVolume <= 0 || isActuallyMuted) {
+      const nextVolume = Math.max(0.2, lastNonZeroVolumeRef.current);
+      updateVolume(nextVolume);
+      const element = localVideoRef.current;
+      if (element) {
+        element.volume = nextVolume;
+        element.muted = false;
+        element.defaultMuted = false;
+      }
+      return;
+    }
+
+    updateVolume(0);
+  }, [isActuallyMuted, safeVolume, updateVolume]);
+
+  const handleSeek = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const element = localVideoRef.current;
+      if (!element || duration <= 0) {
+        return;
+      }
+
+      const nextValue = Number(event.target.value);
+      const nextTime = (Math.min(1000, Math.max(0, nextValue)) / 1000) * duration;
+      try {
+        element.currentTime = nextTime;
+        setCurrentTime(nextTime);
+      } catch {
+        // Ignore seek errors while metadata is still being resolved.
+      }
+    },
+    [duration],
+  );
+
+  return (
+    <div className="studio-video-modal__player is-video">
+      <div className="studio-video-modal__player-stage" onClick={handleTogglePlayback}>
+        <video
+          key={videoKey}
+          ref={assignVideoRef}
+        src={src}
+        autoPlay={autoPlay}
+        playsInline
+        preload={preload}
+        poster={poster ?? undefined}
+        muted={isActuallyMuted || shouldPreferMutedAutoplay}
+        controls={false}
+          onCanPlay={(event) => {
+            const element = event.currentTarget;
+            const nextDuration =
+              typeof element.duration === "number" && Number.isFinite(element.duration) ? Math.max(0, element.duration) : 0;
+            setDuration(nextDuration);
+            if (autoPlay && element.paused) {
+              void attemptPlayback();
+            }
+            onCanPlay?.(event);
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleTogglePlayback();
+          }}
+          onLoadedData={(event) => {
+            const element = event.currentTarget;
+            setCurrentTime(Number.isFinite(element.currentTime) ? Math.max(0, element.currentTime) : 0);
+            setDuration(Number.isFinite(element.duration) ? Math.max(0, element.duration) : 0);
+            onLoadedData?.(event);
+          }}
+          onLoadedMetadata={(event) => {
+            const element = event.currentTarget;
+            setDuration(Number.isFinite(element.duration) ? Math.max(0, element.duration) : 0);
+          }}
+          onPause={(event) => {
+            setIsPlaying(false);
+            onPause?.(event);
+          }}
+          onPlay={(event) => {
+            setIsPlaying(true);
+            setIsActuallyMuted(event.currentTarget.muted);
+            onPlay?.(event);
+          }}
+          onTimeUpdate={(event) => {
+            setCurrentTime(Number.isFinite(event.currentTarget.currentTime) ? Math.max(0, event.currentTarget.currentTime) : 0);
+          }}
+          onEnded={() => {
+            setIsPlaying(false);
+          }}
+          onVolumeChange={(event) => {
+            setIsActuallyMuted(event.currentTarget.muted || event.currentTarget.volume <= 0);
+          }}
+          onError={(event) => {
+            setIsPlaying(false);
+            onError?.(event);
+          }}
+        />
+      </div>
+      {topActions ? <div className="studio-video-modal__top-actions">{topActions}</div> : null}
+      {errorOverlay}
+      <div className="studio-video-modal__player-controls">
+        <input
+          className="studio-video-modal__progress"
+          type="range"
+          min={0}
+          max={1000}
+          step={1}
+          value={progressValue}
+          aria-label="Позиция воспроизведения"
+          onChange={handleSeek}
+        />
+        <div className="studio-video-modal__player-toolbar">
+          <button
+            className="studio-video-modal__control-btn"
+            type="button"
+            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+            onClick={handleTogglePlayback}
+          >
+            {isPlaying ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <rect x="5" y="4.25" width="3.25" height="11.5" rx="1.2" fill="currentColor" />
+                <rect x="11.75" y="4.25" width="3.25" height="11.5" rx="1.2" fill="currentColor" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M7 5.25v9.5l7.5-4.75L7 5.25Z" fill="currentColor" />
+              </svg>
+            )}
+          </button>
+          <button
+            className="studio-video-modal__control-btn"
+            type="button"
+            aria-label={isActuallyMuted || safeVolume <= 0 ? "Включить звук" : "Выключить звук"}
+            onClick={handleToggleMute}
+          >
+            {isActuallyMuted || safeVolume <= 0 ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M4.5 7.5H7.5L11 4.5V15.5L7.5 12.5H4.5V7.5Z" fill="currentColor" />
+                <path d="M13.25 7 16.75 13M16.75 7 13.25 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M4.5 7.5H7.5L11 4.5V15.5L7.5 12.5H4.5V7.5Z" fill="currentColor" />
+                <path d="M13.4 7.2a4 4 0 0 1 0 5.6M15.7 5a7 7 0 0 1 0 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+          <span className="studio-video-modal__time">
+            {formatWorkspaceSegmentEditorTime(currentTime)} / {formatWorkspaceSegmentEditorTime(duration, { roundUp: true })}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -7356,6 +7867,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentImageEditModalPrompt, setSegmentImageEditModalPrompt] = useState("");
   const [segmentAiVideoModalPrompt, setSegmentAiVideoModalPrompt] = useState("");
   const [segmentAiPhotoModalTab, setSegmentAiPhotoModalTab] = useState<WorkspaceSegmentVisualModalTab>("ai_video");
+  const [segmentAiPhotoModalLibraryFilter, setSegmentAiPhotoModalLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [isSegmentAiPhotoModalPreviewPlaying, setIsSegmentAiPhotoModalPreviewPlaying] = useState(false);
   const [isSegmentAiPhotoModalPreviewPlaybackRequested, setIsSegmentAiPhotoModalPreviewPlaybackRequested] = useState(false);
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
@@ -7389,6 +7901,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     readStoredGeneratedMediaLibraryEntries(session.email),
   );
   const [mediaLibraryItems, setMediaLibraryItems] = useState<WorkspaceMediaLibraryItem[]>([]);
+  const [mediaLibraryFilter, setMediaLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [mediaLibraryNextCursor, setMediaLibraryNextCursor] = useState<string | null>(null);
   const [mediaLibraryTotal, setMediaLibraryTotal] = useState(0);
   const [loadedMediaLibraryFingerprint, setLoadedMediaLibraryFingerprint] = useState<string | null>(null);
@@ -7413,6 +7926,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [composerSourceIdea, setComposerSourceIdea] = useState<WorkspaceContentPlanComposerSource | null>(null);
   const [activeProjectPreviewId, setActiveProjectPreviewId] = useState<string | null>(null);
   const [projectPreviewModal, setProjectPreviewModal] = useState<WorkspaceProject | null>(null);
+  const [mediaLibraryPreviewModal, setMediaLibraryPreviewModal] = useState<WorkspaceMediaLibraryItem | null>(null);
   const [previewModalOpenToken, setPreviewModalOpenToken] = useState<number>(0);
   const [previewModalPlaybackError, setPreviewModalPlaybackError] = useState<string | null>(null);
   const [previewModalUseFallbackSource, setPreviewModalUseFallbackSource] = useState(false);
@@ -7436,6 +7950,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [publishPlannerStyle, setPublishPlannerStyle] = useState<CSSProperties | null>(null);
   const [publishCalendarMonth, setPublishCalendarMonth] = useState(() => startOfPublishMonth(new Date()));
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaLibraryPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewModalVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewModalPendingPlaybackRef = useRef<{ immediate?: boolean; resetToStart?: boolean } | null>(null);
   const pendingProjectDeleteIdsRef = useRef<Set<string>>(new Set());
@@ -7457,6 +7972,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorRunRef = useRef(0);
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
+  const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
+  const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
   const detachedSegmentEditorDraftRef = useRef<{
     activeSegmentIndex: number;
     draft: WorkspaceSegmentEditorDraftSession;
@@ -7464,6 +7981,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const pendingStudioRouteSectionRef = useRef<StudioEntryIntentSection | null>(null);
   const pendingStudioRouteSectionResetTimerRef = useRef<number | null>(null);
   const segmentEditorPreviewVideoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
+  const segmentEditorPreviewVideoRefCallbacks = useRef<Record<number, (element: HTMLVideoElement | null) => void>>({});
+  const segmentEditorPreviewResetTokenRef = useRef(0);
+  const segmentEditorCreateModeRef = useRef<StudioCreateMode>("default");
+  const activeSegmentPlaybackIndexRef = useRef<number | null>(null);
+  const pendingSegmentEditorActivatedPlaybackIndexRef = useRef<number | null>(null);
+  const queuedSegmentEditorPlaybackIndexRef = useRef<number | null>(null);
+  const requestSegmentEditorVideoPlaybackRef = useRef<
+    null | ((segmentPlaybackIndex: number, element: HTMLVideoElement, options?: { resetToStart?: boolean }) => Promise<unknown>)
+  >(null);
   const segmentEditorSyntheticPlaybackFrameRef = useRef<number | null>(null);
   const segmentEditorSyntheticPlaybackFinishTimeoutRef = useRef<number | null>(null);
   const segmentEditorSyntheticPlaybackRef = useRef<{
@@ -7602,6 +8128,106 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     navigate(nextUrl, { replace: options?.replace ?? false });
   };
 
+  const getSegmentEditorOrderSnapshot = (draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined) =>
+    draft?.segments.map((segment, arrayIndex) => ({
+      arrayIndex,
+      mediaType: segment.mediaType,
+      segmentIndex: segment.index,
+      videoAction: segment.videoAction,
+    })) ?? [];
+
+  const getSegmentEditorRouteSegmentIndex = (
+    draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
+    segmentArrayIndex: number,
+  ) => {
+    if (!draft || draft.segments.length === 0) {
+      return Math.max(0, segmentArrayIndex);
+    }
+
+    return draft.segments[segmentArrayIndex]?.index ?? Math.max(0, Math.min(segmentArrayIndex, draft.segments.length - 1));
+  };
+
+  const resolveSegmentEditorArrayIndexFromRouteSegment = (
+    draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
+    routeSegmentIndex: number,
+  ) => {
+    if (!draft || draft.segments.length === 0) {
+      return 0;
+    }
+
+    const stableMatchIndex = draft.segments.findIndex((segment) => segment.index === routeSegmentIndex);
+    if (stableMatchIndex >= 0) {
+      return stableMatchIndex;
+    }
+
+    return Math.max(0, Math.min(routeSegmentIndex, draft.segments.length - 1));
+  };
+
+  const syncSegmentEditorRouteForArrayIndex = (
+    draft: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null | undefined,
+    segmentArrayIndex: number,
+    options?: { replace?: boolean },
+  ) => {
+    if (!draft || draft.segments.length === 0) {
+      return;
+    }
+
+    const boundedSegmentArrayIndex = Math.max(0, Math.min(segmentArrayIndex, draft.segments.length - 1));
+    const routeSegmentIndex = getSegmentEditorRouteSegmentIndex(draft, boundedSegmentArrayIndex);
+    const handledRouteKey = `${draft.projectId}:${routeSegmentIndex}`;
+    segmentEditorRouteRestoreKeyRef.current = null;
+    segmentEditorHandledRouteRestoreKeyRef.current = handledRouteKey;
+    syncStudioRouteSection("edit", {
+      projectId: draft.projectId,
+      replace: options?.replace ?? true,
+      segmentIndex: routeSegmentIndex,
+    });
+  };
+
+  const activateSegmentEditorSegmentByArrayIndex = (
+    nextSegmentArrayIndex: number,
+    options?: { replaceRoute?: boolean; syncRoute?: boolean },
+  ) => {
+    if (!segmentEditorDraft || segmentEditorDraft.segments.length === 0) {
+      return;
+    }
+
+    const boundedSegmentArrayIndex = Math.max(0, Math.min(nextSegmentArrayIndex, segmentEditorDraft.segments.length - 1));
+    setActiveSegmentIndex(boundedSegmentArrayIndex);
+
+    if (options?.syncRoute !== false) {
+      syncSegmentEditorRouteForArrayIndex(segmentEditorDraft, boundedSegmentArrayIndex, {
+        replace: options?.replaceRoute ?? true,
+      });
+    }
+  };
+
+  const logSegmentEditorDiagnostics = (
+    event: string,
+    payload: Record<string, unknown> = {},
+    options?: { includeOrder?: boolean; level?: "debug" | "info" | "warn" | "error"; draft?: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null },
+  ) => {
+    const draftSnapshot = options?.draft ?? segmentEditorDraft;
+
+    void logClientEvent(
+      event,
+      {
+        ...payload,
+        activeSegmentArrayIndex: activeSegmentIndex,
+        activeSegmentStableIndex: draftSnapshot?.segments[activeSegmentIndex]?.index ?? null,
+        createMode,
+        draftProjectId: draftSnapshot?.projectId ?? null,
+        path: `${location.pathname}${location.search}`,
+        routeProjectId: routeStudioState.projectId,
+        routeSection: routeStudioState.section,
+        routeSegmentIndex: routeStudioState.segmentIndex,
+        studioView,
+        ...(options?.includeOrder ? { segmentOrder: getSegmentEditorOrderSnapshot(draftSnapshot) } : {}),
+      },
+      options?.level ?? "info",
+    );
+  };
+
   useEffect(() => {
     if (!location.pathname.startsWith("/app/studio")) {
       if (pendingStudioRouteSectionResetTimerRef.current) {
@@ -7635,10 +8261,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [location.pathname, routeStudioState.section]);
 
   useEffect(() => {
+    segmentEditorCreateModeRef.current = createMode;
+  }, [createMode]);
+
+  useEffect(() => {
+    queuedSegmentEditorPlaybackIndexRef.current = queuedSegmentEditorPlaybackIndex;
+  }, [queuedSegmentEditorPlaybackIndex]);
+
+  useEffect(() => {
     return () => {
       if (pendingStudioRouteSectionResetTimerRef.current) {
         window.clearTimeout(pendingStudioRouteSectionResetTimerRef.current);
       }
+      stopSegmentEditorPreviewVideoElements({ clearRefs: true });
       cancelSegmentEditorSyntheticPlayback();
       if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
       if (segmentCarouselWheelResetTimerRef.current) {
@@ -7704,7 +8339,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     void handleStudioCreateModeSwitch("default");
   }, [hasExplicitStudioRouteState, location.search]);
 
-  const isAnyPreviewModalOpen = isPreviewModalOpen || Boolean(projectPreviewModal) || isPublishModalOpen;
+  const isAnyPreviewModalOpen = isPreviewModalOpen || Boolean(projectPreviewModal) || Boolean(mediaLibraryPreviewModal) || isPublishModalOpen;
   const isAnyWorkspaceModalOpen =
     isAnyPreviewModalOpen ||
     isSegmentAiPhotoModalOpen ||
@@ -7724,8 +8359,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const closePreviewModals = () => {
     stopPreviewModalVideoElement(previewModalVideoRef.current);
+    stopPreviewModalVideoElement(mediaLibraryPreviewVideoRef.current);
     setIsPreviewModalOpen(false);
     setProjectPreviewModal(null);
+    setMediaLibraryPreviewModal(null);
     setPreviewModalPlaybackError(null);
     setPreviewModalUseFallbackSource(false);
     previewModalPendingPlaybackRef.current = null;
@@ -7768,6 +8405,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setIsSegmentAiPhotoPromptImproving(false);
     setIsSegmentAiPhotoPromptImproved(false);
     setIsSegmentAiPhotoPromptHighlighted(false);
+  };
+
+  const handleSegmentAiPhotoModalPaidAction = (action: () => Promise<void>) => {
+    flushSync(() => {
+      closeSegmentAiPhotoModal();
+    });
+    void action();
   };
 
   const closeProjectDeleteModal = () => {
@@ -8073,6 +8717,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [activeTab, studioView]);
 
   useEffect(() => {
+    segmentEditorDraftRef.current = segmentEditorDraft;
+  }, [segmentEditorDraft]);
+
+  useEffect(() => {
     if (!segmentEditorDraft?.segments.length) {
       setActiveSegmentIndex(0);
       return;
@@ -8165,18 +8813,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setActiveSegmentIndex((current) => Math.max(0, current - 1));
+        activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex - 1);
       }
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        setActiveSegmentIndex((current) => Math.min(segmentEditorDraft.segments.length - 1, current + 1));
+        activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + 1);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [createMode, segmentEditorDraft]);
+  }, [activeSegmentIndex, createMode, segmentEditorDraft]);
 
   const handleSegmentCarouselWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     if (!segmentEditorDraft || segmentEditorDraft.segments.length <= 1) {
@@ -8219,9 +8867,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentCarouselLastWheelStepAtRef.current = now;
     segmentCarouselWheelDeltaRef.current = 0;
 
-    setActiveSegmentIndex((current) =>
-      Math.min(segmentEditorDraft.segments.length - 1, Math.max(0, current + direction)),
-    );
+    activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + direction);
   };
 
   const isSegmentCarouselClickSuppressed = () => window.performance.now() < segmentCarouselSuppressClickUntilRef.current;
@@ -8300,9 +8946,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (shouldNavigate && segmentEditorDraft) {
       const direction = deltaX < 0 ? 1 : -1;
       setQueuedSegmentEditorPlaybackIndex(null);
-      setActiveSegmentIndex((current) =>
-        Math.min(segmentEditorDraft.segments.length - 1, Math.max(0, current + direction)),
-      );
+      activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + direction);
     }
 
     try {
@@ -8625,7 +9269,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     };
   }, [hasLoadedContentPlans, shouldLoadContentPlans]);
 
-  const shouldLoadMediaLibrary = shouldLoadWorkspaceMediaLibraryView(activeTab, studioView);
+  const shouldLoadSegmentModalMediaLibrary = isSegmentAiPhotoModalOpen && segmentAiPhotoModalTab === "library";
+  const shouldLoadMediaLibrary = shouldLoadWorkspaceMediaLibraryView(activeTab, studioView) || shouldLoadSegmentModalMediaLibrary;
 
   useEffect(() => {
     if (!shouldLoadMediaLibrary) {
@@ -8779,6 +9424,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
   }, [isMediaLibraryLoading, mediaLibraryNextCursor]);
 
+  useEffect(() => {
+    if (!shouldLoadSegmentModalMediaLibrary || !mediaLibraryNextCursor || isMediaLibraryLoading || mediaLibraryError) {
+      return;
+    }
+
+    void handleLoadMoreMediaLibrary();
+  }, [handleLoadMoreMediaLibrary, isMediaLibraryLoading, mediaLibraryError, mediaLibraryNextCursor, shouldLoadSegmentModalMediaLibrary]);
+
   const header = tabCopy[activeTab];
   const sectionTitleId = header.heading ? "account-shell-title" : undefined;
   const workspacePlan = normalizeWorkspacePlan(workspaceProfile?.plan);
@@ -8890,6 +9543,33 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const canEditPreviewModalProject = Boolean(previewModalProject?.adId);
   const canPublishPreviewModalProject = Boolean(previewModalProject?.adId);
   const canAddPreviewModalProjectToExamples = canManageLocalExamples && Boolean(previewModalProject?.videoUrl);
+  const mediaLibraryPreviewModalSurface = mediaLibraryPreviewModal
+    ? getWorkspaceMediaLibraryResolvedMediaSurface(mediaLibraryPreviewModal, "media-viewer")
+    : null;
+  const mediaLibraryPreviewModalPosterUrl = mediaLibraryPreviewModalSurface?.posterUrl ?? null;
+  const mediaLibraryPreviewModalTitle = mediaLibraryPreviewModal
+    ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind)
+    : "";
+  const mediaLibraryPreviewModalMeta = mediaLibraryPreviewModal
+    ? `${mediaLibraryPreviewModal.projectTitle} · Сегмент ${mediaLibraryPreviewModal.segmentNumber}`
+    : "";
+  const formatSegmentVisualCreditsLabel = (credits: number) => `${credits} ⚡`;
+  const renderSegmentPaidActionContent = (
+    _actionLabel: string,
+    credits: number,
+    isBusy: boolean,
+    _busyLabel: string,
+  ) =>
+    isBusy ? (
+      <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+    ) : (
+      <span className="studio-ai-photo-modal__action-cost" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>{formatSegmentVisualCreditsLabel(credits)}</span>
+      </span>
+    );
   const isPreviewModalProjectActionBusy = isSegmentEditorLoading || isSavingLocalExample;
   const hasPreviewModalDescription = Boolean(previewModalDescription);
   const hasPreviewModalHashtags = previewModalHashtags.length > 0;
@@ -9074,8 +9754,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const visibleImageEditMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "image_edit").length;
   const visibleAiVideoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_video").length;
   const visiblePhotoAnimationMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation").length;
+  const visibleAiPhotoGroupMediaItemsCount = visibleAiPhotoMediaItemsCount + visibleImageEditMediaItemsCount;
+  const visibleAiVideoGroupMediaItemsCount = visibleAiVideoMediaItemsCount + visiblePhotoAnimationMediaItemsCount;
+  const filteredVisibleMediaLibraryItems = useMemo(() => {
+    if (mediaLibraryFilter === "photo") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo" || item.kind === "image_edit");
+    }
+
+    if (mediaLibraryFilter === "video") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "ai_video" || item.kind === "photo_animation");
+    }
+
+    return visibleMediaLibraryItems;
+  }, [mediaLibraryFilter, visibleMediaLibraryItems]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
+  useEffect(() => {
+    activeSegmentPlaybackIndexRef.current = activeSegment?.index ?? null;
+  }, [activeSegment?.index]);
   const segmentEditorChangeChecklist = segmentEditorDraft
     ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChecklistBaseSession, {
         subtitleColorOptions,
@@ -9108,6 +9804,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       : null;
   const hasSegmentAiPhotoModalLibrarySelection = Boolean(segmentAiPhotoModalSelectedLibraryItemKey);
   const segmentAiPhotoModalLibraryItems = visibleMediaLibraryItems;
+  const filteredSegmentAiPhotoModalLibraryItems = useMemo(() => {
+    if (segmentAiPhotoModalLibraryFilter === "photo") {
+      return segmentAiPhotoModalLibraryItems.filter((item) => item.kind === "ai_photo" || item.kind === "image_edit");
+    }
+
+    if (segmentAiPhotoModalLibraryFilter === "video") {
+      return segmentAiPhotoModalLibraryItems.filter((item) => item.kind === "ai_video" || item.kind === "photo_animation");
+    }
+
+    return segmentAiPhotoModalLibraryItems;
+  }, [segmentAiPhotoModalLibraryFilter, segmentAiPhotoModalLibraryItems]);
   const segmentAiPhotoModalScenarioPrompt = segmentAiPhotoModalSegment ? getWorkspaceSegmentAiPhotoPromptPrefill(segmentAiPhotoModalSegment) : "";
   const segmentAiPhotoModalSegmentNumber =
     segmentEditorDraft && segmentAiPhotoModalSegment
@@ -9170,20 +9877,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       isSegmentEditorUpscalingImage &&
       segmentEditorUpscalingImageSegmentIndex === segmentAiPhotoModalSegment.index,
   );
-  const segmentAiPhotoModalPreviewKind = segmentAiPhotoModalSegment
-    ? getWorkspaceSegmentPreviewKind(segmentAiPhotoModalSegment)
-    : "video";
-  const segmentAiPhotoModalPreviewPosterUrl = segmentAiPhotoModalSegment
-    ? getWorkspaceSegmentDraftPreviewUrl(segmentAiPhotoModalSegment)
+  const segmentAiPhotoModalPreviewSurface = segmentAiPhotoModalSegment
+    ? getWorkspaceSegmentResolvedMediaSurface(segmentAiPhotoModalSegment, "segment-visual-preview", {
+        isPlaybackRequested: isSegmentAiPhotoModalPreviewPlaybackRequested,
+      })
     : null;
-  const segmentAiPhotoModalFallbackPosterUrl = segmentAiPhotoModalSegment
-    ? getWorkspaceSegmentDraftFallbackPosterUrl(segmentAiPhotoModalSegment)
-    : null;
-  const segmentAiPhotoModalPreviewUrl = segmentAiPhotoModalSegment
-    ? segmentAiPhotoModalPreviewKind === "image"
-      ? segmentAiPhotoModalPreviewPosterUrl
-      : getWorkspaceSegmentDraftVideoUrl(segmentAiPhotoModalSegment)
-    : null;
+  const segmentAiPhotoModalPreviewKind = segmentAiPhotoModalPreviewSurface?.previewKind ?? "video";
+  const segmentAiPhotoModalPreviewPosterUrl = segmentAiPhotoModalPreviewSurface?.posterUrl ?? null;
+  const segmentAiPhotoModalPreviewUrl = segmentAiPhotoModalPreviewSurface?.displayUrl ?? null;
   const segmentAiPhotoModalImageUpscaleSource = segmentAiPhotoModalSegment
     ? getWorkspaceSegmentImageUpscaleSource(segmentAiPhotoModalSegment)
     : null;
@@ -9231,6 +9932,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ? segmentAiPhotoModalPhotoAnimationStatus
         : segmentAiPhotoModalTab === "image_edit"
           ? segmentAiPhotoModalImageEditStatus
+        : segmentAiPhotoModalTab === "image_upscale"
+          ? segmentAiPhotoModalUpscaleStatus
         : segmentAiPhotoModalTab === "library"
           ? segmentAiPhotoModalLibraryStatus
           : segmentAiPhotoModalTab === "upload"
@@ -9244,6 +9947,40 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   );
   const canImproveSegmentAiVideoPrompt = Boolean(
     normalizedSegmentAiVideoModalPrompt || normalizeWorkspaceSegmentAiVideoPrompt(segmentAiPhotoModalScenarioPrompt),
+  );
+  const renderSegmentAiPhotoModalSourceButton = ({
+    title,
+    description,
+    footer,
+    isActive = false,
+    isSelectable = true,
+    disabled = false,
+    buttonTitle,
+    onClick,
+  }: {
+    title: string;
+    description: string;
+    footer?: ReactNode;
+    isActive?: boolean;
+    isSelectable?: boolean;
+    disabled?: boolean;
+    buttonTitle?: string;
+    onClick: () => void;
+  }) => (
+    <button
+      className={`studio-ai-photo-modal__source-tab${isActive ? " is-active" : ""}`}
+      type="button"
+      aria-pressed={isSelectable ? isActive : undefined}
+      disabled={disabled}
+      title={buttonTitle}
+      onClick={onClick}
+    >
+      <span className="studio-ai-photo-modal__source-copy">
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </span>
+      {footer}
+    </button>
   );
   const segmentAiPhotoModalTimeLabel = segmentAiPhotoModalSegment
     ? `${formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segmentAiPhotoModalSegment))} - ${formatWorkspaceSegmentEditorTime(
@@ -9283,11 +10020,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       previewModalPendingPlaybackRef.current = null;
     }
   }, [previewModalVideoPlaybackUrl]);
-  const activeSegmentMediaUrl = activeSegment
-    ? getWorkspaceSegmentPreviewKind(activeSegment) === "image"
-      ? getWorkspaceSegmentDraftPreviewUrl(activeSegment)
-      : getWorkspaceSegmentDraftVideoUrl(activeSegment)
+  const activeSegmentMediaSurface = activeSegment
+    ? getWorkspaceSegmentResolvedMediaSurface(activeSegment, "segment-carousel-card", {
+        isPlaybackRequested:
+          getWorkspaceSegmentPreviewKind(activeSegment) === "video" &&
+          (queuedSegmentEditorPlaybackIndex === activeSegment.index || playingSegmentEditorPreviewIndex === activeSegment.index),
+      })
     : null;
+  const activeSegmentMediaUrl = activeSegmentMediaSurface?.viewerUrl ?? null;
+  const activeSegmentStableIndex = activeSegment?.index ?? null;
+  const activeSegmentPreviewKind = activeSegmentMediaSurface?.previewKind ?? null;
   const studioSidebarActiveItem =
     studioView === "projects" ? "projects" : studioView === "media" ? "media" : createMode === "segment-editor" ? "edit" : "create";
   const shouldShowStudioSidebar = isSegmentEditorPageActive;
@@ -9435,8 +10177,38 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentThumbDragState(nextDragState);
     setSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(clientX, draggedIndex));
   };
-  const resetSegmentEditorPreviewPlaybackState = () => {
+  const stopSegmentEditorPreviewVideoElements = (options?: { clearRefs?: boolean }) => {
+    segmentEditorPreviewResetTokenRef.current += 1;
+
+    Object.values(segmentEditorPreviewVideoRefs.current).forEach((element) => {
+      if (!element) {
+        return;
+      }
+
+      element.pause();
+      element.muted = true;
+      element.defaultMuted = true;
+      if (element.preload !== "none") {
+        element.preload = "none";
+      }
+
+      delete element.dataset.previewPrimed;
+
+      try {
+        element.currentTime = 0;
+      } catch {
+        // Ignore reset errors while metadata is still loading.
+      }
+    });
+
+    if (options?.clearRefs) {
+      segmentEditorPreviewVideoRefs.current = {};
+    }
+  };
+
+  const resetSegmentEditorPreviewPlaybackState = (options?: { clearRefs?: boolean }) => {
     cancelSegmentEditorSyntheticPlayback();
+    stopSegmentEditorPreviewVideoElements(options);
     setPlayingSegmentEditorPreviewIndex(null);
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPreviewTimes({});
@@ -9446,8 +10218,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    const currentOrder = getSegmentEditorOrderSnapshot(segmentEditorDraft);
     const nextSegments = moveArrayItemToInsertIndex(segmentEditorDraft.segments, fromIndex, insertIndex);
     if (nextSegments === segmentEditorDraft.segments) {
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.reorder.noop",
+        {
+          fromIndex,
+          insertIndex,
+        },
+        {
+          includeOrder: true,
+        },
+      );
       return;
     }
 
@@ -9456,6 +10239,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       activeSegmentStableIndex === null
         ? Math.max(0, Math.min(insertIndex, nextSegments.length - 1))
         : nextSegments.findIndex((segment) => segment.index === activeSegmentStableIndex);
+
+    logSegmentEditorDiagnostics("client.segment-editor.reorder.commit", {
+      activeSegmentStableIndex,
+      fromIndex,
+      insertIndex,
+      nextActiveSegmentIndex,
+      nextOrder: getSegmentEditorOrderSnapshot({ segments: nextSegments }),
+      previousOrder: currentOrder,
+    });
 
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
@@ -9466,6 +10258,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             segments: moveArrayItemToInsertIndex(currentDraft.segments, fromIndex, insertIndex),
           }
         : currentDraft,
+    );
+    syncSegmentEditorRouteForArrayIndex(
+      { projectId: segmentEditorDraft.projectId, segments: nextSegments },
+      nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0,
     );
     setActiveSegmentIndex(nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0);
   };
@@ -9540,11 +10336,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         currentDragState?.pointerId === event.pointerId &&
         currentDragState.draggedIndex === segmentArrayIndex;
 
+      const finalInsertIndex = isDragActive
+        ? resolveSegmentThumbInsertIndexFromClientX(event.clientX, segmentArrayIndex)
+        : null;
+
+      logSegmentEditorDiagnostics("client.segment-editor.reorder.finish", {
+        cancelled: options?.cancelled ?? false,
+        finalInsertIndex,
+        isDragActive,
+        pointerId: event.pointerId,
+        segmentArrayIndex,
+      });
+
       if (isDragActive && !options?.cancelled) {
         event.preventDefault();
         updateSegmentThumbPointerDrag(event.clientX, event.clientY, segmentArrayIndex);
-        const finalInsertIndex = resolveSegmentThumbInsertIndexFromClientX(event.clientX, segmentArrayIndex);
-        moveSegmentEditorThumb(segmentArrayIndex, finalInsertIndex);
+        if (finalInsertIndex !== null) {
+          moveSegmentEditorThumb(segmentArrayIndex, finalInsertIndex);
+        }
         segmentThumbSuppressClickUntilRef.current = window.performance.now() + 320;
       }
 
@@ -9589,22 +10398,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const animationFrameId = window.requestAnimationFrame(resetModalScrollPosition);
     const timeoutId = window.setTimeout(resetModalScrollPosition, 80);
 
-    cancelSegmentEditorSyntheticPlayback();
-    Object.values(segmentEditorPreviewVideoRefs.current).forEach((element) => {
-      if (!element) return;
-
-      element.pause();
-
-      try {
-        element.currentTime = 0;
-      } catch {
-        // Ignore reset errors while metadata is still loading.
-      }
-    });
-
-    setQueuedSegmentEditorPlaybackIndex(null);
-    setPlayingSegmentEditorPreviewIndex(null);
-    setSegmentEditorPreviewTimes({});
+    resetSegmentEditorPreviewPlaybackState();
 
     return () => {
       window.cancelAnimationFrame(animationFrameId);
@@ -9635,30 +10429,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   useEffect(() => {
     cancelSegmentEditorSyntheticPlayback();
-    Object.values(segmentEditorPreviewVideoRefs.current).forEach((element) => {
-      if (!element) return;
+    stopSegmentEditorPreviewVideoElements();
+    const pendingActivatedPlaybackIndex =
+      createMode === "segment-editor" &&
+      activeSegmentStableIndex !== null &&
+      activeSegmentPreviewKind === "video" &&
+      pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentStableIndex
+        ? activeSegmentStableIndex
+        : null;
 
-      element.muted = true;
-      element.defaultMuted = true;
-      element.pause();
-
-      try {
-        element.currentTime = 0;
-      } catch {
-        // Ignore reset errors while metadata is still loading.
-      }
-    });
-
+    pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
+    setQueuedSegmentEditorPlaybackIndex(pendingActivatedPlaybackIndex);
     setPlayingSegmentEditorPreviewIndex(null);
     setSegmentEditorPreviewTimes({});
-  }, [activeSegmentIndex, activeSegmentMediaUrl, createMode]);
+  }, [activeSegmentMediaUrl, activeSegmentPreviewKind, activeSegmentStableIndex, createMode]);
 
   useEffect(() => {
     if (createMode !== "segment-editor") {
       return;
     }
 
-    const queuedSegment = activeSegment?.index === queuedSegmentEditorPlaybackIndex ? activeSegment : null;
+    const queuedSegment = activeSegmentStableIndex === queuedSegmentEditorPlaybackIndex ? activeSegment : null;
 
     if (queuedSegmentEditorPlaybackIndex === null || !queuedSegment) {
       return;
@@ -9713,7 +10504,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       cancelled = true;
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, [activeSegment, activeSegmentIndex, createMode, queuedSegmentEditorPlaybackIndex]);
+  }, [activeSegment, activeSegmentMediaUrl, activeSegmentStableIndex, createMode, queuedSegmentEditorPlaybackIndex]);
 
   useEffect(() => {
     if (!isVoiceoverEnabled || !resolvedSelectedVoiceId || resolvedSelectedVoiceId === selectedVoiceId) {
@@ -9945,9 +10736,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const openSegmentEditorWithDraft = (
     nextDraft: WorkspaceSegmentEditorDraftSession,
-    options?: { initialSegmentIndex?: number },
+    options?: { initialSegmentIndex?: number; initialSegmentMode?: "array" | "route" },
   ) => {
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.open-draft",
+      {
+        initialSegmentIndex: options?.initialSegmentIndex ?? 0,
+      },
+      {
+        includeOrder: true,
+        draft: nextDraft,
+      },
+    );
     lockSegmentEditorPromptHeight();
+    resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
     setSegmentEditorDraft(cloneWorkspaceSegmentEditorDraftSession(nextDraft));
     setSegmentEditorVideoError(null);
     segmentAiPhotoRunRef.current += 1;
@@ -9955,23 +10757,34 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentImageUpscaleRunRef.current += 1;
     setIsSegmentEditorUpscalingImage(false);
     setSegmentEditorUpscalingImageSegmentIndex(null);
-    setSegmentEditorPreviewTimes({});
-    setQueuedSegmentEditorPlaybackIndex(null);
-    setPlayingSegmentEditorPreviewIndex(null);
-    const boundedSegmentIndex = Math.max(
-      0,
-      Math.min(options?.initialSegmentIndex ?? 0, Math.max(0, nextDraft.segments.length - 1)),
-    );
+    const boundedSegmentIndex =
+      options?.initialSegmentMode === "route"
+        ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraft, options?.initialSegmentIndex ?? 0)
+        : Math.max(0, Math.min(options?.initialSegmentIndex ?? 0, Math.max(0, nextDraft.segments.length - 1)));
     setActiveSegmentIndex(boundedSegmentIndex);
     setCreateMode("segment-editor");
   };
 
   const ensureSegmentEditorDraftForProject = async (
     projectId: number,
-    options?: { initialSegmentIndex?: number; openDraft?: boolean; replaceRoute?: boolean; syncRoute?: boolean },
+    options?: {
+      initialSegmentIndex?: number;
+      initialSegmentMode?: "array" | "route";
+      openDraft?: boolean;
+      replaceRoute?: boolean;
+      syncRoute?: boolean;
+    },
   ) => {
     const requestedSegmentIndex = options?.initialSegmentIndex ?? 0;
     segmentEditorRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
+
+    logSegmentEditorDiagnostics("client.segment-editor.load.start", {
+      openDraft: options?.openDraft ?? true,
+      projectId,
+      replaceRoute: options?.replaceRoute ?? false,
+      requestedSegmentIndex,
+      syncRoute: options?.syncRoute ?? true,
+    });
 
     setSegmentEditorError(null);
     setSegmentEditorVideoError(null);
@@ -9985,8 +10798,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     if (segmentEditorDraft?.projectId === projectId) {
+      logSegmentEditorDiagnostics("client.segment-editor.load.reuse-active-draft", {
+        projectId,
+        requestedSegmentIndex,
+      });
       if (options?.openDraft !== false) {
-        openSegmentEditorWithDraft(segmentEditorDraft, { initialSegmentIndex: options?.initialSegmentIndex });
+        openSegmentEditorWithDraft(segmentEditorDraft, {
+          initialSegmentIndex: options?.initialSegmentIndex,
+          initialSegmentMode: options?.initialSegmentMode,
+        });
       }
       return segmentEditorDraft;
     }
@@ -9994,9 +10814,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (detachedSegmentEditorDraftRef.current?.draft.projectId === projectId) {
       const detachedDraftState = detachedSegmentEditorDraftRef.current;
       const restoredDraft = cloneWorkspaceSegmentEditorDraftSession(detachedDraftState.draft);
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.restore-detached-draft",
+        {
+          projectId,
+          requestedSegmentIndex,
+          restoredActiveSegmentIndex: detachedDraftState.activeSegmentIndex,
+        },
+        {
+          includeOrder: true,
+          draft: restoredDraft,
+        },
+      );
       if (options?.openDraft !== false) {
         openSegmentEditorWithDraft(restoredDraft, {
           initialSegmentIndex: options?.initialSegmentIndex ?? detachedDraftState.activeSegmentIndex,
+          initialSegmentMode: options?.initialSegmentIndex === undefined ? "array" : options?.initialSegmentMode,
         });
       }
       return restoredDraft;
@@ -10005,20 +10838,62 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const storedDraft = readStoredWorkspaceSegmentEditorDraft(session.email, projectId);
     const restoredStoredDraft = Boolean(storedDraft && options?.openDraft !== false);
     if (restoredStoredDraft && storedDraft) {
-      openSegmentEditorWithDraft(storedDraft, { initialSegmentIndex: options?.initialSegmentIndex });
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.restore-stored-draft",
+        {
+          projectId,
+          requestedSegmentIndex,
+        },
+        {
+          includeOrder: true,
+          draft: storedDraft,
+        },
+      );
+      openSegmentEditorWithDraft(storedDraft, {
+        initialSegmentIndex: options?.initialSegmentIndex,
+        initialSegmentMode: options?.initialSegmentMode,
+      });
     }
 
     if (!restoredStoredDraft && currentAppliedSegmentEditorSession?.projectId === projectId) {
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.reuse-applied-session",
+        {
+          projectId,
+          requestedSegmentIndex,
+        },
+        {
+          includeOrder: true,
+          draft: currentAppliedSegmentEditorSession,
+        },
+      );
       if (options?.openDraft !== false) {
-        openSegmentEditorWithDraft(currentAppliedSegmentEditorSession, { initialSegmentIndex: options?.initialSegmentIndex });
+        openSegmentEditorWithDraft(currentAppliedSegmentEditorSession, {
+          initialSegmentIndex: options?.initialSegmentIndex,
+          initialSegmentMode: options?.initialSegmentMode,
+        });
       }
       return currentAppliedSegmentEditorSession;
     }
 
     if (!restoredStoredDraft && segmentEditorLoadedSession?.projectId === projectId) {
       const nextDraft = createWorkspaceSegmentEditorDraftSession(segmentEditorLoadedSession);
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.reuse-loaded-session",
+        {
+          projectId,
+          requestedSegmentIndex,
+        },
+        {
+          includeOrder: true,
+          draft: nextDraft,
+        },
+      );
       if (options?.openDraft !== false) {
-        openSegmentEditorWithDraft(nextDraft, { initialSegmentIndex: options?.initialSegmentIndex });
+        openSegmentEditorWithDraft(nextDraft, {
+          initialSegmentIndex: options?.initialSegmentIndex,
+          initialSegmentMode: options?.initialSegmentMode,
+        });
       }
       return nextDraft;
     }
@@ -10048,12 +10923,56 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const normalizedSession = normalizeWorkspaceSegmentEditorSession(payload.data);
       setSegmentEditorLoadedSession(normalizedSession);
       const nextDraft = createWorkspaceSegmentEditorDraftSession(normalizedSession);
+      const liveDraft = segmentEditorDraftRef.current;
+
+      if (liveDraft?.projectId === projectId) {
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.load.preserve-live-draft-after-fetch",
+          {
+            projectId,
+            requestedSegmentIndex,
+            segmentCount: liveDraft.segments.length,
+          },
+          {
+            includeOrder: true,
+            draft: liveDraft,
+          },
+        );
+        return liveDraft;
+      }
+
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.success",
+        {
+          projectId,
+          requestedSegmentIndex,
+          segmentCount: nextDraft.segments.length,
+        },
+        {
+          includeOrder: true,
+          draft: nextDraft,
+        },
+      );
       if (options?.openDraft !== false) {
-        openSegmentEditorWithDraft(nextDraft, { initialSegmentIndex: options?.initialSegmentIndex });
+        openSegmentEditorWithDraft(nextDraft, {
+          initialSegmentIndex: options?.initialSegmentIndex,
+          initialSegmentMode: options?.initialSegmentMode,
+        });
       }
       return nextDraft;
     } catch (error) {
       if (controller.signal.aborted) {
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.load.aborted",
+          {
+            projectId,
+            reason: String(controller.signal.reason ?? "aborted"),
+            requestedSegmentIndex,
+          },
+          {
+            level: controller.signal.reason === "segment-editor-timeout" ? "warn" : "info",
+          },
+        );
         if (controller.signal.reason === "segment-editor-timeout" && segmentEditorRunRef.current === runId) {
           setSegmentEditorError("Сегменты загружаются слишком долго. Попробуйте ещё раз.");
         }
@@ -10066,6 +10985,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       const errorMessage = error instanceof Error ? error.message : "Не удалось открыть редактор Shorts.";
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.load.error",
+        {
+          error: errorMessage,
+          projectId,
+          requestedSegmentIndex,
+        },
+        {
+          level: "error",
+        },
+      );
       setSegmentEditorError(
         isWorkspaceSegmentEditorNotFoundError(errorMessage)
           ? "Для этого проекта сегменты пока недоступны."
@@ -10101,9 +11031,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (nextMode === "default") {
       closeSegmentAiPhotoModal();
-      setQueuedSegmentEditorPlaybackIndex(null);
-      setPlayingSegmentEditorPreviewIndex(null);
-      setSegmentEditorPreviewTimes({});
+      resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
       setCreateMode("default");
       return;
     }
@@ -10126,6 +11054,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         cancelPendingSegmentEditorLoad();
         stashCurrentSegmentEditorDraft();
         segmentEditorRouteRestoreKeyRef.current = null;
+        segmentEditorHandledRouteRestoreKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("projects");
@@ -10140,6 +11069,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         cancelPendingSegmentEditorLoad();
         stashCurrentSegmentEditorDraft();
         segmentEditorRouteRestoreKeyRef.current = null;
+        segmentEditorHandledRouteRestoreKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("media");
@@ -10160,6 +11090,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     cancelPendingSegmentEditorLoad();
     stashCurrentSegmentEditorDraft();
+    segmentEditorRouteRestoreKeyRef.current = null;
+    segmentEditorHandledRouteRestoreKeyRef.current = null;
     setSegmentEditorDraft(null);
     syncStudioRouteSection("create");
     void handleStudioCreateModeSwitch("default");
@@ -10168,6 +11100,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     if (!location.pathname.startsWith("/app/studio")) {
       segmentEditorRouteRestoreKeyRef.current = null;
+      segmentEditorHandledRouteRestoreKeyRef.current = null;
       return;
     }
 
@@ -10177,27 +11110,42 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (routeStudioState.section !== "edit" || !routeStudioState.projectId) {
       segmentEditorRouteRestoreKeyRef.current = null;
+      segmentEditorHandledRouteRestoreKeyRef.current = null;
       return;
     }
 
     const requestedSegmentIndex = routeStudioState.segmentIndex ?? 0;
     const restoreKey = `${routeStudioState.projectId}:${requestedSegmentIndex}`;
 
+    logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
+      requestedProjectId: routeStudioState.projectId,
+      requestedSegmentIndex,
+      restoreKey,
+    });
+
     setActiveTab("studio");
     setStudioView("create");
 
     if (segmentEditorDraft?.projectId === routeStudioState.projectId) {
-      segmentEditorRouteRestoreKeyRef.current = restoreKey;
-
       if (createMode !== "segment-editor") {
+        segmentEditorRouteRestoreKeyRef.current = restoreKey;
+        segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
         openSegmentEditorWithDraft(segmentEditorDraft, {
           initialSegmentIndex: requestedSegmentIndex,
+          initialSegmentMode: "route",
         });
         return;
       }
 
-      const boundedSegmentIndex = Math.max(0, Math.min(requestedSegmentIndex, Math.max(0, segmentEditorDraft.segments.length - 1)));
-      setActiveSegmentIndex((current) => (current === boundedSegmentIndex ? current : boundedSegmentIndex));
+      if (segmentEditorHandledRouteRestoreKeyRef.current !== restoreKey) {
+        segmentEditorRouteRestoreKeyRef.current = restoreKey;
+        const boundedSegmentIndex = resolveSegmentEditorArrayIndexFromRouteSegment(
+          segmentEditorDraft,
+          requestedSegmentIndex,
+        );
+        setActiveSegmentIndex((current) => (current === boundedSegmentIndex ? current : boundedSegmentIndex));
+        segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
+      }
       return;
     }
 
@@ -10209,6 +11157,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (storedDraft) {
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
+      segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
 
       if (storedSession && segmentEditorLoadedSession?.projectId !== storedSession.projectId) {
         setSegmentEditorLoadedSession(storedSession);
@@ -10216,9 +11165,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       openSegmentEditorWithDraft(storedDraft, {
         initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
       });
       void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
         initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
         openDraft: false,
         replaceRoute: true,
       });
@@ -10227,6 +11178,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (storedSession) {
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
+      segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
 
       if (segmentEditorLoadedSession?.projectId !== storedSession.projectId) {
         setSegmentEditorLoadedSession(storedSession);
@@ -10234,9 +11186,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       openSegmentEditorWithDraft(createWorkspaceSegmentEditorDraftSession(storedSession), {
         initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
       });
       void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
         initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
         openDraft: false,
         replaceRoute: true,
       });
@@ -10248,8 +11202,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     segmentEditorRouteRestoreKeyRef.current = restoreKey;
+    segmentEditorHandledRouteRestoreKeyRef.current = null;
     void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
       initialSegmentIndex: requestedSegmentIndex,
+      initialSegmentMode: "route",
       replaceRoute: true,
     });
   }, [
@@ -10261,44 +11217,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentEditorLoadedSession,
     segmentEditorDraft,
     session.email,
-  ]);
-
-  useEffect(() => {
-    if (!location.pathname.startsWith("/app/studio")) {
-      return;
-    }
-
-    if (activeTab !== "studio" || studioView !== "create" || createMode !== "segment-editor" || !segmentEditorDraft?.projectId) {
-      return;
-    }
-
-    if (
-      routeStudioState.section === "edit" &&
-      routeStudioState.projectId === segmentEditorDraft.projectId &&
-      (routeStudioState.segmentIndex ?? 0) === activeSegmentIndex
-    ) {
-      const activeRouteKey = `${segmentEditorDraft.projectId}:${activeSegmentIndex}`;
-      if (segmentEditorRouteRestoreKeyRef.current === activeRouteKey) {
-        segmentEditorRouteRestoreKeyRef.current = null;
-      }
-      return;
-    }
-
-    syncStudioRouteSection("edit", {
-      projectId: segmentEditorDraft.projectId,
-      replace: true,
-      segmentIndex: activeSegmentIndex,
-    });
-  }, [
-    activeSegmentIndex,
-    activeTab,
-    createMode,
-    location.pathname,
-    routeStudioState.projectId,
-    routeStudioState.section,
-    routeStudioState.segmentIndex,
-    segmentEditorDraft?.projectId,
-    studioView,
   ]);
 
   useEffect(() => {
@@ -10378,30 +11296,29 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     const insertAt = segmentEditorDraft.segments.length;
+    logSegmentEditorDiagnostics("client.segment-editor.structure.add", {
+      insertAt,
+      segmentCountBefore: segmentEditorDraft.segments.length,
+    }, { includeOrder: true });
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
+    const nextSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: segmentEditorDraft,
+      insertAt,
+      sourceSegment: segmentEditorDraft.segments[segmentEditorDraft.segments.length - 1] ?? null,
+    });
+    const nextSegments = [...segmentEditorDraft.segments, nextSegment];
     updateSegmentEditorDraft((currentDraft) => {
       if (currentDraft.segments.length >= WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
         return currentDraft;
       }
 
-      const boundedInsertIndex = currentDraft.segments.length;
-      const sourceSegment = currentDraft.segments[currentDraft.segments.length - 1] ?? null;
-      const nextSegment = createWorkspaceSegmentEditorInsertedSegment({
-        draft: currentDraft,
-        insertAt: boundedInsertIndex,
-        sourceSegment,
-      });
-
       return {
         ...currentDraft,
-        segments: [
-          ...currentDraft.segments.slice(0, boundedInsertIndex),
-          nextSegment,
-          ...currentDraft.segments.slice(boundedInsertIndex),
-        ],
+        segments: [...currentDraft.segments, cloneWorkspaceSegmentEditorDraftSegment(nextSegment)],
       };
     });
+    syncSegmentEditorRouteForArrayIndex({ projectId: segmentEditorDraft.projectId, segments: nextSegments }, insertAt);
     setActiveSegmentIndex(insertAt);
   };
 
@@ -10425,6 +11342,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    logSegmentEditorDiagnostics("client.segment-editor.structure.delete", {
+      segmentCountBefore: segmentEditorDraft.segments.length,
+      targetSegmentArrayIndex,
+      targetSegmentIndex,
+    }, { includeOrder: true });
+
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     if (segmentAiPhotoModalSegmentIndex === targetSegment.index) {
@@ -10441,8 +11364,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segments: currentDraft.segments.filter((segment) => segment.index !== targetSegment.index),
       };
     });
-    setActiveSegmentIndex((current) => {
-      const boundedCurrentIndex = Math.max(0, Math.min(current, segmentEditorDraft.segments.length - 1));
+    const nextActiveSegmentArrayIndex = (() => {
+      const boundedCurrentIndex = Math.max(0, Math.min(activeSegmentIndex, segmentEditorDraft.segments.length - 1));
       if (boundedCurrentIndex > targetSegmentArrayIndex) {
         return boundedCurrentIndex - 1;
       }
@@ -10452,7 +11375,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       return boundedCurrentIndex;
-    });
+    })();
+    syncSegmentEditorRouteForArrayIndex(
+      {
+        projectId: segmentEditorDraft.projectId,
+        segments: segmentEditorDraft.segments.filter((segment) => segment.index !== targetSegment.index),
+      },
+      nextActiveSegmentArrayIndex,
+    );
+    setActiveSegmentIndex(nextActiveSegmentArrayIndex);
   };
 
   const handleSegmentEditorSubtitleColorSelect = (colorId: StudioSubtitleColorOption["id"]) => {
@@ -10746,6 +11677,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ? 0
         : nextSegments.findIndex((segment) => segment.index === activeSegmentStableIndex);
 
+    logSegmentEditorDiagnostics("client.segment-editor.reorder.reset", {
+      activeSegmentStableIndex,
+      nextActiveSegmentIndex,
+      nextOrder: getSegmentEditorOrderSnapshot({ segments: nextSegments }),
+    }, { includeOrder: true });
+
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     if (
@@ -10768,12 +11705,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           }
         : currentDraft,
     );
+    syncSegmentEditorRouteForArrayIndex(
+      { projectId: segmentEditorDraft.projectId, segments: nextSegments },
+      nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0,
+    );
     setActiveSegmentIndex(nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0);
   };
 
   const openSegmentAiPhotoModal = (segmentArrayIndex: number, segment: WorkspaceSegmentEditorDraftSegment) => {
     setSegmentEditorVideoError(null);
-    setActiveSegmentIndex(segmentArrayIndex);
+    activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
+    setSegmentAiPhotoModalLibraryFilter("all");
     setSegmentAiPhotoModalSegmentIndex(segment.index);
     setSegmentAiPhotoModalPrompt(
       segment.aiPhotoPromptInitialized ? segment.aiPhotoPrompt : getWorkspaceSegmentAiPhotoPromptPrefill(segment),
@@ -10927,6 +11869,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentImageEditRun(targetSegmentIndex);
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
     cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
+    logSegmentEditorDiagnostics("client.segment-editor.media-library.apply", {
+      itemKey: item.itemKey,
+      itemKind: item.kind,
+      previewKind: item.previewKind,
+      targetSegmentIndex,
+    });
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       customVideo: createStudioCustomVideoFileFromMediaLibraryItem(item),
@@ -11399,9 +12347,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
+          const currentSegment = segmentEditorDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+          const preferredPosterUrl = currentSegment
+            ? getWorkspaceAiVideoPreferredPosterUrl(currentSegment, payload.data.asset)
+            : null;
+          const nextAiVideoAsset = preferredPosterUrl
+            ? {
+                ...payload.data.asset,
+                posterUrl: preferredPosterUrl,
+              }
+            : payload.data.asset;
+
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
-            aiVideoAsset: payload.data!.asset!,
+            aiVideoAsset: nextAiVideoAsset,
             aiVideoGeneratedMode: "ai_video",
             aiVideoGeneratedFromPrompt: options.prompt,
             aiVideoPrompt: options.prompt,
@@ -11409,7 +12368,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             videoAction: "ai",
           }));
           upsertGeneratedMediaLibraryEntry({
-            asset: payload.data.asset,
+            asset: nextAiVideoAsset,
             kind: "ai_video",
             projectId: segmentEditorDraft?.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -11475,9 +12434,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
+          const currentSegment = segmentEditorDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+          const preferredPosterUrl = currentSegment
+            ? getWorkspacePhotoAnimationPreferredPosterUrl(currentSegment, payload.data.asset)
+            : null;
+          const nextPhotoAnimationAsset = preferredPosterUrl
+            ? {
+                ...payload.data.asset,
+                posterUrl: preferredPosterUrl,
+              }
+            : payload.data.asset;
+
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
-            aiVideoAsset: payload.data!.asset!,
+            aiVideoAsset: nextPhotoAnimationAsset,
             aiVideoGeneratedMode: "photo_animation",
             aiVideoGeneratedFromPrompt: options.prompt,
             aiVideoPrompt: options.prompt,
@@ -11485,7 +12455,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             videoAction: "photo_animation",
           }));
           upsertGeneratedMediaLibraryEntry({
-            asset: payload.data.asset,
+            asset: nextPhotoAnimationAsset,
             kind: "photo_animation",
             projectId: segmentEditorDraft?.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -12210,6 +13180,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    setSegmentEditorVideoError(null);
+    setSegmentAiPhotoModalTab("image_upscale");
     await handleSegmentEditorImageUpscale({
       segmentIndex: segmentAiPhotoModalSegment.index,
     });
@@ -12318,6 +13290,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    logSegmentEditorDiagnostics("client.segment-editor.create-shorts.start", {
+      segmentCount: segmentEditorDraft.segments.length,
+    }, { includeOrder: true });
+
     const effectiveDraft = createWorkspaceSegmentEditorComparableDraftSession(
       segmentEditorDraft,
       segmentEditorChecklistBaseSession,
@@ -12386,6 +13362,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       (generatedVideo?.adId === effectiveDraft.projectId ? String(generatedVideo.prompt ?? "").trim() : "") ||
       (projects.find((project) => project.adId === effectiveDraft.projectId)?.prompt.trim() ?? "") ||
       topicInput.trim();
+    logSegmentEditorDiagnostics("client.segment-editor.create-shorts.apply", {
+      projectId: effectiveDraft.projectId,
+      regenerationPromptLength: regenerationPrompt.length,
+      segmentCount: effectiveDraft.segments.length,
+    }, { includeOrder: true, draft: effectiveDraft });
     await handleGenerate(regenerationPrompt, buildCurrentRegenerationOptions(nextAppliedSession));
   };
 
@@ -12876,6 +13857,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           }
           if (options?.clearAppliedSegmentEditorOnSuccess) {
             segmentEditorRouteRestoreKeyRef.current = null;
+            segmentEditorHandledRouteRestoreKeyRef.current = null;
             clearDetachedSegmentEditorDraft();
             setCreateMode("default");
             setSegmentEditorAppliedSession(null);
@@ -13216,6 +14198,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       voiceId?: string;
     },
   ) => {
+    console.info("[studio] generate.start", {
+      createMode,
+      isRegeneration: Boolean(options?.isRegeneration),
+      projectId: options?.projectId ?? null,
+      promptLength: nextTopic.trim().length,
+      hasSegmentEditorSession: Boolean(options?.segmentEditorSession),
+      selectedVideoMode,
+    });
     preserveExamplePrefillRef.current = false;
     const requiredCredits = getRequiredCreditsForVideoMode(selectedVideoMode);
 
@@ -13348,7 +14338,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
       setCreateMode("default");
       setHasLoadedProjects(false);
-      setStatus("Task queued");
+      setStatus(options?.segmentEditorSession ? "Подготавливаем сегменты..." : "Task queued");
     });
 
     if (shouldKeepSegmentEditorStateUntilGenerationResult) {
@@ -13363,9 +14353,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     try {
       const formData = new FormData();
+      if (options?.segmentEditorSession) {
+        console.info("[studio] generate.segment-editor-payload.start", {
+          projectId: options.segmentEditorSession.projectId,
+          segmentCount: options.segmentEditorSession.segments.length,
+        });
+      }
       const effectiveSegmentEditorBuild = options?.segmentEditorSession
         ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession)
         : null;
+      if (effectiveSegmentEditorBuild) {
+        console.info("[studio] generate.segment-editor-payload.success", {
+          projectId: effectiveSegmentEditorBuild.payload.projectId,
+          segmentCount: effectiveSegmentEditorBuild.payload.segments.length,
+          uploadCount: effectiveSegmentEditorBuild.uploads.length,
+        });
+      }
       const effectiveSegmentEditor = options?.segmentEditor ?? effectiveSegmentEditorBuild?.payload;
 
       appendStudioFormValue(formData, "prompt", safeTopic);
@@ -13417,6 +14420,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         formData.append(upload.fieldName, upload.file, upload.fileName);
       });
 
+      setStatus("Task queued");
       const response = await fetch("/api/studio/generate", {
         method: "POST",
         body: formData,
@@ -13450,6 +14454,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         invalidateSegmentEditorOnSuccess: Boolean(options?.isRegeneration && options?.projectId),
       });
     } catch (error) {
+      console.error("[studio] generate.failed-before-job", error);
       setIsGenerating(false);
       setStatus("Generation failed");
       setGenerateError(error instanceof Error ? error.message : "Failed to generate task.");
@@ -13582,24 +14587,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     await ensureSegmentEditorDraftForProject(project.adId);
   };
 
-  const handleOpenMediaLibraryItem = async (item: WorkspaceMediaLibraryItem) => {
-    setActiveTab("studio");
-    setStudioView("create");
-    const draft = await ensureSegmentEditorDraftForProject(item.projectId, {
-      openDraft: false,
-    });
-
-    if (!draft) {
-      return;
-    }
-
-    const matchedSegmentIndex = draft.segments.findIndex((segment) => segment.index === item.segmentIndex);
-    const initialSegmentIndex =
-      matchedSegmentIndex >= 0
-        ? matchedSegmentIndex
-        : Math.max(0, Math.min(item.segmentListIndex, Math.max(0, draft.segments.length - 1)));
-
-    openSegmentEditorWithDraft(draft, { initialSegmentIndex });
+  const handleOpenMediaLibraryItem = (item: WorkspaceMediaLibraryItem) => {
+    setPreviewModalPlaybackError(null);
+    setPreviewModalUseFallbackSource(false);
+    setMediaLibraryPreviewModal(item);
   };
 
   const handleOpenProjectPublish = async (project: WorkspaceProject) => {
@@ -13648,6 +14639,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     options?: { resetToStart?: boolean },
   ) => {
     let cancelled = false;
+    const requestToken = segmentEditorPreviewResetTokenRef.current;
 
     const cleanupRetryListeners = () => {
       element.removeEventListener("loadeddata", handlePlaybackRetry);
@@ -13662,7 +14654,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     };
 
     const tryStartPlayback = async () => {
-      if (cancelled) {
+      if (cancelled || segmentEditorPreviewResetTokenRef.current !== requestToken) {
         return false;
       }
 
@@ -13680,7 +14672,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       element.defaultMuted = true;
       await playVideoElement(element, true);
 
-      if (!cancelled && !element.paused && !element.ended) {
+      if (!cancelled && segmentEditorPreviewResetTokenRef.current === requestToken && !element.paused && !element.ended) {
         markPlaybackStarted();
         return true;
       }
@@ -13711,7 +14703,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       element.load();
     } else {
       window.requestAnimationFrame(() => {
-        if (cancelled) {
+        if (cancelled || segmentEditorPreviewResetTokenRef.current !== requestToken) {
           return;
         }
 
@@ -13724,51 +14716,64 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       cleanupRetryListeners();
     };
   };
+  requestSegmentEditorVideoPlaybackRef.current = requestSegmentEditorVideoPlayback;
 
-  const handleSegmentEditorPreviewVideoRef = (segmentIndex: number) => (element: HTMLVideoElement | null) => {
-    if (element) {
-      segmentEditorPreviewVideoRefs.current[segmentIndex] = element;
-
-      const shouldResumeQueuedPlayback =
-        createMode === "segment-editor" &&
-        activeSegment?.index === segmentIndex &&
-        queuedSegmentEditorPlaybackIndex === segmentIndex;
-
-      if (shouldResumeQueuedPlayback) {
-        const startQueuedPlayback = async () => {
-          if (
-            createMode !== "segment-editor" ||
-            activeSegment?.index !== segmentIndex ||
-            queuedSegmentEditorPlaybackIndex !== segmentIndex
-          ) {
-            return;
-          }
-
-          try {
-            element.currentTime = 0;
-          } catch {
-            // Ignore reset errors while metadata is still loading.
-          }
-
-          await requestSegmentEditorVideoPlayback(segmentIndex, element, { resetToStart: true });
-        };
-
-        if (element.readyState >= 1) {
-          void startQueuedPlayback();
-        } else {
-          element.addEventListener("loadedmetadata", () => void startQueuedPlayback(), { once: true });
-          if (element.preload !== "auto") {
-            element.preload = "auto";
-          }
-          element.load();
-        }
-      }
-
-      return;
+  const getSegmentEditorPreviewVideoRef = useCallback((segmentIndex: number) => {
+    const existingCallback = segmentEditorPreviewVideoRefCallbacks.current[segmentIndex];
+    if (existingCallback) {
+      return existingCallback;
     }
 
-    delete segmentEditorPreviewVideoRefs.current[segmentIndex];
-  };
+    const callback = (element: HTMLVideoElement | null) => {
+      if (element) {
+        segmentEditorPreviewVideoRefs.current[segmentIndex] = element;
+
+        const shouldResumeQueuedPlayback =
+          segmentEditorCreateModeRef.current === "segment-editor" &&
+          queuedSegmentEditorPlaybackIndexRef.current === segmentIndex;
+
+        if (shouldResumeQueuedPlayback) {
+          const requestToken = segmentEditorPreviewResetTokenRef.current;
+          const playbackRequest = requestSegmentEditorVideoPlaybackRef.current;
+          const startQueuedPlayback = async () => {
+            if (
+              segmentEditorCreateModeRef.current !== "segment-editor" ||
+              queuedSegmentEditorPlaybackIndexRef.current !== segmentIndex ||
+              segmentEditorPreviewResetTokenRef.current !== requestToken ||
+              !playbackRequest
+            ) {
+              return;
+            }
+
+            try {
+              element.currentTime = 0;
+            } catch {
+              // Ignore reset errors while metadata is still loading.
+            }
+
+            await playbackRequest(segmentIndex, element, { resetToStart: true });
+          };
+
+          if (element.readyState >= 1) {
+            void startQueuedPlayback();
+          } else {
+            element.addEventListener("loadedmetadata", () => void startQueuedPlayback(), { once: true });
+            if (element.preload !== "auto") {
+              element.preload = "auto";
+            }
+            element.load();
+          }
+        }
+
+        return;
+      }
+
+      delete segmentEditorPreviewVideoRefs.current[segmentIndex];
+    };
+
+    segmentEditorPreviewVideoRefCallbacks.current[segmentIndex] = callback;
+    return callback;
+  }, []);
 
   const handleSegmentAiPhotoModalPreviewVideoRef = useCallback((element: HTMLVideoElement | null) => {
     segmentAiPhotoModalPreviewVideoRef.current = element;
@@ -13921,7 +14926,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       cancelSegmentEditorSyntheticPlayback();
       setPlayingSegmentEditorPreviewIndex(null);
       setQueuedSegmentEditorPlaybackIndex(null);
-      setActiveSegmentIndex(segmentArrayIndex);
+      pendingSegmentEditorActivatedPlaybackIndexRef.current = previewKind === "video" ? segmentPlaybackIndex : null;
+      activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
       return;
     }
 
@@ -14123,6 +15129,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       cancelPendingSegmentEditorLoad();
       stashCurrentSegmentEditorDraft();
       segmentEditorRouteRestoreKeyRef.current = null;
+      segmentEditorHandledRouteRestoreKeyRef.current = null;
       setSegmentEditorDraft(null);
       setCreateMode("default");
       setStudioView("projects");
@@ -14284,15 +15291,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     void playVideoElement(element, shouldPreferMutedModalFallback);
-  };
-
-  const handlePreviewModalVideoClick = (event: ReactMouseEvent<HTMLVideoElement>) => {
-    const element = event.currentTarget;
-    if (!isCurrentPreviewModalVideoElement(element) || element.paused) {
-      return;
-    }
-
-    element.pause();
   };
 
   const handlePreviewModalVideoError = (event: ReactSyntheticEvent<HTMLVideoElement>) => {
@@ -14900,6 +15898,30 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       </div>
     </aside>
   ) : null;
+  const segmentEditorChangeSummaryCreateButton = hasSegmentEditorChanges ? (
+    <div className="studio-segment-editor__change-summary-footer">
+      <button
+        className="studio-segment-editor__change-summary-create"
+        type="button"
+        aria-label={`Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST)}`}
+        title={`Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST)}`}
+        disabled={
+          isGenerating ||
+          isSegmentEditorPreparingCustomVideo ||
+          isSegmentEditorGeneratingAiPhoto ||
+          isSegmentEditorGeneratingImageEdit ||
+          isSegmentEditorGeneratingAiVideo ||
+          isSegmentEditorGeneratingPhotoAnimation ||
+          isSegmentEditorUpscalingImage
+        }
+        onClick={() => {
+          void handleCreateShortsFromSegmentEditor();
+        }}
+      >
+        Создать Shorts {STUDIO_VIDEO_GENERATION_CREDIT_COST} ⚡
+      </button>
+    </div>
+  ) : null;
 
   const studioSidebar = (
     <aside className="studio-sidebar" aria-label="Параметры редактирования">
@@ -14949,7 +15971,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           onSelect={handleSegmentEditorLanguageSelect}
         />
       </div>
-      {segmentEditorChangeSummary ? <div className="studio-sidebar__summary">{segmentEditorChangeSummary}</div> : null}
+      {segmentEditorChangeSummary ? (
+        <div className="studio-sidebar__summary">
+          {segmentEditorChangeSummary}
+          {segmentEditorChangeSummaryCreateButton}
+        </div>
+      ) : null}
     </aside>
   );
 
@@ -15040,7 +16067,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               type="button"
                               aria-label="Предыдущий сегмент"
                               disabled={activeSegmentIndex <= 0}
-                              onClick={() => setActiveSegmentIndex((current) => Math.max(0, current - 1))}
+                              onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex - 1)}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -15091,14 +16118,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                                 const isActiveCard = offset === 0;
                                 const segmentNumber = nextSegmentArrayIndex + 1;
-                                const mediaKind = getWorkspaceSegmentPreviewKind(segment);
-                                const previewPosterUrl = getWorkspaceSegmentDraftPreviewUrl(segment);
-                                const fallbackPosterUrl = getWorkspaceSegmentDraftFallbackPosterUrl(segment);
-                                const previewFallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(segment, mediaKind);
-                                const mediaUrl = mediaKind === "image" ? previewPosterUrl : getWorkspaceSegmentDraftVideoUrl(segment);
-                                const mediaKey = mediaUrl
-                                  ? `${segment.index}:${mediaKind}:${mediaUrl}:${previewPosterUrl ?? "no-poster"}`
-                                  : "";
                                 const isAiPhotoGenerationPending = segmentEditorGeneratingAiPhotoSegmentIndex === segment.index;
                                 const isImageEditGenerationPending = segmentEditorGeneratingImageEditSegmentIndex === segment.index;
                                 const isAiVideoGenerationPending = segmentEditorGeneratingAiVideoSegmentIndex === segment.index;
@@ -15114,8 +16133,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const isSegmentPlaying = isActiveCard && playingSegmentEditorPreviewIndex === segment.index;
                                 const isSegmentPlaybackRequested =
                                   isActiveCard &&
-                                  mediaKind === "video" &&
+                                  getWorkspaceSegmentPreviewKind(segment) === "video" &&
                                   (queuedSegmentEditorPlaybackIndex === segment.index || isSegmentPlaying);
+                                const segmentMediaSurface = getWorkspaceSegmentResolvedMediaSurface(
+                                  segment,
+                                  "segment-carousel-card",
+                                  {
+                                    isPlaybackRequested: isSegmentPlaybackRequested,
+                                  },
+                                );
+                                const mediaKind = segmentMediaSurface.previewKind;
+                                const mediaUrl = segmentMediaSurface.displayUrl;
+                                const mediaKey = mediaUrl
+                                  ? `${segment.index}:${mediaKind}:${mediaUrl}:${segmentMediaSurface.posterUrl ?? "no-poster"}`
+                                  : "";
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segment.index] ?? 0 : 0;
                                 const isVisualEdited = isWorkspaceSegmentDraftVisualEdited(segment);
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
@@ -15136,19 +16167,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       {mediaUrl ? (
                                         <WorkspaceSegmentPreviewCardMedia
                                           autoplay={false}
-                                          fallbackPosterUrl={mediaKind === "video" ? fallbackPosterUrl : null}
+                                          fallbackPosterUrl={segmentMediaSurface.fallbackPosterUrl}
                                           imageLoading={isActiveCard ? "eager" : "lazy"}
                                           isPlaybackRequested={isSegmentPlaybackRequested}
                                           loop={false}
                                           mediaKey={mediaKey}
+                                          mountVideoWhenIdle={segmentMediaSurface.mountVideoWhenIdle}
                                           muted
-                                          posterUrl={mediaKind === "video" ? previewPosterUrl : null}
-                                          preferPosterFrame={!isActiveCard && mediaKind === "video"}
-                                          preload={isActiveCard ? "auto" : "metadata"}
-                                          previewFallbackUrls={previewFallbackUrls}
+                                          posterUrl={segmentMediaSurface.posterUrl}
+                                          preferPosterFrame={segmentMediaSurface.preferPosterFrame}
+                                          preload={mediaKind === "video" ? segmentMediaSurface.preloadPolicy : undefined}
+                                          primePausedFrame={segmentMediaSurface.primePausedFrame}
+                                          previewFallbackUrls={segmentMediaSurface.fallbackUrls}
                                           previewUrl={mediaUrl}
                                           previewKind={mediaKind}
-                                          videoRef={mediaKind === "video" ? handleSegmentEditorPreviewVideoRef(segment.index) : undefined}
+                                          videoRef={
+                                            isActiveCard && mediaKind === "video"
+                                              ? getSegmentEditorPreviewVideoRef(segment.index)
+                                              : undefined
+                                          }
                                           onVideoTimeUpdate={handleSegmentEditorPreviewTimeUpdate(segment.index)}
                                           onVideoEnded={() => {
                                             if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segment.index) {
@@ -15319,47 +16356,41 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         </div>
                                       ) : null}
                                       <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
-                                        <div className="studio-segment-editor__card-overlay-main">
-                                          <div className="studio-segment-editor__card-copy">
-                                            <strong>Сегмент {segmentNumber}</strong>
-                                            <span>
-                                              {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
-                                              {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
-                                                roundUp: true,
-                                              })}
-                                            </span>
-                                          </div>
-                                          {segmentSourceLabel !== "Сток" ? (
-                                            <small className="studio-segment-editor__card-badge">{segmentSourceLabel}</small>
-                                          ) : null}
-                                        </div>
-                                        {isActiveCard && hasSegmentEditorChanges ? (
+                                        {isActiveCard ? (
                                           <div className="studio-segment-editor__card-overlay-footer">
-                                            <button
-                                              className="studio-segment-editor__panel-btn is-primary studio-segment-editor__card-create"
-                                              type="button"
-                                              disabled={
-                                                isGenerating ||
-                                                isSegmentEditorPreparingCustomVideo ||
-                                                isSegmentEditorGeneratingAiPhoto ||
-                                                isSegmentEditorGeneratingImageEdit ||
-                                                isSegmentEditorGeneratingAiVideo ||
-                                                isSegmentEditorGeneratingPhotoAnimation ||
-                                                isSegmentEditorUpscalingImage
-                                              }
-                                              onPointerDown={(event) => {
-                                                event.stopPropagation();
-                                              }}
-                                              onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                void handleCreateShortsFromSegmentEditor();
-                                              }}
-                                            >
-                                              Создать Shorts
-                                            </button>
+                                            <div className="studio-segment-editor__card-overlay-main">
+                                              <div className="studio-segment-editor__card-copy">
+                                                <strong>Сегмент {segmentNumber}</strong>
+                                                <span>
+                                                  {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
+                                                  {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
+                                                    roundUp: true,
+                                                  })}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="studio-segment-editor__card-footer-actions">
+                                              {segmentSourceLabel !== "Сток" ? (
+                                                <small className="studio-segment-editor__card-badge">{segmentSourceLabel}</small>
+                                              ) : null}
+                                            </div>
                                           </div>
-                                        ) : null}
+                                        ) : (
+                                          <div className="studio-segment-editor__card-overlay-main">
+                                            <div className="studio-segment-editor__card-copy">
+                                              <strong>Сегмент {segmentNumber}</strong>
+                                              <span>
+                                                {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
+                                                {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
+                                                  roundUp: true,
+                                                })}
+                                              </span>
+                                            </div>
+                                            {segmentSourceLabel !== "Сток" ? (
+                                              <small className="studio-segment-editor__card-badge">{segmentSourceLabel}</small>
+                                            ) : null}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -15372,7 +16403,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               type="button"
                               aria-label="Следующий сегмент"
                               disabled={activeSegmentIndex >= segmentEditorDraft.segments.length - 1}
-                              onClick={() => setActiveSegmentIndex((current) => Math.min(segmentEditorDraft.segments.length - 1, current + 1))}
+                              onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + 1)}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -15395,17 +16426,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               </div>
                             ) : null}
                             {segmentEditorDraft.segments.map((segment, index) => {
-                              const thumbPreviewKind = getWorkspaceSegmentPreviewKind(segment);
-                              const thumbPreviewPosterUrl = getWorkspaceSegmentDraftPreviewUrl(segment);
-                              const thumbFallbackPosterUrl = getWorkspaceSegmentDraftFallbackPosterUrl(segment);
-                              const thumbPreviewFallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(
-                                segment,
-                                thumbPreviewKind,
-                              );
-                              const thumbUrl =
-                                thumbPreviewKind === "image"
-                                  ? thumbPreviewPosterUrl
-                                  : getWorkspaceSegmentDraftVideoUrl(segment);
+                              const thumbMediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+                              const thumbPreviewKind = thumbMediaSurface.previewKind;
+                              const thumbUrl = thumbMediaSurface.displayUrl;
                               const isActiveThumb = index === activeSegmentIndex;
                               const isThumbVisualEdited = isWorkspaceSegmentDraftVisualEdited(segment);
                               const isDraggedThumb = index === draggedSegmentThumbIndex;
@@ -15440,15 +16463,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         {thumbUrl ? (
                                           <WorkspaceSegmentPreviewCardMedia
                                             autoplay={false}
-                                            fallbackPosterUrl={thumbPreviewKind === "video" ? thumbFallbackPosterUrl : null}
+                                            fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
                                             imageLoading="lazy"
                                             loop={false}
-                                            mediaKey={`thumb:${segment.index}:${thumbPreviewKind}:${thumbUrl}:${thumbPreviewPosterUrl ?? "no-poster"}`}
+                                            mediaKey={`thumb:${segment.index}:${thumbPreviewKind}:${thumbUrl}:${thumbMediaSurface.posterUrl ?? "no-poster"}`}
+                                            mountVideoWhenIdle={thumbMediaSurface.mountVideoWhenIdle}
                                             muted
-                                            posterUrl={thumbPreviewKind === "video" ? thumbPreviewPosterUrl : null}
-                                            preferPosterFrame={thumbPreviewKind === "video"}
-                                            preload="none"
-                                            previewFallbackUrls={thumbPreviewFallbackUrls}
+                                            posterUrl={thumbMediaSurface.posterUrl}
+                                            preferPosterFrame={thumbMediaSurface.preferPosterFrame}
+                                            preload={thumbPreviewKind === "video" ? thumbMediaSurface.preloadPolicy : undefined}
+                                            primePausedFrame={thumbMediaSurface.primePausedFrame}
+                                            previewFallbackUrls={thumbMediaSurface.fallbackUrls}
                                             previewKind={thumbPreviewKind}
                                             previewUrl={thumbUrl}
                                           />
@@ -15969,19 +16994,42 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <strong>Медиатека ИИ визуалов</strong>
                     </div>
                     <div className="studio-media-library__pills">
-                      <span>ИИ фото: {visibleAiPhotoMediaItemsCount}</span>
-                      <span>ИИ видео: {visibleAiVideoMediaItemsCount}</span>
-                      <span>ИИ анимации: {visiblePhotoAnimationMediaItemsCount}</span>
+                      <button
+                        className={`studio-media-library__pill${mediaLibraryFilter === "all" ? " is-active" : ""}`}
+                        type="button"
+                        aria-pressed={mediaLibraryFilter === "all"}
+                        onClick={() => setMediaLibraryFilter("all")}
+                      >
+                        Все {visibleMediaLibraryItems.length}
+                      </button>
+                      <button
+                        className={`studio-media-library__pill${mediaLibraryFilter === "photo" ? " is-active" : ""}`}
+                        type="button"
+                        aria-pressed={mediaLibraryFilter === "photo"}
+                        onClick={() => setMediaLibraryFilter((current) => (current === "photo" ? "all" : "photo"))}
+                      >
+                        ИИ фото: {visibleAiPhotoGroupMediaItemsCount}
+                      </button>
+                      <button
+                        className={`studio-media-library__pill${mediaLibraryFilter === "video" ? " is-active" : ""}`}
+                        type="button"
+                        aria-pressed={mediaLibraryFilter === "video"}
+                        onClick={() => setMediaLibraryFilter((current) => (current === "video" ? "all" : "video"))}
+                      >
+                        ИИ видео: {visibleAiVideoGroupMediaItemsCount}
+                      </button>
                     </div>
                   </div>
 
-                  <div className="studio-media-library__grid">
-                    {visibleMediaLibraryItems.map((item) => {
+                  {filteredVisibleMediaLibraryItems.length > 0 ? (
+                    <div className="studio-media-library__grid">
+                      {filteredVisibleMediaLibraryItems.map((item) => {
                       const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
                       const itemKindLabelLower = itemKindLabel.toLowerCase();
                       const canDownloadSegment = Boolean(item.downloadUrl);
                       const openPhotoLabel = `Открыть ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`;
                       const deletePhotoLabel = `Удалить из медиатеки ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`;
+                      const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-library-tile");
 
                       return (
                         <article
@@ -16001,12 +17049,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 <WorkspaceSegmentPreviewCardMedia
                                   autoplay={false}
                                   imageLoading="lazy"
-                                  mediaKey={`media-library:${item.projectId}:${item.segmentIndex}:${item.previewUrl}:${item.previewPosterUrl ?? "no-poster"}`}
-                                  posterUrl={item.previewPosterUrl}
-                                  preferPosterFrame
-                                  preload="none"
-                                  previewUrl={item.previewUrl}
-                                  previewKind={item.previewKind}
+                                  mediaKey={`media-library:${item.projectId}:${item.segmentIndex}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
+                                  mountVideoWhenIdle={mediaLibrarySurface.mountVideoWhenIdle}
+                                  muted
+                                  posterUrl={mediaLibrarySurface.posterUrl}
+                                  preferPosterFrame={mediaLibrarySurface.preferPosterFrame}
+                                  preload={item.previewKind === "video" ? mediaLibrarySurface.preloadPolicy : undefined}
+                                  primePausedFrame={mediaLibrarySurface.primePausedFrame}
+                                  previewUrl={mediaLibrarySurface.displayUrl ?? item.previewUrl}
+                                  previewKind={mediaLibrarySurface.previewKind}
                                 />
                               </span>
                             </button>
@@ -16058,9 +17109,32 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             </button>
                           </div>
                         </article>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="studio-projects__empty">
+                      <div className="studio-projects__empty-icon" aria-hidden="true">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="2" y="4" width="20" height="16" rx="2" />
+                          <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
+                        </svg>
+                      </div>
+                      <strong>{mediaLibraryFilter === "photo" ? "Нет ИИ фото" : "Нет ИИ видео"}</strong>
+                      <p>
+                        {mediaLibraryFilter === "photo"
+                          ? "В медиатеке сейчас нет доступных фото для этого фильтра."
+                          : "В медиатеке сейчас нет доступных видео для этого фильтра."}
+                      </p>
+                      <button
+                        className="studio-projects__retry"
+                        type="button"
+                        onClick={() => setMediaLibraryFilter("all")}
+                      >
+                        Сбросить фильтр
+                      </button>
+                    </div>
+                  )}
                   {mediaLibraryNextCursor ? (
                     <div className="studio-projects__empty-actions">
                       <button
@@ -16071,7 +17145,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           void handleLoadMoreMediaLibrary();
                         }}
                       >
-                        {isMediaLibraryLoading ? "Загружаем..." : `Показать ещё (${visibleMediaLibraryItems.length} из ${Math.max(mediaLibraryTotal, visibleMediaLibraryItems.length)})`}
+                        {isMediaLibraryLoading
+                          ? "Загружаем..."
+                          : `Показать ещё (${filteredVisibleMediaLibraryItems.length} из ${Math.max(mediaLibraryTotal, visibleMediaLibraryItems.length)})`}
                       </button>
                     </div>
                   ) : null}
@@ -16153,32 +17229,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           ? createPortal(
               <div className="studio-segment-editor__thumb-ghost" aria-hidden="true" style={segmentThumbDragGhostStyle}>
                 {(() => {
-                  const ghostPreviewKind = getWorkspaceSegmentPreviewKind(segmentThumbDragSegment);
-                  const ghostPreviewPosterUrl = getWorkspaceSegmentDraftPreviewUrl(segmentThumbDragSegment);
-                  const ghostFallbackPosterUrl = getWorkspaceSegmentDraftFallbackPosterUrl(segmentThumbDragSegment);
-                  const ghostPreviewFallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(
+                  const ghostMediaSurface = getWorkspaceSegmentResolvedMediaSurface(
                     segmentThumbDragSegment,
-                    ghostPreviewKind,
+                    "segment-drag-ghost",
                   );
-                  const ghostPreviewUrl =
-                    ghostPreviewKind === "image"
-                      ? ghostPreviewPosterUrl
-                      : getWorkspaceSegmentDraftVideoUrl(segmentThumbDragSegment);
+                  const ghostPreviewKind = ghostMediaSurface.previewKind;
+                  const ghostPreviewUrl = ghostMediaSurface.displayUrl;
 
                   return (
                     <span className="studio-segment-editor__thumb-media">
                       {ghostPreviewUrl ? (
                         <WorkspaceSegmentPreviewCardMedia
                           autoplay={false}
-                          fallbackPosterUrl={ghostPreviewKind === "video" ? ghostFallbackPosterUrl : null}
+                          fallbackPosterUrl={ghostMediaSurface.fallbackPosterUrl}
                           imageLoading="lazy"
                           loop={false}
-                          mediaKey={`thumb-ghost:${segmentThumbDragSegment.index}:${ghostPreviewKind}:${ghostPreviewUrl}:${ghostPreviewPosterUrl ?? "no-poster"}`}
+                          mediaKey={`thumb-ghost:${segmentThumbDragSegment.index}:${ghostPreviewKind}:${ghostPreviewUrl}:${ghostMediaSurface.posterUrl ?? "no-poster"}`}
+                          mountVideoWhenIdle={ghostMediaSurface.mountVideoWhenIdle}
                           muted
-                          posterUrl={ghostPreviewKind === "video" ? ghostPreviewPosterUrl : null}
-                          preferPosterFrame={ghostPreviewKind === "video"}
-                          preload="none"
-                          previewFallbackUrls={ghostPreviewFallbackUrls}
+                          posterUrl={ghostMediaSurface.posterUrl}
+                          preferPosterFrame={ghostMediaSurface.preferPosterFrame}
+                          preload={ghostPreviewKind === "video" ? ghostMediaSurface.preloadPolicy : undefined}
+                          previewFallbackUrls={ghostMediaSurface.fallbackUrls}
                           previewKind={ghostPreviewKind}
                           previewUrl={ghostPreviewUrl}
                         />
@@ -16453,21 +17525,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           {segmentAiPhotoModalPreviewUrl ? (
                             <WorkspaceSegmentPreviewCardMedia
                               autoplay={false}
-                              fallbackPosterUrl={
-                                segmentAiPhotoModalPreviewKind === "video" ? segmentAiPhotoModalFallbackPosterUrl : null
-                              }
+                              fallbackPosterUrl={segmentAiPhotoModalPreviewSurface?.fallbackPosterUrl ?? null}
                               isPlaybackRequested={isSegmentAiPhotoModalPreviewPlaybackRequested}
                               loop={segmentAiPhotoModalPreviewKind === "video"}
                               mediaKey={`segment-visual-modal:${segmentAiPhotoModalSegment.index}:${segmentAiPhotoModalPreviewKind}:${segmentAiPhotoModalPreviewUrl}:${
                                 segmentAiPhotoModalPreviewPosterUrl ?? "no-poster"
                               }`}
                               muted
-                              posterUrl={segmentAiPhotoModalPreviewKind === "video" ? segmentAiPhotoModalPreviewPosterUrl : null}
-                              preload="auto"
-                              previewFallbackUrls={getWorkspaceSegmentDraftPreviewFallbackUrls(
-                                segmentAiPhotoModalSegment,
-                                segmentAiPhotoModalPreviewKind,
-                              )}
+                              mountVideoWhenIdle={segmentAiPhotoModalPreviewSurface?.mountVideoWhenIdle ?? true}
+                              posterUrl={segmentAiPhotoModalPreviewSurface?.posterUrl ?? null}
+                              preload={segmentAiPhotoModalPreviewKind === "video" ? segmentAiPhotoModalPreviewSurface?.preloadPolicy ?? "auto" : undefined}
+                              primePausedFrame={segmentAiPhotoModalPreviewSurface?.primePausedFrame ?? false}
+                              previewFallbackUrls={segmentAiPhotoModalPreviewSurface?.fallbackUrls ?? []}
                               previewKind={segmentAiPhotoModalPreviewKind}
                               previewUrl={segmentAiPhotoModalPreviewUrl}
                               videoRef={segmentAiPhotoModalPreviewKind === "video" ? handleSegmentAiPhotoModalPreviewVideoRef : undefined}
@@ -16540,209 +17609,166 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <section className="studio-ai-photo-modal__control-pane">
                       <div className="studio-ai-photo-modal__control-head">
                         <div className="studio-ai-photo-modal__control-topline">
-                          <span className="studio-ai-photo-modal__control-kicker">Визуал сегмента</span>
+                          <span className="studio-ai-photo-modal__control-kicker" id="segment-visual-modal-title">Визуал сегмента</span>
                           {segmentAiPhotoModalActiveStatus ? (
                             <span className={`studio-ai-photo-modal__state-chip is-${segmentAiPhotoModalActiveStatus.tone}`}>
                               {segmentAiPhotoModalActiveStatus.label}
                             </span>
                           ) : null}
                         </div>
-
-                        <div className="studio-ai-photo-modal__control-title">
-                          <strong id="segment-visual-modal-title">
-                            Сегмент {segmentAiPhotoModalSegmentNumber ?? segmentAiPhotoModalSegment.index + 1}
-                          </strong>
-                          <p>{segmentAiPhotoModalTimeLabel}</p>
-                        </div>
                       </div>
 
-                      <div className="studio-ai-photo-modal__source-switcher" role="tablist" aria-label="Источник визуала">
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "ai_video" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "ai_video"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("ai_video");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>ИИ видео</strong>
-                            <span>Сцена и движение</span>
-                          </span>
-                          {segmentAiPhotoModalAiVideoStatus ? (
-                            <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiVideoStatus.tone}`}>
-                              <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                              {segmentAiPhotoModalAiVideoStatus.label}
-                            </span>
-                          ) : null}
-                        </button>
+                      <div className="studio-ai-photo-modal__tool-groups" aria-label="Инструменты визуала">
+                        <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-create">
+                          <div className="studio-ai-photo-modal__tool-group-head">
+                            <strong id="segment-visual-group-create">Создать</strong>
+                          </div>
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Создать визуал">
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "ИИ фото",
+                              description: "Сцена по описанию",
+                              isActive: segmentAiPhotoModalTab === "ai_photo",
+                              footer: segmentAiPhotoModalAiPhotoStatus ? (
+                                <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiPhotoStatus.tone}`}>
+                                  <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                  {segmentAiPhotoModalAiPhotoStatus.label}
+                                </span>
+                              ) : null,
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("ai_photo");
+                              },
+                            })}
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "ИИ видео",
+                              description: "Сцена и движение",
+                              isActive: segmentAiPhotoModalTab === "ai_video",
+                              footer: segmentAiPhotoModalAiVideoStatus ? (
+                                <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiVideoStatus.tone}`}>
+                                  <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                  {segmentAiPhotoModalAiVideoStatus.label}
+                                </span>
+                              ) : null,
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("ai_video");
+                              },
+                            })}
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "ИИ анимация фото",
+                              description: "Движение из выбранного фото",
+                              isActive: segmentAiPhotoModalTab === "photo_animation",
+                              disabled: !canAnimateSegmentPhoto,
+                              buttonTitle: !canAnimateSegmentPhoto ? "Сначала выберите фото" : "Анимировать фото",
+                              footer: canAnimateSegmentPhoto ? (
+                                segmentAiPhotoModalPhotoAnimationStatus ? (
+                                  <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalPhotoAnimationStatus.tone}`}>
+                                    <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                    {segmentAiPhotoModalPhotoAnimationStatus.label}
+                                  </span>
+                                ) : null
+                              ) : (
+                                <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
+                              ),
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("photo_animation");
+                              },
+                            })}
+                          </div>
+                        </section>
 
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "photo_animation" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "photo_animation"}
-                          disabled={!canAnimateSegmentPhoto}
-                          title={!canAnimateSegmentPhoto ? "Сначала выберите фото" : "Анимировать фото"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("photo_animation");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>ИИ анимация фото</strong>
-                            <span>Движение из выбранного фото</span>
-                          </span>
-                          {canAnimateSegmentPhoto ? (
-                            segmentAiPhotoModalPhotoAnimationStatus ? (
-                              <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalPhotoAnimationStatus.tone}`}>
-                                <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                                {segmentAiPhotoModalPhotoAnimationStatus.label}
-                              </span>
-                            ) : null
-                          ) : (
-                            <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
-                          )}
-                        </button>
+                        <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-edit">
+                          <div className="studio-ai-photo-modal__tool-group-head">
+                            <strong id="segment-visual-group-edit">Изменить</strong>
+                          </div>
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Изменить визуал">
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "Дорисовать фото",
+                              description: "Редактирование выбранного фото",
+                              isActive: segmentAiPhotoModalTab === "image_edit",
+                              disabled: !canEditSegmentImage,
+                              buttonTitle: !canEditSegmentImage ? "Сначала выберите фото" : "Редактировать выбранное фото",
+                              footer: canEditSegmentImage ? (
+                                segmentAiPhotoModalImageEditStatus ? (
+                                  <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalImageEditStatus.tone}`}>
+                                    <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                    {segmentAiPhotoModalImageEditStatus.label}
+                                  </span>
+                                ) : null
+                              ) : (
+                                <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
+                              ),
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("image_edit");
+                              },
+                            })}
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "Улучшить качество",
+                              description: "Апскейл выбранного фото",
+                              isActive: segmentAiPhotoModalTab === "image_upscale",
+                              disabled: !canUpscaleSegmentImage,
+                              buttonTitle: !canUpscaleSegmentImage ? "Сначала выберите фото" : "Улучшить качество выбранного фото",
+                              footer: canUpscaleSegmentImage ? (
+                                segmentAiPhotoModalUpscaleStatus ? (
+                                  <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUpscaleStatus.tone}`}>
+                                    <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                    {segmentAiPhotoModalUpscaleStatus.label}
+                                  </span>
+                                ) : null
+                              ) : (
+                                <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
+                              ),
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("image_upscale");
+                              },
+                            })}
+                          </div>
+                        </section>
 
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "image_edit" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "image_edit"}
-                          disabled={!canEditSegmentImage}
-                          title={!canEditSegmentImage ? "Сначала выберите фото" : "Редактировать выбранное фото"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("image_edit");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>Дорисовать фото</strong>
-                            <span>Редактирование выбранного фото</span>
-                          </span>
-                          {canEditSegmentImage ? (
-                            segmentAiPhotoModalImageEditStatus ? (
-                              <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalImageEditStatus.tone}`}>
-                                <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                                {segmentAiPhotoModalImageEditStatus.label}
-                              </span>
-                            ) : null
-                          ) : (
-                            <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
-                          )}
-                        </button>
-
-                        <button
-                          className="studio-ai-photo-modal__source-tab"
-                          type="button"
-                          disabled={
-                            !canUpscaleSegmentImage ||
-                            isSegmentEditorPreparingCustomVideo ||
-                            isSegmentEditorGeneratingAiPhoto ||
-                            isSegmentEditorGeneratingImageEdit ||
-                            isSegmentEditorGeneratingAiVideo ||
-                            isSegmentEditorGeneratingPhotoAnimation ||
-                            isSegmentEditorUpscalingImage ||
-                            isSegmentAiPhotoPromptImproving
-                          }
-                          title={!canUpscaleSegmentImage ? "Сначала выберите фото" : "Улучшить качество выбранного фото"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            void handleSegmentAiPhotoModalUpscaleImage();
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>Улучшить качество</strong>
-                            <span>Апскейл выбранного фото</span>
-                          </span>
-                          {canUpscaleSegmentImage ? (
-                            segmentAiPhotoModalUpscaleStatus ? (
-                              <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUpscaleStatus.tone}`}>
-                                <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                                {segmentAiPhotoModalUpscaleStatus.label}
-                              </span>
-                            ) : (
-                              <span className="studio-ai-photo-modal__source-status">
-                                {STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST} ⚡
-                              </span>
-                            )
-                          ) : (
-                            <span className="studio-ai-photo-modal__source-status is-disabled">Выберите фото</span>
-                          )}
-                        </button>
-
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "ai_photo" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "ai_photo"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("ai_photo");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>ИИ фото</strong>
-                            <span>Сцена по описанию</span>
-                          </span>
-                          {segmentAiPhotoModalAiPhotoStatus ? (
-                            <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiPhotoStatus.tone}`}>
-                              <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                              {segmentAiPhotoModalAiPhotoStatus.label}
-                            </span>
-                          ) : null}
-                        </button>
-
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "library" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "library"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("library");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>Медиатека</strong>
-                            <span>Готовые AI-визуалы</span>
-                          </span>
-                          {segmentAiPhotoModalLibraryStatus ? (
-                            <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalLibraryStatus.tone}`}>
-                              <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                              {segmentAiPhotoModalLibraryStatus.label}
-                            </span>
-                          ) : null}
-                        </button>
-
-                        <button
-                          className={`studio-ai-photo-modal__source-tab${segmentAiPhotoModalTab === "upload" ? " is-active" : ""}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={segmentAiPhotoModalTab === "upload"}
-                          onClick={() => {
-                            setSegmentEditorVideoError(null);
-                            setSegmentAiPhotoModalTab("upload");
-                          }}
-                        >
-                          <span className="studio-ai-photo-modal__source-copy">
-                            <strong>Свой файл</strong>
-                            <span>Фото или видео</span>
-                          </span>
-                          {segmentAiPhotoModalUploadStatus ? (
-                            <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUploadStatus.tone}`}>
-                              <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                              {segmentAiPhotoModalUploadStatus.label}
-                            </span>
-                          ) : null}
-                        </button>
+                        <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-pick">
+                          <div className="studio-ai-photo-modal__tool-group-head">
+                            <strong id="segment-visual-group-pick">Выбрать</strong>
+                          </div>
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Выбрать источник визуала">
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "Медиатека",
+                              description: "Готовые AI-визуалы",
+                              isActive: segmentAiPhotoModalTab === "library",
+                              footer: segmentAiPhotoModalLibraryStatus ? (
+                                <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalLibraryStatus.tone}`}>
+                                  <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                  {segmentAiPhotoModalLibraryStatus.label}
+                                </span>
+                              ) : null,
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("library");
+                              },
+                            })}
+                            {renderSegmentAiPhotoModalSourceButton({
+                              title: "Свой файл",
+                              description: "Фото или видео",
+                              isActive: segmentAiPhotoModalTab === "upload",
+                              footer: segmentAiPhotoModalUploadStatus ? (
+                                <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUploadStatus.tone}`}>
+                                  <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                  {segmentAiPhotoModalUploadStatus.label}
+                                </span>
+                              ) : null,
+                              onClick: () => {
+                                setSegmentEditorVideoError(null);
+                                setSegmentAiPhotoModalTab("upload");
+                              },
+                            })}
+                          </div>
+                        </section>
                       </div>
 
                       {segmentAiPhotoModalTab === "ai_video" ? (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>ИИ видео</strong>
                           </div>
@@ -16758,7 +17784,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentAiPhotoModalTab("ai_video");
                               }}
                               aria-label="Промт для генерации ИИ видео"
-                              rows={7}
+                              rows={6}
                               placeholder="Кинематографичный крупный план астронавта в пыльной буре на Марсе, драматичный свет, плавное движение камеры"
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
@@ -16796,8 +17822,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
-                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary"
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
+                              aria-label={`Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`}
+                              title={`Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`}
                               disabled={
                                 isSegmentEditorGeneratingImageEdit ||
                                 isSegmentEditorGeneratingAiVideo ||
@@ -16807,17 +17835,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 isSegmentEditorUpscalingImage
                               }
                               onClick={() => {
-                                void handleSegmentAiVideoModalGenerate();
+                                handleSegmentAiPhotoModalPaidAction(() => handleSegmentAiVideoModalGenerate());
                               }}
                             >
-                              {isSegmentAiVideoModalGeneratingCurrentSegment
-                                ? "Генерируем..."
-                                : `Сгенерировать видео (${STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST} ⚡)`}
+                              {renderSegmentPaidActionContent(
+                                "Сгенерировать видео",
+                                STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
+                                isSegmentAiVideoModalGeneratingCurrentSegment,
+                                "Генерируем...",
+                              )}
                             </button>
                           </div>
                         </div>
                       ) : segmentAiPhotoModalTab === "photo_animation" ? (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>ИИ анимация фото</strong>
                             <p>Добавляет движение к текущему фото сегмента.</p>
@@ -16834,7 +17865,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentAiPhotoModalTab("photo_animation");
                               }}
                               aria-label="Промт для ИИ анимации фото"
-                              rows={7}
+                              rows={6}
                               placeholder="Плавный наезд камеры, легкое движение волос и ткани, атмосферный свет, кинематографичный параллакс"
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
@@ -16872,8 +17903,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
-                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary"
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
+                              aria-label={`Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`}
+                              title={`Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`}
                               disabled={
                                 !canAnimateSegmentPhoto ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -16884,17 +17917,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 isSegmentEditorUpscalingImage
                               }
                               onClick={() => {
-                                void handleSegmentPhotoAnimationModalGenerate();
+                                handleSegmentAiPhotoModalPaidAction(() => handleSegmentPhotoAnimationModalGenerate());
                               }}
                             >
-                              {isSegmentPhotoAnimationModalGeneratingCurrentSegment
-                                ? "Анимируем..."
-                                : `Анимировать фото (${formatCreditsCountLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)})`}
+                              {renderSegmentPaidActionContent(
+                                "Анимировать фото",
+                                STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
+                                isSegmentPhotoAnimationModalGeneratingCurrentSegment,
+                                "Анимируем...",
+                              )}
                             </button>
                           </div>
                         </div>
                       ) : segmentAiPhotoModalTab === "image_edit" ? (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>Дорисовать фото</strong>
                             <p>Меняет текущее фото сегмента по вашему описанию.</p>
@@ -16911,7 +17947,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentAiPhotoModalTab("image_edit");
                               }}
                               aria-label="Промт для дорисовки фото"
-                              rows={7}
+                              rows={6}
                               placeholder="Сохрани композицию, замени фон на неоновый ночной Токио, добавь дождь, кинематографичный свет, фотореализм"
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
@@ -16948,8 +17984,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           ) : null}
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
-                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary"
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
+                              aria-label={`Дорисовать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`}
+                              title={`Дорисовать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`}
                               disabled={
                                 !canEditSegmentImage ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -16960,17 +17998,61 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 isSegmentEditorUpscalingImage
                               }
                               onClick={() => {
-                                void handleSegmentImageEditModalGenerate();
+                                handleSegmentAiPhotoModalPaidAction(() => handleSegmentImageEditModalGenerate());
                               }}
                             >
-                              {isSegmentImageEditModalGeneratingCurrentSegment
-                                ? "Дорисовываем..."
-                                : `Дорисовать фото (${STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST} ⚡)`}
+                              {renderSegmentPaidActionContent(
+                                "Дорисовать фото",
+                                STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
+                                isSegmentImageEditModalGeneratingCurrentSegment,
+                                "Дорисовываем...",
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ) : segmentAiPhotoModalTab === "image_upscale" ? (
+                        <div className="studio-ai-photo-modal__tab-panel">
+                          <div className="studio-ai-photo-modal__tab-panel-head">
+                            <strong>Улучшить качество</strong>
+                            <p>Повышает детализацию и чёткость текущего фото сегмента.</p>
+                          </div>
+
+                          <div className="studio-ai-photo-modal__info-card">
+                            <strong>Используем текущее фото сегмента</strong>
+                            <p>После обработки фото в сегменте заменится на улучшенную версию.</p>
+                          </div>
+
+                          <div className="studio-ai-photo-modal__tab-actions">
+                            <button
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
+                              type="button"
+                              aria-label={`Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`}
+                              title={`Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`}
+                              disabled={
+                                !canUpscaleSegmentImage ||
+                                isSegmentEditorGeneratingAiPhoto ||
+                                isSegmentEditorGeneratingImageEdit ||
+                                isSegmentEditorGeneratingAiVideo ||
+                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentEditorUpscalingImage ||
+                                isSegmentAiPhotoPromptImproving
+                              }
+                              onClick={() => {
+                                handleSegmentAiPhotoModalPaidAction(() => handleSegmentAiPhotoModalUpscaleImage());
+                              }}
+                            >
+                              {renderSegmentPaidActionContent(
+                                "Улучшить качество",
+                                STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+                                isSegmentImageUpscaleCurrentSegment,
+                                "Улучшаем...",
+                              )}
                             </button>
                           </div>
                         </div>
                       ) : segmentAiPhotoModalTab === "ai_photo" ? (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>ИИ фото</strong>
                             <p>Короткое точное описание работает лучше.</p>
@@ -16987,7 +18069,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentAiPhotoModalTab("ai_photo");
                               }}
                               aria-label="Описание сцены для генерации"
-                              rows={7}
+                              rows={6}
                               placeholder="Скелет в пустыне находит блестящий смартфон, закат, песок, драматичный свет"
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
@@ -17026,8 +18108,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
-                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary"
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
+                              aria-label={`Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`}
+                              title={`Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`}
                               disabled={
                                 isSegmentEditorGeneratingAiPhoto ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -17038,67 +18122,116 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 isSegmentEditorUpscalingImage
                               }
                               onClick={() => {
-                                void handleSegmentAiPhotoModalGenerateScene();
+                                handleSegmentAiPhotoModalPaidAction(() => handleSegmentAiPhotoModalGenerateScene());
                               }}
                             >
-                              {isSegmentAiPhotoModalGeneratingCurrentSegment
-                                ? "Генерируем..."
-                                : `Сгенерировать ИИ фото (${formatCreditsCountLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)})`}
+                              {renderSegmentPaidActionContent(
+                                "Сгенерировать ИИ фото",
+                                STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
+                                isSegmentAiPhotoModalGeneratingCurrentSegment,
+                                "Генерируем...",
+                              )}
                             </button>
                           </div>
                         </div>
                       ) : segmentAiPhotoModalTab === "library" ? (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>Медиатека</strong>
-                            <p>Готовые визуалы из проектов и текущей сессии.</p>
                           </div>
 
                           {segmentAiPhotoModalLibraryItems.length > 0 ? (
-                            <div className="studio-ai-photo-modal__library-pills" aria-hidden="true">
-                              <span>ИИ фото: {visibleAiPhotoMediaItemsCount}</span>
-                              <span>Дорисовать фото: {visibleImageEditMediaItemsCount}</span>
-                              <span>ИИ видео: {visibleAiVideoMediaItemsCount}</span>
-                              <span>Анимации: {visiblePhotoAnimationMediaItemsCount}</span>
+                            <div className="studio-media-library__pills" aria-label="Фильтр медиатеки">
+                              <button
+                                className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "all" ? " is-active" : ""}`}
+                                type="button"
+                                aria-pressed={segmentAiPhotoModalLibraryFilter === "all"}
+                                onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
+                              >
+                                Все
+                              </button>
+                              <button
+                                className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "photo" ? " is-active" : ""}`}
+                                type="button"
+                                aria-pressed={segmentAiPhotoModalLibraryFilter === "photo"}
+                                onClick={() =>
+                                  setSegmentAiPhotoModalLibraryFilter((current) => (current === "photo" ? "all" : "photo"))
+                                }
+                              >
+                                ИИ фото
+                              </button>
+                              <button
+                                className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "video" ? " is-active" : ""}`}
+                                type="button"
+                                aria-pressed={segmentAiPhotoModalLibraryFilter === "video"}
+                                onClick={() =>
+                                  setSegmentAiPhotoModalLibraryFilter((current) => (current === "video" ? "all" : "video"))
+                                }
+                              >
+                                ИИ видео
+                              </button>
                             </div>
                           ) : null}
 
-                          {isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
-                            <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
-                              <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                              <div className="studio-ai-photo-modal__library-state-copy">
-                                <strong>Загружаем медиатеку</strong>
-                                <p>Собираем AI-визуалы.</p>
+                          <div className="studio-ai-photo-modal__library-body">
+                            {isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
+                              <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
+                                <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+                                <div className="studio-ai-photo-modal__library-state-copy">
+                                  <strong>Загружаем медиатеку</strong>
+                                  <p>Собираем AI-визуалы.</p>
+                                </div>
                               </div>
-                            </div>
-                          ) : mediaLibraryError && segmentAiPhotoModalLibraryItems.length === 0 ? (
-                            <div className="studio-ai-photo-modal__library-state studio-ai-photo-modal__library-state--error" role="alert">
-                              <div className="studio-ai-photo-modal__library-state-copy">
-                                <strong>Не удалось загрузить медиатеку</strong>
-                                <p>{mediaLibraryError}</p>
+                            ) : mediaLibraryError && segmentAiPhotoModalLibraryItems.length === 0 ? (
+                              <div className="studio-ai-photo-modal__library-state studio-ai-photo-modal__library-state--error" role="alert">
+                                <div className="studio-ai-photo-modal__library-state-copy">
+                                  <strong>Не удалось загрузить медиатеку</strong>
+                                  <p>{mediaLibraryError}</p>
+                                </div>
+                                <button
+                                  className="studio-ai-photo-modal__library-state-action"
+                                  type="button"
+                                  onClick={() => setMediaLibraryReloadToken((current) => current + 1)}
+                                >
+                                  Повторить
+                                </button>
                               </div>
-                              <button
-                                className="studio-ai-photo-modal__library-state-action"
-                                type="button"
-                                onClick={() => setMediaLibraryReloadToken((current) => current + 1)}
-                              >
-                                Повторить
-                              </button>
-                            </div>
-                          ) : segmentAiPhotoModalLibraryItems.length === 0 ? (
-                            <div className="studio-ai-photo-modal__library-state">
-                              <div className="studio-ai-photo-modal__library-state-copy">
-                                <strong>Медиатека пока пуста</strong>
-                                <p>Сначала сохраните хотя бы один AI-визуал.</p>
+                            ) : segmentAiPhotoModalLibraryItems.length === 0 ? (
+                              <div className="studio-ai-photo-modal__library-state">
+                                <div className="studio-ai-photo-modal__library-state-copy">
+                                  <strong>Медиатека пока пуста</strong>
+                                  <p>Сначала сохраните хотя бы один AI-визуал.</p>
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            <div className="studio-ai-photo-modal__library-grid">
-                              {segmentAiPhotoModalLibraryItems.map((item) => {
+                            ) : filteredSegmentAiPhotoModalLibraryItems.length === 0 ? (
+                              <div className="studio-ai-photo-modal__library-state">
+                                <div className="studio-ai-photo-modal__library-state-copy">
+                                  <strong>{segmentAiPhotoModalLibraryFilter === "photo" ? "Нет ИИ фото" : "Нет ИИ видео"}</strong>
+                                  <p>
+                                    {segmentAiPhotoModalLibraryFilter === "photo"
+                                      ? "В медиатеке сейчас нет доступных фото для этого фильтра."
+                                      : "В медиатеке сейчас нет доступных видео для этого фильтра."}
+                                  </p>
+                                </div>
+                                <button
+                                  className="studio-ai-photo-modal__library-state-action"
+                                  type="button"
+                                  onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
+                                >
+                                  Сбросить фильтр
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="studio-ai-photo-modal__library-grid">
+                                {filteredSegmentAiPhotoModalLibraryItems.map((item) => {
                                 const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
                                 const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
                                 const itemKindLabel = rawItemKindLabel;
                                 const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
+                                const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(
+                                  item,
+                                  "segment-modal-library-tile",
+                                );
 
                                 return (
                                   <button
@@ -17122,23 +18255,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       <WorkspaceSegmentPreviewCardMedia
                                         autoplay={false}
                                         imageLoading="lazy"
-                                        mediaKey={`segment-modal-library:${itemKey}:${item.previewPosterUrl ?? "no-poster"}`}
+                                        mediaKey={`segment-modal-library:${itemKey}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
+                                        mountVideoWhenIdle={mediaLibrarySurface.mountVideoWhenIdle}
                                         muted
-                                        posterUrl={item.previewPosterUrl}
-                                        preferPosterFrame
-                                        preload="none"
-                                        previewKind={item.previewKind}
-                                        previewUrl={item.previewUrl}
+                                        posterUrl={mediaLibrarySurface.posterUrl}
+                                        preferPosterFrame={mediaLibrarySurface.preferPosterFrame}
+                                        preload={item.previewKind === "video" ? mediaLibrarySurface.preloadPolicy : undefined}
+                                        primePausedFrame={mediaLibrarySurface.primePausedFrame}
+                                        previewKind={mediaLibrarySurface.previewKind}
+                                        previewUrl={mediaLibrarySurface.displayUrl ?? item.previewUrl}
                                       />
                                     </span>
                                   </button>
                                 );
-                              })}
-                            </div>
-                          )}
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : (
-                        <div className="studio-ai-photo-modal__tab-panel" role="tabpanel">
+                        <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>Свой файл</strong>
                             <p>JPG, PNG, WEBP, AVIF, MP4, MOV, WEBM, M4V.</p>
@@ -17187,6 +18323,115 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               document.body,
             )
           : null}
+        {mediaLibraryPreviewModal ? (
+          <div
+            className="studio-video-modal is-open"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="studio-media-library-preview-title"
+          >
+            <button
+              className="studio-video-modal__backdrop route-close"
+              type="button"
+              aria-label="Закрыть просмотр визуала"
+              onClick={closePreviewModals}
+            />
+            <div className="studio-video-modal__panel" role="document">
+              <button className="studio-video-modal__close route-close" type="button" aria-label="Закрыть просмотр визуала" onClick={closePreviewModals}>
+                ×
+              </button>
+              <div className="studio-video-modal__layout">
+                <div className="studio-video-modal__player-slot">
+                  {mediaLibraryPreviewModalSurface?.previewKind === "image" ? (
+                    <div className="studio-video-modal__player is-image">
+                      <img
+                        src={mediaLibraryPreviewModalSurface.displayUrl ?? mediaLibraryPreviewModal.previewUrl}
+                        alt={mediaLibraryPreviewModalTitle}
+                        draggable={false}
+                      />
+                    </div>
+                  ) : (
+                    <WorkspaceModalVideoPlayer
+                      autoPlay
+                      poster={mediaLibraryPreviewModalSurface?.posterUrl ?? mediaLibraryPreviewModalPosterUrl ?? undefined}
+                      preload={mediaLibraryPreviewModalSurface?.preloadPolicy ?? "auto"}
+                      preferMutedAutoplay={mediaLibraryPreviewModalSurface?.preferMutedAutoplay ?? true}
+                      src={mediaLibraryPreviewModalSurface?.viewerUrl ?? mediaLibraryPreviewModal.previewUrl}
+                      topActions={
+                        <a
+                          className="studio-video-modal__top-action"
+                          href={mediaLibraryPreviewModal.downloadUrl ?? mediaLibraryPreviewModal.previewUrl}
+                          download={mediaLibraryPreviewModal.downloadName}
+                          aria-label="Скачать визуал"
+                          title="Скачать визуал"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                              d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </a>
+                      }
+                      videoKey={`media-library-preview:${mediaLibraryPreviewModal.itemKey}:${mediaLibraryPreviewModalSurface?.viewerUrl ?? mediaLibraryPreviewModal.previewUrl}`}
+                      videoRef={(element) => {
+                        mediaLibraryPreviewVideoRef.current = element;
+                      }}
+                      volume={studioPreviewVolume}
+                      onVolumeChange={setStudioPreviewVolume}
+                    />
+                  )}
+                </div>
+
+                <div className="studio-video-modal__sidebar">
+                  <div className="studio-video-modal__section studio-video-modal__section--hero">
+                    <div className="studio-video-modal__title-block">
+                      <p className="studio-video-modal__eyebrow">Медиатека</p>
+                      <strong id="studio-media-library-preview-title">{mediaLibraryPreviewModalTitle}</strong>
+                    </div>
+                    <div className="studio-video-modal__header-status is-ready">
+                      <span className="studio-video-modal__header-status-label">
+                        {mediaLibraryPreviewModal.previewKind === "video" ? "Видео" : "Фото"}
+                      </span>
+                      <small>{mediaLibraryPreviewModalMeta}</small>
+                    </div>
+                  </div>
+
+                  <div className="studio-video-modal__section">
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Проект</span>
+                      <p className="studio-video-modal__description">{mediaLibraryPreviewModal.projectTitle}</p>
+                    </div>
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Сегмент</span>
+                      <p className="studio-video-modal__description">Сегмент {mediaLibraryPreviewModal.segmentNumber}</p>
+                    </div>
+                    <div className="studio-video-modal__meta">
+                      <span className="studio-video-modal__label">Тип</span>
+                      <p className="studio-video-modal__description">{mediaLibraryPreviewModalTitle}</p>
+                    </div>
+                  </div>
+
+                  <div className="studio-video-modal__actions" aria-label="Действия с визуалом">
+                    <a
+                      className="studio-video-modal__action studio-video-modal__action--primary route-button"
+                      href={mediaLibraryPreviewModal.downloadUrl ?? mediaLibraryPreviewModal.previewUrl}
+                      download={mediaLibraryPreviewModal.downloadName}
+                    >
+                      Скачать
+                    </a>
+                    <button className="studio-video-modal__action route-button" type="button" onClick={closePreviewModals}>
+                      Закрыть
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {previewModalVideoPlaybackUrl ? (
           <div
             className={`studio-video-modal${isAnyPreviewModalOpen ? " is-open" : ""}`}
@@ -17207,119 +18452,120 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               </button>
               <div className="studio-video-modal__layout">
                 <div className="studio-video-modal__player-slot">
-                  <div className="studio-video-modal__player">
-                    <video
-                      ref={handlePreviewModalVideoRef}
-                      key={`${isProjectPreviewModalOpen ? projectPreviewModal?.id ?? "project" : generatedVideo?.id ?? "generated"}-${previewModalSourceKey}-${previewModalOpenToken || previewModalUpdatedAt || "modal"}`}
-                      src={previewModalVideoPlaybackUrl}
-                      controls
-                      autoPlay={isAnyPreviewModalOpen}
-                      playsInline
-                      preload="metadata"
-                      onCanPlay={handlePreviewModalVideoCanPlay}
-                      onClick={handlePreviewModalVideoClick}
-                      onLoadedData={handlePreviewModalVideoLoadedData}
-                      onPlay={handlePreviewModalVideoPlay}
-                      onError={handlePreviewModalVideoError}
-                    />
-                    {previewModalPlaybackError ? (
-                      <div className="studio-video-modal__error" role="alert">
-                        <p>{previewModalPlaybackError}</p>
-                        <div className="studio-video-modal__error-actions">
-                          <button className="studio-video-modal__error-btn" type="button" onClick={handleRetryPreviewModalPlayback}>
-                            Повторить
-                          </button>
-                          <a
-                            className="studio-video-modal__error-btn"
-                            href={previewModalVideoPlaybackUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Открыть напрямую
-                          </a>
+                  <WorkspaceModalVideoPlayer
+                    autoPlay={isAnyPreviewModalOpen}
+                    errorOverlay={
+                      previewModalPlaybackError ? (
+                        <div className="studio-video-modal__error" role="alert">
+                          <p>{previewModalPlaybackError}</p>
+                          <div className="studio-video-modal__error-actions">
+                            <button className="studio-video-modal__error-btn" type="button" onClick={handleRetryPreviewModalPlayback}>
+                              Повторить
+                            </button>
+                            <a
+                              className="studio-video-modal__error-btn"
+                              href={previewModalVideoPlaybackUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Открыть напрямую
+                            </a>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-                    {isProjectPreviewModalOpen && previewModalProject ? (
-                      <div className="studio-video-modal__quick-actions" aria-label="Быстрые действия проекта">
-                        <button
-                          className="studio-canvas-preview__quick-action"
-                          type="button"
-                          aria-label="Открыть Shorts по сегментам"
-                          title={canEditPreviewModalProject ? "Открыть Shorts по сегментам" : "Shorts по сегментам доступны после сохранения проекта"}
-                          disabled={!canEditPreviewModalProject || isPreviewModalProjectActionBusy}
-                          onClick={() => void handleOpenPreviewModalProjectSegmentEditor()}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                            <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          </svg>
-                        </button>
-                        <button
-                          className="studio-canvas-preview__quick-action"
-                          type="button"
-                          aria-label="Опубликовать в YouTube"
-                          title={canPublishPreviewModalProject ? "Опубликовать" : "Публикация доступна после сохранения проекта"}
-                          disabled={!canPublishPreviewModalProject || isPreviewModalProjectActionBusy}
-                          onClick={() => void handleOpenProjectPublish(previewModalProject)}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M14 5h5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M10 14 19 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </button>
-                        {canManageLocalExamples ? (
+                      ) : null
+                    }
+                    onCanPlay={handlePreviewModalVideoCanPlay}
+                    onError={handlePreviewModalVideoError}
+                    onLoadedData={handlePreviewModalVideoLoadedData}
+                    onPlay={handlePreviewModalVideoPlay}
+                    preload="metadata"
+                    src={previewModalVideoPlaybackUrl}
+                    topActions={
+                      isProjectPreviewModalOpen && previewModalProject ? (
+                        <>
                           <button
-                            className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--accent"
+                            className="studio-canvas-preview__quick-action"
                             type="button"
-                            aria-label="Добавить видео в локальные примеры"
-                            title="Добавить в примеры"
-                            disabled={!canAddPreviewModalProjectToExamples || isSavingLocalExample}
-                            onClick={() => handleOpenProjectLocalExampleModal(previewModalProject)}
+                            aria-label="Открыть Shorts по сегментам"
+                            title={canEditPreviewModalProject ? "Открыть Shorts по сегментам" : "Shorts по сегментам доступны после сохранения проекта"}
+                            disabled={!canEditPreviewModalProject || isPreviewModalProjectActionBusy}
+                            onClick={() => void handleOpenPreviewModalProjectSegmentEditor()}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path
-                                d="M12 4.75 14.16 9.13l4.84.7-3.5 3.41.83 4.82L12 15.8 7.67 18.06l.83-4.82L5 9.83l4.84-.7L12 4.75Z"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinejoin="round"
-                              />
+                              <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                              <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                             </svg>
                           </button>
-                        ) : null}
+                          <button
+                            className="studio-canvas-preview__quick-action"
+                            type="button"
+                            aria-label="Опубликовать в YouTube"
+                            title={canPublishPreviewModalProject ? "Опубликовать" : "Публикация доступна после сохранения проекта"}
+                            disabled={!canPublishPreviewModalProject || isPreviewModalProjectActionBusy}
+                            onClick={() => void handleOpenProjectPublish(previewModalProject)}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M14 5h5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M10 14 19 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                          {canManageLocalExamples ? (
+                            <button
+                              className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--accent"
+                              type="button"
+                              aria-label="Добавить видео в локальные примеры"
+                              title="Добавить в примеры"
+                              disabled={!canAddPreviewModalProjectToExamples || isSavingLocalExample}
+                              onClick={() => handleOpenProjectLocalExampleModal(previewModalProject)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path
+                                  d="M12 4.75 14.16 9.13l4.84.7-3.5 3.41.83 4.82L12 15.8 7.67 18.06l.83-4.82L5 9.83l4.84-.7L12 4.75Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          ) : null}
+                          <a
+                            className="studio-video-modal__top-action"
+                            href={previewModalVideoPlaybackUrl}
+                            download={previewModalDownloadName}
+                            aria-label="Скачать видео"
+                            title="Скачать"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </a>
+                        </>
+                      ) : (
                         <a
-                          className="studio-canvas-preview__quick-action"
+                          className="studio-video-modal__top-action"
                           href={previewModalVideoPlaybackUrl}
                           download={previewModalDownloadName}
                           aria-label="Скачать видео"
-                          title="Скачать"
+                          title="Скачать видео"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                              d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
                           </svg>
                         </a>
-                      </div>
-                    ) : (
-                      <a
-                        className="studio-video-modal__download"
-                        href={previewModalVideoPlaybackUrl}
-                        download={previewModalDownloadName}
-                        aria-label="Скачать видео"
-                        title="Скачать видео"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path
-                            d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </a>
-                    )}
-                  </div>
+                      )
+                    }
+                    videoKey={`${isProjectPreviewModalOpen ? projectPreviewModal?.id ?? "project" : generatedVideo?.id ?? "generated"}-${previewModalSourceKey}-${previewModalOpenToken || previewModalUpdatedAt || "modal"}`}
+                    videoRef={handlePreviewModalVideoRef}
+                    volume={studioPreviewVolume}
+                    onVolumeChange={setStudioPreviewVolume}
+                  />
                 </div>
 
                 <div className="studio-video-modal__sidebar">

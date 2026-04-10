@@ -73,7 +73,7 @@ export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
               <span>{email}</span>
             </div>
             <button className="account-menu__action route-button" type="button" onClick={handleLogout}>
-              Sign Out
+              Выход
             </button>
           </div>
         </div>

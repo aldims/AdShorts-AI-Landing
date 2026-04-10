@@ -56,16 +56,16 @@ import {
   createStudioSegmentImageEditJob,
   createStudioSegmentImageUpscaleJob,
   createStudioSegmentPhotoAnimationJob,
-    createStudioGenerationJob,
-    generateStudioSegmentAiPhoto,
-    generateStudioContentPlanIdeas,
-    getStudioSegmentAiPhotoJobStatus,
-    getStudioSegmentImageEditJobStatus,
-    getStudioSegmentImageUpscaleJobStatus,
-    getStudioSegmentAiVideoPlaybackAsset,
-    getStudioSegmentAiVideoJobPosterPath,
+  createStudioGenerationJob,
+  generateStudioSegmentAiPhoto,
+  generateStudioContentPlanIdeas,
+  getStudioSegmentAiPhotoJobStatus,
+  getStudioSegmentAiVideoJobFileProxyTarget,
+  getStudioSegmentAiVideoJobPosterPath,
   getStudioSegmentAiVideoJobStatus,
-  getStudioSegmentPhotoAnimationPlaybackAsset,
+  getStudioSegmentImageEditJobStatus,
+  getStudioSegmentImageUpscaleJobStatus,
+  getStudioSegmentPhotoAnimationJobFileProxyTarget,
   getStudioSegmentPhotoAnimationJobPosterPath,
   getStudioSegmentPhotoAnimationJobStatus,
   getStudioPlaybackAsset,
@@ -93,7 +93,7 @@ import {
   sendAgencyContactSubmission,
 } from "./agency-contact.js";
 import { fetchUpstreamResponse, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
-import { initServerLogging } from "./logger.js";
+import { initServerLogging, logServerEvent } from "./logger.js";
 
 initServerLogging();
 
@@ -297,6 +297,7 @@ type StudioGenerateMultipartSegment = {
   customVideoFileDataUrl?: unknown;
   customVideoFileMimeType?: unknown;
   customVideoFileName?: unknown;
+  customVideoRemoteUrl?: unknown;
   customVideoFileUploadKey?: unknown;
   duration?: unknown;
   endTime?: unknown;
@@ -359,6 +360,28 @@ const buildMultipartFileDataUrl = async (file: File) => {
   return `data:${mimeType};base64,${buffer.toString("base64")}`;
 };
 
+const buildRemoteFileDataUrl = async (remoteUrl: string, fallbackMimeType?: string) => {
+  const targetUrl = new URL(remoteUrl, env.appUrl || "http://127.0.0.1").toString();
+  const response = await fetch(targetUrl, {
+    headers: {
+      Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch remote segment asset (${response.status}).`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) {
+    throw new Error("Remote segment asset is empty.");
+  }
+
+  const mimeType = response.headers.get("content-type")?.trim() || fallbackMimeType?.trim() || "application/octet-stream";
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
+};
+
 const parseMultipartFormData = async (req: express.Request) => {
   const request = new Request(new URL(req.originalUrl, env.appUrl || "http://127.0.0.1").toString(), {
     body: Readable.toWeb(req) as never,
@@ -394,10 +417,20 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                   : "";
               const uploadedEntry = uploadKey ? formData.get(uploadKey) : null;
               const uploadedFile = uploadedEntry instanceof File ? uploadedEntry : null;
+              const remoteUrl =
+                typeof segmentRecord.customVideoRemoteUrl === "string"
+                  ? segmentRecord.customVideoRemoteUrl.trim()
+                  : "";
+              const fallbackMimeType =
+                typeof segmentRecord.customVideoFileMimeType === "string"
+                  ? segmentRecord.customVideoFileMimeType.trim()
+                  : undefined;
 
               return {
                 customVideoFileDataUrl: uploadedFile
                   ? await buildMultipartFileDataUrl(uploadedFile)
+                  : remoteUrl
+                    ? await buildRemoteFileDataUrl(remoteUrl, fallbackMimeType)
                   : typeof segmentRecord.customVideoFileDataUrl === "string"
                     ? segmentRecord.customVideoFileDataUrl.trim()
                     : undefined,
@@ -1365,6 +1398,34 @@ app.all(/^\/api\/auth(\/.*)?$/, toNodeHandler(auth));
 
 app.use(express.json({ limit: "90mb" }));
 
+app.post("/api/client-events", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  const eventName = typeof req.body?.event === "string" ? req.body.event.trim() : "";
+  const level = req.body?.level === "debug" || req.body?.level === "info" || req.body?.level === "warn" || req.body?.level === "error"
+    ? req.body.level
+    : "info";
+  const payload =
+    req.body?.payload && typeof req.body.payload === "object" && !Array.isArray(req.body.payload)
+      ? req.body.payload
+      : {};
+
+  if (!eventName) {
+    res.status(400).json({ error: "Client event name is required." });
+    return;
+  }
+
+  logServerEvent(level, eventName, {
+    ...payload,
+    authUserEmail: session?.user?.email ?? null,
+    source: "client",
+  });
+
+  res.status(202).json({ data: { ok: true } });
+});
+
 app.post("/api/contact/agency", async (req, res) => {
   try {
     const submission = parseAgencyContactSubmission(req.body);
@@ -1991,18 +2052,15 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId/video", async (req, res) => {
   }
 
   try {
-    const asset = await getStudioSegmentAiVideoPlaybackAsset(req.params.jobId, session.user);
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-    res.type(asset.contentType || "video/mp4");
-    res.sendFile(asset.absolutePath);
+    const upstreamUrl = await getStudioSegmentAiVideoJobFileProxyTarget(req.params.jobId, session.user);
+    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment AI video.");
   } catch (error) {
-    console.error("[studio] Failed to load segment AI video playback cache", {
-      error: getServerErrorMessage(error, "Failed to load generated segment AI video playback."),
+    console.error("[studio] Failed to proxy segment AI video", {
+      error: getServerErrorMessage(error, "Failed to load generated segment AI video."),
       jobId: req.params.jobId,
     });
     res.status(502).json({
-      error: error instanceof Error ? error.message : "Failed to load generated segment AI video playback.",
+      error: error instanceof Error ? error.message : "Failed to load generated segment AI video.",
     });
   }
 });
@@ -2111,18 +2169,15 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/video", async (req, res
   }
 
   try {
-    const asset = await getStudioSegmentPhotoAnimationPlaybackAsset(req.params.jobId, session.user);
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
-    res.type(asset.contentType || "video/mp4");
-    res.sendFile(asset.absolutePath);
+    const upstreamUrl = await getStudioSegmentPhotoAnimationJobFileProxyTarget(req.params.jobId, session.user);
+    await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated segment photo animation.");
   } catch (error) {
-    console.error("[studio] Failed to load segment photo animation playback cache", {
-      error: getServerErrorMessage(error, "Failed to load generated segment photo animation playback."),
+    console.error("[studio] Failed to proxy segment photo animation", {
+      error: getServerErrorMessage(error, "Failed to load generated segment photo animation."),
       jobId: req.params.jobId,
     });
     res.status(502).json({
-      error: error instanceof Error ? error.message : "Failed to load generated segment photo animation playback.",
+      error: error instanceof Error ? error.message : "Failed to load generated segment photo animation.",
     });
   }
 });

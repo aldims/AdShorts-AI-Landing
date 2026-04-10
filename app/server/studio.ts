@@ -213,7 +213,7 @@ export type StudioGeneratedVideoAsset = {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  posterUrl: string;
+  posterUrl: string | null;
   remoteUrl: string;
 };
 
@@ -1904,8 +1904,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (
   payload?: AdsflowSegmentAiVideoAssetPayload | null,
 ): StudioGeneratedVideoAsset => {
   const remoteUrl = buildStudioSegmentAiVideoJobVideoProxyUrl(jobId);
-  const posterUrl = buildStudioSegmentAiVideoJobPosterProxyUrl(jobId);
-  if (!remoteUrl || !posterUrl) {
+  if (!remoteUrl) {
     throw new Error("Generated video is unavailable.");
   }
 
@@ -1913,7 +1912,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (
     fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
-    posterUrl,
+    posterUrl: null,
     remoteUrl,
   };
 };
@@ -1923,8 +1922,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
   payload?: AdsflowSegmentAiVideoAssetPayload | null,
 ): StudioGeneratedVideoAsset => {
   const remoteUrl = buildStudioSegmentPhotoAnimationJobVideoProxyUrl(jobId);
-  const posterUrl = buildStudioSegmentPhotoAnimationJobPosterProxyUrl(jobId);
-  if (!remoteUrl || !posterUrl) {
+  if (!remoteUrl) {
     throw new Error("Generated video is unavailable.");
   }
 
@@ -1932,7 +1930,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
     fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
-    posterUrl,
+    posterUrl: null,
     remoteUrl,
   };
 };

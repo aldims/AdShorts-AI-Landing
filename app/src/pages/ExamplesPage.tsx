@@ -466,7 +466,7 @@ export function ExamplesPage({
               </>
             ) : (
               <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
-                Sign in
+                Вход
               </button>
             )}
 

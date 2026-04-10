@@ -1,10 +1,17 @@
 export const MEDIA_LIBRARY_PAGE_SIZE = 24;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const SAME_ORIGIN_VIDEO_PROXY_ROUTE_PATTERN =
+  /^\/api\/(?:workspace\/project-segment-video|workspace\/project-video|studio\/playback\/|studio\/segment-ai-video\/jobs\/[^/]+\/video|studio\/segment-photo-animation\/jobs\/[^/]+\/video)/i;
 
 export const canCapturePosterInBrowser = (videoUrl: string | null | undefined) => {
-  const normalizedVideoUrl = normalizeText(videoUrl).toLowerCase();
-  return normalizedVideoUrl.startsWith("blob:") || normalizedVideoUrl.startsWith("data:");
+  const normalizedVideoUrl = normalizeText(videoUrl);
+  const normalizedVideoUrlLower = normalizedVideoUrl.toLowerCase();
+  return (
+    normalizedVideoUrlLower.startsWith("blob:") ||
+    normalizedVideoUrlLower.startsWith("data:") ||
+    SAME_ORIGIN_VIDEO_PROXY_ROUTE_PATTERN.test(normalizedVideoUrl)
+  );
 };
 
 export const shouldLoadWorkspaceMediaLibraryView = (
