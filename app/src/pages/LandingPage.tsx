@@ -28,27 +28,28 @@ type Props = {
 
 const heroPromptText = "Как нейросети меняют маркетинг в 2026";
 const heroChips = ["Видео", "Субтитры", "Озвучка", "9:16"];
+const heroPreviewImageSrc = "/hero_image.png";
 const landingRefineProofs = [
   {
-    label: "ЛОКАЛЬНОЕ РЕДАКТИРОВАНИЕ",
-    title: "Меняйте только тот фрагмент, который влияет на результат",
-    description: "Финальная доводка остаётся точечной: усиливайте один кадр, не рискуя развалить уже собранный ритм ролика.",
+    label: "ТОЧЕЧНАЯ ПРАВКА",
+    title: "Меняйте только нужный фрагмент",
+    description: "Корректируйте один кадр без пересборки остального ролика.",
   },
   {
-    label: "ВИЗУАЛ ПОД КОНТРОЛЕМ",
-    title: "Кадр, текст и субтитры редактируются в одном контексте",
-    description: "Не нужно переключаться между разрозненными блоками: ключевые правки сцены находятся рядом и читаются как один рабочий экран.",
+    label: "ОДИН КОНТЕКСТ",
+    title: "Текст, визуал и субтитры рядом",
+    description: "Вся сцена редактируется на одном экране без лишних переключений.",
   },
   {
-    label: "ФИНАЛЬНОЕ КАЧЕСТВО",
-    title: "Доводите оффер до точной, профессиональной подачи",
-    description: "Формулировка, визуальный акцент и читаемость субтитров синхронизированы, поэтому финальная сцена выглядит собранно и убедительно.",
+    label: "ФИНАЛЬНЫЙ КОНТРОЛЬ",
+    title: "Проверяйте подачу перед экспортом",
+    description: "Сразу видно, как сцена выглядит в итоговом вертикальном формате.",
   },
 ] as const;
 const landingRefineMetrics = [
   { value: "3", label: "слоя контроля в одном экране" },
-  { value: "1 сцена", label: "правится без пересборки ролика" },
-  { value: "9:16", label: "превью всегда видно в финальном формате" },
+  { value: "1 сцена", label: "правится без пересборки всего ролика" },
+  { value: "9:16", label: "финальный формат виден сразу" },
 ] as const;
 const landingRefineCarouselCards = [
   {
@@ -57,6 +58,7 @@ const landingRefineCarouselCards = [
     time: "00:05 - 00:10",
     source: "Сток",
     tone: "argument",
+    media: "hero",
     slotClass: "is-side is-left",
     isEdited: false,
   },
@@ -66,6 +68,7 @@ const landingRefineCarouselCards = [
     time: "00:11 - 00:17",
     source: "Кастом",
     tone: "accent",
+    media: "hero",
     slotClass: "is-active",
     isEdited: true,
   },
@@ -75,6 +78,7 @@ const landingRefineCarouselCards = [
     time: "00:18 - 00:22",
     source: "AI фото",
     tone: "cta",
+    media: "hero",
     slotClass: "is-side is-right",
     isEdited: false,
   },
@@ -295,7 +299,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   <div className="hero-live-preview__video">
                     <img
                       className="hero-live-preview__image"
-                      src="/hero_image.png"
+                      src={heroPreviewImageSrc}
                       alt="Превью интерфейса AdShorts AI внутри hero-экрана"
                       loading="eager"
                       decoding="async"
@@ -373,7 +377,10 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             <div className="landing-refine-copy">
               <div className="section-head landing-refine-head">
                 <p className="eyebrow eyebrow--dark">ТОЧНАЯ ДОВОДКА В СТУДИИ</p>
-                <h2 id="landing-refine-heading">Доведите каждый сегмент до финального качества</h2>
+                <h2 id="landing-refine-heading">
+                  <span className="landing-refine-head__line">Доведите каждый сегмент</span>
+                  <span className="landing-refine-head__line">до финального качества</span>
+                </h2>
                 <p>
                   Первый драфт собирает AI, финальную точность даёте вы: правьте текст, визуал и субтитры сцена за
                   сценой, пока ролик не будет выглядеть именно так, как нужно.
@@ -424,7 +431,17 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                               key={card.number}
                             >
                               <div className="studio-segment-editor__card-media">
-                                <div className={`landing-refine-board__editor-shot landing-refine-board__editor-shot--${card.tone}`}></div>
+                                <div className={`landing-refine-board__editor-shot landing-refine-board__editor-shot--${card.tone}`}>
+                                  {card.media === "hero" ? (
+                                    <img
+                                      className="landing-refine-board__editor-shot-image"
+                                      src={heroPreviewImageSrc}
+                                      alt=""
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  ) : null}
+                                </div>
 
                                 {isActiveCard ? (
                                   <>
