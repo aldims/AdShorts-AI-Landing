@@ -205,6 +205,7 @@ const isPlayableWorkspaceVideoPath = (value: string | null | undefined) => {
 
     return (
       pathname.includes("/api/video/download/") ||
+      /\/api\/media\/\d+\/download(?:\/)?$/i.test(pathname) ||
       pathname.includes("/api/web/video/") ||
       /\.(mp4|mov|webm|m4v)$/i.test(pathname)
     );

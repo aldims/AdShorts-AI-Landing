@@ -833,6 +833,10 @@ const STUDIO_CUSTOM_VIDEO_MAX_BYTES = 48 * 1024 * 1024;
 const STUDIO_ALLOWED_CUSTOM_VIDEO_EXTENSIONS = [".m4v", ".mov", ".mp4", ".webm"] as const;
 const STUDIO_BRAND_LOGO_MAX_BYTES = 12 * 1024 * 1024;
 const STUDIO_BRAND_TEXT_MAX_CHARS = 50;
+const STUDIO_PROMPT_PANEL_BASE_WIDTH = 620;
+const STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH = 1220;
+const STUDIO_PROMPT_PANEL_ADAPTIVE_BREAKPOINT = 640;
+const STUDIO_PROMPT_PANEL_INLINE_BUFFER = 8;
 const STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS = [".avif", ".jpeg", ".jpg", ".png", ".webp"] as const;
 const STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS = [
   ...STUDIO_ALLOWED_CUSTOM_VIDEO_EXTENSIONS,
@@ -856,6 +860,18 @@ const isWorkspaceSegmentGenerationJobFailedStatus = (value: unknown) =>
   ["canceled", "cancelled", "error", "failed", "timeout"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
 
 const studioPromptChips = ["Видео", "Субтитры", "Озвучка", "Музыка", "Язык"];
+const measureElementChildrenInlineWidth = (element: HTMLElement, gap: number) => {
+  const childWidths = Array.from(element.children)
+    .map((child) => Math.ceil((child as HTMLElement).getBoundingClientRect().width))
+    .filter((width) => width > 0);
+
+  if (childWidths.length === 0) {
+    return 0;
+  }
+
+  return childWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, childWidths.length - 1);
+};
+
 const rgbFromHex = (value: string) => {
   const normalized = value.replace("#", "");
   if (normalized.length !== 6) return null;
@@ -4494,6 +4510,7 @@ const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, ri
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
 const STUDIO_CONTENT_PLAN_VISIBILITY_STORAGE_KEY_PREFIX = "adshorts.content-plan-visible:";
+const STUDIO_BRAND_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-brand:";
 
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
@@ -4548,6 +4565,119 @@ const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_D
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
 const getStudioContentPlanVisibilityStorageKey = (email: string) =>
   `${STUDIO_CONTENT_PLAN_VISIBILITY_STORAGE_KEY_PREFIX}${email}`;
+const getStudioBrandSettingsStorageKey = (email: string) => `${STUDIO_BRAND_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
+
+type StudioBrandSettingsSnapshot = {
+  brandLogoFile: StudioBrandLogoFile | null;
+  brandText: string;
+};
+
+type StoredStudioBrandSettings = {
+  brandLogoFile?: {
+    dataUrl?: string;
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+  } | null;
+  brandText?: string;
+};
+
+const inferStudioBrandLogoExtension = (mimeType: string) => {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized === "image/avif") return ".avif";
+  if (normalized === "image/png") return ".png";
+  if (normalized === "image/webp") return ".webp";
+  return ".jpg";
+};
+
+const readStoredStudioBrandSettings = (email: string | null | undefined): StudioBrandSettingsSnapshot => {
+  if (typeof window === "undefined") {
+    return { brandLogoFile: null, brandText: "" };
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return { brandLogoFile: null, brandText: "" };
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getStudioBrandSettingsStorageKey(normalizedEmail));
+    if (!rawValue) {
+      return { brandLogoFile: null, brandText: "" };
+    }
+
+    const parsed = JSON.parse(rawValue) as StoredStudioBrandSettings | null;
+    const brandText = String(parsed?.brandText ?? "").slice(0, STUDIO_BRAND_TEXT_MAX_CHARS);
+    const storedLogo = parsed?.brandLogoFile && typeof parsed.brandLogoFile === "object" ? parsed.brandLogoFile : null;
+    const dataUrl = String(storedLogo?.dataUrl ?? "").trim();
+    const mimeType =
+      String(storedLogo?.mimeType ?? "").trim() ||
+      String(dataUrl.match(/^data:([^;,]+);base64,/i)?.[1] ?? "").trim() ||
+      "image/png";
+    const fileSize = Math.max(0, Number(storedLogo?.fileSize ?? 0) || 0);
+    const rawFileName = String(storedLogo?.fileName ?? "").trim();
+    const fileName = isSupportedStudioBrandLogoFile(rawFileName)
+      ? rawFileName
+      : `brand-logo${inferStudioBrandLogoExtension(mimeType)}`;
+
+    if (!dataUrl || !dataUrl.startsWith("data:image/") || fileSize > STUDIO_BRAND_LOGO_MAX_BYTES) {
+      return { brandLogoFile: null, brandText };
+    }
+
+    return {
+      brandLogoFile: {
+        dataUrl,
+        fileName,
+        fileSize,
+        mimeType,
+      },
+      brandText,
+    };
+  } catch {
+    return { brandLogoFile: null, brandText: "" };
+  }
+};
+
+const persistStudioBrandSettings = (
+  email: string | null | undefined,
+  settings: StudioBrandSettingsSnapshot,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    const storageKey = getStudioBrandSettingsStorageKey(normalizedEmail);
+    const brandText = settings.brandText.trim().slice(0, STUDIO_BRAND_TEXT_MAX_CHARS);
+    const logoDataUrl = String(settings.brandLogoFile?.dataUrl ?? "").trim();
+    const payload: StoredStudioBrandSettings = {
+      brandText,
+      brandLogoFile:
+        settings.brandLogoFile && logoDataUrl
+          ? {
+              dataUrl: logoDataUrl,
+              fileName: settings.brandLogoFile.fileName,
+              fileSize: settings.brandLogoFile.fileSize,
+              mimeType: settings.brandLogoFile.mimeType,
+            }
+          : null,
+    };
+
+    if (!payload.brandText && !payload.brandLogoFile) {
+      window.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota errors.
+  }
+};
 
 const getWorkspaceMediaLibraryItemStorageKey = (item: WorkspaceMediaLibraryItem) => item.itemKey;
 
@@ -8340,8 +8470,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<StudioCustomVideoFile | null>(null);
   const [isPreparingCustomVideo, setIsPreparingCustomVideo] = useState(false);
   const [videoSelectionError, setVideoSelectionError] = useState<string | null>(null);
-  const [selectedBrandLogo, setSelectedBrandLogo] = useState<StudioBrandLogoFile | null>(null);
-  const [brandText, setBrandText] = useState("");
+  const initialBrandSettingsRef = useRef<StudioBrandSettingsSnapshot | null>(null);
+  if (!initialBrandSettingsRef.current) {
+    initialBrandSettingsRef.current = readStoredStudioBrandSettings(session.email);
+  }
+  const [selectedBrandLogo, setSelectedBrandLogo] = useState<StudioBrandLogoFile | null>(
+    () => initialBrandSettingsRef.current?.brandLogoFile ?? null,
+  );
+  const [brandText, setBrandText] = useState(() => initialBrandSettingsRef.current?.brandText ?? "");
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
   const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>("ai");
@@ -8445,6 +8581,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [isContentPlanVisible, setIsContentPlanVisible] = useState<boolean>(() =>
     readStudioContentPlanVisibility(session.email),
   );
+  const [adaptivePromptPanelWidth, setAdaptivePromptPanelWidth] = useState<number | null>(null);
   const [activeContentPlanId, setActiveContentPlanId] = useState<string | null>(null);
   const [expandedContentPlanUsedIdeasPlanId, setExpandedContentPlanUsedIdeasPlanId] = useState<string | null>(null);
   const [selectedContentPlanIdeaId, setSelectedContentPlanIdeaId] = useState<string | null>(null);
@@ -8484,6 +8621,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const pendingProjectDeleteIdsRef = useRef<Set<string>>(new Set());
   const contentPlanPanelRef = useRef<HTMLElement | null>(null);
   const promptInnerRef = useRef<HTMLDivElement | null>(null);
+  const promptFooterRef = useRef<HTMLDivElement | null>(null);
+  const promptChipsRef = useRef<HTMLDivElement | null>(null);
+  const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -8707,6 +8847,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     referencedStudioObjectUrlsRef.current = nextReferencedUrls;
   }, [segmentEditorAppliedSession, segmentEditorDraft, selectedBrandLogo, selectedCustomMusic, selectedCustomVideo]);
+
+  useEffect(() => {
+    persistStudioBrandSettings(session.email, {
+      brandLogoFile: selectedBrandLogo,
+      brandText,
+    });
+  }, [brandText, selectedBrandLogo, session.email]);
 
   useEffect(
     () => () => {
@@ -9792,6 +9939,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setGeneratedVideo(fallbackGeneration);
 
   }, [failedStudioVideoUrls, generatedVideo?.videoUrl, isWorkspaceBootstrapPending, projects]);
+
+  useEffect(() => {
+    if (generatedVideo && generateError === "Failed to fetch generation status.") {
+      setGenerateError(null);
+    }
+  }, [generateError, generatedVideo]);
 
   useEffect(() => {
     const nextPreviewVideoUrl = String(generatedVideo?.videoUrl ?? "").trim() || null;
@@ -11144,14 +11297,106 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       clearSegmentThumbDragState();
     };
-  const segmentEditorPromptInnerStyle: CSSProperties | undefined =
+  const syncAdaptivePromptPanelWidth = useCallback(() => {
+    if (createMode === "segment-editor" || typeof window === "undefined") {
+      setAdaptivePromptPanelWidth((currentWidth) => (currentWidth === null ? currentWidth : null));
+      return;
+    }
+
+    const promptInnerElement = promptInnerRef.current;
+    const promptFooterElement = promptFooterRef.current;
+    const promptChipsElement = promptChipsRef.current;
+    const promptSubmitElement = promptSubmitRef.current;
+
+    if (!promptInnerElement || !promptFooterElement || !promptChipsElement || !promptSubmitElement) {
+      return;
+    }
+
+    const promptShellElement = promptInnerElement.parentElement;
+    const promptShellStyle = promptShellElement ? window.getComputedStyle(promptShellElement) : null;
+    const shellPaddingInline =
+      (promptShellStyle ? Number.parseFloat(promptShellStyle.paddingLeft) || 0 : 0) +
+      (promptShellStyle ? Number.parseFloat(promptShellStyle.paddingRight) || 0 : 0);
+    const availableViewportWidth = Math.max(0, window.innerWidth - shellPaddingInline);
+
+    if (availableViewportWidth <= STUDIO_PROMPT_PANEL_ADAPTIVE_BREAKPOINT) {
+      setAdaptivePromptPanelWidth((currentWidth) => (currentWidth === null ? currentWidth : null));
+      return;
+    }
+
+    const promptInnerStyle = window.getComputedStyle(promptInnerElement);
+    const promptFooterStyle = window.getComputedStyle(promptFooterElement);
+    const promptChipsStyle = window.getComputedStyle(promptChipsElement);
+    const promptPaddingInline =
+      (Number.parseFloat(promptInnerStyle.paddingLeft) || 0) + (Number.parseFloat(promptInnerStyle.paddingRight) || 0);
+    const footerGap = Number.parseFloat(promptFooterStyle.columnGap || promptFooterStyle.gap) || 0;
+    const chipsGap = Number.parseFloat(promptChipsStyle.columnGap || promptChipsStyle.gap) || 0;
+    const chipsWidth = measureElementChildrenInlineWidth(promptChipsElement, chipsGap);
+    const submitWidth = Math.ceil(promptSubmitElement.getBoundingClientRect().width);
+    const configuredPromptMaxWidth =
+      Number.parseFloat(promptInnerStyle.getPropertyValue("--studio-prompt-panel-max-width")) || 0;
+    const maxPromptWidth = Math.min(
+      availableViewportWidth,
+      Math.max(configuredPromptMaxWidth, STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH),
+    );
+    const minPromptWidth = Math.min(STUDIO_PROMPT_PANEL_BASE_WIDTH, maxPromptWidth);
+    const desiredWidth = Math.ceil(
+      promptPaddingInline + chipsWidth + submitWidth + footerGap + STUDIO_PROMPT_PANEL_INLINE_BUFFER,
+    );
+    const nextWidth = Math.min(maxPromptWidth, Math.max(minPromptWidth, desiredWidth));
+
+    setAdaptivePromptPanelWidth((currentWidth) =>
+      currentWidth !== null && Math.abs(currentWidth - nextWidth) < 1 ? currentWidth : nextWidth,
+    );
+  }, [createMode]);
+
+  useLayoutEffect(() => {
+    syncAdaptivePromptPanelWidth();
+  });
+
+  useEffect(() => {
+    if (createMode === "segment-editor" || typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      syncAdaptivePromptPanelWidth();
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncAdaptivePromptPanelWidth()) : null;
+
+    [promptFooterRef.current, promptChipsRef.current, promptSubmitRef.current].forEach((element) => {
+      if (element && resizeObserver) {
+        resizeObserver.observe(element);
+      }
+    });
+
+    void document.fonts?.ready.then(() => {
+      syncAdaptivePromptPanelWidth();
+    });
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
+    };
+  }, [createMode, syncAdaptivePromptPanelWidth]);
+
+  const promptInnerStyle: CSSProperties | undefined =
     createMode === "segment-editor" && segmentEditorPanelHeightLock
       ? {
           height: `${segmentEditorPanelHeightLock}px`,
           minHeight: `${segmentEditorPanelHeightLock}px`,
           maxHeight: `${segmentEditorPanelHeightLock}px`,
         }
-      : undefined;
+      : adaptivePromptPanelWidth !== null
+        ? {
+            width: `${adaptivePromptPanelWidth}px`,
+            maxWidth: `${adaptivePromptPanelWidth}px`,
+          }
+        : undefined;
 
   useEffect(() => {
     if (createMode !== "segment-editor" || (isSegmentAiPhotoModalOpen && !segmentAiPhotoModalSegment)) {
@@ -11450,7 +11695,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setBrandSelectionError(null);
 
     try {
+      const dataUrl = await readFileAsDataUrl(file);
       setSelectedBrandLogo({
+        dataUrl,
         file,
         fileName: file.name,
         fileSize: file.size,
@@ -15154,6 +15401,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   ) => {
     console.info("[studio] generate.start", {
       createMode,
+      brandLogoSelected: Boolean(selectedBrandLogo),
+      brandLogoHasDataUrl: Boolean(String(selectedBrandLogo?.dataUrl ?? "").trim()),
+      brandTextLength: brandText.trim().length,
       isRegeneration: Boolean(options?.isRegeneration),
       projectId: options?.projectId ?? null,
       promptLength: nextTopic.trim().length,
@@ -16441,9 +16691,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
         if (latestGeneration.generation) {
           setGeneratedVideo(latestGeneration.generation);
-          if (latestGeneration.error) {
-            setGenerateError(latestGeneration.error);
-          }
+          setGenerateError(latestGeneration.error ?? null);
         }
 
         if (latestGeneration.status === "done" && latestGeneration.generation) {
@@ -16929,7 +17177,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         {isGenerating ? (
           <>
             <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
-            <span>Генерируем...</span>
+            <span>Генерируем Shorts</span>
           </>
         ) : (
           <>Создать Shorts {STUDIO_VIDEO_GENERATION_CREDIT_COST} ⚡</>
@@ -16994,6 +17242,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         </div>
       ) : null}
     </aside>
+  );
+  const renderStudioShortsGenerationStatus = () => (
+    <div className="studio-canvas-preview__generation-status">
+      <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
+      <strong>Генерируем Shorts</strong>
+      <span>Собираем изменения сегментов в новое видео</span>
+    </div>
   );
 
   return (
@@ -17791,20 +18046,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         <span>Загружаем сегменты...</span>
                       </div>
                     ) : isGenerating ? (
-                      <div className="studio-canvas-preview__overlay">
-                        <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                        <span>Генерация...</span>
+                      <div className="studio-canvas-preview__overlay is-generating" role="status" aria-live="polite">
+                        {renderStudioShortsGenerationStatus()}
                       </div>
                     ) : null}
                   </div>
                 ) : (
-                  <div className={`studio-canvas-preview__placeholder${isGenerating ? " is-generating" : ""}${generateError ? " is-error" : ""}`}>
+                  <div
+                    className={`studio-canvas-preview__placeholder${isGenerating ? " is-generating" : ""}${generateError ? " is-error" : ""}`}
+                    role={isGenerating ? "status" : undefined}
+                    aria-live={isGenerating ? "polite" : undefined}
+                  >
                     {isGenerating ? (
-                      <>
-                        <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                        <strong>Генерация видео...</strong>
-                        <p>Это займёт около минуты</p>
-                      </>
+                      renderStudioShortsGenerationStatus()
                     ) : generateError ? (
                       <>
                         <strong>Ошибка генерации</strong>
@@ -17839,7 +18093,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	              <div
                 ref={promptInnerRef}
 	                className="studio-canvas-prompt__inner"
-	                style={segmentEditorPromptInnerStyle}
+	                style={promptInnerStyle}
 	              >
 	                <div className="studio-canvas-prompt__editor-layout">
 	                  <div className="studio-canvas-prompt__editor-pane">
@@ -17894,8 +18148,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             </div>
                           ) : null}
                         </div>
-		                        <div className="studio-canvas-prompt__footer">
-	                          <div className="studio-canvas-prompt__chips">
+		                        <div className="studio-canvas-prompt__footer" ref={promptFooterRef}>
+	                          <div className="studio-canvas-prompt__chips" ref={promptChipsRef}>
 		                            {studioPromptChips.map((chip) =>
 		                              chip === "Видео" ? (
 		                                <StudioVideoSelectorChip
@@ -17962,7 +18216,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 		                              ),
 		                            )}
 	                          </div>
-                            <div className="studio-canvas-prompt__submit">
+                            <div className="studio-canvas-prompt__submit" ref={promptSubmitRef}>
 	                            <button
                                 className={`studio-canvas-prompt__btn${isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
                                 type="button"

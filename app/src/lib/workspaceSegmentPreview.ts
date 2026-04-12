@@ -1,4 +1,5 @@
 const WORKSPACE_SEGMENT_VIDEO_ROUTE_PATTERN = /\/api\/workspace\/project-segment-video(?:[/?#]|$)/i;
+const MEDIA_DOWNLOAD_VIDEO_ROUTE_PATTERN = /\/api\/media\/\d+\/download(?:[/?#]|$)/i;
 const VIDEO_ASSET_URL_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
 
 export const getWorkspaceSegmentPausedPreviewTime = (duration: number | null | undefined) => {
@@ -20,7 +21,11 @@ export const isLikelyVideoAssetUrl = (value: string | null | undefined) => {
     return false;
   }
 
-  return WORKSPACE_SEGMENT_VIDEO_ROUTE_PATTERN.test(normalizedValue) || VIDEO_ASSET_URL_PATTERN.test(normalizedValue);
+  return (
+    WORKSPACE_SEGMENT_VIDEO_ROUTE_PATTERN.test(normalizedValue) ||
+    MEDIA_DOWNLOAD_VIDEO_ROUTE_PATTERN.test(normalizedValue) ||
+    VIDEO_ASSET_URL_PATTERN.test(normalizedValue)
+  );
 };
 
 export const filterWorkspaceStillAssetUrls = (values: Array<string | null | undefined>) =>

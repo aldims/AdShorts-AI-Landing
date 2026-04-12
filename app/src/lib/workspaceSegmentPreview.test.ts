@@ -9,6 +9,7 @@ import {
 describe("workspace segment preview helpers", () => {
   it("treats workspace segment proxy routes as video assets", () => {
     expect(isLikelyVideoAssetUrl("/api/workspace/project-segment-video?projectId=2890&segmentIndex=1")).toBe(true);
+    expect(isLikelyVideoAssetUrl("/api/media/4/download")).toBe(true);
     expect(isLikelyVideoAssetUrl("https://cdn.example.com/video.mp4")).toBe(true);
     expect(isLikelyVideoAssetUrl("https://cdn.example.com/poster.jpg")).toBe(false);
   });

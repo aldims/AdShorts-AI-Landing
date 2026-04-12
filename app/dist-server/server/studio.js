@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
-import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, peekWorkspaceProjectPlaybackAsset, warmWorkspaceProjectPlayback, WorkspaceProjectPlaybackPreparationDeferredError, } from "./project-playback.js";
+import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorkspaceVideoPoster, } from "./project-posters.js";
 import { getWorkspaceGenerationHistoryEntry, listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
@@ -441,6 +441,7 @@ const isPlayableStudioVideoPath = (value) => {
             return false;
         }
         return (pathname.includes("/api/video/download/") ||
+            /\/api\/media\/\d+\/download(?:\/)?$/i.test(pathname) ||
             pathname.includes("/api/web/video/") ||
             /\.(mp4|mov|webm|m4v)$/i.test(pathname));
     }
@@ -1487,6 +1488,24 @@ const buildLatestGenerationStatus = (payload, historyEntry) => {
         status,
     };
 };
+const buildStudioGenerationStatusFromHistoryEntry = (entry, options) => {
+    const safeJobId = normalizeGenerationText(entry.jobId);
+    const normalizedStatus = normalizeGenerationText(entry.status).toLowerCase();
+    const generation = buildStudioGenerationFromHistoryEntry(entry);
+    if (generation) {
+        return {
+            generation,
+            jobId: safeJobId,
+            status: "done",
+        };
+    }
+    const status = normalizedStatus || normalizeGenerationText(options?.fallbackStatus) || "queued";
+    return {
+        error: entry.error ?? undefined,
+        jobId: safeJobId,
+        status,
+    };
+};
 const extractStudioVideoPathFromProxyUrl = (value) => {
     const normalized = normalizeGenerationText(value);
     if (!normalized) {
@@ -1895,6 +1914,17 @@ export async function createStudioGenerationJob(prompt, user, options) {
     }
     let jobCreated = false;
     try {
+        console.info("[studio] adsflow.brand-payload", {
+            brandLogoDataUrlLength: normalizedBrandLogoFileDataUrl?.length ?? 0,
+            brandLogoFileName: normalizedBrandLogoFileName ?? null,
+            brandLogoMimeType: normalizedBrandLogoFileMimeType ?? null,
+            brandTextLength: normalizedBrandText?.length ?? 0,
+            hasBrandLogo: Boolean(normalizedBrandLogoFileDataUrl),
+            hasBrandText: Boolean(normalizedBrandText),
+            isRegeneration: Boolean(options?.isRegeneration),
+            projectId: normalizedProjectId ?? null,
+            segmentEditorActive: Boolean(normalizedSegmentEditor),
+        });
         const payload = await fetchAdsflowJson(buildAdsflowUrl("/api/web/generations"), {
             method: "POST",
             headers: {
@@ -2476,7 +2506,26 @@ export async function getStudioSegmentPhotoAnimationJobStatus(jobId, user) {
     }
 }
 export async function getStudioGenerationStatus(jobId, user) {
-    const payload = await fetchAdsflowJobStatus(jobId, user);
+    let payload;
+    try {
+        payload = await fetchAdsflowJobStatus(jobId, user);
+    }
+    catch (error) {
+        const historyEntry = await getWorkspaceGenerationHistoryEntry(user, jobId).catch(() => null);
+        if (historyEntry) {
+            const historyStatus = buildStudioGenerationStatusFromHistoryEntry(historyEntry);
+            if (historyStatus.generation) {
+                warmStudioGenerationPlayback(historyStatus.generation, user);
+            }
+            console.warn("[studio] Falling back to local generation history status", {
+                error: error instanceof Error ? error.message : "Unknown AdsFlow status error.",
+                jobId: normalizeGenerationText(jobId),
+                status: historyStatus.status,
+            });
+            return historyStatus;
+        }
+        throw error;
+    }
     const status = String(payload.status ?? "queued");
     const safeJobId = String(payload.job_id ?? jobId).trim();
     const existingHistoryEntry = await getWorkspaceGenerationHistoryEntry(user, safeJobId).catch(() => null);
@@ -2523,18 +2572,7 @@ export async function getStudioGenerationStatus(jobId, user) {
                 error: "Готовое видео недоступно как прямой media-файл.",
             };
         }
-        try {
-            await ensureWorkspaceProjectPlayback(await getStudioGenerationPlaybackSource(generation, user));
-        }
-        catch (error) {
-            if (isStudioPlaybackPreparationPendingError(error)) {
-                return {
-                    jobId: safeJobId,
-                    status: STUDIO_GENERATION_PREPARING_PREVIEW_STATUS,
-                };
-            }
-            throw error;
-        }
+        warmStudioGenerationPlayback(generation, user);
         return {
             jobId: safeJobId,
             status,
@@ -2778,13 +2816,6 @@ const getStudioPlaybackSource = async (options, user) => {
         upstreamUrl,
     };
 };
-function isStudioPlaybackPreparationPendingError(error) {
-    const message = normalizeGenerationText(error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
-    return (error instanceof WorkspaceProjectPlaybackPreparationDeferredError ||
-        message.includes("timeout") ||
-        message.includes("aborted") ||
-        message.includes("failed to download project playback source"));
-}
 async function getStudioGenerationPlaybackSource(generation, user) {
     const safeJobId = normalizeGenerationText(generation.id);
     if (!safeJobId || !generation.videoUrl || !isStudioPlaybackUrl(generation.videoUrl)) {
@@ -2801,25 +2832,8 @@ async function prepareStudioLatestGenerationForBootstrap(latestGeneration, user)
     if (!latestGeneration?.generation || latestGeneration.status !== "done") {
         return latestGeneration;
     }
-    try {
-        const playbackSource = await getStudioGenerationPlaybackSource(latestGeneration.generation, user);
-        const cachedAsset = await peekWorkspaceProjectPlaybackAsset(playbackSource.cacheKey);
-        if (cachedAsset) {
-            return latestGeneration;
-        }
-        return {
-            ...latestGeneration,
-            generation: undefined,
-            status: STUDIO_GENERATION_PREPARING_PREVIEW_STATUS,
-        };
-    }
-    catch (error) {
-        console.warn("[studio] Failed to inspect latest generation playback cache", {
-            error: error instanceof Error ? error.message : "Unknown playback inspection error.",
-            jobId: latestGeneration.jobId,
-        });
-        return latestGeneration;
-    }
+    warmStudioGenerationPlayback(latestGeneration.generation, user);
+    return latestGeneration;
 }
 const warmStudioGenerationPlayback = (generation, user) => {
     const safeJobId = normalizeGenerationText(generation?.id);

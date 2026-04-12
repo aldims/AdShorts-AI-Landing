@@ -1752,6 +1752,18 @@ app.post("/api/studio/generate", async (req, res) => {
   const projectId = requestBody.projectId;
   const segmentEditor = requestBody.segmentEditor;
 
+  console.info("[studio] generate.brand-input", {
+    brandLogoDataUrlLength: brandLogoFileDataUrl.length,
+    brandLogoFileName: brandLogoFileName || null,
+    brandLogoMimeType: brandLogoFileMimeType || null,
+    brandTextLength: brandText.trim().length,
+    hasBrandLogo: Boolean(brandLogoFileDataUrl),
+    hasBrandText: Boolean(brandText.trim()),
+    isRegeneration,
+    projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
+    segmentEditorActive: Boolean(segmentEditor),
+  });
+
   if (!prompt) {
     res.status(400).json({ error: "Prompt is required." });
     return;
