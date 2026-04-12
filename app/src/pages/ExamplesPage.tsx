@@ -99,7 +99,80 @@ const exampleGoalCopy: Record<ExampleGoal, { label: string; shortLabel: string }
 
 const exampleGoalOrder: ExampleGoal[] = ["stories", "fun", "ads", "fantasy", "interesting", "effects"];
 
-const exampleItems: ExampleItem[] = [];
+const exampleItems: ExampleItem[] = [
+  {
+    goal: "stories",
+    id: "story-future-city",
+    promptHint: "Атмосферный storytelling с сильным первым кадром.",
+    seedPrompt:
+      "Сделай storytelling Shorts про то, как AI меняет привычный город: атмосферный первый кадр, 3 коротких тезиса и финальный вывод без воды.",
+    summary:
+      "Формат для личных историй, трендов и нарратива, где важны настроение, темп и ощущение цельной сцены с первой секунды.",
+    tags: ["Storytelling", "Атмосфера", "Hook"],
+    title: "Storytelling с кинематографичным первым кадром",
+    videoSrc: "/1ru.mp4",
+  },
+  {
+    goal: "ads",
+    id: "sales-offer-contrast",
+    promptHint: "Продажа через боль, решение и короткий CTA.",
+    seedPrompt:
+      "Сделай продающий Shorts для услуги по настройке рекламы: сильный hook про потерю клиентов, затем решение и короткий CTA на заявку.",
+    summary:
+      "Подходит для сервисов, агентств и экспертов, когда нужно быстро показать боль, решение и понятный следующий шаг без длинного объяснения.",
+    tags: ["Продажи", "Оффер", "CTA"],
+    title: "Продажа услуги через контраст и обещание результата",
+    videoSrc: "/2ru.mp4",
+  },
+  {
+    goal: "interesting",
+    id: "facts-curiosity-loop",
+    promptHint: "Любопытный факт с удержанием и payoff.",
+    seedPrompt:
+      "Сделай Shorts в формате любопытного факта о кошках: яркий hook, 3 быстрых наблюдения и короткий финальный вывод с удержанием.",
+    summary:
+      "Формат для познавательных тем, подборок и каналов с фактами, где важны curiosity loop, surprise и быстрый payoff.",
+    tags: ["Факты", "Удержание", "Любопытство"],
+    title: "Факт-ролик с визуальным якорем",
+    videoSrc: "/3ru.mp4",
+  },
+  {
+    goal: "fantasy",
+    id: "story-mini-scene",
+    promptHint: "Нарастающий интерес и визуальная сцена.",
+    seedPrompt:
+      "Сделай Shorts про редкую находку в Альпах: атмосферный первый кадр, нарастающий интерес, ощущение загадки и короткий разворот в финале.",
+    summary:
+      "Полезно для роликов, которые должны ощущаться как маленькая сцена, а не как просто набор фактов.",
+    tags: ["Сцена", "Эмоция", "Нарратив"],
+    title: "Мини-история с нарастающим интересом",
+    videoSrc: "/2ru.mp4",
+  },
+  {
+    goal: "fun",
+    id: "ugc-viral-find",
+    promptHint: "Живая подача с ощущением, что ролик снят сейчас.",
+    seedPrompt:
+      "Сделай viral-style Shorts про продукт для ежедневной привычки: разговорный тон, быстрый hook, ощущение живой находки и нативный CTA.",
+    summary:
+      "Подходит для тестов, реакций, нативных интеграций и роликов, которые должны ощущаться живыми, быстрыми и невылизанными.",
+    tags: ["Viral", "Нативно", "Живо"],
+    title: "Viral-подача с эффектом «снято сейчас»",
+    videoSrc: "/3ru.mp4",
+  },
+  {
+    goal: "effects",
+    id: "effects-wow-frame",
+    promptHint: "Визуальный wow-эффект как основной крючок.",
+    seedPrompt:
+      "Сделай Shorts с визуальным wow-эффектом: первый кадр должен удивлять, дальше 3 быстрые смены сцены и финальный короткий вывод.",
+    summary:
+      "Формат для роликов, где ключевую роль играет визуальное впечатление, динамика монтажа и цепляющий первый кадр.",
+    tags: ["WOW", "Эффект", "Динамика"],
+    title: "WOW-сцена с упором на визуальный эффект",
+    videoSrc: "/1ru.mp4",
+  },
+];
 
 const formatExampleOrdinal = (index: number) => String(index + 1).padStart(2, "0");
 
@@ -291,12 +364,12 @@ function ExampleVideoPreview({
   return (
     <button
       ref={containerRef}
-      className={`${className}${isPlaying ? " is-playing" : ""}`}
+      className={`${className}${isPlaying ? " is-playing" : ""}${playbackMode === "sound" ? " is-sound-playing" : ""}`}
       type="button"
       onClick={handlePreviewClick}
       onMouseEnter={handlePreviewMouseEnter}
       onMouseLeave={handlePreviewMouseLeave}
-      aria-pressed={isPlaying}
+      aria-pressed={playbackMode === "sound"}
       aria-label={`Воспроизвести пример: ${example.title}`}
     >
       {media}
@@ -319,7 +392,7 @@ export function ExamplesPage({
   const [canManageLocalExamples, setCanManageLocalExamples] = useState(false);
   const [deletingLocalExampleId, setDeletingLocalExampleId] = useState<string | null>(null);
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
-  const allExamples = [...localExamples, ...exampleItems];
+  const allExamples = localExamples.length > 0 ? localExamples : exampleItems;
   const totalThemeCount = new Set(allExamples.map((example) => example.goal)).size;
   const totalSceneCount = allExamples.length;
   const exampleFilterOptions: Array<{ id: ExampleFilter; label: string }> = [

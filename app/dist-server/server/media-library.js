@@ -1,4 +1,4 @@
-import { areWorkspaceMediaLibraryUrlsEqual, createWorkspaceMediaLibraryItem, getWorkspaceMediaLibraryUrlMarker, getWorkspaceImageDownloadName, getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName, } from "../src/lib/workspaceMediaLibrary.js";
+import { areWorkspaceMediaLibraryUrlsEqual, createWorkspaceMediaLibraryItem, getWorkspaceMediaLibraryUrlMarker, getWorkspaceImageDownloadName, getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName, normalizeWorkspaceMediaLibraryCreatedAt, sortWorkspaceMediaLibraryItemsNewestFirst, } from "../src/lib/workspaceMediaLibrary.js";
 import { env } from "./env.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspacePreviewImage, getWorkspacePreviewImageCacheKey, } from "./preview-images.js";
@@ -114,6 +114,7 @@ const parseWorkspaceMediaLibraryCursor = (value) => {
 };
 const buildWorkspaceMediaLibraryNextCursor = (offset) => String(Math.max(0, offset));
 const getWorkspaceMediaLibraryProjectVersion = (project) => `${normalizeText(project.updatedAt || project.generatedAt || project.createdAt || project.id)}:${WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION}`;
+const getWorkspaceMediaLibraryProjectCreatedAt = (project) => normalizeWorkspaceMediaLibraryCreatedAt(project.updatedAt || project.generatedAt || project.createdAt);
 const getWorkspaceMediaLibraryIndexWarmKey = (user, projectId) => {
     const cacheKey = getWorkspaceMediaLibraryCacheKey(user);
     return cacheKey ? `${cacheKey}:project:${projectId}` : `anonymous:project:${projectId}`;
@@ -178,7 +179,9 @@ const toWorkspaceMediaIndexStoredItems = (items) => items.map((item) => ({
 const hydrateWorkspaceMediaLibraryIndexEntry = (project, entry) => {
     const projectTitle = getWorkspaceProjectDisplayTitle(project);
     const downloadToken = getWorkspaceMediaLibraryProjectVersion(project);
+    const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
     return entry.items.map((item) => createWorkspaceMediaLibraryItem({
+        createdAt,
         downloadName: buildWorkspaceMediaLibraryDownloadName(projectTitle, item.segmentListIndex, item.kind),
         downloadUrl: appendUrlToken(item.previewUrl, "download", `${downloadToken}:${item.segmentIndex}:${item.kind}`),
         kind: item.kind,
@@ -202,6 +205,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
     const projectId = project.adId;
     const projectTitle = getWorkspaceProjectDisplayTitle(project);
     const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
+    const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
     return session.segments.flatMap((segment, segmentListIndex) => {
         const originalPreviewUrl = segment.originalPreviewUrl;
         const originalPlaybackUrl = segment.originalPlaybackUrl ?? segment.originalPreviewUrl;
@@ -218,6 +222,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                 const aiVideoPreviewUrl = currentPlaybackUrl ?? currentPreviewUrl;
                 if (aiVideoPreviewUrl) {
                     items.push(createWorkspaceMediaLibraryItem({
+                        createdAt,
                         downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-video`),
                         downloadUrl: appendUrlToken(currentPlaybackUrl ?? aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:ai-video`),
                         kind: "ai_video",
@@ -243,6 +248,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
         const originalPhotoDownloadUrl = getWorkspacePhotoOriginalDownloadUrl(segment);
         if (originalPhotoPreviewUrl) {
             items.push(createWorkspaceMediaLibraryItem({
+                createdAt,
                 downloadName: getWorkspaceImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
                 downloadUrl: appendUrlToken(originalPhotoDownloadUrl ?? originalPhotoPreviewUrl, "download", `${downloadToken}:${segment.index}:original`),
                 kind: "ai_photo",
@@ -277,6 +283,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                 });
             if (animatedPreviewUrl) {
                 items.push(createWorkspaceMediaLibraryItem({
+                    createdAt,
                     downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
                     downloadUrl: appendUrlToken(animatedDownloadUrl ?? animatedPreviewUrl, "download", `${downloadToken}:${segment.index}:animation`),
                     kind: "photo_animation",
@@ -546,7 +553,7 @@ export const getWorkspaceMediaLibraryItems = async (user, options) => {
         }
     }
     const request = loadWorkspaceMediaLibraryIndexEntries(user, options).then((entries) => {
-        const allItems = entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry));
+        const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry)));
         const pageItems = allItems.slice(offset, offset + limit);
         const total = entries.hasPendingProjects
             ? Math.max(allItems.length, offset + pageItems.length + 1)

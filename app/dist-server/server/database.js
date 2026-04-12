@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { env } from "./env.js";
@@ -28,6 +28,9 @@ const resolveSqliteTarget = (value) => {
 };
 const resolveAuthDatabaseConfig = () => {
     const databaseUrl = env.authDatabaseUrl?.trim();
+    if (env.isProduction && !databaseUrl) {
+        throw new Error("AUTH_DATABASE_URL must be set in production.");
+    }
     if (databaseUrl) {
         if (databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://")) {
             return {
@@ -37,6 +40,9 @@ const resolveAuthDatabaseConfig = () => {
             };
         }
         if (databaseUrl.startsWith("sqlite:") || databaseUrl.startsWith("file:")) {
+            if (env.isProduction) {
+                throw new Error("SQLite AUTH_DATABASE_URL is not allowed in production. Use PostgreSQL.");
+            }
             const target = resolveSqliteTarget(databaseUrl);
             return {
                 kind: "sqlite",
@@ -46,6 +52,9 @@ const resolveAuthDatabaseConfig = () => {
         }
         throw new Error(`Unsupported AUTH_DATABASE_URL scheme: ${databaseUrl}`);
     }
+    if (env.isProduction) {
+        throw new Error("SQLite auth database path is not allowed in production. Use AUTH_DATABASE_URL with PostgreSQL.");
+    }
     const target = resolveSqliteTarget(env.authDatabasePath);
     return {
         kind: "sqlite",
@@ -54,6 +63,11 @@ const resolveAuthDatabaseConfig = () => {
     };
 };
 export const authDatabaseConfig = resolveAuthDatabaseConfig();
+const require = createRequire(import.meta.url);
+const loadSqliteDatabaseSync = () => {
+    const sqlite = require("node:sqlite");
+    return sqlite.DatabaseSync;
+};
 const createDatabase = () => {
     if (authDatabaseConfig.kind === "postgres") {
         return new Pool({
@@ -62,6 +76,7 @@ const createDatabase = () => {
         });
     }
     mkdirSync(dirname(authDatabaseConfig.target), { recursive: true });
+    const DatabaseSync = loadSqliteDatabaseSync();
     return new DatabaseSync(authDatabaseConfig.target);
 };
 export const database = createDatabase();

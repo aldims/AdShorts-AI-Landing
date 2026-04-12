@@ -198,8 +198,6 @@ export function AgencyContactModal({ defaultEmail = null, defaultName = null, is
             {feedback.message}
           </p>
         ) : null}
-
-        <p className="agency-modal__meta">Получатель: support@adshortsai.com</p>
       </div>
     </div>
   );

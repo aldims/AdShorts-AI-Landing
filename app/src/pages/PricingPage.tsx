@@ -150,7 +150,7 @@ const pricingPacks: PricingPack[] = [
     name: "Pack 500",
     credits: "500 кредитов",
     price: "2 750 ₽",
-    subnote: "~5,5 ₽/кредит",
+    subnote: "до 50 видео",
     badge: "Выгодно",
   },
   {
@@ -158,7 +158,7 @@ const pricingPacks: PricingPack[] = [
     name: "Pack 1000",
     credits: "1000 кредитов",
     price: "4 990 ₽",
-    subnote: "~5 ₽/кредит",
+    subnote: "до 100 видео",
   },
 ];
 

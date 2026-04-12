@@ -1,4 +1,23 @@
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
+export const normalizeWorkspaceMediaLibraryCreatedAt = (value) => {
+    const timestamp = typeof value === "number"
+        ? value
+        : typeof value === "string"
+            ? Date.parse(value)
+            : Number.NaN;
+    return Number.isFinite(timestamp) ? Math.max(0, Math.trunc(timestamp)) : 0;
+};
+export const sortWorkspaceMediaLibraryItemsNewestFirst = (items) => items.slice().sort((left, right) => {
+    const createdAtDifference = right.createdAt - left.createdAt;
+    if (createdAtDifference !== 0) {
+        return createdAtDifference;
+    }
+    const projectIdDifference = right.projectId - left.projectId;
+    if (projectIdDifference !== 0) {
+        return projectIdDifference;
+    }
+    return 0;
+});
 export const getWorkspaceProjectDisplayTitle = (project) => {
     const normalizedTitle = project.title.trim();
     if (normalizedTitle) {
@@ -92,6 +111,7 @@ export const createWorkspaceMediaLibraryItem = (options) => {
         segmentIndex: options.segmentIndex,
     });
     return {
+        createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
         dedupeKey,
         downloadName: options.downloadName,
         downloadUrl: options.downloadUrl,

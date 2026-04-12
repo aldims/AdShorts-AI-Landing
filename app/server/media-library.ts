@@ -5,6 +5,8 @@ import {
   getWorkspaceImageDownloadName,
   getWorkspaceProjectDisplayTitle,
   getWorkspaceVideoDownloadName,
+  normalizeWorkspaceMediaLibraryCreatedAt,
+  sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItemKind,
   type WorkspaceMediaLibraryItem,
 } from "../src/lib/workspaceMediaLibrary.js";
@@ -206,6 +208,11 @@ const buildWorkspaceMediaLibraryNextCursor = (offset: number) => String(Math.max
 const getWorkspaceMediaLibraryProjectVersion = (project: WorkspaceProject) =>
   `${normalizeText(project.updatedAt || project.generatedAt || project.createdAt || project.id)}:${WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION}`;
 
+const getWorkspaceMediaLibraryProjectCreatedAt = (
+  project: Pick<WorkspaceProject, "createdAt" | "generatedAt" | "updatedAt">,
+) =>
+  normalizeWorkspaceMediaLibraryCreatedAt(project.updatedAt || project.generatedAt || project.createdAt);
+
 const getWorkspaceMediaLibraryIndexWarmKey = (user: MediaLibraryUser, projectId: number) => {
   const cacheKey = getWorkspaceMediaLibraryCacheKey(user);
   return cacheKey ? `${cacheKey}:project:${projectId}` : `anonymous:project:${projectId}`;
@@ -301,9 +308,11 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (
 ) => {
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
   const downloadToken = getWorkspaceMediaLibraryProjectVersion(project);
+  const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
 
   return entry.items.map((item) =>
     createWorkspaceMediaLibraryItem({
+      createdAt,
       downloadName: buildWorkspaceMediaLibraryDownloadName(projectTitle, item.segmentListIndex, item.kind),
       downloadUrl: appendUrlToken(
         item.previewUrl,
@@ -339,6 +348,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
   const projectId = project.adId;
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
   const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
+  const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
 
   return session.segments.flatMap((segment, segmentListIndex) => {
     const originalPreviewUrl = segment.originalPreviewUrl;
@@ -360,6 +370,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
         if (aiVideoPreviewUrl) {
           items.push(
             createWorkspaceMediaLibraryItem({
+              createdAt,
               downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-video`),
               downloadUrl: appendUrlToken(
                 currentPlaybackUrl ?? aiVideoPreviewUrl,
@@ -397,6 +408,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
     if (originalPhotoPreviewUrl) {
       items.push(
         createWorkspaceMediaLibraryItem({
+          createdAt,
           downloadName: getWorkspaceImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
           downloadUrl: appendUrlToken(
             originalPhotoDownloadUrl ?? originalPhotoPreviewUrl,
@@ -455,6 +467,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
       if (animatedPreviewUrl) {
         items.push(
           createWorkspaceMediaLibraryItem({
+            createdAt,
             downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
             downloadUrl: appendUrlToken(
               animatedDownloadUrl ?? animatedPreviewUrl,
@@ -844,7 +857,9 @@ export const getWorkspaceMediaLibraryItems = async (
   }
 
   const request = loadWorkspaceMediaLibraryIndexEntries(user, options).then((entries) => {
-    const allItems = entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry));
+    const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(
+      entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry)),
+    );
     const pageItems = allItems.slice(offset, offset + limit);
     const total = entries.hasPendingProjects
       ? Math.max(allItems.length, offset + pageItems.length + 1)

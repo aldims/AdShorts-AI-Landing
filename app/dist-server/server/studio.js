@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
-import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
+import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, peekWorkspaceProjectPlaybackAsset, warmWorkspaceProjectPlayback, WorkspaceProjectPlaybackPreparationDeferredError, } from "./project-playback.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorkspaceVideoPoster, } from "./project-posters.js";
 import { getWorkspaceGenerationHistoryEntry, listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
@@ -60,12 +60,14 @@ const WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS = 10 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS = 5_000;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
+const STUDIO_GENERATION_PREPARING_PREVIEW_STATUS = "preparing_preview";
 const workspaceBootstrapCache = new Map();
 const workspaceSubscriptionExpiryCache = new Map();
 const workspaceSubscriptionExpiryInFlight = new Map();
 const OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS = 30_000;
 const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
 const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
+const STUDIO_OPENROUTER_MISSING_CONFIG_ERROR = "OpenRouter is not configured on this server. Set OPENROUTER_API_KEY or ADSHORTS_SHARED_ENV_FILE.";
 const normalizePrompt = (value) => value.replace(/\s+/g, " ").trim();
 const sanitizeStudioContentPlanIdeaPrompt = (value) => {
     const fallbackPrompt = normalizePrompt(String(value ?? ""));
@@ -415,6 +417,10 @@ const resolveStudioExternalUserId = async (user) => {
         return buildExternalUserId(user);
     }
 };
+export async function invalidateWorkspaceBootstrapCache(user) {
+    const externalUserId = await resolveStudioExternalUserId(user);
+    workspaceBootstrapCache.delete(externalUserId);
+}
 const buildAdsflowUrl = (path, params) => {
     const url = new URL(path, env.adsflowApiBaseUrl);
     Object.entries(params ?? {}).forEach(([key, value]) => {
@@ -832,6 +838,17 @@ const detectStudioPromptLanguage = (prompt, fallbackLanguage) => {
 const getStudioOpenRouterModelCandidates = () => Array.from(new Set([env.openrouterMainModel, env.openrouterFallbackModel]
     .map((model) => normalizePrompt(model ?? ""))
     .filter(Boolean)));
+const createStudioOpenRouterMissingConfigError = () => new Error(STUDIO_OPENROUTER_MISSING_CONFIG_ERROR);
+const requireStudioOpenRouterModels = () => {
+    const modelCandidates = getStudioOpenRouterModelCandidates();
+    if (!env.openrouterApiKey) {
+        throw createStudioOpenRouterMissingConfigError();
+    }
+    if (modelCandidates.length === 0) {
+        throw new Error("OpenRouter is configured without any usable models.");
+    }
+    return modelCandidates;
+};
 const buildStudioVisualPromptEnglishTranslationSystemPrompt = (sourceLanguage) => [
     "You are an expert translator for AI image and AI video generation prompts.",
     `Translate the user's visual prompt from ${getStudioLanguageLabel(sourceLanguage)} to English.`,
@@ -1211,7 +1228,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (jobId, payload) => {
         fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
         mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
-        posterUrl: null,
+        posterUrl: buildStudioSegmentAiVideoJobPosterProxyUrl(jobId),
         remoteUrl,
     };
 };
@@ -1547,7 +1564,16 @@ const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 5
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
 const ADSFLOW_MUTATION_TIMEOUT_MS = 90_000;
+class AdsflowHttpError extends Error {
+    statusCode;
+    constructor(message, statusCode) {
+        super(message);
+        this.name = "AdsflowHttpError";
+        this.statusCode = statusCode;
+    }
+}
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const isAdsflowHttpStatusError = (error, ...statusCodes) => error instanceof AdsflowHttpError && statusCodes.includes(error.statusCode);
 const describeAdsflowFetchFailure = (url, error) => {
     const target = `${url.origin}${url.pathname}`;
     if (!(error instanceof Error)) {
@@ -1595,7 +1621,7 @@ const fetchAdsflowJson = async (url, init, options) => {
         if (response.status === 402) {
             throw new WorkspaceCreditLimitError(detail);
         }
-        throw new Error(detail);
+        throw new AdsflowHttpError(detail, response.status);
     }
     if (!payload) {
         throw new Error("AdsFlow returned an empty response.");
@@ -1617,7 +1643,7 @@ const postAdsflowText = async (path, body, options) => {
         if (response.status === 402) {
             throw new WorkspaceCreditLimitError(detail);
         }
-        throw new Error(detail);
+        throw new AdsflowHttpError(detail, response.status);
     }
     if (!payload) {
         throw new Error("AdsFlow returned an empty response.");
@@ -1779,7 +1805,7 @@ export async function getWorkspaceBootstrap(user) {
         const latestHistoryEntry = payload.latest_generation?.job_id
             ? await getWorkspaceGenerationHistoryEntry(user, String(payload.latest_generation.job_id)).catch(() => null)
             : null;
-        const latestGeneration = buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry);
+        const latestGeneration = await prepareStudioLatestGenerationForBootstrap(buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry), user);
         const bootstrap = {
             latestGeneration,
             profile,
@@ -1811,6 +1837,7 @@ export async function getWorkspaceBootstrap(user) {
                 console.error("[studio] Failed to load workspace history fallback generation", historyError);
             }
         }
+        latestGeneration = await prepareStudioLatestGenerationForBootstrap(latestGeneration, user);
         if (latestGeneration?.generation) {
             warmStudioGenerationPlayback(latestGeneration.generation, user);
         }
@@ -1828,9 +1855,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
         throw new Error("Prompt is required.");
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
-    const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
-        sourceLanguage: normalizedLanguage,
-    });
     const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
     const requiredCredits = STUDIO_GENERATION_CREDIT_COST;
     const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
@@ -1846,6 +1870,10 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedSubtitleColorId = isSubtitleEnabled && normalizedSubtitleStyleId
         ? normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId))
         : undefined;
+    const normalizedBrandLogoFileName = String(options?.brandLogoFileName ?? "").trim() || undefined;
+    const normalizedBrandLogoFileMimeType = String(options?.brandLogoFileMimeType ?? "").trim() || undefined;
+    const normalizedBrandLogoFileDataUrl = String(options?.brandLogoFileDataUrl ?? "").trim() || undefined;
+    const normalizedBrandText = String(options?.brandText ?? "").trim() || undefined;
     const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
     const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
     const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
@@ -1875,12 +1903,18 @@ export async function createStudioGenerationJob(prompt, user, options) {
             body: JSON.stringify({
                 admin_token: env.adsflowAdminToken,
                 external_user_id: externalUserId,
-                prompt: upstreamPrompt,
+                // Preserve the user's original topic language in AdsFlow.
+                // The worker already receives requested/content language separately.
+                prompt: normalizedPrompt,
                 user_email: user.email ?? undefined,
                 user_name: user.name ?? undefined,
                 language: normalizedLanguage,
                 add_watermark: shouldAddWatermark,
                 credit_cost: requiredCredits,
+                brand_logo_data_url: normalizedBrandLogoFileDataUrl,
+                brand_logo_mime_type: normalizedBrandLogoFileMimeType,
+                brand_logo_original_name: normalizedBrandLogoFileName,
+                brand_text: normalizedBrandText,
                 custom_video_data_url: normalizedVideoMode === "custom" ? normalizedCustomVideoFileDataUrl : undefined,
                 custom_video_mime_type: normalizedVideoMode === "custom" ? normalizedCustomVideoFileMimeType : undefined,
                 custom_video_original_name: normalizedVideoMode === "custom" ? normalizedCustomVideoFileName : undefined,
@@ -2192,21 +2226,19 @@ export async function generateStudioContentPlanIdeas(query, options) {
     }
     const normalizedLanguage = detectStudioPromptLanguage(normalizedQuery, options?.language);
     const requestedCount = normalizeStudioContentPlanIdeaCount(options?.count);
-    const modelCandidates = getStudioOpenRouterModelCandidates();
+    const modelCandidates = requireStudioOpenRouterModels();
     let lastError = null;
-    if (env.openrouterApiKey && modelCandidates.length > 0) {
-        for (const model of modelCandidates) {
-            try {
-                const ideas = await requestStudioContentPlanIdeas(normalizedQuery, normalizedLanguage, requestedCount, model, options?.existingIdeas ?? []);
-                return {
-                    ideas,
-                    language: normalizedLanguage,
-                };
-            }
-            catch (error) {
-                lastError = error instanceof Error ? error : new Error("OpenRouter content plan generation failed.");
-                console.warn(`[studio] Failed to generate content plan with ${model}`, lastError);
-            }
+    for (const model of modelCandidates) {
+        try {
+            const ideas = await requestStudioContentPlanIdeas(normalizedQuery, normalizedLanguage, requestedCount, model, options?.existingIdeas ?? []);
+            return {
+                ideas,
+                language: normalizedLanguage,
+            };
+        }
+        catch (error) {
+            lastError = error instanceof Error ? error : new Error("OpenRouter content plan generation failed.");
+            console.warn(`[studio] Failed to generate content plan with ${model}`, lastError);
         }
     }
     throw lastError ?? new Error("Не удалось сгенерировать контент-план.");
@@ -2225,20 +2257,18 @@ export async function translateStudioTexts(texts, options) {
             texts: normalizedTexts,
         };
     }
-    const modelCandidates = getStudioOpenRouterModelCandidates();
+    const modelCandidates = requireStudioOpenRouterModels();
     let lastError = null;
-    if (env.openrouterApiKey && modelCandidates.length > 0) {
-        for (const model of modelCandidates) {
-            try {
-                const translatedTexts = await requestStudioTextTranslation(normalizedTexts, normalizedSourceLanguage, normalizedTargetLanguage, model);
-                return {
-                    texts: translatedTexts,
-                };
-            }
-            catch (error) {
-                lastError = error instanceof Error ? error : new Error("OpenRouter text translation failed.");
-                console.warn(`[studio] Failed to translate segment texts with ${model}`, lastError);
-            }
+    for (const model of modelCandidates) {
+        try {
+            const translatedTexts = await requestStudioTextTranslation(normalizedTexts, normalizedSourceLanguage, normalizedTargetLanguage, model);
+            return {
+                texts: translatedTexts,
+            };
+        }
+        catch (error) {
+            lastError = error instanceof Error ? error : new Error("OpenRouter text translation failed.");
+            console.warn(`[studio] Failed to translate segment texts with ${model}`, lastError);
         }
     }
     throw lastError ?? new Error("Text translation is unavailable.");
@@ -2378,42 +2408,72 @@ export async function getStudioSegmentAiPhotoJobStatus(jobId, user) {
     };
 }
 export async function getStudioSegmentAiVideoJobStatus(jobId, user) {
-    const payload = await fetchAdsflowSegmentAiVideoJobStatus(jobId, user);
-    const status = String(payload.status ?? "queued").trim() || "queued";
-    const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
-    const asset = payload.asset ? normalizeAdsflowSegmentAiVideoAsset(safeJobId, payload.asset) : undefined;
-    if (asset) {
-        warmStudioGeneratedVideoPlayback("segment-ai-video", safeJobId, user);
-        warmStudioGeneratedVideoPoster("segment-ai-video", safeJobId, user);
+    const safeJobId = String(jobId ?? "").trim();
+    try {
+        const payload = await fetchAdsflowSegmentAiVideoJobStatus(jobId, user);
+        const status = String(payload.status ?? "queued").trim() || "queued";
+        const resolvedJobId = String(payload.job_id ?? jobId).trim() || safeJobId;
+        const asset = payload.asset ? normalizeAdsflowSegmentAiVideoAsset(resolvedJobId, payload.asset) : undefined;
+        if (asset) {
+            warmStudioGeneratedVideoPlayback("segment-ai-video", resolvedJobId, user);
+            warmStudioGeneratedVideoPoster("segment-ai-video", resolvedJobId, user);
+        }
+        return {
+            asset,
+            error: normalizeGenerationText(payload.error) || undefined,
+            jobId: resolvedJobId,
+            profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+                rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+            }),
+            status,
+        };
     }
-    return {
-        asset,
-        error: normalizeGenerationText(payload.error) || undefined,
-        jobId: safeJobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
-        status,
-    };
+    catch (error) {
+        if (isAdsflowHttpStatusError(error, 500)) {
+            console.warn("[studio] Segment AI video status returned 500, probing file endpoint", {
+                error: error instanceof Error ? error.message : "Unknown AdsFlow status error.",
+                jobId: safeJobId,
+            });
+            return recoverStudioSegmentGeneratedVideoJobStatus("segment-ai-video", safeJobId, user, {
+                fallbackError: "Генерация ИИ видео завершилась с ошибкой в AdsFlow. Попробуйте ещё раз.",
+            });
+        }
+        throw error;
+    }
 }
 export async function getStudioSegmentPhotoAnimationJobStatus(jobId, user) {
-    const payload = await fetchAdsflowSegmentPhotoAnimationJobStatus(jobId, user);
-    const status = String(payload.status ?? "queued").trim() || "queued";
-    const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
-    const asset = payload.asset ? normalizeAdsflowSegmentPhotoAnimationAsset(safeJobId, payload.asset) : undefined;
-    if (asset) {
-        warmStudioGeneratedVideoPlayback("segment-photo-animation", safeJobId, user);
-        warmStudioGeneratedVideoPoster("segment-photo-animation", safeJobId, user);
+    const safeJobId = String(jobId ?? "").trim();
+    try {
+        const payload = await fetchAdsflowSegmentPhotoAnimationJobStatus(jobId, user);
+        const status = String(payload.status ?? "queued").trim() || "queued";
+        const resolvedJobId = String(payload.job_id ?? jobId).trim() || safeJobId;
+        const asset = payload.asset ? normalizeAdsflowSegmentPhotoAnimationAsset(resolvedJobId, payload.asset) : undefined;
+        if (asset) {
+            warmStudioGeneratedVideoPlayback("segment-photo-animation", resolvedJobId, user);
+            warmStudioGeneratedVideoPoster("segment-photo-animation", resolvedJobId, user);
+        }
+        return {
+            asset,
+            error: normalizeGenerationText(payload.error) || undefined,
+            jobId: resolvedJobId,
+            profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+                rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+            }),
+            status,
+        };
     }
-    return {
-        asset,
-        error: normalizeGenerationText(payload.error) || undefined,
-        jobId: safeJobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
-        status,
-    };
+    catch (error) {
+        if (isAdsflowHttpStatusError(error, 500)) {
+            console.warn("[studio] Segment photo animation status returned 500, probing file endpoint", {
+                error: error instanceof Error ? error.message : "Unknown AdsFlow status error.",
+                jobId: safeJobId,
+            });
+            return recoverStudioSegmentGeneratedVideoJobStatus("segment-photo-animation", safeJobId, user, {
+                fallbackError: "Анимация фото завершилась с ошибкой в AdsFlow. Попробуйте ещё раз.",
+            });
+        }
+        throw error;
+    }
 }
 export async function getStudioGenerationStatus(jobId, user) {
     const payload = await fetchAdsflowJobStatus(jobId, user);
@@ -2463,7 +2523,18 @@ export async function getStudioGenerationStatus(jobId, user) {
                 error: "Готовое видео недоступно как прямой media-файл.",
             };
         }
-        warmStudioGenerationPlayback(generation, user);
+        try {
+            await ensureWorkspaceProjectPlayback(await getStudioGenerationPlaybackSource(generation, user));
+        }
+        catch (error) {
+            if (isStudioPlaybackPreparationPendingError(error)) {
+                return {
+                    jobId: safeJobId,
+                    status: STUDIO_GENERATION_PREPARING_PREVIEW_STATUS,
+                };
+            }
+            throw error;
+        }
         return {
             jobId: safeJobId,
             status,
@@ -2529,6 +2600,57 @@ export async function getStudioVideoProxyTarget(jobId, user) {
     }
     throw fallbackError ?? new Error("Failed to resolve generated video.");
 }
+const getCachedWorkspaceProfileForUser = async (user) => {
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return getCachedWorkspaceBootstrap(externalUserId)?.profile ?? buildWorkspaceProfile();
+};
+const probeStudioGeneratedVideoFileAvailability = async (kind, jobId, user) => {
+    try {
+        const upstreamUrl = kind === "segment-ai-video"
+            ? await getStudioSegmentAiVideoJobFileProxyTarget(jobId, user)
+            : await getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId, user);
+        const response = await fetchAdsflowResponse(upstreamUrl, {
+            headers: {
+                connection: "close",
+                range: "bytes=0-0",
+            },
+        }, {
+            retryDelaysMs: [],
+            timeoutMs: 15_000,
+        });
+        if ("cancel" in (response.body ?? {})) {
+            void response.body.cancel().catch(() => undefined);
+        }
+        return response.ok;
+    }
+    catch {
+        return false;
+    }
+};
+const recoverStudioSegmentGeneratedVideoJobStatus = async (kind, jobId, user, options) => {
+    const safeJobId = String(jobId ?? "").trim();
+    const profile = await getCachedWorkspaceProfileForUser(user);
+    const isFileAvailable = await probeStudioGeneratedVideoFileAvailability(kind, safeJobId, user);
+    if (isFileAvailable) {
+        const asset = kind === "segment-ai-video"
+            ? normalizeAdsflowSegmentAiVideoAsset(safeJobId)
+            : normalizeAdsflowSegmentPhotoAnimationAsset(safeJobId);
+        warmStudioGeneratedVideoPlayback(kind, safeJobId, user);
+        warmStudioGeneratedVideoPoster(kind, safeJobId, user);
+        return {
+            asset,
+            jobId: safeJobId,
+            profile,
+            status: "ready",
+        };
+    }
+    return {
+        error: options.fallbackError,
+        jobId: safeJobId,
+        profile,
+        status: "failed",
+    };
+};
 export async function getStudioSegmentAiVideoJobFileProxyTarget(jobId, user) {
     assertAdsflowConfigured();
     const safeJobId = normalizeGenerationText(jobId);
@@ -2656,6 +2778,49 @@ const getStudioPlaybackSource = async (options, user) => {
         upstreamUrl,
     };
 };
+function isStudioPlaybackPreparationPendingError(error) {
+    const message = normalizeGenerationText(error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
+    return (error instanceof WorkspaceProjectPlaybackPreparationDeferredError ||
+        message.includes("timeout") ||
+        message.includes("aborted") ||
+        message.includes("failed to download project playback source"));
+}
+async function getStudioGenerationPlaybackSource(generation, user) {
+    const safeJobId = normalizeGenerationText(generation.id);
+    if (!safeJobId || !generation.videoUrl || !isStudioPlaybackUrl(generation.videoUrl)) {
+        throw new Error("Studio generation playback source is unavailable.");
+    }
+    const preferredPath = extractStudioVideoPathFromProxyUrl(generation.videoFallbackUrl ?? generation.videoUrl);
+    return getStudioPlaybackSource({
+        jobId: safeJobId,
+        preferredPath,
+        version: generation.generatedAt,
+    }, user);
+}
+async function prepareStudioLatestGenerationForBootstrap(latestGeneration, user) {
+    if (!latestGeneration?.generation || latestGeneration.status !== "done") {
+        return latestGeneration;
+    }
+    try {
+        const playbackSource = await getStudioGenerationPlaybackSource(latestGeneration.generation, user);
+        const cachedAsset = await peekWorkspaceProjectPlaybackAsset(playbackSource.cacheKey);
+        if (cachedAsset) {
+            return latestGeneration;
+        }
+        return {
+            ...latestGeneration,
+            generation: undefined,
+            status: STUDIO_GENERATION_PREPARING_PREVIEW_STATUS,
+        };
+    }
+    catch (error) {
+        console.warn("[studio] Failed to inspect latest generation playback cache", {
+            error: error instanceof Error ? error.message : "Unknown playback inspection error.",
+            jobId: latestGeneration.jobId,
+        });
+        return latestGeneration;
+    }
+}
 const warmStudioGenerationPlayback = (generation, user) => {
     const safeJobId = normalizeGenerationText(generation?.id);
     if (!safeJobId || !generation?.videoUrl || !isStudioPlaybackUrl(generation.videoUrl)) {

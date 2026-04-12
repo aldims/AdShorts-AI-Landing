@@ -5,6 +5,7 @@ export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
 
 export type WorkspaceMediaLibraryItem = {
+  createdAt: number;
   dedupeKey: string;
   downloadName: string;
   downloadUrl: string | null;
@@ -20,6 +21,32 @@ export type WorkspaceMediaLibraryItem = {
   segmentNumber: number;
   source: WorkspaceMediaLibraryItemSource;
 };
+
+export const normalizeWorkspaceMediaLibraryCreatedAt = (value: number | string | null | undefined) => {
+  const timestamp =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Date.parse(value)
+        : Number.NaN;
+
+  return Number.isFinite(timestamp) ? Math.max(0, Math.trunc(timestamp)) : 0;
+};
+
+export const sortWorkspaceMediaLibraryItemsNewestFirst = (items: WorkspaceMediaLibraryItem[]) =>
+  items.slice().sort((left, right) => {
+    const createdAtDifference = right.createdAt - left.createdAt;
+    if (createdAtDifference !== 0) {
+      return createdAtDifference;
+    }
+
+    const projectIdDifference = right.projectId - left.projectId;
+    if (projectIdDifference !== 0) {
+      return projectIdDifference;
+    }
+
+    return 0;
+  });
 
 export const getWorkspaceProjectDisplayTitle = (project: {
   adId: number | null;
@@ -156,6 +183,7 @@ export const buildWorkspaceMediaLibraryItemKey = (
 };
 
 export const createWorkspaceMediaLibraryItem = (options: {
+  createdAt?: number | string | null;
   downloadName: string;
   downloadUrl: string | null;
   kind: WorkspaceMediaLibraryItemKind;
@@ -178,6 +206,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
   });
 
   return {
+    createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
     dedupeKey,
     downloadName: options.downloadName,
     downloadUrl: options.downloadUrl,

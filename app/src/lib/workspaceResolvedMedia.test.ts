@@ -19,6 +19,21 @@ describe("workspace resolved media surface", () => {
     expect(surface.subtitleMode).toBe("active-only");
   });
 
+  it("keeps generated AI video poster routes when the poster comes from the generated video", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "segment-carousel-card",
+      displayUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
+      isGeneratedVideo: true,
+      posterUrl: "/api/studio/segment-ai-video/jobs/job-1/poster?v=job-1",
+      previewKind: "video",
+      viewerUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
+    });
+
+    expect(surface.posterUrl).toBe("/api/studio/segment-ai-video/jobs/job-1/poster?v=job-1");
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
+  });
+
   it("prefers still poster for thumb video when a stable poster exists", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-thumb",

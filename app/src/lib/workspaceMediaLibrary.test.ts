@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   getWorkspaceMediaLibraryAssetIdentityKey,
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
+  sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
 } from "./workspaceMediaLibrary";
 
 const createMediaLibraryItem = (
   overrides: Partial<WorkspaceMediaLibraryItem>,
 ): WorkspaceMediaLibraryItem => ({
+  createdAt: 0,
   dedupeKey: "dedupe",
   downloadName: "file.jpg",
   downloadUrl: null,
@@ -58,5 +60,23 @@ describe("workspace media library display identity", () => {
     expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)).toBe(
       getWorkspaceMediaLibraryAssetIdentityKey(item.previewUrl),
     );
+  });
+
+  it("sorts newer media items before older ones", () => {
+    const oldItem = createMediaLibraryItem({
+      createdAt: 1_000,
+      itemKey: "old",
+      projectId: 1,
+    });
+    const freshItem = createMediaLibraryItem({
+      createdAt: 2_000,
+      itemKey: "fresh",
+      projectId: 2,
+    });
+
+    expect(sortWorkspaceMediaLibraryItemsNewestFirst([oldItem, freshItem]).map((item) => item.itemKey)).toEqual([
+      "fresh",
+      "old",
+    ]);
   });
 });

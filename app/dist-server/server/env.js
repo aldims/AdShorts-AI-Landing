@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -17,41 +17,23 @@ const rootDir = resolveRootDir();
 const envFile = join(rootDir, ".env");
 const dataDir = join(rootDir, "data");
 dotenv.config({ path: envFile });
-const shouldUseSiblingSecret = (currentValue, siblingValue, minLength = 40) => {
-    const normalizedSibling = siblingValue?.trim();
-    if (!normalizedSibling) {
-        return false;
+const trim = (value) => value?.trim() || undefined;
+const resolveEnvFilePath = (value) => (isAbsolute(value) ? value : resolve(rootDir, value));
+const loadSharedEnvFile = (configuredPath) => {
+    const sharedEnvFile = resolveEnvFilePath(configuredPath);
+    if (!existsSync(sharedEnvFile)) {
+        throw new Error(`ADSHORTS_SHARED_ENV_FILE points to a missing file: ${sharedEnvFile}`);
     }
-    const normalizedCurrent = currentValue?.trim();
-    if (!normalizedCurrent || normalizedCurrent === "your_api_key_here") {
-        return true;
-    }
-    return normalizedCurrent.length < minLength && normalizedSibling.length >= minLength;
+    dotenv.config({
+        path: sharedEnvFile,
+        override: false,
+    });
 };
-const siblingAdsflowWorkerEnvFile = join(rootDir, "..", "..", "AdsFlow AI", "services", "worker", ".env");
-if (existsSync(siblingAdsflowWorkerEnvFile)) {
-    const siblingAdsflowWorkerEnv = dotenv.parse(readFileSync(siblingAdsflowWorkerEnvFile));
-    if (!process.env.DEAPI_API_KEY && siblingAdsflowWorkerEnv.DEAPI_API_KEY) {
-        process.env.DEAPI_API_KEY = siblingAdsflowWorkerEnv.DEAPI_API_KEY;
-    }
-    if (!process.env.DEAPI_VERIFY_SSL && siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL) {
-        process.env.DEAPI_VERIFY_SSL = siblingAdsflowWorkerEnv.DEAPI_VERIFY_SSL;
-    }
-    if (shouldUseSiblingSecret(process.env.OPENROUTER_API_KEY, siblingAdsflowWorkerEnv.OPENROUTER_API_KEY)) {
-        process.env.OPENROUTER_API_KEY = siblingAdsflowWorkerEnv.OPENROUTER_API_KEY;
-    }
-    if (!process.env.OPENROUTER_BASE_URL && siblingAdsflowWorkerEnv.OPENROUTER_BASE_URL) {
-        process.env.OPENROUTER_BASE_URL = siblingAdsflowWorkerEnv.OPENROUTER_BASE_URL;
-    }
-    if (!process.env.OPENROUTER_MAIN_MODEL && siblingAdsflowWorkerEnv.OPENROUTER_MAIN_MODEL) {
-        process.env.OPENROUTER_MAIN_MODEL = siblingAdsflowWorkerEnv.OPENROUTER_MAIN_MODEL;
-    }
-    if (!process.env.OPENROUTER_FALLBACK_MODEL && siblingAdsflowWorkerEnv.OPENROUTER_FALLBACK_MODEL) {
-        process.env.OPENROUTER_FALLBACK_MODEL = siblingAdsflowWorkerEnv.OPENROUTER_FALLBACK_MODEL;
-    }
+const sharedEnvFile = trim(process.env.ADSHORTS_SHARED_ENV_FILE);
+if (sharedEnvFile) {
+    loadSharedEnvFile(sharedEnvFile);
 }
 mkdirSync(dataDir, { recursive: true });
-const trim = (value) => value?.trim() || undefined;
 const toBoolean = (value, fallback) => {
     if (value == null) {
         return fallback;
@@ -80,6 +62,12 @@ const authSecret = trim(process.env.BETTER_AUTH_SECRET) ?? "dev-only-secret-chan
 if (isProduction && authSecret === "dev-only-secret-change-me") {
     throw new Error("BETTER_AUTH_SECRET must be set in production.");
 }
+if (isProduction && /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(appUrl)) {
+    throw new Error("APP_URL must point to the public site URL in production.");
+}
+if (isProduction && /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(authBaseUrl)) {
+    throw new Error("BETTER_AUTH_URL must point to the public site URL in production.");
+}
 const smtpHost = trim(process.env.SMTP_HOST);
 const smtpPort = toNumber(process.env.SMTP_PORT, 587);
 const smtpUser = trim(process.env.SMTP_USER);
@@ -97,6 +85,7 @@ export const env = {
     appUrl,
     authBaseUrl,
     authSecret,
+    authServerHost: trim(process.env.AUTH_SERVER_HOST) ?? "127.0.0.1",
     authServerPort: toNumber(process.env.AUTH_SERVER_PORT, 4175),
     authDatabaseUrl: trim(process.env.AUTH_DATABASE_URL),
     authDatabasePath: trim(process.env.AUTH_DATABASE_PATH) ?? "./data/auth.sqlite",
@@ -125,6 +114,7 @@ export const env = {
     deapiVerifySsl: process.env.DEAPI_VERIFY_SSL === "true" || (process.env.DEAPI_VERIFY_SSL == null && isProduction),
     wavespeedApiKey: trim(process.env.WAVESPEED_API_KEY),
     openrouterApiKey: trim(process.env.OPENROUTER_API_KEY),
+    openrouterSharedEnvFile: sharedEnvFile ? resolveEnvFilePath(sharedEnvFile) : undefined,
     openrouterBaseUrl: trim(process.env.OPENROUTER_BASE_URL) ?? "https://openrouter.ai/api/v1",
     openrouterMainModel: trim(process.env.OPENROUTER_MAIN_MODEL) ?? "google/gemini-3-flash-preview",
     openrouterFallbackModel: trim(process.env.OPENROUTER_FALLBACK_MODEL) ?? "openai/gpt-4o-mini",
@@ -134,7 +124,7 @@ export const env = {
     upstreamProjectsTimeoutMs: toNumber(process.env.UPSTREAM_PROJECTS_TIMEOUT_MS, 5_500),
     upstreamProbeTimeoutMs: toNumber(process.env.UPSTREAM_PROBE_TIMEOUT_MS, 1_800),
     upstreamProxyTimeoutMs: toNumber(process.env.UPSTREAM_PROXY_TIMEOUT_MS, 8_000),
-    upstreamPlaybackPreparationTimeoutMs: toNumber(process.env.UPSTREAM_PLAYBACK_PREPARATION_TIMEOUT_MS, 20_000),
+    upstreamPlaybackPreparationTimeoutMs: toNumber(process.env.UPSTREAM_PLAYBACK_PREPARATION_TIMEOUT_MS, 60_000),
 };
 export const authProviderStatus = {
     googleEnabled: Boolean(env.googleClientId && env.googleClientSecret),

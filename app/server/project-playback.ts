@@ -45,6 +45,7 @@ const PROJECT_PLAYBACK_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const PROJECT_PLAYBACK_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const PROJECT_PLAYBACK_FFMPEG_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const PROJECT_PLAYBACK_FAILURE_TTL_MS = 10 * 60 * 1000;
+const PROJECT_PLAYBACK_RETRYABLE_FAILURE_TTL_MS = 5_000;
 const PROJECT_PLAYBACK_INTERACTIVE_CONCURRENCY = 2;
 const PROJECT_PLAYBACK_BACKGROUND_CONCURRENCY = 1;
 const PROJECT_PLAYBACK_ROOT_DIR = join(env.assetCacheDir, "project-playback");
@@ -80,8 +81,21 @@ const hasRecentWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
   return true;
 };
 
-const markWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
-  projectPlaybackRecentFailures.set(cacheKey, Date.now() + PROJECT_PLAYBACK_FAILURE_TTL_MS);
+const isWorkspaceProjectPlaybackRetryableError = (error: unknown) => {
+  const message = normalizeText(error instanceof Error ? error.message : error).toLowerCase();
+  return (
+    message.includes("timeout") ||
+    message.includes("aborted") ||
+    message.includes("failed to download project playback source")
+  );
+};
+
+const markWorkspaceProjectPlaybackFailure = (cacheKey: string, error?: unknown) => {
+  const failureTtlMs = isWorkspaceProjectPlaybackRetryableError(error)
+    ? PROJECT_PLAYBACK_RETRYABLE_FAILURE_TTL_MS
+    : PROJECT_PLAYBACK_FAILURE_TTL_MS;
+
+  projectPlaybackRecentFailures.set(cacheKey, Date.now() + failureTtlMs);
 };
 
 const clearWorkspaceProjectPlaybackFailure = (cacheKey: string) => {
@@ -270,7 +284,7 @@ const ensureWorkspaceProjectPlaybackQueued = (
       });
       return asset;
     } catch (error) {
-      markWorkspaceProjectPlaybackFailure(source.cacheKey);
+      markWorkspaceProjectPlaybackFailure(source.cacheKey, error);
       logServerEvent("warn", "prepared-asset.failed", {
         assetKind: "playback",
         cacheKey: source.cacheKey,
@@ -351,7 +365,7 @@ export async function warmWorkspaceProjectPlayback(source: WorkspaceProjectPlayb
     await ensureWorkspaceProjectPlaybackQueued(source, "background");
     clearWorkspaceProjectPlaybackFailure(source.cacheKey);
   } catch (error) {
-    markWorkspaceProjectPlaybackFailure(source.cacheKey);
+    markWorkspaceProjectPlaybackFailure(source.cacheKey, error);
     throw error;
   }
 }

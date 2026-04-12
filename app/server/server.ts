@@ -74,6 +74,7 @@ import {
   getStudioGenerationStatus,
   getStudioVideoProxyTargetByPath,
   getStudioVideoProxyTarget,
+  invalidateWorkspaceBootstrapCache,
   improveStudioSegmentAiPhotoPrompt,
   translateStudioTexts,
   WorkspaceCreditLimitError,
@@ -456,6 +457,8 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
   const customMusicFile = customMusicFileEntry instanceof File ? customMusicFileEntry : null;
   const customVideoFileEntry = formData.get("customVideoFile");
   const customVideoFile = customVideoFileEntry instanceof File ? customVideoFileEntry : null;
+  const brandLogoFileEntry = formData.get("brandLogoFile");
+  const brandLogoFile = brandLogoFileEntry instanceof File ? brandLogoFileEntry : null;
   const rawSegmentEditor = parseServerJson<StudioGenerateMultipartSegmentEditor>(getFormDataString(formData, "segmentEditor"));
   const segmentEditorRecord =
     rawSegmentEditor && typeof rawSegmentEditor === "object" ? rawSegmentEditor : null;
@@ -514,6 +517,11 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
       : undefined;
 
   return {
+    brandLogoFileDataUrl: brandLogoFile ? await buildMultipartFileDataUrl(brandLogoFile) : getFormDataString(formData, "brandLogoFileDataUrl"),
+    brandLogoFileMimeType:
+      getFormDataString(formData, "brandLogoFileMimeType") || brandLogoFile?.type?.trim() || "",
+    brandLogoFileName: getFormDataString(formData, "brandLogoFileName") || brandLogoFile?.name?.trim() || "",
+    brandText: getFormDataString(formData, "brandText"),
     customMusicFileDataUrl: customMusicFile ? await buildMultipartFileDataUrl(customMusicFile) : getFormDataString(formData, "customMusicFileDataUrl"),
     customMusicFileName: getFormDataString(formData, "customMusicFileName") || customMusicFile?.name?.trim() || "",
     customVideoFileDataUrl: customVideoFile ? await buildMultipartFileDataUrl(customVideoFile) : getFormDataString(formData, "customVideoFileDataUrl"),
@@ -1694,6 +1702,12 @@ app.post("/api/studio/generate", async (req, res) => {
   const requestBody = isMultipartFormRequest(req)
     ? await parseStudioGenerateMultipartBody(req)
     : {
+        brandLogoFileDataUrl:
+          typeof req.body?.brandLogoFileDataUrl === "string" ? req.body.brandLogoFileDataUrl.trim() : "",
+        brandLogoFileMimeType:
+          typeof req.body?.brandLogoFileMimeType === "string" ? req.body.brandLogoFileMimeType.trim() : "",
+        brandLogoFileName: typeof req.body?.brandLogoFileName === "string" ? req.body.brandLogoFileName.trim() : "",
+        brandText: typeof req.body?.brandText === "string" ? req.body.brandText.trim() : "",
         customMusicFileDataUrl:
           typeof req.body?.customMusicFileDataUrl === "string" ? req.body.customMusicFileDataUrl.trim() : "",
         customMusicFileName: typeof req.body?.customMusicFileName === "string" ? req.body.customMusicFileName.trim() : "",
@@ -1722,6 +1736,10 @@ app.post("/api/studio/generate", async (req, res) => {
   const voiceId = requestBody.voiceId;
   const musicType = requestBody.musicType;
   const voiceEnabled = requestBody.voiceEnabled;
+  const brandLogoFileDataUrl = requestBody.brandLogoFileDataUrl;
+  const brandLogoFileMimeType = requestBody.brandLogoFileMimeType;
+  const brandLogoFileName = requestBody.brandLogoFileName;
+  const brandText = requestBody.brandText;
   const customMusicFileName = requestBody.customMusicFileName;
   const customMusicFileDataUrl = requestBody.customMusicFileDataUrl;
   const videoMode = requestBody.videoMode;
@@ -1741,6 +1759,10 @@ app.post("/api/studio/generate", async (req, res) => {
 
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
+      brandLogoFileDataUrl,
+      brandLogoFileMimeType,
+      brandLogoFileName,
+      brandText,
       customMusicFileDataUrl,
       customMusicFileName,
       customVideoFileDataUrl,
@@ -2297,6 +2319,7 @@ app.get("/api/studio/generations/:jobId", async (req, res) => {
   try {
     const status = await getStudioGenerationStatus(req.params.jobId, session.user);
     if (status.generation) {
+      await invalidateWorkspaceBootstrapCache(session.user);
       await invalidateWorkspaceProjectsCache(session.user);
       invalidateWorkspaceMediaLibraryCache(session.user);
       invalidateWorkspaceSegmentEditorSessionCache(session.user);
@@ -2337,6 +2360,17 @@ app.get("/api/studio/playback/:jobId", async (req, res) => {
     res.type(asset.contentType || "video/mp4");
     res.sendFile(asset.absolutePath);
   } catch (error) {
+    const fallbackTarget = await getStudioVideoProxyTarget(jobId, session.user).catch(() => null);
+    if (fallbackTarget) {
+      console.warn("[studio] Falling back to direct playback", {
+        error: getServerErrorMessage(error, "Failed to prepare generated video playback cache."),
+        jobId,
+      });
+      res.setHeader("Cache-Control", "private, max-age=600, stale-while-revalidate=60");
+      await proxyVideoResponse(req, res, fallbackTarget, "Failed to load generated video playback.");
+      return;
+    }
+
     console.error("[studio] Failed to load playback cache", {
       error: getServerErrorMessage(error, "Failed to load generated video playback."),
       jobId,
@@ -2399,8 +2433,8 @@ const startServer = async () => {
   validateServerStartup();
   await ensureAuthSchema();
 
-  app.listen(env.authServerPort, () => {
-    console.info(`[auth] Better Auth server listening on ${env.authServerPort}`);
+  app.listen(env.authServerPort, env.authServerHost, () => {
+    console.info(`[auth] Better Auth server listening on ${env.authServerHost}:${env.authServerPort}`);
     console.info(`[auth] Shared auth database: ${authDatabaseConfig.description}`);
     console.info(
       `[auth] Providers loaded: smtp=${authProviderStatus.smtpConfigured}, google=${authProviderStatus.googleEnabled}, telegram=${authProviderStatus.telegramEnabled}`,
