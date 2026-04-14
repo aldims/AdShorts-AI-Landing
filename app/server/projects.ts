@@ -3,6 +3,10 @@ import { pathToFileURL } from "node:url";
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import {
+  buildWorkspaceMediaAssetRef,
+  mergeWorkspaceMediaAssetRefs,
+} from "./media-assets.js";
+import {
   ensureWorkspaceProjectPlayback,
   getWorkspaceProjectPlaybackCacheKey,
   peekWorkspaceProjectPlaybackAsset,
@@ -28,6 +32,7 @@ import {
   type WorkspaceGenerationHistoryEntry,
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
+import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type WorkspaceUser = {
   email?: string | null;
@@ -43,6 +48,7 @@ type AdsflowLatestGenerationPayload = {
   generated_at?: string | null;
   hashtags?: string | null;
   job_id?: string;
+  media_asset_id?: number | null;
   prompt?: string | null;
   status?: string;
   task_type?: string | null;
@@ -60,6 +66,7 @@ type AdsflowAdminVideoItem = {
   description?: string | null;
   download_path?: string | null;
   id?: number;
+  media_asset_id?: number | null;
   status?: string | null;
   user_id?: number;
   youtube_channel_name?: string | null;
@@ -87,6 +94,7 @@ export type WorkspaceProject = {
   adId: number | null;
   createdAt: string;
   description: string;
+  finalAsset: WorkspaceMediaAssetRef | null;
   generatedAt: string | null;
   hashtags: string[];
   id: string;
@@ -135,6 +143,7 @@ const extractBootstrapUserId = (value: string) => {
 
 const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => ({
   ...project,
+  finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
   hashtags: [...project.hashtags],
   youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
@@ -295,6 +304,42 @@ const buildWorkspaceProjectPlaybackTargets = ({
   };
 };
 
+const buildWorkspaceProjectFinalAsset = (options: {
+  adId?: number | null;
+  createdAt?: string | null;
+  downloadPath?: string | null;
+  generatedAt?: string | null;
+  historyEntry?: WorkspaceGenerationHistoryEntry | null;
+  kind?: string | null;
+  mediaAssetId?: number | null;
+  projectId?: string | null;
+  status?: string | null;
+}) => {
+  const normalizedProjectAsset = buildWorkspaceMediaAssetRef({
+    created_at: options.createdAt ?? options.generatedAt ?? null,
+    download_path: options.downloadPath ?? null,
+    id: options.mediaAssetId ?? null,
+    kind: options.kind ?? "final_video",
+    media_type: "video",
+    project_id: options.adId ?? null,
+    role: "final_video",
+    status: options.status ?? null,
+  });
+  const historyAsset = buildWorkspaceMediaAssetRef({
+    created_at: options.historyEntry?.generatedAt ?? options.historyEntry?.updatedAt ?? options.historyEntry?.createdAt ?? null,
+    download_path: options.historyEntry?.downloadPath ?? null,
+    expires_at: options.historyEntry?.finalAssetExpiresAt ?? null,
+    id: options.historyEntry?.finalAssetId ?? null,
+    kind: options.historyEntry?.finalAssetKind ?? options.kind ?? "final_video",
+    media_type: "video",
+    project_id: options.adId ?? null,
+    role: "final_video",
+    status: options.historyEntry?.finalAssetStatus ?? options.status ?? null,
+  });
+
+  return mergeWorkspaceMediaAssetRefs(normalizedProjectAsset, historyAsset);
+};
+
 const resolvePreferredExternalUserId = async (user: WorkspaceUser) => {
   try {
     return (await resolveExternalUserIdentity(user)).preferred;
@@ -404,9 +449,18 @@ const buildProjectFromAdminVideo = (
   const historyUpdatedAt = toIsoString(historyEntry?.updatedAt);
   const updatedAt = historyUpdatedAt ?? createdAt;
   const status = normalizeProjectStatus(item.status);
+  const finalAsset = buildWorkspaceProjectFinalAsset({
+    adId,
+    createdAt,
+    downloadPath: item.download_path ?? null,
+    historyEntry,
+    kind: "final_video",
+    mediaAssetId: item.media_asset_id ?? null,
+    status,
+  });
   const playbackTargets = buildWorkspaceProjectPlaybackTargets({
     projectId: `project:${adId}`,
-    downloadPath: item.download_path,
+    downloadPath: finalAsset?.downloadPath ?? item.download_path,
     jobId: historyJobId || null,
     version: updatedAt,
   });
@@ -433,6 +487,7 @@ const buildProjectFromAdminVideo = (
     adId,
     createdAt,
     description: metadata.description,
+    finalAsset,
     generatedAt: createdAt,
     hashtags: metadata.hashtags,
     id: `project:${adId}`,
@@ -464,13 +519,23 @@ const buildProjectFromLatestGeneration = (
   const createdAt = generatedAt ?? new Date().toISOString();
   const adId = item.ad_id && Number.isFinite(Number(item.ad_id)) ? Number(item.ad_id) : null;
   const status = normalizeProjectStatus(item.status);
+  const finalAsset = buildWorkspaceProjectFinalAsset({
+    adId,
+    createdAt,
+    downloadPath: item.download_path ?? null,
+    generatedAt,
+    historyEntry,
+    kind: "final_video",
+    mediaAssetId: item.media_asset_id ?? null,
+    status,
+  });
   if (status !== "ready") {
     return null;
   }
 
   const playbackTargets = buildWorkspaceProjectPlaybackTargets({
     projectId: `task:${jobId}`,
-    downloadPath: item.download_path,
+    downloadPath: finalAsset?.downloadPath ?? item.download_path,
     jobId,
     version: generatedAt ?? createdAt,
   });
@@ -489,6 +554,7 @@ const buildProjectFromLatestGeneration = (
     adId,
     createdAt,
     description: metadata.description,
+    finalAsset,
     generatedAt,
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,
@@ -514,13 +580,23 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
   const updatedAt = toIsoString(item.updatedAt) ?? generatedAt ?? createdAt;
   const adId = item.adId && Number.isFinite(Number(item.adId)) ? Number(item.adId) : null;
   const status = normalizeProjectStatus(item.status);
+  const finalAsset = buildWorkspaceProjectFinalAsset({
+    adId,
+    createdAt,
+    downloadPath: item.downloadPath ?? null,
+    generatedAt,
+    historyEntry: item,
+    kind: item.finalAssetKind ?? "final_video",
+    mediaAssetId: item.finalAssetId ?? null,
+    status: item.finalAssetStatus ?? status,
+  });
   if (status !== "ready") {
     return null;
   }
 
   const playbackTargets = buildWorkspaceProjectPlaybackTargets({
     projectId: `task:${jobId}`,
-    downloadPath: item.downloadPath,
+    downloadPath: finalAsset?.downloadPath ?? item.downloadPath,
     jobId,
     version: updatedAt,
   });
@@ -539,6 +615,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     adId,
     createdAt,
     description: metadata.description,
+    finalAsset,
     generatedAt,
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,

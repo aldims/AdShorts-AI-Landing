@@ -10,6 +10,11 @@ import {
 const createMediaLibraryItem = (
   overrides: Partial<WorkspaceMediaLibraryItem>,
 ): WorkspaceMediaLibraryItem => ({
+  assetExpiresAt: null,
+  assetId: null,
+  assetKind: null,
+  assetLifecycle: null,
+  assetMediaType: null,
   createdAt: 0,
   dedupeKey: "dedupe",
   downloadName: "file.jpg",
@@ -78,5 +83,21 @@ describe("workspace media library display identity", () => {
       "fresh",
       "old",
     ]);
+  });
+
+  it("prefers durable asset identity over preview url hashes", () => {
+    const firstItem = createMediaLibraryItem({
+      assetId: 101,
+      previewUrl: "/api/workspace/project-segment-video?projectId=1&segmentIndex=0&source=current&delivery=preview&v=one",
+    });
+    const secondItem = createMediaLibraryItem({
+      assetId: 101,
+      itemKey: "item-2",
+      previewUrl: "/api/workspace/project-segment-video?projectId=2&segmentIndex=3&source=current&delivery=preview&v=two",
+      projectId: 2,
+    });
+
+    expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(firstItem)).toBe("asset:101");
+    expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(secondItem)).toBe("asset:101");
   });
 });

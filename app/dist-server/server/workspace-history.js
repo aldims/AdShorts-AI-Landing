@@ -59,6 +59,10 @@ const ensureWorkspaceHistoryTable = async () => {
         ad_id BIGINT,
         hashtags TEXT NOT NULL DEFAULT '',
         download_path TEXT,
+        final_asset_id BIGINT,
+        final_asset_kind TEXT,
+        final_asset_status TEXT,
+        final_asset_expires_at TEXT,
         generated_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -76,10 +80,46 @@ const ensureWorkspaceHistoryTable = async () => {
       ALTER TABLE workspace_generation_history
       ADD COLUMN IF NOT EXISTS hashtags TEXT NOT NULL DEFAULT ''
     `;
+        const addFinalAssetIdColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN final_asset_id BIGINT
+    `;
+        const addFinalAssetIdColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS final_asset_id BIGINT
+    `;
+        const addFinalAssetKindColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN final_asset_kind TEXT
+    `;
+        const addFinalAssetKindColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS final_asset_kind TEXT
+    `;
+        const addFinalAssetStatusColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN final_asset_status TEXT
+    `;
+        const addFinalAssetStatusColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS final_asset_status TEXT
+    `;
+        const addFinalAssetExpiresAtColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN final_asset_expires_at TEXT
+    `;
+        const addFinalAssetExpiresAtColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS final_asset_expires_at TEXT
+    `;
         if (isPgPool(database)) {
             await database.query(createTableSql);
             await database.query(createIndexSql);
             await database.query(addHashtagsColumnIfNotExistsSql);
+            await database.query(addFinalAssetIdColumnIfNotExistsSql);
+            await database.query(addFinalAssetKindColumnIfNotExistsSql);
+            await database.query(addFinalAssetStatusColumnIfNotExistsSql);
+            await database.query(addFinalAssetExpiresAtColumnIfNotExistsSql);
         }
         else {
             database.exec(createTableSql);
@@ -91,6 +131,22 @@ const ensureWorkspaceHistoryTable = async () => {
                 const message = error instanceof Error ? error.message.toLowerCase() : "";
                 if (!message.includes("duplicate column name")) {
                     throw error;
+                }
+            }
+            for (const statement of [
+                addFinalAssetIdColumnSql,
+                addFinalAssetKindColumnSql,
+                addFinalAssetStatusColumnSql,
+                addFinalAssetExpiresAtColumnSql,
+            ]) {
+                try {
+                    database.exec(statement);
+                }
+                catch (error) {
+                    const message = error instanceof Error ? error.message.toLowerCase() : "";
+                    if (!message.includes("duplicate column name")) {
+                        throw error;
+                    }
                 }
             }
         }
@@ -151,6 +207,12 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
     const error = normalizeText(snapshot.error) || null;
     const adId = toNullableInteger(snapshot.adId);
     const downloadPath = normalizeText(snapshot.downloadPath) || null;
+    const finalAssetId = toNullableInteger(snapshot.finalAssetId);
+    const finalAssetKind = normalizeText(snapshot.finalAssetKind) || null;
+    const finalAssetStatus = normalizeText(snapshot.finalAssetStatus) || null;
+    const finalAssetExpiresAt = normalizeText(snapshot.finalAssetExpiresAt)
+        ? normalizeIsoString(snapshot.finalAssetExpiresAt)
+        : null;
     const generatedAt = normalizeText(snapshot.generatedAt) ? normalizeIsoString(snapshot.generatedAt) : null;
     const hashtags = serializeGenerationHashtags(snapshot.hashtags);
     const sql = isPgPool(database)
@@ -166,11 +228,15 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           ad_id,
           hashtags,
           download_path,
+          final_asset_id,
+          final_asset_kind,
+          final_asset_status,
+          final_asset_expires_at,
           generated_at,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (job_id) DO UPDATE SET
           owner_key = EXCLUDED.owner_key,
           prompt = CASE
@@ -191,6 +257,13 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           error = EXCLUDED.error,
           ad_id = COALESCE(EXCLUDED.ad_id, workspace_generation_history.ad_id),
           download_path = COALESCE(EXCLUDED.download_path, workspace_generation_history.download_path),
+          final_asset_id = COALESCE(EXCLUDED.final_asset_id, workspace_generation_history.final_asset_id),
+          final_asset_kind = COALESCE(EXCLUDED.final_asset_kind, workspace_generation_history.final_asset_kind),
+          final_asset_status = COALESCE(EXCLUDED.final_asset_status, workspace_generation_history.final_asset_status),
+          final_asset_expires_at = COALESCE(
+            EXCLUDED.final_asset_expires_at,
+            workspace_generation_history.final_asset_expires_at
+          ),
           generated_at = COALESCE(EXCLUDED.generated_at, workspace_generation_history.generated_at),
           updated_at = EXCLUDED.updated_at
       `
@@ -206,11 +279,15 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           ad_id,
           hashtags,
           download_path,
+          final_asset_id,
+          final_asset_kind,
+          final_asset_status,
+          final_asset_expires_at,
           generated_at,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id) DO UPDATE SET
           owner_key = excluded.owner_key,
           prompt = CASE
@@ -231,6 +308,13 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           error = excluded.error,
           ad_id = COALESCE(excluded.ad_id, workspace_generation_history.ad_id),
           download_path = COALESCE(excluded.download_path, workspace_generation_history.download_path),
+          final_asset_id = COALESCE(excluded.final_asset_id, workspace_generation_history.final_asset_id),
+          final_asset_kind = COALESCE(excluded.final_asset_kind, workspace_generation_history.final_asset_kind),
+          final_asset_status = COALESCE(excluded.final_asset_status, workspace_generation_history.final_asset_status),
+          final_asset_expires_at = COALESCE(
+            excluded.final_asset_expires_at,
+            workspace_generation_history.final_asset_expires_at
+          ),
           generated_at = COALESCE(excluded.generated_at, workspace_generation_history.generated_at),
           updated_at = excluded.updated_at
       `;
@@ -245,6 +329,10 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
         adId,
         hashtags,
         downloadPath,
+        finalAssetId,
+        finalAssetKind,
+        finalAssetStatus,
+        finalAssetExpiresAt,
         generatedAt,
         createdAt,
         updatedAt,
@@ -268,6 +356,10 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
           ad_id AS "adId",
           hashtags AS "hashtags",
           download_path AS "downloadPath",
+          final_asset_id AS "finalAssetId",
+          final_asset_kind AS "finalAssetKind",
+          final_asset_status AS "finalAssetStatus",
+          final_asset_expires_at AS "finalAssetExpiresAt",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -287,6 +379,10 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
           ad_id AS "adId",
           hashtags AS "hashtags",
           download_path AS "downloadPath",
+          final_asset_id AS "finalAssetId",
+          final_asset_kind AS "finalAssetKind",
+          final_asset_status AS "finalAssetStatus",
+          final_asset_expires_at AS "finalAssetExpiresAt",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -302,6 +398,12 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
         description: normalizeText(row.description),
         downloadPath: normalizeText(row.downloadPath) || null,
         error: normalizeText(row.error) || null,
+        finalAssetExpiresAt: normalizeText(row.finalAssetExpiresAt)
+            ? normalizeIsoString(row.finalAssetExpiresAt)
+            : null,
+        finalAssetId: toNullableInteger(row.finalAssetId),
+        finalAssetKind: normalizeText(row.finalAssetKind) || null,
+        finalAssetStatus: normalizeText(row.finalAssetStatus) || null,
         generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
         hashtags: parseGenerationHashtags(row.hashtags),
         jobId: normalizeText(row.jobId),
@@ -330,6 +432,10 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
           ad_id AS "adId",
           hashtags AS "hashtags",
           download_path AS "downloadPath",
+          final_asset_id AS "finalAssetId",
+          final_asset_kind AS "finalAssetKind",
+          final_asset_status AS "finalAssetStatus",
+          final_asset_expires_at AS "finalAssetExpiresAt",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -348,6 +454,10 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
           ad_id AS "adId",
           hashtags AS "hashtags",
           download_path AS "downloadPath",
+          final_asset_id AS "finalAssetId",
+          final_asset_kind AS "finalAssetKind",
+          final_asset_status AS "finalAssetStatus",
+          final_asset_expires_at AS "finalAssetExpiresAt",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -366,6 +476,12 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
         description: normalizeText(row.description),
         downloadPath: normalizeText(row.downloadPath) || null,
         error: normalizeText(row.error) || null,
+        finalAssetExpiresAt: normalizeText(row.finalAssetExpiresAt)
+            ? normalizeIsoString(row.finalAssetExpiresAt)
+            : null,
+        finalAssetId: toNullableInteger(row.finalAssetId),
+        finalAssetKind: normalizeText(row.finalAssetKind) || null,
+        finalAssetStatus: normalizeText(row.finalAssetStatus) || null,
         generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
         hashtags: parseGenerationHashtags(row.hashtags),
         jobId: normalizeText(row.jobId),

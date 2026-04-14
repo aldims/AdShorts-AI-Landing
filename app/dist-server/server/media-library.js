@@ -1,10 +1,13 @@
-import { areWorkspaceMediaLibraryUrlsEqual, createWorkspaceMediaLibraryItem, getWorkspaceMediaLibraryUrlMarker, getWorkspaceImageDownloadName, getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName, normalizeWorkspaceMediaLibraryCreatedAt, sortWorkspaceMediaLibraryItemsNewestFirst, } from "../src/lib/workspaceMediaLibrary.js";
+import { areWorkspaceMediaLibraryUrlsEqual, createWorkspaceMediaLibraryItem, getWorkspaceMediaLibraryDisplayAssetIdentityKey, getWorkspaceMediaLibraryUrlMarker, getWorkspaceImageDownloadName, getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName, normalizeWorkspaceMediaLibraryCreatedAt, sortWorkspaceMediaLibraryItemsNewestFirst, } from "../src/lib/workspaceMediaLibrary.js";
 import { env } from "./env.js";
+import { buildWorkspaceMediaAssetRef, isAdsflowMediaAssetPayload, } from "./media-assets.js";
+import { buildExternalUserId } from "./external-user.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspacePreviewImage, getWorkspacePreviewImageCacheKey, } from "./preview-images.js";
 import { getWorkspaceProjects } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, getWorkspaceSegmentEditorSession, getWorkspaceSegmentEditorSessionForAccessibleProject, } from "./segment-editor.js";
 import { clearWorkspaceMediaIndex, getWorkspaceMediaIndexProjectEntry, listWorkspaceMediaIndexProjectEntries, pruneWorkspaceMediaIndexProjects, upsertWorkspaceMediaIndexProjectEntry, } from "./workspace-media-index.js";
+import { postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
 const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
@@ -14,6 +17,14 @@ const workspaceMediaLibraryCache = new Map();
 const workspaceMediaLibraryInFlight = new Map();
 const workspaceMediaLibraryIndexWarmInFlight = new Set();
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeInteger = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+        return null;
+    }
+    const rounded = Math.trunc(numeric);
+    return rounded >= 0 ? rounded : null;
+};
 const isWorkspaceRenderableMediaPreviewUrl = (value) => {
     const normalized = normalizeText(value);
     if (!normalized) {
@@ -132,6 +143,163 @@ const buildWorkspaceMediaLibraryDownloadName = (projectTitle, segmentListIndex, 
     }
     return getWorkspaceImageDownloadName(segmentLabel);
 };
+const isAdsflowProjectMediaLinkPayload = (value) => Boolean(value) && typeof value === "object";
+const getAdsflowDurableAssetProjectId = (asset, links) => normalizeInteger(asset.project_id) ??
+    normalizeInteger(links.find((link) => normalizeInteger(link.project_id) !== null)?.project_id);
+const getAdsflowDurableAssetSegmentIndex = (asset, links) => normalizeInteger(asset.segment_index) ??
+    normalizeInteger(links.find((link) => normalizeInteger(link.segment_index) !== null)?.segment_index);
+const getAdsflowDurableAssetRole = (asset, links) => normalizeText(asset.role) ||
+    normalizeText(links.find((link) => normalizeText(link.role))?.role) ||
+    normalizeText(asset.kind);
+const getWorkspaceMediaLibraryKindFromDurableAsset = (asset) => {
+    if (!asset) {
+        return null;
+    }
+    const mediaType = normalizeText(asset.mediaType).toLowerCase();
+    const classifier = `${normalizeText(asset.kind)} ${normalizeText(asset.role)} ${normalizeText(asset.sourceKind)}`.toLowerCase();
+    if (mediaType === "video") {
+        if (classifier.includes("photo_animation") || classifier.includes("animation")) {
+            return "photo_animation";
+        }
+        return "ai_video";
+    }
+    if (mediaType === "photo" || mediaType === "image") {
+        if (classifier.includes("image_edit") || classifier.includes("upscale") || classifier.includes("i2i")) {
+            return "image_edit";
+        }
+        return "ai_photo";
+    }
+    return null;
+};
+const buildWorkspaceDurableMediaAssetProxyUrl = (assetId) => `/api/workspace/media-assets/${assetId}`;
+const buildWorkspaceDurableMediaLibraryItem = (rawAsset) => {
+    const links = Array.isArray(rawAsset.links)
+        ? rawAsset.links.filter(isAdsflowProjectMediaLinkPayload)
+        : [];
+    const canonicalPayload = {
+        ...rawAsset,
+        project_id: getAdsflowDurableAssetProjectId(rawAsset, links) ?? rawAsset.project_id,
+        role: getAdsflowDurableAssetRole(rawAsset, links) || rawAsset.role,
+        segment_index: getAdsflowDurableAssetSegmentIndex(rawAsset, links) ?? rawAsset.segment_index,
+    };
+    const asset = buildWorkspaceMediaAssetRef(canonicalPayload);
+    const assetId = asset?.assetId ?? null;
+    if (!asset || !assetId || assetId <= 0 || asset.lifecycle !== "ready") {
+        return null;
+    }
+    const kind = getWorkspaceMediaLibraryKindFromDurableAsset(asset);
+    if (!kind) {
+        return null;
+    }
+    const previewUrl = buildWorkspaceDurableMediaAssetProxyUrl(assetId);
+    const projectId = asset.projectId ?? 0;
+    const segmentIndex = asset.segmentIndex ?? 0;
+    const segmentListIndex = Math.max(0, segmentIndex);
+    const projectTitle = projectId > 0 ? `Проект #${projectId}` : "Медиатека";
+    const previewKind = kind === "ai_photo" || kind === "image_edit" ? "image" : "video";
+    const rawKind = normalizeText(asset.kind || asset.role);
+    const downloadStem = projectId > 0
+        ? `${projectTitle}-asset-${assetId}`
+        : `${rawKind || "media"}-${assetId}`;
+    return createWorkspaceMediaLibraryItem({
+        assetExpiresAt: asset.expiresAt,
+        assetId,
+        assetKind: asset.kind,
+        assetLifecycle: asset.lifecycle,
+        assetMediaType: asset.mediaType,
+        createdAt: asset.createdAt,
+        downloadName: previewKind === "video"
+            ? getWorkspaceVideoDownloadName(downloadStem)
+            : getWorkspaceImageDownloadName(downloadStem),
+        downloadUrl: previewUrl,
+        kind,
+        previewKind,
+        previewPosterUrl: null,
+        previewUrl,
+        projectId,
+        projectTitle,
+        segmentIndex,
+        segmentListIndex,
+        source: "persisted",
+    });
+};
+const fetchWorkspaceDurableMediaLibraryItems = async (user, options) => {
+    if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
+        return {
+            hasMore: false,
+            items: [],
+        };
+    }
+    const externalUserId = buildExternalUserId(user);
+    const targetItemCount = Math.max(1, (options?.offset ?? 0) + (options?.limit ?? WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT));
+    const requestPageSize = Math.max(WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT, Math.min(WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT, options?.limit ?? WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT));
+    const existingItems = options?.existingItems ?? [];
+    const collectedItems = [];
+    const visitedCursors = new Set();
+    let nextCursor = 0;
+    let hasMore = false;
+    while (!visitedCursors.has(nextCursor)) {
+        visitedCursors.add(nextCursor);
+        const payload = await postAdsflowJson("/api/web/media-library", {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+            limit: requestPageSize,
+            cursor: nextCursor,
+            status: "ready",
+        }, upstreamPolicies.adsflowMetadata, {
+            assetKind: "media-library",
+            endpoint: "web.media-library",
+        }).catch((error) => {
+            console.warn("[workspace] Failed to load durable media library", {
+                error: error instanceof Error ? error.message : "Unknown durable media library error.",
+            });
+            return null;
+        });
+        if (!Array.isArray(payload?.assets)) {
+            return {
+                hasMore: false,
+                items: collectedItems,
+            };
+        }
+        collectedItems.push(...payload.assets
+            .map((item) => isAdsflowMediaAssetPayload(item)
+            ? buildWorkspaceDurableMediaLibraryItem(item)
+            : null)
+            .filter((item) => Boolean(item)));
+        const dedupedVisibleCount = dedupeWorkspaceMediaLibraryItems([
+            ...existingItems,
+            ...collectedItems,
+        ]).length;
+        const payloadNextCursor = normalizeInteger(payload.next_cursor);
+        if (payloadNextCursor === null) {
+            hasMore = false;
+            break;
+        }
+        if (dedupedVisibleCount >= targetItemCount) {
+            hasMore = true;
+            break;
+        }
+        nextCursor = payloadNextCursor;
+    }
+    return {
+        hasMore,
+        items: collectedItems,
+    };
+};
+const dedupeWorkspaceMediaLibraryItems = (items) => {
+    const itemsByIdentity = new Map();
+    for (const item of items) {
+        const identity = typeof item.assetId === "number" && item.assetId > 0
+            ? `asset:${item.assetId}`
+            : `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
+        if (!itemsByIdentity.has(identity)) {
+            itemsByIdentity.set(identity, item);
+        }
+    }
+    return Array.from(itemsByIdentity.values());
+};
 const getWorkspacePhotoOriginalPreviewUrl = (segment) => segment.originalExternalPreviewUrl ??
     segment.originalExternalPlaybackUrl ??
     null;
@@ -168,7 +336,19 @@ const getWorkspacePhotoAnimationDownloadUrl = (segment) => segment.currentPlayba
     segment.currentPreviewUrl ??
     segment.currentExternalPreviewUrl ??
     null;
+const isWorkspaceMediaLibraryAssetVisible = (assetId, lifecycle) => {
+    if (typeof assetId !== "number" || assetId <= 0) {
+        return true;
+    }
+    const normalizedLifecycle = normalizeText(lifecycle).toLowerCase();
+    return normalizedLifecycle !== "deleted" && normalizedLifecycle !== "expired";
+};
 const toWorkspaceMediaIndexStoredItems = (items) => items.map((item) => ({
+    assetExpiresAt: item.assetExpiresAt,
+    assetId: item.assetId,
+    assetKind: item.assetKind,
+    assetLifecycle: item.assetLifecycle,
+    assetMediaType: item.assetMediaType,
     kind: item.kind,
     previewKind: item.previewKind,
     previewPosterUrl: item.previewPosterUrl,
@@ -180,7 +360,14 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (project, entry) => {
     const projectTitle = getWorkspaceProjectDisplayTitle(project);
     const downloadToken = getWorkspaceMediaLibraryProjectVersion(project);
     const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
-    return entry.items.map((item) => createWorkspaceMediaLibraryItem({
+    return entry.items
+        .filter((item) => isWorkspaceMediaLibraryAssetVisible(item.assetId ?? null, item.assetLifecycle ?? null))
+        .map((item) => createWorkspaceMediaLibraryItem({
+        assetExpiresAt: item.assetExpiresAt ?? null,
+        assetId: item.assetId ?? null,
+        assetKind: item.assetKind ?? null,
+        assetLifecycle: item.assetLifecycle ?? null,
+        assetMediaType: item.assetMediaType ?? null,
         createdAt,
         downloadName: buildWorkspaceMediaLibraryDownloadName(projectTitle, item.segmentListIndex, item.kind),
         downloadUrl: appendUrlToken(item.previewUrl, "download", `${downloadToken}:${item.segmentIndex}:${item.kind}`),
@@ -220,8 +407,13 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                     !areWorkspaceMediaLibraryUrlsEqual(currentPlaybackUrl, originalPlaybackUrl));
             if (hasAiVideoVariant) {
                 const aiVideoPreviewUrl = currentPlaybackUrl ?? currentPreviewUrl;
-                if (aiVideoPreviewUrl) {
+                if (aiVideoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
                     items.push(createWorkspaceMediaLibraryItem({
+                        assetExpiresAt: segment.currentAsset?.expiresAt ?? null,
+                        assetId: segment.currentAsset?.assetId ?? null,
+                        assetKind: segment.currentAsset?.kind ?? null,
+                        assetLifecycle: segment.currentAsset?.lifecycle ?? null,
+                        assetMediaType: segment.currentAsset?.mediaType ?? null,
                         createdAt,
                         downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-video`),
                         downloadUrl: appendUrlToken(currentPlaybackUrl ?? aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:ai-video`),
@@ -246,8 +438,13 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
         }
         const originalPhotoPreviewUrl = getWorkspacePhotoOriginalPreviewUrl(segment);
         const originalPhotoDownloadUrl = getWorkspacePhotoOriginalDownloadUrl(segment);
-        if (originalPhotoPreviewUrl) {
+        if (originalPhotoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.originalAsset?.assetId, segment.originalAsset?.lifecycle)) {
             items.push(createWorkspaceMediaLibraryItem({
+                assetExpiresAt: segment.originalAsset?.expiresAt ?? null,
+                assetId: segment.originalAsset?.assetId ?? null,
+                assetKind: segment.originalAsset?.kind ?? null,
+                assetLifecycle: segment.originalAsset?.lifecycle ?? null,
+                assetMediaType: segment.originalAsset?.mediaType ?? null,
                 createdAt,
                 downloadName: getWorkspaceImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
                 downloadUrl: appendUrlToken(originalPhotoDownloadUrl ?? originalPhotoPreviewUrl, "download", `${downloadToken}:${segment.index}:original`),
@@ -281,8 +478,13 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                     segmentIndex: segment.index,
                     version: buildWorkspaceMediaLibraryPreviewVersion(animatedPreviewUrl ?? animatedDownloadUrl ?? originalPhotoPreviewUrl, `${downloadToken}:${segment.index}:photo-animation`),
                 });
-            if (animatedPreviewUrl) {
+            if (animatedPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
                 items.push(createWorkspaceMediaLibraryItem({
+                    assetExpiresAt: segment.currentAsset?.expiresAt ?? null,
+                    assetId: segment.currentAsset?.assetId ?? null,
+                    assetKind: segment.currentAsset?.kind ?? null,
+                    assetLifecycle: segment.currentAsset?.lifecycle ?? null,
+                    assetMediaType: segment.currentAsset?.mediaType ?? null,
                     createdAt,
                     downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
                     downloadUrl: appendUrlToken(animatedDownloadUrl ?? animatedPreviewUrl, "download", `${downloadToken}:${segment.index}:animation`),
@@ -552,17 +754,27 @@ export const getWorkspaceMediaLibraryItems = async (user, options) => {
             return cloneWorkspaceMediaLibraryPage(await inFlightRequest);
         }
     }
-    const request = loadWorkspaceMediaLibraryIndexEntries(user, options).then((entries) => {
-        const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry)));
+    const request = loadWorkspaceMediaLibraryIndexEntries(user, options).then(async (entries) => {
+        const hydratedIndexItems = entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry));
+        const durableMedia = await fetchWorkspaceDurableMediaLibraryItems(user, {
+            existingItems: hydratedIndexItems,
+            limit,
+            offset,
+        });
+        const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(dedupeWorkspaceMediaLibraryItems([
+            ...durableMedia.items,
+            ...hydratedIndexItems,
+        ]));
         const pageItems = allItems.slice(offset, offset + limit);
-        const total = entries.hasPendingProjects
+        const hasAdditionalItems = offset + pageItems.length < allItems.length ||
+            entries.hasPendingProjects ||
+            durableMedia.hasMore;
+        const total = hasAdditionalItems
             ? Math.max(allItems.length, offset + pageItems.length + 1)
             : allItems.length;
         return {
             items: pageItems,
-            nextCursor: offset + pageItems.length < allItems.length || entries.hasPendingProjects
-                ? buildWorkspaceMediaLibraryNextCursor(offset + pageItems.length)
-                : null,
+            nextCursor: hasAdditionalItems ? buildWorkspaceMediaLibraryNextCursor(offset + pageItems.length) : null,
             total,
         };
     });

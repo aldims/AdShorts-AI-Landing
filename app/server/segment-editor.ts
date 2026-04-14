@@ -1,6 +1,11 @@
 import { env } from "./env.js";
 import { getWorkspaceProjects } from "./projects.js";
 import {
+  buildWorkspaceMediaAssetRef,
+  fetchProjectMediaEnvelope,
+  mergeWorkspaceMediaAssetRefs,
+} from "./media-assets.js";
+import {
   assertAdsflowConfigured,
   buildAdsflowUrl,
   fetchAdsflowJson as fetchAdsflowJsonWithPolicy,
@@ -9,6 +14,7 @@ import {
   upstreamPolicies,
 } from "./upstream-client.js";
 import { listWorkspaceGenerationHistory } from "./workspace-history.js";
+import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type SegmentEditorUser = {
   email?: string | null;
@@ -54,7 +60,9 @@ type AdsflowProjectMediaEntryPayload = {
   download_url?: string | null;
   id?: number | string | null;
   local_path?: string | null;
+  media_asset_id?: number | string | null;
   media_type?: string | null;
+  mime_type?: string | null;
   preview?: string | null;
   source?: string | null;
   url?: string | null;
@@ -87,6 +95,7 @@ export type WorkspaceSegmentEditorSpeechWord = {
 export type WorkspaceSegmentEditorMediaType = "photo" | "video";
 
 export type WorkspaceSegmentEditorSegment = {
+  currentAsset: WorkspaceMediaAssetRef | null;
   currentExternalPlaybackUrl: string | null;
   currentExternalPreviewUrl: string | null;
   currentPlaybackUrl: string | null;
@@ -96,6 +105,7 @@ export type WorkspaceSegmentEditorSegment = {
   endTime: number;
   index: number;
   mediaType: WorkspaceSegmentEditorMediaType;
+  originalAsset: WorkspaceMediaAssetRef | null;
   originalExternalPlaybackUrl: string | null;
   originalExternalPreviewUrl: string | null;
   originalPlaybackUrl: string | null;
@@ -275,6 +285,42 @@ const getProjectCurrentMediaEntries = (
     payload?.generation_settings?.background_urls,
     originalEntries,
   );
+
+const buildProjectMediaAssetIndex = (assets: WorkspaceMediaAssetRef[]) =>
+  new Map(
+    assets
+      .filter((asset): asset is WorkspaceMediaAssetRef & { assetId: number } => typeof asset.assetId === "number" && asset.assetId > 0)
+      .map((asset) => [asset.assetId, asset] as const),
+  );
+
+const buildSegmentMediaAssetFromEntry = (
+  entry: AdsflowProjectMediaEntryPayload | null | undefined,
+  projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>,
+  options?: {
+    projectId?: number | null;
+    role?: string | null;
+    segmentIndex?: number | null;
+  },
+) => {
+  const assetId = normalizeInteger(entry?.media_asset_id);
+  const linkedAsset = assetId !== null ? projectMediaByAssetId.get(assetId) ?? null : null;
+  const entryAsset = buildWorkspaceMediaAssetRef({
+    download_path: entry?.download_url ?? entry?.url ?? null,
+    download_url: entry?.download_url ?? null,
+    id: assetId,
+    kind: options?.role ?? null,
+    media_type: entry?.media_type ?? null,
+    mime_type: entry?.mime_type ?? null,
+    original_url: entry?.url ?? null,
+    project_id: options?.projectId ?? null,
+    role: options?.role ?? null,
+    segment_index: options?.segmentIndex ?? null,
+    source_kind: detectWorkspaceSegmentSourceKind(entry),
+    status: linkedAsset?.status ?? "ready",
+  });
+
+  return mergeWorkspaceMediaAssetRefs(linkedAsset, entryAsset);
+};
 
 const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[] => {
   if (!Array.isArray(value)) {
@@ -511,6 +557,7 @@ const buildWorkspaceSegmentEditorSegment = (
   payload: AdsflowSegmentEditorSegmentPayload,
   projectSources?: {
     currentEntries: AdsflowProjectMediaEntryPayload[];
+    projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>;
     originalEntries: AdsflowProjectMediaEntryPayload[];
   },
 ): WorkspaceSegmentEditorSegment | null => {
@@ -534,8 +581,19 @@ const buildWorkspaceSegmentEditorSegment = (
   const hasOriginalVideo = Boolean(originalVideoMarker);
   const currentEntry = projectSources?.currentEntries[index] ?? null;
   const originalEntry = projectSources?.originalEntries[index] ?? currentEntry;
+  const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectSources?.projectMediaByAssetId ?? new Map(), {
+    projectId,
+    role: "segment_current",
+    segmentIndex: index,
+  });
+  const originalAsset = buildSegmentMediaAssetFromEntry(originalEntry, projectSources?.projectMediaByAssetId ?? new Map(), {
+    projectId,
+    role: "segment_original",
+    segmentIndex: index,
+  });
 
   return {
+    currentAsset,
     currentExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(currentEntry),
     currentExternalPreviewUrl: getProjectMediaEntryPreviewUrl(currentEntry),
     currentPlaybackUrl: hasCurrentVideo
@@ -549,6 +607,7 @@ const buildWorkspaceSegmentEditorSegment = (
     endTime,
     index,
     mediaType: normalizeMediaType(payload.media_type),
+    originalAsset,
     originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),
     originalExternalPreviewUrl: getProjectMediaEntryPreviewUrl(originalEntry),
     originalPlaybackUrl: hasOriginalVideo
@@ -572,9 +631,10 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
   assertAdsflowConfigured();
   let payload: AdsflowSegmentEditorResponse;
   let projectDetailsPayload: AdsflowProjectDetailsResponse | null = null;
+  let projectMediaEnvelope = { assets: [], projectId } as Awaited<ReturnType<typeof fetchProjectMediaEnvelope>>;
 
   try {
-    const [segmentEditorPayload, projectPayload] = await Promise.all([
+    const [segmentEditorPayload, projectPayload, mediaEnvelope] = await Promise.all([
       fetchAdsflowJsonWithPolicy<AdsflowSegmentEditorResponse>({
         context: {
           endpoint: "segment-editor.session",
@@ -602,10 +662,15 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
         console.warn(`[segment-editor] Failed to load source metadata for project ${projectId}`, error);
         return null;
       }),
+      fetchProjectMediaEnvelope(projectId).catch((error) => {
+        console.warn(`[segment-editor] Failed to load durable media for project ${projectId}`, error);
+        return { assets: [], projectId };
+      }),
     ]);
 
     payload = segmentEditorPayload;
     projectDetailsPayload = projectPayload;
+    projectMediaEnvelope = mediaEnvelope;
   } catch (error) {
     if (error instanceof UpstreamFetchError && error.isTimeout) {
       throw new WorkspaceSegmentEditorError(SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE, 504);
@@ -626,10 +691,12 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
   const normalizedProjectId = normalizeInteger(payload.project_id) ?? projectId;
   const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
+  const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
   const segments = (payload.segments ?? [])
     .map((segment) =>
       buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment, {
         currentEntries,
+        projectMediaByAssetId,
         originalEntries,
       }),
     )

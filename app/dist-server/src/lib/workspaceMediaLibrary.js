@@ -87,10 +87,17 @@ const getWorkspaceMediaLibraryAssetIdentity = (value) => {
     return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
 };
 export const getWorkspaceMediaLibraryAssetIdentityKey = (value) => getWorkspaceMediaLibraryAssetIdentity(value);
-export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => item.kind === "photo_animation" && item.previewPosterUrl
-    ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
-    : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
-export const buildWorkspaceMediaLibraryItemDedupeKey = (options) => `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(options.previewUrl)}`;
+export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => typeof item.assetId === "number" && item.assetId > 0
+    ? `asset:${item.assetId}`
+    : item.kind === "photo_animation" && item.previewPosterUrl
+        ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
+        : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
+export const buildWorkspaceMediaLibraryItemDedupeKey = (options) => {
+    if (typeof options.assetId === "number" && options.assetId > 0) {
+        return `asset:${options.assetId}`;
+    }
+    return `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(options.previewUrl)}`;
+};
 export const buildWorkspaceMediaLibraryItemKey = (source, options) => {
     if (source === "live" && options.sourceJobId) {
         return `live:${options.kind}:job:${options.sourceJobId}`;
@@ -100,17 +107,26 @@ export const buildWorkspaceMediaLibraryItemKey = (source, options) => {
         previewUrl: options.previewUrl,
         projectId: options.projectId,
         segmentIndex: options.segmentIndex,
+        assetId: options.assetId,
     })}`;
 };
 export const createWorkspaceMediaLibraryItem = (options) => {
     const segmentNumber = options.segmentListIndex + 1;
     const dedupeKey = buildWorkspaceMediaLibraryItemDedupeKey({
+        assetId: options.assetId,
         kind: options.kind,
         previewUrl: options.previewUrl,
         projectId: options.projectId,
         segmentIndex: options.segmentIndex,
     });
     return {
+        assetExpiresAt: typeof options.assetExpiresAt === "string" ? options.assetExpiresAt : null,
+        assetId: Number.isFinite(Number(options.assetId)) ? Math.trunc(Number(options.assetId)) : null,
+        assetKind: typeof options.assetKind === "string" && options.assetKind.trim() ? options.assetKind.trim() : null,
+        assetLifecycle: options.assetLifecycle ?? null,
+        assetMediaType: typeof options.assetMediaType === "string" && options.assetMediaType.trim()
+            ? options.assetMediaType.trim()
+            : null,
         createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
         dedupeKey,
         downloadName: options.downloadName,
@@ -121,6 +137,7 @@ export const createWorkspaceMediaLibraryItem = (options) => {
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
             sourceJobId: options.sourceJobId,
+            assetId: options.assetId,
         }),
         kind: options.kind,
         previewKind: options.previewKind,

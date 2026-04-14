@@ -90,7 +90,6 @@ const pricingPlans: PricingPlan[] = [
     features: [
       "Автопубликация в YouTube",
       "Брендинг на видео",
-      "Улучшение видео до Premium",
       "Видео без водяного знака",
     ],
     ctaLabel: "Оплатить START",

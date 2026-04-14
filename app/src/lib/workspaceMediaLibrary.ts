@@ -1,3 +1,5 @@
+import type { WorkspaceMediaAssetLifecycle } from "../../shared/workspace-media-assets.js";
+
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
 
 export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
@@ -5,6 +7,11 @@ export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
 
 export type WorkspaceMediaLibraryItem = {
+  assetExpiresAt: string | null;
+  assetId: number | null;
+  assetKind: string | null;
+  assetLifecycle: WorkspaceMediaAssetLifecycle | null;
+  assetMediaType: string | null;
   createdAt: number;
   dedupeKey: string;
   downloadName: string;
@@ -144,25 +151,32 @@ export const getWorkspaceMediaLibraryAssetIdentityKey = (value: string | null | 
 
 export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
   WorkspaceMediaLibraryItem,
-  "kind" | "previewPosterUrl" | "previewUrl"
+  "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
 >) =>
-  item.kind === "photo_animation" && item.previewPosterUrl
+  typeof item.assetId === "number" && item.assetId > 0
+    ? `asset:${item.assetId}`
+    : item.kind === "photo_animation" && item.previewPosterUrl
     ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
     : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
 
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options: {
+  assetId?: number | null;
   kind: WorkspaceMediaLibraryItemKind;
   previewUrl: string;
   projectId: number;
   segmentIndex: number;
-}) =>
-  `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(
-    options.previewUrl,
-  )}`;
+}) => {
+  if (typeof options.assetId === "number" && options.assetId > 0) {
+    return `asset:${options.assetId}`;
+  }
+
+  return `project:${options.projectId}:segment:${options.segmentIndex}:kind:${options.kind}:asset:${getWorkspaceMediaLibraryAssetIdentity(options.previewUrl)}`;
+};
 
 export const buildWorkspaceMediaLibraryItemKey = (
   source: WorkspaceMediaLibraryItemSource,
   options: {
+    assetId?: number | null;
     kind: WorkspaceMediaLibraryItemKind;
     previewUrl: string;
     projectId: number;
@@ -179,10 +193,16 @@ export const buildWorkspaceMediaLibraryItemKey = (
     previewUrl: options.previewUrl,
     projectId: options.projectId,
     segmentIndex: options.segmentIndex,
+    assetId: options.assetId,
   })}`;
 };
 
 export const createWorkspaceMediaLibraryItem = (options: {
+  assetExpiresAt?: string | null;
+  assetId?: number | null;
+  assetKind?: string | null;
+  assetLifecycle?: WorkspaceMediaAssetLifecycle | null;
+  assetMediaType?: string | null;
   createdAt?: number | string | null;
   downloadName: string;
   downloadUrl: string | null;
@@ -199,6 +219,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
 }) => {
   const segmentNumber = options.segmentListIndex + 1;
   const dedupeKey = buildWorkspaceMediaLibraryItemDedupeKey({
+    assetId: options.assetId,
     kind: options.kind,
     previewUrl: options.previewUrl,
     projectId: options.projectId,
@@ -206,6 +227,14 @@ export const createWorkspaceMediaLibraryItem = (options: {
   });
 
   return {
+    assetExpiresAt: typeof options.assetExpiresAt === "string" ? options.assetExpiresAt : null,
+    assetId: Number.isFinite(Number(options.assetId)) ? Math.trunc(Number(options.assetId)) : null,
+    assetKind: typeof options.assetKind === "string" && options.assetKind.trim() ? options.assetKind.trim() : null,
+    assetLifecycle: options.assetLifecycle ?? null,
+    assetMediaType:
+      typeof options.assetMediaType === "string" && options.assetMediaType.trim()
+        ? options.assetMediaType.trim()
+        : null,
     createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
     dedupeKey,
     downloadName: options.downloadName,
@@ -216,6 +245,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
       projectId: options.projectId,
       segmentIndex: options.segmentIndex,
       sourceJobId: options.sourceJobId,
+      assetId: options.assetId,
     }),
     kind: options.kind,
     previewKind: options.previewKind,

@@ -1,6 +1,10 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import {
+  buildWorkspaceMediaAssetRef,
+  mergeWorkspaceMediaAssetRefs,
+} from "./media-assets.js";
+import {
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
@@ -29,6 +33,7 @@ import {
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
+import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type StudioUser = {
   email?: string | null;
@@ -44,6 +49,29 @@ type AdsflowCreateJobResponse = {
   title?: string;
 };
 
+type AdsflowMediaAssetPayload = {
+  id?: number | null;
+  kind?: string | null;
+  media_type?: string | null;
+  mime_type?: string | null;
+  download_path?: string | null;
+  download_url?: string | null;
+};
+
+type AdsflowMediaUploadResponse = {
+  asset?: AdsflowMediaAssetPayload | null;
+  success?: boolean;
+};
+
+type AdsflowMediaUploadInitResponse = AdsflowMediaUploadResponse & {
+  upload?: {
+    expires_in?: number | null;
+    headers?: Record<string, string> | null;
+    method?: string | null;
+    url?: string | null;
+  } | null;
+};
+
 type AdsflowJobStatusResponse = {
   ad_id?: number | null;
   description?: string | null;
@@ -52,6 +80,7 @@ type AdsflowJobStatusResponse = {
   generated_at?: string | null;
   hashtags?: string | null;
   job_id?: string;
+  media_asset_id?: number | null;
   prompt?: string | null;
   status?: string;
   title?: string | null;
@@ -84,6 +113,7 @@ type AdsflowLatestGenerationPayload = {
   generated_at?: string | null;
   hashtags?: string | null;
   job_id?: string;
+  media_asset_id?: number | null;
   prompt?: string | null;
   status?: string;
   task_type?: string | null;
@@ -145,6 +175,7 @@ type AdsflowSegmentAiPhotoAssetPayload = {
   download_url?: string | null;
   file_name?: string | null;
   file_size?: number | null;
+  media_asset_id?: number | null;
   mime_type?: string | null;
   remote_url?: string | null;
   url?: string | null;
@@ -172,6 +203,7 @@ type AdsflowSegmentAiVideoAssetPayload = {
   download_url?: string | null;
   file_name?: string | null;
   file_size?: number | null;
+  media_asset_id?: number | null;
   mime_type?: string | null;
   remote_url?: string | null;
   url?: string | null;
@@ -203,6 +235,7 @@ export type WorkspaceProfile = {
 };
 
 export type StudioGeneratedImageAsset = {
+  assetId?: number | null;
   dataUrl: string;
   fileName: string;
   fileSize: number;
@@ -210,6 +243,7 @@ export type StudioGeneratedImageAsset = {
 };
 
 export type StudioGeneratedVideoAsset = {
+  assetId?: number | null;
   fileName: string;
   fileSize: number;
   mimeType: string;
@@ -325,6 +359,7 @@ export type StudioGeneration = {
   aspectRatio: string;
   description: string;
   durationLabel: string;
+  finalAsset: WorkspaceMediaAssetRef | null;
   generatedAt: string;
   hashtags: string[];
   id: string;
@@ -352,6 +387,7 @@ export type StudioGenerationStatus = {
 export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original";
 
 export type StudioSegmentEditorSegment = {
+  customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
@@ -552,6 +588,7 @@ const normalizeStudioSegmentEditorPayload = (
     }
 
     const segmentRecord = segment as {
+      customVideoAssetId?: unknown;
       customVideoFileDataUrl?: unknown;
       customVideoFileMimeType?: unknown;
       customVideoFileName?: unknown;
@@ -568,6 +605,7 @@ const normalizeStudioSegmentEditorPayload = (
     }
 
     const videoAction = normalizeStudioSegmentVideoAction(segmentRecord.videoAction);
+    const customVideoAssetId = normalizePositiveInteger(segmentRecord.customVideoAssetId) ?? undefined;
     const customVideoFileDataUrl = String(segmentRecord.customVideoFileDataUrl ?? "").trim() || undefined;
     const customVideoFileMimeType = String(segmentRecord.customVideoFileMimeType ?? "").trim() || undefined;
     const customVideoFileName = String(segmentRecord.customVideoFileName ?? "").trim() || undefined;
@@ -575,11 +613,12 @@ const normalizeStudioSegmentEditorPayload = (
     const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
     const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
 
-    if (videoAction === "custom" && (!customVideoFileDataUrl || !customVideoFileName)) {
+    if (videoAction === "custom" && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
       throw new Error(`Upload a custom video for segment ${index + 1} or choose a different source.`);
     }
 
     segments.push({
+      customVideoAssetId: videoAction === "custom" ? customVideoAssetId : undefined,
       customVideoFileDataUrl: videoAction === "custom" ? customVideoFileDataUrl : undefined,
       customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
       customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
@@ -762,6 +801,7 @@ const fallbackWorkspaceStudioOptions: WorkspaceStudioOptions = {
 
 const cloneStudioGeneration = (generation: StudioGeneration): StudioGeneration => ({
   ...generation,
+  finalAsset: generation.finalAsset ? { ...generation.finalAsset } : null,
   hashtags: [...generation.hashtags],
 });
 
@@ -1009,6 +1049,40 @@ const buildStudioGenerationVideoUrls = (options: {
   };
 };
 
+const buildStudioFinalAsset = (options: {
+  adId?: number | null;
+  downloadPath?: string | null;
+  generatedAt?: string | null;
+  historyEntry?: WorkspaceGenerationHistoryEntry | null;
+  kind?: string | null;
+  mediaAssetId?: number | null;
+  status?: string | null;
+}) => {
+  const payloadAsset = buildWorkspaceMediaAssetRef({
+    created_at: options.generatedAt ?? null,
+    download_path: options.downloadPath ?? null,
+    id: options.mediaAssetId ?? null,
+    kind: options.kind ?? "final_video",
+    media_type: "video",
+    project_id: options.adId ?? null,
+    role: "final_video",
+    status: options.status ?? null,
+  });
+  const historyAsset = buildWorkspaceMediaAssetRef({
+    created_at: options.historyEntry?.generatedAt ?? options.historyEntry?.updatedAt ?? options.historyEntry?.createdAt ?? null,
+    download_path: options.historyEntry?.downloadPath ?? null,
+    expires_at: options.historyEntry?.finalAssetExpiresAt ?? null,
+    id: options.historyEntry?.finalAssetId ?? null,
+    kind: options.historyEntry?.finalAssetKind ?? options.kind ?? "final_video",
+    media_type: "video",
+    project_id: options.adId ?? null,
+    role: "final_video",
+    status: options.historyEntry?.finalAssetStatus ?? options.status ?? null,
+  });
+
+  return mergeWorkspaceMediaAssetRefs(payloadAsset, historyAsset);
+};
+
 const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfile => ({
   balance: Math.max(0, Number(payload?.balance ?? 0)),
   expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
@@ -1052,6 +1126,40 @@ const decodeDataUrlBytes = (value: string) => {
 
 const buildDataUrlFromBytes = (bytes: Buffer, mimeType: string) =>
   `data:${normalizeStudioGeneratedImageMimeType(mimeType)};base64,${bytes.toString("base64")}`;
+
+const decodeBinaryDataUrl = (value: string) => {
+  const match = /^data:(?<mime>[^;,]+)?;base64,(?<data>.+)$/i.exec(String(value ?? "").trim());
+  if (!match?.groups?.data) {
+    throw new Error("Uploaded file data URL is invalid.");
+  }
+
+  return {
+    bytes: Buffer.from(match.groups.data, "base64"),
+    mimeType: String(match.groups.mime ?? "").trim(),
+  };
+};
+
+const inferStudioUploadMediaType = (
+  mimeType: string | null | undefined,
+  fileName: string | null | undefined,
+): "audio" | "photo" | "video" | "binary" => {
+  const normalizedMimeType = normalizeGenerationText(mimeType).toLowerCase();
+  if (normalizedMimeType.startsWith("audio/")) {
+    return "audio";
+  }
+  if (normalizedMimeType.startsWith("image/")) {
+    return "photo";
+  }
+  if (normalizedMimeType.startsWith("video/")) {
+    return "video";
+  }
+
+  const target = normalizeGenerationText(fileName).toLowerCase();
+  if (/\.(aac|m4a|mp3|wav)$/i.test(target)) return "audio";
+  if (/\.(avif|gif|jpe?g|png|webp)$/i.test(target)) return "photo";
+  if (/\.(m4v|mov|mp4|mpeg|webm)$/i.test(target)) return "video";
+  return "binary";
+};
 
 const inferStudioGeneratedImageMimeType = (
   mimeType: string | null | undefined,
@@ -1916,6 +2024,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
   const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
 
   return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     dataUrl: inlineDataUrl || buildDataUrlFromBytes(bytes, mimeType),
     fileName,
     fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),
@@ -1933,6 +2042,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (
   }
 
   return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
@@ -1951,6 +2061,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
   }
 
   return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
@@ -2101,6 +2212,7 @@ const buildStudioGeneration = (
   payload: AdsflowJobStatusResponse,
   options?: {
     description?: string | null;
+    historyEntry?: WorkspaceGenerationHistoryEntry | null;
     hashtags?: string[] | string | null;
     prompt?: string | null;
     title?: string | null;
@@ -2114,8 +2226,17 @@ const buildStudioGeneration = (
     title: options?.title ?? payload.title,
   });
   const jobId = String(payload.job_id ?? "");
+  const finalAsset = buildStudioFinalAsset({
+    adId: payload.ad_id ?? null,
+    downloadPath: payload.download_path ?? null,
+    generatedAt: payload.generated_at ?? null,
+    historyEntry: options?.historyEntry ?? null,
+    kind: "final_video",
+    mediaAssetId: payload.media_asset_id ?? null,
+    status: payload.status ?? null,
+  });
   const videoUrls = buildStudioGenerationVideoUrls({
-    downloadPath: payload.download_path,
+    downloadPath: finalAsset?.downloadPath ?? payload.download_path,
     generatedAt: payload.generated_at,
     jobId,
   });
@@ -2131,6 +2252,7 @@ const buildStudioGeneration = (
     title: metadata.title,
     description: metadata.description,
     hashtags: metadata.hashtags,
+    finalAsset,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
@@ -2161,8 +2283,17 @@ const buildStudioGenerationFromLatest = (
     title: historyEntry?.title || payload.title,
   });
   const jobId = String(payload.job_id ?? "");
+  const finalAsset = buildStudioFinalAsset({
+    adId: payload.ad_id ?? null,
+    downloadPath: payload.download_path ?? null,
+    generatedAt: payload.generated_at ?? null,
+    historyEntry,
+    kind: "final_video",
+    mediaAssetId: payload.media_asset_id ?? null,
+    status: payload.status ?? null,
+  });
   const videoUrls = buildStudioGenerationVideoUrls({
-    downloadPath: payload.download_path,
+    downloadPath: finalAsset?.downloadPath ?? payload.download_path,
     generatedAt: payload.generated_at,
     jobId,
   });
@@ -2178,6 +2309,7 @@ const buildStudioGenerationFromLatest = (
     title: metadata.title,
     description: metadata.description,
     hashtags: metadata.hashtags,
+    finalAsset,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
@@ -2198,8 +2330,17 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
     return null;
   }
 
+  const finalAsset = buildStudioFinalAsset({
+    adId: entry.adId,
+    downloadPath: entry.downloadPath ?? null,
+    generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
+    historyEntry: entry,
+    kind: entry.finalAssetKind ?? "final_video",
+    mediaAssetId: entry.finalAssetId ?? null,
+    status: entry.finalAssetStatus ?? entry.status,
+  });
   const videoUrls = buildStudioGenerationVideoUrls({
-    downloadPath: entry.downloadPath,
+    downloadPath: finalAsset?.downloadPath ?? entry.downloadPath,
     generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
     jobId,
   });
@@ -2226,6 +2367,7 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
     modelLabel: "AdsFlow pipeline",
     prompt: metadata.prompt,
     title: metadata.title,
+    finalAsset,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
   };
@@ -2511,6 +2653,107 @@ const postAdsflowJson = async <T>(path: string, body: Record<string, unknown>, o
   }, options);
 };
 
+const uploadStudioMediaAsset = async (
+  user: StudioUser,
+  options: {
+    dataUrl: string;
+    externalUserId: string;
+    fileName: string;
+    kind: string;
+    language: "en" | "ru";
+    mediaType?: "audio" | "photo" | "video" | "binary";
+    mimeType?: string | null;
+    projectId?: number | null;
+    role?: string | null;
+    segmentIndex?: number | null;
+  },
+): Promise<number> => {
+  const normalizedDataUrl = String(options.dataUrl ?? "").trim();
+  if (!normalizedDataUrl) {
+    throw new Error("Uploaded media data URL is required.");
+  }
+
+  const normalizedFileName = String(options.fileName ?? "").trim();
+  if (!normalizedFileName) {
+    throw new Error("Uploaded media file name is required.");
+  }
+
+  const decoded = decodeBinaryDataUrl(normalizedDataUrl);
+  if (!decoded.bytes.length) {
+    throw new Error("Uploaded media file is empty.");
+  }
+
+  const normalizedMimeType = normalizeGenerationText(options.mimeType) || decoded.mimeType || "application/octet-stream";
+  const normalizedMediaType =
+    options.mediaType || inferStudioUploadMediaType(normalizedMimeType, normalizedFileName);
+
+  const initPayload = await postAdsflowJson<AdsflowMediaUploadInitResponse>("/api/media/uploads/init", {
+    admin_token: env.adsflowAdminToken,
+    external_user_id: options.externalUserId,
+    file_name: normalizedFileName,
+    kind: options.kind,
+    language: options.language,
+    media_type: normalizedMediaType,
+    mime_type: normalizedMimeType,
+    project_id: options.projectId ?? undefined,
+    role: options.role ?? undefined,
+    segment_index: options.segmentIndex ?? undefined,
+    size_bytes: decoded.bytes.length,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  const assetId = normalizePositiveInteger(initPayload.asset?.id);
+  if (!assetId) {
+    throw new Error("AdsFlow did not return a media asset id.");
+  }
+
+  const uploadUrl = normalizeGenerationText(initPayload.upload?.url);
+  if (!uploadUrl) {
+    throw new Error("AdsFlow did not return a direct media upload URL.");
+  }
+
+  const uploadHeaders = new Headers();
+  Object.entries(initPayload.upload?.headers ?? {}).forEach(([key, value]) => {
+    if (value) {
+      uploadHeaders.set(key, value);
+    }
+  });
+  if (!uploadHeaders.has("content-type")) {
+    uploadHeaders.set("content-type", normalizedMimeType);
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    body: new Blob([decoded.bytes], { type: normalizedMimeType }),
+    headers: uploadHeaders,
+    method: normalizeGenerationText(initPayload.upload?.method) || "PUT",
+    signal: AbortSignal.timeout(ADSFLOW_MUTATION_TIMEOUT_MS),
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Direct media upload failed (${uploadResponse.status}).`);
+  }
+
+  await postAdsflowJson<AdsflowMediaUploadResponse>("/api/media/uploads/complete", {
+    admin_token: env.adsflowAdminToken,
+    asset_id: assetId,
+    external_user_id: options.externalUserId,
+    language: options.language,
+    project_id: options.projectId ?? undefined,
+    role: options.role ?? undefined,
+    segment_index: options.segmentIndex ?? undefined,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  return assetId;
+};
+
 const fetchAdsflowJobStatus = async (jobId: string, user: StudioUser) => {
   assertAdsflowConfigured();
 
@@ -2769,12 +3012,15 @@ export async function createStudioGenerationJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    brandLogoAssetId?: number;
     brandLogoFileDataUrl?: string;
     brandLogoFileMimeType?: string;
     brandLogoFileName?: string;
     brandText?: string;
+    customMusicAssetId?: number;
     customMusicFileDataUrl?: string;
     customMusicFileName?: string;
+    customVideoAssetId?: number;
     customVideoFileDataUrl?: string;
     customVideoFileMimeType?: string;
     customVideoFileName?: string;
@@ -2822,20 +3068,23 @@ export async function createStudioGenerationJob(
   const normalizedBrandLogoFileName = String(options?.brandLogoFileName ?? "").trim() || undefined;
   const normalizedBrandLogoFileMimeType = String(options?.brandLogoFileMimeType ?? "").trim() || undefined;
   const normalizedBrandLogoFileDataUrl = String(options?.brandLogoFileDataUrl ?? "").trim() || undefined;
+  const normalizedBrandLogoAssetId = normalizePositiveInteger(options?.brandLogoAssetId) ?? undefined;
   const normalizedBrandText = String(options?.brandText ?? "").trim() || undefined;
   const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
   const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomMusicAssetId = normalizePositiveInteger(options?.customMusicAssetId) ?? undefined;
   const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
   const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
   const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
 
-  if (normalizedMusicType === "custom" && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
+  if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
     throw new Error("Upload a custom music track or choose a different music mode.");
   }
 
-  if (normalizedVideoMode === "custom" && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
+  if (normalizedVideoMode === "custom" && !normalizedCustomVideoAssetId && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
     throw new Error("Upload a custom video or choose a different video mode.");
   }
 
@@ -2862,6 +3111,88 @@ export async function createStudioGenerationJob(
       segmentEditorActive: Boolean(normalizedSegmentEditor),
     });
 
+    const brandLogoAssetId = normalizedBrandLogoAssetId ?? (normalizedBrandLogoFileDataUrl && normalizedBrandLogoFileName
+      ? await uploadStudioMediaAsset(user, {
+          dataUrl: normalizedBrandLogoFileDataUrl,
+          externalUserId,
+          fileName: normalizedBrandLogoFileName,
+          kind: "brand_logo",
+          language: normalizedLanguage,
+          mediaType: "photo",
+          mimeType: normalizedBrandLogoFileMimeType,
+          projectId: normalizedProjectId,
+          role: "brand_logo",
+        })
+      : undefined);
+    const customMusicAssetId =
+      normalizedMusicType === "custom" && normalizedCustomMusicAssetId
+        ? normalizedCustomMusicAssetId
+        : normalizedMusicType === "custom" && normalizedCustomMusicFileDataUrl && normalizedCustomMusicFileName
+        ? await uploadStudioMediaAsset(user, {
+            dataUrl: normalizedCustomMusicFileDataUrl,
+            externalUserId,
+            fileName: normalizedCustomMusicFileName,
+            kind: "custom_music",
+            language: normalizedLanguage,
+            mediaType: "audio",
+            projectId: normalizedProjectId,
+            role: "music",
+          })
+        : undefined;
+    const customVideoAssetId =
+      normalizedVideoMode === "custom" && normalizedCustomVideoAssetId
+        ? normalizedCustomVideoAssetId
+        : normalizedVideoMode === "custom" && normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
+        ? await uploadStudioMediaAsset(user, {
+            dataUrl: normalizedCustomVideoFileDataUrl,
+            externalUserId,
+            fileName: normalizedCustomVideoFileName,
+            kind: "custom_video",
+            language: normalizedLanguage,
+            mediaType: inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+            mimeType: normalizedCustomVideoFileMimeType,
+            projectId: normalizedProjectId,
+            role: "custom_video",
+          })
+        : undefined;
+    const normalizedSegmentEditorAssetPayload = normalizedSegmentEditor
+      ? {
+          segments: await Promise.all(
+            normalizedSegmentEditor.segments.map(async (segment) => {
+              const segmentAssetId =
+                segment.videoAction === "custom" && segment.customVideoAssetId
+                  ? segment.customVideoAssetId
+                  : segment.videoAction === "custom" && segment.customVideoFileDataUrl && segment.customVideoFileName
+                  ? await uploadStudioMediaAsset(user, {
+                      dataUrl: segment.customVideoFileDataUrl,
+                      externalUserId,
+                      fileName: segment.customVideoFileName,
+                      kind: "segment_source",
+                      language: normalizedLanguage,
+                      mediaType: inferStudioUploadMediaType(segment.customVideoFileMimeType, segment.customVideoFileName),
+                      mimeType: segment.customVideoFileMimeType,
+                      projectId: normalizedProjectId,
+                      role: "segment_source",
+                      segmentIndex: segment.index,
+                    })
+                  : undefined;
+
+              return {
+                custom_video_asset_id: segmentAssetId,
+                custom_video_mime_type: segment.customVideoFileMimeType,
+                custom_video_original_name: segment.customVideoFileName,
+                duration: segment.duration,
+                end_time: segment.endTime,
+                index: segment.index,
+                start_time: segment.startTime,
+                text: segment.text,
+                video_action: segment.videoAction,
+              };
+            }),
+          ),
+        }
+      : undefined;
+
     const payload = await fetchAdsflowJson<AdsflowCreateJobResponse>(buildAdsflowUrl("/api/web/generations"), {
       method: "POST",
       headers: {
@@ -2878,32 +3209,18 @@ export async function createStudioGenerationJob(
         language: normalizedLanguage,
         add_watermark: shouldAddWatermark,
         credit_cost: requiredCredits,
-        brand_logo_data_url: normalizedBrandLogoFileDataUrl,
+        brand_logo_asset_id: brandLogoAssetId,
         brand_logo_mime_type: normalizedBrandLogoFileMimeType,
         brand_logo_original_name: normalizedBrandLogoFileName,
         brand_text: normalizedBrandText,
-        custom_video_data_url: normalizedVideoMode === "custom" ? normalizedCustomVideoFileDataUrl : undefined,
+        custom_video_asset_id: normalizedVideoMode === "custom" ? customVideoAssetId : undefined,
         custom_video_mime_type: normalizedVideoMode === "custom" ? normalizedCustomVideoFileMimeType : undefined,
         custom_video_original_name: normalizedVideoMode === "custom" ? normalizedCustomVideoFileName : undefined,
         is_regeneration: Boolean(options?.isRegeneration),
         music_type: normalizedMusicType,
         project_id: normalizedProjectId,
-        segment_editor: normalizedSegmentEditor
-          ? {
-              segments: normalizedSegmentEditor.segments.map((segment) => ({
-                custom_video_data_url: segment.customVideoFileDataUrl,
-                custom_video_mime_type: segment.customVideoFileMimeType,
-                custom_video_original_name: segment.customVideoFileName,
-                duration: segment.duration,
-                end_time: segment.endTime,
-                index: segment.index,
-                start_time: segment.startTime,
-                text: segment.text,
-                video_action: segment.videoAction,
-              })),
-            }
-          : undefined,
-        custom_music_data_url: normalizedMusicType === "custom" ? normalizedCustomMusicFileDataUrl : undefined,
+        segment_editor: normalizedSegmentEditorAssetPayload,
+        custom_music_asset_id: normalizedMusicType === "custom" ? customMusicAssetId : undefined,
         custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : undefined,
         subtitle_type: isSubtitleEnabled ? undefined : "none",
         subtitle_color: normalizedSubtitleColorId,
@@ -3048,10 +3365,11 @@ export async function generateStudioSegmentAiPhoto(
 
 export async function createStudioSegmentImageEditJob(
   prompt: string,
-  imageDataUrl: string,
+  imageDataUrl: string | undefined,
   user: StudioUser,
   options?: {
     fileName?: string;
+    imageAssetId?: number;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -3064,14 +3382,10 @@ export async function createStudioSegmentImageEditJob(
     throw new Error("Prompt is required.");
   }
 
-  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim();
-  if (!normalizedImageDataUrl) {
-    throw new Error("Image data URL is required.");
-  }
-
-  const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
-  if (!decodedImage.bytes.length) {
-    throw new Error("Image data URL is empty.");
+  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim() || undefined;
+  const normalizedImageAssetId = normalizePositiveInteger(options?.imageAssetId);
+  if (!normalizedImageAssetId && !normalizedImageDataUrl) {
+    throw new Error("Image asset id or image data URL is required.");
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
@@ -3080,16 +3394,38 @@ export async function createStudioSegmentImageEditJob(
   });
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-  const normalizedMimeType = inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+  const normalizedMimeType = normalizedImageDataUrl
+    ? (() => {
+        const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
+        if (!decodedImage.bytes.length) {
+          throw new Error("Image data URL is empty.");
+        }
+        return inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+      })()
+    : inferStudioGeneratedImageMimeType(null, options?.fileName, null);
   const normalizedFileName =
     normalizeStudioGeneratedImageFileName(options?.fileName, normalizedMimeType) ||
     `segment-image-edit-${(normalizedSegmentIndex ?? 0) + 1}${getStudioGeneratedImageExtension(normalizedMimeType)}`;
   const externalUserId = await resolveStudioExternalUserId(user);
+  const imageAssetId = normalizedImageAssetId
+    ? normalizedImageAssetId
+    : await uploadStudioMediaAsset(user, {
+        dataUrl: normalizedImageDataUrl as string,
+        externalUserId,
+        fileName: normalizedFileName,
+        kind: "segment_image",
+        language: normalizedLanguage,
+        mediaType: "photo",
+        mimeType: normalizedMimeType,
+        projectId: normalizedProjectId,
+        role: "segment_source",
+        segmentIndex: normalizedSegmentIndex,
+      });
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-edit/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
     external_user_id: externalUserId,
-    image_data_url: normalizedImageDataUrl,
+    image_asset_id: imageAssetId,
     image_mime_type: normalizedMimeType,
     image_original_name: normalizedFileName,
     language: normalizedLanguage,
@@ -3118,10 +3454,11 @@ export async function createStudioSegmentImageEditJob(
 }
 
 export async function createStudioSegmentImageUpscaleJob(
-  imageDataUrl: string,
+  imageDataUrl: string | undefined,
   user: StudioUser,
   options?: {
     fileName?: string;
+    imageAssetId?: number;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -3129,29 +3466,47 @@ export async function createStudioSegmentImageUpscaleJob(
 ) : Promise<StudioSegmentAiPhotoJob> {
   assertAdsflowConfigured();
 
-  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim();
-  if (!normalizedImageDataUrl) {
-    throw new Error("Image data URL is required.");
-  }
-
-  const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
-  if (!decodedImage.bytes.length) {
-    throw new Error("Image data URL is empty.");
+  const normalizedImageDataUrl = String(imageDataUrl ?? "").trim() || undefined;
+  const normalizedImageAssetId = normalizePositiveInteger(options?.imageAssetId);
+  if (!normalizedImageAssetId && !normalizedImageDataUrl) {
+    throw new Error("Image asset id or image data URL is required.");
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-  const normalizedMimeType = inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+  const normalizedMimeType = normalizedImageDataUrl
+    ? (() => {
+        const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
+        if (!decodedImage.bytes.length) {
+          throw new Error("Image data URL is empty.");
+        }
+        return inferStudioGeneratedImageMimeType(decodedImage.mimeType, options?.fileName, null);
+      })()
+    : inferStudioGeneratedImageMimeType(null, options?.fileName, null);
   const normalizedFileName = buildStudioUpscaledImageFileName(options?.fileName, normalizedMimeType, {
     segmentIndex: normalizedSegmentIndex,
   });
   const externalUserId = await resolveStudioExternalUserId(user);
+  const imageAssetId = normalizedImageAssetId
+    ? normalizedImageAssetId
+    : await uploadStudioMediaAsset(user, {
+        dataUrl: normalizedImageDataUrl as string,
+        externalUserId,
+        fileName: normalizedFileName,
+        kind: "segment_image",
+        language: normalizedLanguage,
+        mediaType: "photo",
+        mimeType: normalizedMimeType,
+        projectId: normalizedProjectId,
+        role: "segment_source",
+        segmentIndex: normalizedSegmentIndex,
+      });
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-upscale/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
     external_user_id: externalUserId,
-    image_data_url: normalizedImageDataUrl,
+    image_asset_id: imageAssetId,
     image_mime_type: normalizedMimeType,
     image_original_name: normalizedFileName,
     language: normalizedLanguage,
@@ -3448,6 +3803,7 @@ export async function createStudioSegmentPhotoAnimationJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    customVideoAssetId?: number;
     customVideoFileDataUrl?: string;
     customVideoFileMimeType?: string;
     customVideoFileName?: string;
@@ -3467,16 +3823,37 @@ export async function createStudioSegmentPhotoAnimationJob(
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
+  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
   const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
   const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
   const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+  if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
+    throw new Error("Photo source asset id or image data URL is required.");
+  }
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const externalUserId = await resolveStudioExternalUserId(user);
+  const customVideoAssetId =
+    normalizedCustomVideoAssetId
+      ? normalizedCustomVideoAssetId
+      : normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
+      ? await uploadStudioMediaAsset(user, {
+          dataUrl: normalizedCustomVideoFileDataUrl,
+          externalUserId,
+          fileName: normalizedCustomVideoFileName,
+          kind: "segment_source",
+          language: normalizedLanguage,
+          mediaType: inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+          mimeType: normalizedCustomVideoFileMimeType,
+          projectId: normalizedProjectId,
+          role: "segment_source",
+          segmentIndex: normalizedSegmentIndex,
+        })
+      : undefined;
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-photo-animation/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
-    custom_video_data_url: normalizedCustomVideoFileDataUrl,
+    custom_video_asset_id: customVideoAssetId,
     custom_video_mime_type: normalizedCustomVideoFileMimeType,
     custom_video_original_name: normalizedCustomVideoFileName,
     external_user_id: externalUserId,
@@ -3649,6 +4026,9 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       description: resolvedMetadata.description,
       downloadPath: payload.download_path ?? null,
       error: payload.error ?? null,
+      finalAssetId: payload.media_asset_id ?? existingHistoryEntry?.finalAssetId ?? null,
+      finalAssetKind: "final_video",
+      finalAssetStatus: status,
       generatedAt: payload.generated_at ?? null,
       hashtags: resolvedMetadata.hashtags,
       jobId: safeJobId,
@@ -3666,7 +4046,10 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       throw new Error("AdsFlow finished the job without a video path.");
     }
 
-    const generation = buildStudioGeneration(payload, resolvedMetadata);
+    const generation = buildStudioGeneration(payload, {
+      ...resolvedMetadata,
+      historyEntry: existingHistoryEntry,
+    });
     if (!generation) {
       console.warn("[studio] Done generation is missing playable preview metadata", {
         adId: payload.ad_id ?? null,

@@ -6,6 +6,7 @@ import type {
   WorkspaceMediaLibraryItemKind,
   WorkspaceMediaLibraryPreviewKind,
 } from "../src/lib/workspaceMediaLibrary.js";
+import type { WorkspaceMediaAssetLifecycle } from "../shared/workspace-media-assets.js";
 import { env } from "./env.js";
 
 export type WorkspaceMediaIndexUser = {
@@ -14,6 +15,11 @@ export type WorkspaceMediaIndexUser = {
 };
 
 export type WorkspaceMediaIndexStoredItem = {
+  assetExpiresAt?: string | null;
+  assetId?: number | null;
+  assetKind?: string | null;
+  assetLifecycle?: WorkspaceMediaAssetLifecycle | null;
+  assetMediaType?: string | null;
   kind: WorkspaceMediaLibraryItemKind;
   previewKind: WorkspaceMediaLibraryPreviewKind;
   previewPosterUrl: string | null;

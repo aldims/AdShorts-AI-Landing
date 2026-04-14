@@ -89,12 +89,13 @@ import {
   saveLocalExample,
   type LocalExampleGoal,
 } from "./local-examples.js";
+import { buildExternalUserId } from "./external-user.js";
 import {
   AgencyContactValidationError,
   parseAgencyContactSubmission,
   sendAgencyContactSubmission,
 } from "./agency-contact.js";
-import { fetchUpstreamResponse, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
+import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 
 initServerLogging();
@@ -296,6 +297,7 @@ const isWorkspaceSegmentEditorVideoDelivery = (value: string): value is Workspac
   value === "preview" || value === "playback";
 
 type StudioGenerateMultipartSegment = {
+  customVideoAssetId?: unknown;
   customVideoFileDataUrl?: unknown;
   customVideoFileMimeType?: unknown;
   customVideoFileName?: unknown;
@@ -312,6 +314,12 @@ type StudioGenerateMultipartSegment = {
 type StudioGenerateMultipartSegmentEditor = {
   projectId?: unknown;
   segments?: unknown;
+};
+
+type AdsflowMediaUploadSessionPayload = {
+  asset?: unknown;
+  success?: boolean;
+  upload?: unknown;
 };
 
 const isMultipartFormRequest = (req: express.Request) =>
@@ -354,6 +362,26 @@ const getFormDataBoolean = (formData: FormData, key: string, defaultValue: boole
 const getFormDataNumber = (formData: FormData, key: string) => {
   const value = Number(getFormDataString(formData, key));
   return Number.isFinite(value) ? value : 0;
+};
+
+const normalizeRequestPositiveInteger = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+
+  const rounded = Math.trunc(numeric);
+  return rounded > 0 ? rounded : undefined;
+};
+
+const normalizeRequestNonNegativeInteger = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+
+  const rounded = Math.trunc(numeric);
+  return rounded >= 0 ? rounded : undefined;
 };
 
 const buildMultipartFileDataUrl = async (file: File) => {
@@ -487,6 +515,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                   : undefined;
 
               return {
+                customVideoAssetId: normalizeRequestPositiveInteger(segmentRecord.customVideoAssetId),
                 customVideoFileDataUrl: uploadedFile
                   ? await buildMultipartFileDataUrl(uploadedFile)
                   : remoteUrl
@@ -517,13 +546,16 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
       : undefined;
 
   return {
+    brandLogoAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "brandLogoAssetId")),
     brandLogoFileDataUrl: brandLogoFile ? await buildMultipartFileDataUrl(brandLogoFile) : getFormDataString(formData, "brandLogoFileDataUrl"),
     brandLogoFileMimeType:
       getFormDataString(formData, "brandLogoFileMimeType") || brandLogoFile?.type?.trim() || "",
     brandLogoFileName: getFormDataString(formData, "brandLogoFileName") || brandLogoFile?.name?.trim() || "",
     brandText: getFormDataString(formData, "brandText"),
+    customMusicAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "customMusicAssetId")),
     customMusicFileDataUrl: customMusicFile ? await buildMultipartFileDataUrl(customMusicFile) : getFormDataString(formData, "customMusicFileDataUrl"),
     customMusicFileName: getFormDataString(formData, "customMusicFileName") || customMusicFile?.name?.trim() || "",
+    customVideoAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "customVideoAssetId")),
     customVideoFileDataUrl: customVideoFile ? await buildMultipartFileDataUrl(customVideoFile) : getFormDataString(formData, "customVideoFileDataUrl"),
     customVideoFileMimeType:
       getFormDataString(formData, "customVideoFileMimeType") || customVideoFile?.type?.trim() || "",
@@ -930,6 +962,56 @@ app.get("/api/workspace/media-library", async (req, res) => {
   }
 });
 
+app.delete("/api/workspace/media-library/:assetId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = Number(req.params.assetId ?? 0);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    res.status(400).json({ error: "Asset id is required." });
+    return;
+  }
+
+  try {
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: buildExternalUserId(session.user),
+    });
+    const response = await fetchUpstreamResponse(
+      upstreamUrl,
+      { method: "DELETE" },
+      upstreamPolicies.adsflowMutation,
+      {
+        assetKind: "media-library-asset",
+        endpoint: req.path,
+      },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string"
+          ? payload.detail
+          : `AdsFlow request failed (${response.status}).`;
+      throw new Error(detail);
+    }
+
+    invalidateWorkspaceMediaLibraryCache(session.user);
+    invalidateWorkspaceSegmentEditorSessionCache(session.user);
+    res.json({ data: payload ?? { success: true, assetId: Math.trunc(assetId) } });
+  } catch (error) {
+    console.error("[workspace] Failed to delete media asset", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to delete media asset.",
+    });
+  }
+});
+
 app.get("/api/workspace/media-library-preview", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -1326,6 +1408,85 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
   }
 });
 
+app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = Number(req.params.assetId ?? 0);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    res.status(400).json({ error: "Asset id is required." });
+    return;
+  }
+
+  try {
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: buildExternalUserId(session.user),
+    });
+    const response = await fetchUpstreamResponse(
+      upstreamUrl,
+      {
+        headers: {
+          ...buildVideoProxyRequestHeaders(req),
+          connection: "close",
+        },
+      },
+      upstreamPolicies.proxyInteractive,
+      {
+        assetKind: "media-asset",
+        endpoint: req.path,
+      },
+    );
+
+    if (!response.ok || !response.body) {
+      res.status(response.status).json({ error: `Media asset request failed (${response.status}).` });
+      return;
+    }
+
+    [
+      "accept-ranges",
+      "cache-control",
+      "content-disposition",
+      "content-length",
+      "content-range",
+      "content-type",
+      "etag",
+      "last-modified",
+    ].forEach((headerName) => {
+      const value = response.headers.get(headerName);
+      if (value) res.setHeader(headerName, value);
+    });
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.status(response.status);
+    await pipeline(Readable.fromWeb(response.body as never), res);
+  } catch (error) {
+    if (isVideoProxyStreamAbortLikeError(error)) {
+      if (!res.destroyed) {
+        res.destroy();
+      }
+      return;
+    }
+
+    if (res.headersSent) {
+      if (!res.destroyed) {
+        res.destroy();
+      }
+      return;
+    }
+
+    console.error("[workspace] Failed to proxy media asset", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to proxy media asset.",
+    });
+  }
+});
+
 app.get("/api/workspace/project-video", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -1522,6 +1683,114 @@ app.post("/api/contact/agency", async (req, res) => {
   }
 });
 
+app.post("/api/studio/media-upload/init", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+  const mimeType = typeof req.body?.mimeType === "string" ? req.body.mimeType.trim() : "";
+  const kind = typeof req.body?.kind === "string" ? req.body.kind.trim() : "";
+  const mediaType = typeof req.body?.mediaType === "string" ? req.body.mediaType.trim() : "";
+  const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
+  const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+  const sizeBytes = normalizeRequestPositiveInteger(req.body?.sizeBytes);
+
+  if (!fileName || !kind || !mediaType) {
+    res.status(400).json({ error: "fileName, kind and mediaType are required." });
+    return;
+  }
+
+  try {
+    const data = await postAdsflowJson<AdsflowMediaUploadSessionPayload>(
+      "/api/media/uploads/init",
+      {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: buildExternalUserId(session.user),
+        file_name: fileName,
+        kind,
+        language,
+        media_type: mediaType,
+        mime_type: mimeType || undefined,
+        project_id: projectId,
+        role: role || kind,
+        segment_index: segmentIndex,
+        size_bytes: sizeBytes,
+        user_email: session.user.email ?? undefined,
+        user_name: session.user.name ?? undefined,
+      },
+      upstreamPolicies.adsflowMutation,
+      {
+        assetKind: "media-upload",
+        endpoint: "media.uploads.init",
+      },
+    );
+    res.json({ data });
+  } catch (error) {
+    console.error("[studio] Failed to initialize media upload", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to initialize media upload.",
+    });
+  }
+});
+
+app.post("/api/studio/media-upload/complete", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = normalizeRequestPositiveInteger(req.body?.assetId);
+  const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
+  const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+
+  if (!assetId) {
+    res.status(400).json({ error: "assetId is required." });
+    return;
+  }
+
+  try {
+    const data = await postAdsflowJson<AdsflowMediaUploadSessionPayload>(
+      "/api/media/uploads/complete",
+      {
+        admin_token: env.adsflowAdminToken,
+        asset_id: assetId,
+        external_user_id: buildExternalUserId(session.user),
+        language,
+        project_id: projectId,
+        role: role || undefined,
+        segment_index: segmentIndex,
+        user_email: session.user.email ?? undefined,
+        user_name: session.user.name ?? undefined,
+      },
+      upstreamPolicies.adsflowMutation,
+      {
+        assetKind: "media-upload",
+        endpoint: "media.uploads.complete",
+      },
+    );
+    res.json({ data });
+  } catch (error) {
+    console.error("[studio] Failed to complete media upload", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to complete media upload.",
+    });
+  }
+});
+
 app.post("/api/workspace/publish/bootstrap", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -1702,6 +1971,7 @@ app.post("/api/studio/generate", async (req, res) => {
   const requestBody = isMultipartFormRequest(req)
     ? await parseStudioGenerateMultipartBody(req)
     : {
+        brandLogoAssetId: normalizeRequestPositiveInteger(req.body?.brandLogoAssetId),
         brandLogoFileDataUrl:
           typeof req.body?.brandLogoFileDataUrl === "string" ? req.body.brandLogoFileDataUrl.trim() : "",
         brandLogoFileMimeType:
@@ -1710,9 +1980,11 @@ app.post("/api/studio/generate", async (req, res) => {
         brandText: typeof req.body?.brandText === "string" ? req.body.brandText.trim() : "",
         customMusicFileDataUrl:
           typeof req.body?.customMusicFileDataUrl === "string" ? req.body.customMusicFileDataUrl.trim() : "",
+        customMusicAssetId: normalizeRequestPositiveInteger(req.body?.customMusicAssetId),
         customMusicFileName: typeof req.body?.customMusicFileName === "string" ? req.body.customMusicFileName.trim() : "",
         customVideoFileDataUrl:
           typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "",
+        customVideoAssetId: normalizeRequestPositiveInteger(req.body?.customVideoAssetId),
         customVideoFileMimeType:
           typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "",
         customVideoFileName: typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "",
@@ -1737,11 +2009,13 @@ app.post("/api/studio/generate", async (req, res) => {
   const musicType = requestBody.musicType;
   const voiceEnabled = requestBody.voiceEnabled;
   const brandLogoFileDataUrl = requestBody.brandLogoFileDataUrl;
+  const brandLogoAssetId = requestBody.brandLogoAssetId;
   const brandLogoFileMimeType = requestBody.brandLogoFileMimeType;
   const brandLogoFileName = requestBody.brandLogoFileName;
   const brandText = requestBody.brandText;
   const customMusicFileName = requestBody.customMusicFileName;
   const customMusicFileDataUrl = requestBody.customMusicFileDataUrl;
+  const customMusicAssetId = requestBody.customMusicAssetId;
   const videoMode = requestBody.videoMode;
   const subtitleStyleId = requestBody.subtitleStyleId;
   const subtitleColorId = requestBody.subtitleColorId;
@@ -1749,6 +2023,7 @@ app.post("/api/studio/generate", async (req, res) => {
   const customVideoFileName = requestBody.customVideoFileName;
   const customVideoFileMimeType = requestBody.customVideoFileMimeType;
   const customVideoFileDataUrl = requestBody.customVideoFileDataUrl;
+  const customVideoAssetId = requestBody.customVideoAssetId;
   const projectId = requestBody.projectId;
   const segmentEditor = requestBody.segmentEditor;
 
@@ -1772,12 +2047,15 @@ app.post("/api/studio/generate", async (req, res) => {
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
       brandLogoFileDataUrl,
+      brandLogoAssetId,
       brandLogoFileMimeType,
       brandLogoFileName,
       brandText,
       customMusicFileDataUrl,
+      customMusicAssetId,
       customMusicFileName,
       customVideoFileDataUrl,
+      customVideoAssetId,
       customVideoFileMimeType,
       customVideoFileName,
       isRegeneration,
@@ -1850,20 +2128,22 @@ app.post("/api/studio/segment-image-upscale/jobs", async (req, res) => {
     return;
   }
 
+  const imageAssetId = normalizeRequestPositiveInteger(req.body?.imageAssetId);
   const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
-  if (!imageDataUrl) {
-    res.status(400).json({ error: "Image data URL is required." });
+  if (!imageDataUrl && !imageAssetId) {
+    res.status(400).json({ error: "Image asset id or image data URL is required." });
     return;
   }
 
   try {
-    const job = await createStudioSegmentImageUpscaleJob(imageDataUrl, session.user, {
+    const job = await createStudioSegmentImageUpscaleJob(imageDataUrl || undefined, session.user, {
       fileName: imageFileName || undefined,
+      imageAssetId,
       language,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
@@ -1913,6 +2193,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
   }
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+  const imageAssetId = normalizeRequestPositiveInteger(req.body?.imageAssetId);
   const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
@@ -1924,14 +2205,15 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
     return;
   }
 
-  if (!imageDataUrl) {
-    res.status(400).json({ error: "Image data URL is required." });
+  if (!imageDataUrl && !imageAssetId) {
+    res.status(400).json({ error: "Image asset id or image data URL is required." });
     return;
   }
 
   try {
-    const job = await createStudioSegmentImageEditJob(prompt, imageDataUrl, session.user, {
+    const job = await createStudioSegmentImageEditJob(prompt, imageDataUrl || undefined, session.user, {
       fileName: imageFileName || undefined,
+      imageAssetId,
       language,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
@@ -2210,6 +2492,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
   const customVideoFileDataUrl =
     typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
   const customVideoFileMimeType =
@@ -2224,8 +2507,14 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     return;
   }
 
+  if (!customVideoAssetId && !customVideoFileDataUrl) {
+    res.status(400).json({ error: "Photo source asset id or image data URL is required." });
+    return;
+  }
+
   try {
     const job = await createStudioSegmentPhotoAnimationJob(prompt, session.user, {
+      customVideoAssetId,
       customVideoFileDataUrl: customVideoFileDataUrl || undefined,
       customVideoFileMimeType: customVideoFileMimeType || undefined,
       customVideoFileName: customVideoFileName || undefined,

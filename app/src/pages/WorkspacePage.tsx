@@ -53,6 +53,7 @@ import {
   STUDIO_VIDEO_GENERATION_CREDIT_COST,
   type StudioCreditAction,
 } from "../../shared/studio-credit-costs";
+import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
@@ -95,6 +96,7 @@ type StudioGeneration = {
   aspectRatio: string;
   description: string;
   durationLabel: string;
+  finalAsset?: WorkspaceMediaAssetRef | null;
   generatedAt: string;
   hashtags: string[];
   id: string;
@@ -175,6 +177,7 @@ type WorkspaceProject = {
   adId: number | null;
   createdAt: string;
   description: string;
+  finalAsset?: WorkspaceMediaAssetRef | null;
   generatedAt: string | null;
   hashtags: string[];
   id: string;
@@ -409,6 +412,7 @@ type WorkspaceSegmentEditorSession = {
 };
 
 type WorkspaceSegmentEditorPayloadSegment = {
+  customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
@@ -467,7 +471,8 @@ type WorkspaceSegmentAiPhotoJobCreateRequest = {
 };
 
 type WorkspaceSegmentImageUpscaleRequest = {
-  imageDataUrl: string;
+  imageAssetId?: number;
+  imageDataUrl?: string;
   imageFileName?: string;
   language: StudioLanguage;
   projectId?: number;
@@ -563,6 +568,7 @@ type WorkspaceSegmentAiVideoJobCreateRequest = {
 };
 
 type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiVideoJobCreateRequest & {
+  customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
@@ -730,6 +736,7 @@ type StudioMusicOption = {
 };
 
 type StudioCustomMusicFile = {
+  assetId?: number;
   dataUrl?: string;
   file?: File;
   fileName: string;
@@ -746,6 +753,7 @@ type StudioVideoOption = {
 };
 
 type StudioCustomVideoFile = {
+  assetId?: number;
   dataUrl?: string;
   file?: File;
   fileName: string;
@@ -759,6 +767,7 @@ type StudioCustomVideoFile = {
 };
 
 type StudioBrandLogoFile = {
+  assetId?: number;
   dataUrl?: string;
   file?: File;
   fileName: string;
@@ -2280,6 +2289,61 @@ const readBlobAsDataUrl = (blob: Blob) =>
     }),
   );
 
+type StudioUploadableAsset =
+  | Pick<StudioBrandLogoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl">
+  | Pick<StudioCustomMusicFile, "assetId" | "dataUrl" | "file" | "fileName" | "objectUrl">
+  | Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl" | "remoteUrl">;
+
+const fetchStudioUploadSourceBlob = async (sourceUrl: string, fallbackMessage: string) => {
+  const response = await fetch(sourceUrl);
+  if (!response.ok) {
+    throw new Error(`${fallbackMessage} (${response.status}).`);
+  }
+
+  return response.blob();
+};
+
+const buildStudioUploadFileFromAsset = async (
+  asset: StudioUploadableAsset | null | undefined,
+  options: {
+    fallbackFileName: string;
+    fallbackMimeType?: string | null;
+  },
+) => {
+  if (!asset) {
+    return null;
+  }
+
+  const fileName = String(asset.fileName || options.fallbackFileName).trim() || options.fallbackFileName;
+  const fallbackMimeType =
+    "mimeType" in asset && typeof asset.mimeType === "string" && asset.mimeType.trim()
+      ? asset.mimeType.trim()
+      : String(options.fallbackMimeType || "").trim() || "application/octet-stream";
+  const sourceFile = asset.file;
+  if (sourceFile) {
+    if (sourceFile.name === fileName && (sourceFile.type || fallbackMimeType) === sourceFile.type) {
+      return sourceFile;
+    }
+
+    return new File([sourceFile], fileName, {
+      type: sourceFile.type || fallbackMimeType,
+    });
+  }
+
+  const dataUrl = typeof asset.dataUrl === "string" ? asset.dataUrl.trim() : "";
+  const remoteUrl = "remoteUrl" in asset && typeof asset.remoteUrl === "string" ? asset.remoteUrl.trim() : "";
+  const objectUrl = typeof asset.objectUrl === "string" ? asset.objectUrl.trim() : "";
+  const sourceUrl = dataUrl || remoteUrl || objectUrl;
+  if (!sourceUrl) {
+    return null;
+  }
+
+  const blob = await fetchStudioUploadSourceBlob(sourceUrl, "Не удалось подготовить файл для загрузки");
+  return new File([blob], fileName, {
+    type: blob.type || fallbackMimeType,
+  });
+};
+
 const createStudioObjectUrl = (file: Blob) => {
   if (typeof URL === "undefined") {
     throw new Error("Object URL is not available in this environment.");
@@ -2417,6 +2481,151 @@ const appendStudioFormValue = (
   }
 
   formData.append(key, String(value));
+};
+
+type StudioDirectMediaUploadAssetPayload = {
+  assetId?: number | string | null;
+  id?: number | string | null;
+};
+
+type StudioDirectMediaUploadPayload = {
+  asset?: StudioDirectMediaUploadAssetPayload | null;
+  upload?: {
+    headers?: Record<string, string> | null;
+    method?: string | null;
+    url?: string | null;
+  } | null;
+};
+
+type StudioDirectMediaUploadResponse = {
+  data?: StudioDirectMediaUploadPayload | null;
+  error?: string;
+};
+
+const getStudioDirectUploadAssetId = (payload: StudioDirectMediaUploadPayload | null | undefined) => {
+  const rawAssetId = payload?.asset?.assetId ?? payload?.asset?.id;
+  const numeric = Number(rawAssetId);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : null;
+};
+
+const uploadStudioMediaFileToStorage = async (
+  file: File,
+  options: {
+    fileName: string;
+    kind: string;
+    language: StudioLanguage;
+    mediaType: "audio" | "photo" | "video";
+    mimeType?: string | null;
+    projectId?: number | null;
+    role: string;
+    segmentIndex?: number | null;
+  },
+) => {
+  const mimeType = String(options.mimeType || file.type || "application/octet-stream").trim() || "application/octet-stream";
+  const initResponse = await fetch("/api/studio/media-upload/init", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileName: options.fileName || file.name,
+      kind: options.kind,
+      language: options.language,
+      mediaType: options.mediaType,
+      mimeType,
+      projectId: options.projectId ?? undefined,
+      role: options.role,
+      segmentIndex: options.segmentIndex ?? undefined,
+      sizeBytes: file.size,
+    }),
+  });
+  const initPayload = (await initResponse.json().catch(() => null)) as StudioDirectMediaUploadResponse | null;
+  if (!initResponse.ok || !initPayload?.data) {
+    throw new Error(initPayload?.error ?? "Не удалось создать upload-сессию.");
+  }
+
+  const assetId = getStudioDirectUploadAssetId(initPayload.data);
+  const uploadUrl = String(initPayload.data.upload?.url ?? "").trim();
+  if (!assetId || !uploadUrl) {
+    throw new Error("Upload-сессия не вернула assetId или upload URL.");
+  }
+
+  const uploadHeaders = Object.fromEntries(
+    Object.entries(initPayload.data.upload?.headers ?? {}).filter(([, value]) => typeof value === "string" && value.trim()),
+  );
+  if (!Object.keys(uploadHeaders).some((key) => key.toLowerCase() === "content-type")) {
+    uploadHeaders["content-type"] = mimeType;
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    body: file,
+    headers: uploadHeaders,
+    method: String(initPayload.data.upload?.method ?? "PUT").trim() || "PUT",
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Storage upload failed (${uploadResponse.status}).`);
+  }
+
+  const completeResponse = await fetch("/api/studio/media-upload/complete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assetId,
+      language: options.language,
+      projectId: options.projectId ?? undefined,
+      role: options.role,
+      segmentIndex: options.segmentIndex ?? undefined,
+    }),
+  });
+  const completePayload = (await completeResponse.json().catch(() => null)) as StudioDirectMediaUploadResponse | null;
+  if (!completeResponse.ok || !completePayload?.data) {
+    throw new Error(completePayload?.error ?? "Не удалось подтвердить upload.");
+  }
+
+  return getStudioDirectUploadAssetId(completePayload.data) ?? assetId;
+};
+
+const ensureStudioUploadedAssetId = async (
+  asset: StudioUploadableAsset | null | undefined,
+  options: {
+    fallbackFileName: string;
+    fallbackMimeType?: string | null;
+    kind: string;
+    language: StudioLanguage;
+    mediaType: "audio" | "photo" | "video";
+    projectId?: number | null;
+    role: string;
+    segmentIndex?: number | null;
+  },
+) => {
+  const existingAssetId =
+    asset && Number.isFinite(Number(asset.assetId)) && Number(asset.assetId) > 0
+      ? Math.trunc(Number(asset.assetId))
+      : null;
+  if (existingAssetId) {
+    return existingAssetId;
+  }
+
+  const uploadFile = await buildStudioUploadFileFromAsset(asset, {
+    fallbackFileName: options.fallbackFileName,
+    fallbackMimeType: options.fallbackMimeType,
+  });
+  if (!uploadFile) {
+    return null;
+  }
+
+  return uploadStudioMediaFileToStorage(uploadFile, {
+    fileName: uploadFile.name || options.fallbackFileName,
+    kind: options.kind,
+    language: options.language,
+    mediaType: options.mediaType,
+    mimeType: uploadFile.type || options.fallbackMimeType,
+    projectId: options.projectId,
+    role: options.role,
+    segmentIndex: options.segmentIndex,
+  });
 };
 
 const getProjectPosterCacheValue = (videoUrl: string | null | undefined) => {
@@ -2865,8 +3074,9 @@ const getWorkspaceSegmentImageUpscaleSource = (segment: WorkspaceSegmentEditorDr
 };
 
 const createWorkspaceSegmentGeneratedImageAsset = (
-  asset: Pick<StudioCustomVideoFile, "dataUrl" | "fileName" | "fileSize" | "mimeType">,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType">,
 ): StudioCustomVideoFile => ({
+  assetId: asset.assetId,
   dataUrl: asset.dataUrl,
   fileName: asset.fileName,
   fileSize: asset.fileSize,
@@ -2875,7 +3085,7 @@ const createWorkspaceSegmentGeneratedImageAsset = (
 
 const applyWorkspaceSegmentUpscaledImageAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  asset: Pick<StudioCustomVideoFile, "dataUrl" | "fileName" | "fileSize" | "mimeType">,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType">,
 ): WorkspaceSegmentEditorDraftSegment => {
   const nextAsset = createWorkspaceSegmentGeneratedImageAsset(asset);
 
@@ -2959,6 +3169,7 @@ const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
 const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
 const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => ({
   ...project,
+  finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
   hashtags: [...project.hashtags],
   youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
@@ -3531,6 +3742,7 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
   }
 
   const dataUrl = typeof value.dataUrl === "string" ? value.dataUrl.trim() : "";
+  const assetId = Number.isFinite(Number(value.assetId)) && Number(value.assetId) > 0 ? Math.trunc(Number(value.assetId)) : null;
   const fileName = typeof value.fileName === "string" ? value.fileName : "";
   const fileSize = Number.isFinite(value.fileSize) ? Math.max(0, value.fileSize) : 0;
   const libraryItemKey = typeof value.libraryItemKey === "string" ? value.libraryItemKey.trim() : "";
@@ -3542,11 +3754,12 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
       ? value.source
       : undefined;
 
-  if (!dataUrl && !remoteUrl && !libraryItemKey) {
+  if (!assetId && !dataUrl && !remoteUrl && !libraryItemKey) {
     return null;
   }
 
   return {
+    assetId: assetId ?? undefined,
     dataUrl: dataUrl || undefined,
     fileName,
     fileSize,
@@ -3960,6 +4173,9 @@ type WorkspaceSegmentEditorUploadFile = {
 
 const buildWorkspaceSegmentEditorPayload = async (
   session: WorkspaceSegmentEditorDraftSession,
+  options: {
+    language: StudioLanguage;
+  },
 ): Promise<{ payload: WorkspaceSegmentEditorPayload; uploads: WorkspaceSegmentEditorUploadFile[] }> => {
   const segments: WorkspaceSegmentEditorPayloadSegment[] = [];
   const uploads: WorkspaceSegmentEditorUploadFile[] = [];
@@ -3992,25 +4208,35 @@ const buildWorkspaceSegmentEditorPayload = async (
           ? "original"
           : segment.videoAction;
     let customVideoFileDataUrl: string | undefined;
+    let customVideoAssetId: number | undefined;
     let customVideoFileUploadKey: string | undefined;
     let customVideoRemoteUrl: string | undefined;
 
     if (payloadVideoAction === "custom") {
-      if (customVisualAsset?.file) {
-        customVideoFileUploadKey = `segmentCustomFile-${segment.index}`;
-        uploads.push({
-          fieldName: customVideoFileUploadKey,
-          file: customVisualAsset.file,
-          fileName: customVisualAsset.fileName,
-        });
-      } else if (typeof customVisualAsset?.remoteUrl === "string" && customVisualAsset.remoteUrl.trim()) {
+      if (customVisualAsset?.assetId) {
+        customVideoAssetId = customVisualAsset.assetId;
+      } else if (customVisualAsset) {
+        customVideoAssetId = (await ensureStudioUploadedAssetId(customVisualAsset, {
+          fallbackFileName: customVisualAsset.fileName || `segment-visual-${segment.index + 1}.bin`,
+          fallbackMimeType: customVisualAsset.mimeType,
+          kind: "segment_source",
+          language: options.language,
+          mediaType: getWorkspaceSegmentCustomPreviewKind(customVisualAsset) === "image" ? "photo" : "video",
+          projectId: session.projectId,
+          role: "segment_source",
+          segmentIndex: segment.index,
+        })) ?? undefined;
+      }
+
+      if (!customVideoAssetId && typeof customVisualAsset?.remoteUrl === "string" && customVisualAsset.remoteUrl.trim()) {
         customVideoRemoteUrl = customVisualAsset.remoteUrl.trim();
       } else {
-        customVideoFileDataUrl = await resolveStudioCustomAssetDataUrl(customVisualAsset);
+        customVideoFileDataUrl = customVideoAssetId ? undefined : await resolveStudioCustomAssetDataUrl(customVisualAsset);
       }
     }
 
     segments.push({
+      customVideoAssetId,
       customVideoFileDataUrl,
       customVideoFileMimeType: payloadVideoAction === "custom" ? customVisualAsset?.mimeType : undefined,
       customVideoFileName: payloadVideoAction === "custom" ? customVisualAsset?.fileName : undefined,
@@ -4681,7 +4907,23 @@ const persistStudioBrandSettings = (
 
 const getWorkspaceMediaLibraryItemStorageKey = (item: WorkspaceMediaLibraryItem) => item.itemKey;
 
-const getWorkspaceMediaLibraryItemKindLabel = (kind: WorkspaceMediaLibraryItemKind) => {
+const getWorkspaceMediaLibraryItemKindLabel = (
+  kind: WorkspaceMediaLibraryItemKind,
+  assetKind?: string | null,
+) => {
+  const normalizedAssetKind = String(assetKind ?? "").trim().toLowerCase();
+  if (normalizedAssetKind === "final_video") {
+    return "Готовое видео";
+  }
+
+  if (normalizedAssetKind === "custom_video" || normalizedAssetKind === "segment_source") {
+    return "Загруженное видео";
+  }
+
+  if (normalizedAssetKind === "brand_logo" || normalizedAssetKind === "uploaded_photo") {
+    return "Загруженное фото";
+  }
+
   if (kind === "photo_animation") {
     return "ИИ анимация фото";
   }
@@ -4704,6 +4946,7 @@ const getWorkspaceMediaLibraryItemMimeType = (item: WorkspaceMediaLibraryItem) =
   item.previewKind === "video" ? "video/mp4" : "image/jpeg";
 
 const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLibraryItem): StudioCustomVideoFile => ({
+  assetId: item.assetId ?? undefined,
   fileName: item.downloadName,
   fileSize: 0,
   libraryItemKey: getWorkspaceMediaLibraryItemStorageKey(item),
@@ -5221,6 +5464,7 @@ const buildWorkspaceMediaLibraryDraftItems = (
 
     if (aiPhotoPreviewUrl) {
       items.push(createWorkspaceMediaLibraryItem({
+        assetId: segment.aiPhotoAsset?.assetId ?? undefined,
         createdAt,
         downloadName: getImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-photo`),
         downloadUrl: appendUrlToken(aiPhotoPreviewUrl, "download", `${downloadToken}:${segment.index}:draft-ai-photo`),
@@ -5238,6 +5482,7 @@ const buildWorkspaceMediaLibraryDraftItems = (
 
     if (imageEditPreviewUrl) {
       items.push(createWorkspaceMediaLibraryItem({
+        assetId: segment.imageEditAsset?.assetId ?? undefined,
         createdAt,
         downloadName: getImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-i2i`),
         downloadUrl: appendUrlToken(imageEditPreviewUrl, "download", `${downloadToken}:${segment.index}:draft-image-edit`),
@@ -5255,6 +5500,7 @@ const buildWorkspaceMediaLibraryDraftItems = (
 
     if (aiVideoPreviewUrl && segment.aiVideoGeneratedMode === "ai_video") {
       items.push(createWorkspaceMediaLibraryItem({
+        assetId: segment.aiVideoAsset?.assetId ?? undefined,
         createdAt,
         downloadName: getVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-ai-video`),
         downloadUrl: appendUrlToken(aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:draft-ai-video`),
@@ -5272,6 +5518,7 @@ const buildWorkspaceMediaLibraryDraftItems = (
 
     if (aiVideoPreviewUrl && segment.aiVideoGeneratedMode === "photo_animation") {
       items.push(createWorkspaceMediaLibraryItem({
+        assetId: segment.aiVideoAsset?.assetId ?? undefined,
         createdAt,
         downloadName: getVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
         downloadUrl: appendUrlToken(aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:draft-animation`),
@@ -5331,6 +5578,7 @@ const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
         : getVideoDownloadName(`${projectTitle}-segment-${segmentNumber}-ai-video`);
   const downloadUrl = appendUrlToken(previewUrl, "download", `${downloadToken}:${segment.index}:${options.sourceJobId}`);
   const item = createWorkspaceMediaLibraryItem({
+    assetId: options.asset.assetId ?? undefined,
     createdAt: Date.now(),
     downloadName,
     downloadUrl,
@@ -8762,6 +9010,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         persistHiddenMediaLibraryItemKeys(session.email, nextKeys);
         return nextKeys;
       });
+
+      if (typeof item.assetId === "number" && item.assetId > 0) {
+        void fetch(`/api/workspace/media-library/${encodeURIComponent(String(item.assetId))}`, {
+          method: "DELETE",
+        }).then(async (response) => {
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(payload?.error ?? "Не удалось удалить asset из медиатеки.");
+          }
+
+          setMediaLibraryItems((current) => current.filter((candidate) => candidate.assetId !== item.assetId));
+          setMediaLibraryReloadToken((current) => current + 1);
+        }).catch((error) => {
+          setMediaLibraryError(error instanceof Error ? error.message : "Не удалось удалить asset из медиатеки.");
+        });
+      }
     },
     [session.email],
   );
@@ -10169,16 +10433,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!mediaLibraryProjects.length) {
-      setMediaLibraryItems([]);
-      setMediaLibraryNextCursor(null);
-      setLoadedMediaLibraryFingerprint(mediaLibraryProjectsFingerprint);
-      setLoadedMediaLibraryReloadToken(mediaLibraryReloadToken);
-      setMediaLibraryError(null);
-      setIsMediaLibraryLoading(false);
-      return;
-    }
-
     const shouldBypassMediaLibraryCache = mediaLibraryReloadToken !== loadedMediaLibraryReloadToken;
     const shouldFetchMediaLibrary =
       shouldBypassMediaLibraryCache || loadedMediaLibraryFingerprint !== mediaLibraryProjectsFingerprint;
@@ -10476,7 +10730,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : null;
   const mediaLibraryPreviewModalPosterUrl = mediaLibraryPreviewModalSurface?.posterUrl ?? null;
   const mediaLibraryPreviewModalTitle = mediaLibraryPreviewModal
-    ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind)
+    ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind, mediaLibraryPreviewModal.assetKind)
     : "";
   const mediaLibraryPreviewModalMeta = mediaLibraryPreviewModal
     ? `${mediaLibraryPreviewModal.projectTitle} · Сегмент ${mediaLibraryPreviewModal.segmentNumber}`
@@ -10656,7 +10910,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const itemsByKey = new Map<string, WorkspaceMediaLibraryItem>();
 
     [...liveMediaLibraryItems, ...draftMediaLibraryItems, ...storedDraftMediaLibraryItems, ...mediaLibraryItems].forEach((item) => {
-      if (item.source === "persisted" && !mediaLibraryProjectIdSet.has(item.projectId)) {
+      if (item.source === "persisted" && item.projectId > 0 && !mediaLibraryProjectIdSet.has(item.projectId)) {
         return;
       }
 
@@ -13827,8 +14081,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     let pollStarted = false;
 
     try {
-      const imageDataUrl = await resolveStudioCustomAssetDataUrl(imageEditSource.asset);
-      if (!imageDataUrl) {
+      const imageAssetId = await ensureStudioUploadedAssetId(imageEditSource.asset, {
+        fallbackFileName: imageEditSource.fileName,
+        fallbackMimeType: imageEditSource.asset.mimeType,
+        kind: "segment_image",
+        language: selectedLanguage,
+        mediaType: "photo",
+        projectId: segmentEditorDraft.projectId,
+        role: "segment_source",
+        segmentIndex: targetSegmentIndex,
+      });
+      if (!imageAssetId) {
         throw new Error("Не удалось подготовить исходное фото для дорисовки.");
       }
 
@@ -13842,7 +14105,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageDataUrl,
+          imageAssetId,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
           projectId: segmentEditorDraft.projectId,
@@ -14089,13 +14352,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     let pollStarted = false;
 
     try {
-      const customVideoFileDataUrl = photoAnimationSourceAsset
-        ? await resolveStudioCustomAssetDataUrl(photoAnimationSourceAsset)
-        : undefined;
+      const customVideoAssetId = photoAnimationSourceAsset
+        ? await ensureStudioUploadedAssetId(photoAnimationSourceAsset, {
+            fallbackFileName: photoAnimationSourceAsset.fileName || `segment-photo-${targetSegmentIndex + 1}.jpg`,
+            fallbackMimeType: photoAnimationSourceAsset.mimeType,
+            kind: "segment_source",
+            language: selectedLanguage,
+            mediaType: "photo",
+            projectId: segmentEditorDraft.projectId,
+            role: "segment_source",
+            segmentIndex: targetSegmentIndex,
+          })
+        : null;
       const customVideoFileMimeType = photoAnimationSourceAsset?.mimeType;
       const customVideoFileName = photoAnimationSourceAsset?.fileName;
 
-      if (photoAnimationSourceAsset && !customVideoFileDataUrl) {
+      if (photoAnimationSourceAsset && !customVideoAssetId) {
         logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.empty-source-data", {
           sourceMimeType: photoAnimationSourceAsset?.mimeType ?? null,
           sourceRemoteUrl: photoAnimationSourceAsset?.remoteUrl ?? null,
@@ -14109,7 +14381,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       logSegmentEditorDiagnostics("client.segment-editor.photo-animation.fetch.start", {
-        hasCustomVideoFileDataUrl: Boolean(customVideoFileDataUrl),
+        customVideoAssetId,
         sourceFileName: customVideoFileName ?? null,
         sourceMimeType: customVideoFileMimeType ?? null,
         targetSegmentIndex,
@@ -14120,7 +14392,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          customVideoFileDataUrl,
+          customVideoAssetId: customVideoAssetId ?? undefined,
           customVideoFileMimeType,
           customVideoFileName,
           language: selectedLanguage,
@@ -14225,8 +14497,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     let pollStarted = false;
 
     try {
-      const imageDataUrl = await resolveStudioCustomAssetDataUrl(upscaleSource.asset);
-      if (!imageDataUrl) {
+      const imageAssetId = await ensureStudioUploadedAssetId(upscaleSource.asset, {
+        fallbackFileName: upscaleSource.fileName,
+        fallbackMimeType: upscaleSource.asset.mimeType,
+        kind: "segment_image",
+        language: selectedLanguage,
+        mediaType: "photo",
+        projectId: segmentEditorDraft.projectId,
+        role: "segment_source",
+        segmentIndex: targetSegmentIndex,
+      });
+      if (!imageAssetId) {
         throw new Error("Не удалось подготовить изображение для улучшения качества.");
       }
 
@@ -14236,7 +14517,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageDataUrl,
+          imageAssetId,
           imageFileName: upscaleSource.fileName,
           language: selectedLanguage,
           projectId: segmentEditorDraft.projectId,
@@ -15571,7 +15852,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         });
       }
       const effectiveSegmentEditorBuild = options?.segmentEditorSession
-        ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession)
+        ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession, {
+            language: selectedLanguage,
+          })
         : null;
       if (effectiveSegmentEditorBuild) {
         console.info("[studio] generate.segment-editor-payload.success", {
@@ -15595,11 +15878,56 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       appendStudioFormValue(formData, "voiceId", effectiveVoiceId);
       appendStudioFormValue(formData, "brandText", brandText.trim() || undefined);
 
+      let brandLogoAssetId = selectedBrandLogo?.assetId;
+      let customMusicAssetId = selectedCustomMusic?.assetId;
+      let customVideoAssetId = selectedCustomVideo?.assetId;
+
+      if (selectedBrandLogo && !brandLogoAssetId) {
+        setStatus("Загружаем бренд...");
+        brandLogoAssetId = (await ensureStudioUploadedAssetId(selectedBrandLogo, {
+          fallbackFileName: selectedBrandLogo.fileName || "brand-logo.png",
+          fallbackMimeType: selectedBrandLogo.mimeType,
+          kind: "brand_logo",
+          language: selectedLanguage,
+          mediaType: "photo",
+          projectId: options?.projectId,
+          role: "brand_logo",
+        })) ?? undefined;
+      }
+
+      if (effectiveMusicType === "custom" && selectedCustomMusic && !customMusicAssetId) {
+        setStatus("Загружаем музыку...");
+        customMusicAssetId = (await ensureStudioUploadedAssetId(selectedCustomMusic, {
+          fallbackFileName: selectedCustomMusic.fileName || "custom-music.mp3",
+          fallbackMimeType: "audio/mpeg",
+          kind: "custom_music",
+          language: selectedLanguage,
+          mediaType: "audio",
+          projectId: options?.projectId,
+          role: "music",
+        })) ?? undefined;
+      }
+
+      if (selectedVideoMode === "custom" && selectedCustomVideo && !customVideoAssetId) {
+        setStatus("Загружаем визуал...");
+        customVideoAssetId = (await ensureStudioUploadedAssetId(selectedCustomVideo, {
+          fallbackFileName: selectedCustomVideo.fileName || "custom-visual.mp4",
+          fallbackMimeType: selectedCustomVideo.mimeType,
+          kind: "custom_video",
+          language: selectedLanguage,
+          mediaType: getWorkspaceSegmentCustomPreviewKind(selectedCustomVideo) === "image" ? "photo" : "video",
+          projectId: options?.projectId,
+          role: "custom_video",
+        })) ?? undefined;
+      }
+
       if (selectedBrandLogo) {
         appendStudioFormValue(formData, "brandLogoFileName", selectedBrandLogo.fileName);
         appendStudioFormValue(formData, "brandLogoFileMimeType", selectedBrandLogo.mimeType);
 
-        if (selectedBrandLogo.file) {
+        if (brandLogoAssetId) {
+          appendStudioFormValue(formData, "brandLogoAssetId", brandLogoAssetId);
+        } else if (selectedBrandLogo.file) {
           formData.append("brandLogoFile", selectedBrandLogo.file, selectedBrandLogo.fileName);
         } else {
           appendStudioFormValue(
@@ -15613,7 +15941,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       if (effectiveMusicType === "custom") {
         appendStudioFormValue(formData, "customMusicFileName", selectedCustomMusic?.fileName);
 
-        if (selectedCustomMusic?.file) {
+        if (customMusicAssetId) {
+          appendStudioFormValue(formData, "customMusicAssetId", customMusicAssetId);
+        } else if (selectedCustomMusic?.file) {
           formData.append("customMusicFile", selectedCustomMusic.file, selectedCustomMusic.fileName);
         } else {
           appendStudioFormValue(
@@ -15628,7 +15958,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         appendStudioFormValue(formData, "customVideoFileName", selectedCustomVideo?.fileName);
         appendStudioFormValue(formData, "customVideoFileMimeType", selectedCustomVideo?.mimeType);
 
-        if (selectedCustomVideo?.file) {
+        if (customVideoAssetId) {
+          appendStudioFormValue(formData, "customVideoAssetId", customVideoAssetId);
+        } else if (selectedCustomVideo?.file) {
           formData.append("customVideoFile", selectedCustomVideo.file, selectedCustomVideo.fileName);
         } else {
           appendStudioFormValue(
@@ -18356,7 +18688,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   {filteredVisibleMediaLibraryItems.length > 0 ? (
                     <div className="studio-media-library__grid">
                       {filteredVisibleMediaLibraryItems.map((item) => {
-                      const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
+                      const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind);
                       const itemKindLabelLower = itemKindLabel.toLowerCase();
                       const canDownloadSegment = Boolean(item.downloadUrl);
                       const openPhotoLabel = `Открыть ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`;
@@ -19476,7 +19808,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <div className="studio-ai-photo-modal__library-grid">
                                 {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
                                 const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
-                                const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind);
+                                const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind);
                                 const itemKindLabel = rawItemKindLabel;
                                 const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
                                 const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(
