@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
@@ -27,23 +27,24 @@ type Props = {
 };
 
 const heroPromptText = "Как нейросети меняют маркетинг в 2026";
-const heroChips = ["Видео", "Субтитры", "Озвучка", "9:16"];
+const heroChips = ["Визуал", "Озвучка", "Субтитры", "Музыка", "Язык"];
 const heroPreviewImageSrc = "/hero_image.webp";
+const landingRefineCarouselImageSrc = "/t1.png";
 const landingRefineProofs = [
   {
-    label: "ТОЧЕЧНАЯ ПРАВКА",
-    title: "Меняйте только нужный фрагмент",
-    description: "Корректируйте один кадр без пересборки остального ролика.",
+    label: "ГЕНЕРАЦИЯ",
+    title: "Генерация по описанию",
+    description: "Создавайте сцены с помощью AI.",
   },
   {
-    label: "ОДИН КОНТЕКСТ",
-    title: "Текст, визуал и субтитры рядом",
-    description: "Вся сцена редактируется на одном экране без лишних переключений.",
+    label: "АНИМАЦИЯ",
+    title: "Анимация сцен",
+    description: "Добавляйте движение и оживляйте изображения.",
   },
   {
-    label: "ФИНАЛЬНЫЙ КОНТРОЛЬ",
-    title: "Проверяйте подачу перед экспортом",
-    description: "Сразу видно, как сцена выглядит в итоговом вертикальном формате.",
+    label: "КАЧЕСТВО",
+    title: "Улучшение качества",
+    description: "Делайте видео чётче и детализированнее.",
   },
 ] as const;
 const landingRefineCarouselCards = [
@@ -99,25 +100,49 @@ const landingGuideCards = [
     href: "https://adshortsai.com/subtitry-dlya-shorts-avtomatom/",
   },
 ] as const;
-const landingRevealSelector = [
-  ".section-head",
-  ".capability",
-  ".showcase-card",
-  ".step-card",
-  ".trust-shell__copy",
-  ".stat-card",
-  ".pricing-shell__copy",
-  ".plan-card",
-  ".guide-card",
-  ".guides-strip__cta",
-  ".landing-refine-proof",
-  ".landing-refine-board__shell",
-].join(", ");
-
 export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
   const previewRef = useRef<HTMLDivElement>(null);
   const revealRootRef = useRef<HTMLElement>(null);
+  const statsObserverRef = useRef<IntersectionObserver | null>(null);
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+
+  const animateCounter = useCallback((el: HTMLElement, target: string) => {
+    const numericMatch = target.match(/[\d,.]+/);
+    if (!numericMatch) return;
+
+    const raw = numericMatch[0];
+    const hasComma = raw.includes(",");
+    const numericValue = parseFloat(raw.replace(/,/g, ""));
+    const prefix = target.slice(0, target.indexOf(raw));
+    const suffix = target.slice(target.indexOf(raw) + raw.length);
+    const duration = 1200;
+    const start = performance.now();
+
+    const step = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = numericValue * eased;
+
+      let formatted: string;
+      if (hasComma) {
+        formatted = Math.round(current).toLocaleString("en-US");
+      } else if (Number.isInteger(numericValue)) {
+        formatted = String(Math.round(current));
+      } else {
+        formatted = current.toFixed(1);
+      }
+
+      el.textContent = `${prefix}${formatted}${suffix}`;
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.textContent = target;
+      }
+    };
+
+    requestAnimationFrame(step);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,29 +168,11 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     const root = revealRootRef.current;
     if (!root) return undefined;
 
-    const revealNodes = Array.from(root.querySelectorAll<HTMLElement>(landingRevealSelector));
-    if (!revealNodes.length) return undefined;
-
-    revealNodes.forEach((node) => {
-      node.setAttribute("data-reveal", "");
-      node.classList.remove("is-visible");
-      delete node.dataset.revealDelay;
-
-      const parent = node.parentElement;
-      if (!parent) return;
-
-      const siblings = Array.from(parent.children).filter(
-        (child): child is HTMLElement => child instanceof HTMLElement && child.matches(landingRevealSelector),
-      );
-      const siblingIndex = siblings.indexOf(node);
-
-      if (siblingIndex >= 0 && siblingIndex < 5) {
-        node.dataset.revealDelay = String(siblingIndex + 1);
-      }
-    });
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (!nodes.length) return undefined;
 
     if (typeof IntersectionObserver === "undefined") {
-      revealNodes.forEach((node) => node.classList.add("is-visible"));
+      nodes.forEach((n) => n.classList.add("is-visible"));
       return undefined;
     }
 
@@ -173,21 +180,81 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
       (entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
-
           entry.target.classList.add("is-visible");
           observer.unobserve(entry.target);
         });
       },
-      {
-        threshold: 0.1,
-        rootMargin: "0px 0px -30px 0px",
-      },
+      { threshold: 0.08, rootMargin: "0px 0px -50px 0px" },
     );
 
-    revealNodes.forEach((node) => observer.observe(node));
-
+    nodes.forEach((n) => observer.observe(n));
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const root = revealRootRef.current;
+    if (!root) return undefined;
+
+    const carouselNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-carousel-reveal]"));
+    if (!carouselNodes.length) return undefined;
+
+    if (typeof IntersectionObserver === "undefined") {
+      carouselNodes.forEach((n) => n.classList.add("is-revealed"));
+      return undefined;
+    }
+
+    const carouselObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-revealed");
+          carouselObserver.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -60px 0px" },
+    );
+
+    carouselNodes.forEach((n) => carouselObserver.observe(n));
+    return () => carouselObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const root = revealRootRef.current;
+    if (!root) return undefined;
+
+    const statCards = Array.from(root.querySelectorAll<HTMLElement>(".stat-card"));
+    if (!statCards.length) return undefined;
+
+    const targets = new Map<HTMLElement, string>();
+    statCards.forEach((card) => {
+      const strong = card.querySelector("strong");
+      if (strong) targets.set(card, strong.textContent ?? "");
+    });
+
+    if (typeof IntersectionObserver === "undefined") return undefined;
+
+    statsObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+
+          const card = entry.target as HTMLElement;
+          const strong = card.querySelector<HTMLElement>("strong");
+          const target = targets.get(card);
+          if (strong && target) {
+            card.classList.add("is-counted");
+            animateCounter(strong, target);
+          }
+          statsObserverRef.current?.unobserve(card);
+        });
+      },
+      { threshold: 0.3 },
+    );
+
+    statCards.forEach((card) => statsObserverRef.current?.observe(card));
+
+    return () => statsObserverRef.current?.disconnect();
+  }, [animateCounter]);
 
   const openPrimaryFlow = () => {
     if (session) {
@@ -236,31 +303,13 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 Вход
               </button>
             )}
-            {!session ? (
-              <button className="btn btn--header btn--premium-cta btn--premium-cta--compact route-button" type="button" onClick={openPrimaryFlow}>
-                <span className="btn--premium-cta__label">Создать видео бесплатно</span>
-                <svg
-                  className="btn--premium-cta__arrow"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </button>
-            ) : null}
           </div>
         </div>
       </header>
 
       <main ref={revealRootRef}>
         <section className="hero">
+          {/* Background scene */}
           <div className="hero__scene" aria-hidden="true">
             <span className="hero__scene-stars"></span>
             <span className="hero__scene-glow hero__scene-glow--left"></span>
@@ -272,14 +321,22 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
 
           <div className="container hero__grid">
+            {/* Left: copy */}
             <div className="hero__copy">
-              <p className="eyebrow">AI studio for short-form creators</p>
+              <div className="hero__badge">
+                <span className="hero__badge-dot" aria-hidden="true"></span>
+                Создание Shorts с AI
+              </div>
+
               <h1>
-                <span className="hero__title-highlight">Shorts / Reels / TikTok</span>
-                <span className="hero__title-subline">за 1 минуту. В один клик.</span>
+                <span className="hero__title-line1">
+                  <span className="hero__title-highlight">Shorts за&nbsp;1&nbsp;минуту</span>
+                </span>
+                <span className="hero__title-line2">в один клик.</span>
               </h1>
+
               <p className="hero__lead">
-                Превратите любую вашу идею в готовый Shorts.
+                Введите идею — остальное сделает AdShorts AI.
               </p>
 
               <div className="hero__actions">
@@ -292,22 +349,37 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </div>
 
               <ul className="hero__features">
-                <li>Оптимизирован под Shorts</li>
-                <li>Всё делается автоматически</li>
+                <li>Без монтажа</li>
+                <li>Полностью автоматически</li>
                 <li>Готово к публикации</li>
               </ul>
 
               <div className="hero__service-pills" aria-label="Что входит в ролик">
-                <span className="hero__service-pill">AI сценарий</span>
-                <span className="hero__service-pill">Озвучка</span>
-                <span className="hero__service-pill">Визуал</span>
-                <span className="hero__service-pill">Субтитры</span>
-                <span className="hero__service-pill">Музыка</span>
-                <span className="hero__service-pill">9:16</span>
+                <span className="hero__service-pill">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zM4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  AI сценарий
+                </span>
+                <span className="hero__service-pill">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  Визуал
+                </span>
+                <span className="hero__service-pill">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 1v22M9 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 5h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4"/></svg>
+                  Озвучка
+                </span>
+                <span className="hero__service-pill">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10"/></svg>
+                  Субтитры
+                </span>
+                <span className="hero__service-pill">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  Музыка
+                </span>
               </div>
             </div>
 
-            <aside className="hero-live-preview" aria-label="Live studio preview">
+            {/* Right: phone mockup */}
+            <aside className="hero-live-preview" aria-label="Превью студии">
               <div className="hero-live-preview__perspective" ref={previewRef}>
                 <div className="hero-live-preview__glow" aria-hidden="true"></div>
                 <div className="hero-live-preview__reflection" aria-hidden="true"></div>
@@ -316,17 +388,22 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                     <img
                       className="hero-live-preview__image"
                       src={heroPreviewImageSrc}
-                      alt="Превью интерфейса AdShorts AI внутри hero-экрана"
+                      alt="Интерфейс AdShorts AI"
                       loading="eager"
                       fetchPriority="high"
                       decoding="async"
                     />
                     <span className="hero-live-preview__image-shade" aria-hidden="true"></span>
+                    {/* Overlay label */}
+                    <div className="hero-live-preview__video-label" aria-hidden="true">
+                      <span className="hero-live-preview__video-label-dot"></span>
+                      Генерация…
+                    </div>
                   </div>
                   <div className="hero-live-preview__prompt">
                     <span className="hero-live-preview__prompt-text">{heroPromptText}</span>
-                    <button className="hero-live-preview__btn" type="button" aria-label="Generate">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <button className="hero-live-preview__btn" type="button" aria-label="Generate" tabIndex={-1}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M5 12h14M12 5l7 7-7 7" />
                       </svg>
                     </button>
@@ -339,74 +416,66 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 </div>
               </div>
             </aside>
-
-            
           </div>
 
+          {/* Trust strip */}
           <div className="container hero__trust">
-            <span className="hero__trust-label">Built for</span>
+            <span className="hero__trust-label">ИДЕАЛЬНО ДЛЯ</span>
             <div className="hero__trust-list">
               <span>YouTube Shorts</span>
               <span>Instagram Reels</span>
               <span>TikTok</span>
-              <span>Solo creators</span>
-              <span>Brand teams</span>
-              <span>Growth agencies</span>
+              <span>Авторы</span>
+              <span>Бренды</span>
+              <span>Агентства</span>
             </div>
           </div>
         </section>
 
-        <section className="section section--paper section--workflow">
+        <section className="section lp-section lp-section--a lp-section--workflow">
           <div className="container">
-            <div className="section-head">
-              <p className="eyebrow eyebrow--dark">КАК ЭТО РАБОТАЕТ</p>
+            <div className="lp-section-head lp-section-head--left" data-reveal="">
+              <p className="lp-eyebrow">КАК ЭТО РАБОТАЕТ</p>
               <h2>От идеи до готового Shorts за 3 шага</h2>
               <p>
-                Вы задаёте тему, сервис автоматически собирает сценарий, озвучку, визуал и субтитры, а на выходе
-                получаете готовый ролик для публикации.
+                Введите идею — AI создаст сценарий, озвучку и видео. Готовый ролик сразу готов для публикации.
               </p>
             </div>
 
             <div className="steps-grid">
-              <article className="step-card">
+              <article className="step-card" data-reveal="" data-reveal-delay="1">
                 <div className="step-card__num">01</div>
                 <h3>Введите идею</h3>
-                <p>Опишите, о чём ролик: тему, оффер или формат — сервис подхватит и соберёт структуру под Shorts.</p>
+                <p>Напишите, о чём должен быть ролик.</p>
               </article>
 
-              <article className="step-card">
+              <article className="step-card" data-reveal="" data-reveal-delay="2">
                 <div className="step-card__num">02</div>
                 <h3>Получите готовый Shorts</h3>
-                <p>Сценарий, озвучка, визуал и субтитры собираются автоматически — без ручного монтажа.</p>
+                <p>Видео создаётся автоматически: визуал, озвучка и субтитры.</p>
               </article>
 
-              <article className="step-card">
+              <article className="step-card" data-reveal="" data-reveal-delay="3">
                 <div className="step-card__num">03</div>
-                <h3>Публикуйте прямо из студии</h3>
-                <p>Отправьте готовый ролик в YouTube Shorts из интерфейса, без скачивания и лишних шагов.</p>
+                <h3>Опубликуйте в один клик</h3>
+                <p>Отправьте ролик в YouTube Shorts прямо из сервиса.</p>
               </article>
             </div>
           </div>
         </section>
 
-        <section className="section section--paper section--tight section--landing-refine" aria-labelledby="landing-refine-heading">
+        <section className="section lp-section lp-section--b section--tight section--landing-refine" aria-labelledby="landing-refine-heading">
           <div className="container landing-refine-layout">
             <div className="landing-refine-copy">
-              <div className="section-head landing-refine-head">
-                <p className="eyebrow eyebrow--dark">ТОЧНАЯ ДОВОДКА В СТУДИИ</p>
-                <h2 id="landing-refine-heading">
-                  <span className="landing-refine-head__line">Доведите каждый сегмент</span>
-                  <span className="landing-refine-head__line">до финального качества</span>
-                </h2>
-                <p>
-                  Первый драфт собирает AI, финальную точность даёте вы: правьте текст, визуал и субтитры сцена за
-                  сценой, пока ролик не будет выглядеть именно так, как нужно.
-                </p>
+              <div className="lp-section-head lp-section-head--left landing-refine-head" data-reveal="">
+                <p className="lp-eyebrow">ТОЧНАЯ ДОВОДКА В СТУДИИ</p>
+                <h2 id="landing-refine-heading">Доведите Shorts до идеала</h2>
+                <p>Изменяйте любой сегмент: генерируйте, анимируйте, улучшайте или загружайте свой контент</p>
               </div>
 
               <div className="landing-refine-proof-list">
                 {landingRefineProofs.map((proof, index) => (
-                  <article className="landing-refine-proof" key={proof.title}>
+                  <article className="landing-refine-proof" key={proof.title} data-reveal="" data-reveal-delay={String(index + 1)}>
                     <span className="landing-refine-proof__index">{String(index + 1).padStart(2, "0")}</span>
                     <div className="landing-refine-proof__copy">
                       <span className="landing-refine-proof__label">{proof.label}</span>
@@ -419,7 +488,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             </div>
 
             <div className="landing-refine-board" aria-hidden="true">
-              <div className="landing-refine-board__shell">
+              <div className="landing-refine-board__shell" data-carousel-reveal="">
                 <div className="landing-refine-board__editor">
                   <div className="studio-segment-editor__stage">
                     <div className="studio-segment-editor__carousel">
@@ -443,7 +512,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                                   {card.media === "hero" ? (
                                     <img
                                       className="landing-refine-board__editor-shot-image"
-                                      src={heroPreviewImageSrc}
+                                      src={landingRefineCarouselImageSrc}
                                       alt=""
                                       loading="lazy"
                                       decoding="async"
@@ -484,7 +553,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
                                     <div className="landing-refine-board__editor-caption">
                                       <span>Текст сегмента</span>
-                                      <strong>Каждая сцена может работать точнее</strong>
+                                      <strong>Редактируйте текст сцены прямо на карточке сегмента</strong>
                                     </div>
                                   </>
                                 ) : null}
@@ -531,36 +600,43 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
         </section>
 
-        <section className="section section--stone section--tight section--publish-regular" aria-labelledby="publish-regular-heading">
+        <section className="section lp-section lp-section--a section--tight section--publish-regular" aria-labelledby="publish-regular-heading">
           <div className="container">
-            <div className="section-head section-head--center">
+            <div className="lp-section-head lp-section-head--left" data-reveal="">
+              <p className="lp-eyebrow">РЕГУЛЯРНОСТЬ</p>
               <h2 id="publish-regular-heading">Публикуйте Shorts регулярно</h2>
-              <p>И развивайте канал без монтажа и поиска идей</p>
+              <p>Развивайте канал без монтажа и поиска идей</p>
             </div>
             <div className="landing-publish-regular">
               <div className="steps-grid landing-publish-regular__grid">
-                <article className="step-card landing-publish-regular__card">
-                  <h3>Темы и структура всегда под рукой</h3>
-                  <p>
-                    Сервис помогает не выпадать из ритма: подсказывает тему, собирает сценарий и готовит Shorts под
-                    регулярный выпуск.
-                  </p>
+                <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="1">
+                  <div className="landing-publish-regular__card-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </div>
+                  <h3>Идеи и контент-план с AI</h3>
+                  <p>Введите тему — AI предложит идеи и готовые сценарии для регулярных Shorts.</p>
                 </article>
 
-                <article className="step-card landing-publish-regular__card">
-                  <h3>Shorts без ручного монтажа</h3>
-                  <p>
-                    Озвучка, визуал, субтитры и музыка собираются автоматически, чтобы ролик был готов без сложных
-                    программ.
-                  </p>
+                <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="2">
+                  <div className="landing-publish-regular__card-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                  </div>
+                  <h3>Быстрое создание Shorts</h3>
+                  <p>Создавайте готовые Shorts без лишних действий и задержек.</p>
                 </article>
 
-                <article className="step-card landing-publish-regular__card">
-                  <h3>Публикация без лишних шагов</h3>
-                  <p>
-                    Готовый ролик можно сразу отправить в YouTube Shorts из студии, без скачивания и повторной
-                    загрузки.
-                  </p>
+                <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="3">
+                  <div className="landing-publish-regular__card-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  </div>
+                  <h3>Мгновенная публикация</h3>
+                  <p>Готовый ролик отправляется в YouTube Shorts прямо из студии.</p>
                 </article>
               </div>
 
@@ -587,31 +663,44 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
         </section>
 
-        <section className="section section--paper section--tight section--examples-cta" aria-labelledby="examples-cta-heading">
+        <section className="section lp-section lp-section--b section--tight section--examples-cta" aria-labelledby="examples-cta-heading">
           <div className="container">
-            <div className="section-head section-head--center">
-              <h2 id="examples-cta-heading">Посмотрите примеры Shorts</h2>
-              <p>Выберите идею и создайте такое же видео за минуту</p>
+            <div className="lp-section-head lp-section-head--left" data-reveal="">
+              <p className="lp-eyebrow">ПРИМЕРЫ</p>
+              <h2 id="examples-cta-heading">Вдохновляйтесь примерами Shorts</h2>
+              <p>Используйте готовые шаблоны, чтобы создавать похожие видео</p>
             </div>
 
             <div className="landing-examples-cta">
               <div className="landing-examples-cta__grid">
-                <Link className="landing-examples-cta__card" to="/examples" aria-label="Открыть примеры Shorts в категории Истории">
-                  <span className="landing-examples-cta__chip">📖 Истории</span>
-                  <h3>История с сильным хуком</h3>
-                  <p>Быстрый пример подачи, где зритель с первых секунд понимает, зачем досматривать ролик.</p>
+                <Link className="landing-examples-cta__card" to="/examples?filter=ads" aria-label="Открыть примеры Shorts: Рекламные Shorts" data-reveal="" data-reveal-delay="1">
+                  <div className="landing-examples-cta__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                  </div>
+                  <h3>Рекламные Shorts</h3>
+                  <p>Продвигайте продукт или услугу и ведите зрителя к действию.</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to="/examples" aria-label="Открыть примеры Shorts в категории Реклама">
-                  <span className="landing-examples-cta__chip">💰 Реклама</span>
-                  <h3>Рекламный Shorts под оффер</h3>
-                  <p>Покажите продукт, выгоду и следующий шаг в коротком формате без сложной упаковки.</p>
+                <Link className="landing-examples-cta__card" to="/examples?filter=growth" aria-label="Открыть примеры Shorts: Shorts для роста канала" data-reveal="" data-reveal-delay="2">
+                  <div className="landing-examples-cta__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+                    </svg>
+                  </div>
+                  <h3>Shorts для роста канала</h3>
+                  <p>Набирайте просмотры и привлекайте новых подписчиков.</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to="/examples" aria-label="Открыть примеры Shorts в категории Интересное">
-                  <span className="landing-examples-cta__chip">🧠 Интересное</span>
-                  <h3>Идея для экспертного канала</h3>
-                  <p>Выберите тему, посмотрите подачу и адаптируйте её под свой Shorts за несколько минут.</p>
+                <Link className="landing-examples-cta__card" to="/examples?filter=expert" aria-label="Открыть примеры Shorts: Экспертные Shorts" data-reveal="" data-reveal-delay="3">
+                  <div className="landing-examples-cta__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><line x1="12" y1="12" x2="12" y2="14"/>
+                    </svg>
+                  </div>
+                  <h3>Экспертные Shorts</h3>
+                  <p>Делитесь знаниями и формируйте доверие аудитории.</p>
                 </Link>
               </div>
 
@@ -638,160 +727,71 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
         </section>
 
-        <section className="section section--dark" id="pricing">
-          <div className="container pricing-shell">
-            <div className="pricing-shell__copy">
-              <p className="eyebrow">ТАРИФЫ</p>
-              <h2>START для старта, PRO для потока, ULTRA для масштаба</h2>
-              <p>
-                Тарифы отличаются объёмом кредитов и темпом работы. 1 Shorts = 10 кредитов: START подходит для теста,
-                PRO для регулярного выпуска, ULTRA для масштабирования.
-              </p>
-
-              <div className="pricing-shell__actions">
-                <Link className="btn btn--primary btn--premium-cta route-button" to="/pricing">
-                  <span className="btn--premium-cta__label">Тарифы</span>
-                  <svg
-                    className="btn--premium-cta__arrow"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              </div>
+        <section className="section lp-section lp-section--pricing" id="pricing">
+          <div className="container">
+            <div className="lp-section-head lp-section-head--left" data-reveal="">
+              <p className="lp-eyebrow">ТАРИФЫ</p>
+              <h2>Создавайте Shorts в любом масштабе</h2>
+              <p>От первых видео до стабильного потока и роста канала</p>
             </div>
 
             <div className="plan-grid">
-              <article className="plan-card">
+              <article className="plan-card" data-reveal="" data-reveal-delay="1">
                 <span className="plan-card__label">START</span>
                 <strong>390 ₽</strong>
                 <h3>50 кредитов</h3>
-                <p>До 5 видео для первого запуска и проверки идеи.</p>
+                <p>До 5 видео — для первого запуска и проверки идеи.</p>
+                <div className="plan-card__divider" aria-hidden="true" />
+                <ul className="plan-card__features">
+                  <li>5 готовых Shorts</li>
+                  <li>Сценарий + озвучка + субтитры</li>
+                  <li>Без водяного знака</li>
+                </ul>
               </article>
 
-              <article className="plan-card plan-card--accent">
+              <article className="plan-card plan-card--accent" data-reveal="" data-reveal-delay="2">
                 <span className="plan-card__label">PRO</span>
                 <strong>1 490 ₽</strong>
                 <h3>250 кредитов</h3>
-                <p>До 25 видео для стабильного контент-потока.</p>
+                <p>До 25 видео — для стабильного контент-потока.</p>
+                <div className="plan-card__divider" aria-hidden="true" />
+                <ul className="plan-card__features">
+                  <li>25 готовых Shorts</li>
+                  <li>Приоритетная генерация</li>
+                  <li>Автопубликация в YouTube</li>
+                </ul>
               </article>
 
-              <article className="plan-card">
+              <article className="plan-card" data-reveal="" data-reveal-delay="3">
                 <span className="plan-card__label">ULTRA</span>
                 <strong>4 990 ₽</strong>
                 <h3>1000 кредитов</h3>
-                <p>До 100 видео для серийного производства и команд.</p>
+                <p>До 100 видео — для серийного производства и команд.</p>
+                <div className="plan-card__divider" aria-hidden="true" />
+                <ul className="plan-card__features">
+                  <li>100 готовых Shorts</li>
+                  <li>Командный доступ</li>
+                  <li>API интеграция</li>
+                </ul>
               </article>
+            </div>
+
+            <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
+              <Link className="btn btn--primary btn--premium-cta route-button" to="/pricing">
+                <span className="btn--premium-cta__label">Все тарифы</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </Link>
             </div>
           </div>
         </section>
 
-        <section className="section section--paper section--tight" id="product">
-          <div className="container">
-            <div className="section-head">
-              <p className="eyebrow eyebrow--dark">ВСЁ ДЛЯ SHORTS В ОДНОМ СЕРВИСЕ</p>
-              <h2>Превращайте идею в готовый Shorts в одном сервисе.</h2>
-              <p>
-                AdShorts AI автоматически создаёт сценарий, озвучку, визуал и субтитры. Вы получаете готовый
-                вертикальный ролик без монтажа, сложных программ и переключения между сервисами.
-              </p>
-            </div>
-
-            <div className="capability-grid">
-              <article className="capability capability--lead">
-                <h3>От идеи до готового Shorts — в одном сервисе</h3>
-                <p>
-                  Сценарий, озвучка, видеофон, субтитры и экспорт собираются в одном сервисе, чтобы вы могли создавать
-                  готовые short-видео без монтажа и без сложных программ.
-                </p>
-
-                <div className="capability__list">
-                  <span>Hook и структура</span>
-                  <span>AI Сценарий</span>
-                  <span>Визуал</span>
-                  <span>Озвучка</span>
-                  <span>Субтитры</span>
-                  <span>Музыка</span>
-                  <span>Автопубликация</span>
-                </div>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">HOOK И СТРУКТУРА</span>
-                <h3>Сильное начало и понятная структура ролика</h3>
-                <p>
-                  Хук в первые секунды, правильный ритм и логичная структура, чтобы ролик удерживал внимание до конца.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">AI СЦЕНАРИЙ</span>
-                <h3>Структура для первых секунд и удержания внимания</h3>
-                <p>
-                  Сильное начало, правильный ритм и логичный сценарий, оптимизированный для коротких вертикальных
-                  видео.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">ВИЗУАЛ</span>
-                <h3>Готовые сцены и единый стиль роликов</h3>
-                <p>
-                  Сцены, динамика и визуальный стиль создаются автоматически, чтобы ролики выглядели целостно и
-                  профессионально.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">ОЗВУЧКА</span>
-                <h3>Озвучка, которая звучит естественно</h3>
-                <p>
-                  Натуральное звучание, разные языки и быстрая настройка голоса, чтобы озвучка подходила под стиль
-                  ролика.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">Субтитры</span>
-                <h3>Субтитры с акцентами и правильным ритмом</h3>
-                <p>
-                  Выделение важных фраз, удобная скорость чтения и формат, который хорошо смотрится на мобильных
-                  экранах.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">МУЗЫКА</span>
-                <h3>Музыка, подходящая под ритм ролика</h3>
-                <p>
-                  Фоновая музыка подбирается автоматически, чтобы ролик звучал динамично и удерживал внимание.
-                </p>
-              </article>
-
-              <article className="capability">
-                <span className="capability__label">АВТОПУБЛИКАЦИЯ</span>
-                <h3>Публикуйте сразу в YouTube Shorts</h3>
-                <p>
-                  Готовый ролик можно отправить в YouTube прямо из студии, без скачивания и без ручной загрузки.
-                </p>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="section section--stone" id="history">
+        <section className="section lp-section lp-section--a" id="history">
           <div className="container trust-shell">
-            <div className="trust-shell__copy">
-              <p className="eyebrow eyebrow--dark">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
-              <h2>Результат за минуты, качество — на уровне продакшна.</h2>
+            <div className="trust-shell__copy" data-reveal="">
+              <p className="lp-eyebrow">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
+              <h2>Результат за минуты, качество — на уровне продакшна</h2>
               <p>
                 AdShorts AI помогает быстро выпускать short-видео без потери качества: от идеи и сценария до готового
                 ролика в одном сервисе.
@@ -799,19 +799,19 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             </div>
 
             <div className="trust-stats">
-              <article className="stat-card">
+              <article className="stat-card" data-reveal="" data-reveal-delay="1">
                 <strong>50,000+</strong>
                 <span>создателей и маркетологов</span>
               </article>
-              <article className="stat-card">
+              <article className="stat-card" data-reveal="" data-reveal-delay="2">
                 <strong>12M+</strong>
                 <span>сгенерированных Shorts</span>
               </article>
-              <article className="stat-card">
+              <article className="stat-card" data-reveal="" data-reveal-delay="3">
                 <strong>4.9/5</strong>
                 <span>средняя оценка пользователей</span>
               </article>
-              <article className="stat-card">
+              <article className="stat-card" data-reveal="" data-reveal-delay="4">
                 <strong>~1 мин</strong>
                 <span>до первого готового ролика</span>
               </article>
@@ -819,33 +819,27 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
         </section>
 
-        <section className="section section--paper section--guides" id="guides" aria-labelledby="guides-heading">
+        <section className="section lp-section lp-section--b section--guides" id="guides" aria-labelledby="guides-heading">
           <div className="container guides-strip">
-            <div className="section-head section-head--split guides-strip__head">
-              <div className="guides-strip__copy">
-                <p className="eyebrow eyebrow--dark">ГАЙДЫ</p>
-                <h2 id="guides-heading">Полезные материалы привлекают трафик и подводят к продукту.</h2>
-                <p>
-                  Короткие разборы по хуку, структуре и оформлению помогают быстрее понять, как собрать Shorts,
-                  которые удерживают внимание и доводят зрителя до CTA.
-                </p>
-              </div>
-
-              <div className="section-head__aside guides-strip__aside" aria-hidden="true">
-                <span className="section-chip">Shorts</span>
-                <span className="section-chip">Хук</span>
-                <span className="section-chip">Удержание</span>
-              </div>
+            <div className="lp-section-head lp-section-head--left" data-reveal="">
+              <p className="lp-eyebrow">ГАЙДЫ</p>
+              <h2 id="guides-heading">Полезные материалы по созданию Shorts</h2>
+              <p>
+                Короткие разборы по хуку, структуре и оформлению помогают быстрее понять, как собрать Shorts,
+                которые удерживают внимание и доводят зрителя до CTA.
+              </p>
             </div>
 
             <div className="guides-strip__cards">
-              {landingGuideCards.map((guide) => (
+              {landingGuideCards.map((guide, index) => (
                 <a
                   key={guide.href}
                   className="guide-card route-guide-link"
                   href={guide.href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-reveal=""
+                  data-reveal-delay={String(index + 1)}
                 >
                   <div className="guide-card__meta">
                     <span className="guide-card__label">{guide.label}</span>
@@ -872,8 +866,12 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               href={landingGuidesIndexHref}
               target="_blank"
               rel="noopener noreferrer"
+              data-reveal=""
             >
               Все материалы
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{marginLeft: 8}}>
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
             </a>
           </div>
         </section>
@@ -881,18 +879,23 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
       <footer className="footer">
         <div className="container footer__inner">
-          <div>
-            <p>App staging route for AdShorts AI.</p>
-            <p>© 2026 AdShorts AI</p>
+          <div className="footer__brand">
+            <Link className="footer__brand-link" to="/" aria-label="AdShorts AI">
+              <img src="/logo.png" alt="" width="36" height="36" style={{borderRadius: 10}} />
+              <span style={{color: "rgba(255,255,255,0.85)", fontWeight: 700, fontSize: "0.9rem"}}>AdShorts AI</span>
+            </Link>
           </div>
 
           <div className="footer__links">
-            <a href="/app">Web studio</a>
-            <a href="#guides">Guides</a>
-            <a href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener noreferrer">
-              Telegram bot
-            </a>
+            <a href="mailto:support@adshortsai.com">Контакты: support@adshortsai.com</a>
+            <a href="https://adshortsai.com/terms-of-use/" target="_blank" rel="noopener noreferrer">Условия использования</a>
+            <a href="https://adshortsai.com/terms/" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
+            <a href="https://adshortsai.com/privacy/" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+            <a href="https://adshortsai.com/data-deletion.html" target="_blank" rel="noopener noreferrer">Удаление данных</a>
+            <a href="https://adshortsai.com/en/" target="_blank" rel="noopener noreferrer">English</a>
           </div>
+
+          <p className="footer__copyright">© AdShorts AI</p>
         </div>
       </footer>
     </div>

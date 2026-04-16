@@ -356,11 +356,6 @@ export function PricingPage({
                 Вход
               </button>
             )}
-            {!session ? (
-              <button className="btn btn--header route-button" type="button" onClick={openPrimaryFlow}>
-                Создать видео бесплатно
-              </button>
-            ) : null}
           </div>
         </div>
       </header>

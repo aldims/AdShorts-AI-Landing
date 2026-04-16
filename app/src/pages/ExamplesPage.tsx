@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
@@ -28,7 +28,7 @@ type Props = {
   onOpenWorkspace: () => void;
 };
 
-type ExampleGoal = "stories" | "fun" | "ads" | "fantasy" | "interesting" | "effects";
+type ExampleGoal = "ads" | "growth" | "expert";
 type ExampleFilter = "all" | ExampleGoal;
 
 type ExampleItem = {
@@ -71,37 +71,25 @@ type LocalExampleDeleteResponse = {
 const EXAMPLE_PREVIEW_PLAY_EVENT = "adshorts:example-preview-play";
 
 const exampleGoalCopy: Record<ExampleGoal, { label: string; shortLabel: string }> = {
-  stories: {
-    label: "📖 Истории",
-    shortLabel: "📖 Истории",
-  },
-  fun: {
-    label: "😂 Развлечения",
-    shortLabel: "😂 Развлечения",
-  },
   ads: {
-    label: "💰 Реклама",
-    shortLabel: "💰 Реклама",
+    label: "📣 Рекламные Shorts",
+    shortLabel: "📣 Реклама",
   },
-  fantasy: {
-    label: "🌌 Фантазия",
-    shortLabel: "🌌 Фантазия",
+  growth: {
+    label: "📈 Shorts для роста канала",
+    shortLabel: "📈 Рост канала",
   },
-  interesting: {
-    label: "🧠 Интересное",
-    shortLabel: "🧠 Интересное",
-  },
-  effects: {
-    label: "✨ Эффекты",
-    shortLabel: "✨ Эффекты",
+  expert: {
+    label: "🎓 Экспертные Shorts",
+    shortLabel: "🎓 Экспертиза",
   },
 };
 
-const exampleGoalOrder: ExampleGoal[] = ["stories", "fun", "ads", "fantasy", "interesting", "effects"];
+const exampleGoalOrder: ExampleGoal[] = ["ads", "growth", "expert"];
 
 const exampleItems: ExampleItem[] = [
   {
-    goal: "stories",
+    goal: "growth",
     id: "story-future-city",
     promptHint: "Атмосферный storytelling с сильным первым кадром.",
     seedPrompt:
@@ -125,7 +113,7 @@ const exampleItems: ExampleItem[] = [
     videoSrc: "/2ru.mp4",
   },
   {
-    goal: "interesting",
+    goal: "expert",
     id: "facts-curiosity-loop",
     promptHint: "Любопытный факт с удержанием и payoff.",
     seedPrompt:
@@ -137,7 +125,7 @@ const exampleItems: ExampleItem[] = [
     videoSrc: "/3ru.mp4",
   },
   {
-    goal: "fantasy",
+    goal: "expert",
     id: "story-mini-scene",
     promptHint: "Нарастающий интерес и визуальная сцена.",
     seedPrompt:
@@ -149,7 +137,7 @@ const exampleItems: ExampleItem[] = [
     videoSrc: "/2ru.mp4",
   },
   {
-    goal: "fun",
+    goal: "ads",
     id: "ugc-viral-find",
     promptHint: "Живая подача с ощущением, что ролик снят сейчас.",
     seedPrompt:
@@ -161,7 +149,7 @@ const exampleItems: ExampleItem[] = [
     videoSrc: "/3ru.mp4",
   },
   {
-    goal: "effects",
+    goal: "growth",
     id: "effects-wow-frame",
     promptHint: "Визуальный wow-эффект как основной крючок.",
     seedPrompt:
@@ -386,13 +374,19 @@ export function ExamplesPage({
   onOpenWorkspace,
 }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
-  const [activeFilter, setActiveFilter] = useState<ExampleFilter>("all");
+  const initialFilter = (searchParams.get("filter") as ExampleFilter | null) ?? "all";
+  const [activeFilter, setActiveFilter] = useState<ExampleFilter>(
+    (["all", "ads", "growth", "expert"] as ExampleFilter[]).includes(initialFilter) ? initialFilter : "all"
+  );
   const [localExamples, setLocalExamples] = useState<ExampleItem[]>([]);
   const [canManageLocalExamples, setCanManageLocalExamples] = useState(false);
   const [deletingLocalExampleId, setDeletingLocalExampleId] = useState<string | null>(null);
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
-  const allExamples = localExamples.length > 0 ? localExamples : exampleItems;
+  const knownGoals = new Set<string>(["ads", "growth", "expert"]);
+  const filteredLocalExamples = localExamples.filter((e) => knownGoals.has(e.goal));
+  const allExamples = filteredLocalExamples.length > 0 ? filteredLocalExamples : exampleItems;
   const totalThemeCount = new Set(allExamples.map((example) => example.goal)).size;
   const totalSceneCount = allExamples.length;
   const exampleFilterOptions: Array<{ id: ExampleFilter; label: string }> = [
@@ -542,12 +536,6 @@ export function ExamplesPage({
                 Вход
               </button>
             )}
-
-            {!session ? (
-              <button className="btn btn--header route-button" type="button" onClick={openPrimaryFlow}>
-                Создать видео бесплатно
-              </button>
-            ) : null}
           </div>
         </div>
       </header>
@@ -560,7 +548,7 @@ export function ExamplesPage({
                 <p className="eyebrow">ПРИМЕРЫ</p>
                 <h1>Готовые сцены для запуска Shorts</h1>
                 <p className="examples-modern__hero-lead">
-                  Выберите подходящий шаблон, нажмите «Использовать» и получите готовую структуру прямо в генерации.
+                  Выберите подходящий шаблон, нажмите «Использовать» и получите готовую структуру прямо в студии.
                 </p>
 
                 <div className="examples-modern__hero-facts" aria-label="Преимущества страницы">
@@ -587,8 +575,8 @@ export function ExamplesPage({
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">01</span>
                     <div>
-                      <strong>Выбираете сцену</strong>
-                      <p>Продажа, экспертка, факт, сюжет или wow-подача.</p>
+                      <strong>Выберите пример</strong>
+                      <p>Реклама, рост канал, экспертиза.</p>
                     </div>
                   </article>
 
@@ -664,7 +652,7 @@ export function ExamplesPage({
                     overlay={
                       <>
                         <div className="examples-modern__preview-bar">
-                          <span className="examples-modern__preview-goal">{exampleGoalCopy[example.goal].shortLabel}</span>
+                          <span className="examples-modern__preview-goal">{(exampleGoalCopy[example.goal] ?? exampleGoalCopy["ads"]).shortLabel}</span>
                           {!example.isLocal ? <span className="examples-modern__preview-index">{formatExampleOrdinal(index)}</span> : null}
                         </div>
                         <div className="examples-modern__preview-copy">

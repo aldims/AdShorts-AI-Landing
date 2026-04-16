@@ -54,7 +54,7 @@ describe("LandingPage guides section", () => {
       .getByRole("heading", { name: "От идеи до готового Shorts за 3 шага" })
       .closest("section");
     const refineSection = screen
-      .getByRole("heading", { name: /Доведите каждый сегмент\s*до финального качества/ })
+      .getByRole("heading", { name: /Доведите Shorts до идеала/ })
       .closest("section");
 
     expect(workflowSection?.className).toContain("section--workflow");

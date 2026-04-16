@@ -1,9 +1,4 @@
-import {
-  formatCreditsCountLabel,
-  getInsufficientCreditsBannerCopy,
-  getInsufficientCreditsContextActionLabel,
-  type InsufficientCreditsContext,
-} from "../lib/insufficient-credits";
+import { type InsufficientCreditsContext } from "../lib/insufficient-credits";
 
 type Props = {
   context: InsufficientCreditsContext;
@@ -12,102 +7,52 @@ type Props = {
 };
 
 export function InsufficientCreditsModal({ context, onAction, onClose }: Props) {
-  const copy = getInsufficientCreditsBannerCopy(context);
-  const planLabel = context.plan ?? "FREE";
-  const numericBalance = context.balance === null ? null : Math.max(0, context.balance);
-  const balanceLabel = numericBalance === null ? "—" : formatCreditsCountLabel(numericBalance);
-  const requiredLabel = formatCreditsCountLabel(context.requiredCredits);
-  const actionLabel = getInsufficientCreditsContextActionLabel(context.action);
-  const missingCredits = Math.max(0, context.requiredCredits - (numericBalance ?? 0));
-  const missingLabel = formatCreditsCountLabel(missingCredits);
-  const progressPercent =
-    context.requiredCredits > 0
-      ? numericBalance === null
-        ? 12
-        : Math.max(8, Math.min(100, Math.round((numericBalance / context.requiredCredits) * 100)))
-      : 100;
+  const planLabel = (context.plan ?? "FREE").toUpperCase();
 
   return (
-    <div className="studio-credits-modal" role="dialog" aria-modal="true" aria-labelledby="studio-credits-modal-title">
-      <button
-        className="studio-credits-modal__backdrop route-close"
-        type="button"
-        aria-label="Закрыть окно пополнения кредитов"
-        onClick={onClose}
-      />
+    <div className="icm" role="dialog" aria-modal="true" aria-labelledby="icm-title">
+      <button className="icm__backdrop" type="button" aria-label="Закрыть" onClick={onClose} />
 
-      <div className="studio-credits-modal__panel" role="document">
-        <div className="studio-credits-modal__panel-glow" aria-hidden="true"></div>
+      <div className="icm__panel">
+        <div className="icm__light icm__light--purple" aria-hidden="true" />
+        <div className="icm__light icm__light--red"    aria-hidden="true" />
+        <div className="icm__noise"                    aria-hidden="true" />
 
-        <div className="studio-credits-modal__header">
-          <div className="studio-credits-modal__topline">
-            <span className="studio-credits-modal__chip studio-credits-modal__chip--alert">Недостаточно кредитов</span>
-            <span className="studio-credits-modal__chip">Пополнение в 1 шаг</span>
+        {/* top bar */}
+        <div className="icm__topbar">
+          <div className="icm__status">
+            <span className="icm__status-dot" aria-hidden="true" />
+            Тариф {planLabel}
           </div>
-
-          <button
-            className="studio-credits-modal__close route-close"
-            type="button"
-            aria-label="Закрыть окно пополнения кредитов"
-            onClick={onClose}
-          >
-            ×
+          <button className="icm__close" type="button" aria-label="Закрыть" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
           </button>
         </div>
 
-        <div className="studio-credits-modal__hero">
-          <div className="studio-credits-modal__hero-copy">
-            <span className="studio-credits-modal__eyebrow">Пополнение</span>
-            <strong id="studio-credits-modal-title">{copy.title}</strong>
-            <p>{copy.text}</p>
-
-            <div className="studio-credits-modal__details">
-              <div className="studio-credits-modal__detail">
-                <span>Действие</span>
-                <strong>{actionLabel}</strong>
-              </div>
-              <div className="studio-credits-modal__detail">
-                <span>Текущий тариф</span>
-                <strong>{planLabel}</strong>
-              </div>
-            </div>
-          </div>
-
-          <aside className="studio-credits-modal__aside">
-            <div className="studio-credits-modal__balance-card">
-              <div className="studio-credits-modal__balance-head">
-                <span>Текущий баланс</span>
-                <strong>{balanceLabel}</strong>
-              </div>
-              <div className="studio-credits-modal__balance-bar" aria-hidden="true">
-                <span style={{ width: `${progressPercent}%` }}></span>
-              </div>
-              <p className="studio-credits-modal__balance-caption">
-                Для этого действия нужно {requiredLabel}. После пополнения можно сразу продолжить.
-              </p>
-            </div>
-
-            <div className="studio-credits-modal__summary">
-              <div className="studio-credits-modal__metric is-deficit">
-                <span>Не хватает</span>
-                <strong>{missingLabel}</strong>
-              </div>
-              <div className="studio-credits-modal__metric is-accent">
-                <span>Нужно сейчас</span>
-                <strong>{requiredLabel}</strong>
-              </div>
-            </div>
-          </aside>
+        {/* hero */}
+        <div className="icm__hero">
+          <h2 className="icm__title" id="icm-title">
+            Кредиты<br />
+            <span className="icm__title-accent">закончились</span>
+          </h2>
+          <p className="icm__desc">
+            Пополните баланс и продолжайте выпускать Shorts без ограничений.
+          </p>
         </div>
 
-        <p className="studio-credits-modal__note">{copy.note}</p>
-
-        <div className="studio-credits-modal__actions">
-          <button className="studio-credits-modal__action studio-credits-modal__action--secondary" type="button" onClick={onClose}>
+        {/* actions */}
+        <div className="icm__cta">
+          <button className="icm__btn-primary" type="button" onClick={onAction}>
+            <span className="icm__btn-glow" aria-hidden="true" />
+            <span className="icm__btn-label">Тарифы</span>
+            <svg className="icm__btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <button className="icm__btn-ghost" type="button" onClick={onClose}>
             Позже
-          </button>
-          <button className="studio-credits-modal__action studio-credits-modal__action--primary" type="button" onClick={onAction}>
-            {copy.ctaLabel}
           </button>
         </div>
       </div>
