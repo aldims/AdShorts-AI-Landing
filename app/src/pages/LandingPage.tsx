@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
@@ -101,8 +101,10 @@ const landingGuideCards = [
   },
 ] as const;
 export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+  const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const revealRootRef = useRef<HTMLElement>(null);
+  const revealTimersRef = useRef<number[]>([]);
   const statsObserverRef = useRef<IntersectionObserver | null>(null);
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
 
@@ -168,27 +170,68 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     const root = revealRootRef.current;
     if (!root) return undefined;
 
-    const nodes = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (!nodes.length) return undefined;
+    const groupedNodes = new Set(
+      Array.from(root.querySelectorAll<HTMLElement>("[data-reveal-group] [data-reveal]")),
+    );
+    const singleNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]")).filter(
+      (node) => !groupedNodes.has(node),
+    );
+    const groupNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal-group]"));
+    if (!singleNodes.length && !groupNodes.length) return undefined;
+
+    const clearRevealTimers = () => {
+      revealTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      revealTimersRef.current = [];
+    };
+
+    const revealGroup = (group: HTMLElement) => {
+      const items = Array.from(group.querySelectorAll<HTMLElement>("[data-reveal]"));
+      const staggerMs = 180;
+
+      items.forEach((item, index) => {
+        const timerId = window.setTimeout(() => {
+          item.classList.add("is-visible");
+        }, index * staggerMs);
+        revealTimersRef.current.push(timerId);
+      });
+    };
 
     if (typeof IntersectionObserver === "undefined") {
-      nodes.forEach((n) => n.classList.add("is-visible"));
+      singleNodes.forEach((n) => n.classList.add("is-visible"));
+      groupNodes.forEach((group) => revealGroup(group));
       return undefined;
     }
 
-    const observer = new IntersectionObserver(
+    const singleObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
           entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target);
+          singleObserver.unobserve(entry.target);
         });
       },
-      { threshold: 0.08, rootMargin: "0px 0px -50px 0px" },
+      { threshold: 0.14, rootMargin: "0px 0px -12% 0px" },
     );
 
-    nodes.forEach((n) => observer.observe(n));
-    return () => observer.disconnect();
+    const groupObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          revealGroup(entry.target as HTMLElement);
+          groupObserver.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.18, rootMargin: "0px 0px -10% 0px" },
+    );
+
+    singleNodes.forEach((node) => singleObserver.observe(node));
+    groupNodes.forEach((group) => groupObserver.observe(group));
+
+    return () => {
+      singleObserver.disconnect();
+      groupObserver.disconnect();
+      clearRevealTimers();
+    };
   }, []);
 
   useEffect(() => {
@@ -265,6 +308,43 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     onOpenSignup();
   };
 
+  const handlePlanCheckout = async (productId: "start" | "pro" | "ultra") => {
+    if (!session) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("adshorts.pending-checkout-plan", productId);
+      }
+      onOpenSignup();
+      return;
+    }
+
+    setActiveCheckoutProductId(productId);
+    try {
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}`, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      const payload = (await response.json().catch(() => null)) as { data?: { url: string }; error?: string } | null;
+
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("adshorts.pending-checkout-plan", productId);
+        }
+        onOpenSignin();
+        return;
+      }
+
+      if (!response.ok || !payload?.data?.url) {
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("adshorts.pending-checkout-plan");
+        window.location.assign(payload.data.url);
+      }
+    } finally {
+      setActiveCheckoutProductId(null);
+    }
+  };
+
   const openStudioSection = (section: StudioEntryIntentSection) => {
     if (session) {
       writeStudioEntryIntent({ section });
@@ -299,8 +379,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
               </>
             ) : (
-              <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
-                Вход
+              <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
+                Войти
               </button>
             )}
           </div>
@@ -442,7 +522,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </p>
             </div>
 
-            <div className="steps-grid">
+            <div className="steps-grid" data-reveal-group="">
               <article className="step-card" data-reveal="" data-reveal-delay="1">
                 <div className="step-card__num">01</div>
                 <h3>Введите идею</h3>
@@ -468,12 +548,12 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <div className="container landing-refine-layout">
             <div className="landing-refine-copy">
               <div className="lp-section-head lp-section-head--left landing-refine-head" data-reveal="">
-                <p className="lp-eyebrow">ТОЧНАЯ ДОВОДКА В СТУДИИ</p>
+                <p className="lp-eyebrow">ПОЛНЫЙ КОНТРОЛЬ</p>
                 <h2 id="landing-refine-heading">Доведите Shorts до идеала</h2>
-                <p>Изменяйте любой сегмент: генерируйте, анимируйте, улучшайте или загружайте свой контент</p>
+                <p>Изменяйте любой сегмент: генерируйте, дорисовывайте, анимируйте, улучшайте или загружайте свой контент</p>
               </div>
 
-              <div className="landing-refine-proof-list">
+              <div className="landing-refine-proof-list" data-reveal-group="">
                 {landingRefineProofs.map((proof, index) => (
                   <article className="landing-refine-proof" key={proof.title} data-reveal="" data-reveal-delay={String(index + 1)}>
                     <span className="landing-refine-proof__index">{String(index + 1).padStart(2, "0")}</span>
@@ -608,7 +688,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               <p>Развивайте канал без монтажа и поиска идей</p>
             </div>
             <div className="landing-publish-regular">
-              <div className="steps-grid landing-publish-regular__grid">
+              <div className="steps-grid landing-publish-regular__grid" data-reveal-group="">
                 <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="1">
                   <div className="landing-publish-regular__card-icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -672,7 +752,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             </div>
 
             <div className="landing-examples-cta">
-              <div className="landing-examples-cta__grid">
+              <div className="landing-examples-cta__grid" data-reveal-group="">
                 <Link className="landing-examples-cta__card" to="/examples?filter=ads" aria-label="Открыть примеры Shorts: Рекламные Shorts" data-reveal="" data-reveal-delay="1">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -735,44 +815,132 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               <p>От первых видео до стабильного потока и роста канала</p>
             </div>
 
-            <div className="plan-grid">
+            <div className="plan-grid" data-reveal-group="">
               <article className="plan-card" data-reveal="" data-reveal-delay="1">
-                <span className="plan-card__label">START</span>
-                <strong>390 ₽</strong>
-                <h3>50 кредитов</h3>
-                <p>До 5 видео — для первого запуска и проверки идеи.</p>
+                <div className="plan-card__header">
+                  <span className="plan-card__label">START</span>
+                </div>
+                <div className="plan-card__price">
+                  <strong>390 ₽</strong>
+                  <span className="plan-card__per">/ пакет</span>
+                </div>
+                <div className="plan-card__output">
+                  <span>50 кредитов</span>
+                  <small>До 5 Shorts</small>
+                </div>
+                <p className="plan-card__tagline">Для первого запуска</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
-                  <li>5 готовых Shorts</li>
-                  <li>Сценарий + озвучка + субтитры</li>
-                  <li>Без водяного знака</li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Полный доступ к созданию Shorts
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Без водяного знака
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Редактирование в студии
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Автопубликация в YouTube
+                  </li>
                 </ul>
+                <button
+                  className="plan-card__cta route-button"
+                  type="button"
+                  onClick={() => void handlePlanCheckout("start")}
+                  disabled={activeCheckoutProductId === "start"}
+                >
+                  {activeCheckoutProductId === "start" ? "Открываем оплату..." : "Выбрать START"}
+                </button>
               </article>
 
               <article className="plan-card plan-card--accent" data-reveal="" data-reveal-delay="2">
-                <span className="plan-card__label">PRO</span>
-                <strong>1 490 ₽</strong>
-                <h3>250 кредитов</h3>
-                <p>До 25 видео — для стабильного контент-потока.</p>
+                <div className="plan-card__header">
+                  <span className="plan-card__label">PRO</span>
+                  <span className="plan-card__badge">Популярный</span>
+                </div>
+                <div className="plan-card__price">
+                  <strong>1 490 ₽</strong>
+                  <span className="plan-card__per">/ пакет</span>
+                </div>
+                <div className="plan-card__output">
+                  <span>250 кредитов</span>
+                  <small>До 25 Shorts</small>
+                </div>
+                <p className="plan-card__tagline">Для регулярного контент-потока</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
-                  <li>25 готовых Shorts</li>
-                  <li>Приоритетная генерация</li>
-                  <li>Автопубликация в YouTube</li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Всё из START
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Приоритетная генерация
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Можно докупать кредиты
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Подходит для регулярного контента
+                  </li>
                 </ul>
+                <button
+                  className="plan-card__cta plan-card__cta--accent route-button"
+                  type="button"
+                  onClick={() => void handlePlanCheckout("pro")}
+                  disabled={activeCheckoutProductId === "pro"}
+                >
+                  {activeCheckoutProductId === "pro" ? "Открываем оплату..." : "Выбрать PRO"}
+                </button>
               </article>
 
               <article className="plan-card" data-reveal="" data-reveal-delay="3">
-                <span className="plan-card__label">ULTRA</span>
-                <strong>4 990 ₽</strong>
-                <h3>1000 кредитов</h3>
-                <p>До 100 видео — для серийного производства и команд.</p>
+                <div className="plan-card__header">
+                  <span className="plan-card__label">ULTRA</span>
+                </div>
+                <div className="plan-card__price">
+                  <strong>4 990 ₽</strong>
+                  <span className="plan-card__per">/ пакет</span>
+                </div>
+                <div className="plan-card__output">
+                  <span>1000 кредитов</span>
+                  <small>До 100 Shorts</small>
+                </div>
+                <p className="plan-card__tagline">Для максимального объёма</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
-                  <li>100 готовых Shorts</li>
-                  <li>Командный доступ</li>
-                  <li>API интеграция</li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Всё из PRO
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Максимальный приоритет
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Ранний доступ к новым функциям
+                  </li>
+                  <li>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    Лучшие лимиты для активного использования
+                  </li>
                 </ul>
+                <button
+                  className="plan-card__cta route-button"
+                  type="button"
+                  onClick={() => void handlePlanCheckout("ultra")}
+                  disabled={activeCheckoutProductId === "ultra"}
+                >
+                  {activeCheckoutProductId === "ultra" ? "Открываем оплату..." : "Выбрать ULTRA"}
+                </button>
               </article>
             </div>
 
@@ -789,16 +957,16 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
         <section className="section lp-section lp-section--a" id="history">
           <div className="container trust-shell">
-            <div className="trust-shell__copy" data-reveal="">
+            <div className="trust-shell__copy lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
-              <h2>Результат за минуты, качество — на уровне продакшна</h2>
+              <h2>Результат за минуты</h2>
               <p>
                 AdShorts AI помогает быстро выпускать short-видео без потери качества: от идеи и сценария до готового
                 ролика в одном сервисе.
               </p>
             </div>
 
-            <div className="trust-stats">
+            <div className="trust-stats" data-reveal-group="">
               <article className="stat-card" data-reveal="" data-reveal-delay="1">
                 <strong>50,000+</strong>
                 <span>создателей и маркетологов</span>
@@ -830,7 +998,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </p>
             </div>
 
-            <div className="guides-strip__cards">
+            <div className="guides-strip__cards" data-reveal-group="">
               {landingGuideCards.map((guide, index) => (
                 <a
                   key={guide.href}
@@ -879,23 +1047,23 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
       <footer className="footer">
         <div className="container footer__inner">
-          <div className="footer__brand">
-            <Link className="footer__brand-link" to="/" aria-label="AdShorts AI">
-              <img src="/logo.png" alt="" width="36" height="36" style={{borderRadius: 10}} />
-              <span style={{color: "rgba(255,255,255,0.85)", fontWeight: 700, fontSize: "0.9rem"}}>AdShorts AI</span>
-            </Link>
-          </div>
 
-          <div className="footer__links">
-            <a href="mailto:support@adshortsai.com">Контакты: support@adshortsai.com</a>
-            <a href="https://adshortsai.com/terms-of-use/" target="_blank" rel="noopener noreferrer">Условия использования</a>
-            <a href="https://adshortsai.com/terms/" target="_blank" rel="noopener noreferrer">Пользовательское соглашение</a>
-            <a href="https://adshortsai.com/privacy/" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+          <Link className="footer__brand-link" to="/" aria-label="AdShorts AI">
+            <img src="/logo.png" alt="" width="30" height="30" style={{borderRadius: 8}} />
+            <span className="footer__brand-name">AdShorts AI</span>
+          </Link>
+
+          <nav className="footer__links" aria-label="Footer navigation">
+            <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>
+            <a href="https://adshortsai.com/terms-of-use/" target="_blank" rel="noopener noreferrer">Условия</a>
+            <a href="https://adshortsai.com/terms/" target="_blank" rel="noopener noreferrer">Соглашение</a>
+            <a href="https://adshortsai.com/privacy/" target="_blank" rel="noopener noreferrer">Конфиденциальность</a>
             <a href="https://adshortsai.com/data-deletion.html" target="_blank" rel="noopener noreferrer">Удаление данных</a>
             <a href="https://adshortsai.com/en/" target="_blank" rel="noopener noreferrer">English</a>
-          </div>
+          </nav>
 
-          <p className="footer__copyright">© AdShorts AI</p>
+          <p className="footer__copyright">© {new Date().getFullYear()} AdShorts AI</p>
+
         </div>
       </footer>
     </div>
