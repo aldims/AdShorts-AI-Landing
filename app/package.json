@@ -16,7 +16,8 @@
     "auth:generate": "npx auth@latest generate --config ./server/auth.ts --yes",
     "auth:migrate": "npx auth@latest migrate --config ./server/auth.ts --yes",
     "auth:sync-legacy": "tsx server/migrate-auth-data.ts",
-    "auth:prepare-shared": "npm run auth:migrate && npm run auth:sync-legacy"
+    "auth:prepare-shared": "npm run auth:migrate && npm run auth:sync-legacy",
+    "workspace:migrate-owner-keys": "tsx server/migrate-workspace-owner-keys.ts"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",

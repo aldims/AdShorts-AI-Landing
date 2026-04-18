@@ -36,6 +36,7 @@ import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js
 
 type WorkspaceUser = {
   email?: string | null;
+  emailVerified?: boolean | null;
   id?: string | null;
   name?: string | null;
 };
@@ -359,6 +360,7 @@ const fetchBootstrapPayload = async (user: WorkspaceUser, externalUserId?: strin
       language: "ru",
       referral_source: "landing_site",
       user_email: user.email ?? undefined,
+      user_email_verified: user.emailVerified === true,
       user_name: user.name ?? undefined,
     },
     upstreamPolicies.adsflowBootstrap,
@@ -385,6 +387,11 @@ const fetchBootstrapPayload = async (user: WorkspaceUser, externalUserId?: strin
     remoteUserId,
   } satisfies AdsflowBootstrapResponse;
 };
+
+const createWorkspaceBootstrapFallbackPayload = (): AdsflowBootstrapResponse => ({
+  latest_generation: null,
+  remoteUserId: null,
+});
 
 const getWorkspaceProjectFetchLimit = (deletedProjectsCount: number) =>
   Math.max(MAX_PROJECTS, Math.min(MAX_PROJECTS + Math.max(0, Math.trunc(deletedProjectsCount || 0)), MAX_PROJECT_FETCH_LIMIT));
@@ -831,7 +838,13 @@ const isWorkspaceProjectDeleted = (project: WorkspaceProject, deletedProjects: W
 
 const loadWorkspaceProjects = async (user: WorkspaceUser, externalUserId: string) => {
   const [bootstrapPayload, deletedProjects] = await Promise.all([
-    fetchBootstrapPayload(user, externalUserId),
+    fetchBootstrapPayload(user, externalUserId).catch((error) => {
+      console.warn("[workspace] Failed to load workspace bootstrap from AdsFlow, using local fallbacks only", {
+        error: error instanceof Error ? error.message : "Unknown workspace bootstrap error.",
+        externalUserId,
+      });
+      return createWorkspaceBootstrapFallbackPayload();
+    }),
     listWorkspaceDeletedProjects(user).catch((error) => {
       console.error("[workspace] Failed to load deleted workspace projects", error);
       return [] as WorkspaceDeletedProjectEntry[];

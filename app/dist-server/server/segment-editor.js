@@ -54,6 +54,33 @@ const pickWorkspaceRenderableMediaUrl = (...candidates) => {
     }
     return null;
 };
+const ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN = /\/api\/media\/(\d+)\/download(?:[/?#]|$)/i;
+const buildWorkspaceMediaAssetProxyUrl = (assetId) => `/api/workspace/media-assets/${assetId}`;
+const getProjectMediaEntryAssetId = (entry) => normalizeInteger(entry?.media_asset_id) ?? normalizeInteger(entry?.id);
+const normalizeWorkspaceProjectMediaUrl = (entry, value) => {
+    const normalizedUrl = normalizeUrl(value);
+    if (!normalizedUrl) {
+        return null;
+    }
+    const assetId = getProjectMediaEntryAssetId(entry);
+    if (!assetId || normalizeMediaType(entry?.media_type) !== "photo") {
+        return normalizedUrl;
+    }
+    const matchedPath = normalizedUrl.match(ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN);
+    if (matchedPath) {
+        return buildWorkspaceMediaAssetProxyUrl(assetId);
+    }
+    try {
+        const resolvedUrl = new URL(normalizedUrl);
+        return ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN.test(resolvedUrl.pathname)
+            ? buildWorkspaceMediaAssetProxyUrl(assetId)
+            : normalizedUrl;
+    }
+    catch {
+        return normalizedUrl;
+    }
+};
+const getProjectMediaEntryRenderableUrl = (entry, ...candidates) => normalizeWorkspaceProjectMediaUrl(entry, pickWorkspaceRenderableMediaUrl(...candidates));
 const normalizeProjectMediaEntries = (value) => {
     if (!Array.isArray(value)) {
         return [];
@@ -70,7 +97,7 @@ const pickProjectMediaEntries = (...candidates) => {
     return [];
 };
 const detectWorkspaceSegmentSourceKind = (entry) => {
-    const source = normalizeText(entry?.source).toLowerCase();
+    const source = normalizeText(entry?.source_kind || entry?.source).toLowerCase();
     if (source === "ai_generated" || source === "ai" || source === "generated") {
         return "ai_generated";
     }
@@ -90,8 +117,14 @@ const detectWorkspaceSegmentSourceKind = (entry) => {
     }
     const identifier = normalizeText(entry?.id).toLowerCase();
     const localPath = normalizeText(entry?.local_path).toLowerCase();
+    const storageKey = normalizeText(entry?.storage_key).toLowerCase();
     const joinedUrls = [entry?.url, entry?.download_url, entry?.preview].map((value) => normalizeText(value).toLowerCase()).join(" ");
-    if (identifier.startsWith("aiimg_") || localPath.includes("wavespeed") || localPath.includes("deapi")) {
+    if (identifier.startsWith("aiimg_") ||
+        localPath.includes("wavespeed") ||
+        localPath.includes("deapi") ||
+        storageKey.includes("wavespeed") ||
+        storageKey.includes("deapi") ||
+        storageKey.includes("rendered_segment")) {
         return "ai_generated";
     }
     if (joinedUrls.includes("pexels.com") || joinedUrls.includes("pixabay.com") || joinedUrls.includes("unsplash.com")) {
@@ -99,29 +132,32 @@ const detectWorkspaceSegmentSourceKind = (entry) => {
     }
     return "unknown";
 };
-const getProjectMediaEntryPreviewUrl = (entry) => pickWorkspaceRenderableMediaUrl(entry?.preview, entry?.download_url, entry?.url);
+const getProjectMediaEntryPreviewUrl = (entry) => getProjectMediaEntryRenderableUrl(entry, entry?.preview, entry?.download_url, entry?.url);
 const getProjectMediaEntryPlaybackUrl = (entry) => pickWorkspaceRenderableMediaUrl(entry?.download_url, entry?.url, entry?.preview);
 const getProjectOriginalMediaEntries = (payload) => pickProjectMediaEntries(payload?.source_video_urls, payload?.generation_settings?.original_videos, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, payload?.video_urls, payload?.background_urls);
-const getProjectCurrentMediaEntries = (payload, originalEntries) => pickProjectMediaEntries(payload?.video_urls, payload?.background_urls, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, originalEntries);
+const getProjectCurrentMediaEntries = (payload, originalEntries) => pickProjectMediaEntries(payload?.generation_settings?.current_rendered_segments, payload?.video_urls, payload?.background_urls, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, originalEntries);
 const buildProjectMediaAssetIndex = (assets) => new Map(assets
     .filter((asset) => typeof asset.assetId === "number" && asset.assetId > 0)
     .map((asset) => [asset.assetId, asset]));
 const buildSegmentMediaAssetFromEntry = (entry, projectMediaByAssetId, options) => {
-    const assetId = normalizeInteger(entry?.media_asset_id);
+    const assetId = getProjectMediaEntryAssetId(entry);
     const linkedAsset = assetId !== null ? projectMediaByAssetId.get(assetId) ?? null : null;
+    const entryKind = normalizeText(entry?.kind || entry?.asset_kind) || options?.role || null;
+    const entryRole = normalizeText(entry?.role || entry?.link_role) || options?.role || entryKind;
     const entryAsset = buildWorkspaceMediaAssetRef({
         download_path: entry?.download_url ?? entry?.url ?? null,
         download_url: entry?.download_url ?? null,
         id: assetId,
-        kind: options?.role ?? null,
+        kind: entryKind,
         media_type: entry?.media_type ?? null,
         mime_type: entry?.mime_type ?? null,
         original_url: entry?.url ?? null,
         project_id: options?.projectId ?? null,
-        role: options?.role ?? null,
+        role: entryRole,
         segment_index: options?.segmentIndex ?? null,
         source_kind: detectWorkspaceSegmentSourceKind(entry),
         status: linkedAsset?.status ?? "ready",
+        storage_key: entry?.storage_key ?? null,
     });
     return mergeWorkspaceMediaAssetRefs(linkedAsset, entryAsset);
 };
@@ -152,7 +188,7 @@ const normalizeSpeechWords = (value) => {
         .filter((item) => Boolean(item));
 };
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
-const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 60_000;
+const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 10 * 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
@@ -487,8 +523,10 @@ const getWorkspaceSegmentEditorSessionInternal = async (user, projectId, options
         }
     }
 };
-export async function getWorkspaceSegmentEditorSession(user, projectId) {
-    return getWorkspaceSegmentEditorSessionInternal(user, projectId);
+export async function getWorkspaceSegmentEditorSession(user, projectId, options) {
+    return getWorkspaceSegmentEditorSessionInternal(user, projectId, {
+        bypassCache: options?.bypassCache,
+    });
 }
 export async function getWorkspaceSegmentEditorSessionForAccessibleProject(user, projectId, options) {
     return getWorkspaceSegmentEditorSessionInternal(user, projectId, {

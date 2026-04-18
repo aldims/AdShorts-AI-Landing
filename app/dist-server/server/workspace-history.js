@@ -14,12 +14,43 @@ const toNullableInteger = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
 };
+const addOwnerKey = (values, nextValue) => {
+    const normalized = normalizeText(nextValue);
+    if (!normalized || values.includes(normalized))
+        return;
+    values.push(normalized);
+};
 const getWorkspaceHistoryOwnerKey = (user) => {
     const userId = normalizeText(user.id);
     if (userId)
         return `user:${userId}`;
     const email = normalizeText(user.email).toLowerCase();
     return email ? `email:${email}` : null;
+};
+export const buildWorkspaceOwnerKeyMigration = (user) => {
+    const userId = normalizeText(user.id);
+    if (!userId)
+        return null;
+    const email = normalizeText(user.email).toLowerCase();
+    const legacyOwnerKeys = [];
+    const canonicalOwnerKey = `user:${userId}`;
+    if (email) {
+        addOwnerKey(legacyOwnerKeys, `email:${email}`);
+        addOwnerKey(legacyOwnerKeys, `user:${email}`);
+    }
+    return {
+        canonicalOwnerKey,
+        legacyOwnerKeys: legacyOwnerKeys.filter((ownerKey) => ownerKey !== canonicalOwnerKey),
+    };
+};
+const buildSqlInClause = (valuesCount, startIndex = 1) => {
+    if (valuesCount <= 0) {
+        throw new Error("IN clause requires at least one value.");
+    }
+    if (isPgPool(database)) {
+        return Array.from({ length: valuesCount }, (_, index) => `$${startIndex + index}`).join(", ");
+    }
+    return Array.from({ length: valuesCount }, () => "?").join(", ");
 };
 let workspaceHistoryTableReady = false;
 let workspaceHistoryTableReadyPromise = null;
@@ -38,6 +69,14 @@ const queryRows = async (sql, params = []) => {
         return result.rows;
     }
     return database.prepare(sql).all(...params);
+};
+const queryValue = async (sql, params = []) => {
+    const rows = await queryRows(sql, params);
+    const row = rows[0];
+    if (!row)
+        return null;
+    const [value] = Object.values(row);
+    return value ?? null;
 };
 const ensureWorkspaceHistoryTable = async () => {
     if (workspaceHistoryTableReady)
@@ -192,6 +231,139 @@ const ensureWorkspaceDeletedProjectsTable = async () => {
     });
     await workspaceDeletedProjectsTableReadyPromise;
 };
+const loadWorkspaceOwnerKeyMigrations = async () => {
+    const userTableSql = `
+    SELECT
+      id AS "id",
+      email AS "email"
+    FROM "user"
+    WHERE email IS NOT NULL AND TRIM(email) <> ''
+  `;
+    try {
+        const rows = await queryRows(userTableSql);
+        return rows
+            .map((row) => buildWorkspaceOwnerKeyMigration({
+            id: normalizeText(row.id) || null,
+            email: normalizeText(row.email) || null,
+        }))
+            .filter((row) => Boolean(row && row.legacyOwnerKeys.length));
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message.toLowerCase() : "";
+        if (message.includes("no such table") || message.includes("relation \"user\" does not exist")) {
+            return [];
+        }
+        throw error;
+    }
+};
+const updateWorkspaceGenerationHistoryOwnerKeys = async (migration) => {
+    if (!migration.legacyOwnerKeys.length)
+        return;
+    const legacyPlaceholders = buildSqlInClause(migration.legacyOwnerKeys.length, 2);
+    const sql = isPgPool(database)
+        ? `
+        UPDATE workspace_generation_history
+        SET owner_key = $1
+        WHERE owner_key IN (${legacyPlaceholders}) AND owner_key <> $1
+      `
+        : `
+        UPDATE workspace_generation_history
+        SET owner_key = ?
+        WHERE owner_key IN (${legacyPlaceholders}) AND owner_key <> ?
+      `;
+    const params = isPgPool(database)
+        ? [migration.canonicalOwnerKey, ...migration.legacyOwnerKeys]
+        : [migration.canonicalOwnerKey, ...migration.legacyOwnerKeys, migration.canonicalOwnerKey];
+    await runStatement(sql, params);
+};
+const migrateWorkspaceDeletedProjectsOwnerKey = async (legacyOwnerKey, canonicalOwnerKey) => {
+    const insertSql = isPgPool(database)
+        ? `
+        INSERT INTO workspace_deleted_projects (
+          owner_key,
+          project_id,
+          ad_id,
+          job_id,
+          deleted_at
+        )
+        SELECT
+          $1,
+          project_id,
+          ad_id,
+          job_id,
+          deleted_at
+        FROM workspace_deleted_projects
+        WHERE owner_key = $2
+        ON CONFLICT (owner_key, project_id) DO UPDATE SET
+          ad_id = COALESCE(EXCLUDED.ad_id, workspace_deleted_projects.ad_id),
+          job_id = COALESCE(EXCLUDED.job_id, workspace_deleted_projects.job_id),
+          deleted_at = CASE
+            WHEN EXCLUDED.deleted_at > workspace_deleted_projects.deleted_at THEN EXCLUDED.deleted_at
+            ELSE workspace_deleted_projects.deleted_at
+          END
+      `
+        : `
+        INSERT INTO workspace_deleted_projects (
+          owner_key,
+          project_id,
+          ad_id,
+          job_id,
+          deleted_at
+        )
+        SELECT
+          ?,
+          project_id,
+          ad_id,
+          job_id,
+          deleted_at
+        FROM workspace_deleted_projects
+        WHERE owner_key = ?
+        ON CONFLICT(owner_key, project_id) DO UPDATE SET
+          ad_id = COALESCE(excluded.ad_id, workspace_deleted_projects.ad_id),
+          job_id = COALESCE(excluded.job_id, workspace_deleted_projects.job_id),
+          deleted_at = CASE
+            WHEN excluded.deleted_at > workspace_deleted_projects.deleted_at THEN excluded.deleted_at
+            ELSE workspace_deleted_projects.deleted_at
+          END
+      `;
+    const deleteSql = isPgPool(database)
+        ? `DELETE FROM workspace_deleted_projects WHERE owner_key = $1`
+        : `DELETE FROM workspace_deleted_projects WHERE owner_key = ?`;
+    await runStatement(insertSql, [canonicalOwnerKey, legacyOwnerKey]);
+    await runStatement(deleteSql, [legacyOwnerKey]);
+};
+export async function runWorkspaceOwnerKeyMigration() {
+    await ensureWorkspaceHistoryTable();
+    await ensureWorkspaceDeletedProjectsTable();
+    const migrations = await loadWorkspaceOwnerKeyMigrations();
+    let migratedHistoryOwners = 0;
+    let migratedDeletedOwners = 0;
+    for (const migration of migrations) {
+        const historyCountSql = isPgPool(database)
+            ? `SELECT COUNT(*) AS "total" FROM workspace_generation_history WHERE owner_key = ANY($1::text[])`
+            : `SELECT COUNT(*) AS "total" FROM workspace_generation_history WHERE owner_key IN (${buildSqlInClause(migration.legacyOwnerKeys.length)})`;
+        const historyCount = Number((await queryValue(historyCountSql, isPgPool(database) ? [migration.legacyOwnerKeys] : migration.legacyOwnerKeys)) ?? 0);
+        if (historyCount > 0) {
+            await updateWorkspaceGenerationHistoryOwnerKeys(migration);
+            migratedHistoryOwners += historyCount;
+        }
+        for (const legacyOwnerKey of migration.legacyOwnerKeys) {
+            const deletedCountSql = isPgPool(database)
+                ? `SELECT COUNT(*) AS "total" FROM workspace_deleted_projects WHERE owner_key = $1`
+                : `SELECT COUNT(*) AS "total" FROM workspace_deleted_projects WHERE owner_key = ?`;
+            const deletedCount = Number((await queryValue(deletedCountSql, [legacyOwnerKey])) ?? 0);
+            if (deletedCount <= 0)
+                continue;
+            await migrateWorkspaceDeletedProjectsOwnerKey(legacyOwnerKey, migration.canonicalOwnerKey);
+            migratedDeletedOwners += deletedCount;
+        }
+    }
+    return {
+        migratedDeletedOwners,
+        migratedHistoryOwners,
+        scannedUsers: migrations.length,
+    };
+}
 export async function saveWorkspaceGenerationHistory(user, snapshot) {
     const ownerKey = getWorkspaceHistoryOwnerKey(user);
     const jobId = normalizeText(snapshot.jobId);

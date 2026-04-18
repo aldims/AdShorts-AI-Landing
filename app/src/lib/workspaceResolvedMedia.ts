@@ -74,8 +74,6 @@ export const resolveWorkspaceMediaSurface = (
       ? sanitizeWorkspaceSegmentPosterUrl(previewKind, surfaceReferenceUrl, rawFallbackPosterUrl)
       : rawFallbackPosterUrl;
   const fallbackUrls = getUniqueResolvedMediaUrls(input.fallbackUrls ?? []);
-  const hasUsablePoster = Boolean(posterUrl || fallbackPosterUrl);
-  const isGeneratedVideo = previewKind === "video" && Boolean(input.isGeneratedVideo);
   const isPlaybackRequested = previewKind === "video" && Boolean(input.isPlaybackRequested);
   const forceMountVideoWhenIdle = previewKind === "video" && Boolean(input.forceMountVideoWhenIdle);
 
@@ -89,18 +87,18 @@ export const resolveWorkspaceMediaSurface = (
   if (previewKind === "video") {
     switch (input.context) {
       case "segment-carousel-card": {
-        mountVideoWhenIdle = forceMountVideoWhenIdle || isGeneratedVideo || !hasUsablePoster;
+        mountVideoWhenIdle = isPlaybackRequested || forceMountVideoWhenIdle;
         preloadPolicy = isPlaybackRequested ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
-        preferPosterFrame = !mountVideoWhenIdle && !isPlaybackRequested;
-        primePausedFrame = mountVideoWhenIdle;
+        preferPosterFrame = !isPlaybackRequested;
+        primePausedFrame = false;
         subtitleMode = "active-only";
         break;
       }
       case "segment-thumb": {
-        mountVideoWhenIdle = forceMountVideoWhenIdle || isGeneratedVideo || !hasUsablePoster;
+        mountVideoWhenIdle = forceMountVideoWhenIdle;
         preloadPolicy = mountVideoWhenIdle ? "metadata" : "none";
-        preferPosterFrame = !mountVideoWhenIdle;
-        primePausedFrame = mountVideoWhenIdle;
+        preferPosterFrame = true;
+        primePausedFrame = false;
         break;
       }
       case "segment-drag-ghost": {

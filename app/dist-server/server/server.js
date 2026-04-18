@@ -13,17 +13,26 @@ import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWor
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
+import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview } from "./voice-preview.js";
 import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
 import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
-import { buildExternalUserId } from "./external-user.js";
+import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 initServerLogging();
 const app = express();
+const resolvePreferredExternalUserId = async (user) => {
+    try {
+        return (await resolveExternalUserIdentity(user)).preferred;
+    }
+    catch {
+        return buildExternalUserId(user);
+    }
+};
 const validateServerStartup = () => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         console.warn("[server] AdsFlow environment variables are missing. Studio and workspace media features will fail.");
@@ -92,16 +101,122 @@ const isVideoProxyStreamAbortLikeError = (error) => {
     }
     return false;
 };
+const getVideoProxyFetchErrorCode = (error) => {
+    let current = error;
+    const visited = new Set();
+    while (current && typeof current === "object" && !visited.has(current)) {
+        visited.add(current);
+        if ("code" in current && typeof current.code === "string" && current.code.trim()) {
+            return current.code.trim();
+        }
+        current = "cause" in current ? current.cause : null;
+    }
+    return "";
+};
+const getVideoProxyFetchErrorMessage = (error) => error instanceof Error && error.message.trim()
+    ? error.message.trim()
+    : typeof error === "string"
+        ? error.trim()
+        : "";
+const isVideoProxyFetchTimeoutLikeError = (error) => {
+    let current = error;
+    const visited = new Set();
+    while (current && typeof current === "object" && !visited.has(current)) {
+        visited.add(current);
+        const name = "name" in current ? String(current.name ?? "") : "";
+        const code = "code" in current ? String(current.code ?? "") : "";
+        const message = "message" in current ? String(current.message ?? "").toLowerCase() : "";
+        if (name === "AbortError" ||
+            name === "TimeoutError" ||
+            code === "ABORT_ERR" ||
+            code === "ETIMEDOUT" ||
+            code === "UND_ERR_CONNECT_TIMEOUT" ||
+            code === "UND_ERR_HEADERS_TIMEOUT" ||
+            message.includes("timeout") ||
+            message.includes("timed out") ||
+            message.includes("aborted")) {
+            return true;
+        }
+        current = "cause" in current ? current.cause : null;
+    }
+    return false;
+};
 const fetchVideoProxyUpstream = async (req, upstreamUrl, upstreamHeaders) => {
-    return fetchUpstreamResponse(upstreamUrl, {
-        headers: {
-            ...buildVideoProxyRequestHeaders(req),
-            ...(upstreamHeaders ?? {}),
-            connection: "close",
-        },
-    }, upstreamPolicies.proxyInteractive, {
-        assetKind: "video-proxy",
-        endpoint: req.path,
+    const policy = upstreamPolicies.playbackPreparation;
+    const target = `${upstreamUrl.origin}${upstreamUrl.pathname}`;
+    let lastError = null;
+    let lastStatusCode = null;
+    for (let attempt = 0; attempt <= policy.retryDelaysMs.length; attempt += 1) {
+        const attemptNumber = attempt + 1;
+        const startedAt = Date.now();
+        const controller = new AbortController();
+        const timeoutHandle = setTimeout(() => {
+            controller.abort(new Error(`Upstream request timed out for ${target}.`));
+        }, policy.timeoutMs);
+        try {
+            const response = await fetch(upstreamUrl, {
+                headers: {
+                    ...buildVideoProxyRequestHeaders(req),
+                    ...(upstreamHeaders ?? {}),
+                    connection: "close",
+                },
+                signal: controller.signal,
+            });
+            clearTimeout(timeoutHandle);
+            lastStatusCode = response.status;
+            logServerEvent(response.ok ? "info" : "warn", "upstream.response", {
+                attempt: attemptNumber,
+                assetKind: "video-proxy",
+                cacheHit: false,
+                elapsedMs: Date.now() - startedAt,
+                endpoint: req.path,
+                jobId: null,
+                policy: `${policy.name}-headers`,
+                projectId: null,
+                statusCode: response.status,
+                target,
+            });
+            if (!policy.retryableStatusCodes.has(response.status) || attempt === policy.retryDelaysMs.length) {
+                return response;
+            }
+            void response.body?.cancel();
+        }
+        catch (error) {
+            clearTimeout(timeoutHandle);
+            lastError = error;
+            const isTimeout = isVideoProxyFetchTimeoutLikeError(error);
+            logServerEvent("warn", "upstream.error", {
+                attempt: attemptNumber,
+                assetKind: "video-proxy",
+                code: getVideoProxyFetchErrorCode(error) || null,
+                elapsedMs: Date.now() - startedAt,
+                endpoint: req.path,
+                error: getVideoProxyFetchErrorMessage(error) || `Upstream request failed for ${target}.`,
+                jobId: null,
+                policy: `${policy.name}-headers`,
+                projectId: null,
+                target,
+                timeout: isTimeout,
+            });
+            if (attempt === policy.retryDelaysMs.length || !isTimeout) {
+                throw new UpstreamFetchError(getVideoProxyFetchErrorMessage(error) || `Upstream request failed for ${target}.`, {
+                    code: getVideoProxyFetchErrorCode(error) || null,
+                    isTimeout,
+                    target,
+                });
+            }
+        }
+        const delayMs = policy.retryDelaysMs[attempt] ?? 0;
+        if (delayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+    }
+    throw new UpstreamFetchError(lastStatusCode !== null
+        ? `Upstream request failed (${lastStatusCode}) for ${target}.`
+        : getVideoProxyFetchErrorMessage(lastError) || `Upstream request failed for ${target}.`, {
+        code: getVideoProxyFetchErrorCode(lastError) || null,
+        isTimeout: isVideoProxyFetchTimeoutLikeError(lastError),
+        target,
     });
 };
 const proxyVideoResponse = async (req, res, upstreamUrl, fallbackMessage, upstreamHeaders) => {
@@ -339,6 +454,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     duration: segmentRecord.duration,
                     endTime: segmentRecord.endTime,
                     index: segmentRecord.index,
+                    resetVisual: Boolean(segmentRecord.resetVisual),
                     startTime: segmentRecord.startTime,
                     text: segmentRecord.text,
                     videoAction: segmentRecord.videoAction,
@@ -373,12 +489,9 @@ const parseStudioGenerateMultipartBody = async (req) => {
         voiceId: getFormDataString(formData, "voiceId"),
     };
 };
-const isLocalExampleGoal = (value) => value === "stories" ||
-    value === "fun" ||
-    value === "ads" ||
-    value === "fantasy" ||
-    value === "interesting" ||
-    value === "effects";
+const isLocalExampleGoal = (value) => value === "ads" ||
+    value === "growth" ||
+    value === "expert";
 app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
 });
@@ -728,9 +841,10 @@ app.delete("/api/workspace/media-library/:assetId", async (req, res) => {
         return;
     }
     try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
         const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}`, {
             admin_token: env.adsflowAdminToken,
-            external_user_id: buildExternalUserId(session.user),
+            external_user_id: externalUserId,
         });
         const response = await fetchUpstreamResponse(upstreamUrl, { method: "DELETE" }, upstreamPolicies.adsflowMutation, {
             assetKind: "media-library-asset",
@@ -1102,7 +1216,7 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
         });
     }
 });
-app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
+const proxyWorkspaceMediaAssetDownload = async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
     });
@@ -1116,9 +1230,10 @@ app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
         return;
     }
     try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
         const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
             admin_token: env.adsflowAdminToken,
-            external_user_id: buildExternalUserId(session.user),
+            external_user_id: externalUserId,
         });
         const response = await fetchUpstreamResponse(upstreamUrl, {
             headers: {
@@ -1169,6 +1284,47 @@ app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
             error: error instanceof Error ? error.message : "Failed to proxy media asset.",
         });
     }
+};
+app.get("/api/media/:assetId/download", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const assetId = Number(req.params.assetId ?? 0);
+    if (!Number.isFinite(assetId) || assetId <= 0) {
+        res.status(400).json({ error: "Asset id is required." });
+        return;
+    }
+    const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+        });
+        const cacheTargetUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`);
+        const posterPath = await ensureWorkspaceVideoPoster({
+            cacheKey: getWorkspaceVideoPosterCacheKey({
+                posterId: `workspace-media-asset:${Math.trunc(assetId)}`,
+                targetUrl: cacheTargetUrl,
+                version: version || `asset:${Math.trunc(assetId)}`,
+            }),
+            upstreamUrl,
+        });
+        res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+        res.sendFile(posterPath);
+    }
+    catch (error) {
+        console.error("[workspace] Failed to build media asset poster", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to build media asset poster.",
+        });
+    }
 });
 app.get("/api/workspace/project-video", async (req, res) => {
     const session = await auth.api.getSession({
@@ -1209,7 +1365,10 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
         return;
     }
     try {
-        const data = await getWorkspaceSegmentEditorSession(session.user, projectId);
+        const shouldBypassCache = ["1", "true", "yes"].includes(String(req.query.refresh ?? req.query.bypassCache ?? "").trim().toLowerCase());
+        const data = await getWorkspaceSegmentEditorSession(session.user, projectId, {
+            bypassCache: shouldBypassCache,
+        });
         res.json({ data });
     }
     catch (error) {
@@ -1361,9 +1520,10 @@ app.post("/api/studio/media-upload/init", async (req, res) => {
         return;
     }
     try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
         const data = await postAdsflowJson("/api/media/uploads/init", {
             admin_token: env.adsflowAdminToken,
-            external_user_id: buildExternalUserId(session.user),
+            external_user_id: externalUserId,
             file_name: fileName,
             kind,
             language,
@@ -1406,10 +1566,11 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
         return;
     }
     try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
         const data = await postAdsflowJson("/api/media/uploads/complete", {
             admin_token: env.adsflowAdminToken,
             asset_id: assetId,
-            external_user_id: buildExternalUserId(session.user),
+            external_user_id: externalUserId,
             language,
             project_id: projectId,
             role: role || undefined,
@@ -1799,6 +1960,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
         res.status(400).json({ error: "Image asset id or image data URL is required." });
         return;
     }
+    console.info("[studio] segment-image-edit route: request received", JSON.stringify({ imageAssetId, imageDataUrl: imageDataUrl ? `[dataUrl len=${imageDataUrl.length}]` : null, imageFileName, projectId, segmentIndex }));
     try {
         const job = await createStudioSegmentImageEditJob(prompt, imageDataUrl || undefined, session.user, {
             fileName: imageFileName || undefined,
@@ -1810,7 +1972,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
         res.json({ data: job });
     }
     catch (error) {
-        console.error("[studio] Failed to create segment image edit job", error);
+        console.error("[studio] Failed to create segment image edit job", { imageAssetId, imageFileName, projectId, segmentIndex }, error);
         const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
         res.status(statusCode).json({
             error: error instanceof Error ? error.message : "Failed to create segment image edit job.",

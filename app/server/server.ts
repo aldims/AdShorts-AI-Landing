@@ -50,6 +50,10 @@ import {
   invalidateWorkspaceMediaLibraryCache,
   WorkspaceMediaLibraryPreviewError,
 } from "./media-library.js";
+import {
+  ensureWorkspaceVideoPoster,
+  getWorkspaceVideoPosterCacheKey,
+} from "./project-posters.js";
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
   createStudioSegmentAiPhotoJob,
@@ -89,7 +93,7 @@ import {
   saveLocalExample,
   type LocalExampleGoal,
 } from "./local-examples.js";
-import { buildExternalUserId } from "./external-user.js";
+import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import {
   AgencyContactValidationError,
   parseAgencyContactSubmission,
@@ -101,6 +105,14 @@ import { initServerLogging, logServerEvent } from "./logger.js";
 initServerLogging();
 
 const app = express();
+
+const resolvePreferredExternalUserId = async (user: { email?: string | null; id?: string | null }) => {
+  try {
+    return (await resolveExternalUserIdentity(user)).preferred;
+  } catch {
+    return buildExternalUserId(user);
+  }
+};
 
 const validateServerStartup = () => {
   if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
@@ -195,24 +207,154 @@ const isVideoProxyStreamAbortLikeError = (error: unknown) => {
   return false;
 };
 
+const getVideoProxyFetchErrorCode = (error: unknown): string => {
+  let current: unknown = error;
+  const visited = new Set<unknown>();
+
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+
+    if ("code" in current && typeof current.code === "string" && current.code.trim()) {
+      return current.code.trim();
+    }
+
+    current = "cause" in current ? current.cause : null;
+  }
+
+  return "";
+};
+
+const getVideoProxyFetchErrorMessage = (error: unknown) =>
+  error instanceof Error && error.message.trim()
+    ? error.message.trim()
+    : typeof error === "string"
+      ? error.trim()
+      : "";
+
+const isVideoProxyFetchTimeoutLikeError = (error: unknown) => {
+  let current: unknown = error;
+  const visited = new Set<unknown>();
+
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+
+    const name = "name" in current ? String(current.name ?? "") : "";
+    const code = "code" in current ? String(current.code ?? "") : "";
+    const message = "message" in current ? String(current.message ?? "").toLowerCase() : "";
+
+    if (
+      name === "AbortError" ||
+      name === "TimeoutError" ||
+      code === "ABORT_ERR" ||
+      code === "ETIMEDOUT" ||
+      code === "UND_ERR_CONNECT_TIMEOUT" ||
+      code === "UND_ERR_HEADERS_TIMEOUT" ||
+      message.includes("timeout") ||
+      message.includes("timed out") ||
+      message.includes("aborted")
+    ) {
+      return true;
+    }
+
+    current = "cause" in current ? current.cause : null;
+  }
+
+  return false;
+};
+
 const fetchVideoProxyUpstream = async (
   req: express.Request,
   upstreamUrl: URL,
   upstreamHeaders?: Record<string, string>,
 ) => {
-  return fetchUpstreamResponse(
-    upstreamUrl,
+  const policy = upstreamPolicies.playbackPreparation;
+  const target = `${upstreamUrl.origin}${upstreamUrl.pathname}`;
+  let lastError: unknown = null;
+  let lastStatusCode: number | null = null;
+
+  for (let attempt = 0; attempt <= policy.retryDelaysMs.length; attempt += 1) {
+    const attemptNumber = attempt + 1;
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort(new Error(`Upstream request timed out for ${target}.`));
+    }, policy.timeoutMs);
+
+    try {
+      const response = await fetch(upstreamUrl, {
+        headers: {
+          ...buildVideoProxyRequestHeaders(req),
+          ...(upstreamHeaders ?? {}),
+          connection: "close",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutHandle);
+
+      lastStatusCode = response.status;
+      logServerEvent(response.ok ? "info" : "warn", "upstream.response", {
+        attempt: attemptNumber,
+        assetKind: "video-proxy",
+        cacheHit: false,
+        elapsedMs: Date.now() - startedAt,
+        endpoint: req.path,
+        jobId: null,
+        policy: `${policy.name}-headers`,
+        projectId: null,
+        statusCode: response.status,
+        target,
+      });
+
+      if (!policy.retryableStatusCodes.has(response.status) || attempt === policy.retryDelaysMs.length) {
+        return response;
+      }
+
+      void response.body?.cancel();
+    } catch (error) {
+      clearTimeout(timeoutHandle);
+      lastError = error;
+      const isTimeout = isVideoProxyFetchTimeoutLikeError(error);
+
+      logServerEvent("warn", "upstream.error", {
+        attempt: attemptNumber,
+        assetKind: "video-proxy",
+        code: getVideoProxyFetchErrorCode(error) || null,
+        elapsedMs: Date.now() - startedAt,
+        endpoint: req.path,
+        error: getVideoProxyFetchErrorMessage(error) || `Upstream request failed for ${target}.`,
+        jobId: null,
+        policy: `${policy.name}-headers`,
+        projectId: null,
+        target,
+        timeout: isTimeout,
+      });
+
+      if (attempt === policy.retryDelaysMs.length || !isTimeout) {
+        throw new UpstreamFetchError(
+          getVideoProxyFetchErrorMessage(error) || `Upstream request failed for ${target}.`,
+          {
+            code: getVideoProxyFetchErrorCode(error) || null,
+            isTimeout,
+            target,
+          },
+        );
+      }
+    }
+
+    const delayMs = policy.retryDelaysMs[attempt] ?? 0;
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw new UpstreamFetchError(
+    lastStatusCode !== null
+      ? `Upstream request failed (${lastStatusCode}) for ${target}.`
+      : getVideoProxyFetchErrorMessage(lastError) || `Upstream request failed for ${target}.`,
     {
-      headers: {
-        ...buildVideoProxyRequestHeaders(req),
-        ...(upstreamHeaders ?? {}),
-        connection: "close",
-      },
-    },
-    upstreamPolicies.proxyInteractive,
-    {
-      assetKind: "video-proxy",
-      endpoint: req.path,
+      code: getVideoProxyFetchErrorCode(lastError) || null,
+      isTimeout: isVideoProxyFetchTimeoutLikeError(lastError),
+      target,
     },
   );
 };
@@ -306,6 +448,7 @@ type StudioGenerateMultipartSegment = {
   duration?: unknown;
   endTime?: unknown;
   index?: unknown;
+  resetVisual?: unknown;
   startTime?: unknown;
   text?: unknown;
   videoAction?: unknown;
@@ -536,6 +679,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                 duration: segmentRecord.duration,
                 endTime: segmentRecord.endTime,
                 index: segmentRecord.index,
+                resetVisual: Boolean(segmentRecord.resetVisual),
                 startTime: segmentRecord.startTime,
                 text: segmentRecord.text,
                 videoAction: segmentRecord.videoAction,
@@ -576,12 +720,9 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
 };
 
 const isLocalExampleGoal = (value: string): value is LocalExampleGoal =>
-  value === "stories" ||
-  value === "fun" ||
   value === "ads" ||
-  value === "fantasy" ||
-  value === "interesting" ||
-  value === "effects";
+  value === "growth" ||
+  value === "expert";
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -979,9 +1120,10 @@ app.delete("/api/workspace/media-library/:assetId", async (req, res) => {
   }
 
   try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
     const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}`, {
       admin_token: env.adsflowAdminToken,
-      external_user_id: buildExternalUserId(session.user),
+      external_user_id: externalUserId,
     });
     const response = await fetchUpstreamResponse(
       upstreamUrl,
@@ -1408,7 +1550,7 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
   }
 });
 
-app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
+const proxyWorkspaceMediaAssetDownload = async (req: express.Request, res: express.Response) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -1425,9 +1567,10 @@ app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
   }
 
   try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
     const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
       admin_token: env.adsflowAdminToken,
-      external_user_id: buildExternalUserId(session.user),
+      external_user_id: externalUserId,
     });
     const response = await fetchUpstreamResponse(
       upstreamUrl,
@@ -1485,6 +1628,53 @@ app.get("/api/workspace/media-assets/:assetId", async (req, res) => {
       error: error instanceof Error ? error.message : "Failed to proxy media asset.",
     });
   }
+};
+
+app.get("/api/media/:assetId/download", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId", proxyWorkspaceMediaAssetDownload);
+
+app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = Number(req.params.assetId ?? 0);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    res.status(400).json({ error: "Asset id is required." });
+    return;
+  }
+
+  const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+    });
+    const cacheTargetUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`);
+    const posterPath = await ensureWorkspaceVideoPoster({
+      cacheKey: getWorkspaceVideoPosterCacheKey({
+        posterId: `workspace-media-asset:${Math.trunc(assetId)}`,
+        targetUrl: cacheTargetUrl,
+        version: version || `asset:${Math.trunc(assetId)}`,
+      }),
+      upstreamUrl,
+    });
+
+    res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+    res.sendFile(posterPath);
+  } catch (error) {
+    console.error("[workspace] Failed to build media asset poster", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to build media asset poster.",
+    });
+  }
 });
 
 app.get("/api/workspace/project-video", async (req, res) => {
@@ -1532,7 +1722,12 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
   }
 
   try {
-    const data = await getWorkspaceSegmentEditorSession(session.user, projectId);
+    const shouldBypassCache = ["1", "true", "yes"].includes(
+      String(req.query.refresh ?? req.query.bypassCache ?? "").trim().toLowerCase(),
+    );
+    const data = await getWorkspaceSegmentEditorSession(session.user, projectId, {
+      bypassCache: shouldBypassCache,
+    });
     res.json({ data });
   } catch (error) {
     if (error instanceof WorkspaceSegmentEditorError) {
@@ -1709,11 +1904,12 @@ app.post("/api/studio/media-upload/init", async (req, res) => {
   }
 
   try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
     const data = await postAdsflowJson<AdsflowMediaUploadSessionPayload>(
       "/api/media/uploads/init",
       {
         admin_token: env.adsflowAdminToken,
-        external_user_id: buildExternalUserId(session.user),
+        external_user_id: externalUserId,
         file_name: fileName,
         kind,
         language,
@@ -1763,12 +1959,13 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
   }
 
   try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
     const data = await postAdsflowJson<AdsflowMediaUploadSessionPayload>(
       "/api/media/uploads/complete",
       {
         admin_token: env.adsflowAdminToken,
         asset_id: assetId,
-        external_user_id: buildExternalUserId(session.user),
+        external_user_id: externalUserId,
         language,
         project_id: projectId,
         role: role || undefined,
@@ -2210,6 +2407,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
     return;
   }
 
+  console.info("[studio] segment-image-edit route: request received", JSON.stringify({ imageAssetId, imageDataUrl: imageDataUrl ? `[dataUrl len=${imageDataUrl.length}]` : null, imageFileName, projectId, segmentIndex }));
   try {
     const job = await createStudioSegmentImageEditJob(prompt, imageDataUrl || undefined, session.user, {
       fileName: imageFileName || undefined,
@@ -2220,7 +2418,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
     });
     res.json({ data: job });
   } catch (error) {
-    console.error("[studio] Failed to create segment image edit job", error);
+    console.error("[studio] Failed to create segment image edit job", { imageAssetId, imageFileName, projectId, segmentIndex }, error);
     const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
 
     res.status(statusCode).json({

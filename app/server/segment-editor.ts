@@ -57,19 +57,26 @@ type AdsflowSegmentEditorResponse = {
 };
 
 type AdsflowProjectMediaEntryPayload = {
+  asset_kind?: string | null;
   download_url?: string | null;
   id?: number | string | null;
+  kind?: string | null;
+  link_role?: string | null;
   local_path?: string | null;
   media_asset_id?: number | string | null;
   media_type?: string | null;
   mime_type?: string | null;
   preview?: string | null;
+  role?: string | null;
   source?: string | null;
+  source_kind?: string | null;
+  storage_key?: string | null;
   url?: string | null;
 };
 
 type AdsflowProjectGenerationSettingsPayload = {
   background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  current_rendered_segments?: AdsflowProjectMediaEntryPayload[] | null;
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
@@ -196,6 +203,47 @@ const pickWorkspaceRenderableMediaUrl = (...candidates: Array<string | null | un
   return null;
 };
 
+const ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN = /\/api\/media\/(\d+)\/download(?:[/?#]|$)/i;
+
+const buildWorkspaceMediaAssetProxyUrl = (assetId: number) => `/api/workspace/media-assets/${assetId}`;
+
+const getProjectMediaEntryAssetId = (entry?: AdsflowProjectMediaEntryPayload | null) =>
+  normalizeInteger(entry?.media_asset_id) ?? normalizeInteger(entry?.id);
+
+const normalizeWorkspaceProjectMediaUrl = (
+  entry: AdsflowProjectMediaEntryPayload | null | undefined,
+  value: string | null,
+) => {
+  const normalizedUrl = normalizeUrl(value);
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  const assetId = getProjectMediaEntryAssetId(entry);
+  if (!assetId || normalizeMediaType(entry?.media_type) !== "photo") {
+    return normalizedUrl;
+  }
+
+  const matchedPath = normalizedUrl.match(ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN);
+  if (matchedPath) {
+    return buildWorkspaceMediaAssetProxyUrl(assetId);
+  }
+
+  try {
+    const resolvedUrl = new URL(normalizedUrl);
+    return ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN.test(resolvedUrl.pathname)
+      ? buildWorkspaceMediaAssetProxyUrl(assetId)
+      : normalizedUrl;
+  } catch {
+    return normalizedUrl;
+  }
+};
+
+const getProjectMediaEntryRenderableUrl = (
+  entry: AdsflowProjectMediaEntryPayload | null | undefined,
+  ...candidates: Array<string | null | undefined>
+) => normalizeWorkspaceProjectMediaUrl(entry, pickWorkspaceRenderableMediaUrl(...candidates));
+
 const normalizeProjectMediaEntries = (value: unknown): AdsflowProjectMediaEntryPayload[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -218,7 +266,7 @@ const pickProjectMediaEntries = (...candidates: unknown[]) => {
 const detectWorkspaceSegmentSourceKind = (
   entry?: AdsflowProjectMediaEntryPayload | null,
 ): WorkspaceSegmentEditorSourceKind => {
-  const source = normalizeText(entry?.source).toLowerCase();
+  const source = normalizeText(entry?.source_kind || entry?.source).toLowerCase();
   if (source === "ai_generated" || source === "ai" || source === "generated") {
     return "ai_generated";
   }
@@ -245,9 +293,17 @@ const detectWorkspaceSegmentSourceKind = (
 
   const identifier = normalizeText(entry?.id).toLowerCase();
   const localPath = normalizeText(entry?.local_path).toLowerCase();
+  const storageKey = normalizeText(entry?.storage_key).toLowerCase();
   const joinedUrls = [entry?.url, entry?.download_url, entry?.preview].map((value) => normalizeText(value).toLowerCase()).join(" ");
 
-  if (identifier.startsWith("aiimg_") || localPath.includes("wavespeed") || localPath.includes("deapi")) {
+  if (
+    identifier.startsWith("aiimg_") ||
+    localPath.includes("wavespeed") ||
+    localPath.includes("deapi") ||
+    storageKey.includes("wavespeed") ||
+    storageKey.includes("deapi") ||
+    storageKey.includes("rendered_segment")
+  ) {
     return "ai_generated";
   }
 
@@ -259,7 +315,7 @@ const detectWorkspaceSegmentSourceKind = (
 };
 
 const getProjectMediaEntryPreviewUrl = (entry?: AdsflowProjectMediaEntryPayload | null) =>
-  pickWorkspaceRenderableMediaUrl(entry?.preview, entry?.download_url, entry?.url);
+  getProjectMediaEntryRenderableUrl(entry, entry?.preview, entry?.download_url, entry?.url);
 
 const getProjectMediaEntryPlaybackUrl = (entry?: AdsflowProjectMediaEntryPayload | null) =>
   pickWorkspaceRenderableMediaUrl(entry?.download_url, entry?.url, entry?.preview);
@@ -279,6 +335,7 @@ const getProjectCurrentMediaEntries = (
   originalEntries: AdsflowProjectMediaEntryPayload[],
 ) =>
   pickProjectMediaEntries(
+    payload?.generation_settings?.current_rendered_segments,
     payload?.video_urls,
     payload?.background_urls,
     payload?.generation_settings?.video_urls,
@@ -302,21 +359,24 @@ const buildSegmentMediaAssetFromEntry = (
     segmentIndex?: number | null;
   },
 ) => {
-  const assetId = normalizeInteger(entry?.media_asset_id);
+  const assetId = getProjectMediaEntryAssetId(entry);
   const linkedAsset = assetId !== null ? projectMediaByAssetId.get(assetId) ?? null : null;
+  const entryKind = normalizeText(entry?.kind || entry?.asset_kind) || options?.role || null;
+  const entryRole = normalizeText(entry?.role || entry?.link_role) || options?.role || entryKind;
   const entryAsset = buildWorkspaceMediaAssetRef({
     download_path: entry?.download_url ?? entry?.url ?? null,
     download_url: entry?.download_url ?? null,
     id: assetId,
-    kind: options?.role ?? null,
+    kind: entryKind,
     media_type: entry?.media_type ?? null,
     mime_type: entry?.mime_type ?? null,
     original_url: entry?.url ?? null,
     project_id: options?.projectId ?? null,
-    role: options?.role ?? null,
+    role: entryRole,
     segment_index: options?.segmentIndex ?? null,
     source_kind: detectWorkspaceSegmentSourceKind(entry),
     status: linkedAsset?.status ?? "ready",
+    storage_key: entry?.storage_key ?? null,
   });
 
   return mergeWorkspaceMediaAssetRefs(linkedAsset, entryAsset);
@@ -354,7 +414,7 @@ const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[
 };
 
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
-const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 60_000;
+const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 10 * 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
@@ -779,8 +839,13 @@ const getWorkspaceSegmentEditorSessionInternal = async (
 export async function getWorkspaceSegmentEditorSession(
   user: SegmentEditorUser,
   projectId: number,
+  options?: {
+    bypassCache?: boolean;
+  },
 ): Promise<WorkspaceSegmentEditorSession> {
-  return getWorkspaceSegmentEditorSessionInternal(user, projectId);
+  return getWorkspaceSegmentEditorSessionInternal(user, projectId, {
+    bypassCache: options?.bypassCache,
+  });
 }
 
 export async function getWorkspaceSegmentEditorSessionForAccessibleProject(

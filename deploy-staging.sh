@@ -80,6 +80,9 @@ if (!String(mergedEnv.OPENROUTER_API_KEY ?? "").trim()) {
 }
 NODE
 
+echo "[staging] migrate workspace owner keys"
+node dist-server/server/migrate-workspace-owner-keys.js
+
 sudo systemctl restart "$STAGING_SERVICE"
 sleep 2
 

@@ -22,21 +22,21 @@ const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLower
 const normalizeLocalExampleGoal = (value) => {
     const normalized = normalizeText(value);
     switch (normalized) {
-        case "stories":
-        case "fun":
         case "ads":
-        case "fantasy":
-        case "interesting":
-        case "effects":
-            return normalized;
         case "ad_product":
             return "ads";
+        case "growth":
+        case "stories":
+        case "fun":
+        case "fantasy":
+        case "effects":
         case "cinematic":
-            return "stories";
-        case "entertainment":
-            return "interesting";
         case "wow_fantasy":
-            return "fantasy";
+            return "growth";
+        case "expert":
+        case "interesting":
+        case "entertainment":
+            return "expert";
         default:
             return null;
     }
@@ -282,7 +282,7 @@ const buildLocalExampleVideoUrl = (exampleId) => {
     return `${url.pathname}${url.search}`;
 };
 const toLocalExampleClientItem = (item) => ({
-    goal: normalizeLocalExampleGoal(item.goal) ?? "interesting",
+    goal: normalizeLocalExampleGoal(item.goal) ?? "growth",
     id: item.id,
     isLocal: true,
     promptHint: buildLocalExamplePromptHint(item.prompt),

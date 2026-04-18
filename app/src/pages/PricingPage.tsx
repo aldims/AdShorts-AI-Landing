@@ -4,12 +4,7 @@ import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
-import { getInsufficientCreditsPricingNotice } from "../lib/insufficient-credits";
-import {
-  clearPricingEntryIntent,
-  readPricingEntryIntent,
-  type PricingEntryIntent,
-} from "../lib/pricing-entry-intent";
+import { clearPricingEntryIntent, readPricingEntryIntent } from "../lib/pricing-entry-intent";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type Session = {
@@ -86,11 +81,12 @@ const pricingPlans: PricingPlan[] = [
     price: "390 ₽",
     billing: "",
     credits: "50 кредитов",
-    subnote: "До 5 видео, доступен один раз",
+    subnote: "До 5 Shorts",
     features: [
+      "Полный доступ к созданию Shorts",
+      "Без водяного знака",
+      "Редактирование в студии",
       "Автопубликация в YouTube",
-      "Брендинг на видео",
-      "Видео без водяного знака",
     ],
     ctaLabel: "Оплатить START",
   },
@@ -102,12 +98,12 @@ const pricingPlans: PricingPlan[] = [
     price: "1 490 ₽",
     billing: "",
     credits: "250 кредитов",
-    subnote: "До 25 видео",
+    subnote: "До 25 Shorts",
     features: [
       "Всё из START",
       "Приоритетная генерация",
       "Можно докупать кредиты",
-      "Видео без водяного знака",
+      "Подходит для регулярного контента",
     ],
     badge: "Самый популярный",
     featured: true,
@@ -121,12 +117,12 @@ const pricingPlans: PricingPlan[] = [
     price: "4 990 ₽",
     billing: "",
     credits: "1000 кредитов",
-    subnote: "До 100 видео",
+    subnote: "До 100 Shorts",
     features: [
       "Всё из PRO",
       "Максимальный приоритет",
       "Ранний доступ к новым функциям",
-      "Видео без водяного знака",
+      "Лучшие лимиты для активного использования",
     ],
     badge: "Лучшая выгода",
     ctaLabel: "Оплатить ULTRA",
@@ -142,22 +138,22 @@ const pricingPacks: PricingPack[] = [
     name: "Pack 100",
     credits: "100 кредитов",
     price: "690 ₽",
-    subnote: "До 10 видео",
+    subnote: "До 10 Shorts",
   },
   {
     checkoutProductId: "package_50",
     name: "Pack 500",
     credits: "500 кредитов",
     price: "2 750 ₽",
-    subnote: "до 50 видео",
-    badge: "Выгодно",
+    subnote: "До 50 Shorts",
   },
   {
     checkoutProductId: "package_100",
     name: "Pack 1000",
     credits: "1000 кредитов",
     price: "4 990 ₽",
-    subnote: "до 100 видео",
+    subnote: "До 100 Shorts",
+    badge: "Выгодно",
   },
 ];
 
@@ -188,7 +184,6 @@ export function PricingPage({
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
-  const [entryIntent, setEntryIntent] = useState<PricingEntryIntent | null>(null);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const addonsEligibilityNote = canPurchaseAddonCredits
@@ -196,15 +191,6 @@ export function PricingPage({
       : currentPlanLabel
         ? `На тарифе ${currentPlanLabel} пакеты недоступны. Дополнительные кредиты можно покупать только на PRO и ULTRA.`
         : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
-  const plansEntryNotice =
-    entryIntent?.source === "insufficient-credits" && entryIntent.section === "plans"
-      ? getInsufficientCreditsPricingNotice("plans")
-      : null;
-  const addonsEntryNotice =
-    entryIntent?.source === "insufficient-credits" && entryIntent.section === "addons"
-      ? getInsufficientCreditsPricingNotice("addons")
-      : null;
-
   const openPrimaryFlow = () => {
     if (session) {
       onOpenWorkspace();
@@ -299,12 +285,11 @@ export function PricingPage({
   };
 
   useEffect(() => {
-    const nextEntryIntent = readPricingEntryIntent();
-    if (!nextEntryIntent) {
+    const intent = readPricingEntryIntent();
+    if (!intent) {
       return;
     }
 
-    setEntryIntent(nextEntryIntent);
     clearPricingEntryIntent();
   }, []);
 
@@ -352,8 +337,8 @@ export function PricingPage({
                 />
               </>
             ) : (
-              <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
-                Вход
+              <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
+                Войти
               </button>
             )}
           </div>
@@ -364,7 +349,6 @@ export function PricingPage({
         <section className="section pricing-max-hero">
           <div className="container">
             <div className="pricing-max-hero__heading">
-              <p className="eyebrow">Тарифы</p>
               <h1>Выберите свой тариф</h1>
               {checkoutError ? (
                 <p className="pricing-max-hero__status" role="alert">
@@ -377,11 +361,6 @@ export function PricingPage({
 
         <section className="section pricing-max-plans" id="plans">
           <div className="container">
-            {plansEntryNotice ? (
-              <p className="pricing-max-section__status pricing-max-section__status--info" role="status">
-                {plansEntryNotice}
-              </p>
-            ) : null}
             <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}>
               {pricingPlans.map((plan) => {
                 const isActivePlan = plan.checkoutProductId === activePlanId;
@@ -481,16 +460,9 @@ export function PricingPage({
           <div className="container">
             <div className="pricing-max-section-head">
               <div>
-                <p className="eyebrow">Дополнительные кредиты</p>
                 <h2>Пополняйте кредиты не меняя тарифный план</h2>
               </div>
             </div>
-
-            {addonsEntryNotice ? (
-              <p className="pricing-max-section__status pricing-max-section__status--info" role="status">
-                {addonsEntryNotice}
-              </p>
-            ) : null}
 
             {checkoutError ? (
               <p className="pricing-max-addons__status" role="alert">
@@ -528,7 +500,6 @@ export function PricingPage({
         <section className="section pricing-max-faq">
           <div className="container pricing-max-faq__frame">
             <div className="pricing-max-faq__lead">
-              <p className="eyebrow">Как работает</p>
               <h2>Как работают тарифы</h2>
             </div>
 

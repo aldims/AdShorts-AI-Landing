@@ -19,6 +19,7 @@ describe("workspace hot path helpers", () => {
     expect(canCapturePosterInBrowser("data:video/mp4;base64,AAAA")).toBe(true);
     expect(canCapturePosterInBrowser("/api/workspace/project-segment-video?projectId=2893&segmentIndex=0")).toBe(true);
     expect(canCapturePosterInBrowser("/api/workspace/project-video?projectId=2893")).toBe(true);
+    expect(canCapturePosterInBrowser("/api/workspace/media-assets/153")).toBe(true);
     expect(canCapturePosterInBrowser("/api/studio/playback/job-123")).toBe(true);
     expect(canCapturePosterInBrowser("/api/studio/segment-ai-video/jobs/job-123/video")).toBe(true);
     expect(canCapturePosterInBrowser("/api/studio/segment-photo-animation/jobs/job-456/video")).toBe(true);

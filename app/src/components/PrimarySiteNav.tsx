@@ -10,6 +10,8 @@ type Props = {
   onOpenStudio: () => void;
   onOpenStudioSection?: (section: StudioEntryIntentSection) => void;
   projectsCount?: number;
+  studioSectionLabels?: Partial<Record<StudioEntryIntentSection, string>>;
+  onStudioBack?: (() => void) | null;
 };
 
 const studioNavItems: Array<{
@@ -27,6 +29,8 @@ export function PrimarySiteNav({
   onOpenStudio,
   onOpenStudioSection,
   projectsCount = 0,
+  studioSectionLabels,
+  onStudioBack = null,
 }: Props) {
   const isStudioActive = activeItem === "studio";
   const resolvedActiveStudioSection = activeStudioSection === "edit" ? "create" : activeStudioSection;
@@ -92,6 +96,20 @@ export function PrimarySiteNav({
         <div className="site-nav__submenu-viewport" aria-hidden={!isStudioMenuOpen}>
           <div className="site-nav__submenu-viewport-inner">
             <div id={studioMenuId} className="site-nav__submenu" role="menu" aria-label="Разделы студии">
+              {onStudioBack ? (
+                <button
+                  className="site-nav__submenu-back"
+                  type="button"
+                  role="menuitem"
+                  aria-label="Вернуться в студию"
+                  tabIndex={isStudioMenuOpen ? 0 : -1}
+                  onClick={onStudioBack}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ) : null}
               {studioNavItems.map((item) => (
                 <button
                   key={item.id}
@@ -101,7 +119,7 @@ export function PrimarySiteNav({
                   tabIndex={isStudioMenuOpen ? 0 : -1}
                   onClick={() => handleStudioSectionSelect(item.id)}
                 >
-                  <span>{item.label}</span>
+                  <span>{studioSectionLabels?.[item.id] ?? item.label}</span>
                   {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
                 </button>
               ))}

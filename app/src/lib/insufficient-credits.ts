@@ -81,8 +81,3 @@ export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsCon
     title: "Не хватает кредитов, чтобы продолжить",
   };
 };
-
-export const getInsufficientCreditsPricingNotice = (section: PricingEntryIntentSection) =>
-  section === "addons"
-    ? "Кредитов не хватило для этого действия. Пополните баланс и возвращайтесь к генерации."
-    : "Кредитов не хватило для этого действия. Выберите тариф и продолжайте без паузы.";

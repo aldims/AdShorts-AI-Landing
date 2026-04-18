@@ -42,9 +42,9 @@ const landingRefineProofs = [
     description: "Добавляйте движение и оживляйте изображения.",
   },
   {
-    label: "КАЧЕСТВО",
-    title: "Улучшение качества",
-    description: "Делайте видео чётче и детализированнее.",
+    label: "ДОРИСОВКА",
+    title: "Изменение изображения",
+    description: "Дорисовывайте и меняйте отдельные элементы в сцене.",
   },
 ] as const;
 const landingRefineCarouselCards = [
@@ -568,7 +568,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             </div>
 
             <div className="landing-refine-board" aria-hidden="true">
-              <div className="landing-refine-board__shell" data-carousel-reveal="">
+              <div className="landing-refine-board__shell landing-refine-board__shell--linear" data-carousel-reveal="">
                 <div className="landing-refine-board__editor">
                   <div className="studio-segment-editor__stage">
                     <div className="studio-segment-editor__carousel">

@@ -394,6 +394,7 @@ export type StudioSegmentEditorSegment = {
   duration?: number;
   endTime?: number;
   index: number;
+  resetVisual?: boolean;
   startTime?: number;
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
@@ -595,6 +596,7 @@ const normalizeStudioSegmentEditorPayload = (
       duration?: unknown;
       endTime?: unknown;
       index?: unknown;
+      resetVisual?: unknown;
       startTime?: unknown;
       text?: unknown;
       videoAction?: unknown;
@@ -625,6 +627,7 @@ const normalizeStudioSegmentEditorPayload = (
       duration,
       endTime,
       index,
+      resetVisual: Boolean(segmentRecord.resetVisual),
       startTime,
       text: normalizeGenerationText(String(segmentRecord.text ?? "")),
       videoAction,
@@ -1171,18 +1174,44 @@ const inferStudioGeneratedImageMimeType = (
     return normalizedMimeType;
   }
 
-  const target = `${normalizeGenerationText(fileName)} ${normalizeGenerationText(urlValue)}`.toLowerCase();
-  if (target.endsWith(".jpg") || target.endsWith(".jpeg")) return "image/jpeg";
-  if (target.endsWith(".webp")) return "image/webp";
-  if (target.endsWith(".avif")) return "image/avif";
-  if (target.endsWith(".gif")) return "image/gif";
+  const normalizedFileName = normalizeGenerationText(fileName).toLowerCase();
+  const normalizedUrlValue = normalizeGenerationText(urlValue).toLowerCase();
+  const pathname = normalizedUrlValue
+    ? (() => {
+        try {
+          return new URL(normalizedUrlValue).pathname.toLowerCase();
+        } catch {
+          return normalizedUrlValue.split(/[?#]/u, 1)[0] ?? normalizedUrlValue;
+        }
+      })()
+    : "";
+  const candidates = [normalizedFileName, pathname];
+  if (candidates.some((candidate) => candidate.endsWith(".jpg") || candidate.endsWith(".jpeg"))) return "image/jpeg";
+  if (candidates.some((candidate) => candidate.endsWith(".webp"))) return "image/webp";
+  if (candidates.some((candidate) => candidate.endsWith(".avif"))) return "image/avif";
+  if (candidates.some((candidate) => candidate.endsWith(".gif"))) return "image/gif";
   return "image/png";
 };
 
 const normalizeStudioGeneratedImageFileName = (fileName: string | null | undefined, mimeType: string) => {
   const normalized = String(fileName ?? "").trim().split(/[\\/]/).pop() ?? "";
   if (normalized) {
-    return normalized;
+    const targetExtension = getStudioGeneratedImageExtension(mimeType);
+    const currentExtensionMatch = normalized.match(/(\.[^.]+)$/u);
+    const currentExtension = currentExtensionMatch?.[1]?.toLowerCase() ?? "";
+    if (!currentExtension) {
+      return `${normalized}${targetExtension}`;
+    }
+
+    if (currentExtension === ".jpeg" && targetExtension === ".jpg") {
+      return normalized;
+    }
+
+    if (currentExtension === targetExtension) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, -currentExtension.length)}${targetExtension}`;
   }
 
   return `segment-ai-photo${getStudioGeneratedImageExtension(mimeType)}`;
@@ -2598,6 +2627,8 @@ const fetchAdsflowJson = async <T>(url: URL, init?: RequestInit, options?: Adsfl
         ? payload.detail
         : `AdsFlow request failed (${response.status}).`;
 
+    console.error("[adsflow] HTTP error", url.pathname, response.status, JSON.stringify(payload));
+
     if (response.status === 402) {
       throw new WorkspaceCreditLimitError(detail);
     }
@@ -2934,6 +2965,7 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
         language: "ru",
         referral_source: "landing_site",
         user_email: user.email ?? undefined,
+        user_email_verified: user.emailVerified === true,
         user_name: user.name ?? undefined,
       },
       upstreamPolicies.adsflowBootstrap,
@@ -3184,6 +3216,7 @@ export async function createStudioGenerationJob(
                 duration: segment.duration,
                 end_time: segment.endTime,
                 index: segment.index,
+                reset_visual: Boolean(segment.resetVisual),
                 start_time: segment.startTime,
                 text: segment.text,
                 video_action: segment.videoAction,
@@ -3421,23 +3454,38 @@ export async function createStudioSegmentImageEditJob(
         role: "segment_source",
         segmentIndex: normalizedSegmentIndex,
       });
-  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-edit/jobs", {
-    admin_token: env.adsflowAdminToken,
-    credit_cost: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
-    external_user_id: externalUserId,
-    image_asset_id: imageAssetId,
-    image_mime_type: normalizedMimeType,
-    image_original_name: normalizedFileName,
-    language: normalizedLanguage,
-    project_id: normalizedProjectId,
-    prompt: upstreamPrompt,
-    segment_index: normalizedSegmentIndex,
-    user_email: user.email ?? undefined,
-    user_name: user.name ?? undefined,
-  }, {
-    retryDelaysMs: [],
-    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
-  });
+  console.info("[studio] segment-image-edit: sending job request", JSON.stringify({
+    imageAssetId,
+    imageFileName: normalizedFileName,
+    imageMimeType: normalizedMimeType,
+    projectId: normalizedProjectId,
+    segmentIndex: normalizedSegmentIndex,
+    externalUserId,
+  }));
+  let payload: AdsflowSegmentAiPhotoJobCreateResponse;
+  try {
+    payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-image-edit/jobs", {
+      admin_token: env.adsflowAdminToken,
+      credit_cost: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
+      external_user_id: externalUserId,
+      image_asset_id: imageAssetId,
+      image_mime_type: normalizedMimeType,
+      image_original_name: normalizedFileName,
+      language: normalizedLanguage,
+      project_id: normalizedProjectId,
+      prompt: upstreamPrompt,
+      segment_index: normalizedSegmentIndex,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+    }, {
+      retryDelaysMs: [],
+      timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+    });
+    console.info("[studio] segment-image-edit: job created successfully", JSON.stringify({ jobId: payload.job_id, status: payload.status }));
+  } catch (err) {
+    console.error("[studio] segment-image-edit: postAdsflowJson failed", err);
+    throw err;
+  }
 
   const jobId = String(payload.job_id ?? "").trim();
   if (!jobId) {
@@ -3561,10 +3609,20 @@ export async function getStudioSegmentImageEditJobStatus(
   const status = String(payload.status ?? "queued").trim() || "queued";
   const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
   const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+  const error = normalizeGenerationText(payload.error) || undefined;
+
+  if (error || status === "failed") {
+    console.warn("[studio] segment-image-edit job status has error", JSON.stringify({
+      jobId: safeJobId,
+      status,
+      error,
+      payloadKeys: Object.keys(payload),
+    }));
+  }
 
   return {
     asset,
-    error: normalizeGenerationText(payload.error) || undefined,
+    error,
     jobId: safeJobId,
     profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
       rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
@@ -3773,30 +3831,45 @@ export async function createStudioSegmentAiVideoJob(
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const externalUserId = await resolveStudioExternalUserId(user);
-  const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
-    admin_token: env.adsflowAdminToken,
-    credit_cost: STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
-    external_user_id: externalUserId,
-    language: normalizedLanguage,
-    project_id: normalizedProjectId,
-    prompt: upstreamPrompt,
-    segment_index: normalizedSegmentIndex,
-    user_email: user.email ?? undefined,
-    user_name: user.name ?? undefined,
-  });
 
-  const jobId = String(payload.job_id ?? "").trim();
-  if (!jobId) {
-    throw new Error("AdsFlow did not return a segment AI video job id.");
+  // Same billing model as /api/web/segment-ai-photo/generate: debit via /api/web/credits/consume first so the
+  // amount matches STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST. Upstream previously debited a lower default (e.g. 3) from job creation alone.
+  const creditReservation = await consumeWorkspaceGenerationCredit(user, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, normalizedLanguage);
+
+  try {
+    const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
+      admin_token: env.adsflowAdminToken,
+      credit_cost: 0,
+      external_user_id: externalUserId,
+      language: normalizedLanguage,
+      project_id: normalizedProjectId,
+      prompt: upstreamPrompt,
+      segment_index: normalizedSegmentIndex,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+    });
+
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+      throw new Error("AdsFlow did not return a segment AI video job id.");
+    }
+
+    return {
+      jobId,
+      profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+        rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      }),
+      status: String(payload.status ?? "queued"),
+    };
+  } catch (error) {
+    try {
+      await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+    } catch (refundError) {
+      console.error("[studio] Failed to refund segment AI video credits", refundError);
+    }
+
+    throw error;
   }
-
-  return {
-    jobId,
-    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-    }),
-    status: String(payload.status ?? "queued"),
-  };
 }
 
 export async function createStudioSegmentPhotoAnimationJob(

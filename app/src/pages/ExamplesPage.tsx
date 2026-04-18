@@ -532,8 +532,8 @@ export function ExamplesPage({
                 <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
               </>
             ) : (
-              <button className="site-header__link route-button" type="button" onClick={onOpenSignin}>
-                Вход
+              <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
+                Войти
               </button>
             )}
           </div>

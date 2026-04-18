@@ -60,6 +60,35 @@ const emptyStatus: AuthStatus = {
   telegramEnabled: false,
 };
 
+const getAuthBackendUnavailableMessage = () => {
+  if (typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+    return "Локальный auth backend недоступен. Для входа запустите API-сервер на 127.0.0.1:4175 командой `npm run dev` или `npm run preview` в папке `app/`.";
+  }
+
+  return "Сервис авторизации временно недоступен. Попробуйте позже.";
+};
+
+const resolveAuthActionErrorMessage = (error: unknown, fallback: string) => {
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (!message) {
+    return fallback;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  if (
+    normalizedMessage.includes("fetch") ||
+    normalizedMessage.includes("network") ||
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("502") ||
+    normalizedMessage.includes("503") ||
+    normalizedMessage.includes("504")
+  ) {
+    return getAuthBackendUnavailableMessage();
+  }
+
+  return message;
+};
+
 export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -68,6 +97,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [devEmailPreview, setDevEmailPreview] = useState<DevEmailPreview | null>(null);
+  const [authBackendIssue, setAuthBackendIssue] = useState<string | null>(null);
 
   const content = copy[mode];
   const isBusy = busyAction !== null;
@@ -91,11 +121,23 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     if (!isOpen) return;
 
     const fetchStatus = async () => {
-      const response = await fetch("/api/auth/status");
-      if (!response.ok) return;
+      try {
+        const response = await fetch("/api/auth/status");
+        if (!response.ok) {
+          const message = resolveAuthActionErrorMessage(new Error(String(response.status)), getAuthBackendUnavailableMessage());
+          setAuthBackendIssue(message);
+          setFeedback({ kind: "error", message });
+          return;
+        }
 
-      const data = (await response.json()) as AuthStatus;
-      setStatus(data);
+        const data = (await response.json()) as AuthStatus;
+        setStatus(data);
+        setAuthBackendIssue(null);
+      } catch (error) {
+        const message = resolveAuthActionErrorMessage(error, getAuthBackendUnavailableMessage());
+        setAuthBackendIssue(message);
+        setFeedback({ kind: "error", message });
+      }
     };
 
     void fetchStatus();
@@ -124,32 +166,48 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     setFeedback(null);
     setDevEmailPreview(null);
 
+    if (authBackendIssue) {
+      setFeedback({ kind: "error", message: authBackendIssue });
+      return;
+    }
+
     if (mode === "signup") {
       setBusyAction("signup");
+      try {
+        const { error } = await authClient.signUp.email({
+          callbackURL,
+          email,
+          name,
+          password,
+        });
 
-      const { error } = await authClient.signUp.email({
-        callbackURL,
-        email,
-        name,
-        password,
-      });
+        if (error) {
+          setFeedback({
+            kind: "error",
+            message: resolveAuthActionErrorMessage(error, "Не удалось создать аккаунт."),
+          });
+          setBusyAction(null);
+          return;
+        }
 
-      if (error) {
-        setFeedback({ kind: "error", message: error.message ?? "Не удалось создать аккаунт." });
+        setFeedback({
+          kind: "success",
+          message:
+            status.mailMode === "smtp"
+              ? "Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам». После подтверждения аккаунт будет активирован."
+              : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
+        });
+
+        if (status.mailMode === "ethereal") {
+          await loadDevEmailPreview();
+        }
+      } catch (error) {
+        setFeedback({
+          kind: "error",
+          message: resolveAuthActionErrorMessage(error, "Не удалось создать аккаунт."),
+        });
         setBusyAction(null);
         return;
-      }
-
-      setFeedback({
-        kind: "success",
-        message:
-          status.mailMode === "smtp"
-            ? "Аккаунт создан. Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам»."
-            : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
-      });
-
-      if (status.mailMode === "ethereal") {
-        await loadDevEmailPreview();
       }
 
       setBusyAction(null);
@@ -157,35 +215,44 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     }
 
     setBusyAction("signin");
-
-    const { error } = await authClient.signIn.email(
-      {
-        callbackURL,
-        email,
-        password,
-        rememberMe: true,
-      },
-      {
-        onSuccess: () => {
-          onClose();
-          onSignedIn();
+    try {
+      const { error } = await authClient.signIn.email(
+        {
+          callbackURL,
+          email,
+          password,
+          rememberMe: true,
         },
-      },
-    );
+        {
+          onSuccess: () => {
+            onClose();
+            onSignedIn();
+          },
+        },
+      );
 
-    if (error) {
-      if (error.status === 403) {
-        setFeedback({
-          kind: "info",
-          message: "Почта еще не подтверждена. Отправьте письмо повторно и завершите верификацию.",
-        });
+      if (error) {
+        if (error.status === 403) {
+          setFeedback({
+            kind: "info",
+            message: "Почта еще не подтверждена. Отправьте письмо повторно и завершите верификацию.",
+          });
 
-        if (status.mailMode === "ethereal") {
-          await loadDevEmailPreview();
+          if (status.mailMode === "ethereal") {
+            await loadDevEmailPreview();
+          }
+        } else {
+          setFeedback({
+            kind: "error",
+            message: resolveAuthActionErrorMessage(error, "Не удалось войти в аккаунт."),
+          });
         }
-      } else {
-        setFeedback({ kind: "error", message: error.message ?? "Не удалось войти в аккаунт." });
       }
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: resolveAuthActionErrorMessage(error, "Не удалось войти в аккаунт."),
+      });
     }
 
     setBusyAction(null);
@@ -194,14 +261,30 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
   const handleGoogleSignIn = async () => {
     setBusyAction("google");
     setFeedback(null);
+    if (authBackendIssue) {
+      setFeedback({ kind: "error", message: authBackendIssue });
+      setBusyAction(null);
+      return;
+    }
 
-    const { error } = await authClient.signIn.social({
-      callbackURL,
-      provider: "google",
-    });
+    try {
+      const { error } = await authClient.signIn.social({
+        callbackURL,
+        provider: "google",
+      });
 
-    if (error) {
-      setFeedback({ kind: "error", message: error.message ?? "Не удалось запустить вход через Google." });
+      if (error) {
+        setFeedback({
+          kind: "error",
+          message: resolveAuthActionErrorMessage(error, "Не удалось запустить вход через Google."),
+        });
+        setBusyAction(null);
+      }
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: resolveAuthActionErrorMessage(error, "Не удалось запустить вход через Google."),
+      });
       setBusyAction(null);
     }
   };
@@ -235,7 +318,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
           <button
             className="signup-social__button route-button"
             type="button"
-            disabled={!status.googleEnabled || isBusy}
+            disabled={!status.googleEnabled || isBusy || Boolean(authBackendIssue)}
             onClick={handleGoogleSignIn}
           >
             <span className="signup-social__icon signup-social__icon--google" aria-hidden="true">
@@ -309,7 +392,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
           <button
             className={`btn ${mode === "signin" ? "signup-form__submit--dark" : "btn--primary"} signup-form__submit route-button`}
             type="submit"
-            disabled={isBusy}
+            disabled={isBusy || Boolean(authBackendIssue)}
           >
             {busyAction === "signup" || busyAction === "signin" ? "Подождите..." : content.submit}
           </button>

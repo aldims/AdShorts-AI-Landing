@@ -121,7 +121,7 @@ export const env = {
     redisUrl: trim(process.env.REDIS_URL),
     disableBackgroundWarming: toBoolean(process.env.DISABLE_BACKGROUND_WARMING, false),
     upstreamBootstrapTimeoutMs: toNumber(process.env.UPSTREAM_BOOTSTRAP_TIMEOUT_MS, 5_500),
-    upstreamProjectsTimeoutMs: toNumber(process.env.UPSTREAM_PROJECTS_TIMEOUT_MS, 5_500),
+    upstreamProjectsTimeoutMs: toNumber(process.env.UPSTREAM_PROJECTS_TIMEOUT_MS, 12_000),
     upstreamProbeTimeoutMs: toNumber(process.env.UPSTREAM_PROBE_TIMEOUT_MS, 1_800),
     upstreamProxyTimeoutMs: toNumber(process.env.UPSTREAM_PROXY_TIMEOUT_MS, 8_000),
     upstreamPlaybackPreparationTimeoutMs: toNumber(process.env.UPSTREAM_PLAYBACK_PREPARATION_TIMEOUT_MS, 60_000),

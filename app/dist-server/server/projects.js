@@ -203,6 +203,7 @@ const fetchBootstrapPayload = async (user, externalUserId) => {
         language: "ru",
         referral_source: "landing_site",
         user_email: user.email ?? undefined,
+        user_email_verified: user.emailVerified === true,
         user_name: user.name ?? undefined,
     }, upstreamPolicies.adsflowBootstrap, {
         endpoint: "workspace.bootstrap",
@@ -221,6 +222,10 @@ const fetchBootstrapPayload = async (user, externalUserId) => {
         remoteUserId,
     };
 };
+const createWorkspaceBootstrapFallbackPayload = () => ({
+    latest_generation: null,
+    remoteUserId: null,
+});
 const getWorkspaceProjectFetchLimit = (deletedProjectsCount) => Math.max(MAX_PROJECTS, Math.min(MAX_PROJECTS + Math.max(0, Math.trunc(deletedProjectsCount || 0)), MAX_PROJECT_FETCH_LIMIT));
 const fetchAdminVideos = async (userId, limit = MAX_PROJECTS) => {
     const requestedLimit = Math.max(1, Math.min(Math.trunc(limit || MAX_PROJECTS), MAX_PROJECT_FETCH_LIMIT));
@@ -588,7 +593,13 @@ const isWorkspaceProjectDeleted = (project, deletedProjects) => deletedProjects.
 });
 const loadWorkspaceProjects = async (user, externalUserId) => {
     const [bootstrapPayload, deletedProjects] = await Promise.all([
-        fetchBootstrapPayload(user, externalUserId),
+        fetchBootstrapPayload(user, externalUserId).catch((error) => {
+            console.warn("[workspace] Failed to load workspace bootstrap from AdsFlow, using local fallbacks only", {
+                error: error instanceof Error ? error.message : "Unknown workspace bootstrap error.",
+                externalUserId,
+            });
+            return createWorkspaceBootstrapFallbackPayload();
+        }),
         listWorkspaceDeletedProjects(user).catch((error) => {
             console.error("[workspace] Failed to load deleted workspace projects", error);
             return [];

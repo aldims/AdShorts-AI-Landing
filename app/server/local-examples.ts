@@ -16,8 +16,17 @@ type LocalExamplesUser = {
   name?: string | null;
 };
 
-type LegacyLocalExampleGoal = "ad_product" | "cinematic" | "entertainment" | "wow_fantasy";
-export type LocalExampleGoal = "stories" | "fun" | "ads" | "fantasy" | "interesting" | "effects";
+type LegacyLocalExampleGoal =
+  | "ad_product"
+  | "cinematic"
+  | "entertainment"
+  | "wow_fantasy"
+  | "stories"
+  | "fun"
+  | "fantasy"
+  | "interesting"
+  | "effects";
+export type LocalExampleGoal = "ads" | "growth" | "expert";
 
 export type LocalExampleClientItem = {
   goal: LocalExampleGoal;
@@ -65,21 +74,21 @@ const normalizeLocalExampleGoal = (value: unknown): LocalExampleGoal | null => {
   const normalized = normalizeText(value);
 
   switch (normalized) {
-    case "stories":
-    case "fun":
     case "ads":
-    case "fantasy":
-    case "interesting":
-    case "effects":
-      return normalized;
     case "ad_product":
       return "ads";
+    case "growth":
+    case "stories":
+    case "fun":
+    case "fantasy":
+    case "effects":
     case "cinematic":
-      return "stories";
-    case "entertainment":
-      return "interesting";
     case "wow_fantasy":
-      return "fantasy";
+      return "growth";
+    case "expert":
+    case "interesting":
+    case "entertainment":
+      return "expert";
     default:
       return null;
   }
@@ -402,7 +411,7 @@ const buildLocalExampleVideoUrl = (exampleId: string) => {
 };
 
 const toLocalExampleClientItem = (item: StoredLocalExampleItem): LocalExampleClientItem => ({
-  goal: normalizeLocalExampleGoal(item.goal) ?? "interesting",
+  goal: normalizeLocalExampleGoal(item.goal) ?? "growth",
   id: item.id,
   isLocal: true,
   promptHint: buildLocalExamplePromptHint(item.prompt),
