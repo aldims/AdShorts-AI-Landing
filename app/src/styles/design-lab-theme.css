@@ -26871,9 +26871,9 @@ html, body {
 
 .section--landing-refine.lp-section .landing-refine-board {
   width: min(820px, calc(100vw - 32px)) !important;
-  justify-self: end;
-  transform: translateX(clamp(8px, 2.2vw, 36px)) scale(0.75) !important;
-  transform-origin: center right;
+  justify-self: center;
+  transform: translateX(clamp(72px, 8vw, 132px)) scale(0.7875) !important;
+  transform-origin: center center;
 }
 
 .section--landing-refine.lp-section .landing-refine-board__shell--linear {
@@ -26905,8 +26905,8 @@ html, body {
   z-index: 3;
   justify-items: center;
   overflow: visible;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.08) 7%, rgba(0, 0, 0, 0.62) 21%, #000 34%, #000 66%, rgba(0, 0, 0, 0.62) 79%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.08) 7%, rgba(0, 0, 0, 0.62) 21%, #000 34%, #000 66%, rgba(0, 0, 0, 0.62) 79%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
 }
 
 .section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__stage {
@@ -26923,8 +26923,35 @@ html, body {
   overflow: visible;
 }
 
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__carousel::after {
+  content: none !important;
+}
+
 .section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-side {
   opacity: 0.52;
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active .studio-segment-editor__card-media {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active .landing-refine-board__editor-shot {
+  background: transparent !important;
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active .landing-refine-board__editor-shot-image {
+  opacity: 0.78;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 48%, #000 0%, #000 58%, rgba(0, 0, 0, 0.72) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse at 50% 48%, #000 0%, #000 58%, rgba(0, 0, 0, 0.72) 76%, transparent 100%);
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active .landing-refine-board__editor-shot::before {
+  background: linear-gradient(180deg, transparent 0%, rgba(6, 8, 14, 0.46) 100%);
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active .studio-segment-editor__card-overlay {
+  background: linear-gradient(180deg, rgba(3, 6, 12, 0) 0%, rgba(3, 6, 12, 0.36) 62%, rgba(3, 6, 12, 0.58) 100%) !important;
 }
 
 .section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__arrow {
@@ -26949,6 +26976,10 @@ html, body {
     0 0 0 4px rgba(94, 106, 210, 0.1),
     0 28px 60px -20px rgba(44, 50, 120, 0.54),
     0 0 32px rgba(94, 106, 210, 0.14) !important;
+}
+
+.section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-active.is-visual-edited .studio-segment-editor__card-media {
+  box-shadow: none !important;
 }
 
 .section--landing-refine.lp-section .landing-refine-board__shell--linear .studio-segment-editor__card.is-side.is-left .studio-segment-editor__card-media {
@@ -27005,9 +27036,9 @@ html, body {
 @media (max-width: 1180px) {
   .section--landing-refine.lp-section .landing-refine-board {
     width: min(900px, 100%) !important;
-    justify-self: end;
-    transform: translateX(clamp(8px, 2.2vw, 28px)) scale(0.75) !important;
-    transform-origin: center right;
+    justify-self: center;
+    transform: translateX(clamp(32px, 8vw, 86px)) scale(0.7875) !important;
+    transform-origin: center center;
   }
 }
 
