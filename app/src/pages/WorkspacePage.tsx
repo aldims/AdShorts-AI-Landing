@@ -2349,6 +2349,8 @@ const createStudioObjectUrl = (file: Blob) => {
   return URL.createObjectURL(file);
 };
 
+const buildWorkspaceMediaAssetProxyUrl = (assetId: number) => `/api/workspace/media-assets/${Math.trunc(assetId)}`;
+
 const revokeStudioObjectUrl = (value: string | null | undefined) => {
   if (typeof URL === "undefined") {
     return;
@@ -2363,8 +2365,8 @@ const revokeStudioObjectUrl = (value: string | null | undefined) => {
 const getStudioCustomAssetPreviewUrl = (
   asset:
     | Pick<StudioBrandLogoFile, "dataUrl" | "objectUrl">
-    | Pick<StudioCustomMusicFile, "dataUrl" | "objectUrl">
-    | Pick<StudioCustomVideoFile, "dataUrl" | "objectUrl" | "remoteUrl">
+    | Pick<StudioCustomMusicFile, "assetId" | "dataUrl" | "objectUrl">
+    | Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "objectUrl" | "remoteUrl">
     | null
     | undefined,
 ) => {
@@ -2382,7 +2384,16 @@ const getStudioCustomAssetPreviewUrl = (
     typeof (asset as { remoteUrl?: unknown } | null | undefined)?.remoteUrl === "string"
       ? String((asset as { remoteUrl?: string }).remoteUrl).trim()
       : "";
-  return remoteUrl || null;
+  if (remoteUrl) {
+    return remoteUrl;
+  }
+
+  const assetId =
+    Number.isFinite(Number((asset as { assetId?: unknown } | null | undefined)?.assetId)) &&
+    Number((asset as { assetId?: unknown } | null | undefined)?.assetId) > 0
+      ? Math.trunc(Number((asset as { assetId?: unknown }).assetId))
+      : null;
+  return assetId ? buildWorkspaceMediaAssetProxyUrl(assetId) : null;
 };
 
 const getStudioCustomAssetPosterUrl = (
@@ -2407,11 +2418,15 @@ const getWorkspaceAiVideoPreferredPosterUrl = (
   asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
 ) => {
   const assetPosterUrl = getStudioCustomAssetPosterUrl(asset);
+  if (!assetPosterUrl || isStudioSegmentAiVideoPosterUrl(assetPosterUrl)) {
+    return null;
+  }
+
   if (assetPosterUrl && getWorkspaceSegmentStillPreviewUrls(segment).includes(assetPosterUrl)) {
     return null;
   }
 
-  return assetPosterUrl || null;
+  return assetPosterUrl;
 };
 
 const getWorkspacePhotoAnimationSourcePosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
@@ -2499,13 +2514,35 @@ type StudioDirectMediaUploadResponse = {
   error?: string;
 };
 
+type StudioDirectMediaUploadSession = {
+  assetId: number;
+  method: string;
+  mimeType: string;
+  uploadHeaders: Record<string, string>;
+  uploadUrl: string;
+};
+
+const STUDIO_DIRECT_MEDIA_UPLOAD_TIMEOUT_MS = 90_000;
+
 const getStudioDirectUploadAssetId = (payload: StudioDirectMediaUploadPayload | null | undefined) => {
   const rawAssetId = payload?.asset?.assetId ?? payload?.asset?.id;
   const numeric = Number(rawAssetId);
   return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : null;
 };
 
-const uploadStudioMediaFileToStorage = async (
+const createStudioDirectUploadTimeoutController = (timeoutMs: number) => {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  return {
+    clear: () => globalThis.clearTimeout(timeoutId),
+    signal: controller.signal,
+  };
+};
+
+const initializeStudioMediaFileUpload = async (
   file: File,
   options: {
     fileName: string;
@@ -2554,15 +2591,51 @@ const uploadStudioMediaFileToStorage = async (
     uploadHeaders["content-type"] = mimeType;
   }
 
-  const uploadResponse = await fetch(uploadUrl, {
-    body: file,
-    headers: uploadHeaders,
+  return {
+    assetId,
     method: String(initPayload.data.upload?.method ?? "PUT").trim() || "PUT",
-  });
-  if (!uploadResponse.ok) {
-    throw new Error(`Storage upload failed (${uploadResponse.status}).`);
-  }
+    mimeType,
+    uploadHeaders,
+    uploadUrl,
+  } satisfies StudioDirectMediaUploadSession;
+};
 
+const uploadStudioMediaFileViaDirectSession = async (
+  file: File,
+  session: StudioDirectMediaUploadSession,
+) => {
+  const timeout = createStudioDirectUploadTimeoutController(STUDIO_DIRECT_MEDIA_UPLOAD_TIMEOUT_MS);
+
+  try {
+    const uploadResponse = await fetch(session.uploadUrl, {
+      body: file,
+      headers: session.uploadHeaders,
+      method: session.method,
+      signal: timeout.signal,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(`Storage upload failed (${uploadResponse.status}).`);
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Загрузка файла заняла слишком много времени. Попробуйте еще раз.");
+    }
+
+    throw error;
+  } finally {
+    timeout.clear();
+  }
+};
+
+const completeStudioMediaFileUpload = async (
+  assetId: number,
+  options: {
+    language: StudioLanguage;
+    projectId?: number | null;
+    role: string;
+    segmentIndex?: number | null;
+  },
+) => {
   const completeResponse = await fetch("/api/studio/media-upload/complete", {
     method: "POST",
     headers: {
@@ -2582,6 +2655,24 @@ const uploadStudioMediaFileToStorage = async (
   }
 
   return getStudioDirectUploadAssetId(completePayload.data) ?? assetId;
+};
+
+const uploadStudioMediaFileToStorage = async (
+  file: File,
+  options: {
+    fileName: string;
+    kind: string;
+    language: StudioLanguage;
+    mediaType: "audio" | "photo" | "video";
+    mimeType?: string | null;
+    projectId?: number | null;
+    role: string;
+    segmentIndex?: number | null;
+  },
+) => {
+  const session = await initializeStudioMediaFileUpload(file, options);
+  await uploadStudioMediaFileViaDirectSession(file, session);
+  return completeStudioMediaFileUpload(session.assetId, options);
 };
 
 const ensureStudioUploadedAssetId = async (
@@ -4302,7 +4393,12 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
   const libraryItemKey = typeof value.libraryItemKey === "string" ? value.libraryItemKey.trim() : "";
   const mimeType = typeof value.mimeType === "string" && value.mimeType.trim() ? value.mimeType : "application/octet-stream";
   const posterUrl = typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
-  const remoteUrl = typeof value.remoteUrl === "string" ? value.remoteUrl.trim() : "";
+  const remoteUrl =
+    typeof value.remoteUrl === "string" && value.remoteUrl.trim()
+      ? value.remoteUrl.trim()
+      : assetId
+        ? buildWorkspaceMediaAssetProxyUrl(assetId)
+        : "";
   const source =
     value.source === "media-library" || value.source === "upload"
       ? value.source
@@ -4696,6 +4792,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       segment.photoAnimationSourceAsset ||
       normalizedVideoAction === "original" ||
       normalizedVideoAction === "ai" ||
+      normalizedVideoAction === "custom" ||
       normalizedVideoAction === "ai_photo" ||
       normalizedVideoAction === "image_edit" ||
       normalizedVideoAction === "photo_animation"
@@ -5042,7 +5139,9 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   }
 
   if (segment.videoAction === "custom" && getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
-    return segment.currentExternalPreviewUrl ?? segment.originalExternalPreviewUrl ?? null;
+    // A user-selected custom video must not inherit the previous segment still frame.
+    // Otherwise the carousel keeps showing the old photo until playback starts.
+    return null;
   }
 
   return null;
@@ -8097,7 +8196,6 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   useEffect(() => {
     if (
       previewKind !== "video" ||
-      preload === "none" ||
       normalizedPosterUrl ||
       normalizedFallbackPosterUrl ||
       !canCapturePosterInBrowser(resolvedPreviewUrl)
@@ -8106,6 +8204,8 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     }
 
     let cancelled = false;
+    // Idle carousel cards keep generated videos unmounted until playback is requested.
+    // Trigger poster capture anyway so they can render a real preview frame instead of a dark placeholder.
     void captureProjectPosterOnce(resolvedPreviewUrl, {
       cacheKey: segmentPreviewPosterCacheKey,
       useSegmentPreviewTime: true,
@@ -12870,6 +12970,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     nextDraft: WorkspaceSegmentEditorDraftSession,
     options?: { initialSegmentIndex?: number; initialSegmentMode?: "array" | "route" },
   ) => {
+    const nextDraftSnapshot = cloneWorkspaceSegmentEditorDraftSession(nextDraft);
     logSegmentEditorDiagnostics(
       "client.segment-editor.open-draft",
       {
@@ -12877,12 +12978,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       },
       {
         includeOrder: true,
-        draft: nextDraft,
+        draft: nextDraftSnapshot,
       },
     );
     lockSegmentEditorPromptHeight();
     resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
-    setSegmentEditorDraft(cloneWorkspaceSegmentEditorDraftSession(nextDraft));
+    segmentEditorDraftRef.current = nextDraftSnapshot;
+    setSegmentEditorDraft(nextDraftSnapshot);
     setSegmentEditorVideoError(null);
     segmentAiPhotoRunRef.current += 1;
     setIsSegmentEditorGeneratingAiPhoto(false);
@@ -12891,8 +12993,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorUpscalingImageSegmentIndex(null);
     const boundedSegmentIndex =
       options?.initialSegmentMode === "route"
-        ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraft, options?.initialSegmentIndex ?? 0)
-        : Math.max(0, Math.min(options?.initialSegmentIndex ?? 0, Math.max(0, nextDraft.segments.length - 1)));
+        ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraftSnapshot, options?.initialSegmentIndex ?? 0)
+        : Math.max(0, Math.min(options?.initialSegmentIndex ?? 0, Math.max(0, nextDraftSnapshot.segments.length - 1)));
     setActiveSegmentIndex(boundedSegmentIndex);
     setCreateMode("segment-editor");
   };
@@ -13431,10 +13533,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   ) => {
     setSegmentEditorDraft((currentDraft) => {
       if (!currentDraft) {
+        segmentEditorDraftRef.current = currentDraft;
         return currentDraft;
       }
 
-      return updater(currentDraft);
+      const nextDraft = updater(currentDraft);
+      segmentEditorDraftRef.current = nextDraft;
+      return nextDraft;
     });
   };
 
@@ -14019,18 +14124,100 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       cancelPendingSegmentImageEditRun(targetSegmentIndex);
       cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
       cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
+      const mimeType = getWorkspaceSegmentCustomVisualMimeType(file);
+      const objectUrl = createStudioObjectUrl(file);
+
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
         ...segment,
         customVideo: {
           file,
           fileName: file.name,
           fileSize: file.size,
-          mimeType: getWorkspaceSegmentCustomVisualMimeType(file),
-          objectUrl: createStudioObjectUrl(file),
+          mimeType,
+          objectUrl,
           source: "upload",
         },
         videoAction: "custom",
       }));
+
+      const projectId = segmentEditorDraft?.projectId;
+      if (projectId) {
+        void (async () => {
+          try {
+            const uploadSession = await initializeStudioMediaFileUpload(file, {
+              fileName: file.name,
+              kind: "segment_source",
+              language: selectedLanguage,
+              mediaType: isWorkspaceSegmentImageFile(file.name) ? "photo" : "video",
+              mimeType,
+              projectId,
+              role: "segment_source",
+              segmentIndex: targetSegmentIndex,
+            });
+
+            updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
+              if (segment.customVideo?.objectUrl !== objectUrl) {
+                return segment;
+              }
+
+              return {
+                ...segment,
+                customVideo: {
+                  ...segment.customVideo,
+                  assetId: uploadSession.assetId,
+                  remoteUrl: buildWorkspaceMediaAssetProxyUrl(uploadSession.assetId),
+                },
+              };
+            });
+
+            await uploadStudioMediaFileViaDirectSession(file, uploadSession);
+            const assetId = await completeStudioMediaFileUpload(uploadSession.assetId, {
+              language: selectedLanguage,
+              projectId,
+              role: "segment_source",
+              segmentIndex: targetSegmentIndex,
+            });
+
+            updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
+              if (segment.customVideo?.objectUrl !== objectUrl) {
+                return segment;
+              }
+
+              return {
+                ...segment,
+                customVideo: {
+                  ...segment.customVideo,
+                  assetId,
+                  remoteUrl: buildWorkspaceMediaAssetProxyUrl(assetId),
+                },
+              };
+            });
+          } catch (error) {
+            let shouldReportError = false;
+            updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
+              if (segment.customVideo?.objectUrl !== objectUrl) {
+                return segment;
+              }
+
+              shouldReportError = true;
+              return {
+                ...segment,
+                customVideo: {
+                  ...segment.customVideo,
+                  assetId: undefined,
+                  remoteUrl: undefined,
+                },
+              };
+            });
+            if (shouldReportError) {
+              setSegmentEditorVideoError(
+                error instanceof Error ? error.message : "Не удалось загрузить файл сегмента.",
+              );
+            }
+          }
+        })();
+      }
+
       return true;
     } catch (error) {
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось подготовить файл сегмента.");

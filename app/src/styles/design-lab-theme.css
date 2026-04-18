@@ -12701,25 +12701,61 @@ textarea {
 .agency-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(7, 9, 12, 0.68);
-  backdrop-filter: blur(14px);
+  background:
+    radial-gradient(circle at 24% 18%, rgba(95, 102, 246, 0.1), transparent 30%),
+    radial-gradient(circle at 78% 22%, rgba(191, 90, 242, 0.08), transparent 26%),
+    rgba(7, 8, 18, 0.74);
+  backdrop-filter: blur(16px) saturate(118%);
+  -webkit-backdrop-filter: blur(16px) saturate(118%);
 }
 
 .agency-modal__panel {
   position: relative;
   z-index: 1;
-  width: min(560px, 100%);
-  padding: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  isolation: isolate;
+  overflow: hidden;
+  width: min(580px, 100%);
+  padding: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 32px;
-  color: white;
+  color: var(--text-primary);
   background:
-    radial-gradient(circle at top left, rgba(216, 255, 114, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)),
-    rgba(12, 14, 18, 0.92);
+    radial-gradient(circle at 14% 2%, rgba(95, 102, 246, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(10, 12, 24, 0.92);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 40px 90px rgba(0, 0, 0, 0.36);
+    0 0 0 1px rgba(95, 102, 246, 0.08),
+    0 28px 90px rgba(4, 6, 18, 0.72),
+    0 0 72px -40px rgba(95, 102, 246, 0.2);
+}
+
+.agency-modal__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.12) 0%, transparent 24%, transparent 78%, rgba(95, 102, 246, 0.08) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 42%);
+  opacity: 0.62;
+  pointer-events: none;
+}
+
+.agency-modal__panel::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+.agency-modal__panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .agency-modal__close {
@@ -12728,27 +12764,34 @@ textarea {
   right: 18px;
   width: 38px;
   height: 38px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.76);
-  background: rgba(255, 255, 255, 0.08);
+  color: rgba(229, 232, 255, 0.8);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   transition:
+    border-color 0.2s ease,
     background-color 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .agency-modal__close:hover {
   color: white;
-  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(160, 168, 255, 0.2);
+  background: rgba(95, 102, 246, 0.12);
+  box-shadow: 0 14px 30px rgba(95, 102, 246, 0.14);
+  transform: translateY(-1px);
 }
 
 .agency-modal__eyebrow {
   margin: 0 0 10px;
-  color: rgba(216, 255, 114, 0.9);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  color: rgba(180, 188, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
@@ -12758,18 +12801,21 @@ textarea {
   font-size: clamp(1.8rem, 3vw, 2.3rem);
   line-height: 1.08;
   letter-spacing: -0.04em;
+  max-width: 11ch;
+  color: #ffffff;
+  text-shadow: 0 10px 24px rgba(95, 102, 246, 0.08);
 }
 
 .agency-modal__lead,
 .agency-modal__meta {
   margin: 14px 0 0;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(214, 219, 255, 0.64);
 }
 
 .agency-form {
   display: grid;
-  gap: 14px;
-  margin-top: 24px;
+  gap: 16px;
+  margin-top: 28px;
 }
 
 .agency-field {
@@ -12778,18 +12824,27 @@ textarea {
 }
 
 .agency-field span {
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 0.92rem;
+  color: rgba(220, 224, 255, 0.78);
+  font-size: 0.9rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .agency-field input,
 .agency-field textarea {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
-  color: white;
-  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+    rgba(9, 11, 21, 0.52);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .agency-field input {
@@ -12805,19 +12860,40 @@ textarea {
 
 .agency-field input::placeholder,
 .agency-field textarea::placeholder {
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(204, 210, 255, 0.34);
 }
 
 .agency-field input:focus,
 .agency-field textarea:focus {
   outline: none;
-  border-color: rgba(216, 255, 114, 0.46);
-  box-shadow: 0 0 0 4px rgba(216, 255, 114, 0.12);
+  border-color: rgba(120, 130, 255, 0.36);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04)),
+    rgba(11, 13, 24, 0.68);
+  box-shadow:
+    0 0 0 4px rgba(95, 102, 246, 0.1),
+    0 14px 32px rgba(95, 102, 246, 0.12);
+  transform: translateY(-1px);
 }
 
 .agency-form__submit {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
+  border: 1px solid rgba(120, 130, 255, 0.34) !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, rgba(95, 102, 246, 0.82) 0%, rgba(139, 92, 246, 0.72) 100%) !important;
+  box-shadow: 0 16px 34px rgba(95, 102, 246, 0.22) !important;
+}
+
+.agency-form__submit:hover:not(:disabled) {
+  border-color: rgba(160, 168, 255, 0.44) !important;
+  background: linear-gradient(135deg, rgba(105, 112, 255, 0.88) 0%, rgba(149, 102, 255, 0.78) 100%) !important;
+  box-shadow: 0 18px 38px rgba(95, 102, 246, 0.28) !important;
+}
+
+.agency-form__submit:disabled {
+  box-shadow: none !important;
+  opacity: 0.84;
 }
 
 .agency-modal__status {
@@ -12827,6 +12903,9 @@ textarea {
   border-radius: 18px;
   font-size: 0.92rem;
   line-height: 1.45;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .agency-modal__status--success {
