@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +27,49 @@ dotenv.config({ path: envFile });
 
 const trim = (value: string | undefined) => value?.trim() || undefined;
 const resolveEnvFilePath = (value: string) => (isAbsolute(value) ? value : resolve(rootDir, value));
+const hasPlaceholderOpenRouterKey = (value: string | undefined) => {
+  const normalized = trim(value)?.toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized === "your_api_key" ||
+    normalized === "your-openrouter-api-key" ||
+    normalized === "openrouter_api_key" ||
+    normalized === "changeme" ||
+    normalized === "change-me" ||
+    normalized === "replace_me" ||
+    normalized === "replace-me" ||
+    normalized.includes("your_api") ||
+    normalized.includes("placeholder")
+  );
+};
+const applyPreferredOpenRouterEnv = (filePath: string) => {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const parsed = dotenv.parse(readFileSync(filePath));
+  const openRouterKeys = [
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_BASE_URL",
+    "OPENROUTER_MAIN_MODEL",
+    "OPENROUTER_FALLBACK_MODEL",
+  ] as const;
+
+  for (const key of openRouterKeys) {
+    const fileValue = trim(parsed[key]);
+    if (!fileValue) {
+      continue;
+    }
+
+    const currentValue = process.env[key];
+    if (!trim(currentValue) || (key === "OPENROUTER_API_KEY" && hasPlaceholderOpenRouterKey(currentValue))) {
+      process.env[key] = fileValue;
+    }
+  }
+};
 const loadSharedEnvFile = (configuredPath: string) => {
   const sharedEnvFile = resolveEnvFilePath(configuredPath);
   if (!existsSync(sharedEnvFile)) {
@@ -37,7 +80,10 @@ const loadSharedEnvFile = (configuredPath: string) => {
     path: sharedEnvFile,
     override: false,
   });
+  applyPreferredOpenRouterEnv(sharedEnvFile);
 };
+
+applyPreferredOpenRouterEnv(envFile);
 
 const sharedEnvFile = trim(process.env.ADSHORTS_SHARED_ENV_FILE);
 if (sharedEnvFile) {

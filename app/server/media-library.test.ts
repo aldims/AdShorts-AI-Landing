@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkspacePersistedMediaLibraryItems,
+  dedupeWorkspaceMediaLibraryPageItems,
   getWorkspaceMediaLibraryKindFromDurableAsset,
+  getWorkspaceMediaLibraryNextCursorForPage,
   getWorkspaceMediaLibrarySegmentPreviewUrl,
 } from "./media-library.js";
 import { buildWorkspaceMediaAssetRef } from "./media-assets.js";
+import { createWorkspaceMediaLibraryItem } from "../src/lib/workspaceMediaLibrary.js";
 import type { WorkspaceProject } from "./projects.js";
 import type { WorkspaceSegmentEditorSegment, WorkspaceSegmentEditorSession } from "./segment-editor.js";
 
@@ -57,15 +60,15 @@ const createPhotoSegment = (): WorkspaceSegmentEditorSegment => ({
     projectId: 42,
     role: "segment_original",
     segmentIndex: 0,
-    sourceKind: "upload",
+    sourceKind: "ai_generated",
     status: "ready",
-    storageKey: "users/1/projects/42/source/101-image.jpg",
+    storageKey: "users/1/projects/42/generated/101-image.jpg",
   },
   originalExternalPlaybackUrl: "https://cdn.example.com/segments/0-original.jpg",
   originalExternalPreviewUrl: "https://cdn.example.com/segments/0-original-preview.jpg",
   originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=42&segmentIndex=0&source=original&delivery=playback&v=original",
   originalPreviewUrl: "/api/workspace/project-segment-video?projectId=42&segmentIndex=0&source=original&delivery=preview&v=original",
-  originalSourceKind: "upload",
+  originalSourceKind: "ai_generated",
   speechDuration: null,
   speechEndTime: null,
   speechStartTime: null,
@@ -78,6 +81,7 @@ const project: WorkspaceProject & { adId: number } = {
   adId: 42,
   createdAt: "2026-04-09T00:00:00.000Z",
   description: "",
+  editedFromProjectAdId: null,
   finalAsset: null,
   generatedAt: "2026-04-09T00:00:00.000Z",
   hashtags: [],
@@ -89,6 +93,7 @@ const project: WorkspaceProject & { adId: number } = {
   status: "ready",
   title: "Test project",
   updatedAt: "2026-04-09T00:00:00.000Z",
+  versionRootProjectAdId: null,
   videoFallbackUrl: null,
   videoUrl: null,
   youtubePublication: null,
@@ -134,6 +139,24 @@ describe("media library photo sources", () => {
     });
   });
 
+  it("does not expose deleted segment assets even when preview urls are still present", () => {
+    const segment = createPhotoSegment();
+    segment.originalAsset = {
+      ...segment.originalAsset,
+      lifecycle: "deleted",
+      status: "deleted",
+    };
+    segment.currentAsset = {
+      ...segment.currentAsset,
+      lifecycle: "deleted",
+      status: "deleted",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
+  });
+
   it("skips ai_photo items when a photo only has non-renderable external sources", () => {
     const segment = createPhotoSegment();
     segment.originalExternalPreviewUrl = null;
@@ -161,6 +184,45 @@ describe("media library photo sources", () => {
     expect(items).toHaveLength(0);
   });
 
+  it("does not store uploaded original photos as ai_photo items", () => {
+    const segment = createPhotoSegment();
+    segment.currentAsset = null;
+    segment.currentExternalPlaybackUrl = null;
+    segment.currentExternalPreviewUrl = null;
+    segment.currentPlaybackUrl = null;
+    segment.currentPreviewUrl = null;
+    segment.currentSourceKind = "unknown";
+    segment.originalAsset = {
+      ...segment.originalAsset!,
+      sourceKind: "upload",
+      storageKey: "users/1/projects/42/source/101-image.jpg",
+    };
+    segment.originalSourceKind = "upload";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
+  });
+
+  it("keeps ai animations created from uploaded photos without exposing the uploaded photo", () => {
+    const segment = createPhotoSegment();
+    segment.originalAsset = {
+      ...segment.originalAsset!,
+      sourceKind: "upload",
+      storageKey: "users/1/projects/42/source/101-image.jpg",
+    };
+    segment.originalSourceKind = "upload";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      assetId: 202,
+      kind: "photo_animation",
+      previewKind: "video",
+    });
+  });
+
   it("does not create a photo animation item when only the original external image differs from equal proxy media", () => {
     const segment = createPhotoSegment();
     segment.currentExternalPreviewUrl = null;
@@ -175,6 +237,39 @@ describe("media library photo sources", () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.kind).toBe("ai_photo");
     expect(items[0]?.assetId).toBe(101);
+  });
+
+  it("does not store stock current videos as ai_video items", () => {
+    const segment = createPhotoSegment();
+    segment.mediaType = "video";
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      kind: "stock_video",
+      role: "stock_video",
+      sourceKind: "stock",
+    };
+    segment.currentSourceKind = "stock";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
+  });
+
+  it("does not store generic rendered segment cache without ai source markers", () => {
+    const segment = createPhotoSegment();
+    segment.mediaType = "video";
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      kind: "rendered_segment",
+      role: "rendered_segment",
+      sourceKind: null,
+      storageKey: "users/1/assets/404/rendered_segment/404-rendered_segment_cache_stock_0.mp4",
+    };
+    segment.currentSourceKind = "unknown";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
   });
 
   it("classifies a video segment rendered from a photo source as photo animation", () => {
@@ -236,6 +331,72 @@ describe("media library durable assets", () => {
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("ai_video");
   });
 
+  it("uses durable library_kind to classify photo animations", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/786/download",
+      id: 786,
+      kind: "rendered_segment",
+      library_kind: "photo_animation",
+      media_type: "video",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 0,
+      source_kind: "ai_generated",
+      status: "ready",
+      storage_key: "users/1/assets/786/rendered_segment/786-rendered_segment_cache_ai_0.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("photo_animation");
+  });
+
+  it("keeps durable source_ai_image assets in the media library even when source_kind is missing", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/783/download",
+      id: 783,
+      kind: "source_ai_image",
+      media_type: "photo",
+      project_id: 42,
+      role: "source_ai_image",
+      segment_index: 0,
+      status: "ready",
+      storage_key: "users/1/assets/783/source_ai_image/783-source_media_0.png",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("ai_photo");
+  });
+
+  it("keeps durable rendered_segment assets in the media library even when source_kind is missing", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/784/download",
+      id: 784,
+      kind: "rendered_segment",
+      media_type: "video",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 0,
+      status: "ready",
+      storage_key: "users/1/assets/784/rendered_segment/784-wavespeed_wan_0.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("ai_video");
+  });
+
+  it("does not keep generic durable rendered_segment cache without ai source markers", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/785/download",
+      id: 785,
+      kind: "rendered_segment",
+      media_type: "video",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 0,
+      status: "ready",
+      storage_key: "users/1/assets/785/rendered_segment/785-rendered_segment_cache_stock_0.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+
   it("does not expose source helper uploads as durable media library items", () => {
     const sourceUpload = buildWorkspaceMediaAssetRef({
       download_path: "/api/media/779/download",
@@ -260,5 +421,96 @@ describe("media library durable assets", () => {
 
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(sourceUpload)).toBeNull();
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(segmentImage)).toBeNull();
+  });
+
+  it("does not expose stock durable assets as ai media library items", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/781/download",
+      id: 781,
+      kind: "segment_current",
+      media_type: "video",
+      project_id: 42,
+      role: "segment_current",
+      segment_index: 0,
+      source_kind: "stock",
+      status: "ready",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+
+  it("does not expose custom uploaded durable assets as ai media library items", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/782/download",
+      id: 782,
+      kind: "custom_video",
+      media_type: "video",
+      project_id: 42,
+      role: "custom_video",
+      segment_index: 0,
+      source_kind: "upload",
+      status: "ready",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+});
+
+describe("media library pagination", () => {
+  it("does not return a non-advancing cursor for empty pages", () => {
+    expect(
+      getWorkspaceMediaLibraryNextCursorForPage({
+        hasAdditionalItems: true,
+        offset: 24,
+        pageItemCount: 0,
+      }),
+    ).toBeNull();
+  });
+
+  it("returns the next offset when the page includes items", () => {
+    expect(
+      getWorkspaceMediaLibraryNextCursorForPage({
+        hasAdditionalItems: true,
+        offset: 24,
+        pageItemCount: 12,
+      }),
+    ).toBe("36");
+  });
+});
+
+describe("media library dedupe", () => {
+  it("collapses durable ai_video duplicates when a more specific photo_animation item exists for the same asset", () => {
+    const durableVideo = createWorkspaceMediaLibraryItem({
+      assetId: 900,
+      createdAt: "2026-04-09T00:00:00.000Z",
+      downloadName: "video.mp4",
+      downloadUrl: "/api/workspace/media-assets/900",
+      kind: "ai_video",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/900/poster",
+      previewUrl: "/api/workspace/media-assets/900",
+      projectId: 42,
+      projectTitle: "Проект #42",
+      segmentIndex: 0,
+      segmentListIndex: 0,
+      source: "persisted",
+    });
+    const animation = createWorkspaceMediaLibraryItem({
+      assetId: 900,
+      createdAt: "2026-04-09T00:01:00.000Z",
+      downloadName: "animation.mp4",
+      downloadUrl: "/api/workspace/project-segment-video?projectId=42&segmentIndex=0&source=current&delivery=playback",
+      kind: "photo_animation",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/100",
+      previewUrl: "/api/workspace/project-segment-video?projectId=42&segmentIndex=0&source=current&delivery=preview",
+      projectId: 42,
+      projectTitle: "Project",
+      segmentIndex: 0,
+      segmentListIndex: 0,
+      source: "persisted",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryPageItems([durableVideo, animation])).toEqual([animation]);
   });
 });

@@ -78,6 +78,23 @@ if (!String(mergedEnv.OPENROUTER_API_KEY ?? "").trim()) {
     `Missing OPENROUTER_API_KEY for staging backend. Set it in ${appEnvFile} or point ADSHORTS_SHARED_ENV_FILE to a shared secrets file.`,
   );
 }
+
+const normalizedOpenRouterApiKey = String(mergedEnv.OPENROUTER_API_KEY ?? "").trim().toLowerCase();
+if (
+  normalizedOpenRouterApiKey === "your_api_key" ||
+  normalizedOpenRouterApiKey === "your-openrouter-api-key" ||
+  normalizedOpenRouterApiKey === "openrouter_api_key" ||
+  normalizedOpenRouterApiKey === "changeme" ||
+  normalizedOpenRouterApiKey === "change-me" ||
+  normalizedOpenRouterApiKey === "replace_me" ||
+  normalizedOpenRouterApiKey === "replace-me" ||
+  normalizedOpenRouterApiKey.includes("your_api") ||
+  normalizedOpenRouterApiKey.includes("placeholder")
+) {
+  throw new Error(
+    `OPENROUTER_API_KEY looks like a placeholder value in ${appEnvFile}. Set a real OpenRouter secret before deploy.`,
+  );
+}
 NODE
 
 echo "[staging] migrate workspace owner keys"

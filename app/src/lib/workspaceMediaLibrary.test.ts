@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryAssetIdentityKey,
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
+  getWorkspaceMediaLibraryResolvedDedupeKey,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
 } from "./workspaceMediaLibrary";
@@ -55,6 +57,32 @@ describe("workspace media library display identity", () => {
     );
   });
 
+  it("keeps photo animations deduplicated by poster even when asset ids differ", () => {
+    const firstItem = createMediaLibraryItem({
+      assetId: 101,
+      kind: "photo_animation",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/source-photo.jpg",
+      previewUrl: "/api/workspace/project-segment-video?projectId=10&segmentIndex=0&source=current&delivery=preview&v=one",
+    });
+    const secondItem = createMediaLibraryItem({
+      assetId: 202,
+      itemKey: "item-2",
+      projectId: 2,
+      kind: "photo_animation",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/source-photo.jpg",
+      previewUrl: "/api/workspace/project-segment-video?projectId=11&segmentIndex=4&source=current&delivery=preview&v=two",
+    });
+
+    expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(firstItem)).toBe(
+      getWorkspaceMediaLibraryDisplayAssetIdentityKey(secondItem),
+    );
+    expect(getWorkspaceMediaLibraryResolvedDedupeKey(firstItem)).toBe(
+      getWorkspaceMediaLibraryResolvedDedupeKey(secondItem),
+    );
+  });
+
   it("keeps photo identity based on the photo preview itself", () => {
     const item = createMediaLibraryItem({
       kind: "ai_photo",
@@ -99,5 +127,98 @@ describe("workspace media library display identity", () => {
 
     expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(firstItem)).toBe("asset:101");
     expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(secondItem)).toBe("asset:101");
+  });
+
+  it("collapses a stale photo animation draft with a persisted ai video for the same segment", () => {
+    const items = dedupeWorkspaceMediaLibraryItems([
+      createMediaLibraryItem({
+        assetId: null,
+        itemKey: "live-photo-animation",
+        kind: "photo_animation",
+        previewKind: "video",
+        previewPosterUrl: "https://cdn.example.com/source-photo.jpg",
+        previewUrl: "/api/studio/segment-photo-animation/jobs/job-1/video",
+        projectId: 3031,
+        segmentIndex: 1,
+        source: "live",
+      }),
+      createMediaLibraryItem({
+        assetId: 903,
+        itemKey: "persisted-ai-video",
+        kind: "ai_video",
+        previewKind: "video",
+        previewPosterUrl: null,
+        previewUrl: "/api/workspace/project-segment-video?projectId=3031&segmentIndex=1&source=current&delivery=preview&v=ready",
+        projectId: 3031,
+        segmentIndex: 1,
+        source: "persisted",
+      }),
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.itemKey).toBe("live-photo-animation");
+    expect(items[0]?.kind).toBe("photo_animation");
+  });
+
+  it("keeps a fresh ai video when a stale photo animation still exists for the same segment", () => {
+    const items = dedupeWorkspaceMediaLibraryItems([
+      createMediaLibraryItem({
+        assetId: null,
+        createdAt: 2_000,
+        itemKey: "live-ai-video",
+        kind: "ai_video",
+        previewKind: "video",
+        previewPosterUrl: null,
+        previewUrl: "/api/studio/segment-ai-video/jobs/job-2/video",
+        projectId: 3031,
+        segmentIndex: 1,
+        source: "live",
+      }),
+      createMediaLibraryItem({
+        assetId: 904,
+        createdAt: 1_000,
+        itemKey: "persisted-photo-animation",
+        kind: "photo_animation",
+        previewKind: "video",
+        previewPosterUrl: "https://cdn.example.com/stale-source-photo.jpg",
+        previewUrl: "/api/workspace/project-segment-video?projectId=3031&segmentIndex=1&source=current&delivery=preview&v=stale",
+        projectId: 3031,
+        segmentIndex: 1,
+        source: "persisted",
+      }),
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.itemKey).toBe("live-ai-video");
+    expect(items[0]?.kind).toBe("ai_video");
+  });
+
+  it("does not collapse two persisted video generations from the same segment when their modes differ", () => {
+    const items = dedupeWorkspaceMediaLibraryItems([
+      createMediaLibraryItem({
+        assetId: 111,
+        itemKey: "persisted-ai-video",
+        kind: "ai_video",
+        previewKind: "video",
+        previewPosterUrl: null,
+        previewUrl: "/api/workspace/project-segment-video?projectId=55&segmentIndex=2&source=current&delivery=preview&v=one",
+        projectId: 55,
+        segmentIndex: 2,
+        source: "persisted",
+      }),
+      createMediaLibraryItem({
+        assetId: 222,
+        itemKey: "persisted-photo-animation",
+        kind: "photo_animation",
+        previewKind: "video",
+        previewPosterUrl: "https://cdn.example.com/another-source-photo.jpg",
+        previewUrl: "/api/workspace/project-segment-video?projectId=55&segmentIndex=2&source=current&delivery=preview&v=two",
+        projectId: 55,
+        segmentIndex: 2,
+        source: "persisted",
+      }),
+    ]);
+
+    expect(items).toHaveLength(2);
   });
 });

@@ -153,11 +153,65 @@ export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
   WorkspaceMediaLibraryItem,
   "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
 >) =>
-  typeof item.assetId === "number" && item.assetId > 0
-    ? `asset:${item.assetId}`
-    : item.kind === "photo_animation" && item.previewPosterUrl
+  item.kind === "photo_animation" && item.previewPosterUrl
     ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
-    : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
+    : typeof item.assetId === "number" && item.assetId > 0
+      ? `asset:${item.assetId}`
+      : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
+
+export const getWorkspaceMediaLibraryResolvedDedupeKey = (item: Pick<
+  WorkspaceMediaLibraryItem,
+  "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
+>) => `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
+
+const getWorkspaceMediaLibraryVideoModeSlotKey = (item: Pick<
+  WorkspaceMediaLibraryItem,
+  "kind" | "projectId" | "segmentIndex"
+>) =>
+  item.kind === "ai_video" || item.kind === "photo_animation"
+    ? `project:${item.projectId}:segment:${item.segmentIndex}:generated-video`
+    : null;
+
+const shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision = (
+  left: Pick<WorkspaceMediaLibraryItem, "kind" | "source">,
+  right: Pick<WorkspaceMediaLibraryItem, "kind" | "source">,
+) =>
+  left.kind !== right.kind &&
+  (left.kind === "ai_video" || left.kind === "photo_animation") &&
+  (right.kind === "ai_video" || right.kind === "photo_animation") &&
+  (left.source !== "persisted" || right.source !== "persisted");
+
+export const dedupeWorkspaceMediaLibraryItems = (items: WorkspaceMediaLibraryItem[]) => {
+  const itemsByPrimaryKey = new Map<string, WorkspaceMediaLibraryItem>();
+  const primaryKeysByVideoModeSlot = new Map<string, string>();
+
+  for (const item of items) {
+    const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
+    const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
+    const existingPrimaryKey = videoModeSlotKey ? primaryKeysByVideoModeSlot.get(videoModeSlotKey) ?? null : null;
+
+    if (existingPrimaryKey) {
+      const existingItem = itemsByPrimaryKey.get(existingPrimaryKey) ?? null;
+
+      if (
+        existingItem &&
+        shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision(existingItem, item)
+      ) {
+        continue;
+      }
+    }
+
+    if (!itemsByPrimaryKey.has(primaryKey)) {
+      itemsByPrimaryKey.set(primaryKey, item);
+
+      if (videoModeSlotKey && !primaryKeysByVideoModeSlot.has(videoModeSlotKey)) {
+        primaryKeysByVideoModeSlot.set(videoModeSlotKey, primaryKey);
+      }
+    }
+  }
+
+  return Array.from(itemsByPrimaryKey.values());
+};
 
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options: {
   assetId?: number | null;

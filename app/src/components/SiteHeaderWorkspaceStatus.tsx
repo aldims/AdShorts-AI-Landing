@@ -4,6 +4,7 @@ type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
 } | null;
 
 type Props = {
@@ -58,7 +59,7 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
         ? `Активен до ${formatExpiryDate(expiryDate)}. Осталось ${daysLeft} дн.`
         : `Активен до ${formatExpiryDate(expiryDate)}.`;
   } else if (hasPaidPlan) {
-    tooltipText = "Тариф активен. Дата окончания уточняется.";
+    tooltipText = "Тариф активен.";
   }
 
   return (

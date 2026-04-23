@@ -67,6 +67,8 @@ type AdsflowProjectMediaEntryPayload = {
   media_type?: string | null;
   mime_type?: string | null;
   preview?: string | null;
+  rendered_animation_mode?: string | null;
+  rendered_via_i2v?: boolean | string | number | null;
   role?: string | null;
   source?: string | null;
   source_kind?: string | null;
@@ -76,14 +78,20 @@ type AdsflowProjectMediaEntryPayload = {
 
 type AdsflowProjectGenerationSettingsPayload = {
   background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  custom_music_asset_id?: number | string | null;
+  custom_music_original_name?: string | null;
   current_rendered_segments?: AdsflowProjectMediaEntryPayload[] | null;
+  music_asset_id?: number | string | null;
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
 
 type AdsflowProjectDetailsResponse = {
   background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  custom_music_asset_id?: number | string | null;
   generation_settings?: AdsflowProjectGenerationSettingsPayload | null;
+  music_asset_id?: number | string | null;
+  music_name?: string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
@@ -127,6 +135,8 @@ export type WorkspaceSegmentEditorSegment = {
 };
 
 export type WorkspaceSegmentEditorSession = {
+  customMusicAssetId: number | null;
+  customMusicFileName: string;
   description: string;
   musicType: string;
   projectId: number;
@@ -169,6 +179,28 @@ const normalizeMediaType = (value: unknown): WorkspaceSegmentEditorMediaType =>
 const normalizeUrl = (value: unknown) => {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || null;
+};
+
+export const resolveWorkspaceSegmentEditorCustomMusicMetadata = (
+  projectDetailsPayload?: AdsflowProjectDetailsResponse | null,
+) => {
+  const generationSettings =
+    projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+      ? projectDetailsPayload.generation_settings
+      : null;
+
+  return {
+    customMusicAssetId:
+      normalizeInteger(
+        generationSettings?.custom_music_asset_id ??
+          generationSettings?.music_asset_id ??
+          projectDetailsPayload?.custom_music_asset_id ??
+          projectDetailsPayload?.music_asset_id,
+      ) ?? null,
+    customMusicFileName: normalizeText(
+      generationSettings?.custom_music_original_name ?? projectDetailsPayload?.music_name,
+    ),
+  };
 };
 
 const isWorkspaceRenderableMediaUrl = (value: string | null | undefined) => {
@@ -267,6 +299,11 @@ const detectWorkspaceSegmentSourceKind = (
   entry?: AdsflowProjectMediaEntryPayload | null,
 ): WorkspaceSegmentEditorSourceKind => {
   const source = normalizeText(entry?.source_kind || entry?.source).toLowerCase();
+  const renderedAnimationMode = normalizeText(entry?.rendered_animation_mode).toLowerCase();
+  const renderedViaI2v =
+    entry?.rendered_via_i2v === true ||
+    entry?.rendered_via_i2v === 1 ||
+    normalizeText(entry?.rendered_via_i2v).toLowerCase() === "true";
   if (source === "ai_generated" || source === "ai" || source === "generated") {
     return "ai_generated";
   }
@@ -298,11 +335,12 @@ const detectWorkspaceSegmentSourceKind = (
 
   if (
     identifier.startsWith("aiimg_") ||
+    renderedViaI2v ||
+    renderedAnimationMode === "i2v" ||
     localPath.includes("wavespeed") ||
     localPath.includes("deapi") ||
     storageKey.includes("wavespeed") ||
-    storageKey.includes("deapi") ||
-    storageKey.includes("rendered_segment")
+    storageKey.includes("deapi")
   ) {
     return "ai_generated";
   }
@@ -354,6 +392,7 @@ const buildSegmentMediaAssetFromEntry = (
   entry: AdsflowProjectMediaEntryPayload | null | undefined,
   projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>,
   options?: {
+    projectMediaLoaded?: boolean;
     projectId?: number | null;
     role?: string | null;
     segmentIndex?: number | null;
@@ -361,6 +400,10 @@ const buildSegmentMediaAssetFromEntry = (
 ) => {
   const assetId = getProjectMediaEntryAssetId(entry);
   const linkedAsset = assetId !== null ? projectMediaByAssetId.get(assetId) ?? null : null;
+  const hasMissingProjectAssetReference =
+    assetId !== null &&
+    !linkedAsset &&
+    Boolean(options?.projectMediaLoaded);
   const entryKind = normalizeText(entry?.kind || entry?.asset_kind) || options?.role || null;
   const entryRole = normalizeText(entry?.role || entry?.link_role) || options?.role || entryKind;
   const entryAsset = buildWorkspaceMediaAssetRef({
@@ -375,11 +418,68 @@ const buildSegmentMediaAssetFromEntry = (
     role: entryRole,
     segment_index: options?.segmentIndex ?? null,
     source_kind: detectWorkspaceSegmentSourceKind(entry),
-    status: linkedAsset?.status ?? "ready",
+    status: linkedAsset?.status ?? (hasMissingProjectAssetReference ? "deleted" : null),
     storage_key: entry?.storage_key ?? null,
   });
 
   return mergeWorkspaceMediaAssetRefs(linkedAsset, entryAsset);
+};
+
+const isWorkspacePhotoMediaAssetRef = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  const mediaType = normalizeText(asset?.mediaType).toLowerCase();
+  const mimeType = normalizeText(asset?.mimeType).toLowerCase();
+  return mediaType === "photo" || mediaType === "image" || mimeType.startsWith("image/");
+};
+
+const isWorkspaceVideoMediaAssetRef = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  const mediaType = normalizeText(asset?.mediaType).toLowerCase();
+  const mimeType = normalizeText(asset?.mimeType).toLowerCase();
+  return mediaType === "video" || mimeType.startsWith("video/");
+};
+
+const isProjectMediaEntryPhoto = (entry: AdsflowProjectMediaEntryPayload | null | undefined) => {
+  const mediaType = normalizeText(entry?.media_type).toLowerCase();
+  const mimeType = normalizeText(entry?.mime_type).toLowerCase();
+  return mediaType === "photo" || mediaType === "image" || mimeType.startsWith("image/");
+};
+
+const isProjectMediaEntryVideo = (entry: AdsflowProjectMediaEntryPayload | null | undefined) => {
+  const mediaType = normalizeText(entry?.media_type).toLowerCase();
+  const mimeType = normalizeText(entry?.mime_type).toLowerCase();
+  return mediaType === "video" || mimeType.startsWith("video/");
+};
+
+const resolveWorkspaceSegmentMediaType = (options: {
+  currentAsset: WorkspaceMediaAssetRef | null;
+  currentEntry: AdsflowProjectMediaEntryPayload | null;
+  originalAsset: WorkspaceMediaAssetRef | null;
+  originalEntry: AdsflowProjectMediaEntryPayload | null;
+  payloadMediaType: unknown;
+}): WorkspaceSegmentEditorMediaType => {
+  const payloadMediaType = normalizeMediaType(options.payloadMediaType);
+  if (payloadMediaType === "photo") {
+    return "photo";
+  }
+
+  if (
+    isWorkspaceVideoMediaAssetRef(options.currentAsset) ||
+    isWorkspaceVideoMediaAssetRef(options.originalAsset) ||
+    isProjectMediaEntryVideo(options.currentEntry) ||
+    isProjectMediaEntryVideo(options.originalEntry)
+  ) {
+    return "video";
+  }
+
+  if (
+    isWorkspacePhotoMediaAssetRef(options.currentAsset) ||
+    isWorkspacePhotoMediaAssetRef(options.originalAsset) ||
+    isProjectMediaEntryPhoto(options.currentEntry) ||
+    isProjectMediaEntryPhoto(options.originalEntry)
+  ) {
+    return "photo";
+  }
+
+  return payloadMediaType;
 };
 
 const normalizeSpeechWords = (value: unknown): WorkspaceSegmentEditorSpeechWord[] => {
@@ -612,11 +712,12 @@ const buildWorkspaceSegmentEditorVideoUrl = (
   return `${previewUrl.pathname}${previewUrl.search}`;
 };
 
-const buildWorkspaceSegmentEditorSegment = (
+export const buildWorkspaceSegmentEditorSegment = (
   projectId: number,
   payload: AdsflowSegmentEditorSegmentPayload,
   projectSources?: {
     currentEntries: AdsflowProjectMediaEntryPayload[];
+    projectMediaLoaded?: boolean;
     projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>;
     originalEntries: AdsflowProjectMediaEntryPayload[];
   },
@@ -641,15 +742,26 @@ const buildWorkspaceSegmentEditorSegment = (
   const hasOriginalVideo = Boolean(originalVideoMarker);
   const currentEntry = projectSources?.currentEntries[index] ?? null;
   const originalEntry = projectSources?.originalEntries[index] ?? currentEntry;
-  const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectSources?.projectMediaByAssetId ?? new Map(), {
+  const projectMediaByAssetId = projectSources?.projectMediaByAssetId ?? new Map();
+  const projectMediaLoaded = Boolean(projectSources?.projectMediaLoaded);
+  const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectMediaByAssetId, {
     projectId,
+    projectMediaLoaded,
     role: "segment_current",
     segmentIndex: index,
   });
-  const originalAsset = buildSegmentMediaAssetFromEntry(originalEntry, projectSources?.projectMediaByAssetId ?? new Map(), {
+  const originalAsset = buildSegmentMediaAssetFromEntry(originalEntry, projectMediaByAssetId, {
     projectId,
+    projectMediaLoaded,
     role: "segment_original",
     segmentIndex: index,
+  });
+  const resolvedMediaType = resolveWorkspaceSegmentMediaType({
+    currentAsset,
+    currentEntry,
+    originalAsset,
+    originalEntry,
+    payloadMediaType: payload.media_type,
   });
 
   return {
@@ -666,7 +778,7 @@ const buildWorkspaceSegmentEditorSegment = (
     duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
     endTime,
     index,
-    mediaType: normalizeMediaType(payload.media_type),
+    mediaType: resolvedMediaType,
     originalAsset,
     originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),
     originalExternalPreviewUrl: getProjectMediaEntryPreviewUrl(originalEntry),
@@ -691,7 +803,7 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
   assertAdsflowConfigured();
   let payload: AdsflowSegmentEditorResponse;
   let projectDetailsPayload: AdsflowProjectDetailsResponse | null = null;
-  let projectMediaEnvelope = { assets: [], projectId } as Awaited<ReturnType<typeof fetchProjectMediaEnvelope>>;
+  let projectMediaEnvelope = { assets: [], loaded: false, projectId } as Awaited<ReturnType<typeof fetchProjectMediaEnvelope>>;
 
   try {
     const [segmentEditorPayload, projectPayload, mediaEnvelope] = await Promise.all([
@@ -724,7 +836,7 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
       }),
       fetchProjectMediaEnvelope(projectId).catch((error) => {
         console.warn(`[segment-editor] Failed to load durable media for project ${projectId}`, error);
-        return { assets: [], projectId };
+        return { assets: [], loaded: false, projectId };
       }),
     ]);
 
@@ -756,6 +868,7 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
     .map((segment) =>
       buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment, {
         currentEntries,
+        projectMediaLoaded: projectMediaEnvelope.loaded,
         projectMediaByAssetId,
         originalEntries,
       }),
@@ -774,7 +887,11 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
     );
   }
 
+  const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+
   return {
+    customMusicAssetId: customMusicMetadata.customMusicAssetId,
+    customMusicFileName: customMusicMetadata.customMusicFileName,
     description: normalizeText(payload.description),
     musicType: normalizeText(payload.music_type),
     projectId: normalizedProjectId,

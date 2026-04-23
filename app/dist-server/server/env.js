@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -19,6 +19,43 @@ const dataDir = join(rootDir, "data");
 dotenv.config({ path: envFile });
 const trim = (value) => value?.trim() || undefined;
 const resolveEnvFilePath = (value) => (isAbsolute(value) ? value : resolve(rootDir, value));
+const hasPlaceholderOpenRouterKey = (value) => {
+    const normalized = trim(value)?.toLowerCase();
+    if (!normalized) {
+        return false;
+    }
+    return (normalized === "your_api_key" ||
+        normalized === "your-openrouter-api-key" ||
+        normalized === "openrouter_api_key" ||
+        normalized === "changeme" ||
+        normalized === "change-me" ||
+        normalized === "replace_me" ||
+        normalized === "replace-me" ||
+        normalized.includes("your_api") ||
+        normalized.includes("placeholder"));
+};
+const applyPreferredOpenRouterEnv = (filePath) => {
+    if (!existsSync(filePath)) {
+        return;
+    }
+    const parsed = dotenv.parse(readFileSync(filePath));
+    const openRouterKeys = [
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL",
+        "OPENROUTER_MAIN_MODEL",
+        "OPENROUTER_FALLBACK_MODEL",
+    ];
+    for (const key of openRouterKeys) {
+        const fileValue = trim(parsed[key]);
+        if (!fileValue) {
+            continue;
+        }
+        const currentValue = process.env[key];
+        if (!trim(currentValue) || (key === "OPENROUTER_API_KEY" && hasPlaceholderOpenRouterKey(currentValue))) {
+            process.env[key] = fileValue;
+        }
+    }
+};
 const loadSharedEnvFile = (configuredPath) => {
     const sharedEnvFile = resolveEnvFilePath(configuredPath);
     if (!existsSync(sharedEnvFile)) {
@@ -28,7 +65,9 @@ const loadSharedEnvFile = (configuredPath) => {
         path: sharedEnvFile,
         override: false,
     });
+    applyPreferredOpenRouterEnv(sharedEnvFile);
 };
+applyPreferredOpenRouterEnv(envFile);
 const sharedEnvFile = trim(process.env.ADSHORTS_SHARED_ENV_FILE);
 if (sharedEnvFile) {
     loadSharedEnvFile(sharedEnvFile);

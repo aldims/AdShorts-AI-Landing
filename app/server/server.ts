@@ -54,6 +54,10 @@ import {
   ensureWorkspaceVideoPoster,
   getWorkspaceVideoPosterCacheKey,
 } from "./project-posters.js";
+import {
+  ensureWorkspaceMediaAssetPlayback,
+  getWorkspaceMediaAssetPlaybackCacheKey,
+} from "./media-asset-playback.js";
 import { verifyTelegramLogin, getTelegramUserProfile, type TelegramLoginData } from "./telegram.js";
 import {
   createStudioSegmentAiPhotoJob,
@@ -84,7 +88,7 @@ import {
   WorkspaceCreditLimitError,
 } from "./studio.js";
 import { getStudioVoicePreview } from "./voice-preview.js";
-import { CheckoutConfigError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
+import { CheckoutConfigError, CheckoutProductUnavailableError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
 import {
   deleteLocalExample,
   getLocalExampleVideoAsset,
@@ -93,6 +97,7 @@ import {
   saveLocalExample,
   type LocalExampleGoal,
 } from "./local-examples.js";
+import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import {
   AgencyContactValidationError,
@@ -190,11 +195,13 @@ const isVideoProxyStreamAbortLikeError = (error: unknown) => {
       name === "AbortError" ||
       code === "ABORT_ERR" ||
       code === "ECONNRESET" ||
+      code === "ERR_STREAM_UNABLE_TO_PIPE" ||
       code === "ERR_STREAM_PREMATURE_CLOSE" ||
       code === "UND_ERR_ABORTED" ||
       code === "UND_ERR_SOCKET" ||
       message.includes("aborted") ||
       message.includes("terminated") ||
+      message.includes("closed or destroyed stream") ||
       message.includes("premature close") ||
       message.includes("econnreset")
     ) {
@@ -704,6 +711,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
     customVideoFileMimeType:
       getFormDataString(formData, "customVideoFileMimeType") || customVideoFile?.type?.trim() || "",
     customVideoFileName: getFormDataString(formData, "customVideoFileName") || customVideoFile?.name?.trim() || "",
+    editedFromProjectAdId: normalizeRequestPositiveInteger(getFormDataString(formData, "editedFromProjectAdId")),
     isRegeneration: getFormDataBoolean(formData, "isRegeneration", false),
     language: getFormDataString(formData, "language"),
     musicType: getFormDataString(formData, "musicType"),
@@ -713,6 +721,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
     subtitleColorId: getFormDataString(formData, "subtitleColorId"),
     subtitleEnabled: getFormDataBoolean(formData, "subtitleEnabled", true),
     subtitleStyleId: getFormDataString(formData, "subtitleStyleId"),
+    versionRootProjectAdId: normalizeRequestPositiveInteger(getFormDataString(formData, "versionRootProjectAdId")),
     videoMode: getFormDataString(formData, "videoMode"),
     voiceEnabled: getFormDataBoolean(formData, "voiceEnabled", true),
     voiceId: getFormDataString(formData, "voiceId"),
@@ -916,6 +925,7 @@ app.post("/api/examples/local", express.json(), async (req, res) => {
   const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
   const videoUrl = typeof req.body?.videoUrl === "string" ? req.body.videoUrl.trim() : "";
   const sourceId = typeof req.body?.sourceId === "string" ? req.body.sourceId.trim() : "";
+  const prefillSettings = normalizeExamplePrefillStudioSettings(req.body?.prefillSettings);
 
   if (!isLocalExampleGoal(goal)) {
     res.status(400).json({ error: "Local example section is invalid." });
@@ -930,6 +940,7 @@ app.post("/api/examples/local", express.json(), async (req, res) => {
   try {
     const item = await saveLocalExample(session.user, {
       goal,
+      prefillSettings,
       prompt,
       sourceId: sourceId || null,
       title,
@@ -1535,6 +1546,7 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
     const preview = await getStudioVoicePreview({
       language: typeof req.query.language === "string" ? req.query.language : null,
       voiceId: typeof req.query.voiceId === "string" ? req.query.voiceId : null,
+      previewText: typeof req.query.text === "string" ? req.query.text : null,
     });
 
     res.status(200);
@@ -1632,6 +1644,65 @@ const proxyWorkspaceMediaAssetDownload = async (req: express.Request, res: expre
 
 app.get("/api/media/:assetId/download", proxyWorkspaceMediaAssetDownload);
 app.get("/api/workspace/media-assets/:assetId", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId/playback", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = Number(req.params.assetId ?? 0);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    res.status(400).json({ error: "Asset id is required." });
+    return;
+  }
+
+  const safeAssetId = Math.trunc(assetId);
+  let fallbackTarget: URL | null = null;
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    fallbackTarget = buildAdsflowUrl(`/api/media/${safeAssetId}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+    });
+
+    const asset = await ensureWorkspaceMediaAssetPlayback({
+      assetId: safeAssetId,
+      cacheKey: getWorkspaceMediaAssetPlaybackCacheKey({
+        assetId: safeAssetId,
+        externalUserId,
+        targetUrl: fallbackTarget,
+      }),
+      upstreamUrl: fallbackTarget,
+    });
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.type(asset.contentType || "video/mp4");
+    res.sendFile(asset.absolutePath);
+  } catch (error) {
+    if (fallbackTarget) {
+      console.warn("[workspace] Falling back to direct media asset playback", {
+        assetId: safeAssetId,
+        error: getServerErrorMessage(error, "Failed to prepare media asset playback cache."),
+      });
+      res.setHeader("Cache-Control", "private, max-age=600, stale-while-revalidate=60");
+      await proxyVideoResponse(req, res, fallbackTarget, "Failed to load media asset playback.");
+      return;
+    }
+
+    console.error("[workspace] Failed to load media asset playback cache", {
+      assetId: safeAssetId,
+      error: getServerErrorMessage(error, "Failed to load media asset playback."),
+    });
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to load media asset playback.",
+    });
+  }
+});
 
 app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
   const session = await auth.api.getSession({
@@ -1821,7 +1892,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
     const url = await getCheckoutUrl(productId, session.user);
     res.json({ data: { url } });
   } catch (error) {
-    const statusCode = error instanceof CheckoutConfigError ? 503 : 500;
+    const statusCode = error instanceof CheckoutProductUnavailableError ? 409 : error instanceof CheckoutConfigError ? 503 : 500;
     res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to prepare checkout.",
     });
@@ -2185,6 +2256,7 @@ app.post("/api/studio/generate", async (req, res) => {
         customVideoFileMimeType:
           typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "",
         customVideoFileName: typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "",
+        editedFromProjectAdId: normalizeRequestPositiveInteger(req.body?.editedFromProjectAdId),
         isRegeneration: Boolean(req.body?.isRegeneration),
         language: typeof req.body?.language === "string" ? req.body.language.trim() : "",
         musicType: typeof req.body?.musicType === "string" ? req.body.musicType.trim() : "",
@@ -2195,6 +2267,7 @@ app.post("/api/studio/generate", async (req, res) => {
         subtitleColorId: typeof req.body?.subtitleColorId === "string" ? req.body.subtitleColorId.trim() : "",
         subtitleEnabled: req.body?.subtitleEnabled !== false,
         subtitleStyleId: typeof req.body?.subtitleStyleId === "string" ? req.body.subtitleStyleId.trim() : "",
+        versionRootProjectAdId: normalizeRequestPositiveInteger(req.body?.versionRootProjectAdId),
         videoMode: typeof req.body?.videoMode === "string" ? req.body.videoMode.trim() : "",
         voiceEnabled: req.body?.voiceEnabled !== false,
         voiceId: typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "",
@@ -2221,8 +2294,10 @@ app.post("/api/studio/generate", async (req, res) => {
   const customVideoFileMimeType = requestBody.customVideoFileMimeType;
   const customVideoFileDataUrl = requestBody.customVideoFileDataUrl;
   const customVideoAssetId = requestBody.customVideoAssetId;
+  const editedFromProjectAdId = requestBody.editedFromProjectAdId;
   const projectId = requestBody.projectId;
   const segmentEditor = requestBody.segmentEditor;
+  const versionRootProjectAdId = requestBody.versionRootProjectAdId;
 
   console.info("[studio] generate.brand-input", {
     brandLogoDataUrlLength: brandLogoFileDataUrl.length,
@@ -2255,6 +2330,7 @@ app.post("/api/studio/generate", async (req, res) => {
       customVideoAssetId,
       customVideoFileMimeType,
       customVideoFileName,
+      editedFromProjectAdId: editedFromProjectAdId ?? undefined,
       isRegeneration,
       language,
       musicType,
@@ -2263,6 +2339,7 @@ app.post("/api/studio/generate", async (req, res) => {
       subtitleEnabled,
       subtitleColorId,
       subtitleStyleId,
+      versionRootProjectAdId: versionRootProjectAdId ?? undefined,
       videoMode,
       voiceEnabled,
       voiceId,
@@ -2462,6 +2539,7 @@ app.post("/api/studio/segment-ai-photo/improve-prompt", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const mode = typeof req.body?.mode === "string" ? req.body.mode.trim() : "";
 
   if (!prompt) {
     res.status(400).json({ error: "Prompt is required." });
@@ -2469,7 +2547,7 @@ app.post("/api/studio/segment-ai-photo/improve-prompt", async (req, res) => {
   }
 
   try {
-    const result = await improveStudioSegmentAiPhotoPrompt(prompt, { language });
+    const result = await improveStudioSegmentAiPhotoPrompt(prompt, { language, mode });
     res.json({ data: result });
   } catch (error) {
     console.error("[studio] Failed to improve segment AI photo prompt", error);

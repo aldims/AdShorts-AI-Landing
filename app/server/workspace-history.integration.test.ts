@@ -188,4 +188,44 @@ describe("workspace owner key migration integration", () => {
       },
     ]);
   });
+
+  it("migrates lineage columns and preserves them across later upserts", async () => {
+    const historyModule = await import("./workspace-history.js");
+    const user = {
+      email: "aldima@mail.com",
+      id: "EZ1NwuqMeyTydVsu4DMrm6ZJxvYOnsU7",
+    };
+
+    await historyModule.saveWorkspaceGenerationHistory(user, {
+      description: "Edited version",
+      editedFromProjectAdId: 42,
+      jobId: "job-lineage",
+      prompt: "Prompt",
+      status: "queued",
+      title: "Version",
+      versionRootProjectAdId: 42,
+    });
+
+    const historyColumns = database
+      .prepare(`PRAGMA table_info(workspace_generation_history)`)
+      .all() as Array<{ name: string }>;
+    expect(historyColumns.some((column) => column.name === "edited_from_project_ad_id")).toBe(true);
+    expect(historyColumns.some((column) => column.name === "version_root_project_ad_id")).toBe(true);
+
+    await historyModule.saveWorkspaceGenerationHistory(user, {
+      adId: 77,
+      jobId: "job-lineage",
+      status: "done",
+      updatedAt: "2026-04-12T13:02:40.309Z",
+    });
+
+    const savedEntry = await historyModule.getWorkspaceGenerationHistoryEntry(user, "job-lineage");
+    expect(savedEntry).toMatchObject({
+      adId: 77,
+      editedFromProjectAdId: 42,
+      jobId: "job-lineage",
+      status: "done",
+      versionRootProjectAdId: 42,
+    });
+  });
 });

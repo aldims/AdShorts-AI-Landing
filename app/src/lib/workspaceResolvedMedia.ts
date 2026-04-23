@@ -88,17 +88,21 @@ export const resolveWorkspaceMediaSurface = (
     switch (input.context) {
       case "segment-carousel-card": {
         mountVideoWhenIdle = isPlaybackRequested || forceMountVideoWhenIdle;
-        preloadPolicy = isPlaybackRequested ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
+        preloadPolicy = isPlaybackRequested ? "auto" : forceMountVideoWhenIdle ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
         preferPosterFrame = !isPlaybackRequested;
         primePausedFrame = false;
         subtitleMode = "active-only";
         break;
       }
       case "segment-thumb": {
-        mountVideoWhenIdle = forceMountVideoWhenIdle;
+        const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
+        // Thumb previews must never stay blank while waiting for async poster capture.
+        // When no stable poster is available, mount the paused video directly so the
+        // browser can render a frame without requiring a page refresh.
+        mountVideoWhenIdle = forceMountVideoWhenIdle || !hasStablePosterFrame;
         preloadPolicy = mountVideoWhenIdle ? "metadata" : "none";
         preferPosterFrame = true;
-        primePausedFrame = false;
+        primePausedFrame = mountVideoWhenIdle;
         break;
       }
       case "segment-drag-ghost": {

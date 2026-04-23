@@ -16,6 +16,7 @@ export type WorkspaceMediaAssetRef = {
   expiresAt: string | null;
   isCurrent: boolean | null;
   kind: string | null;
+  libraryKind: string | null;
   lifecycle: WorkspaceMediaAssetLifecycle;
   mediaType: string | null;
   mimeType: string | null;
@@ -31,6 +32,7 @@ export type WorkspaceMediaAssetRef = {
 
 export type ProjectMediaEnvelope = {
   assets: WorkspaceMediaAssetRef[];
+  loaded: boolean;
   projectId: number;
 };
 
@@ -123,4 +125,3 @@ export const isWorkspaceMediaAssetReady = (asset: Pick<
   WorkspaceMediaAssetRef,
   "downloadPath" | "downloadUrl" | "lifecycle"
 >) => asset.lifecycle === "ready" && Boolean(normalizeText(asset.downloadPath) || normalizeText(asset.downloadUrl));
-

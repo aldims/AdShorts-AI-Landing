@@ -43,6 +43,7 @@ export const buildWorkspaceMediaAssetRef = (value) => {
     const downloadUrl = normalizeText(value.download_url) || null;
     const expiresAt = normalizeIsoString(value.expires_at);
     const kind = normalizeText(value.kind) || null;
+    const libraryKind = normalizeText(value.library_kind) || null;
     const mediaType = normalizeText(value.media_type) || null;
     const mimeType = normalizeText(value.mime_type) || null;
     const originalUrl = normalizeText(value.original_url) || null;
@@ -62,6 +63,7 @@ export const buildWorkspaceMediaAssetRef = (value) => {
         expiresAt,
         isCurrent,
         kind,
+        libraryKind,
         lifecycle: resolveWorkspaceMediaAssetLifecycle({
             deletedAt,
             downloadPath,
@@ -100,6 +102,7 @@ export const mergeWorkspaceMediaAssetRefs = (primary, fallback) => {
         expiresAt: primary.expiresAt ?? fallback.expiresAt,
         isCurrent: primary.isCurrent ?? fallback.isCurrent,
         kind: primary.kind ?? fallback.kind,
+        libraryKind: primary.libraryKind ?? fallback.libraryKind,
         lifecycle: primary.lifecycle !== "unavailable"
             ? primary.lifecycle
             : fallback.lifecycle,
@@ -135,6 +138,7 @@ export const fetchProjectMediaEnvelope = async (projectId) => {
     if (safeProjectId === null || safeProjectId <= 0) {
         return {
             assets: [],
+            loaded: false,
             projectId: Number(projectId) || 0,
         };
     }
@@ -159,6 +163,7 @@ export const fetchProjectMediaEnvelope = async (projectId) => {
         : [];
     return {
         assets,
+        loaded: Boolean(payload),
         projectId: normalizeInteger(payload?.project_id) ?? safeProjectId,
     };
 };

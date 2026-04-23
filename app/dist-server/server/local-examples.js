@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
 import { env } from "./env.js";
+import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { getWorkspaceProjectPlaybackAsset, getWorkspaceProjectVideoProxyTarget } from "./projects.js";
 import { getStudioVideoProxyTarget, getStudioVideoProxyTargetByPath } from "./studio.js";
 const LOCAL_EXAMPLES_ROOT_DIR = join(env.dataDir, "local-examples");
@@ -178,7 +179,7 @@ const inferLocalExampleVideoExtension = (contentType, url) => {
     }
     return ".mp4";
 };
-const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
+export const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
     const normalizedVideoUrl = normalizeText(videoUrl);
     if (!normalizedVideoUrl) {
         throw new Error("Video URL is required.");
@@ -195,6 +196,12 @@ const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
     }
     if (resolvedUrl.pathname.startsWith("/api/studio/video/")) {
         const jobId = decodeURIComponent(resolvedUrl.pathname.slice("/api/studio/video/".length));
+        return {
+            sourceUrl: await getStudioVideoProxyTarget(jobId, user),
+        };
+    }
+    if (resolvedUrl.pathname.startsWith("/api/studio/playback/")) {
+        const jobId = decodeURIComponent(resolvedUrl.pathname.slice("/api/studio/playback/".length));
         return {
             sourceUrl: await getStudioVideoProxyTarget(jobId, user),
         };
@@ -285,6 +292,7 @@ const toLocalExampleClientItem = (item) => ({
     goal: normalizeLocalExampleGoal(item.goal) ?? "growth",
     id: item.id,
     isLocal: true,
+    prefillSettings: normalizeExamplePrefillStudioSettings(item.prefillSettings),
     promptHint: buildLocalExamplePromptHint(item.prompt),
     seedPrompt: item.prompt,
     summary: buildLocalExampleSummary(item.prompt),
@@ -317,6 +325,7 @@ export const saveLocalExample = async (user, input) => {
     assertLocalExamplesAdmin(user);
     const ownerKey = LOCAL_EXAMPLES_SHARED_OWNER_KEY;
     const goal = normalizeLocalExampleGoal(input.goal);
+    const prefillSettings = normalizeExamplePrefillStudioSettings(input.prefillSettings);
     const prompt = normalizeText(input.prompt);
     const title = sanitizeLocalExampleTitle(input.title, prompt);
     const sourceId = normalizeText(input.sourceId) || null;
@@ -339,6 +348,7 @@ export const saveLocalExample = async (user, input) => {
         mediaContentType: downloadedVideo.contentType,
         mediaFileName: downloadedVideo.mediaFileName,
         ownerKey,
+        prefillSettings,
         prompt,
         sourceId,
         title,

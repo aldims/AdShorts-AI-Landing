@@ -95,6 +95,7 @@ export type WorkspaceProject = {
   adId: number | null;
   createdAt: string;
   description: string;
+  editedFromProjectAdId: number | null;
   finalAsset: WorkspaceMediaAssetRef | null;
   generatedAt: string | null;
   hashtags: string[];
@@ -105,6 +106,7 @@ export type WorkspaceProject = {
   status: string;
   title: string;
   updatedAt: string;
+  versionRootProjectAdId: number | null;
   posterUrl: string | null;
   videoFallbackUrl: string | null;
   videoUrl: string | null;
@@ -150,6 +152,13 @@ const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => (
 });
 
 const cloneWorkspaceProjects = (projects: WorkspaceProject[]) => projects.map(cloneWorkspaceProject);
+
+export const getWorkspaceProjectLineage = (
+  historyEntry?: Pick<WorkspaceGenerationHistoryEntry, "editedFromProjectAdId" | "versionRootProjectAdId"> | null,
+) => ({
+  editedFromProjectAdId: historyEntry?.editedFromProjectAdId ?? null,
+  versionRootProjectAdId: historyEntry?.versionRootProjectAdId ?? null,
+});
 
 const toIsoString = (value: unknown) => {
   if (!value) return null;
@@ -473,6 +482,7 @@ const buildProjectFromAdminVideo = (
   });
   const videoUrl = status === "ready" ? playbackTargets.videoUrl : null;
   const videoFallbackUrl = status === "ready" ? playbackTargets.videoFallbackUrl : null;
+  const lineage = getWorkspaceProjectLineage(historyEntry);
   const youtubePublication =
     normalizeText(item.youtube_publish_state) ||
     normalizeText(item.youtube_published_link) ||
@@ -494,6 +504,7 @@ const buildProjectFromAdminVideo = (
     adId,
     createdAt,
     description: metadata.description,
+    editedFromProjectAdId: lineage.editedFromProjectAdId,
     finalAsset,
     generatedAt: createdAt,
     hashtags: metadata.hashtags,
@@ -504,6 +515,7 @@ const buildProjectFromAdminVideo = (
     status,
     title: metadata.title,
     updatedAt,
+    versionRootProjectAdId: lineage.versionRootProjectAdId,
     posterUrl: status === "ready" && videoUrl ? buildWorkspaceProjectPosterUrl(`project:${adId}`, updatedAt) : null,
     videoFallbackUrl,
     videoUrl,
@@ -549,6 +561,7 @@ const buildProjectFromLatestGeneration = (
   if (!playbackTargets.videoUrl) {
     return null;
   }
+  const lineage = getWorkspaceProjectLineage(historyEntry);
   const metadata = resolveGenerationPresentation({
     description: historyEntry?.description || item.description,
     fallbackTitle: adId ? `Проект #${adId}` : "Проект",
@@ -561,6 +574,7 @@ const buildProjectFromLatestGeneration = (
     adId,
     createdAt,
     description: metadata.description,
+    editedFromProjectAdId: lineage.editedFromProjectAdId,
     finalAsset,
     generatedAt,
     hashtags: metadata.hashtags,
@@ -571,6 +585,7 @@ const buildProjectFromLatestGeneration = (
     status,
     title: metadata.title,
     updatedAt: generatedAt ?? createdAt,
+    versionRootProjectAdId: lineage.versionRootProjectAdId,
     posterUrl: playbackTargets.videoUrl ? buildWorkspaceProjectPosterUrl(`task:${jobId}`, generatedAt ?? createdAt) : null,
     videoFallbackUrl: playbackTargets.videoFallbackUrl,
     videoUrl: playbackTargets.videoUrl,
@@ -610,6 +625,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
   if (!playbackTargets.videoUrl) {
     return null;
   }
+  const lineage = getWorkspaceProjectLineage(item);
   const metadata = resolveGenerationPresentation({
     description: item.description,
     fallbackTitle: adId ? `Проект #${adId}` : "Проект",
@@ -622,6 +638,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     adId,
     createdAt,
     description: metadata.description,
+    editedFromProjectAdId: lineage.editedFromProjectAdId,
     finalAsset,
     generatedAt,
     hashtags: metadata.hashtags,
@@ -632,6 +649,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     status,
     title: metadata.title,
     updatedAt,
+    versionRootProjectAdId: lineage.versionRootProjectAdId,
     posterUrl: playbackTargets.videoUrl ? buildWorkspaceProjectPosterUrl(`task:${jobId}`, updatedAt) : null,
     videoFallbackUrl: playbackTargets.videoFallbackUrl,
     videoUrl: playbackTargets.videoUrl,

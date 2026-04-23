@@ -43,6 +43,7 @@ type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
 };
 
 type WorkspaceBootstrapResponse = {
@@ -64,16 +65,26 @@ const isAbortLikeError = (error: unknown) =>
   error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError";
+const normalizeWorkspaceBooleanFlag = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
+
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return null;
+};
 
 const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
   if (!value || typeof value !== "object") {
     return null;
   }
 
-  const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown };
+  const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown; startPlanUsed?: unknown };
   const parsedBalance = Number(profile.balance);
   const normalizedPlan = String(profile.plan ?? "").trim().toUpperCase();
   const normalizedExpiresAt = String(profile.expiresAt ?? "").trim() || null;
+  const normalizedStartPlanUsed = normalizeWorkspaceBooleanFlag(profile.startPlanUsed) ?? normalizedPlan === "START";
 
   if (!Number.isFinite(parsedBalance) || !normalizedPlan) {
     return null;
@@ -83,6 +94,7 @@ const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
     balance: Math.max(0, parsedBalance),
     expiresAt: normalizedExpiresAt,
     plan: normalizedPlan,
+    startPlanUsed: normalizedStartPlanUsed,
   };
 };
 
@@ -97,7 +109,8 @@ const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, ri
   return (
     normalizedLeft.plan === normalizedRight.plan &&
     normalizedLeft.balance === normalizedRight.balance &&
-    normalizedLeft.expiresAt === normalizedRight.expiresAt
+    normalizedLeft.expiresAt === normalizedRight.expiresAt &&
+    normalizedLeft.startPlanUsed === normalizedRight.startPlanUsed
   );
 };
 

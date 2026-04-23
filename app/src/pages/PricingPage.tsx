@@ -17,6 +17,7 @@ type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
 } | null;
 
 type Props = {
@@ -70,6 +71,7 @@ type PricingFAQ = {
 
 const PENDING_CHECKOUT_STORAGE_KEY = "adshorts.pending-checkout-plan";
 const PACKAGE_RESTRICTION_ERROR_FRAGMENT = "PRO and ULTRA";
+const START_PLAN_USED_MESSAGE = "Тариф START уже использован для этого аккаунта.";
 const CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
 const pricingPlans: PricingPlan[] = [
@@ -185,6 +187,7 @@ export function PricingPage({
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
+  const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const addonsEligibilityNote = canPurchaseAddonCredits
     ? `На тарифе ${currentPlanLabel} вам доступны пакеты дополнительных кредитов. Нажмите на нужный пакет, чтобы перейти к оплате.`
@@ -209,6 +212,11 @@ export function PricingPage({
   };
 
   const requestCheckout = async (productId: CheckoutProductId) => {
+    if (productId === "start" && isStartPlanUsed) {
+      setCheckoutError(START_PLAN_USED_MESSAGE);
+      return;
+    }
+
     setCheckoutError(null);
     setActiveCheckoutProductId(productId);
 
@@ -311,8 +319,19 @@ export function PricingPage({
     }
 
     window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
+    if (pendingCheckoutProductId === "start" && isStartPlanUsed) {
+      setCheckoutError(START_PLAN_USED_MESSAGE);
+      return;
+    }
+
     void requestCheckout(pendingCheckoutProductId);
-  }, [session]);
+  }, [isStartPlanUsed, session]);
+
+  useEffect(() => {
+    if (isStartPlanUsed && activePlanId === "start") {
+      setActivePlanId(DEFAULT_FEATURED_PLAN_ID);
+    }
+  }, [activePlanId, isStartPlanUsed]);
 
   return (
     <div className="route-page pricing-page">
@@ -363,14 +382,31 @@ export function PricingPage({
           <div className="container">
             <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}>
               {pricingPlans.map((plan) => {
-                const isActivePlan = plan.checkoutProductId === activePlanId;
+                const isUsedStartPlan = plan.checkoutProductId === "start" && isStartPlanUsed;
+                const isActivePlan = !isUsedStartPlan && plan.checkoutProductId === activePlanId;
+                const cardClassName = [
+                  "pricing-max-card",
+                  isActivePlan ? "pricing-max-card--featured" : "",
+                  isUsedStartPlan ? "pricing-max-card--disabled" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
 
                 return (
                   <article
                     key={plan.name}
-                    className={isActivePlan ? "pricing-max-card pricing-max-card--featured" : "pricing-max-card"}
-                    onMouseEnter={() => setActivePlanId(plan.checkoutProductId)}
-                    onFocusCapture={() => setActivePlanId(plan.checkoutProductId)}
+                    className={cardClassName}
+                    aria-disabled={isUsedStartPlan}
+                    onMouseEnter={() => {
+                      if (!isUsedStartPlan) {
+                        setActivePlanId(plan.checkoutProductId);
+                      }
+                    }}
+                    onFocusCapture={() => {
+                      if (!isUsedStartPlan) {
+                        setActivePlanId(plan.checkoutProductId);
+                      }
+                    }}
                     onBlurCapture={(event) => {
                       if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
                         return;
@@ -392,7 +428,11 @@ export function PricingPage({
                             : plan.audience}
                         </h3>
                       </div>
-                      {plan.badge ? <span className="pricing-max-card__badge">{plan.badge}</span> : null}
+                      {isUsedStartPlan ? (
+                        <span className="pricing-max-card__badge pricing-max-card__badge--used">Использован</span>
+                      ) : plan.badge ? (
+                        <span className="pricing-max-card__badge">{plan.badge}</span>
+                      ) : null}
                     </div>
 
                     <div className="pricing-max-card__price">
@@ -415,9 +455,13 @@ export function PricingPage({
                       className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
                       type="button"
                       onClick={() => handlePlanCheckout(plan.checkoutProductId)}
-                      disabled={activeCheckoutProductId === plan.checkoutProductId}
+                      disabled={isUsedStartPlan || activeCheckoutProductId === plan.checkoutProductId}
                     >
-                      {activeCheckoutProductId === plan.checkoutProductId ? "Открываем оплату..." : plan.ctaLabel}
+                      {isUsedStartPlan
+                        ? "Использован"
+                        : activeCheckoutProductId === plan.checkoutProductId
+                          ? "Открываем оплату..."
+                          : plan.ctaLabel}
                     </button>
                   </article>
                 );

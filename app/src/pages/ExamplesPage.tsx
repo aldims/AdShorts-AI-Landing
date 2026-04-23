@@ -6,6 +6,7 @@ import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { readExamplePrefillIntent, writeExamplePrefillIntent, type ExamplePrefillIntent } from "../lib/example-prefill";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
+import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 
 type Session = {
   name: string;
@@ -17,6 +18,7 @@ type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
 } | null;
 
 type Props = {
@@ -36,6 +38,7 @@ type ExampleItem = {
   id: string;
   isLocal?: boolean;
   posterSrc?: string;
+  prefillSettings?: ExamplePrefillStudioSettings | null;
   promptHint: string;
   seedPrompt: string;
   summary: string;
@@ -87,10 +90,22 @@ const exampleGoalCopy: Record<ExampleGoal, { label: string; shortLabel: string }
 
 const exampleGoalOrder: ExampleGoal[] = ["ads", "growth", "expert"];
 
+const defaultRussianExamplePrefillSettings: ExamplePrefillStudioSettings = {
+  language: "ru",
+  musicType: "ai",
+  subtitleColorId: "purple",
+  subtitleEnabled: true,
+  subtitleStyleId: "modern",
+  videoMode: "standard",
+  voiceEnabled: true,
+  voiceId: "Bys_24000",
+};
+
 const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "story-future-city",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Атмосферный storytelling с сильным первым кадром.",
     seedPrompt:
       "Сделай storytelling Shorts про то, как AI меняет привычный город: атмосферный первый кадр, 3 коротких тезиса и финальный вывод без воды.",
@@ -103,6 +118,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "sales-offer-contrast",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Продажа через боль, решение и короткий CTA.",
     seedPrompt:
       "Сделай продающий Shorts для услуги по настройке рекламы: сильный hook про потерю клиентов, затем решение и короткий CTA на заявку.",
@@ -115,6 +131,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "facts-curiosity-loop",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Любопытный факт с удержанием и payoff.",
     seedPrompt:
       "Сделай Shorts в формате любопытного факта о кошках: яркий hook, 3 быстрых наблюдения и короткий финальный вывод с удержанием.",
@@ -127,6 +144,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "story-mini-scene",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Нарастающий интерес и визуальная сцена.",
     seedPrompt:
       "Сделай Shorts про редкую находку в Альпах: атмосферный первый кадр, нарастающий интерес, ощущение загадки и короткий разворот в финале.",
@@ -139,6 +157,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "ugc-viral-find",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Живая подача с ощущением, что ролик снят сейчас.",
     seedPrompt:
       "Сделай viral-style Shorts про продукт для ежедневной привычки: разговорный тон, быстрый hook, ощущение живой находки и нативный CTA.",
@@ -151,6 +170,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "effects-wow-frame",
+    prefillSettings: defaultRussianExamplePrefillSettings,
     promptHint: "Визуальный wow-эффект как основной крючок.",
     seedPrompt:
       "Сделай Shorts с визуальным wow-эффектом: первый кадр должен удивлять, дальше 3 быстрые смены сцены и финальный короткий вывод.",
@@ -476,6 +496,7 @@ export function ExamplesPage({
     const intent = {
       exampleId: example.id,
       prompt: example.seedPrompt,
+      settings: example.prefillSettings ?? null,
     } satisfies ExamplePrefillIntent;
 
     writeExamplePrefillIntent(intent);
@@ -545,7 +566,6 @@ export function ExamplesPage({
           <div className="container">
             <div className="examples-modern__hero-grid">
               <div className="examples-modern__hero-copy">
-                <p className="eyebrow">ПРИМЕРЫ</p>
                 <h1>Готовые сцены для запуска Shorts</h1>
                 <p className="examples-modern__hero-lead">
                   Выберите подходящий шаблон, нажмите «Использовать» и получите готовую структуру прямо в студии.
@@ -583,16 +603,16 @@ export function ExamplesPage({
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">02</span>
                     <div>
-                      <strong>Промт вставляется сам</strong>
-                      <p>Хук, подача и структура уже готовы для генерации.</p>
+                      <strong>Нажмите Использовать</strong>
+                      <p>Все настройки уже готовы для генерации.</p>
                     </div>
                   </article>
 
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">03</span>
                     <div>
-                      <strong>Дальше генерируете</strong>
-                      <p>Если нужно, меняете тему уже внутри студии.</p>
+                      <strong>Получите похожий Shorts</strong>
+                      <p>Добавляйте свои настройки при необходимости.</p>
                     </div>
                   </article>
                 </div>

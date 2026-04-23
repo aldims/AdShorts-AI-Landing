@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
@@ -15,6 +15,7 @@ type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
 } | null;
 
 type Props = {
@@ -30,6 +31,18 @@ const heroPromptText = "Как нейросети меняют маркетин�
 const heroChips = ["Визуал", "Озвучка", "Субтитры", "Музыка", "Язык"];
 const heroPreviewImageSrc = "/hero_image.webp";
 const landingRefineCarouselImageSrc = "/t1.png";
+const heroPreviewMaxScroll = 600;
+
+function getHeroPreviewTransform(scrollY: number) {
+  const progress = Math.min(scrollY / heroPreviewMaxScroll, 1);
+  const rotateY = -25 + progress * 25;
+  const rotateX = 12 - progress * 12;
+  const rotateZ = 3 - progress * 3;
+  const translateY = progress * -40;
+
+  return `rotateY(${rotateY}deg) rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateY(${translateY}px)`;
+}
+
 const landingRefineProofs = [
   {
     label: "ГЕНЕРАЦИЯ",
@@ -37,14 +50,14 @@ const landingRefineProofs = [
     description: "Создавайте сцены с помощью AI.",
   },
   {
+    label: "ДОРИСОВКА",
+    title: "Изменение сцен",
+    description: "Дорисовывайте и меняйте отдельные элементы в сцене.",
+  },
+  {
     label: "АНИМАЦИЯ",
     title: "Анимация сцен",
     description: "Добавляйте движение и оживляйте изображения.",
-  },
-  {
-    label: "ДОРИСОВКА",
-    title: "Изменение изображения",
-    description: "Дорисовывайте и меняйте отдельные элементы в сцене.",
   },
 ] as const;
 const landingRefineCarouselCards = [
@@ -107,6 +120,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
   const revealTimersRef = useRef<number[]>([]);
   const statsObserverRef = useRef<IntersectionObserver | null>(null);
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+  const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
+  const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
 
   const animateCounter = useCallback((el: HTMLElement, target: string) => {
     const numericMatch = target.match(/[\d,.]+/);
@@ -146,24 +161,40 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     requestAnimationFrame(step);
   }, []);
 
-  useEffect(() => {
-    const handleScroll = () => {
+  useLayoutEffect(() => {
+    let initialSyncFrame = 0;
+    let restoreTransitionFrame = 0;
+
+    const syncPreviewTransform = () => {
       if (!previewRef.current) return;
-      const scrollY = window.scrollY;
-      const maxScroll = 600;
-      const progress = Math.min(scrollY / maxScroll, 1);
-      
-      const rotateY = -25 + progress * 25;
-      const rotateX = 12 - progress * 12;
-      const rotateZ = 3 - progress * 3;
-      const translateY = progress * -40;
-      
-      previewRef.current.style.transform = 
-        `rotateY(${rotateY}deg) rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateY(${translateY}px)`;
+      previewRef.current.style.transform = getHeroPreviewTransform(window.scrollY);
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const syncPreviewTransformImmediately = () => {
+      if (!previewRef.current) return;
+      window.cancelAnimationFrame(restoreTransitionFrame);
+      previewRef.current.style.transition = "none";
+      syncPreviewTransform();
+      restoreTransitionFrame = window.requestAnimationFrame(() => {
+        if (!previewRef.current) return;
+        previewRef.current.style.transition = "";
+      });
+    };
+
+    syncPreviewTransformImmediately();
+    initialSyncFrame = window.requestAnimationFrame(syncPreviewTransformImmediately);
+
+    window.addEventListener("scroll", syncPreviewTransform, { passive: true });
+    window.addEventListener("pageshow", syncPreviewTransformImmediately);
+
+    return () => {
+      window.cancelAnimationFrame(initialSyncFrame);
+      window.cancelAnimationFrame(restoreTransitionFrame);
+      window.removeEventListener("scroll", syncPreviewTransform);
+      window.removeEventListener("pageshow", syncPreviewTransformImmediately);
+      if (!previewRef.current) return;
+      previewRef.current.style.transition = "";
+    };
   }, []);
 
   useEffect(() => {
@@ -309,6 +340,10 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
   };
 
   const handlePlanCheckout = async (productId: "start" | "pro" | "ultra") => {
+    if (productId === "start" && isStartPlanUsed) {
+      return;
+    }
+
     if (!session) {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("adshorts.pending-checkout-plan", productId);
@@ -365,14 +400,6 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <PrimarySiteNav activeItem="home" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
-            <a
-              className="site-header__link"
-              href="https://t.me/AdShortsAIBot"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Telegram
-            </a>
             {session ? (
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
@@ -403,16 +430,11 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <div className="container hero__grid">
             {/* Left: copy */}
             <div className="hero__copy">
-              <div className="hero__badge">
-                <span className="hero__badge-dot" aria-hidden="true"></span>
-                Создание Shorts с AI
-              </div>
-
-              <h1>
+              <h1 aria-label="Shorts / Reels / TikTok за 1 минуту. В один клик.">
                 <span className="hero__title-line1">
-                  <span className="hero__title-highlight">Shorts за&nbsp;1&nbsp;минуту</span>
+                  <span className="hero__title-highlight">Shorts / Reels / TikTok</span>
                 </span>
-                <span className="hero__title-line2">в один клик.</span>
+                <span className="hero__title-line2">за&nbsp;1&nbsp;минуту. В один клик.</span>
               </h1>
 
               <p className="hero__lead">
@@ -518,7 +540,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               <p className="lp-eyebrow">КАК ЭТО РАБОТАЕТ</p>
               <h2>От идеи до готового Shorts за 3 шага</h2>
               <p>
-                Введите идею — AI создаст сценарий, озвучку и видео. Готовый ролик сразу готов для публикации.
+                Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.
               </p>
             </div>
 
@@ -685,7 +707,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             <div className="lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">РЕГУЛЯРНОСТЬ</p>
               <h2 id="publish-regular-heading">Публикуйте Shorts регулярно</h2>
-              <p>Развивайте канал без монтажа и поиска идей</p>
+              <p>Запусти канал, который приносит просмотры каждый день</p>
             </div>
             <div className="landing-publish-regular">
               <div className="steps-grid landing-publish-regular__grid" data-reveal-group="">
@@ -816,9 +838,17 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             </div>
 
             <div className="plan-grid" data-reveal-group="">
-              <article className="plan-card" data-reveal="" data-reveal-delay="1">
+              <article
+                className={`plan-card${isStartPlanUsed ? " plan-card--disabled" : ""}`}
+                data-reveal=""
+                data-reveal-delay="1"
+                aria-disabled={isStartPlanUsed}
+              >
                 <div className="plan-card__header">
                   <span className="plan-card__label">START</span>
+                  {isStartPlanUsed ? (
+                    <span className="plan-card__badge plan-card__badge--used">Использован</span>
+                  ) : null}
                 </div>
                 <div className="plan-card__price">
                   <strong>390 ₽</strong>
@@ -852,9 +882,13 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   className="plan-card__cta route-button"
                   type="button"
                   onClick={() => void handlePlanCheckout("start")}
-                  disabled={activeCheckoutProductId === "start"}
+                  disabled={isStartPlanUsed || activeCheckoutProductId === "start"}
                 >
-                  {activeCheckoutProductId === "start" ? "Открываем оплату..." : "Выбрать START"}
+                  {isStartPlanUsed
+                    ? "Использован"
+                    : activeCheckoutProductId === "start"
+                      ? "Открываем оплату..."
+                      : "Выбрать START"}
                 </button>
               </article>
 
@@ -961,8 +995,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               <p className="lp-eyebrow">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
               <h2>Результат за минуты</h2>
               <p>
-                AdShorts AI помогает быстро выпускать short-видео без потери качества: от идеи и сценария до готового
-                ролика в одном сервисе.
+                AdShorts AI помогает быстро выпускать короткие вертикальные видео без потери качества: от идеи и сценария
+                до готового ролика в одном сервисе.
               </p>
             </div>
 
@@ -1055,6 +1089,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
           <nav className="footer__links" aria-label="Footer navigation">
             <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>
+            <a href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener noreferrer">Telegram</a>
             <a href="https://adshortsai.com/terms-of-use/" target="_blank" rel="noopener noreferrer">Условия</a>
             <a href="https://adshortsai.com/terms/" target="_blank" rel="noopener noreferrer">Соглашение</a>
             <a href="https://adshortsai.com/privacy/" target="_blank" rel="noopener noreferrer">Конфиденциальность</a>

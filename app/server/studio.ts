@@ -89,6 +89,10 @@ type AdsflowJobStatusResponse = {
 type AdsflowWebUserPayload = {
   balance?: number;
   plan?: string;
+  startPlanAvailable?: boolean | number | string | null;
+  startPlanUsed?: boolean | number | string | null;
+  start_plan_available?: boolean | number | string | null;
+  start_plan_used?: boolean | number | string | null;
   subscription_expires_at?: string | null;
   user_id?: number | string | null;
 };
@@ -232,6 +236,81 @@ export type WorkspaceProfile = {
   balance: number;
   expiresAt: string | null;
   plan: string;
+  startPlanUsed: boolean;
+};
+
+const normalizeWorkspaceSubscriptionPlanCode = (value: unknown) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "start" || normalized === "pro" || normalized === "ultra" ? normalized : null;
+};
+
+const getWorkspaceSubscriptionPlanDurationDays = (planCode: string | null | undefined) =>
+  planCode === "start" || planCode === "pro" || planCode === "ultra" ? 30 : 0;
+
+export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
+  payload: AdsflowAdminUserDetailsResponse,
+  options?: {
+    currentPlanHint?: string | null;
+  },
+): WorkspaceSubscriptionDetails => {
+  const successfulPayments = Array.isArray(payload.payments)
+    ? payload.payments.filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
+    : [];
+  const startPlanUsed = successfulPayments.some(
+    (payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === "start",
+  );
+
+  const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
+  if (directExpiry) {
+    return {
+      expiresAt: directExpiry,
+      startPlanUsed,
+    };
+  }
+
+  const currentPlan =
+    normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
+    normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
+  const candidatePayments = currentPlan
+    ? successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) === currentPlan)
+    : successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) !== null);
+  const latestSuccessfulPayment = candidatePayments
+    .map((payment) => {
+      const paidAt = normalizeGenerationText(payment.paid_at);
+      const parsedPaidAt = paidAt ? new Date(paidAt) : null;
+      return Number.isNaN(parsedPaidAt?.getTime?.() ?? Number.NaN)
+        ? null
+        : {
+            paidAt: parsedPaidAt,
+            planCode: normalizeWorkspaceSubscriptionPlanCode(payment.plan_code),
+          };
+    })
+    .filter(
+      (
+        value,
+      ): value is {
+        paidAt: Date;
+        planCode: "start" | "pro" | "ultra" | null;
+      } => value instanceof Object && value.paidAt instanceof Date,
+    )
+    .sort((left, right) => right.paidAt.getTime() - left.paidAt.getTime())[0] ?? null;
+
+  const effectivePlanCode = currentPlan ?? latestSuccessfulPayment?.planCode ?? null;
+  const planDurationDays = getWorkspaceSubscriptionPlanDurationDays(effectivePlanCode);
+  if (!planDurationDays || !latestSuccessfulPayment) {
+    return {
+      expiresAt: null,
+      startPlanUsed,
+    };
+  }
+
+  const derivedExpiry = new Date(latestSuccessfulPayment.paidAt.getTime());
+  derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
+
+  return {
+    expiresAt: derivedExpiry.toISOString(),
+    startPlanUsed,
+  };
 };
 
 export type StudioGeneratedImageAsset = {
@@ -283,6 +362,8 @@ export type StudioSegmentAiVideoJobStatus = {
   profile: WorkspaceProfile;
   status: string;
 };
+
+type StudioSegmentPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 
 export type StudioSegmentAiPhotoPromptImproveResult = {
   prompt: string;
@@ -342,9 +423,14 @@ type WorkspaceBootstrapCacheEntry = {
   expiresAt: number;
 };
 
+type WorkspaceSubscriptionDetails = {
+  expiresAt: string | null;
+  startPlanUsed: boolean;
+};
+
 type WorkspaceSubscriptionExpiryCacheEntry = {
   expiresAt: number;
-  value: string | null;
+  value: WorkspaceSubscriptionDetails;
 };
 
 export class WorkspaceCreditLimitError extends Error {
@@ -450,25 +536,61 @@ const studioSupportedVideoModes = new Set([
   "standard",
 ]);
 
+const studioSupportedPromptImproveModes = new Set([
+  "ai_photo",
+  "ai_video",
+  "photo_animation",
+  "image_edit",
+]);
+
 const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"]);
 
 const studioSupportedLanguages = new Set(["en", "ru"]);
 const WORKSPACE_BOOTSTRAP_CACHE_TTL_MS = 5 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS = 10 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS = 5_000;
+const FALLBACK_WORKSPACE_SUBSCRIPTION_DETAILS: WorkspaceSubscriptionDetails = {
+  expiresAt: null,
+  startPlanUsed: false,
+};
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const STUDIO_GENERATION_PREPARING_PREVIEW_STATUS = "preparing_preview";
 const workspaceBootstrapCache = new Map<string, WorkspaceBootstrapCacheEntry>();
 const workspaceSubscriptionExpiryCache = new Map<string, WorkspaceSubscriptionExpiryCacheEntry>();
-const workspaceSubscriptionExpiryInFlight = new Map<string, Promise<string | null>>();
+const workspaceSubscriptionExpiryInFlight = new Map<string, Promise<WorkspaceSubscriptionDetails>>();
 const OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS = 30_000;
 const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
 const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
+const OPENROUTER_STUDIO_PROMPT_ENHANCEMENT_PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const STUDIO_OPENROUTER_MISSING_CONFIG_ERROR =
-  "OpenRouter is not configured on this server. Set OPENROUTER_API_KEY or ADSHORTS_SHARED_ENV_FILE.";
+  "OpenRouter is not configured on this server. Set a valid OPENROUTER_API_KEY or ADSHORTS_SHARED_ENV_FILE.";
 
 const normalizePrompt = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const hasUsableOpenRouterApiKey = (value: string | null | undefined) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lowered = normalized.toLowerCase();
+  if (
+    lowered === "your_api_key" ||
+    lowered === "your-openrouter-api-key" ||
+    lowered === "openrouter_api_key" ||
+    lowered === "changeme" ||
+    lowered === "change-me" ||
+    lowered === "replace_me" ||
+    lowered === "replace-me" ||
+    lowered.includes("your_api") ||
+    lowered.includes("placeholder")
+  ) {
+    return false;
+  }
+
+  return true;
+};
 
 const sanitizeStudioContentPlanIdeaPrompt = (value: unknown) => {
   const fallbackPrompt = normalizePrompt(String(value ?? ""));
@@ -867,7 +989,10 @@ const getCachedWorkspaceSubscriptionExpiry = (userId: string | number | null | u
   return cachedEntry.value;
 };
 
-const setCachedWorkspaceSubscriptionExpiry = (userId: string | number | null | undefined, value: string | null) => {
+const setCachedWorkspaceSubscriptionExpiry = (
+  userId: string | number | null | undefined,
+  value: WorkspaceSubscriptionDetails,
+) => {
   const cacheKey = getWorkspaceSubscriptionExpiryCacheKey(userId);
   if (!cacheKey) {
     return;
@@ -1086,11 +1211,55 @@ const buildStudioFinalAsset = (options: {
   return mergeWorkspaceMediaAssetRefs(payloadAsset, historyAsset);
 };
 
-const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfile => ({
-  balance: Math.max(0, Number(payload?.balance ?? 0)),
-  expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
-  plan: String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE",
-});
+const normalizeWorkspaceBooleanFlag = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value !== 0;
+  }
+
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+};
+
+const extractAdsflowStartPlanUsed = (payload: AdsflowWebUserPayload | undefined, plan: string) => {
+  const explicitUsed = normalizeWorkspaceBooleanFlag(payload?.start_plan_used ?? payload?.startPlanUsed);
+  if (explicitUsed !== null) {
+    return explicitUsed;
+  }
+
+  const explicitAvailable = normalizeWorkspaceBooleanFlag(payload?.start_plan_available ?? payload?.startPlanAvailable);
+  if (explicitAvailable !== null) {
+    return !explicitAvailable;
+  }
+
+  return plan === "START";
+};
+
+const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfile => {
+  const plan = String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE";
+
+  return {
+    balance: Math.max(0, Number(payload?.balance ?? 0)),
+    expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
+    plan,
+    startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
+  };
+};
 
 const normalizeStudioGeneratedImageMimeType = (value: string | null | undefined, fallback = "image/png") => {
   const normalized = normalizeGenerationText(value).toLowerCase().split(";")[0]?.trim() ?? "";
@@ -1099,6 +1268,11 @@ const normalizeStudioGeneratedImageMimeType = (value: string | null | undefined,
   }
 
   return fallback;
+};
+
+const normalizeStudioSegmentPromptImproveMode = (value: unknown): StudioSegmentPromptImproveMode => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return studioSupportedPromptImproveModes.has(normalized) ? (normalized as StudioSegmentPromptImproveMode) : "ai_photo";
 };
 
 const getStudioGeneratedImageExtension = (mimeType: string) => {
@@ -1266,7 +1440,7 @@ const DEAPI_NO_TEXT_NEGATIVE_PROMPT =
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const sanitizeStudioSegmentAiPhotoPromptEnhancementOutput = (value: unknown) =>
+const sanitizeStudioSegmentPromptEnhancementOutput = (value: unknown) =>
   String(value ?? "")
     .replace(/^```[\w-]*\s*/i, "")
     .replace(/\s*```$/i, "")
@@ -1275,9 +1449,10 @@ const sanitizeStudioSegmentAiPhotoPromptEnhancementOutput = (value: unknown) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const buildStudioSegmentAiPhotoPromptEnhancementFallback = (
+const buildStudioSegmentPromptEnhancementFallback = (
   value: string,
   language: "en" | "ru",
+  mode: StudioSegmentPromptImproveMode,
 ) => {
   const normalizedPrompt = normalizePrompt(value).replace(/[.!?]+$/g, "");
   if (!normalizedPrompt) {
@@ -1286,36 +1461,154 @@ const buildStudioSegmentAiPhotoPromptEnhancementFallback = (
 
   const descriptors =
     language === "en"
-      ? [
-          "cinematic vertical 9:16 composition",
-          "photorealistic",
-          "dramatic lighting",
-          "clear focal subject",
-          "high detail",
-        ]
-      : [
-          "кинематографичная вертикальная композиция 9:16",
-          "фотореализм",
-          "драматичный свет",
-          "четкий главный объект",
-          "высокая детализация",
-        ];
+      ? mode === "ai_video"
+        ? [
+            "cinematic vertical 9:16 video",
+            "natural subject motion",
+            "clear focal action",
+            "subtle camera movement",
+            "realistic detail",
+          ]
+        : mode === "photo_animation"
+          ? [
+              "image-to-video animation from a single source photo",
+              "natural motion",
+              "gentle camera push-in or parallax",
+              "preserve subject identity and setting",
+              "realistic detail",
+            ]
+          : mode === "image_edit"
+            ? [
+                "seamless image edit or outpaint",
+                "preserve the original subject and composition",
+                "matching lighting and perspective",
+                "clean realistic detail",
+              ]
+            : [
+                "cinematic vertical 9:16 composition",
+                "photorealistic",
+                "dramatic lighting",
+                "clear focal subject",
+                "high detail",
+              ]
+      : mode === "ai_video"
+        ? [
+            "кинематографичное вертикальное видео 9:16",
+            "естественное движение объекта",
+            "четкое главное действие",
+            "мягкое движение камеры",
+            "реалистичная детализация",
+          ]
+        : mode === "photo_animation"
+          ? [
+              "i2v анимация из одного исходного фото",
+              "естественное движение",
+              "легкий наезд камеры или параллакс",
+              "сохранить героя и окружение",
+              "реалистичная детализация",
+            ]
+          : mode === "image_edit"
+            ? [
+                "аккуратная дорисовка или редактирование фото",
+                "сохранить исходного героя и композицию",
+                "совпадающий свет и перспектива",
+                "чистая реалистичная детализация",
+              ]
+            : [
+                "кинематографичная вертикальная композиция 9:16",
+                "фотореализм",
+                "драматичный свет",
+                "четкий главный объект",
+                "высокая детализация",
+              ];
 
   return [normalizedPrompt.charAt(0).toUpperCase() + normalizedPrompt.slice(1), ...descriptors].join(", ");
 };
 
-const buildStudioSegmentAiPhotoPromptEnhancementSystemPrompt = (language: "en" | "ru") =>
-  language === "en"
-    ? [
-        "You are an expert prompt engineer for AI image generation.",
-        "Rewrite the user's rough scene description into one strong production-ready prompt for a vertical 9:16 image.",
-        "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
-        "Focus only on visible details: subject, action, setting, composition, camera framing, lighting, mood, textures, and product visibility when relevant.",
-        "Prefer cinematic, realistic, premium-looking imagery unless the user explicitly asks for fantasy, stylization, or surrealism.",
-        "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 320 characters.",
-        "Do not mention captions, subtitles, logos, watermarks, UI, split screens, or multiple unrelated scenes.",
-      ].join(" ")
-    : [
+const buildStudioSegmentPromptEnhancementSystemPrompt = (
+  language: "en" | "ru",
+  mode: StudioSegmentPromptImproveMode,
+) => {
+  if (language === "en") {
+    switch (mode) {
+      case "ai_video":
+        return [
+          "You are an expert prompt engineer for text-to-video generation.",
+          "Rewrite the user's rough description into one strong production-ready prompt for a short vertical 9:16 video.",
+          "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
+          "Describe the visible scene, subject, action, environment, camera framing, camera movement, motion, lighting, and mood.",
+          "Prefer one continuous cinematic shot with believable motion and a clear focal action.",
+          "Avoid dialogue, voiceover, sound effects, editing instructions, cuts, multi-shot sequences, captions, subtitles, logos, watermarks, and UI.",
+          "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 360 characters.",
+        ].join(" ");
+      case "photo_animation":
+        return [
+          "You are an expert prompt engineer for image-to-video generation.",
+          "Rewrite the user's rough description into one strong production-ready prompt for animating a single source photo into a short vertical 9:16 video.",
+          "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
+          "Base the result on the existing photo: preserve identity, outfit, location, framing, and composition unless the user explicitly asks to change them.",
+          "Focus on motion directions only: subject movement, facial expression, hair or clothing movement, environmental motion, depth, parallax, and subtle camera movement.",
+          "Avoid new unrelated objects, scene changes, hard cuts, impossible transformations, captions, subtitles, logos, watermarks, and UI.",
+          "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 360 characters.",
+        ].join(" ");
+      case "image_edit":
+        return [
+          "You are an expert prompt engineer for AI image editing and outpainting.",
+          "Rewrite the user's rough edit request into one strong production-ready prompt for editing an existing vertical 9:16 image.",
+          "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
+          "Describe the final visible result only: what should be added, extended, replaced, or refined in the existing image.",
+          "Preserve the original subject identity, style, lighting, perspective, and composition unless the user explicitly asks to change them.",
+          "Avoid mentioning masks, tools, UI, processing steps, captions, subtitles, logos, or watermarks.",
+          "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 340 characters.",
+        ].join(" ");
+      case "ai_photo":
+      default:
+        return [
+          "You are an expert prompt engineer for AI image generation.",
+          "Rewrite the user's rough scene description into one strong production-ready prompt for a vertical 9:16 image.",
+          "Return exactly one prompt in English with no quotes, labels, markdown, or explanations.",
+          "Focus only on visible details: subject, action, setting, composition, camera framing, lighting, mood, textures, and product visibility when relevant.",
+          "Prefer cinematic, realistic, premium-looking imagery unless the user explicitly asks for fantasy, stylization, or surrealism.",
+          "Keep it compact and clear: one sentence or a tight comma-separated phrase, under 320 characters.",
+          "Do not mention captions, subtitles, logos, watermarks, UI, split screens, or multiple unrelated scenes.",
+        ].join(" ");
+    }
+  }
+
+  switch (mode) {
+    case "ai_video":
+      return [
+        "Ты эксперт по созданию промтов для text-to-video генерации.",
+        "Преобразуй черновое описание пользователя в один сильный готовый промт для короткого вертикального видео 9:16.",
+        "Верни ровно один промт на русском языке без кавычек, меток, markdown и пояснений.",
+        "Описывай видимую сцену: героя, действие, окружение, композицию, ракурс, движение камеры, движение объектов, свет и атмосферу.",
+        "По умолчанию делай сцену как один цельный кинематографичный шот с понятным главным действием и правдоподобным движением.",
+        "Не добавляй реплики, озвучку, звуки, монтажные команды, смены сцен, титры, текст на экране, логотипы, водяные знаки и интерфейсы.",
+        "Промт должен быть компактным и ясным: одно предложение или плотная фраза до 360 символов.",
+      ].join(" ");
+    case "photo_animation":
+      return [
+        "Ты эксперт по созданию промтов для image-to-video анимации фото.",
+        "Преобразуй черновое описание пользователя в один сильный готовый промт для анимации одного исходного фото в короткое вертикальное видео 9:16.",
+        "Верни ровно один промт на русском языке без кавычек, меток, markdown и пояснений.",
+        "Опирайся на исходное фото: сохраняй личность героя, одежду, локацию, ракурс и композицию, если пользователь явно не просит изменить их.",
+        "Фокусируйся именно на движении: жесты, мимика, ветер в волосах или одежде, движение фона, глубина, параллакс и мягкое движение камеры.",
+        "Не добавляй новые несвязанные объекты, смены сцен, резкие трансформации, титры, текст на экране, логотипы, водяные знаки и интерфейсы.",
+        "Промт должен быть компактным и ясным: одно предложение или плотная фраза до 360 символов.",
+      ].join(" ");
+    case "image_edit":
+      return [
+        "Ты эксперт по созданию промтов для редактирования и дорисовки изображений.",
+        "Преобразуй черновой запрос пользователя в один сильный готовый промт для редактирования существующего вертикального изображения 9:16.",
+        "Верни ровно один промт на русском языке без кавычек, меток, markdown и пояснений.",
+        "Описывай только итоговый видимый результат: что нужно добавить, расширить, заменить или уточнить в исходном изображении.",
+        "По умолчанию сохраняй исходного героя, стиль, свет, перспективу и композицию, если пользователь явно не просит другого.",
+        "Не упоминай маски, инструменты, интерфейсы, шаги обработки, титры, текст на экране, логотипы и водяные знаки.",
+        "Промт должен быть компактным и ясным: одно предложение или плотная фраза до 340 символов.",
+      ].join(" ");
+    case "ai_photo":
+    default:
+      return [
         "Ты эксперт по созданию промтов для генерации изображений.",
         "Преобразуй черновое описание пользователя в один сильный готовый промт для вертикального изображения 9:16.",
         "Верни ровно один промт на русском языке без кавычек, меток, markdown и пояснений.",
@@ -1324,11 +1617,35 @@ const buildStudioSegmentAiPhotoPromptEnhancementSystemPrompt = (language: "en" |
         "Промт должен быть компактным и ясным: одно предложение или плотная фраза до 320 символов.",
         "Не упоминай титры, текст на экране, логотипы, водяные знаки, интерфейсы, коллажи и несколько несвязанных сцен.",
       ].join(" ");
+  }
+};
 
-const buildStudioSegmentAiPhotoPromptEnhancementUserPrompt = (prompt: string, language: "en" | "ru") =>
-  language === "en"
-    ? [`Raw scene description:`, prompt, "", `Return only the final prompt.`].join("\n")
-    : [`Черновое описание сцены:`, prompt, "", `Верни только итоговый промт.`].join("\n");
+const buildStudioSegmentPromptEnhancementUserPrompt = (
+  prompt: string,
+  language: "en" | "ru",
+  mode: StudioSegmentPromptImproveMode,
+) => {
+  const label =
+    language === "en"
+      ? mode === "ai_video"
+        ? "Raw video scene description:"
+        : mode === "photo_animation"
+          ? "Raw photo animation instruction:"
+          : mode === "image_edit"
+            ? "Raw image edit request:"
+            : "Raw scene description:"
+      : mode === "ai_video"
+        ? "Черновое описание видео-сцены:"
+        : mode === "photo_animation"
+          ? "Черновое описание анимации фото:"
+          : mode === "image_edit"
+            ? "Черновой запрос на дорисовку фото:"
+            : "Черновое описание сцены:";
+
+  const returnInstruction = language === "en" ? "Return only the final prompt." : "Верни только итоговый промт.";
+
+  return [label, prompt, "", returnInstruction].join("\n");
+};
 
 type OpenRouterChatCompletionResponse = {
   choices?: Array<{
@@ -1566,11 +1883,24 @@ const getStudioOpenRouterModelCandidates = () =>
     ),
   );
 
+const getStudioOpenRouterPromptEnhancementModelCandidates = () =>
+  Array.from(
+    new Set(
+      [
+        OPENROUTER_STUDIO_PROMPT_ENHANCEMENT_PRIMARY_MODEL,
+        env.openrouterMainModel,
+        env.openrouterFallbackModel,
+      ]
+        .map((model) => normalizePrompt(model ?? ""))
+        .filter(Boolean),
+    ),
+  );
+
 const createStudioOpenRouterMissingConfigError = () => new Error(STUDIO_OPENROUTER_MISSING_CONFIG_ERROR);
 
 const requireStudioOpenRouterModels = () => {
   const modelCandidates = getStudioOpenRouterModelCandidates();
-  if (!env.openrouterApiKey) {
+  if (!hasUsableOpenRouterApiKey(env.openrouterApiKey)) {
     throw createStudioOpenRouterMissingConfigError();
   }
 
@@ -1597,9 +1927,10 @@ const buildStudioVisualPromptEnglishTranslationUserPrompt = (prompt: string) =>
 const sanitizeStudioVisualPromptEnglishTranslationOutput = (value: string) =>
   sanitizeStudioTranslationResponseText(value).replace(/^["'`]+|["'`]+$/g, "").trim();
 
-const requestStudioSegmentAiPhotoPromptEnhancement = async (
+const requestStudioSegmentPromptEnhancement = async (
   prompt: string,
   language: "en" | "ru",
+  mode: StudioSegmentPromptImproveMode,
   model: string,
 ) => {
   const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
@@ -1616,11 +1947,11 @@ const requestStudioSegmentAiPhotoPromptEnhancement = async (
       messages: [
         {
           role: "system",
-          content: buildStudioSegmentAiPhotoPromptEnhancementSystemPrompt(language),
+          content: buildStudioSegmentPromptEnhancementSystemPrompt(language, mode),
         },
         {
           role: "user",
-          content: buildStudioSegmentAiPhotoPromptEnhancementUserPrompt(prompt, language),
+          content: buildStudioSegmentPromptEnhancementUserPrompt(prompt, language, mode),
         },
       ],
       temperature: 0.35,
@@ -1636,7 +1967,7 @@ const requestStudioSegmentAiPhotoPromptEnhancement = async (
     );
   }
 
-  const improvedPrompt = sanitizeStudioSegmentAiPhotoPromptEnhancementOutput(
+  const improvedPrompt = sanitizeStudioSegmentPromptEnhancementOutput(
     extractOpenRouterChatCompletionText(payload),
   );
   if (!improvedPrompt) {
@@ -2144,10 +2475,15 @@ const buildWorkspaceStudioOptions = (payload?: AdsflowStudioOptionsPayload | nul
   };
 };
 
-const fetchAdsflowSubscriptionExpiry = async (userId: string | number | null | undefined) => {
+const fetchAdsflowSubscriptionDetails = async (
+  userId: string | number | null | undefined,
+  options?: {
+    currentPlanHint?: string | null;
+  },
+): Promise<WorkspaceSubscriptionDetails> => {
   const cacheKey = getWorkspaceSubscriptionExpiryCacheKey(userId);
   if (!cacheKey) {
-    return null;
+    return FALLBACK_WORKSPACE_SUBSCRIPTION_DETAILS;
   }
 
   const cachedValue = getCachedWorkspaceSubscriptionExpiry(cacheKey);
@@ -2161,54 +2497,36 @@ const fetchAdsflowSubscriptionExpiry = async (userId: string | number | null | u
   }
 
   const request = (async () => {
-    const payload = await fetchAdsflowJson<AdsflowAdminUserDetailsResponse>(
-      buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(cacheKey)}`),
-      {
-        headers: {
-          "X-Admin-Token": env.adsflowAdminToken ?? "",
+    let payload: AdsflowAdminUserDetailsResponse;
+    try {
+      payload = await fetchAdsflowJson<AdsflowAdminUserDetailsResponse>(
+        buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(cacheKey)}`),
+        {
+          headers: {
+            "X-Admin-Token": env.adsflowAdminToken ?? "",
+          },
         },
-      },
-      {
-        retryDelaysMs: [],
-        timeoutMs: WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS,
-      },
-    );
+        {
+          retryDelaysMs: [],
+          silentStatuses: [404],
+          timeoutMs: WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS,
+        },
+      );
+    } catch (error) {
+      if (isAdsflowHttpStatusError(error, 404)) {
+        const details = { ...FALLBACK_WORKSPACE_SUBSCRIPTION_DETAILS };
+        setCachedWorkspaceSubscriptionExpiry(cacheKey, details);
+        return details;
+      }
 
-    const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
-    if (directExpiry) {
-      setCachedWorkspaceSubscriptionExpiry(cacheKey, directExpiry);
-      return directExpiry;
+      throw error;
     }
 
-    const currentPlan = String(payload.user?.subscription_type ?? "").trim().toLowerCase();
-    const planDurationDays =
-      currentPlan === "start" ? 30 : currentPlan === "pro" ? 30 : currentPlan === "ultra" ? 30 : 0;
-    if (!planDurationDays || !Array.isArray(payload.payments)) {
-      setCachedWorkspaceSubscriptionExpiry(cacheKey, null);
-      return null;
-    }
-
-    const latestSuccessfulPayment = payload.payments
-      .filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
-      .filter((payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === currentPlan)
-      .map((payment) => {
-        const paidAt = normalizeGenerationText(payment.paid_at);
-        const parsedPaidAt = paidAt ? new Date(paidAt) : null;
-        return Number.isNaN(parsedPaidAt?.getTime?.() ?? Number.NaN) ? null : parsedPaidAt;
-      })
-      .filter((value): value is Date => value instanceof Date)
-      .sort((left, right) => right.getTime() - left.getTime())[0];
-
-    if (!latestSuccessfulPayment) {
-      setCachedWorkspaceSubscriptionExpiry(cacheKey, null);
-      return null;
-    }
-
-    const derivedExpiry = new Date(latestSuccessfulPayment.getTime());
-    derivedExpiry.setUTCDate(derivedExpiry.getUTCDate() + planDurationDays);
-    const derivedValue = derivedExpiry.toISOString();
-    setCachedWorkspaceSubscriptionExpiry(cacheKey, derivedValue);
-    return derivedValue;
+    const details = resolveWorkspaceSubscriptionDetailsFromAdminPayload(payload, {
+      currentPlanHint: options?.currentPlanHint,
+    });
+    setCachedWorkspaceSubscriptionExpiry(cacheKey, details);
+    return details;
   })().finally(() => {
     workspaceSubscriptionExpiryInFlight.delete(cacheKey);
   });
@@ -2222,15 +2540,18 @@ const enrichWorkspaceProfile = async (
   options?: { rawUserId?: string | null },
 ): Promise<WorkspaceProfile> => {
   const profile = buildWorkspaceProfile(payload);
-  if (profile.plan === "FREE" || profile.expiresAt) {
+  if (profile.startPlanUsed && (profile.plan === "FREE" || profile.expiresAt)) {
     return profile;
   }
 
   try {
-    const expiresAt = await fetchAdsflowSubscriptionExpiry(options?.rawUserId ?? payload?.user_id);
+    const details = await fetchAdsflowSubscriptionDetails(options?.rawUserId ?? payload?.user_id, {
+      currentPlanHint: profile.plan,
+    });
     return {
       ...profile,
-      expiresAt,
+      expiresAt: profile.expiresAt ?? details.expiresAt,
+      startPlanUsed: profile.startPlanUsed || details.startPlanUsed,
     };
   } catch {
     return profile;
@@ -2545,6 +2866,7 @@ const ADSFLOW_MUTATION_TIMEOUT_MS = 90_000;
 
 type AdsflowRequestOptions = {
   retryDelaysMs?: number[];
+  silentStatuses?: number[];
   timeoutMs?: number;
 };
 
@@ -2627,7 +2949,9 @@ const fetchAdsflowJson = async <T>(url: URL, init?: RequestInit, options?: Adsfl
         ? payload.detail
         : `AdsFlow request failed (${response.status}).`;
 
-    console.error("[adsflow] HTTP error", url.pathname, response.status, JSON.stringify(payload));
+    if (!(options?.silentStatuses ?? []).includes(response.status)) {
+      console.error("[adsflow] HTTP error", url.pathname, response.status, JSON.stringify(payload));
+    }
 
     if (response.status === 402) {
       throw new WorkspaceCreditLimitError(detail);
@@ -3056,6 +3380,7 @@ export async function createStudioGenerationJob(
     customVideoFileDataUrl?: string;
     customVideoFileMimeType?: string;
     customVideoFileName?: string;
+    editedFromProjectAdId?: number;
     isRegeneration?: boolean;
     language?: string;
     musicType?: string;
@@ -3064,6 +3389,7 @@ export async function createStudioGenerationJob(
     subtitleEnabled?: boolean;
     subtitleColorId?: string;
     subtitleStyleId?: string;
+    versionRootProjectAdId?: number;
     videoMode?: string;
     voiceEnabled?: boolean;
     voiceId?: string;
@@ -3109,23 +3435,25 @@ export async function createStudioGenerationJob(
   const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
   const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
   const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
+  const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
+  const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
 
   if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
-    throw new Error("Upload a custom music track or choose a different music mode.");
+    throw new Error("Загрузите свой музыкальный трек или выберите другой режим музыки.");
   }
 
   if (normalizedVideoMode === "custom" && !normalizedCustomVideoAssetId && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
-    throw new Error("Upload a custom video or choose a different video mode.");
+    throw new Error("Загрузите своё видео или выберите другой режим видео.");
   }
 
   if (normalizedSegmentEditor && !options?.isRegeneration) {
-    throw new Error("Segment editor can only be used during regeneration.");
+    throw new Error("Редактор сегментов можно использовать только при перегенерации.");
   }
 
   if (normalizedSegmentEditor && !normalizedProjectId) {
-    throw new Error("Project id is required for segment editor regeneration.");
+    throw new Error("Для перегенерации из редактора сегментов нужен project id.");
   }
 
   let jobCreated = false;
@@ -3290,12 +3618,14 @@ export async function createStudioGenerationJob(
 
     try {
       await saveWorkspaceGenerationHistory(user, {
+        editedFromProjectAdId: normalizedEditedFromProjectAdId ?? null,
         description: queuedMetadata.description,
         hashtags: queuedMetadata.hashtags,
         jobId,
         prompt: queuedMetadata.prompt,
         status: String(payload.status ?? "queued"),
         title: queuedMetadata.title,
+        versionRootProjectAdId: normalizedVersionRootProjectAdId ?? null,
       });
     } catch (error) {
       console.error("[studio] Failed to persist queued generation", error);
@@ -3635,6 +3965,7 @@ export async function improveStudioSegmentAiPhotoPrompt(
   prompt: string,
   options?: {
     language?: string;
+    mode?: StudioSegmentPromptImproveMode | string;
   },
 ): Promise<StudioSegmentAiPhotoPromptImproveResult> {
   const normalizedPrompt = normalizePrompt(prompt);
@@ -3643,15 +3974,23 @@ export async function improveStudioSegmentAiPhotoPrompt(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
-  const modelCandidates = getStudioOpenRouterModelCandidates();
+  const normalizedMode = normalizeStudioSegmentPromptImproveMode(options?.mode);
+  const modelCandidates = getStudioOpenRouterPromptEnhancementModelCandidates();
   let lastError: Error | null = null;
+  const hasConfiguredOpenRouterKey = Boolean(String(env.openrouterApiKey ?? "").trim());
+  const hasOpenRouter = hasUsableOpenRouterApiKey(env.openrouterApiKey);
 
-  if (env.openrouterApiKey && modelCandidates.length > 0) {
+  if (hasConfiguredOpenRouterKey && !hasOpenRouter) {
+    throw createStudioOpenRouterMissingConfigError();
+  }
+
+  if (hasOpenRouter && modelCandidates.length > 0) {
     for (const model of modelCandidates) {
       try {
-        const improvedPrompt = await requestStudioSegmentAiPhotoPromptEnhancement(
+        const improvedPrompt = await requestStudioSegmentPromptEnhancement(
           normalizedPrompt,
           normalizedLanguage,
+          normalizedMode,
           model,
         );
         return {
@@ -3664,7 +4003,15 @@ export async function improveStudioSegmentAiPhotoPrompt(
     }
   }
 
-  const fallbackPrompt = buildStudioSegmentAiPhotoPromptEnhancementFallback(normalizedPrompt, normalizedLanguage);
+  if (hasOpenRouter) {
+    throw lastError ?? new Error("Failed to improve segment AI photo prompt with OpenRouter.");
+  }
+
+  const fallbackPrompt = buildStudioSegmentPromptEnhancementFallback(
+    normalizedPrompt,
+    normalizedLanguage,
+    normalizedMode,
+  );
   if (fallbackPrompt) {
     return {
       prompt: fallbackPrompt,
@@ -4098,6 +4445,7 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       adId: payload.ad_id ?? null,
       description: resolvedMetadata.description,
       downloadPath: payload.download_path ?? null,
+      editedFromProjectAdId: existingHistoryEntry?.editedFromProjectAdId ?? null,
       error: payload.error ?? null,
       finalAssetId: payload.media_asset_id ?? existingHistoryEntry?.finalAssetId ?? null,
       finalAssetKind: "final_video",
@@ -4109,6 +4457,7 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       status,
       title: resolvedMetadata.title,
       updatedAt: payload.generated_at ?? new Date().toISOString(),
+      versionRootProjectAdId: existingHistoryEntry?.versionRootProjectAdId ?? null,
     });
   } catch (error) {
     console.error("[studio] Failed to sync generation history", error);

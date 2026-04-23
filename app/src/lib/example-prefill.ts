@@ -1,18 +1,11 @@
-export type ExamplePrefillIntent = {
-  exampleId: string;
-  prompt: string;
-};
+import {
+  normalizeExamplePrefillIntent,
+  type ExamplePrefillIntent,
+} from "../../shared/example-prefill";
+
+export type { ExamplePrefillIntent } from "../../shared/example-prefill";
 
 const EXAMPLE_PREFILL_INTENT_STORAGE_KEY = "adshorts.example-prefill-intent";
-
-const isValidExamplePrefillIntent = (value: unknown): value is ExamplePrefillIntent => {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const payload = value as { exampleId?: unknown; prompt?: unknown };
-  return typeof payload.exampleId === "string" && payload.exampleId.trim().length > 0 && typeof payload.prompt === "string" && payload.prompt.trim().length > 0;
-};
 
 export const readExamplePrefillIntent = (): ExamplePrefillIntent | null => {
   if (typeof window === "undefined") {
@@ -24,15 +17,13 @@ export const readExamplePrefillIntent = (): ExamplePrefillIntent | null => {
     if (!rawValue) return null;
 
     const payload = JSON.parse(rawValue) as unknown;
-    if (!isValidExamplePrefillIntent(payload)) {
+    const normalizedIntent = normalizeExamplePrefillIntent(payload);
+    if (!normalizedIntent) {
       window.sessionStorage.removeItem(EXAMPLE_PREFILL_INTENT_STORAGE_KEY);
       return null;
     }
 
-    return {
-      exampleId: payload.exampleId.trim(),
-      prompt: payload.prompt.trim(),
-    };
+    return normalizedIntent;
   } catch {
     return null;
   }
@@ -43,12 +34,9 @@ export const writeExamplePrefillIntent = (intent: ExamplePrefillIntent) => {
     return;
   }
 
-  const normalizedIntent: ExamplePrefillIntent = {
-    exampleId: intent.exampleId.trim(),
-    prompt: intent.prompt.trim(),
-  };
+  const normalizedIntent = normalizeExamplePrefillIntent(intent);
 
-  if (!normalizedIntent.exampleId || !normalizedIntent.prompt) {
+  if (!normalizedIntent) {
     return;
   }
 

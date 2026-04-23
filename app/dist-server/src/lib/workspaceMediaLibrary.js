@@ -87,11 +87,42 @@ const getWorkspaceMediaLibraryAssetIdentity = (value) => {
     return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
 };
 export const getWorkspaceMediaLibraryAssetIdentityKey = (value) => getWorkspaceMediaLibraryAssetIdentity(value);
-export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => typeof item.assetId === "number" && item.assetId > 0
-    ? `asset:${item.assetId}`
-    : item.kind === "photo_animation" && item.previewPosterUrl
-        ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
+export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => item.kind === "photo_animation" && item.previewPosterUrl
+    ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
+    : typeof item.assetId === "number" && item.assetId > 0
+        ? `asset:${item.assetId}`
         : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
+export const getWorkspaceMediaLibraryResolvedDedupeKey = (item) => `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
+const getWorkspaceMediaLibraryVideoModeSlotKey = (item) => item.kind === "ai_video" || item.kind === "photo_animation"
+    ? `project:${item.projectId}:segment:${item.segmentIndex}:generated-video`
+    : null;
+const shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision = (left, right) => left.kind !== right.kind &&
+    (left.kind === "ai_video" || left.kind === "photo_animation") &&
+    (right.kind === "ai_video" || right.kind === "photo_animation") &&
+    (left.source !== "persisted" || right.source !== "persisted");
+export const dedupeWorkspaceMediaLibraryItems = (items) => {
+    const itemsByPrimaryKey = new Map();
+    const primaryKeysByVideoModeSlot = new Map();
+    for (const item of items) {
+        const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
+        const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
+        const existingPrimaryKey = videoModeSlotKey ? primaryKeysByVideoModeSlot.get(videoModeSlotKey) ?? null : null;
+        if (existingPrimaryKey) {
+            const existingItem = itemsByPrimaryKey.get(existingPrimaryKey) ?? null;
+            if (existingItem &&
+                shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision(existingItem, item)) {
+                continue;
+            }
+        }
+        if (!itemsByPrimaryKey.has(primaryKey)) {
+            itemsByPrimaryKey.set(primaryKey, item);
+            if (videoModeSlotKey && !primaryKeysByVideoModeSlot.has(videoModeSlotKey)) {
+                primaryKeysByVideoModeSlot.set(videoModeSlotKey, primaryKey);
+            }
+        }
+    }
+    return Array.from(itemsByPrimaryKey.values());
+};
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options) => {
     if (typeof options.assetId === "number" && options.assetId > 0) {
         return `asset:${options.assetId}`;

@@ -20,11 +20,47 @@ const renderLandingPage = () =>
   );
 
 describe("LandingPage guides section", () => {
+  it("renders the updated hero headline", () => {
+    renderLandingPage();
+
+    expect(
+      screen.getByRole("heading", {
+        name: /Shorts \/ Reels \/ TikTok за\s*1\s*минуту\. В один клик\./,
+      }),
+    ).toBeTruthy();
+  });
+
+  it("syncs the hero preview position with the current scroll on initial render", () => {
+    const scrollYDescriptor = Object.getOwnPropertyDescriptor(window, "scrollY");
+
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 240,
+    });
+
+    try {
+      const { container } = renderLandingPage();
+      const heroPreview = container.querySelector<HTMLElement>(".hero-live-preview__perspective");
+
+      expect(heroPreview).toBeTruthy();
+      expect(heroPreview?.style.transform).toContain("translateY(-16px)");
+    } finally {
+      if (scrollYDescriptor) {
+        Object.defineProperty(window, "scrollY", scrollYDescriptor);
+      } else {
+        Object.defineProperty(window, "scrollY", {
+          configurable: true,
+          value: 0,
+        });
+      }
+    }
+  });
+
   it("renders production guide links and keeps them external", () => {
     renderLandingPage();
 
     const guidesSection = screen.getByRole("region", {
-      name: "Полезные материалы привлекают трафик и подводят к продукту.",
+      name: "Полезные материалы по созданию Shorts",
     });
     const guideCards = Array.from(guidesSection.querySelectorAll<HTMLAnchorElement>(".guide-card"));
 
@@ -57,8 +93,15 @@ describe("LandingPage guides section", () => {
       .getByRole("heading", { name: /Доведите Shorts до идеала/ })
       .closest("section");
 
-    expect(workflowSection?.className).toContain("section--workflow");
-    expect(workflowSection?.className).toContain("section--paper");
-    expect(refineSection?.className).toContain("section--paper");
+    expect(workflowSection?.className).toContain("lp-section--workflow");
+    expect(refineSection?.className).toContain("section--landing-refine");
+    expect(workflowSection).toBeTruthy();
+    expect(refineSection).toBeTruthy();
+
+    if (!workflowSection || !refineSection) {
+      throw new Error("Expected workflow and refine sections to exist");
+    }
+
+    expect(workflowSection.compareDocumentPosition(refineSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

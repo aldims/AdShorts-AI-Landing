@@ -9,8 +9,8 @@ const DEAPI_TTS_STATUS_URL = "https://api.deapi.ai/api/v1/client/request-status"
 const DEAPI_TTS_MODEL_SLUG = "Qwen3_TTS_12Hz_1_7B_CustomVoice";
 const DEAPI_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEAPI_PREVIEW_CACHE_DIR = join(env.dataDir, "voice-previews");
-const DEAPI_PREVIEW_TEXT_EN = "Studio voice preview for an English video ad.";
-const WAVESPEED_PREVIEW_TEXT_RU = "Это быстрый тест русского голоса для вашего видео.";
+const DEAPI_PREVIEW_TEXT_EN = "Listen to how the voice sounds — its pace, intonation, and overall quality.";
+const WAVESPEED_PREVIEW_TEXT_RU = "Послушайте, как звучит голос, его темп, интонация и общее восприятие.";
 const deapiPreviewAgent = new Agent({
     rejectUnauthorized: env.deapiVerifySsl,
 });
@@ -30,6 +30,14 @@ const englishVoiceAliases = new Map([
     ["sohee", "Sohee"],
 ]);
 const russianWaveSpeedVoiceAliases = new Map([
+    ["bys_24000", "Bys_24000"],
+    ["nec_24000", "Nec_24000"],
+    ["tur_24000", "Tur_24000"],
+    ["may_24000", "May_24000"],
+    ["ost_24000", "Ost_24000"],
+    ["pon_24000", "Pon_24000"],
+    ["rma_24000", "Rma_24000"],
+    ["rnu_24000", "Rnu_24000"],
     ["male-qn-jingying", "male-qn-jingying"],
     ["aleksey", "male-qn-jingying"],
     ["alexey", "male-qn-jingying"],
@@ -48,7 +56,8 @@ const normalizeRussianWaveSpeedVoiceId = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase().replace(/[-\s]+/g, "-");
     return russianWaveSpeedVoiceAliases.get(normalized) ?? null;
 };
-const getPreviewText = (language) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : WAVESPEED_PREVIEW_TEXT_RU);
+const getDefaultPreviewText = (language) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : WAVESPEED_PREVIEW_TEXT_RU);
+const normalizePreviewText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const getPreviewCachePath = (voiceId, language, previewText) => {
     const hash = createHash("sha1").update(`${voiceId}:${language}:${previewText}`).digest("hex");
     return join(DEAPI_PREVIEW_CACHE_DIR, `${hash}.wav`);
@@ -72,6 +81,7 @@ const fetchAdsflowVoicePreview = async (options) => {
     const previewUrl = new URL("/api/web/voice-preview", env.adsflowApiBaseUrl);
     previewUrl.searchParams.set("admin_token", env.adsflowAdminToken);
     previewUrl.searchParams.set("language", options.language);
+    previewUrl.searchParams.set("text", options.previewText);
     previewUrl.searchParams.set("voice_id", options.voiceId);
     const response = await fetch(previewUrl, {
         headers: {
@@ -201,7 +211,7 @@ const pollDeapiPreviewResult = async (requestId) => {
 };
 export async function getStudioVoicePreview(options) {
     const language = normalizePreviewLanguage(options?.language);
-    const previewText = getPreviewText(language);
+    const previewText = normalizePreviewText(options?.previewText) || getDefaultPreviewText(language);
     if (language === "ru") {
         const normalizedVoiceId = normalizeRussianWaveSpeedVoiceId(options?.voiceId);
         if (!normalizedVoiceId) {
@@ -218,6 +228,7 @@ export async function getStudioVoicePreview(options) {
         try {
             const preview = await fetchAdsflowVoicePreview({
                 language,
+                previewText,
                 voiceId: normalizedVoiceId,
             });
             writeFileSync(cachePath, preview.audio);
@@ -228,6 +239,9 @@ export async function getStudioVoicePreview(options) {
                 error: adsflowError instanceof Error ? adsflowError.message : String(adsflowError),
                 voiceId: normalizedVoiceId,
             });
+            if (normalizedVoiceId !== "male-qn-jingying") {
+                throw adsflowError instanceof Error ? adsflowError : new Error("Russian voice preview failed.");
+            }
         }
         return generateWaveSpeedSpeechPreview({
             format: "wav",
@@ -235,9 +249,6 @@ export async function getStudioVoicePreview(options) {
             text: previewText,
             voiceId: normalizedVoiceId,
         });
-    }
-    if (!env.deapiApiKey) {
-        throw new Error("DEAPI preview is not configured on this server.");
     }
     const normalizedVoiceId = normalizeEnglishVoiceId(options?.voiceId);
     if (!normalizedVoiceId) {
@@ -250,6 +261,24 @@ export async function getStudioVoicePreview(options) {
             audio: cachedAudio,
             contentType: "audio/wav",
         };
+    }
+    try {
+        const preview = await fetchAdsflowVoicePreview({
+            language,
+            previewText,
+            voiceId: normalizedVoiceId,
+        });
+        writeFileSync(cachePath, preview.audio);
+        return preview;
+    }
+    catch (adsflowError) {
+        console.warn("[workspace] AdsFlow English voice preview failed, falling back to direct DEAPI", {
+            error: adsflowError instanceof Error ? adsflowError.message : String(adsflowError),
+            voiceId: normalizedVoiceId,
+        });
+    }
+    if (!env.deapiApiKey) {
+        throw new Error("DEAPI preview is not configured on this server.");
     }
     const createResponse = await requestHttps(DEAPI_TTS_API_URL, {
         body: JSON.stringify({

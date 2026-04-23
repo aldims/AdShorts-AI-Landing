@@ -35,6 +35,22 @@ describe("workspace resolved media surface", () => {
     expect(surface.primePausedFrame).toBe(false);
   });
 
+  it("supports warmed carousel video playback before the click", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "segment-carousel-card",
+      displayUrl: "/api/workspace/project-segment-video?projectId=2893&segmentIndex=2",
+      forceMountVideoWhenIdle: true,
+      posterUrl: "https://cdn.example.com/poster.jpg",
+      previewKind: "video",
+      viewerUrl: "/api/workspace/project-segment-video?projectId=2893&segmentIndex=2",
+    });
+
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("auto");
+    expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.posterUrl).toBe("https://cdn.example.com/poster.jpg");
+  });
+
   it("keeps generated AI video poster routes when the poster comes from the generated video", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-carousel-card",
@@ -67,7 +83,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.preferPosterFrame).toBe(true);
   });
 
-  it("keeps thumb video idle when a segment has no poster", () => {
+  it("mounts thumb video when a segment has no poster", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-thumb",
       displayUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
@@ -76,10 +92,10 @@ describe("workspace resolved media surface", () => {
       viewerUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
     });
 
-    expect(surface.mountVideoWhenIdle).toBe(false);
-    expect(surface.preloadPolicy).toBe("none");
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
     expect(surface.preferPosterFrame).toBe(true);
-    expect(surface.primePausedFrame).toBe(false);
+    expect(surface.primePausedFrame).toBe(true);
   });
 
   it("always mounts media-library video tiles and primes a paused frame", () => {

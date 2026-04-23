@@ -1,7 +1,7 @@
 import {
   areWorkspaceMediaLibraryUrlsEqual,
   createWorkspaceMediaLibraryItem,
-  getWorkspaceMediaLibraryDisplayAssetIdentityKey,
+  dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryUrlMarker,
   getWorkspaceImageDownloadName,
   getWorkspaceProjectDisplayTitle,
@@ -241,6 +241,17 @@ const parseWorkspaceMediaLibraryCursor = (value: string | null | undefined) => {
 
 const buildWorkspaceMediaLibraryNextCursor = (offset: number) => String(Math.max(0, offset));
 
+export const getWorkspaceMediaLibraryNextCursorForPage = (options: {
+  hasAdditionalItems: boolean;
+  offset: number;
+  pageItemCount: number;
+}) => {
+  const nextOffset = options.offset + options.pageItemCount;
+  return options.hasAdditionalItems && nextOffset > options.offset
+    ? buildWorkspaceMediaLibraryNextCursor(nextOffset)
+    : null;
+};
+
 const getWorkspaceMediaLibraryProjectVersion = (project: WorkspaceProject) =>
   `${normalizeText(project.updatedAt || project.generatedAt || project.createdAt || project.id)}:${WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION}`;
 
@@ -337,6 +348,43 @@ const WORKSPACE_MEDIA_LIBRARY_SOURCE_INPUT_CLASSIFIERS = new Set([
   "source_upload",
 ]);
 
+const WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS = new Set([
+  "ai",
+  "ai_generated",
+  "ai_image",
+  "ai_photo",
+  "ai_video",
+  "generated",
+  "image_edit",
+  "photo_animation",
+  "segment_ai_image",
+  "segment_ai_photo",
+  "segment_ai_video",
+  "source_ai_image",
+  "source_ai_photo",
+]);
+
+const WORKSPACE_MEDIA_LIBRARY_NON_AI_CLASSIFIERS = new Set([
+  "custom",
+  "custom_photo",
+  "custom_video",
+  "library",
+  "media_library",
+  "pexels",
+  "pixabay",
+  "stock",
+  "stock_photo",
+  "stock_video",
+  "telegram",
+  "unsplash",
+  "upload",
+  "uploaded",
+  "uploaded_photo",
+  "uploaded_video",
+  "user",
+  "user_upload",
+]);
+
 const isWorkspaceDurableFinalVideoAsset = (
   asset: ReturnType<typeof buildWorkspaceMediaAssetRef>,
 ) => {
@@ -356,6 +404,7 @@ const isWorkspaceDurableFinalVideoAsset = (
     asset.kind,
     asset.role,
     asset.sourceKind,
+    asset.libraryKind,
   ].map(normalizeWorkspaceDurableAssetClassifier);
 
   return classifiers.some((classifier) => {
@@ -384,6 +433,7 @@ const getWorkspaceDurableAssetClassifiers = (
     asset?.kind,
     asset?.role,
     asset?.sourceKind,
+    asset?.libraryKind,
   ].map(normalizeWorkspaceDurableAssetClassifier);
 
 const isWorkspaceDurableSourceInputAsset = (
@@ -398,15 +448,56 @@ const isWorkspaceDurableSourceInputAsset = (
   );
 };
 
+const isWorkspaceAiGeneratedClassifier = (classifier: string) =>
+  WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS.has(classifier);
+
+const isWorkspaceNonAiClassifier = (classifier: string) =>
+  WORKSPACE_MEDIA_LIBRARY_NON_AI_CLASSIFIERS.has(classifier) ||
+  classifier.includes("custom") ||
+  classifier.includes("stock") ||
+  classifier.includes("upload") ||
+  classifier.includes("uploaded") ||
+  classifier.includes("user_upload");
+
+const isWorkspaceDurableAiGeneratedAsset = (
+  asset: ReturnType<typeof buildWorkspaceMediaAssetRef>,
+) => {
+  if (!asset) {
+    return false;
+  }
+
+  const classifiers = getWorkspaceDurableAssetClassifiers(asset).filter(Boolean);
+  if (classifiers.some(isWorkspaceNonAiClassifier)) {
+    return false;
+  }
+
+  if (classifiers.some(isWorkspaceAiGeneratedClassifier)) {
+    return true;
+  }
+
+  const storageKey = normalizeText(asset.storageKey).toLowerCase();
+  return (
+    storageKey.includes("/source_ai_image/") ||
+    storageKey.includes("/source_ai_photo/") ||
+    storageKey.includes("wavespeed") ||
+    storageKey.includes("deapi")
+  );
+};
+
 export const getWorkspaceMediaLibraryKindFromDurableAsset = (
   asset: ReturnType<typeof buildWorkspaceMediaAssetRef>,
 ): WorkspaceMediaLibraryItemKind | null => {
-  if (!asset || isWorkspaceDurableFinalVideoAsset(asset) || isWorkspaceDurableSourceInputAsset(asset)) {
+  if (
+    !asset ||
+    isWorkspaceDurableFinalVideoAsset(asset) ||
+    isWorkspaceDurableSourceInputAsset(asset) ||
+    !isWorkspaceDurableAiGeneratedAsset(asset)
+  ) {
     return null;
   }
 
   const mediaType = normalizeText(asset.mediaType).toLowerCase();
-  const classifier = `${normalizeText(asset.kind)} ${normalizeText(asset.role)} ${normalizeText(asset.sourceKind)}`.toLowerCase();
+  const classifier = `${normalizeText(asset.kind)} ${normalizeText(asset.role)} ${normalizeText(asset.sourceKind)} ${normalizeText(asset.libraryKind)}`.toLowerCase();
 
   if (mediaType === "video") {
     if (classifier.includes("photo_animation") || classifier.includes("animation")) {
@@ -454,6 +545,53 @@ const buildWorkspaceDurableMediaAssetPosterUrl = (
   }
 
   return `${posterUrl.pathname}${posterUrl.search}`;
+};
+
+const getWorkspaceMediaLibraryItemSpecificityRank = (item: WorkspaceMediaLibraryItem) => {
+  if (item.kind === "photo_animation" || item.kind === "image_edit") {
+    return 3;
+  }
+
+  if (item.kind === "ai_video" || item.kind === "ai_photo") {
+    return 2;
+  }
+
+  return 1;
+};
+
+export const dedupeWorkspaceMediaLibraryPageItems = (items: WorkspaceMediaLibraryItem[]) => {
+  const dedupedItems = dedupeWorkspaceMediaLibraryItems(items);
+  const itemIndexesByAssetId = new Map<number, number>();
+  const result: WorkspaceMediaLibraryItem[] = [];
+
+  for (const item of dedupedItems) {
+    const assetId =
+      typeof item.assetId === "number" && item.assetId > 0
+        ? item.assetId
+        : null;
+
+    if (!assetId) {
+      result.push(item);
+      continue;
+    }
+
+    const existingIndex = itemIndexesByAssetId.get(assetId);
+    if (existingIndex === undefined) {
+      itemIndexesByAssetId.set(assetId, result.length);
+      result.push(item);
+      continue;
+    }
+
+    const existingItem = result[existingIndex];
+    if (
+      getWorkspaceMediaLibraryItemSpecificityRank(item) >
+      getWorkspaceMediaLibraryItemSpecificityRank(existingItem)
+    ) {
+      result[existingIndex] = item;
+    }
+  }
+
+  return result;
 };
 
 const buildWorkspaceDurableMediaLibraryItem = (
@@ -587,7 +725,7 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
         .filter((item): item is WorkspaceMediaLibraryItem => Boolean(item)),
     );
 
-    const dedupedVisibleCount = dedupeWorkspaceMediaLibraryItems([
+    const dedupedVisibleCount = dedupeWorkspaceMediaLibraryPageItems([
       ...existingItems,
       ...collectedItems,
     ]).length;
@@ -609,22 +747,6 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
     hasMore,
     items: collectedItems,
   };
-};
-
-const dedupeWorkspaceMediaLibraryItems = (items: WorkspaceMediaLibraryItem[]) => {
-  const itemsByIdentity = new Map<string, WorkspaceMediaLibraryItem>();
-
-  for (const item of items) {
-    const identity =
-      typeof item.assetId === "number" && item.assetId > 0
-        ? `asset:${item.assetId}`
-        : `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
-    if (!itemsByIdentity.has(identity)) {
-      itemsByIdentity.set(identity, item);
-    }
-  }
-
-  return Array.from(itemsByIdentity.values());
 };
 
 const getWorkspacePhotoOriginalPreviewUrl = (segment: WorkspaceSegmentEditorSegment) =>
@@ -749,6 +871,18 @@ const isWorkspaceMediaIndexEntryUsable = (entry: WorkspaceMediaIndexProjectEntry
     return Boolean(normalizeText(item.previewUrl));
   });
 
+const isWorkspaceAiGeneratedSourceKind = (value: unknown) =>
+  isWorkspaceAiGeneratedClassifier(normalizeWorkspaceDurableAssetClassifier(value));
+
+const isWorkspaceMediaLibraryAiGeneratedAsset = (
+  asset: WorkspaceSegmentEditorSegment["currentAsset"] | WorkspaceSegmentEditorSegment["originalAsset"],
+) => Boolean(asset && isWorkspaceDurableAiGeneratedAsset(asset));
+
+const isWorkspaceMediaLibraryAiGeneratedSegmentSource = (
+  sourceKind: unknown,
+  asset: WorkspaceSegmentEditorSegment["currentAsset"] | WorkspaceSegmentEditorSegment["originalAsset"],
+) => isWorkspaceAiGeneratedSourceKind(sourceKind) || isWorkspaceMediaLibraryAiGeneratedAsset(asset);
+
 export const buildWorkspacePersistedMediaLibraryItems = (
   project: WorkspaceProject & { adId: number },
   session: WorkspaceSegmentEditorSession,
@@ -766,7 +900,12 @@ export const buildWorkspacePersistedMediaLibraryItems = (
     const items: WorkspaceMediaLibraryItem[] = [];
 
     if (segment.mediaType !== "photo") {
+      const hasAiGeneratedCurrentSource = isWorkspaceMediaLibraryAiGeneratedSegmentSource(
+        segment.currentSourceKind,
+        segment.currentAsset,
+      );
       const hasAiVideoVariant =
+        hasAiGeneratedCurrentSource &&
         Boolean(currentPreviewUrl || currentPlaybackUrl) &&
         (!originalPreviewUrl ||
           !originalPlaybackUrl ||
@@ -837,8 +976,16 @@ export const buildWorkspacePersistedMediaLibraryItems = (
 
     const originalPhotoPreviewUrl = getWorkspacePhotoOriginalPreviewUrl(segment);
     const originalPhotoDownloadUrl = getWorkspacePhotoOriginalDownloadUrl(segment);
+    const hasAiGeneratedOriginalSource = isWorkspaceMediaLibraryAiGeneratedSegmentSource(
+      segment.originalSourceKind,
+      segment.originalAsset,
+    );
 
-    if (originalPhotoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.originalAsset?.assetId, segment.originalAsset?.lifecycle)) {
+    if (
+      hasAiGeneratedOriginalSource &&
+      originalPhotoPreviewUrl &&
+      isWorkspaceMediaLibraryAssetVisible(segment.originalAsset?.assetId, segment.originalAsset?.lifecycle)
+    ) {
       items.push(
         createWorkspaceMediaLibraryItem({
           assetExpiresAt: segment.originalAsset?.expiresAt ?? null,
@@ -875,6 +1022,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
     }
 
     const hasAnimatedVariant =
+      isWorkspaceMediaLibraryAiGeneratedSegmentSource(segment.currentSourceKind, segment.currentAsset) &&
       Boolean(
         getWorkspacePhotoAnimationPreviewUrl(segment) ||
         getWorkspacePhotoAnimationDownloadUrl(segment),
@@ -1311,7 +1459,7 @@ export const getWorkspaceMediaLibraryItems = async (
       offset,
     });
     const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(
-      dedupeWorkspaceMediaLibraryItems([
+      dedupeWorkspaceMediaLibraryPageItems([
         ...hydratedIndexItems,
         ...durableMedia.items,
       ]),
@@ -1321,13 +1469,19 @@ export const getWorkspaceMediaLibraryItems = async (
       offset + pageItems.length < allItems.length ||
       entries.hasPendingProjects ||
       durableMedia.hasMore;
+    const nextCursor = getWorkspaceMediaLibraryNextCursorForPage({
+      hasAdditionalItems,
+      offset,
+      pageItemCount: pageItems.length,
+    });
+    const nextOffset = offset + pageItems.length;
     const total = hasAdditionalItems
-      ? Math.max(allItems.length, offset + pageItems.length + 1)
+      ? Math.max(allItems.length, nextOffset + 1)
       : allItems.length;
 
     return {
       items: pageItems,
-      nextCursor: hasAdditionalItems ? buildWorkspaceMediaLibraryNextCursor(offset + pageItems.length) : null,
+      nextCursor,
       total,
     } satisfies WorkspaceMediaLibraryPage;
   });

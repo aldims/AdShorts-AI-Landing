@@ -1,4 +1,5 @@
 const WORKSPACE_SEGMENT_VIDEO_ROUTE_PATTERN = /\/api\/workspace\/project-segment-video(?:[/?#]|$)/i;
+const WORKSPACE_MEDIA_ASSET_PLAYBACK_ROUTE_PATTERN = /\/api\/workspace\/media-assets\/\d+\/playback(?:[/?#]|$)/i;
 const MEDIA_DOWNLOAD_VIDEO_ROUTE_PATTERN = /\/api\/media\/\d+\/download(?:[/?#]|$)/i;
 const VIDEO_ASSET_URL_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
 
@@ -23,6 +24,7 @@ export const isLikelyVideoAssetUrl = (value: string | null | undefined) => {
 
   return (
     WORKSPACE_SEGMENT_VIDEO_ROUTE_PATTERN.test(normalizedValue) ||
+    WORKSPACE_MEDIA_ASSET_PLAYBACK_ROUTE_PATTERN.test(normalizedValue) ||
     MEDIA_DOWNLOAD_VIDEO_ROUTE_PATTERN.test(normalizedValue) ||
     VIDEO_ASSET_URL_PATTERN.test(normalizedValue)
   );
