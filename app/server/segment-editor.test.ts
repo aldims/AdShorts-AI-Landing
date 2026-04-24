@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildWorkspaceSegmentEditorSessionFromPayload,
   buildWorkspaceSegmentEditorSegment,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
@@ -158,6 +159,61 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.currentAsset?.lifecycle).toBe("ready");
     expect(segment?.originalAsset?.assetId).toBe(901);
     expect(segment?.originalAsset?.lifecycle).toBe("ready");
+  });
+
+  it("does not treat a current upload as the original visual when an original marker exists", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        index: 0,
+        media_type: "photo",
+        original_video: "original-marker",
+        text: "Segment",
+      },
+      {
+        currentEntries: [
+          {
+            download_url: "/api/media/1001/download",
+            media_asset_id: 1001,
+            media_type: "photo",
+            role: "segment_current",
+            source_kind: "upload",
+          },
+        ],
+        originalEntries: [],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: false,
+      },
+    );
+
+    expect(segment?.currentSourceKind).toBe("upload");
+    expect(segment?.originalAsset?.assetId).not.toBe(1001);
+    expect(segment?.originalAsset?.lifecycle).toBe("unavailable");
+    expect(segment?.originalSourceKind).toBe("unknown");
+    expect(segment?.originalPlaybackUrl).toContain("source=original");
+  });
+
+  it("keeps the requested project id when upstream returns a different segment-editor project_id", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(3127, {
+      project_id: 3117,
+      segments: [
+        {
+          current_video: "current-marker",
+          duration: 4,
+          index: 0,
+          media_type: "photo",
+          original_video: "original-marker",
+          text: "Segment",
+        },
+      ],
+      title: "Selected project",
+    });
+
+    expect(session.projectId).toBe(3127);
+    expect(session.title).toBe("Selected project");
+    expect(session.segments[0]?.currentPlaybackUrl).toContain("projectId=3127");
+    expect(session.segments[0]?.originalPlaybackUrl).toContain("projectId=3127");
   });
 
   it("resolves custom music metadata from project details for segment editor reuse", () => {

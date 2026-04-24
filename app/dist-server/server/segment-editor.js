@@ -23,6 +23,10 @@ const normalizeNumber = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 };
+const normalizePositiveProjectId = (value) => {
+    const normalized = normalizeInteger(value);
+    return normalized !== null && normalized > 0 ? normalized : null;
+};
 const normalizeMediaType = (value) => String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
 const normalizeUrl = (value) => {
     const normalized = typeof value === "string" ? value.trim() : "";
@@ -151,7 +155,7 @@ const detectWorkspaceSegmentSourceKind = (entry) => {
 };
 const getProjectMediaEntryPreviewUrl = (entry) => getProjectMediaEntryRenderableUrl(entry, entry?.preview, entry?.download_url, entry?.url);
 const getProjectMediaEntryPlaybackUrl = (entry) => pickWorkspaceRenderableMediaUrl(entry?.download_url, entry?.url, entry?.preview);
-const getProjectOriginalMediaEntries = (payload) => pickProjectMediaEntries(payload?.source_video_urls, payload?.generation_settings?.original_videos, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, payload?.video_urls, payload?.background_urls);
+const getProjectOriginalMediaEntries = (payload) => pickProjectMediaEntries(payload?.source_video_urls, payload?.generation_settings?.original_videos);
 const getProjectCurrentMediaEntries = (payload, originalEntries) => pickProjectMediaEntries(payload?.generation_settings?.current_rendered_segments, payload?.video_urls, payload?.background_urls, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, originalEntries);
 const buildProjectMediaAssetIndex = (assets) => new Map(assets
     .filter((asset) => typeof asset.assetId === "number" && asset.assetId > 0)
@@ -398,6 +402,54 @@ const buildWorkspaceSegmentEditorVideoUrl = (projectId, segmentIndex, source, de
     }
     return `${previewUrl.pathname}${previewUrl.search}`;
 };
+export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId, payload, options = {}) => {
+    const sessionProjectId = normalizePositiveProjectId(requestedProjectId) ?? requestedProjectId;
+    const upstreamProjectId = normalizePositiveProjectId(payload.project_id);
+    if (upstreamProjectId !== null && upstreamProjectId !== sessionProjectId) {
+        console.warn("[segment-editor] Upstream returned a different project_id for segment editor; using requested project id", {
+            requestedProjectId: sessionProjectId,
+            upstreamProjectId,
+        });
+    }
+    const projectDetailsPayload = options.projectDetailsPayload ?? null;
+    const projectMediaEnvelope = options.projectMediaEnvelope ?? {
+        assets: [],
+        loaded: false,
+        projectId: sessionProjectId,
+    };
+    const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
+    const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
+    const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
+    const segments = (payload.segments ?? [])
+        .map((segment) => buildWorkspaceSegmentEditorSegment(sessionProjectId, segment, {
+        currentEntries,
+        projectMediaLoaded: projectMediaEnvelope.loaded,
+        projectMediaByAssetId,
+        originalEntries,
+    }))
+        .filter((segment) => Boolean(segment))
+        .sort((left, right) => left.index - right.index);
+    if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+        throw new WorkspaceSegmentEditorError("Для этого проекта пока нет данных сегментов.", 409);
+    }
+    if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
+        throw new WorkspaceSegmentEditorError(`Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`, 409);
+    }
+    const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+    return {
+        customMusicAssetId: customMusicMetadata.customMusicAssetId,
+        customMusicFileName: customMusicMetadata.customMusicFileName,
+        description: normalizeText(payload.description),
+        musicType: normalizeText(payload.music_type),
+        projectId: sessionProjectId,
+        segments,
+        subtitleColor: normalizeText(payload.subtitle_color),
+        subtitleStyle: normalizeText(payload.subtitle_style),
+        subtitleType: normalizeText(payload.subtitle_type),
+        title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
+        voiceType: normalizeText(payload.voice_type),
+    };
+};
 export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSources) => {
     const index = normalizeInteger(payload.index);
     if (index === null) {
@@ -416,7 +468,9 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     const hasCurrentVideo = Boolean(currentVideoMarker);
     const hasOriginalVideo = Boolean(originalVideoMarker);
     const currentEntry = projectSources?.currentEntries[index] ?? null;
-    const originalEntry = projectSources?.originalEntries[index] ?? currentEntry;
+    const explicitOriginalEntry = projectSources?.originalEntries[index] ?? null;
+    const originalEntry = explicitOriginalEntry ??
+        (!hasOriginalVideo && currentEntry && detectWorkspaceSegmentSourceKind(currentEntry) !== "upload" ? currentEntry : null);
     const projectMediaByAssetId = projectSources?.projectMediaByAssetId ?? new Map();
     const projectMediaLoaded = Boolean(projectSources?.projectMediaLoaded);
     const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectMediaByAssetId, {
@@ -527,39 +581,10 @@ const loadWorkspaceSegmentEditorSession = async (projectId) => {
         }
         throw error;
     }
-    const normalizedProjectId = normalizeInteger(payload.project_id) ?? projectId;
-    const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
-    const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
-    const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
-    const segments = (payload.segments ?? [])
-        .map((segment) => buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment, {
-        currentEntries,
-        projectMediaLoaded: projectMediaEnvelope.loaded,
-        projectMediaByAssetId,
-        originalEntries,
-    }))
-        .filter((segment) => Boolean(segment))
-        .sort((left, right) => left.index - right.index);
-    if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
-        throw new WorkspaceSegmentEditorError("Для этого проекта пока нет данных сегментов.", 409);
-    }
-    if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
-        throw new WorkspaceSegmentEditorError(`Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`, 409);
-    }
-    const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
-    return {
-        customMusicAssetId: customMusicMetadata.customMusicAssetId,
-        customMusicFileName: customMusicMetadata.customMusicFileName,
-        description: normalizeText(payload.description),
-        musicType: normalizeText(payload.music_type),
-        projectId: normalizedProjectId,
-        segments,
-        subtitleColor: normalizeText(payload.subtitle_color),
-        subtitleStyle: normalizeText(payload.subtitle_style),
-        subtitleType: normalizeText(payload.subtitle_type),
-        title: normalizeText(payload.title) || `Проект #${normalizedProjectId}`,
-        voiceType: normalizeText(payload.voice_type),
-    };
+    return buildWorkspaceSegmentEditorSessionFromPayload(projectId, payload, {
+        projectDetailsPayload,
+        projectMediaEnvelope,
+    });
 };
 const getWorkspaceSegmentEditorSessionInternal = async (user, projectId, options) => {
     const shouldBypassCache = Boolean(options?.bypassCache);

@@ -14,7 +14,7 @@ import {
   upstreamPolicies,
 } from "./upstream-client.js";
 import { listWorkspaceGenerationHistory } from "./workspace-history.js";
-import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
+import type { ProjectMediaEnvelope, WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type SegmentEditorUser = {
   email?: string | null;
@@ -44,7 +44,7 @@ type AdsflowSegmentEditorSegmentPayload = {
   text?: string | null;
 };
 
-type AdsflowSegmentEditorResponse = {
+export type AdsflowSegmentEditorResponse = {
   description?: string | null;
   music_type?: string | null;
   project_id?: number | string | null;
@@ -94,6 +94,11 @@ type AdsflowProjectDetailsResponse = {
   music_name?: string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
+};
+
+type WorkspaceSegmentEditorSessionBuildOptions = {
+  projectDetailsPayload?: AdsflowProjectDetailsResponse | null;
+  projectMediaEnvelope?: ProjectMediaEnvelope | null;
 };
 
 export type WorkspaceSegmentEditorVideoSource = "current" | "original";
@@ -171,6 +176,11 @@ const normalizeInteger = (value: unknown) => {
 const normalizeNumber = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const normalizePositiveProjectId = (value: unknown) => {
+  const normalized = normalizeInteger(value);
+  return normalized !== null && normalized > 0 ? normalized : null;
 };
 
 const normalizeMediaType = (value: unknown): WorkspaceSegmentEditorMediaType =>
@@ -362,10 +372,6 @@ const getProjectOriginalMediaEntries = (payload: AdsflowProjectDetailsResponse |
   pickProjectMediaEntries(
     payload?.source_video_urls,
     payload?.generation_settings?.original_videos,
-    payload?.generation_settings?.video_urls,
-    payload?.generation_settings?.background_urls,
-    payload?.video_urls,
-    payload?.background_urls,
   );
 
 const getProjectCurrentMediaEntries = (
@@ -712,6 +718,70 @@ const buildWorkspaceSegmentEditorVideoUrl = (
   return `${previewUrl.pathname}${previewUrl.search}`;
 };
 
+export const buildWorkspaceSegmentEditorSessionFromPayload = (
+  requestedProjectId: number,
+  payload: AdsflowSegmentEditorResponse,
+  options: WorkspaceSegmentEditorSessionBuildOptions = {},
+): WorkspaceSegmentEditorSession => {
+  const sessionProjectId = normalizePositiveProjectId(requestedProjectId) ?? requestedProjectId;
+  const upstreamProjectId = normalizePositiveProjectId(payload.project_id);
+
+  if (upstreamProjectId !== null && upstreamProjectId !== sessionProjectId) {
+    console.warn("[segment-editor] Upstream returned a different project_id for segment editor; using requested project id", {
+      requestedProjectId: sessionProjectId,
+      upstreamProjectId,
+    });
+  }
+
+  const projectDetailsPayload = options.projectDetailsPayload ?? null;
+  const projectMediaEnvelope = options.projectMediaEnvelope ?? {
+    assets: [],
+    loaded: false,
+    projectId: sessionProjectId,
+  };
+  const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
+  const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
+  const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
+  const segments = (payload.segments ?? [])
+    .map((segment) =>
+      buildWorkspaceSegmentEditorSegment(sessionProjectId, segment, {
+        currentEntries,
+        projectMediaLoaded: projectMediaEnvelope.loaded,
+        projectMediaByAssetId,
+        originalEntries,
+      }),
+    )
+    .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
+    .sort((left, right) => left.index - right.index);
+
+  if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+    throw new WorkspaceSegmentEditorError("Для этого проекта пока нет данных сегментов.", 409);
+  }
+
+  if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
+    throw new WorkspaceSegmentEditorError(
+      `Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`,
+      409,
+    );
+  }
+
+  const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+
+  return {
+    customMusicAssetId: customMusicMetadata.customMusicAssetId,
+    customMusicFileName: customMusicMetadata.customMusicFileName,
+    description: normalizeText(payload.description),
+    musicType: normalizeText(payload.music_type),
+    projectId: sessionProjectId,
+    segments,
+    subtitleColor: normalizeText(payload.subtitle_color),
+    subtitleStyle: normalizeText(payload.subtitle_style),
+    subtitleType: normalizeText(payload.subtitle_type),
+    title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
+    voiceType: normalizeText(payload.voice_type),
+  };
+};
+
 export const buildWorkspaceSegmentEditorSegment = (
   projectId: number,
   payload: AdsflowSegmentEditorSegmentPayload,
@@ -741,7 +811,10 @@ export const buildWorkspaceSegmentEditorSegment = (
   const hasCurrentVideo = Boolean(currentVideoMarker);
   const hasOriginalVideo = Boolean(originalVideoMarker);
   const currentEntry = projectSources?.currentEntries[index] ?? null;
-  const originalEntry = projectSources?.originalEntries[index] ?? currentEntry;
+  const explicitOriginalEntry = projectSources?.originalEntries[index] ?? null;
+  const originalEntry =
+    explicitOriginalEntry ??
+    (!hasOriginalVideo && currentEntry && detectWorkspaceSegmentSourceKind(currentEntry) !== "upload" ? currentEntry : null);
   const projectMediaByAssetId = projectSources?.projectMediaByAssetId ?? new Map();
   const projectMediaLoaded = Boolean(projectSources?.projectMediaLoaded);
   const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectMediaByAssetId, {
@@ -860,48 +933,10 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
     throw error;
   }
 
-  const normalizedProjectId = normalizeInteger(payload.project_id) ?? projectId;
-  const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
-  const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
-  const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
-  const segments = (payload.segments ?? [])
-    .map((segment) =>
-      buildWorkspaceSegmentEditorSegment(normalizedProjectId, segment, {
-        currentEntries,
-        projectMediaLoaded: projectMediaEnvelope.loaded,
-        projectMediaByAssetId,
-        originalEntries,
-      }),
-    )
-    .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
-    .sort((left, right) => left.index - right.index);
-
-  if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
-    throw new WorkspaceSegmentEditorError("Для этого проекта пока нет данных сегментов.", 409);
-  }
-
-  if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
-    throw new WorkspaceSegmentEditorError(
-      `Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`,
-      409,
-    );
-  }
-
-  const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
-
-  return {
-    customMusicAssetId: customMusicMetadata.customMusicAssetId,
-    customMusicFileName: customMusicMetadata.customMusicFileName,
-    description: normalizeText(payload.description),
-    musicType: normalizeText(payload.music_type),
-    projectId: normalizedProjectId,
-    segments,
-    subtitleColor: normalizeText(payload.subtitle_color),
-    subtitleStyle: normalizeText(payload.subtitle_style),
-    subtitleType: normalizeText(payload.subtitle_type),
-    title: normalizeText(payload.title) || `Проект #${normalizedProjectId}`,
-    voiceType: normalizeText(payload.voice_type),
-  };
+  return buildWorkspaceSegmentEditorSessionFromPayload(projectId, payload, {
+    projectDetailsPayload,
+    projectMediaEnvelope,
+  });
 };
 
 const getWorkspaceSegmentEditorSessionInternal = async (

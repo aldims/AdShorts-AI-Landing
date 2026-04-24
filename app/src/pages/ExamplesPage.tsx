@@ -90,7 +90,9 @@ const exampleGoalCopy: Record<ExampleGoal, { label: string; shortLabel: string }
 
 const exampleGoalOrder: ExampleGoal[] = ["ads", "growth", "expert"];
 
-const defaultRussianExamplePrefillSettings: ExamplePrefillStudioSettings = {
+const createRussianExamplePrefillSettings = (
+  overrides: Partial<ExamplePrefillStudioSettings> = {},
+): ExamplePrefillStudioSettings => ({
   language: "ru",
   musicType: "ai",
   subtitleColorId: "purple",
@@ -99,13 +101,19 @@ const defaultRussianExamplePrefillSettings: ExamplePrefillStudioSettings = {
   videoMode: "standard",
   voiceEnabled: true,
   voiceId: "Bys_24000",
-};
+  ...overrides,
+});
 
 const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "story-future-city",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "inspirational",
+      subtitleColorId: "cyan",
+      subtitleStyleId: "story",
+      voiceId: "Nec_24000",
+    }),
     promptHint: "Атмосферный storytelling с сильным первым кадром.",
     seedPrompt:
       "Сделай storytelling Shorts про то, как AI меняет привычный город: атмосферный первый кадр, 3 коротких тезиса и финальный вывод без воды.",
@@ -118,7 +126,12 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "sales-offer-contrast",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "business",
+      subtitleColorId: "yellow",
+      subtitleStyleId: "impact",
+      voiceId: "Pon_24000",
+    }),
     promptHint: "Продажа через боль, решение и короткий CTA.",
     seedPrompt:
       "Сделай продающий Shorts для услуги по настройке рекламы: сильный hook про потерю клиентов, затем решение и короткий CTA на заявку.",
@@ -131,7 +144,12 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "facts-curiosity-loop",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "ai",
+      subtitleColorId: "purple",
+      subtitleStyleId: "modern",
+      voiceId: "Bys_24000",
+    }),
     promptHint: "Любопытный факт с удержанием и payoff.",
     seedPrompt:
       "Сделай Shorts в формате любопытного факта о кошках: яркий hook, 3 быстрых наблюдения и короткий финальный вывод с удержанием.",
@@ -144,7 +162,12 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "story-mini-scene",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "dramatic",
+      subtitleColorId: "white",
+      subtitleStyleId: "cinema",
+      voiceId: "Ost_24000",
+    }),
     promptHint: "Нарастающий интерес и визуальная сцена.",
     seedPrompt:
       "Сделай Shorts про редкую находку в Альпах: атмосферный первый кадр, нарастающий интерес, ощущение загадки и короткий разворот в финале.",
@@ -157,7 +180,12 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "ugc-viral-find",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "fun",
+      subtitleColorId: "orange",
+      subtitleStyleId: "karaoke",
+      voiceId: "Tur_24000",
+    }),
     promptHint: "Живая подача с ощущением, что ролик снят сейчас.",
     seedPrompt:
       "Сделай viral-style Shorts про продукт для ежедневной привычки: разговорный тон, быстрый hook, ощущение живой находки и нативный CTA.",
@@ -170,7 +198,13 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "effects-wow-frame",
-    prefillSettings: defaultRussianExamplePrefillSettings,
+    prefillSettings: createRussianExamplePrefillSettings({
+      musicType: "energetic",
+      subtitleColorId: "blue",
+      subtitleStyleId: "impact",
+      videoMode: "ai_video",
+      voiceId: "male-qn-jingying",
+    }),
     promptHint: "Визуальный wow-эффект как основной крючок.",
     seedPrompt:
       "Сделай Shorts с визуальным wow-эффектом: первый кадр должен удивлять, дальше 3 быстрые смены сцены и финальный короткий вывод.",

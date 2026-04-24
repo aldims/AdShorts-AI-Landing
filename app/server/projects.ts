@@ -32,6 +32,7 @@ import {
   type WorkspaceGenerationHistoryEntry,
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
+import type { ExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type WorkspaceUser = {
@@ -108,6 +109,7 @@ export type WorkspaceProject = {
   updatedAt: string;
   versionRootProjectAdId: number | null;
   posterUrl: string | null;
+  prefillSettings: ExamplePrefillStudioSettings | null;
   videoFallbackUrl: string | null;
   videoUrl: string | null;
   youtubePublication: WorkspaceProjectYouTubePublication | null;
@@ -510,6 +512,7 @@ const buildProjectFromAdminVideo = (
     hashtags: metadata.hashtags,
     id: `project:${adId}`,
     jobId: historyJobId || null,
+    prefillSettings: historyEntry?.prefillSettings ?? null,
     prompt: metadata.prompt,
     source: "project",
     status,
@@ -580,6 +583,7 @@ const buildProjectFromLatestGeneration = (
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,
     jobId,
+    prefillSettings: historyEntry?.prefillSettings ?? null,
     prompt: metadata.prompt,
     source: "task",
     status,
@@ -644,6 +648,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,
     jobId,
+    prefillSettings: item.prefillSettings ?? null,
     prompt: metadata.prompt,
     source: "task",
     status,

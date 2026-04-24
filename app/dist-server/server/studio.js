@@ -2,6 +2,7 @@ import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
 import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorkspaceVideoPoster, } from "./project-posters.js";
 import { getWorkspaceGenerationHistoryEntry, listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
@@ -1734,6 +1735,7 @@ const buildStudioGeneration = (payload, options) => {
         videoUrl: videoUrls.videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
+        prefillSettings: options?.historyEntry?.prefillSettings ?? null,
         aspectRatio: "9:16",
         generatedAt: payload.generated_at ?? new Date().toISOString(),
     };
@@ -1783,6 +1785,7 @@ const buildStudioGenerationFromLatest = (payload, historyEntry) => {
         videoUrl: videoUrls.videoUrl,
         durationLabel: "Ready",
         modelLabel: "AdsFlow pipeline",
+        prefillSettings: historyEntry?.prefillSettings ?? null,
         aspectRatio: "9:16",
         generatedAt: payload.generated_at ?? new Date().toISOString(),
     };
@@ -1829,6 +1832,7 @@ const buildStudioGenerationFromHistoryEntry = (entry) => {
         hashtags: metadata.hashtags,
         id: jobId,
         modelLabel: "AdsFlow pipeline",
+        prefillSettings: entry.prefillSettings ?? null,
         prompt: metadata.prompt,
         title: metadata.title,
         finalAsset,
@@ -2348,6 +2352,17 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
     const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
+    const prefillSettings = normalizeExamplePrefillStudioSettings({
+        brandText: normalizedBrandText,
+        language: normalizedLanguage,
+        musicType: normalizedMusicType,
+        subtitleColorId: normalizedSubtitleColorId,
+        subtitleEnabled: isSubtitleEnabled,
+        subtitleStyleId: normalizedSubtitleStyleId,
+        videoMode: normalizedVideoMode,
+        voiceEnabled: isVoiceEnabled,
+        voiceId: normalizedVoiceId,
+    });
     if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
         throw new Error("Загрузите свой музыкальный трек или выберите другой режим музыки.");
     }
@@ -2512,6 +2527,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 description: queuedMetadata.description,
                 hashtags: queuedMetadata.hashtags,
                 jobId,
+                prefillSettings,
                 prompt: queuedMetadata.prompt,
                 status: String(payload.status ?? "queued"),
                 title: queuedMetadata.title,

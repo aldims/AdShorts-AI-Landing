@@ -13,6 +13,10 @@ import {
   STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST,
 } from "../shared/studio-credit-costs.js";
 import {
+  normalizeExamplePrefillStudioSettings,
+  type ExamplePrefillStudioSettings,
+} from "../shared/example-prefill.js";
+import {
   ensureWorkspaceProjectPlayback,
   getWorkspaceProjectPlaybackCacheKey,
   warmWorkspaceProjectPlayback,
@@ -450,6 +454,7 @@ export type StudioGeneration = {
   hashtags: string[];
   id: string;
   modelLabel: string;
+  prefillSettings: ExamplePrefillStudioSettings | null;
   prompt: string;
   title: string;
   videoFallbackUrl: string | null;
@@ -2607,6 +2612,7 @@ const buildStudioGeneration = (
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
     modelLabel: "AdsFlow pipeline",
+    prefillSettings: options?.historyEntry?.prefillSettings ?? null,
     aspectRatio: "9:16",
     generatedAt: payload.generated_at ?? new Date().toISOString(),
   };
@@ -2664,6 +2670,7 @@ const buildStudioGenerationFromLatest = (
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
     modelLabel: "AdsFlow pipeline",
+    prefillSettings: historyEntry?.prefillSettings ?? null,
     aspectRatio: "9:16",
     generatedAt: payload.generated_at ?? new Date().toISOString(),
   };
@@ -2715,6 +2722,7 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
     hashtags: metadata.hashtags,
     id: jobId,
     modelLabel: "AdsFlow pipeline",
+    prefillSettings: entry.prefillSettings ?? null,
     prompt: metadata.prompt,
     title: metadata.title,
     finalAsset,
@@ -3439,6 +3447,17 @@ export async function createStudioGenerationJob(
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
   const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
+  const prefillSettings = normalizeExamplePrefillStudioSettings({
+    brandText: normalizedBrandText,
+    language: normalizedLanguage,
+    musicType: normalizedMusicType,
+    subtitleColorId: normalizedSubtitleColorId,
+    subtitleEnabled: isSubtitleEnabled,
+    subtitleStyleId: normalizedSubtitleStyleId,
+    videoMode: normalizedVideoMode,
+    voiceEnabled: isVoiceEnabled,
+    voiceId: normalizedVoiceId,
+  });
 
   if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
     throw new Error("Загрузите свой музыкальный трек или выберите другой режим музыки.");
@@ -3622,6 +3641,7 @@ export async function createStudioGenerationJob(
         description: queuedMetadata.description,
         hashtags: queuedMetadata.hashtags,
         jobId,
+        prefillSettings,
         prompt: queuedMetadata.prompt,
         status: String(payload.status ?? "queued"),
         title: queuedMetadata.title,

@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { database } from "./database.js";
 import { parseGenerationHashtags, serializeGenerationHashtags } from "./generation-metadata.js";
+import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 const isPgPool = (value) => value instanceof Pool;
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizeIsoString = (value, fallback = new Date().toISOString()) => {
@@ -13,6 +14,19 @@ const normalizeIsoString = (value, fallback = new Date().toISOString()) => {
 const toNullableInteger = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+};
+const parsePrefillSettings = (value) => {
+    if (!value)
+        return null;
+    if (typeof value === "object") {
+        return normalizeExamplePrefillStudioSettings(value);
+    }
+    try {
+        return normalizeExamplePrefillStudioSettings(JSON.parse(String(value)));
+    }
+    catch {
+        return null;
+    }
 };
 const addOwnerKey = (values, nextValue) => {
     const normalized = normalizeText(nextValue);
@@ -103,6 +117,7 @@ const ensureWorkspaceHistoryTable = async () => {
         final_asset_kind TEXT,
         final_asset_status TEXT,
         final_asset_expires_at TEXT,
+        prefill_settings TEXT,
         generated_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -169,6 +184,14 @@ const ensureWorkspaceHistoryTable = async () => {
       ALTER TABLE workspace_generation_history
       ADD COLUMN IF NOT EXISTS version_root_project_ad_id BIGINT
     `;
+        const addPrefillSettingsColumnSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN prefill_settings TEXT
+    `;
+        const addPrefillSettingsColumnIfNotExistsSql = `
+      ALTER TABLE workspace_generation_history
+      ADD COLUMN IF NOT EXISTS prefill_settings TEXT
+    `;
         if (isPgPool(database)) {
             await database.query(createTableSql);
             await database.query(createIndexSql);
@@ -179,6 +202,7 @@ const ensureWorkspaceHistoryTable = async () => {
             await database.query(addFinalAssetExpiresAtColumnIfNotExistsSql);
             await database.query(addEditedFromProjectAdIdColumnIfNotExistsSql);
             await database.query(addVersionRootProjectAdIdColumnIfNotExistsSql);
+            await database.query(addPrefillSettingsColumnIfNotExistsSql);
         }
         else {
             database.exec(createTableSql);
@@ -199,6 +223,7 @@ const ensureWorkspaceHistoryTable = async () => {
                 addFinalAssetExpiresAtColumnSql,
                 addEditedFromProjectAdIdColumnSql,
                 addVersionRootProjectAdIdColumnSql,
+                addPrefillSettingsColumnSql,
             ]) {
                 try {
                     database.exec(statement);
@@ -410,6 +435,8 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
         : null;
     const generatedAt = normalizeText(snapshot.generatedAt) ? normalizeIsoString(snapshot.generatedAt) : null;
     const hashtags = serializeGenerationHashtags(snapshot.hashtags);
+    const normalizedPrefillSettings = normalizeExamplePrefillStudioSettings(snapshot.prefillSettings);
+    const prefillSettings = normalizedPrefillSettings ? JSON.stringify(normalizedPrefillSettings) : null;
     const versionRootProjectAdId = toNullableInteger(snapshot.versionRootProjectAdId);
     const sql = isPgPool(database)
         ? `
@@ -429,12 +456,13 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           final_asset_kind,
           final_asset_status,
           final_asset_expires_at,
+          prefill_settings,
           generated_at,
           created_at,
           updated_at,
           version_root_project_ad_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT (job_id) DO UPDATE SET
           owner_key = EXCLUDED.owner_key,
           prompt = CASE
@@ -466,6 +494,7 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
             EXCLUDED.final_asset_expires_at,
             workspace_generation_history.final_asset_expires_at
           ),
+          prefill_settings = COALESCE(EXCLUDED.prefill_settings, workspace_generation_history.prefill_settings),
           generated_at = COALESCE(EXCLUDED.generated_at, workspace_generation_history.generated_at),
           updated_at = EXCLUDED.updated_at,
           version_root_project_ad_id = COALESCE(
@@ -490,12 +519,13 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
           final_asset_kind,
           final_asset_status,
           final_asset_expires_at,
+          prefill_settings,
           generated_at,
           created_at,
           updated_at,
           version_root_project_ad_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(job_id) DO UPDATE SET
           owner_key = excluded.owner_key,
           prompt = CASE
@@ -527,6 +557,7 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
             excluded.final_asset_expires_at,
             workspace_generation_history.final_asset_expires_at
           ),
+          prefill_settings = COALESCE(excluded.prefill_settings, workspace_generation_history.prefill_settings),
           generated_at = COALESCE(excluded.generated_at, workspace_generation_history.generated_at),
           updated_at = excluded.updated_at,
           version_root_project_ad_id = COALESCE(
@@ -550,6 +581,7 @@ export async function saveWorkspaceGenerationHistory(user, snapshot) {
         finalAssetKind,
         finalAssetStatus,
         finalAssetExpiresAt,
+        prefillSettings,
         generatedAt,
         createdAt,
         updatedAt,
@@ -579,6 +611,7 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
           final_asset_kind AS "finalAssetKind",
           final_asset_status AS "finalAssetStatus",
           final_asset_expires_at AS "finalAssetExpiresAt",
+          prefill_settings AS "prefillSettings",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -604,6 +637,7 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
           final_asset_kind AS "finalAssetKind",
           final_asset_status AS "finalAssetStatus",
           final_asset_expires_at AS "finalAssetExpiresAt",
+          prefill_settings AS "prefillSettings",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -630,6 +664,7 @@ export async function listWorkspaceGenerationHistory(user, limit = 60) {
         generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
         hashtags: parseGenerationHashtags(row.hashtags),
         jobId: normalizeText(row.jobId),
+        prefillSettings: parsePrefillSettings(row.prefillSettings),
         prompt: normalizeText(row.prompt),
         status: normalizeText(row.status) || "queued",
         title: normalizeText(row.title),
@@ -661,6 +696,7 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
           final_asset_kind AS "finalAssetKind",
           final_asset_status AS "finalAssetStatus",
           final_asset_expires_at AS "finalAssetExpiresAt",
+          prefill_settings AS "prefillSettings",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -685,6 +721,7 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
           final_asset_kind AS "finalAssetKind",
           final_asset_status AS "finalAssetStatus",
           final_asset_expires_at AS "finalAssetExpiresAt",
+          prefill_settings AS "prefillSettings",
           generated_at AS "generatedAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -714,6 +751,7 @@ export async function getWorkspaceGenerationHistoryEntry(user, jobId) {
         generatedAt: normalizeText(row.generatedAt) ? normalizeIsoString(row.generatedAt) : null,
         hashtags: parseGenerationHashtags(row.hashtags),
         jobId: normalizeText(row.jobId),
+        prefillSettings: parsePrefillSettings(row.prefillSettings),
         prompt: normalizeText(row.prompt),
         status: normalizeText(row.status) || "queued",
         title: normalizeText(row.title),

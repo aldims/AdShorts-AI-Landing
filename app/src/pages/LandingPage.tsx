@@ -989,38 +989,6 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           </div>
         </section>
 
-        <section className="section lp-section lp-section--a" id="history">
-          <div className="container trust-shell">
-            <div className="trust-shell__copy lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">НАДЁЖНОСТЬ И СКОРОСТЬ</p>
-              <h2>Результат за минуты</h2>
-              <p>
-                AdShorts AI помогает быстро выпускать короткие вертикальные видео без потери качества: от идеи и сценария
-                до готового ролика в одном сервисе.
-              </p>
-            </div>
-
-            <div className="trust-stats" data-reveal-group="">
-              <article className="stat-card" data-reveal="" data-reveal-delay="1">
-                <strong>50,000+</strong>
-                <span>создателей и маркетологов</span>
-              </article>
-              <article className="stat-card" data-reveal="" data-reveal-delay="2">
-                <strong>12M+</strong>
-                <span>сгенерированных Shorts</span>
-              </article>
-              <article className="stat-card" data-reveal="" data-reveal-delay="3">
-                <strong>4.9/5</strong>
-                <span>средняя оценка пользователей</span>
-              </article>
-              <article className="stat-card" data-reveal="" data-reveal-delay="4">
-                <strong>~1 мин</strong>
-                <span>до первого готового ролика</span>
-              </article>
-            </div>
-          </div>
-        </section>
-
         <section className="section lp-section lp-section--b section--guides" id="guides" aria-labelledby="guides-heading">
           <div className="container guides-strip">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
