@@ -71,7 +71,7 @@ describe("LandingPage guides section", () => {
     }
   });
 
-  it("renders production guide links and keeps them external", () => {
+  it("renders guide links as localized same-domain paths", () => {
     renderLandingPage();
 
     const guidesSection = screen.getByRole("region", {
@@ -81,21 +81,41 @@ describe("LandingPage guides section", () => {
 
     expect(guideCards).toHaveLength(3);
     expect(guideCards.map((guide) => guide.getAttribute("href"))).toEqual([
-      "https://adshortsai.com/shorts-guides/",
-      "https://adshortsai.com/kak-sdelat-huk-v-shorts/",
-      "https://adshortsai.com/subtitry-dlya-shorts-avtomatom/",
+      "/shorts-guides/",
+      "/kak-sdelat-huk-v-shorts/",
+      "/subtitry-dlya-shorts-avtomatom/",
     ]);
 
     guideCards.forEach((guide) => {
-      expect(guide.getAttribute("target")).toBe("_blank");
-      expect(guide.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(guide.getAttribute("href")).not.toContain("adshortsai.com");
+      expect(guide.getAttribute("target")).toBeNull();
+      expect(guide.getAttribute("rel")).toBeNull();
     });
 
     const ctaLink = within(guidesSection).getByRole("link", { name: "Все материалы" });
 
-    expect(ctaLink.getAttribute("href")).toBe("https://adshortsai.com/shorts-guides/");
-    expect(ctaLink.getAttribute("target")).toBe("_blank");
-    expect(ctaLink.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(ctaLink.getAttribute("href")).toBe("/shorts-guides/");
+    expect(ctaLink.getAttribute("target")).toBeNull();
+    expect(ctaLink.getAttribute("rel")).toBeNull();
+  });
+
+  it("renders English guide links with the English URL prefix", () => {
+    renderLandingPage("en");
+
+    const guidesSection = screen.getByRole("region", {
+      name: "Useful Shorts creation guides",
+    });
+    const guideCards = Array.from(guidesSection.querySelectorAll<HTMLAnchorElement>(".guide-card"));
+
+    expect(guideCards.map((guide) => guide.getAttribute("href"))).toEqual([
+      "/en/shorts-guides/",
+      "/en/how-to-create-a-hook-in-shorts/",
+      "/en/automatic-subtitles-for-youtube-shorts/",
+    ]);
+
+    const ctaLink = within(guidesSection).getByRole("link", { name: "All guides" });
+
+    expect(ctaLink.getAttribute("href")).toBe("/en/shorts-guides/");
   });
 
   it("uses the original workflow block before the refine block", () => {

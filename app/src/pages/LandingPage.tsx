@@ -238,7 +238,7 @@ const landingRefineCarouselCards: Record<Locale, Array<{
     },
   ],
 };
-const landingGuidesIndexHref = "https://adshortsai.com/shorts-guides/";
+const landingGuidesIndexHref = "/shorts-guides/";
 const landingGuideCards: Record<Locale, Array<{ label: string; title: string; description: string; href: string }>> = {
   ru: [
   {
@@ -251,13 +251,13 @@ const landingGuideCards: Record<Locale, Array<{ label: string; title: string; de
     label: "ХУК",
     title: "Как сделать сильный первый экран",
     description: "Что удерживает внимание и снижает вероятность свайпа в первые секунды ролика.",
-    href: "https://adshortsai.com/kak-sdelat-huk-v-shorts/",
+    href: "/kak-sdelat-huk-v-shorts/",
   },
   {
     label: "СУБТИТРЫ",
     title: "Автоматические субтитры",
     description: "Как субтитры помогают коротким видео работать даже без звука и не терять удержание.",
-    href: "https://adshortsai.com/subtitry-dlya-shorts-avtomatom/",
+    href: "/subtitry-dlya-shorts-avtomatom/",
   },
   ],
   en: [
@@ -265,19 +265,19 @@ const landingGuideCards: Record<Locale, Array<{ label: string; title: string; de
       label: "BASE",
       title: "All Shorts guides in one place",
       description: "A single entry point for ideas, structure, retention, packaging and publishing.",
-      href: "https://adshortsai.com/en/shorts-guides/",
+      href: "/shorts-guides/",
     },
     {
       label: "HOOK",
       title: "How to create a strong first screen",
       description: "What keeps attention and reduces swipes in the first seconds of a video.",
-      href: "https://adshortsai.com/en/how-to-create-a-hook-in-shorts/",
+      href: "/how-to-create-a-hook-in-shorts/",
     },
     {
       label: "SUBTITLES",
       title: "Automatic subtitles",
       description: "How subtitles help short videos work without sound and keep retention.",
-      href: "https://adshortsai.com/en/automatic-subtitles-for-youtube-shorts/",
+      href: "/automatic-subtitles-for-youtube-shorts/",
     },
   ],
 };
@@ -296,7 +296,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
   const refineProofs = landingRefineProofs[locale];
   const refineCarouselCards = landingRefineCarouselCards[locale];
   const guideCards = landingGuideCards[locale];
-  const guidesIndexHref = locale === "en" ? "https://adshortsai.com/en/shorts-guides/" : landingGuidesIndexHref;
+  const guidesIndexHref = localizePath(landingGuidesIndexHref);
 
   const animateCounter = useCallback((el: HTMLElement, target: string) => {
     const numericMatch = target.match(/[\d,.]+/);
@@ -1174,9 +1174,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 <a
                   key={guide.href}
                   className="guide-card route-guide-link"
-                  href={guide.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={localizePath(guide.href)}
                   data-reveal=""
                   data-reveal-delay={String(index + 1)}
                 >
@@ -1203,8 +1201,6 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             <a
               className="guides-strip__cta route-linkbtn"
               href={guidesIndexHref}
-              target="_blank"
-              rel="noopener noreferrer"
               data-reveal=""
             >
               {t(landingMessages.guidesAll)}
