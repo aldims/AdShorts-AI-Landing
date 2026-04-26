@@ -7,6 +7,7 @@ LOCAL_EXAMPLES_DIR="$APP_DIR/data/local-examples"
 
 STAGING_SSH="${STAGING_SSH:-aldima@158.160.125.225}"
 STAGING_APP_DIR="${STAGING_APP_DIR:-/home/aldima/AdShorts-AI-staging/app}"
+STAGING_STATIC_DIR="${STAGING_STATIC_DIR:-/home/aldima/AdShorts-AI-staging-static}"
 STAGING_SERVICE="${STAGING_SERVICE:-adshorts-staging-api}"
 STAGING_URL="${STAGING_URL:-https://staging.adshortsai.com}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
@@ -25,7 +26,37 @@ if [ "${RUN_TESTS:-0}" = "1" ]; then
   npm test
 fi
 
+echo "[staging] check static pages"
+cd "$ROOT_DIR"
+node scripts/generate-static-landing.mjs --check
+node scripts/check-static-i18n.mjs
+
+echo "[staging] upload static pages"
+ssh "${SSH_OPTS[@]}" "$STAGING_SSH" "mkdir -p '$STAGING_STATIC_DIR'"
+rsync -az --delete \
+  --exclude='.git/' \
+  --exclude='.codex-tmp/' \
+  --exclude='app/' \
+  --exclude='node_modules/' \
+  --exclude='logs/' \
+  --exclude='tmp/' \
+  --exclude='Untitled' \
+  --include='*/' \
+  --include='*.html' \
+  --include='*.css' \
+  --include='*.js' \
+  --include='*.svg' \
+  --include='*.png' \
+  --include='*.webp' \
+  --include='*.mp4' \
+  --include='*.ico' \
+  --include='*.txt' \
+  --include='*.xml' \
+  --exclude='*' \
+  "$ROOT_DIR/" "$STAGING_SSH:$STAGING_STATIC_DIR/"
+
 echo "[staging] upload frontend"
+cd "$APP_DIR"
 rsync -az --delete "$APP_DIR/dist/" "$STAGING_SSH:$STAGING_APP_DIR/dist/"
 
 echo "[staging] upload server"
@@ -101,16 +132,29 @@ echo "[staging] migrate workspace owner keys"
 node dist-server/server/migrate-workspace-owner-keys.js
 
 sudo systemctl restart "$STAGING_SERVICE"
-sleep 2
 
-service_state="$(systemctl is-active "$STAGING_SERVICE")"
+api_health=""
+service_state="unknown"
+for _ in $(seq 1 30); do
+  service_state="$(systemctl is-active "$STAGING_SERVICE" || true)"
+  if [ "$service_state" = "active" ] && api_health="$(curl -fsS http://127.0.0.1:4275/api/health 2>/dev/null)"; then
+    break
+  fi
+  sleep 1
+done
+
 if [ "$service_state" != "active" ]; then
   echo "Service is not active: $service_state" >&2
   sudo journalctl -u "$STAGING_SERVICE" -n 80 --no-pager >&2
   exit 1
 fi
 
-api_health="$(curl -fsS http://127.0.0.1:4275/api/health)"
+if [ -z "$api_health" ]; then
+  echo "API health check did not become ready in time." >&2
+  sudo journalctl -u "$STAGING_SERVICE" -n 80 --no-pager >&2
+  exit 1
+fi
+
 public_status="$(curl -sS -o /dev/null -w "%{http_code}" "$STAGING_URL/")"
 
 if [ "$public_status" != "200" ] && [ "$public_status" != "401" ]; then
