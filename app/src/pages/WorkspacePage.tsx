@@ -3,6 +3,7 @@ import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { InsufficientCreditsModal } from "../components/InsufficientCreditsModal";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import {
@@ -13,6 +14,7 @@ import {
 } from "../features/workspace/hot-path";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
+import { useLocale, type Locale } from "../lib/i18n";
 import {
   canPurchaseAddonCredits,
   formatCreditsCountLabel,
@@ -68,10 +70,13 @@ import {
   type StudioCreditAction,
 } from "../../shared/studio-credit-costs";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
+import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
+
+const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 
 type Session = {
   name: string;
@@ -476,8 +481,12 @@ type WorkspaceContentPlanIdeaMutation = {
 
 const WORKSPACE_CONTENT_PLAN_IDEA_COUNT_DEFAULT = 5;
 
-const formatWorkspaceContentPlanIdeaCount = (value: number) => {
+const formatWorkspaceContentPlanIdeaCount = (value: number, locale: Locale = "ru") => {
   const count = Math.max(1, Math.trunc(value));
+  if (locale === "en") {
+    return `${count} ${count === 1 ? "idea" : "ideas"}`;
+  }
+
   const normalized = Math.abs(count) % 100;
   const tail = normalized % 10;
 
@@ -555,6 +564,7 @@ type WorkspaceSegmentEditorSession = {
   customMusicAssetId?: number | null;
   customMusicFileName?: string | null;
   description: string;
+  language?: StudioLanguage | "";
   musicType: string;
   projectId: number;
   segments: WorkspaceSegmentEditorSegment[];
@@ -2280,6 +2290,51 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
     },
   ],
 };
+
+export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
+  const normalizedVoiceId = String(voiceId ?? "").trim();
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
+    if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id === normalizedVoiceId)) {
+      return language;
+    }
+  }
+
+  return null;
+};
+
+export const normalizeStudioLanguageValue = (value: string | null | undefined): StudioLanguage | null => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "ru" || normalized === "en" ? normalized : null;
+};
+
+export const getDefaultStudioVoiceId = (language: StudioLanguage): StudioVoiceOption["id"] =>
+  DEFAULT_STUDIO_VOICE_ID[language] ?? studioVoiceOptionsByLanguage[language][0]?.id ?? "Bys_24000";
+
+export const resolveStudioVoiceIdForLanguage = (
+  language: StudioLanguage,
+  voiceId: string | null | undefined,
+): StudioVoiceOption["id"] =>
+  studioVoiceOptionsByLanguage[language].find((voice) => voice.id === String(voiceId ?? "").trim())?.id ??
+  getDefaultStudioVoiceId(language);
+
+export const getWorkspaceInitialStudioDefaults = (
+  locale: Locale,
+): { language: StudioLanguage; voiceId: StudioVoiceOption["id"] } => {
+  const language = normalizeStudioLanguageValue(locale) ?? "ru";
+  return {
+    language,
+    voiceId: getDefaultStudioVoiceId(language),
+  };
+};
+
+const getWorkspaceSegmentEditorSessionLanguage = (
+  session: Pick<WorkspaceSegmentEditorSession, "language" | "voiceType">,
+): StudioLanguage => normalizeStudioLanguageValue(session.language) ?? getStudioLanguageForVoiceId(session.voiceType) ?? "ru";
+
 const studioMusicOptions: StudioMusicOption[] = [
   {
     id: "ai",
@@ -2346,6 +2401,24 @@ const studioMusicStyleOptions = studioMusicOptions.filter(
   (option): option is StudioMusicOption & { id: Exclude<StudioMusicType, "ai" | "custom" | "none"> } =>
     !["ai", "custom", "none"].includes(option.id),
 );
+const studioMusicOptionEnglishCopy: Record<StudioMusicType, Pick<StudioMusicOption, "description" | "label">> = {
+  ai: { label: "Auto", description: "AI picks music for the video" },
+  business: { label: "Business", description: "For products, services and B2B delivery" },
+  calm: { label: "Calm", description: "For expert delivery and a measured pace" },
+  custom: { label: "Custom music", description: "Upload your .mp3, .wav or .m4a" },
+  dramatic: { label: "Dramatic", description: "For a strong hook and emotional intensity" },
+  energetic: { label: "Energetic", description: "For dynamic and sales-oriented Shorts" },
+  fun: { label: "Fun", description: "For UGC, memes and viral formats" },
+  inspirational: { label: "Inspirational", description: "For stories, growth and motivational topics" },
+  luxury: { label: "Luxury", description: "For premium brands and expensive positioning" },
+  none: { label: "No music", description: "Keep only voice and video" },
+  tech: { label: "Tech", description: "For AI, SaaS and digital products" },
+  upbeat: { label: "Upbeat", description: "For light sales and lifestyle videos" },
+};
+
+const getStudioMusicOptionCopy = (option: StudioMusicOption, locale: string) =>
+  locale === "en" ? studioMusicOptionEnglishCopy[option.id] ?? option : option;
+
 const studioVideoOptions: StudioVideoOption[] = [
   {
     id: "standard",
@@ -2368,6 +2441,15 @@ const studioVideoOptions: StudioVideoOption[] = [
     description: "Загрузите свое фото или видео",
   },
 ];
+const studioVideoOptionEnglishCopy: Record<StudioVideoMode, Pick<StudioVideoOption, "description" | "label">> = {
+  ai_photo: { label: "AI photos only", description: "Only animated AI photos, no stock assets" },
+  ai_video: { label: "AI video", description: "Full AI mode for every scene" },
+  custom: { label: "Custom visual", description: "Upload your own photo or video" },
+  standard: { label: "Standard", description: "Animated AI photos + stock assets" },
+};
+
+const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: string) =>
+  locale === "en" ? studioVideoOptionEnglishCopy[option.id] ?? option : option;
 const workspaceLocalExampleGoalOptions: Array<{
   description: string;
   id: WorkspaceLocalExampleGoal;
@@ -2389,6 +2471,25 @@ const workspaceLocalExampleGoalOptions: Array<{
     label: "🎓 Экспертиза",
   },
 ];
+const workspaceLocalExampleGoalEnglishCopy: Record<WorkspaceLocalExampleGoal, Pick<(typeof workspaceLocalExampleGoalOptions)[number], "description" | "label">> = {
+  ads: {
+    description: "Offers, sales, products and ad concepts.",
+    label: "📣 Ads",
+  },
+  expert: {
+    description: "Facts, explainers and expert-led videos.",
+    label: "🎓 Expertise",
+  },
+  growth: {
+    description: "Reach, retention, dynamic formats and channel growth.",
+    label: "📈 Channel growth",
+  },
+};
+
+const getWorkspaceLocalExampleGoalCopy = (
+  option: (typeof workspaceLocalExampleGoalOptions)[number],
+  locale: Locale,
+) => (locale === "en" ? workspaceLocalExampleGoalEnglishCopy[option.id] ?? option : option);
 const projectPosterCache = new Map<string, string>();
 const projectPosterCaptureRequests = new Map<string, Promise<string>>();
 const projectPosterCaptureQueue: Array<() => void> = [];
@@ -3103,12 +3204,13 @@ const truncateStudioCustomAssetName = (value: string, maxChars = STUDIO_CUSTOM_A
   return `${normalized.slice(0, baseMaxChars)}...${extension}`;
 };
 
-const getStudioMusicChipValue = (musicType: StudioMusicType, customMusicFile: StudioCustomMusicFile | null) => {
+const getStudioMusicChipValue = (musicType: StudioMusicType, customMusicFile: StudioCustomMusicFile | null, locale = "ru") => {
   if (musicType === "custom") {
-    return customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : "Своя музыка";
+    return customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : locale === "en" ? "Custom music" : "Своя музыка";
   }
 
-  return studioMusicOptions.find((option) => option.id === musicType)?.label ?? "Авто";
+  const option = studioMusicOptions.find((item) => item.id === musicType);
+  return option ? getStudioMusicOptionCopy(option, locale).label : locale === "en" ? "Auto" : "Авто";
 };
 
 const isSupportedStudioVideoFile = (fileName: string) => {
@@ -3622,7 +3724,7 @@ const getWorkspaceSegmentVisualModalDefaultTab = (
       ? "ai_photo"
     : latestVisualAction === "photo_animation" && canWorkspaceSegmentAnimatePhoto(segment)
       ? "photo_animation"
-      : "ai_video";
+      : "ai_photo";
 };
 
 const isWorkspaceSegmentVisualModalTabAllowed = (
@@ -3665,7 +3767,7 @@ const getWorkspaceSegmentVisualTabForPromptSceneMode = (
 ): WorkspaceSegmentVisualModalTab => {
   const candidateTabs =
     mode === "create"
-      ? (["ai_video", "ai_photo", "library", "upload"] as const)
+      ? (["ai_photo", "ai_video", "library", "upload"] as const)
       : (["photo_animation", "image_edit", "image_upscale"] as const);
 
   if (candidateTabs.some((tab) => tab === currentTab)) {
@@ -3698,6 +3800,10 @@ const getWorkspaceSegmentFallbackPreviewKind = (
 const getWorkspaceSegmentSelectedVisualPreviewKind = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): WorkspaceSegmentPreviewKind => {
+  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+    return "image";
+  }
+
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
   if (latestVisualAction === "ai" || latestVisualAction === "photo_animation") {
@@ -3711,6 +3817,10 @@ const getWorkspaceSegmentSelectedVisualPreviewKind = (
 };
 
 const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDraftSegment): WorkspaceSegmentPreviewKind => {
+  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+    return "image";
+  }
+
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
   // Fresh segment sessions can promote a photo segment to a server-backed animation
@@ -3776,6 +3886,78 @@ const isWorkspaceVideoMediaAsset = (asset: WorkspaceMediaAssetRef | null | undef
   const mimeType = normalizeWorkspaceMediaAssetToken(asset?.mimeType);
   return mediaType === "video" || mimeType.startsWith("video/");
 };
+
+const isWorkspaceAiPhotoRenderedStillAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  if (!isWorkspaceVideoMediaAsset(asset)) {
+    return false;
+  }
+
+  const signature = getWorkspaceMediaAssetSignature(asset);
+  const libraryKind = normalizeWorkspaceMediaAssetToken(asset?.libraryKind);
+  const sourceKind = normalizeWorkspaceMediaAssetToken(asset?.sourceKind);
+  const isRenderedSegment =
+    signature.includes("rendered_segment") ||
+    signature.includes("current_rendered_segment") ||
+    signature.includes("/rendered_segment/");
+  const hasAiPhotoMarker =
+    libraryKind === "ai_photo" ||
+    signature.includes("source_ai_image") ||
+    signature.includes("ai_photo") ||
+    signature.includes("ai-photo") ||
+    signature.includes("segment_animation_fallback");
+
+  return isRenderedSegment && hasAiPhotoMarker && (libraryKind === "ai_photo" || sourceKind === "ai_generated");
+};
+
+const isWorkspaceSegmentAiPhotoRenderedStill = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  Boolean(
+    isWorkspaceAiPhotoRenderedStillAsset(segment.currentAsset) ||
+      isWorkspaceAiPhotoRenderedStillAsset(segment.originalAsset),
+  );
+
+const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  const assetId = Number(asset?.assetId);
+  if (!Number.isFinite(assetId) || assetId <= 0 || !isWorkspaceVideoMediaAsset(asset)) {
+    return null;
+  }
+
+  const posterUrl = new URL(`/api/workspace/media-assets/${Math.trunc(assetId)}/poster`, "http://localhost");
+  const version = [
+    asset?.createdAt,
+    asset?.expiresAt,
+    asset?.storageKey,
+    asset?.mimeType,
+    asset?.downloadPath,
+    asset?.downloadUrl,
+    asset?.playbackUrl,
+    asset?.originalUrl,
+  ]
+    .map(normalizeWorkspaceMediaAssetToken)
+    .filter(Boolean)
+    .join(":");
+
+  if (version) {
+    posterUrl.searchParams.set("v", version);
+  }
+
+  return `${posterUrl.pathname}${posterUrl.search}`;
+};
+
+const getWorkspaceSegmentVideoAssetPosterUrl = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  options?: { preferOriginal?: boolean },
+) =>
+  getUniqueWorkspaceSegmentPreviewUrls(
+    options?.preferOriginal
+      ? [
+          buildWorkspaceMediaAssetPosterUrl(segment.originalAsset),
+          buildWorkspaceMediaAssetPosterUrl(segment.currentAsset),
+        ]
+      : [
+          buildWorkspaceMediaAssetPosterUrl(segment.currentAsset),
+          buildWorkspaceMediaAssetPosterUrl(segment.originalAsset),
+        ],
+  )[0] ?? null;
 
 const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {
   const assetId = Number(asset?.assetId);
@@ -3911,16 +4093,22 @@ const getWorkspaceSegmentLatestVisualAction = (
 const getStudioVideoChipValue = (
   videoMode: StudioVideoMode,
   customVideoFile: StudioCustomVideoFile | null,
-  options?: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null },
+  options?: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null; locale?: string },
 ) => {
+  const locale = options?.locale ?? "ru";
   const visualLabel =
     videoMode === "custom"
       ? customVideoFile
         ? truncateStudioCustomAssetName(customVideoFile.fileName)
-        : "Свой визуал"
-      : studioVideoOptions.find((option) => option.id === videoMode)?.label ?? "Стандартный";
+        : locale === "en"
+          ? "Custom visual"
+          : "Свой визуал"
+      : (() => {
+          const option = studioVideoOptions.find((item) => item.id === videoMode);
+          return option ? getStudioVideoOptionCopy(option, locale).label : locale === "en" ? "Standard" : "Стандартный";
+        })();
 
-  return hasStudioBranding(options ?? {}) ? `${visualLabel} + бренд` : visualLabel;
+  return hasStudioBranding(options ?? {}) ? `${visualLabel} + ${locale === "en" ? "brand" : "бренд"}` : visualLabel;
 };
 
 const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
@@ -3937,11 +4125,49 @@ const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => (
   youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 
+const hasWorkspaceCyrillicText = (value: string | null | undefined) => /[А-Яа-яЁё]/.test(String(value ?? ""));
+
+const normalizeWorkspaceLocalizedTextForCompare = (value: string | null | undefined) =>
+  String(value ?? "").replace(/\s+/g, " ").trim();
+
+const isWorkspaceSegmentCachedLanguageTextUsable = (
+  targetText: string | null | undefined,
+  targetLanguage: StudioLanguage,
+  sourceText: string | null | undefined,
+) => {
+  if (typeof targetText !== "string") {
+    return false;
+  }
+
+  if (targetLanguage !== "ru") {
+    return true;
+  }
+
+  const normalizedTargetText = normalizeWorkspaceLocalizedTextForCompare(targetText);
+  const normalizedSourceText = normalizeWorkspaceLocalizedTextForCompare(sourceText);
+
+  if (!normalizedTargetText) {
+    return !normalizedSourceText;
+  }
+
+  if (hasWorkspaceCyrillicText(normalizedTargetText)) {
+    return true;
+  }
+
+  if (normalizedSourceText && !hasWorkspaceCyrillicText(normalizedSourceText)) {
+    return false;
+  }
+
+  return !normalizedSourceText || normalizedTargetText !== normalizedSourceText;
+};
+
 const cloneWorkspaceSegmentEditorLocalizedTextMap = (
   value: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
   fallbackText: string,
+  fallbackLanguage: StudioLanguage = "ru",
 ): WorkspaceSegmentEditorLocalizedTextMap => {
   const nextMap: WorkspaceSegmentEditorLocalizedTextMap = {};
+  const hadFallbackLanguage = typeof value?.[fallbackLanguage] === "string";
 
   (["ru", "en"] as const).forEach((language) => {
     if (typeof value?.[language] === "string") {
@@ -3949,8 +4175,18 @@ const cloneWorkspaceSegmentEditorLocalizedTextMap = (
     }
   });
 
-  if (typeof nextMap.ru !== "string") {
-    nextMap.ru = fallbackText;
+  if (typeof nextMap[fallbackLanguage] !== "string") {
+    nextMap[fallbackLanguage] = fallbackText;
+  }
+
+  if (
+    fallbackLanguage === "en" &&
+    typeof nextMap.ru === "string" &&
+    normalizeWorkspaceLocalizedTextForCompare(nextMap.ru) === normalizeWorkspaceLocalizedTextForCompare(nextMap.en) &&
+    !hasWorkspaceCyrillicText(nextMap.ru) &&
+    (!hadFallbackLanguage || nextMap.ru === fallbackText)
+  ) {
+    delete nextMap.ru;
   }
 
   return nextMap;
@@ -3958,6 +4194,7 @@ const cloneWorkspaceSegmentEditorLocalizedTextMap = (
 
 const cloneWorkspaceSegmentEditorDraftSegment = (
   segment: WorkspaceSegmentEditorDraftSegment,
+  fallbackLanguage: StudioLanguage = "ru",
 ): WorkspaceSegmentEditorDraftSegment => ({
   ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
   aiPhotoAsset: cloneStudioCustomVideoFile(segment.aiPhotoAsset),
@@ -3991,10 +4228,11 @@ const cloneWorkspaceSegmentEditorDraftSegment = (
   originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
     segment.originalTextByLanguage,
     typeof segment.originalText === "string" ? segment.originalText : segment.text,
+    fallbackLanguage,
   ),
-    photoAnimationSourceAsset: cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
-  textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text),
-    visualReset: Boolean(segment.visualReset),
+  photoAnimationSourceAsset: cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+  textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text, fallbackLanguage),
+  visualReset: Boolean(segment.visualReset),
 });
 
 const areWorkspaceSegmentEditorLocalizedTextMapsEqual = (
@@ -4391,12 +4629,16 @@ const normalizeWorkspaceSegmentEditorSegmentUrls = <
 
 const cloneWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => ({
-  ...sanitizeWorkspaceSegmentEditorCustomMusicState(session, {
-    allowEphemeralCustomMusic: true,
-  }),
-  segments: session.segments.map((segment) => cloneWorkspaceSegmentEditorDraftSegment(segment)),
-});
+): WorkspaceSegmentEditorDraftSession => {
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
+
+  return {
+    ...sanitizeWorkspaceSegmentEditorCustomMusicState(session, {
+      allowEphemeralCustomMusic: true,
+    }),
+    segments: session.segments.map((segment) => cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage)),
+  };
+};
 
 const shouldPreferEstimatedDurationForDraftSegment = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const hasSpeechTiming =
@@ -4436,39 +4678,43 @@ const rebuildWorkspaceSegmentEditorDraftTimeline = (
 
 const createWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorSession,
-): WorkspaceSegmentEditorDraftSession => ({
-  ...session,
-  segments: rebuildWorkspaceSegmentEditorDraftTimeline(
-    session.segments.map((segment) => ({
-    ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-    aiPhotoAsset: null,
-    aiPhotoGeneratedFromPrompt: null,
-    aiPhotoPrompt: "",
-    aiPhotoPromptInitialized: false,
-    aiVideoAsset: null,
-    aiVideoGeneratedMode: null,
-    aiVideoGeneratedFromPrompt: null,
-    aiVideoPrompt: "",
-    aiVideoPromptInitialized: false,
-    customVideo: null,
-    imageEditAsset: null,
-    imageEditGeneratedFromPrompt: null,
-    imageEditPrompt: "",
-    imageEditPromptInitialized: false,
-    mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-    originalText: segment.text,
-    originalTextByLanguage: {
-      ru: segment.text,
-    },
-      photoAnimationSourceAsset: null,
-    textByLanguage: {
-      ru: segment.text,
-    },
-    videoAction: "original",
-      visualReset: false,
-    })),
-  ),
-});
+): WorkspaceSegmentEditorDraftSession => {
+  const sourceLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
+
+  return {
+    ...session,
+    segments: rebuildWorkspaceSegmentEditorDraftTimeline(
+      session.segments.map((segment) => ({
+        ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
+        aiPhotoAsset: null,
+        aiPhotoGeneratedFromPrompt: null,
+        aiPhotoPrompt: "",
+        aiPhotoPromptInitialized: false,
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
+        aiVideoGeneratedFromPrompt: null,
+        aiVideoPrompt: "",
+        aiVideoPromptInitialized: false,
+        customVideo: null,
+        imageEditAsset: null,
+        imageEditGeneratedFromPrompt: null,
+        imageEditPrompt: "",
+        imageEditPromptInitialized: false,
+        mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
+        originalText: segment.text,
+        originalTextByLanguage: {
+          [sourceLanguage]: segment.text,
+        },
+        photoAnimationSourceAsset: null,
+        textByLanguage: {
+          [sourceLanguage]: segment.text,
+        },
+        videoAction: "original",
+        visualReset: false,
+      })),
+    ),
+  };
+};
 
 const shouldPromoteFreshServerVideoToPhotoAnimation = (
   liveSegment: WorkspaceSegmentEditorDraftSegment,
@@ -4519,6 +4765,7 @@ const createWorkspaceSegmentFreshPhotoAnimationAsset = (
 const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   liveSegment: WorkspaceSegmentEditorDraftSegment,
   freshSegment: WorkspaceSegmentEditorSegment,
+  fallbackLanguage: StudioLanguage = "ru",
 ): WorkspaceSegmentEditorDraftSegment => {
   const normalizedFreshSegment = normalizeWorkspaceSegmentEditorSegmentUrls(freshSegment);
   const shouldUseFreshServerVideo = shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, normalizedFreshSegment);
@@ -4548,10 +4795,15 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
       liveSegment.originalTextByLanguage,
       liveSegment.originalText,
+      fallbackLanguage,
     ),
     photoAnimationSourceAsset: cloneStudioCustomVideoFile(liveSegment.photoAnimationSourceAsset),
     text: liveSegment.text,
-    textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(liveSegment.textByLanguage, liveSegment.text),
+    textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
+      liveSegment.textByLanguage,
+      liveSegment.text,
+      fallbackLanguage,
+    ),
     videoAction: shouldUseFreshServerVideo ? "photo_animation" : liveSegment.videoAction,
     visualReset: liveSegment.visualReset,
   };
@@ -4565,6 +4817,11 @@ const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   },
 ): WorkspaceSegmentEditorDraftSession => {
   const normalizedFreshSession = normalizeWorkspaceSegmentEditorSession(freshSession);
+  const fallbackLanguage =
+    normalizeStudioLanguageValue(liveDraft.language) ??
+    normalizeStudioLanguageValue(normalizedFreshSession.language) ??
+    getStudioLanguageForVoiceId(liveDraft.voiceType || normalizedFreshSession.voiceType) ??
+    "ru";
   const normalizedLiveMusicState = sanitizeWorkspaceSegmentEditorCustomMusicState(liveDraft, {
     allowEphemeralCustomMusic: true,
   });
@@ -4588,12 +4845,12 @@ const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   liveDraft.segments.forEach((segment) => {
     const freshSegment = freshSegmentsByIndex.get(segment.index);
     if (!freshSegment) {
-      mergedSegments.push(cloneWorkspaceSegmentEditorDraftSegment(segment));
+      mergedSegments.push(cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage));
       return;
     }
 
     handledSegmentIndexes.add(segment.index);
-    mergedSegments.push(mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession(segment, freshSegment));
+    mergedSegments.push(mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession(segment, freshSegment, fallbackLanguage));
   });
 
   if (!shouldPreserveLiveStructure) {
@@ -4614,6 +4871,7 @@ const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     customMusicAssetId: normalizedLiveMusicState.customMusicAssetId ?? null,
     customMusicFileName: normalizedLiveMusicState.customMusicFileName ?? null,
     description: liveDraft.description,
+    language: liveDraft.language,
     musicType: normalizedLiveMusicState.musicType,
     segments: rebuildWorkspaceSegmentEditorDraftTimeline(mergedSegments),
     subtitleColor: liveDraft.subtitleColor,
@@ -4656,7 +4914,8 @@ const createWorkspaceSegmentEditorInsertedSegment = (options: {
   const { draft, insertAt } = options;
   const nextIndex = getWorkspaceSegmentEditorNextSegmentIndex(draft.segments);
   const baseText = "";
-  const textByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, baseText);
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
+  const textByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, baseText, fallbackLanguage);
   const { duration, endTime, startTime } = getWorkspaceSegmentEditorInsertedSegmentTiming(draft.segments, insertAt);
 
   return {
@@ -4711,10 +4970,11 @@ const normalizeWorkspaceSegmentEditorSession = (
   const sanitizedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(session);
   return {
     ...sanitizedSession,
+    language: normalizeStudioLanguageValue(sanitizedSession.language) ?? "",
     segments: sanitizedSession.segments.map((segment) => ({
-    ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-    mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-  })),
+      ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
+      mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
+    })),
   };
 };
 
@@ -4928,6 +5188,23 @@ const writeStoredWorkspaceSegmentEditorSession = (
   );
 };
 
+const removeStoredWorkspaceSegmentEditorSession = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorSessionStorageKey(normalizedEmail, normalizedProjectId));
+};
+
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
@@ -5020,6 +5297,7 @@ const canRestoreStoredWorkspaceSegmentEditorDraftSession = (session: WorkspaceSe
 const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
   const clonedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(
     cloneWorkspaceSegmentEditorDraftSession(session),
   );
@@ -5027,11 +5305,11 @@ const normalizeStoredWorkspaceSegmentEditorDraftSession = (
     ...clonedSession,
     segments: rebuildWorkspaceSegmentEditorDraftTimeline(
       clonedSession.segments.map((segment) => ({
-    ...cloneWorkspaceSegmentEditorDraftSegment(segment),
-    aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
-    aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
-    customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
-    imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
+        ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
+        aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
+        aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
+        customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
+        imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
         photoAnimationSourceAsset: normalizePersistedStudioCustomVideoFile(segment.photoAnimationSourceAsset),
       })),
     ),
@@ -5372,6 +5650,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
   let hasChanges = false;
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
 
   const segments = session.segments.map((segment) => {
     const normalizedSegment = normalizeWorkspaceSegmentEditorSegmentUrls(segment);
@@ -5417,10 +5696,15 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       Boolean(normalizedImageEditPrompt) ||
       Boolean(normalizedImageEditGeneratedFromPrompt);
     const normalizedMediaType = normalizeWorkspaceSegmentMediaType(segment.mediaType);
-    const normalizedTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text);
+    const normalizedTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
+      segment.textByLanguage,
+      segment.text,
+      fallbackLanguage,
+    );
     const normalizedOriginalTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
       segment.originalTextByLanguage,
       normalizedOriginalText,
+      fallbackLanguage,
     );
     const hasUrlChanges =
       normalizedSegment.currentExternalPlaybackUrl !== segment.currentExternalPlaybackUrl ||
@@ -5718,6 +6002,14 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
     return getWorkspaceSegmentVisualResetPreviewUrl(segment);
   }
 
+  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+    return (
+      getWorkspaceSegmentVideoAssetPosterUrl(segment) ??
+      getWorkspaceSegmentPreferredStillPreviewUrl(segment) ??
+      null
+    );
+  }
+
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
   const preferredStillPreviewUrl = getWorkspaceSegmentPreferredStillPreviewUrl(segment);
   const fallbackStillPreviewUrl =
@@ -5842,6 +6134,7 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   if (latestVisualAction === "photo_animation") {
     return (
       getWorkspacePhotoAnimationSourcePosterUrl(segment) ??
+      getWorkspaceSegmentVideoAssetPosterUrl(segment) ??
       segment.currentExternalPreviewUrl ??
       segment.originalExternalPreviewUrl ??
       segment.currentPreviewUrl ??
@@ -5851,16 +6144,12 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   }
 
   if (segment.videoAction === "original" && segment.mediaType === "video") {
-    if (
-      segment.originalPreviewUrl ||
-      segment.originalPlaybackUrl ||
-      segment.currentPreviewUrl ||
-      segment.currentPlaybackUrl
-    ) {
-      return null;
-    }
-
-    return segment.originalExternalPreviewUrl ?? segment.currentExternalPreviewUrl ?? null;
+    return (
+      getWorkspaceSegmentVideoAssetPosterUrl(segment, { preferOriginal: true }) ??
+      segment.originalExternalPreviewUrl ??
+      segment.currentExternalPreviewUrl ??
+      null
+    );
   }
 
   if (segment.videoAction === "custom" && getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
@@ -5890,6 +6179,13 @@ const getWorkspaceSegmentDraftPreviewFallbackUrls = (
 
   if (previewKind === "image") {
     const stillPreviewFallbackUrls = getWorkspaceSegmentStillPreviewUrls(segment);
+
+    if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+      return getUniqueWorkspaceSegmentPreviewUrls([
+        getWorkspaceSegmentVideoAssetPosterUrl(segment),
+        ...stillPreviewFallbackUrls,
+      ]);
+    }
 
     if (latestVisualAction === "custom") {
       return getUniqueWorkspaceSegmentPreviewUrls([
@@ -6160,6 +6456,10 @@ const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraf
     return "Сток";
   }
 
+  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+    return "ИИ фото";
+  }
+
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
   if (latestVisualAction === "custom") {
@@ -6192,6 +6492,31 @@ const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraf
   }
 
   return "Сток";
+};
+
+const getWorkspaceSegmentDraftSourceDisplayLabel = (sourceLabel: string, locale: Locale) => {
+  if (locale !== "en") {
+    return sourceLabel;
+  }
+
+  switch (sourceLabel) {
+    case "Сток":
+      return "Stock";
+    case "ИИ фото":
+      return "AI photo";
+    case "Медиатека":
+      return "Media library";
+    case "Свой визуал":
+      return "Custom visual";
+    case "Дорисовка":
+      return "Image edit";
+    case "ИИ анимация":
+      return "AI animation";
+    case "ИИ видео":
+      return "AI video";
+    default:
+      return sourceLabel;
+  }
 };
 
 const formatWorkspaceSegmentEditorTime = (value: number, options?: { roundUp?: boolean }) => {
@@ -6441,33 +6766,34 @@ const getWorkspaceMediaLibraryItemStorageKey = (item: WorkspaceMediaLibraryItem)
 const getWorkspaceMediaLibraryItemKindLabel = (
   kind: WorkspaceMediaLibraryItemKind,
   assetKind?: string | null,
+  locale: Locale = "ru",
 ) => {
   const normalizedAssetKind = String(assetKind ?? "").trim().toLowerCase();
   if (normalizedAssetKind === "final_video") {
-    return "Готовое видео";
+    return workspaceText(locale, "Готовое видео", "Finished video");
   }
 
   if (normalizedAssetKind === "custom_video" || normalizedAssetKind === "segment_source") {
-    return "Загруженное видео";
+    return workspaceText(locale, "Загруженное видео", "Uploaded video");
   }
 
   if (normalizedAssetKind === "brand_logo" || normalizedAssetKind === "uploaded_photo") {
-    return "Загруженное фото";
+    return workspaceText(locale, "Загруженное фото", "Uploaded photo");
   }
 
   if (kind === "photo_animation") {
-    return "ИИ анимация фото";
+    return workspaceText(locale, "ИИ анимация фото", "AI photo animation");
   }
 
   if (kind === "ai_video") {
-    return "ИИ видео";
+    return workspaceText(locale, "ИИ видео", "AI video");
   }
 
   if (kind === "image_edit") {
-    return "Дорисовать фото";
+    return workspaceText(locale, "Дорисовать", "Image edit");
   }
 
-  return "ИИ фото";
+  return workspaceText(locale, "ИИ фото", "AI photo");
 };
 
 const renderWorkspaceMediaLibraryPlayOverlay = (previewKind: WorkspaceMediaLibraryPreviewKind): ReactNode => {
@@ -6484,16 +6810,31 @@ const renderWorkspaceMediaLibraryPlayOverlay = (previewKind: WorkspaceMediaLibra
   );
 };
 
-const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) =>
-  getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId: item.assetId,
-    fileName: item.downloadName,
-    mimeType: getWorkspaceMediaLibraryItemMimeType(item),
-    remoteUrl: item.previewKind === "video" ? item.previewUrl : item.previewUrl ?? item.downloadUrl,
-  });
-
 const getWorkspaceMediaLibraryItemMimeType = (item: WorkspaceMediaLibraryItem) =>
   item.previewKind === "video" ? "video/mp4" : "image/jpeg";
+
+const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) => {
+  const assetId =
+    Number.isFinite(Number(item.assetId)) && Number(item.assetId) > 0
+      ? Math.trunc(Number(item.assetId))
+      : null;
+  const mimeType = getWorkspaceMediaLibraryItemMimeType(item);
+
+  if (assetId) {
+    return getWorkspaceMediaAssetResolvedPreviewUrl({
+      assetId,
+      fileName: item.downloadName,
+      mimeType,
+    });
+  }
+
+  return getWorkspaceMediaAssetResolvedPreviewUrl({
+    assetId: null,
+    fileName: item.downloadName,
+    mimeType,
+    remoteUrl: item.downloadUrl ?? item.previewUrl,
+  });
+};
 
 const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLibraryItem): StudioCustomVideoFile => ({
   assetId: item.assetId ?? undefined,
@@ -6992,39 +7333,39 @@ const appendUrlToken = (value: string | null | undefined, key: string, token: st
   }
 };
 
-const getStudioStatusLabel = (value: string) => {
+const getStudioStatusLabel = (value: string, locale: Locale = "ru") => {
   switch (value) {
     case "queued":
-      return "Task queued";
+      return workspaceText(locale, "В очереди", "Task queued");
     case "processing":
-      return "Генерация видео...";
+      return workspaceText(locale, "Генерация видео...", "Generating video...");
     case "preparing_preview":
-      return "Подготавливаем видео...";
+      return workspaceText(locale, "Подготавливаем видео...", "Preparing video...");
     case "retrying":
-      return "Retrying generation...";
+      return workspaceText(locale, "Повторяем генерацию...", "Retrying generation...");
     case "done":
       return "";
     case "failed":
-      return "Generation failed";
+      return workspaceText(locale, "Генерация не удалась", "Generation failed");
     default:
-      return "Генерация видео...";
+      return workspaceText(locale, "Генерация видео...", "Generating video...");
   }
 };
 
-const getProjectStatusLabel = (value: string) => {
+const getProjectStatusLabel = (value: string, locale: Locale = "ru") => {
   switch (value) {
     case "ready":
-      return "Готов";
+      return workspaceText(locale, "Готов", "Ready");
     case "queued":
-      return "В очереди";
+      return workspaceText(locale, "В очереди", "Queued");
     case "processing":
-      return "Генерация";
+      return workspaceText(locale, "Генерация", "Generating");
     case "failed":
-      return "Ошибка";
+      return workspaceText(locale, "Ошибка", "Failed");
     case "draft":
-      return "Черновик";
+      return workspaceText(locale, "Черновик", "Draft");
     default:
-      return "Проект";
+      return workspaceText(locale, "Проект", "Project");
   }
 };
 
@@ -7044,20 +7385,20 @@ const getProjectStatusClassName = (value: string) => {
 
 const shouldShowProjectStatusBadge = (value: string) => value !== "ready";
 
-const getProjectPreviewNote = (project: WorkspaceProject) => {
+const getProjectPreviewNote = (project: WorkspaceProject, locale: Locale = "ru") => {
   if (project.videoUrl) {
     return "";
   }
 
   switch (project.status) {
     case "queued":
-      return "В очереди на генерацию";
+      return workspaceText(locale, "В очереди на генерацию", "Queued for generation");
     case "processing":
-      return "Собираем превью";
+      return workspaceText(locale, "Собираем превью", "Preparing preview");
     case "failed":
-      return "Видео не готово";
+      return workspaceText(locale, "Видео не готово", "Video is not ready");
     default:
-      return "Превью появится после рендера";
+      return workspaceText(locale, "Превью появится после рендера", "Preview appears after rendering");
   }
 };
 
@@ -7216,7 +7557,10 @@ const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
   }
 
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
-  const segment = cloneWorkspaceSegmentEditorDraftSegment(options.segment);
+  const segment = cloneWorkspaceSegmentEditorDraftSegment(
+    options.segment,
+    project.prefillSettings?.language ?? getStudioLanguageForVoiceId(options.project.prefillSettings?.voiceId) ?? "ru",
+  );
   const segmentNumber = options.segmentListIndex + 1;
   const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
   const previewKind = options.kind === "ai_photo" || options.kind === "image_edit" ? "image" : "video";
@@ -7470,8 +7814,9 @@ function WorkspaceProjectCard({
   project,
   stackBadgeLabel = null,
 }: WorkspaceProjectCardProps) {
+  const { locale } = useLocale();
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
-  const projectPreviewNote = getProjectPreviewNote(project);
+  const projectPreviewNote = getProjectPreviewNote(project, locale);
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
   const projectDownloadUrl = appendUrlToken(project.videoUrl, "download", project.updatedAt || project.generatedAt || project.id);
   const projectDownloadName = getVideoDownloadName(projectTitle);
@@ -7610,7 +7955,7 @@ function WorkspaceProjectCard({
             ) : null}
             <div className="studio-project-card__thumb-copy">
               {projectPreviewNote ? <span className="studio-project-card__thumb-note">{projectPreviewNote}</span> : null}
-              <strong>{project.title || "Без названия"}</strong>
+              <strong>{project.title || workspaceText(locale, "Без названия", "Untitled")}</strong>
             </div>
           </div>
         </div>
@@ -7621,9 +7966,9 @@ function WorkspaceProjectCard({
             aria-label={
               shouldToggleStackFromCard
                 ? isStackExpanded
-                  ? `Свернуть версии: ${projectTitle}`
-                  : `Показать версии: ${projectTitle}`
-                : `Открыть превью: ${projectTitle}`
+                  ? workspaceText(locale, `Свернуть версии: ${projectTitle}`, `Collapse versions: ${projectTitle}`)
+                  : workspaceText(locale, `Показать версии: ${projectTitle}`, `Show versions: ${projectTitle}`)
+                : workspaceText(locale, `Открыть превью: ${projectTitle}`, `Open preview: ${projectTitle}`)
             }
             onClick={() => {
               if (shouldToggleStackFromCard) {
@@ -7641,8 +7986,12 @@ function WorkspaceProjectCard({
           <button
             className="studio-canvas-preview__quick-action"
             type="button"
-            aria-label="Открыть Shorts по сегментам"
-            title={canEditProject ? "Открыть Shorts по сегментам" : "Shorts по сегментам доступны после сохранения проекта"}
+            aria-label={workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")}
+            title={
+              canEditProject
+                ? workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")
+                : workspaceText(locale, "Shorts по сегментам доступны после сохранения проекта", "Segment editor is available after the project is saved")
+            }
             disabled={!canEditProject || isProjectActionBusy}
             onClick={() => onEdit(project)}
           >
@@ -7654,8 +8003,12 @@ function WorkspaceProjectCard({
           <button
             className="studio-canvas-preview__quick-action"
             type="button"
-            aria-label="Опубликовать в YouTube"
-            title={canPublishProject ? "Опубликовать" : "Публикация доступна после сохранения проекта"}
+            aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
+            title={
+              canPublishProject
+                ? workspaceText(locale, "Опубликовать", "Publish")
+                : workspaceText(locale, "Публикация доступна после сохранения проекта", "Publishing is available after the project is saved")
+            }
             disabled={!canPublishProject || isProjectActionBusy}
             onClick={() => onPublish(project)}
           >
@@ -7669,8 +8022,8 @@ function WorkspaceProjectCard({
             <button
               className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--accent"
               type="button"
-              aria-label="Добавить видео в локальные примеры"
-              title="Добавить в примеры"
+              aria-label={workspaceText(locale, "Добавить видео в локальные примеры", "Add video to local examples")}
+              title={workspaceText(locale, "Добавить в примеры", "Add to examples")}
               disabled={!canAddProjectToExamples || isProjectActionBusy}
               onClick={() => onAddToExamples(project)}
             >
@@ -7688,10 +8041,14 @@ function WorkspaceProjectCard({
             className={`studio-canvas-preview__quick-action${canDownloadProject ? "" : " is-disabled"}`}
             href={projectDownloadUrl ?? undefined}
             download={projectDownloadName}
-            aria-label="Скачать видео"
+            aria-label={workspaceText(locale, "Скачать видео", "Download video")}
             aria-disabled={!canDownloadProject}
             tabIndex={canDownloadProject ? 0 : -1}
-            title={canDownloadProject ? "Скачать" : "Видео ещё не готово для скачивания"}
+            title={
+              canDownloadProject
+                ? workspaceText(locale, "Скачать", "Download")
+                : workspaceText(locale, "Видео ещё не готово для скачивания", "Video is not ready for download yet")
+            }
             onClick={(event) => {
               event.stopPropagation();
               if (!canDownloadProject) {
@@ -7706,18 +8063,18 @@ function WorkspaceProjectCard({
         </div>
         {shouldShowStatusBadge ? (
         <span className={`studio-project-card__status studio-project-card__status--${project.status}`}>
-          {getProjectStatusLabel(project.status)}
+          {getProjectStatusLabel(project.status, locale)}
         </span>
         ) : null}
         <div className="studio-project-card__thumb-footer">
           <div className="studio-project-card__thumb-meta">
-          <span className="studio-project-card__date">{formatProjectDate(project.updatedAt)}</span>
+          <span className="studio-project-card__date">{formatProjectDate(project.updatedAt, locale)}</span>
           </div>
           <button
             className="studio-project-card__delete workspace-delete-btn"
             type="button"
-            aria-label="Удалить проект"
-            title="Удалить проект"
+            aria-label={workspaceText(locale, "Удалить проект", "Delete project")}
+            title={workspaceText(locale, "Удалить проект", "Delete project")}
             onClick={(event) => {
               event.stopPropagation();
               onDelete(project);
@@ -7737,8 +8094,8 @@ function WorkspaceProjectCard({
         <button
           className="workspace-project-stack__collapse-handle studio-project-card__stack-collapse"
           type="button"
-          aria-label="Свернуть стопку проектов"
-          title="Свернуть стопку"
+          aria-label={workspaceText(locale, "Свернуть стопку проектов", "Collapse project stack")}
+          title={workspaceText(locale, "Свернуть стопку", "Collapse stack")}
           onClick={(event) => {
             event.stopPropagation();
             handleToggleStack?.();
@@ -7772,14 +8129,29 @@ const doesWorkspaceProjectMatch = (
   return false;
 };
 
-const formatProjectDate = (value: string) => {
+const doesStudioGenerationMatchWorkspaceProject = (
+  generation: Pick<StudioGeneration, "adId" | "id">,
+  project: Pick<WorkspaceProject, "id" | "adId" | "jobId">,
+) => {
+  if (generation.adId !== null && project.adId !== null && generation.adId === project.adId) {
+    return true;
+  }
+
+  if (generation.id && project.jobId && generation.id === project.jobId) {
+    return true;
+  }
+
+  return generation.id === project.id;
+};
+
+const formatProjectDate = (value: string, locale: Locale = "ru") => {
   const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return "Дата недоступна";
+    return workspaceText(locale, "Дата недоступна", "Date unavailable");
   }
 
-  return new Intl.DateTimeFormat("ru-RU", {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -7788,8 +8160,12 @@ const formatProjectDate = (value: string) => {
   }).format(parsed);
 };
 
-const formatProjectVersionsLabel = (count: number) => {
+const formatProjectVersionsLabel = (count: number, locale: Locale = "ru") => {
   const absoluteCount = Math.abs(Math.trunc(count));
+  if (locale === "en") {
+    return `${absoluteCount} ${absoluteCount === 1 ? "version" : "versions"}`;
+  }
+
   const lastTwoDigits = absoluteCount % 100;
   const lastDigit = absoluteCount % 10;
 
@@ -7829,6 +8205,7 @@ function AccountProjectListCard({
   showStackCollapseHandle = false,
   stackBadgeLabel = null,
 }: AccountProjectListCardProps) {
+  const { locale } = useLocale();
   const handleToggleStack = typeof onToggleStack === "function" ? onToggleStack : null;
   const hasCollapseHandle = Boolean(handleToggleStack && showStackCollapseHandle);
   const isToggleable = Boolean(handleToggleStack && stackBadgeLabel);
@@ -7863,7 +8240,7 @@ function AccountProjectListCard({
     >
       <div className="account-project-card__meta">
         <span className="account-library__label">
-          {project.adId ? `Проект #${project.adId}` : `Job ${project.jobId?.slice(0, 8) ?? "N/A"}`}
+          {project.adId ? workspaceText(locale, `Проект #${project.adId}`, `Project #${project.adId}`) : `Job ${project.jobId?.slice(0, 8) ?? "N/A"}`}
         </span>
         <div className="account-project-card__meta-actions">
           {stackBadgeLabel ? (
@@ -7871,7 +8248,7 @@ function AccountProjectListCard({
           ) : null}
           {shouldShowStatusBadge ? (
             <span className={`account-status ${getProjectStatusClassName(project.status)}`}>
-              {getProjectStatusLabel(project.status)}
+              {getProjectStatusLabel(project.status, locale)}
             </span>
           ) : null}
         </div>
@@ -7882,21 +8259,25 @@ function AccountProjectListCard({
 
       <div className="account-project-card__details">
         <div className="account-project-card__detail">
-          <span>Тема</span>
-          <strong>{project.prompt || "Без темы"}</strong>
+          <span>{workspaceText(locale, "Тема", "Topic")}</span>
+          <strong>{project.prompt || workspaceText(locale, "Без темы", "No topic")}</strong>
         </div>
         <div className="account-project-card__detail">
-          <span>Источник</span>
-          <strong>{project.source === "task" ? "Generation task" : "Saved project"}</strong>
+          <span>{workspaceText(locale, "Источник", "Source")}</span>
+          <strong>
+            {project.source === "task"
+              ? workspaceText(locale, "Задача генерации", "Generation task")
+              : workspaceText(locale, "Сохраненный проект", "Saved project")}
+          </strong>
         </div>
         <div className="account-project-card__detail">
-          <span>Обновлен</span>
-          <strong>{formatProjectDate(project.updatedAt)}</strong>
+          <span>{workspaceText(locale, "Обновлен", "Updated")}</span>
+          <strong>{formatProjectDate(project.updatedAt, locale)}</strong>
         </div>
       </div>
 
       {project.hashtags.length ? (
-        <div className="account-project-card__tags" aria-label="Хэштеги проекта">
+        <div className="account-project-card__tags" aria-label={workspaceText(locale, "Хэштеги проекта", "Project hashtags")}>
           {project.hashtags.map((tag) => (
             <span key={`${project.id}-${tag}`}>{tag}</span>
           ))}
@@ -7905,16 +8286,16 @@ function AccountProjectListCard({
 
       <div className="account-project-card__footer">
         <span>
-          Создан: {formatProjectDate(project.createdAt)}
-          {project.generatedAt ? ` · Готов: ${formatProjectDate(project.generatedAt)}` : ""}
+          {workspaceText(locale, "Создан", "Created")}: {formatProjectDate(project.createdAt, locale)}
+          {project.generatedAt ? ` · ${workspaceText(locale, "Готов", "Ready")}: ${formatProjectDate(project.generatedAt, locale)}` : ""}
         </span>
 
         <div className="account-project-card__actions">
           <button
             className="account-linkbtn account-linkbtn--subtle-danger workspace-delete-btn"
             type="button"
-            aria-label="Удалить проект"
-            title="Удалить проект"
+            aria-label={workspaceText(locale, "Удалить проект", "Delete project")}
+            title={workspaceText(locale, "Удалить проект", "Delete project")}
             onKeyDown={(event) => {
               event.stopPropagation();
             }}
@@ -7937,8 +8318,8 @@ function AccountProjectListCard({
         <button
           className="workspace-project-stack__collapse-handle account-project-card__stack-collapse"
           type="button"
-          aria-label="Свернуть стопку проектов"
-          title="Свернуть стопку"
+          aria-label={workspaceText(locale, "Свернуть стопку проектов", "Collapse project stack")}
+          title={workspaceText(locale, "Свернуть стопку", "Collapse stack")}
           onClick={(event) => {
             event.stopPropagation();
             handleToggleStack?.();
@@ -7964,7 +8345,10 @@ const formatDateTimeLocalValue = (value: string | null | undefined) => {
   return new Date(parsed.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 };
 
-const publishCalendarWeekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const publishCalendarWeekdayLabels: Record<Locale, string[]> = {
+  ru: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+};
 
 type PublishCalendarDay = {
   date: Date;
@@ -8013,8 +8397,8 @@ const isSamePublishDay = (left: Date | null | undefined, right: Date | null | un
       left.getDate() === right.getDate(),
   );
 
-const formatPublishCalendarMonth = (value: Date) =>
-  new Intl.DateTimeFormat("ru-RU", {
+const formatPublishCalendarMonth = (value: Date, locale: Locale = "ru") =>
+  new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
     month: "long",
     year: "numeric",
   }).format(value);
@@ -8088,75 +8472,164 @@ const normalizePublishDateTimeInput = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 };
 
-const getYouTubePublicationMetaLabel = (publication: WorkspaceProjectYouTubePublication | null | undefined) => {
+const getYouTubePublicationMetaLabel = (publication: WorkspaceProjectYouTubePublication | null | undefined, locale: Locale = "ru") => {
   if (!publication) return "";
 
   if (publication.state === "scheduled" && publication.scheduledAt) {
-    return `Выход: ${formatProjectDate(publication.scheduledAt)}`;
+    return workspaceText(locale, `Выход: ${formatProjectDate(publication.scheduledAt, locale)}`, `Scheduled: ${formatProjectDate(publication.scheduledAt, locale)}`);
   }
 
   if (publication.state === "published" && publication.publishedAt) {
-    return `Опубликовано: ${formatProjectDate(publication.publishedAt)}`;
+    return workspaceText(locale, `Опубликовано: ${formatProjectDate(publication.publishedAt, locale)}`, `Published: ${formatProjectDate(publication.publishedAt, locale)}`);
   }
 
-  return publication.channelName ? `Канал: ${publication.channelName}` : "";
+  return publication.channelName ? workspaceText(locale, `Канал: ${publication.channelName}`, `Channel: ${publication.channelName}`) : "";
+};
+
+const normalizePublishJobStatus = (value: string | null | undefined) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+const isPublishJobProgressStatus = (status: string) =>
+  ["pending", "queued", "processing", "running", "started", "uploading", "in_progress"].includes(status);
+
+const isPublishJobSuccessStatus = (status: string) =>
+  ["complete", "completed", "done", "published", "scheduled", "success", "succeeded"].includes(status);
+
+const isPublishJobFailureStatus = (status: string) =>
+  ["canceled", "cancelled", "error", "errored", "failed", "timeout"].includes(status);
+
+const hasConfirmedYouTubePublication = (publication: WorkspaceProjectYouTubePublication | null | undefined) => {
+  if (!publication) return false;
+
+  const state = normalizePublishJobStatus(publication.state);
+  if (state === "published") {
+    return Boolean(publication.link || publication.youtubeVideoId || publication.publishedAt);
+  }
+
+  if (state === "scheduled") {
+    return Boolean(publication.scheduledAt || publication.link || publication.youtubeVideoId);
+  }
+
+  return Boolean(publication.link || publication.youtubeVideoId || publication.publishedAt || publication.scheduledAt);
 };
 
 const tabCopy: Record<
   WorkspaceTab,
-  {
+  Record<Locale, {
     eyebrow: string;
     heading: string;
     subtitle: string;
-  }
+  }>
 > = {
   overview: {
-    eyebrow: "Personal workspace",
-    heading: "Личный кабинет AdShorts AI",
-    subtitle:
-      "Управляйте генерациями, тарифом, каналами публикации и рабочими пресетами из одного workspace.",
+    ru: {
+      eyebrow: "Личный кабинет",
+      heading: "Личный кабинет AdShorts AI",
+      subtitle:
+        "Управляйте генерациями, тарифом, каналами публикации и рабочими пресетами из одного workspace.",
+    },
+    en: {
+      eyebrow: "Personal workspace",
+      heading: "AdShorts AI workspace",
+      subtitle: "Manage generations, plan, publishing channels and working presets from one workspace.",
+    },
   },
   studio: {
-    eyebrow: "Студия Shorts",
-    heading: "",
-    subtitle: "",
+    ru: {
+      eyebrow: "Студия Shorts",
+      heading: "",
+      subtitle: "",
+    },
+    en: {
+      eyebrow: "Shorts Studio",
+      heading: "",
+      subtitle: "",
+    },
   },
   generations: {
-    eyebrow: "Проекты",
-    heading: "Все проекты аккаунта",
-    subtitle: "Здесь собраны все генерации и готовые Shorts, связанные с вашим аккаунтом в общей БД.",
+    ru: {
+      eyebrow: "Проекты",
+      heading: "Все проекты аккаунта",
+      subtitle: "Здесь собраны все генерации и готовые Shorts, связанные с вашим аккаунтом в общей БД.",
+    },
+    en: {
+      eyebrow: "Projects",
+      heading: "All account projects",
+      subtitle: "All generations and finished Shorts linked to your account in the shared database.",
+    },
   },
   billing: {
-    eyebrow: "Тариф и кредиты",
-    heading: "Тариф и пополнение",
-    subtitle: "Здесь видно текущий тариф, баланс кредитов и сценарий докупки пакетов для PRO и ULTRA.",
+    ru: {
+      eyebrow: "Тариф и кредиты",
+      heading: "Тариф и пополнение",
+      subtitle: "Здесь видно текущий тариф, баланс кредитов и сценарий докупки пакетов для PRO и ULTRA.",
+    },
+    en: {
+      eyebrow: "Plan and credits",
+      heading: "Plan and top-ups",
+      subtitle: "Current plan, credit balance and add-on pack flow for PRO and ULTRA.",
+    },
   },
   settings: {
-    eyebrow: "Settings",
-    heading: "Настройки workspace",
-    subtitle: "Профиль, интеграции, уведомления и безопасность собраны в одной панели.",
+    ru: {
+      eyebrow: "Настройки",
+      heading: "Настройки workspace",
+      subtitle: "Профиль, интеграции, уведомления и безопасность собраны в одной панели.",
+    },
+    en: {
+      eyebrow: "Settings",
+      heading: "Workspace settings",
+      subtitle: "Profile, integrations, notifications and account security in one panel.",
+    },
   },
 };
 
-const workspaceCreditTopupPacks: WorkspaceCreditTopupPack[] = [
+const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>> = [
   {
-    name: "Pack 100",
-    credits: "100 кредитов",
-    price: "690 ₽",
-    subnote: "До 10 видео",
+    ru: {
+      name: "Pack 100",
+      credits: "100 кредитов",
+      price: "690 ₽",
+      subnote: "До 10 видео",
+    },
+    en: {
+      name: "Pack 100",
+      credits: "100 credits",
+      price: "690 ₽",
+      subnote: "Up to 10 videos",
+    },
   },
   {
-    name: "Pack 500",
-    credits: "500 кредитов",
-    price: "2 750 ₽",
-    subnote: "до 50 видео",
-    badge: "Выгодно",
+    ru: {
+      name: "Pack 500",
+      credits: "500 кредитов",
+      price: "2 750 ₽",
+      subnote: "до 50 видео",
+      badge: "Выгодно",
+    },
+    en: {
+      name: "Pack 500",
+      credits: "500 credits",
+      price: "2 750 ₽",
+      subnote: "Up to 50 videos",
+      badge: "Good value",
+    },
   },
   {
-    name: "Pack 1000",
-    credits: "1000 кредитов",
-    price: "4 990 ₽",
-    subnote: "до 100 видео",
+    ru: {
+      name: "Pack 1000",
+      credits: "1000 кредитов",
+      price: "4 990 ₽",
+      subnote: "до 100 видео",
+    },
+    en: {
+      name: "Pack 1000",
+      credits: "1000 credits",
+      price: "4 990 ₽",
+      subnote: "Up to 100 videos",
+    },
   },
 ];
 
@@ -8317,6 +8790,7 @@ function StudioSubtitleSelectorChip({
   subtitleStyleOptions,
   variant = "chip",
 }: StudioSubtitleSelectorChipProps) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
@@ -8328,7 +8802,11 @@ function StudioSubtitleSelectorChip({
   const selectedStyle = safeStyleOptions.find((style) => style.id === selectedStyleId) ?? safeStyleOptions[0];
   const selectedColor = safeColorOptions.find((color) => color.id === selectedColorId) ?? safeColorOptions[0];
   const previewStyle = getStudioSubtitlePreviewStyle(selectedStyle, selectedColor);
-  const previewColorLabel = studioSubtitleStyleUsesAccentColor(selectedStyle) ? selectedColor.label : "Белый текст";
+  const previewColorLabel = studioSubtitleStyleUsesAccentColor(selectedStyle)
+    ? selectedColor.label
+    : locale === "en"
+      ? "White text"
+      : "Белый текст";
   const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle);
   const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle);
   const isSidebarVariant = variant === "sidebar";
@@ -8417,15 +8895,15 @@ function StudioSubtitleSelectorChip({
       >
         {isSidebarVariant ? (
           <>
-            <span className="studio-sidebar__item-icon" aria-hidden="true">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M7 11.5h4M7 14.5h6M14 11.5h3M16 14.5h1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <span className="studio-sidebar__item-icon studio-sidebar__item-icon--subtitles" aria-hidden="true">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <rect x="3.25" y="5.25" width="17.5" height="13.5" rx="3.25" stroke="currentColor" strokeWidth="1.9" />
+                <path d="M7 11.2h4.1M7 14.6h6.2M14.3 11.2H17M16 14.6h1" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
               </svg>
             </span>
             <span className="studio-sidebar__item-copy">
-              <strong>Субтитры</strong>
-              <span className="studio-sidebar__item-value">{isEnabled ? selectedStyle.label : "Выкл"}</span>
+              <strong>{locale === "en" ? "Subtitles" : "Субтитры"}</strong>
+              <span className="studio-sidebar__item-value">{isEnabled ? selectedStyle.label : locale === "en" ? "Off" : "Выкл"}</span>
             </span>
             <svg
               className="studio-subtitle-selector__icon studio-subtitle-selector__icon--sidebar"
@@ -8440,8 +8918,8 @@ function StudioSubtitleSelectorChip({
           </>
         ) : (
           <>
-            <span className="studio-subtitle-selector__label">Субтитры</span>
-            <strong className="studio-subtitle-selector__value">{isEnabled ? selectedStyle.label : "Выкл"}</strong>
+            <span className="studio-subtitle-selector__label">{locale === "en" ? "Subtitles" : "Субтитры"}</span>
+            <strong className="studio-subtitle-selector__value">{isEnabled ? selectedStyle.label : locale === "en" ? "Off" : "Выкл"}</strong>
             <svg className="studio-subtitle-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -8456,7 +8934,7 @@ function StudioSubtitleSelectorChip({
               className="studio-subtitle-selector__menu"
               id={menuId}
               role="menu"
-              aria-label="Настройки субтитров"
+              aria-label={locale === "en" ? "Subtitle settings" : "Настройки субтитров"}
               style={
                 menuStyle ?? {
                   left: "16px",
@@ -8468,7 +8946,7 @@ function StudioSubtitleSelectorChip({
             >
               <div className="studio-subtitle-selector__section">
                 <div className="studio-subtitle-selector__section-head">
-                  <span>Режим</span>
+                  <span>{locale === "en" ? "Mode" : "Режим"}</span>
                 </div>
                 <div className="studio-subtitle-selector__styles">
                   <button
@@ -8479,15 +8957,15 @@ function StudioSubtitleSelectorChip({
                       setIsOpen(false);
                     }}
                   >
-                    <span>Без субтитров</span>
-                    <small>Полностью скрыть титры в ролике</small>
+                    <span>{locale === "en" ? "No subtitles" : "Без субтитров"}</span>
+                    <small>{locale === "en" ? "Hide captions completely in the video" : "Полностью скрыть титры в ролике"}</small>
                   </button>
                 </div>
               </div>
 
               <div className="studio-subtitle-selector__section">
                 <div className="studio-subtitle-selector__section-head">
-                  <span>Стиль</span>
+                  <span>{locale === "en" ? "Style" : "Стиль"}</span>
                 </div>
                 <div className="studio-subtitle-selector__styles">
                   {safeStyleOptions.map((style) => (
@@ -8509,7 +8987,7 @@ function StudioSubtitleSelectorChip({
 
               <div className="studio-subtitle-selector__section">
                 <div className="studio-subtitle-selector__section-head">
-                  <span>Цвет</span>
+                  <span>{locale === "en" ? "Color" : "Цвет"}</span>
                 </div>
                 <div className="studio-subtitle-selector__colors">
                   {safeColorOptions.map((color) => (
@@ -8528,7 +9006,7 @@ function StudioSubtitleSelectorChip({
 
               <div className="studio-subtitle-selector__section">
                 <div className="studio-subtitle-selector__section-head">
-                  <span>Примеры</span>
+                  <span>{locale === "en" ? "Examples" : "Примеры"}</span>
                 </div>
                 <div className="studio-subtitle-selector__examples">
                   {studioSubtitleExampleOptions.map((example) => {
@@ -8592,6 +9070,7 @@ function StudioSubtitleSelectorChip({
 }
 
 function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chip" }: StudioLanguageSelectorChipProps) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
@@ -8599,6 +9078,16 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selectedOption = studioLanguageOptions.find((option) => option.id === selectedLanguage) ?? studioLanguageOptions[0];
+  const getLanguageLabel = (language: StudioLanguage) =>
+    locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
+  const getLanguageDescription = (language: StudioLanguage) =>
+    locale === "en"
+      ? language === "en"
+        ? "English voices"
+        : "Russian voices"
+      : language === "en"
+        ? "Англоязычные голоса"
+        : "Русскоязычные голоса";
   const isSidebarVariant = variant === "sidebar";
 
   useEffect(() => {
@@ -8679,14 +9168,16 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
       >
         {isSidebarVariant ? (
           <>
-            <span className="studio-sidebar__item-icon" aria-hidden="true">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                <path d="M4 7h9M8.5 4v3m0 0c0 4.6-1.7 8-4.5 10m4.5-10c1.1 2.6 2.9 4.9 5.4 6.9M13 20l1.8-4.3m0 0L17 10l2.2 5.7m-4.4 0h4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <span className="studio-sidebar__item-icon studio-sidebar__item-icon--language" aria-hidden="true">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.9" />
+                <path d="M4 12h16M12 3.75c2.2 2.45 3.2 5.2 3.2 8.25S14.2 17.8 12 20.25M12 3.75C9.8 6.2 8.8 8.95 8.8 12s1 5.8 3.2 8.25" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" />
+                <path d="M7.2 7.25c1.25.72 2.86 1.12 4.8 1.12s3.55-.4 4.8-1.12M7.2 16.75c1.25-.72 2.86-1.12 4.8-1.12s3.55.4 4.8 1.12" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" opacity="0.82" />
               </svg>
             </span>
             <span className="studio-sidebar__item-copy">
-              <strong>Язык</strong>
-              <span className="studio-sidebar__item-value">{selectedOption?.label ?? "Русский"}</span>
+              <strong>{locale === "en" ? "Language" : "Язык"}</strong>
+              <span className="studio-sidebar__item-value">{selectedOption ? getLanguageLabel(selectedOption.id) : getLanguageLabel("ru")}</span>
             </span>
             <svg className="studio-voice-selector__icon studio-voice-selector__icon--sidebar" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -8694,8 +9185,8 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
           </>
         ) : (
           <>
-            <span className="studio-voice-selector__label">Язык</span>
-            <strong className="studio-voice-selector__value">{selectedOption?.label ?? "Русский"}</strong>
+            <span className="studio-voice-selector__label">{locale === "en" ? "Language" : "Язык"}</span>
+            <strong className="studio-voice-selector__value">{selectedOption ? getLanguageLabel(selectedOption.id) : getLanguageLabel("ru")}</strong>
             <svg className="studio-voice-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -8710,10 +9201,10 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
               className="studio-voice-selector__menu"
               id={menuId}
               role="menu"
-              aria-label="Выбор языка"
+              aria-label={locale === "en" ? "Language selection" : "Выбор языка"}
               style={menuStyle}
             >
-              <span className="studio-voice-selector__menu-title">Выберите язык</span>
+              <span className="studio-voice-selector__menu-title">{locale === "en" ? "Choose language" : "Выберите язык"}</span>
               {studioLanguageOptions.map((option) => (
                 <div
                   key={option.id}
@@ -8729,8 +9220,8 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
                       setIsOpen(false);
                     }}
                   >
-                    <span>{option.label}</span>
-                    <small>{option.description}</small>
+                    <span>{getLanguageLabel(option.id)}</span>
+                    <small>{getLanguageDescription(option.id)}</small>
                   </button>
                 </div>
               ))}
@@ -8751,6 +9242,7 @@ function StudioVoiceSelectorChip({
   voiceOptions,
   variant = "chip",
 }: StudioVoiceSelectorChipProps) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<StudioVoiceOption["id"] | null>(null);
@@ -8918,16 +9410,16 @@ function StudioVoiceSelectorChip({
       >
         {isSidebarVariant ? (
           <>
-            <span className="studio-sidebar__item-icon" aria-hidden="true">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                <path d="M12 4v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <rect x="9" y="3.5" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M7 11a5 5 0 1 0 10 0M12 18.5v2M8.5 20.5h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <span className="studio-sidebar__item-icon studio-sidebar__item-icon--voice" aria-hidden="true">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <path d="M12 4.2v9.2" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" />
+                <rect x="8.75" y="3.25" width="6.5" height="11.6" rx="3.25" stroke="currentColor" strokeWidth="2.05" />
+                <path d="M6.75 10.9a5.25 5.25 0 0 0 10.5 0M12 17.45v2.2M8.6 19.65h6.8" stroke="currentColor" strokeWidth="2.05" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
             <span className="studio-sidebar__item-copy">
-              <strong>Озвучка</strong>
-              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoice?.label ?? "Выберите голос" : "Выкл"}</span>
+              <strong>{locale === "en" ? "Voiceover" : "Озвучка"}</strong>
+              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : locale === "en" ? "Off" : "Выкл"}</span>
             </span>
             <svg className="studio-voice-selector__icon studio-voice-selector__icon--sidebar" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -8935,8 +9427,8 @@ function StudioVoiceSelectorChip({
           </>
         ) : (
           <>
-            <span className="studio-voice-selector__label">Озвучка</span>
-            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoice?.label ?? "Выберите голос" : "Выкл"}</strong>
+            <span className="studio-voice-selector__label">{locale === "en" ? "Voiceover" : "Озвучка"}</span>
+            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : locale === "en" ? "Off" : "Выкл"}</strong>
             <svg className="studio-voice-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -8951,10 +9443,10 @@ function StudioVoiceSelectorChip({
               className="studio-voice-selector__menu"
               id={menuId}
               role="menu"
-              aria-label="Выбор голоса"
+              aria-label={locale === "en" ? "Voice selection" : "Выбор голоса"}
               style={menuStyle}
             >
-              <span className="studio-voice-selector__menu-title">Выберите голос</span>
+              <span className="studio-voice-selector__menu-title">{locale === "en" ? "Choose voice" : "Выберите голос"}</span>
               <div className={`studio-voice-selector__option${!isEnabled ? " is-selected" : ""}`}>
                 <button
                   className="studio-voice-selector__option-main"
@@ -8967,8 +9459,8 @@ function StudioVoiceSelectorChip({
                     setIsOpen(false);
                   }}
                 >
-                  <span>Без озвучки</span>
-                  <small>Оставить ролик без голосовой дорожки</small>
+                  <span>{locale === "en" ? "No voiceover" : "Без озвучки"}</span>
+                  <small>{locale === "en" ? "Keep the video without a voice track" : "Оставить ролик без голосовой дорожки"}</small>
                 </button>
               </div>
               {voiceOptions.map((voice) => (
@@ -9001,12 +9493,12 @@ function StudioVoiceSelectorChip({
                         type="button"
                         aria-label={
                           !canPreviewVoice
-                            ? `Превью недоступно: ${voice.label}`
+                            ? `${locale === "en" ? "Preview unavailable" : "Превью недоступно"}: ${voice.label}`
                             : previewingVoiceId === voice.id
-                              ? `Остановить: ${voice.label}`
-                              : `Прослушать: ${voice.label}`
+                              ? `${locale === "en" ? "Stop" : "Остановить"}: ${voice.label}`
+                              : `${locale === "en" ? "Listen" : "Прослушать"}: ${voice.label}`
                         }
-                        title={!canPreviewVoice ? "Превью недоступно" : previewingVoiceId === voice.id ? "Остановить" : "Прослушать"}
+                        title={!canPreviewVoice ? (locale === "en" ? "Preview unavailable" : "Превью недоступно") : previewingVoiceId === voice.id ? (locale === "en" ? "Stop" : "Остановить") : (locale === "en" ? "Listen" : "Прослушать")}
                         disabled={!canPreviewVoice}
                         onClick={() => void handlePreviewVoice(voice)}
                       >
@@ -9504,6 +9996,7 @@ function WorkspaceModalVideoPlayer({
   volume = 0.88,
   onVolumeChange,
 }: WorkspaceModalVideoPlayerProps) {
+  const { locale } = useLocale();
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastNonZeroVolumeRef = useRef(Math.max(0.2, clampWorkspaceModalPlayerVolume(volume)));
   const [currentTime, setCurrentTime] = useState(0);
@@ -9696,14 +10189,14 @@ function WorkspaceModalVideoPlayer({
           max={1000}
           step={1}
           value={progressValue}
-          aria-label="Позиция воспроизведения"
+          aria-label={workspaceText(locale, "Позиция воспроизведения", "Playback position")}
           onChange={handleSeek}
         />
         <div className="studio-video-modal__player-toolbar">
           <button
             className="studio-video-modal__control-btn"
             type="button"
-            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+            aria-label={isPlaying ? workspaceText(locale, "Пауза", "Pause") : workspaceText(locale, "Воспроизвести", "Play")}
             onClick={handleTogglePlayback}
           >
             {isPlaying ? (
@@ -9720,7 +10213,11 @@ function WorkspaceModalVideoPlayer({
           <button
             className="studio-video-modal__control-btn"
             type="button"
-            aria-label={isActuallyMuted || safeVolume <= 0 ? "Включить звук" : "Выключить звук"}
+            aria-label={
+              isActuallyMuted || safeVolume <= 0
+                ? workspaceText(locale, "Включить звук", "Unmute")
+                : workspaceText(locale, "Выключить звук", "Mute")
+            }
             onClick={handleToggleMute}
           >
             {isActuallyMuted || safeVolume <= 0 ? (
@@ -9758,6 +10255,7 @@ function WorkspaceSegmentSubtitleOverlay({
   subtitleStyleId,
   subtitleStyleOptions,
 }: WorkspaceSegmentSubtitleOverlayProps) {
+  const { locale } = useLocale();
   const [isEditingText, setIsEditingText] = useState(false);
   const pendingCaretPointRef = useRef<WorkspaceSegmentSubtitleCaretPoint | null>(null);
   const subtitleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -9838,13 +10336,13 @@ function WorkspaceSegmentSubtitleOverlay({
         {isEdited ? (
           <div className="studio-segment-editor__subtitle-meta">
             <span className="studio-segment-editor__subtitle-meta-spacer" aria-hidden="true"></span>
-            <span className="studio-segment-editor__subtitle-status">Текст изменен</span>
+            <span className="studio-segment-editor__subtitle-status">{workspaceText(locale, "Текст изменен", "Text changed")}</span>
             {onResetText ? (
               <button
                 className="studio-segment-editor__subtitle-reset"
                 type="button"
-                aria-label="Сбросить текст сегмента"
-                title="Сбросить текст сегмента"
+                aria-label={workspaceText(locale, "Сбросить текст сегмента", "Reset segment text")}
+                title={workspaceText(locale, "Сбросить текст сегмента", "Reset segment text")}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -9925,8 +10423,8 @@ function WorkspaceSegmentSubtitleOverlay({
                 value={segment.text}
                 onChange={onTextChange}
                 rows={4}
-                placeholder="Введите текст сегмента"
-                aria-label={`Текст сегмента ${segmentNumber}`}
+                placeholder={workspaceText(locale, "Введите текст сегмента", "Enter segment text")}
+                aria-label={workspaceText(locale, `Текст сегмента ${segmentNumber}`, `Segment ${segmentNumber} text`)}
                 onBlur={() => {
                   setIsEditingText(false);
                 }}
@@ -9956,7 +10454,7 @@ function WorkspaceSegmentSubtitleOverlay({
               type="button"
               data-logic={selectedStyle.logicMode}
               data-style={selectedStyle.id}
-              aria-label={`Редактировать текст сегмента ${segmentNumber}`}
+              aria-label={workspaceText(locale, `Редактировать текст сегмента ${segmentNumber}`, `Edit segment ${segmentNumber} text`)}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -9990,7 +10488,7 @@ function WorkspaceSegmentSubtitleOverlay({
                   </span>
                 ))
               ) : (
-                <span className="studio-segment-editor__subtitle-empty">Нажмите, чтобы добавить текст</span>
+                <span className="studio-segment-editor__subtitle-empty">{workspaceText(locale, "Нажмите, чтобы добавить текст", "Click to add text")}</span>
               )}
             </button>
           ) : (
@@ -10038,6 +10536,7 @@ function StudioVideoSelectorChip({
   selectedVideoMode,
   uploadError,
 }: StudioVideoSelectorChipProps) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
@@ -10049,6 +10548,7 @@ function StudioVideoSelectorChip({
   const selectedVideoLabel = getStudioVideoChipValue(selectedVideoMode, customVideoFile, {
     brandLogoFile,
     brandText,
+    locale,
   });
   const selectedVideoTitle = [customVideoFile?.fileName ?? selectedVideoLabel, hasStudioBranding({ brandLogoFile, brandText }) ? getStudioBrandSummary({ brandLogoFile, brandText }) : ""]
     .filter(Boolean)
@@ -10180,7 +10680,7 @@ function StudioVideoSelectorChip({
         aria-controls={menuId}
         onClick={() => setIsOpen((open) => !open)}
       >
-        <span className="studio-video-selector__label">Визуал</span>
+        <span className="studio-video-selector__label">{locale === "en" ? "Visual" : "Визуал"}</span>
         <strong className="studio-video-selector__value" title={selectedVideoTitle}>
           {selectedVideoLabel}
         </strong>
@@ -10196,10 +10696,10 @@ function StudioVideoSelectorChip({
               className="studio-video-selector__menu"
               id={menuId}
               role="menu"
-              aria-label="Выбор режима визуала"
+              aria-label={locale === "en" ? "Visual mode selection" : "Выбор режима визуала"}
               style={menuStyle}
             >
-              <span className="studio-video-selector__menu-title">Режим создания</span>
+              <span className="studio-video-selector__menu-title">{locale === "en" ? "Creation mode" : "Режим создания"}</span>
               <div className="studio-video-selector__options">
                 {studioVideoOptions
                   .filter((option) => option.id !== "custom")
@@ -10216,31 +10716,31 @@ function StudioVideoSelectorChip({
                       }}
                     >
                       <span className="studio-video-selector__option-row">
-                        <span>{option.label}</span>
+                        <span>{getStudioVideoOptionCopy(option, locale).label}</span>
                       </span>
-                      <small>{option.description}</small>
+                      <small>{getStudioVideoOptionCopy(option, locale).description}</small>
                     </button>
                   ))}
               </div>
 
               <div className="studio-video-selector__section">
-                <span className="studio-video-selector__menu-title">Загрузить свой визуал</span>
+                <span className="studio-video-selector__menu-title">{locale === "en" ? "Upload custom visual" : "Загрузить свой визуал"}</span>
                 <div className={`studio-video-selector__custom${selectedVideoMode === "custom" ? " is-selected" : ""}`}>
                   <button
                     className="studio-video-selector__custom-main"
                     type="button"
                     onClick={handleCustomVideoSelect}
                   >
-                    <span>Загрузить свой визуал</span>
+                    <span>{locale === "en" ? "Upload custom visual" : "Загрузить свой визуал"}</span>
                     <small title={customVideoFile?.fileName}>
-                      {customVideoFileLabel ?? "Поддерживаются .jpg, .png, .webp, .avif, .mp4, .mov, .webm, .m4v"}
+                      {customVideoFileLabel ?? (locale === "en" ? "Supports .jpg, .png, .webp, .avif, .mp4, .mov, .webm, .m4v" : "Поддерживаются .jpg, .png, .webp, .avif, .mp4, .mov, .webm, .m4v")}
                     </small>
                   </button>
                   <button
                     className="studio-video-selector__custom-action"
                     type="button"
-                    aria-label={customVideoFile ? "Заменить визуал" : "Загрузить визуал"}
-                    title={customVideoFile ? "Заменить визуал" : "Загрузить визуал"}
+                    aria-label={customVideoFile ? (locale === "en" ? "Replace visual" : "Заменить визуал") : (locale === "en" ? "Upload visual" : "Загрузить визуал")}
+                    title={customVideoFile ? (locale === "en" ? "Replace visual" : "Заменить визуал") : (locale === "en" ? "Upload visual" : "Загрузить визуал")}
                     onClick={openCustomVideoPicker}
                   >
                     {isPreparingCustomVideo ? (
@@ -10256,7 +10756,7 @@ function StudioVideoSelectorChip({
               </div>
 
               <div className="studio-video-selector__section">
-                <span className="studio-video-selector__menu-title">Бренд</span>
+                <span className="studio-video-selector__menu-title">{locale === "en" ? "Brand" : "Бренд"}</span>
                 <div
                   className={`studio-video-selector__brand${
                     hasStudioBranding({ brandLogoFile, brandText }) ? " is-selected" : ""
@@ -10271,15 +10771,15 @@ function StudioVideoSelectorChip({
                       )}
                     </div>
                     <div className="studio-video-selector__brand-copy">
-                      <span>{hasStudioBranding({ brandLogoFile, brandText }) ? "Бренд добавлен" : "Добавить бренд"}</span>
+                      <span>{hasStudioBranding({ brandLogoFile, brandText }) ? (locale === "en" ? "Brand added" : "Бренд добавлен") : (locale === "en" ? "Add brand" : "Добавить бренд")}</span>
                       <small title={brandLogoFile?.fileName ?? brandText}>{getStudioBrandSummary({ brandLogoFile, brandText })}</small>
                     </div>
                     <div className="studio-video-selector__brand-actions">
                       <button
                         className="studio-video-selector__custom-action"
                         type="button"
-                        aria-label={brandLogoFile ? "Заменить логотип" : "Добавить логотип"}
-                        title={brandLogoFile ? "Заменить логотип" : "Добавить логотип"}
+                        aria-label={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
+                        title={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
                         onClick={openBrandLogoPicker}
                       >
                         {isPreparingBrandLogo ? (
@@ -10294,8 +10794,8 @@ function StudioVideoSelectorChip({
                         <button
                           className="studio-video-selector__custom-action studio-video-selector__custom-action--danger"
                           type="button"
-                          aria-label="Убрать логотип"
-                          title="Убрать логотип"
+                          aria-label={locale === "en" ? "Remove logo" : "Убрать логотип"}
+                          title={locale === "en" ? "Remove logo" : "Убрать логотип"}
                           onClick={onRemoveBrandLogo}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -10306,7 +10806,7 @@ function StudioVideoSelectorChip({
                     </div>
                   </div>
                   <label className="studio-video-selector__brand-field">
-                    <span>Текст бренда</span>
+                    <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
                     <input
                       className="studio-video-selector__brand-input"
                       type="text"
@@ -10320,10 +10820,10 @@ function StudioVideoSelectorChip({
                     <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
                     {brandText ? (
                       <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
-                        Очистить текст
+                        {locale === "en" ? "Clear text" : "Очистить текст"}
                       </button>
                     ) : (
-                      <span>Лого: .jpg, .png, .webp, .avif</span>
+                      <span>{locale === "en" ? "Logo: .jpg, .png, .webp, .avif" : "Лого: .jpg, .png, .webp, .avif"}</span>
                     )}
                   </div>
                   <button
@@ -10335,7 +10835,7 @@ function StudioVideoSelectorChip({
                       triggerRef.current?.focus();
                     }}
                   >
-                    Применить
+                    {locale === "en" ? "Apply" : "Применить"}
                   </button>
                 </div>
                 {brandUploadError ? <p className="studio-video-selector__error">{brandUploadError}</p> : null}
@@ -10357,6 +10857,7 @@ function StudioMusicSelectorChip({
   uploadError,
   variant = "chip",
 }: StudioMusicSelectorChipProps) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
@@ -10364,7 +10865,7 @@ function StudioMusicSelectorChip({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedMusicLabel = getStudioMusicChipValue(selectedMusicType, customMusicFile);
+  const selectedMusicLabel = getStudioMusicChipValue(selectedMusicType, customMusicFile, locale);
   const selectedMusicTitle = customMusicFile?.fileName ?? selectedMusicLabel;
   const customMusicFileLabel = customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : null;
   const isSidebarVariant = variant === "sidebar";
@@ -10478,13 +10979,13 @@ function StudioMusicSelectorChip({
       >
         {isSidebarVariant ? (
           <>
-            <span className="studio-sidebar__item-icon" aria-hidden="true">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                <path d="M14 5v10.5a2.5 2.5 0 1 1-2-2.45V7.2l8-1.7v8a2.5 2.5 0 1 1-2-2.45V5.85L14 6.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <span className="studio-sidebar__item-icon studio-sidebar__item-icon--music" aria-hidden="true">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="2.05" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
             <span className="studio-sidebar__item-copy">
-              <strong>Музыка</strong>
+              <strong>{locale === "en" ? "Music" : "Музыка"}</strong>
               <span className="studio-sidebar__item-value" title={selectedMusicTitle}>{selectedMusicLabel}</span>
             </span>
             <svg className="studio-music-selector__icon studio-music-selector__icon--sidebar" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -10493,7 +10994,7 @@ function StudioMusicSelectorChip({
           </>
         ) : (
           <>
-            <span className="studio-music-selector__label">Музыка</span>
+            <span className="studio-music-selector__label">{locale === "en" ? "Music" : "Музыка"}</span>
             <strong className="studio-music-selector__value" title={selectedMusicTitle}>
               {selectedMusicLabel}
             </strong>
@@ -10511,11 +11012,11 @@ function StudioMusicSelectorChip({
               className="studio-music-selector__menu"
               id={menuId}
               role="menu"
-              aria-label="Выбор музыки"
+              aria-label={locale === "en" ? "Music selection" : "Выбор музыки"}
               style={menuStyle}
             >
               <div className="studio-music-selector__section">
-                <span className="studio-music-selector__menu-title">Режим</span>
+                <span className="studio-music-selector__menu-title">{locale === "en" ? "Mode" : "Режим"}</span>
                 <div className="studio-music-selector__presets">
                   {studioMusicOptions
                     .filter((option) => option.id === "ai" || option.id === "none")
@@ -10531,15 +11032,15 @@ function StudioMusicSelectorChip({
                           setIsOpen(false);
                         }}
                       >
-                        <span>{option.label}</span>
-                        <small>{option.description}</small>
+                        <span>{getStudioMusicOptionCopy(option, locale).label}</span>
+                        <small>{getStudioMusicOptionCopy(option, locale).description}</small>
                       </button>
                     ))}
                 </div>
               </div>
 
               <div className="studio-music-selector__section">
-                <span className="studio-music-selector__menu-title">Стиль музыки</span>
+                <span className="studio-music-selector__menu-title">{locale === "en" ? "Music style" : "Стиль музыки"}</span>
                 <div className="studio-music-selector__styles">
                   {studioMusicStyleOptions.map((option) => (
                     <button
@@ -10553,31 +11054,31 @@ function StudioMusicSelectorChip({
                         setIsOpen(false);
                       }}
                     >
-                      <span>{option.label}</span>
-                      <small>{option.description}</small>
+                      <span>{getStudioMusicOptionCopy(option, locale).label}</span>
+                      <small>{getStudioMusicOptionCopy(option, locale).description}</small>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="studio-music-selector__section">
-                <span className="studio-music-selector__menu-title">Своя музыка</span>
+                <span className="studio-music-selector__menu-title">{locale === "en" ? "Custom music" : "Своя музыка"}</span>
                 <div className={`studio-music-selector__custom${selectedMusicType === "custom" ? " is-selected" : ""}`}>
                   <button
                     className="studio-music-selector__custom-main"
                     type="button"
                     onClick={handleCustomMusicSelect}
                   >
-                    <span>Загрузить свой трек</span>
+                    <span>{locale === "en" ? "Upload your track" : "Загрузить свой трек"}</span>
                     <small title={customMusicFile?.fileName}>
-                      {customMusicFileLabel ?? "Поддерживаются .mp3, .wav и .m4a"}
+                      {customMusicFileLabel ?? (locale === "en" ? "Supports .mp3, .wav and .m4a" : "Поддерживаются .mp3, .wav и .m4a")}
                     </small>
                   </button>
                   <button
                     className="studio-music-selector__custom-action"
                     type="button"
-                    aria-label={customMusicFile ? "Заменить аудиофайл" : "Загрузить аудиофайл"}
-                    title={customMusicFile ? "Заменить файл" : "Загрузить файл"}
+                    aria-label={customMusicFile ? (locale === "en" ? "Replace audio file" : "Заменить аудиофайл") : (locale === "en" ? "Upload audio file" : "Загрузить аудиофайл")}
+                    title={customMusicFile ? (locale === "en" ? "Replace file" : "Заменить файл") : (locale === "en" ? "Upload file" : "Загрузить файл")}
                     onClick={openCustomMusicPicker}
                   >
                     {isPreparingCustomMusic ? (
@@ -10600,8 +11101,12 @@ function StudioMusicSelectorChip({
 }
 
 export function WorkspacePage({ defaultTab, initialProfile = null, session, onLogout, onProfileChange }: Props) {
+  const { locale, localizePath } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
+  const routeStudioDefaults = getWorkspaceInitialStudioDefaults(locale);
+  const routeLocaleLanguage = routeStudioDefaults.language;
+  const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
   const initialExamplePrefillRef = useRef(readExamplePrefillIntent());
   const initialStudioEntryIntentRef = useRef(readStudioEntryIntent());
@@ -10615,7 +11120,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>("ru");
+  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(routeStudioDefaults.language);
   const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([]);
   const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([]);
   const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(true);
@@ -10624,7 +11129,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [selectedSubtitleColorId, setSelectedSubtitleColorId] = useState<StudioSubtitleColorOption["id"]>("purple");
   const [selectedSubtitleExampleId, setSelectedSubtitleExampleId] = useState<StudioSubtitleExampleOption["id"]>(studioSubtitleExampleOptions[0]?.id ?? "hook");
   const [selectedVoiceId, setSelectedVoiceId] = useState<StudioVoiceOption["id"]>(
-    studioVoiceOptionsByLanguage.ru[0]?.id ?? "Bys_24000",
+    routeStudioDefaults.voiceId,
   );
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>("standard");
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<StudioCustomVideoFile | null>(null);
@@ -10646,6 +11151,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [musicSelectionError, setMusicSelectionError] = useState<string | null>(null);
   const [, setStatus] = useState("Ready to generate");
   const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    const previousRouteLanguage = previousRouteLocaleLanguageRef.current;
+    previousRouteLocaleLanguageRef.current = routeLocaleLanguage;
+
+    setSelectedLanguage((current) => (current === previousRouteLanguage ? routeLocaleLanguage : current));
+    setSelectedVoiceId((currentVoiceId) => {
+      const currentVoiceLanguage = getStudioLanguageForVoiceId(currentVoiceId);
+      return currentVoiceLanguage === previousRouteLanguage || !currentVoiceLanguage
+        ? routeStudioDefaults.voiceId
+        : currentVoiceId;
+    });
+  }, [routeLocaleLanguage, routeStudioDefaults.voiceId]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [studioPreviewPosterUrl, setStudioPreviewPosterUrl] = useState<string | null>(null);
   const [failedStudioVideoUrls, setFailedStudioVideoUrls] = useState<string[]>([]);
@@ -10808,6 +11326,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
+  const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
   const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
   const detachedSegmentEditorDraftRef = useRef<{
     activeSegmentIndex: number;
@@ -10988,8 +11507,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     ],
   );
   const getSegmentVisualPlaceholderLabel = useCallback(
-    (segmentIndex: number) => (isSegmentVisualGenerationPending(segmentIndex) ? "Генерация..." : "Нет превью"),
-    [isSegmentVisualGenerationPending],
+    (segmentIndex: number) =>
+      isSegmentVisualGenerationPending(segmentIndex)
+        ? workspaceText(locale, "Генерация...", "Generating...")
+        : workspaceText(locale, "Нет превью", "No preview"),
+    [isSegmentVisualGenerationPending, locale],
   );
   const syncStorageBackedMediaLibraryState = useCallback(() => {
     const nextStoredDrafts = readStoredWorkspaceSegmentEditorDrafts(session.email);
@@ -12742,21 +13264,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     void handleLoadMoreMediaLibrary();
   }, [handleLoadMoreMediaLibrary, isMediaLibraryLoading, mediaLibraryError, mediaLibraryNextCursor, shouldLoadSegmentModalMediaLibrary]);
 
-  const header = tabCopy[activeTab];
+  const header = tabCopy[activeTab][locale];
   const sectionTitleId = header.heading ? "account-shell-title" : undefined;
   const workspacePlan = normalizeWorkspacePlan(workspaceProfile?.plan);
   const workspacePlanLabel = workspacePlan ?? "…";
   const workspaceBalance = normalizeWorkspaceBalance(workspaceProfile?.balance);
   const workspaceCanPurchaseCreditPacks = canPurchaseAddonCredits(workspacePlan);
   const workspaceBillingDescription = workspaceCanPurchaseCreditPacks
-    ? `На тарифе ${workspacePlanLabel} можно докупать кредиты пакетами.`
-    : "Покупка дополнительных кредитов доступна только на тарифах PRO и ULTRA.";
+    ? workspaceText(locale, `На тарифе ${workspacePlanLabel} можно докупать кредиты пакетами.`, `Plan ${workspacePlanLabel} can buy credit packs.`)
+    : workspaceText(locale, "Покупка дополнительных кредитов доступна только на тарифах PRO и ULTRA.", "Extra credit packs are available only on PRO and ULTRA.");
   const workspaceCreditPackActionLabel = workspaceCanPurchaseCreditPacks
-    ? "Открыть пакеты кредитов"
-    : "Перейти на PRO или ULTRA";
+    ? workspaceText(locale, "Открыть пакеты кредитов", "Open credit packs")
+    : workspaceText(locale, "Перейти на PRO или ULTRA", "Upgrade to PRO or ULTRA");
   const workspaceCreditPackNote = workspaceCanPurchaseCreditPacks
-    ? "Пакеты пополняют текущий баланс и не меняют сам тариф."
-    : "Сначала нужен активный тариф PRO или ULTRA, после этого откроется докупка пакетов.";
+    ? workspaceText(locale, "Пакеты пополняют текущий баланс и не меняют сам тариф.", "Packs top up the current balance without changing the plan.")
+    : workspaceText(locale, "Сначала нужен активный тариф PRO или ULTRA, после этого откроется докупка пакетов.", "An active PRO or ULTRA plan is required before add-on packs become available.");
   const studioCreateRequiredCredits = getRequiredCreditsForVideoMode(selectedVideoMode);
   const studioCreateCostLabel = `${studioCreateRequiredCredits} ⚡`;
   const generatedVideoTopic = generatedVideo?.prompt ?? "";
@@ -12764,19 +13286,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const generatedVideoDescription = generatedVideo?.description ?? "";
   const generatedVideoHashtags = generatedVideo?.hashtags ?? [];
   const normalizedGeneratedVideoPrompt = generatedVideoTopic.trim() || topicInput.trim();
-  const normalizedGeneratedVideoTitle = generatedVideoTitle.trim() || normalizedGeneratedVideoPrompt || "Видео без названия";
+  const normalizedGeneratedVideoTitle = generatedVideoTitle.trim() || normalizedGeneratedVideoPrompt || workspaceText(locale, "Видео без названия", "Untitled video");
   const hasGeneratedVideoTitle = Boolean(generatedVideoTitle);
-  const generatedVideoModalTitle = hasGeneratedVideoTitle ? generatedVideoTitle : "Результат генерации";
+  const generatedVideoModalTitle = hasGeneratedVideoTitle ? generatedVideoTitle : workspaceText(locale, "Результат генерации", "Generation result");
   const isProjectPreviewModalOpen = Boolean(projectPreviewModal);
   const previewModalTitle = isProjectPreviewModalOpen
-    ? projectPreviewModal?.title || "Без названия"
+    ? projectPreviewModal?.title || workspaceText(locale, "Без названия", "Untitled")
     : generatedVideoModalTitle;
   const previewModalTopic = isProjectPreviewModalOpen ? projectPreviewModal?.prompt ?? "" : generatedVideoTopic;
   const previewModalDescription = isProjectPreviewModalOpen
     ? projectPreviewModal?.description ?? ""
     : generatedVideoDescription;
   const openWorkspaceCreditPacks = () => {
-    navigate(workspaceCanPurchaseCreditPacks ? "/pricing#addons" : "/pricing#plans");
+    navigate(localizePath(workspaceCanPurchaseCreditPacks ? "/pricing#addons" : "/pricing#plans"));
   };
   const handleInsufficientCreditsAction = () => {
     const targetSection = getInsufficientCreditsPricingSection(insufficientCreditsContext?.plan ?? workspacePlan);
@@ -12785,7 +13307,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       section: targetSection,
       source: "insufficient-credits",
     });
-    navigate(`/pricing#${targetSection}`);
+    navigate(localizePath(`/pricing#${targetSection}`));
   };
   const previewModalHashtags = isProjectPreviewModalOpen ? projectPreviewModal?.hashtags ?? [] : generatedVideoHashtags;
   const generatedVideoPlaybackUrl = String(generatedVideo?.videoUrl ?? "").trim() || null;
@@ -12797,6 +13319,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const selectedLocalExampleGoalOption =
     workspaceLocalExampleGoalOptions.find((option) => option.id === selectedLocalExampleGoal) ??
     workspaceLocalExampleGoalOptions[0];
+  const selectedLocalExampleGoalOptionCopy = getWorkspaceLocalExampleGoalCopy(selectedLocalExampleGoalOption, locale);
   const isGeneratedVideoPlaybackBroken = isStudioVideoMarkedFailed(generatedVideo?.videoUrl);
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
@@ -12820,10 +13343,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const previewModalUpdatedAt = isProjectPreviewModalOpen ? projectPreviewModal?.updatedAt ?? "" : "";
   const previewModalStatusLabel =
     previewModalPublication?.state === "published"
-      ? "Shorts опубликован"
+      ? workspaceText(locale, "Shorts опубликован", "Shorts published")
       : previewModalPublication?.state === "scheduled"
-        ? "Публикация запланирована"
-        : "Готово к публикации";
+        ? workspaceText(locale, "Публикация запланирована", "Publication scheduled")
+        : workspaceText(locale, "Готово к публикации", "Ready to publish");
   const previewModalStatusTone =
     previewModalPublication?.state === "published"
       ? "published"
@@ -12831,10 +13354,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ? "scheduled"
         : "ready";
   const previewModalStatusMeta =
-    getYouTubePublicationMetaLabel(previewModalPublication) ||
+    getYouTubePublicationMetaLabel(previewModalPublication, locale) ||
     (isProjectPreviewModalOpen
-      ? `Обновлено ${formatProjectDate(previewModalUpdatedAt)}`
-      : "Готово к отправке в YouTube");
+      ? workspaceText(locale, `Обновлено ${formatProjectDate(previewModalUpdatedAt, locale)}`, `Updated ${formatProjectDate(previewModalUpdatedAt, locale)}`)
+      : workspaceText(locale, "Готово к отправке в YouTube", "Ready to send to YouTube"));
   const previewModalStatusLink = previewModalPublication?.link ?? null;
   const previewModalPublishTargetAdId = isProjectPreviewModalOpen ? projectPreviewModal?.adId ?? null : generatedVideo?.adId ?? null;
   const previewModalPlaybackToken = isProjectPreviewModalOpen
@@ -12859,7 +13382,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : null;
   const mediaLibraryPreviewModalPosterUrl = mediaLibraryPreviewModalSurface?.posterUrl ?? null;
   const mediaLibraryPreviewModalTitle = mediaLibraryPreviewModal
-    ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind, mediaLibraryPreviewModal.assetKind)
+    ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind, mediaLibraryPreviewModal.assetKind, locale)
     : "";
   const formatSegmentVisualCreditsLabel = (credits: number) => `${credits} ⚡`;
   const renderSegmentPaidActionContent = (
@@ -12881,8 +13404,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const hasPreviewModalDescription = Boolean(previewModalDescription);
   const hasPreviewModalHashtags = previewModalHashtags.length > 0;
   const selectedVoiceOptions = studioVoiceOptionsByLanguage[selectedLanguage];
-  const resolvedSelectedVoiceId =
-    selectedVoiceOptions.find((voice) => voice.id === selectedVoiceId)?.id ?? selectedVoiceOptions[0]?.id ?? "";
+  const resolvedSelectedVoiceId = resolveStudioVoiceIdForLanguage(selectedLanguage, selectedVoiceId);
   const buildCurrentExamplePrefillSettings = (): ExamplePrefillStudioSettings => {
     const settings: ExamplePrefillStudioSettings = {
       language: selectedLanguage,
@@ -13191,10 +13713,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         : mediaLibraryVisibleCount;
   const mediaLibraryAllPillLabel =
     mediaLibraryDisplayTotalCount === null && isMediaLibraryInitialLoading
-      ? "Все"
+      ? workspaceText(locale, "Все", "All")
       : mediaLibraryDisplayTotalCount !== null && mediaLibraryDisplayTotalCount > mediaLibraryVisibleCount
-        ? `Все ${mediaLibraryVisibleCount} из ${mediaLibraryDisplayTotalCount}`
-        : `Все ${mediaLibraryVisibleCount}`;
+        ? workspaceText(locale, `Все ${mediaLibraryVisibleCount} из ${mediaLibraryDisplayTotalCount}`, `All ${mediaLibraryVisibleCount} of ${mediaLibraryDisplayTotalCount}`)
+        : workspaceText(locale, `Все ${mediaLibraryVisibleCount}`, `All ${mediaLibraryVisibleCount}`);
   useEffect(() => {
     if (
       activeTab !== "studio" ||
@@ -14154,15 +14676,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const pendingActivatedPlaybackIndex =
       createMode === "segment-editor" &&
       activeSegmentStableIndex !== null &&
-      activeSegmentPreviewKind === "video" &&
       pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentStableIndex
         ? activeSegmentStableIndex
         : null;
+    const shouldStartSyntheticPlayback =
+      pendingActivatedPlaybackIndex !== null &&
+      activeSegmentPreviewKind === "image" &&
+      activeSegment;
 
     pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
-    setQueuedSegmentEditorPlaybackIndex(pendingActivatedPlaybackIndex);
+    setQueuedSegmentEditorPlaybackIndex(shouldStartSyntheticPlayback ? null : pendingActivatedPlaybackIndex);
     setPlayingSegmentEditorPreviewIndex(null);
     setSegmentEditorPreviewTimes({});
+    if (shouldStartSyntheticPlayback) {
+      startSegmentEditorSyntheticPlayback(
+        pendingActivatedPlaybackIndex,
+        getSegmentEditorSyntheticPlaybackDuration(activeSegment),
+      );
+    }
   }, [activeSegmentMediaUrl, activeSegmentPreviewKind, activeSegmentStableIndex, createMode]);
 
   useEffect(() => {
@@ -14465,21 +14996,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
   };
 
-  const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
-    const normalizedVoiceId = String(voiceId ?? "").trim();
-    if (!normalizedVoiceId || normalizedVoiceId === "none") {
-      return null;
-    }
-
-    for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
-      if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id === normalizedVoiceId)) {
-        return language;
-      }
-    }
-
-    return null;
-  };
-
   const getSegmentEditorProjectPrefillSettings = (
     projectId: number | null | undefined,
   ): ExamplePrefillStudioSettings | null => {
@@ -14507,7 +15023,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const nextLanguage =
       projectSettings?.language === "ru" || projectSettings?.language === "en"
         ? projectSettings.language
-        : getStudioLanguageForVoiceId(draftVoiceId) ?? getStudioLanguageForVoiceId(projectVoiceId) ?? selectedLanguage;
+        : normalizeStudioLanguageValue(draft.language) ??
+          getStudioLanguageForVoiceId(draftVoiceId) ??
+          getStudioLanguageForVoiceId(projectVoiceId) ??
+          selectedLanguage;
     const nextVoiceOptions = studioVoiceOptionsByLanguage[nextLanguage];
     const nextVoiceId =
       nextVoiceOptions.find((voice) => voice.id === draftVoiceId)?.id ??
@@ -14649,6 +15168,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       initialSegmentIndex?: number;
       initialSegmentMode?: "array" | "route";
       bypassCache?: boolean;
+      discardLocalDraft?: boolean;
       forceRefresh?: boolean;
       openDraft?: boolean;
       replaceRoute?: boolean;
@@ -14656,6 +15176,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     },
   ) => {
     const requestedSegmentIndex = options?.initialSegmentIndex ?? 0;
+    const shouldDiscardLocalDraft = Boolean(options?.discardLocalDraft || options?.forceRefresh);
     segmentEditorRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
 
     logSegmentEditorDiagnostics("client.segment-editor.load.start", {
@@ -14669,6 +15190,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorError(null);
     setSegmentEditorVideoError(null);
 
+    if (shouldDiscardLocalDraft) {
+      if (detachedSegmentEditorDraftRef.current?.draft.projectId === projectId) {
+        detachedSegmentEditorDraftRef.current = null;
+      }
+      removeStoredWorkspaceSegmentEditorDraft(session.email, projectId);
+      removeStoredWorkspaceSegmentEditorSession(session.email, projectId);
+      setStoredSegmentEditorDrafts((currentDrafts) => currentDrafts.filter((draft) => draft.projectId !== projectId));
+      if (segmentEditorDraftRef.current?.projectId === projectId) {
+        segmentEditorDraftRef.current = null;
+        setSegmentEditorDraft(null);
+      }
+      if (segmentEditorLoadedSession?.projectId === projectId) {
+        setSegmentEditorLoadedSession(null);
+      }
+    }
+
     if (options?.syncRoute !== false) {
       syncStudioRouteSection("edit", {
         projectId,
@@ -14677,7 +15214,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       });
     }
 
-    if (segmentEditorDraft?.projectId === projectId && !options?.forceRefresh) {
+    if (segmentEditorDraft?.projectId === projectId && !options?.forceRefresh && !options?.bypassCache) {
       logSegmentEditorDiagnostics("client.segment-editor.load.reuse-active-draft", {
         projectId,
         requestedSegmentIndex,
@@ -14692,7 +15229,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     const restoredDetachedDraftState =
-      detachedSegmentEditorDraftRef.current?.draft.projectId === projectId
+      !shouldDiscardLocalDraft && detachedSegmentEditorDraftRef.current?.draft.projectId === projectId
         ? detachedSegmentEditorDraftRef.current
         : null;
     const restoredDetachedDraft = Boolean(restoredDetachedDraftState);
@@ -14724,7 +15261,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
     }
 
-    const storedDraft = restoredDetachedDraft
+    const storedDraft = restoredDetachedDraft || shouldDiscardLocalDraft || options?.bypassCache
       ? null
       : hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(
           readStoredWorkspaceSegmentEditorDraft(session.email, projectId),
@@ -14749,7 +15286,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       });
     }
 
-    if (!restoredDetachedDraft && !restoredStoredDraft && !options?.forceRefresh && currentAppliedSegmentEditorSession?.projectId === projectId) {
+    if (
+      !restoredDetachedDraft &&
+      !restoredStoredDraft &&
+      !options?.forceRefresh &&
+      !options?.bypassCache &&
+      currentAppliedSegmentEditorSession?.projectId === projectId
+    ) {
       logSegmentEditorDiagnostics(
         "client.segment-editor.load.reuse-applied-session",
         {
@@ -14770,7 +15313,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return currentAppliedSegmentEditorSession;
     }
 
-    if (!restoredDetachedDraft && !restoredStoredDraft && !options?.forceRefresh && segmentEditorLoadedSession?.projectId === projectId) {
+    if (
+      !restoredDetachedDraft &&
+      !restoredStoredDraft &&
+      !options?.forceRefresh &&
+      !options?.bypassCache &&
+      segmentEditorLoadedSession?.projectId === projectId
+    ) {
       const nextDraft = createWorkspaceSegmentEditorDraftSession(segmentEditorLoadedSession);
       logSegmentEditorDiagnostics(
         "client.segment-editor.load.reuse-loaded-session",
@@ -14836,7 +15385,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const nextDraft = createWorkspaceSegmentEditorDraftSession(normalizedSession);
       const liveDraft = segmentEditorDraftRef.current;
 
-      if (liveDraft?.projectId === projectId) {
+      if (liveDraft?.projectId === projectId && !shouldDiscardLocalDraft) {
         const refreshedLiveDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, normalizedSession, {
           baselineSession: segmentEditorLoadedSession?.projectId === projectId ? segmentEditorLoadedSession : null,
         });
@@ -14852,6 +15401,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             draft: refreshedLiveDraft,
           },
         );
+        segmentEditorDraftRef.current = refreshedLiveDraft;
         setSegmentEditorDraft(refreshedLiveDraft);
         return refreshedLiveDraft;
       }
@@ -15033,11 +15583,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (routeStudioState.section !== "edit" || !routeStudioState.projectId) {
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
+      hasProcessedInitialSegmentEditorEditRouteRef.current = false;
       return;
     }
 
     const requestedSegmentIndex = routeStudioState.segmentIndex ?? 0;
     const restoreKey = `${routeStudioState.projectId}:${requestedSegmentIndex}`;
+    const storedDraftForRoute = readStoredWorkspaceSegmentEditorDraft(session.email, routeStudioState.projectId);
 
     logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
       requestedProjectId: routeStudioState.projectId,
@@ -15047,6 +15599,42 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     setActiveTab("studio");
     setStudioView("create");
+    if (createMode !== "segment-editor") {
+      setCreateMode("segment-editor");
+    }
+
+    const shouldRefreshInitialEditRoute =
+      !hasProcessedInitialSegmentEditorEditRouteRef.current &&
+      segmentEditorRouteRestoreKeyRef.current !== restoreKey &&
+      !storedDraftForRoute;
+    hasProcessedInitialSegmentEditorEditRouteRef.current = true;
+
+    if (shouldRefreshInitialEditRoute) {
+      segmentEditorRouteRestoreKeyRef.current = restoreKey;
+      segmentEditorHandledRouteRestoreKeyRef.current = null;
+      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
+        bypassCache: true,
+        discardLocalDraft: true,
+        forceRefresh: true,
+        initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
+        replaceRoute: true,
+      });
+      return;
+    }
+
+    const isSegmentEditorRouteAlreadyOpen =
+      activeTab === "studio" &&
+      studioView === "create" &&
+      createMode === "segment-editor" &&
+      segmentEditorDraft?.projectId === routeStudioState.projectId;
+
+    if (
+      segmentEditorRouteRestoreKeyRef.current === restoreKey &&
+      (isSegmentEditorLoading || isSegmentEditorRouteAlreadyOpen || Boolean(segmentEditorError))
+    ) {
+      return;
+    }
 
     if (segmentEditorDraft?.projectId === routeStudioState.projectId) {
       if (createMode !== "segment-editor") {
@@ -15071,7 +15659,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    const storedDraft = readStoredWorkspaceSegmentEditorDraft(session.email, routeStudioState.projectId);
+    const storedDraft = storedDraftForRoute;
     const storedSession =
       segmentEditorLoadedSession?.projectId === routeStudioState.projectId
         ? segmentEditorLoadedSession
@@ -15119,10 +15707,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (segmentEditorRouteRestoreKeyRef.current === restoreKey) {
-      return;
-    }
-
     segmentEditorRouteRestoreKeyRef.current = restoreKey;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
     void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
@@ -15132,17 +15716,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     });
   }, [
     createMode,
+    activeTab,
+    studioView,
+    isSegmentEditorLoading,
     location.pathname,
     routeStudioState.projectId,
     routeStudioState.section,
     routeStudioState.segmentIndex,
     segmentEditorLoadedSession,
     segmentEditorDraft,
+    segmentEditorError,
     session.email,
   ]);
 
   useEffect(() => {
     if (!location.pathname.startsWith("/app/studio") || routeStudioState.section !== "edit") {
+      return;
+    }
+
+    if (routeStudioState.projectId) {
       return;
     }
 
@@ -15242,7 +15834,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ...currentDraft,
         segments: rebuildWorkspaceSegmentEditorDraftTimeline([
           ...currentDraft.segments,
-          cloneWorkspaceSegmentEditorDraftSegment(nextSegment),
+          cloneWorkspaceSegmentEditorDraftSegment(
+            nextSegment,
+            normalizeStudioLanguageValue(currentDraft.language) ??
+              getStudioLanguageForVoiceId(currentDraft.voiceType) ??
+              selectedLanguage,
+          ),
         ]),
       };
     });
@@ -15414,6 +16011,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       if (wasVoiceoverEnabledInDraft) {
         updateSegmentEditorDraft((currentDraft) => ({
           ...currentDraft,
+          language,
           voiceType: nextVoiceId,
         }));
       }
@@ -15424,16 +16022,46 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    const cachedLocalizedSegments = currentDraft.segments.map((segment) => ({
-      originalText:
-        typeof segment.originalTextByLanguage?.[language] === "string" ? segment.originalTextByLanguage[language] : null,
-      text: typeof segment.textByLanguage?.[language] === "string" ? segment.textByLanguage[language] : null,
-    }));
+    const cachedLocalizedSegments = currentDraft.segments.map((segment) => {
+      const sourceOriginalText = segment.originalTextByLanguage?.[previousLanguage] ?? segment.originalText;
+      const sourceText = segment.textByLanguage?.[previousLanguage] ?? segment.text;
+      const cachedOriginalText = segment.originalTextByLanguage?.[language] ?? null;
+      const cachedText = segment.textByLanguage?.[language] ?? null;
+      const isCachedOriginalTextUsable = isWorkspaceSegmentCachedLanguageTextUsable(
+        cachedOriginalText,
+        language,
+        sourceOriginalText,
+      );
+      const isCachedTextUsable = isWorkspaceSegmentCachedLanguageTextUsable(cachedText, language, sourceText);
+
+      return {
+        originalText: isCachedOriginalTextUsable ? cachedOriginalText : null,
+        staleOriginalText: typeof cachedOriginalText === "string" && !isCachedOriginalTextUsable,
+        staleText: typeof cachedText === "string" && !isCachedTextUsable,
+        text: isCachedTextUsable ? cachedText : null,
+      };
+    });
     const hasCachedTargetTexts = cachedLocalizedSegments.every((segment) => typeof segment.text === "string");
+    const staleCachedTargetCount = cachedLocalizedSegments.filter(
+      (segment) => segment.staleOriginalText || segment.staleText,
+    ).length;
+
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.language.select",
+      {
+        hasCachedTargetTexts,
+        language,
+        previousLanguage,
+        segmentCount: currentDraft.segments.length,
+        staleCachedTargetCount,
+      },
+      { draft: currentDraft, level: staleCachedTargetCount > 0 ? "warn" : "info" },
+    );
 
     if (hasCachedTargetTexts) {
       updateSegmentEditorDraft((draft) => ({
         ...draft,
+        language,
         segments: draft.segments.map((segment, index) => ({
           ...segment,
           originalText:
@@ -15465,6 +16093,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       updateSegmentEditorDraft((draft) => ({
         ...draft,
+        language,
         segments: draft.segments.map((segment, index) => {
           const currentLanguageText = segment.textByLanguage?.[previousLanguage] ?? segment.text;
           const currentLanguageOriginalText =
@@ -15500,6 +16129,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         if (wasVoiceoverEnabledInDraft) {
           updateSegmentEditorDraft((draft) => ({
             ...draft,
+            language: previousLanguage,
             voiceType: previousVoiceId,
           }));
         }
@@ -15937,6 +16567,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentImageEditRun(targetSegmentIndex);
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
     cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
+    resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
     logSegmentEditorDiagnostics("client.segment-editor.media-library.apply", {
       itemKey: item.itemKey,
       itemKind: item.kind,
@@ -16481,7 +17112,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           if (projectId > 0) {
             void ensureSegmentEditorDraftForProject(projectId, {
               bypassCache: true,
-              forceRefresh: true,
               initialSegmentIndex: options.segmentIndex,
               initialSegmentMode: "route",
               openDraft: false,
@@ -16499,7 +17129,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
             bypassCache: true,
-            forceRefresh: true,
             initialSegmentIndex: options.segmentIndex,
             initialSegmentMode: "route",
             openDraft: false,
@@ -17710,16 +18339,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     );
   };
 
-  const clearPersistedSegmentEditorDraftForProject = (projectId: number | null | undefined) => {
+  const clearPersistedSegmentEditorStateForProject = (projectId: number | null | undefined) => {
     const normalizedProjectId = Number(projectId);
     if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
       return;
     }
 
     removeStoredWorkspaceSegmentEditorDraft(session.email, normalizedProjectId);
+    removeStoredWorkspaceSegmentEditorSession(session.email, normalizedProjectId);
     setStoredSegmentEditorDrafts((currentDrafts) =>
       currentDrafts.filter((draft) => draft.projectId !== normalizedProjectId),
     );
+
+    if (detachedSegmentEditorDraftRef.current?.draft.projectId === normalizedProjectId) {
+      detachedSegmentEditorDraftRef.current = null;
+    }
   };
 
   const removeProjectFromLocalState = (targetProject: WorkspaceProject) => {
@@ -17727,11 +18361,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       currentProjects.filter((project) => !doesWorkspaceProjectMatch(project, targetProject)),
     );
     if (targetProject.adId !== null) {
-      clearPersistedSegmentEditorDraftForProject(targetProject.adId);
+      clearPersistedSegmentEditorStateForProject(targetProject.adId);
       setMediaLibraryItems((currentItems) =>
         currentItems.filter((item) => item.projectId !== targetProject.adId),
       );
     }
+    setGeneratedVideo((currentGeneration) =>
+      currentGeneration && doesStudioGenerationMatchWorkspaceProject(currentGeneration, targetProject)
+        ? null
+        : currentGeneration,
+    );
     setActiveProjectPreviewId((currentProjectId) =>
       currentProjectId === targetProject.id ? null : currentProjectId,
     );
@@ -17763,6 +18402,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         (left, right) => getProjectSortTime(right) - getProjectSortTime(left),
       );
     });
+    setGeneratedVideo((currentGeneration) => currentGeneration ?? buildStudioGenerationFromProject(targetProject));
   };
 
   const requestProjectDelete = (project: WorkspaceProject) => {
@@ -17855,9 +18495,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
       const deletedAdIds = new Set(projectsToDelete.flatMap((targetProject) => (targetProject.adId !== null ? [targetProject.adId] : [])));
+      const isDeletedRouteProject =
+        routeStudioState.projectId !== null && deletedAdIds.has(routeStudioState.projectId);
       setSegmentEditorDraft((currentDraft) =>
         currentDraft && deletedAdIds.has(currentDraft.projectId) ? null : currentDraft,
       );
+      setSegmentEditorLoadedSession((currentSession) =>
+        currentSession && deletedAdIds.has(currentSession.projectId) ? null : currentSession,
+      );
+      setSegmentEditorAppliedSession((currentSession) =>
+        currentSession && deletedAdIds.has(currentSession.projectId) ? null : currentSession,
+      );
+      if (segmentEditorDraftRef.current && deletedAdIds.has(segmentEditorDraftRef.current.projectId)) {
+        segmentEditorDraftRef.current = null;
+      }
+      if (isDeletedRouteProject) {
+        setCreateMode("default");
+        syncStudioRouteSection("projects", { replace: true });
+      }
       setMediaLibraryReloadToken((currentToken) => currentToken + 1);
     } catch (error) {
       setMediaLibraryReloadToken((currentToken) => currentToken + 1);
@@ -18016,6 +18671,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
 
         const publishData = payload.data;
+        const latestStatus = normalizePublishJobStatus(publishData.status);
         setPublishJobStatus(publishData);
 
         if (publishData.publication && publishData.videoProjectId) {
@@ -18030,13 +18686,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           applyPublicationToLocalState(publishData.videoProjectId, publishData.publication);
         }
 
-        if (publishData.status === "done") {
-          setHasLoadedProjects(false);
-          break;
+        if (isPublishJobFailureStatus(latestStatus)) {
+          throw new Error(publishData.error ?? "Публикация завершилась с ошибкой.");
         }
 
-        if (publishData.status === "failed") {
-          throw new Error(publishData.error ?? "Публикация завершилась с ошибкой.");
+        if (isPublishJobSuccessStatus(latestStatus)) {
+          if (!hasConfirmedYouTubePublication(publishData.publication)) {
+            throw new Error("YouTube не вернул подтверждение публикации. Обновите проекты и попробуйте повторить публикацию.");
+          }
+          setHasLoadedProjects(false);
+          break;
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
@@ -18143,6 +18802,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     setPublishError(null);
+    setIsPublishSubmitting(true);
+    let didStartPolling = false;
 
     try {
       const response = await fetch("/api/workspace/publish/youtube", {
@@ -18165,19 +18826,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить публикацию.");
       }
 
+      if (payload.data.enqueueError) {
+        throw new Error(payload.data.enqueueError);
+      }
+
       setPublishJobStatus({
         jobId: payload.data.jobId,
         publication: publishBootstrap?.publication ?? null,
         status: payload.data.status,
         videoProjectId: payload.data.videoProjectId,
       });
-      if (payload.data.enqueueError) {
-        setPublishError(`Очередь публикации ответила с предупреждением: ${payload.data.enqueueError}`);
-      }
 
+      didStartPolling = true;
       await pollPublishJob(payload.data.jobId);
     } catch (error) {
-      setPublishError(error instanceof Error ? error.message : "Не удалось запустить публикацию.");
+      setPublishError(error instanceof Error ? error.message : workspaceText(locale, "Не удалось запустить публикацию.", "Could not start publishing."));
+    } finally {
+      if (!didStartPolling) {
+        setIsPublishSubmitting(false);
+      }
     }
   };
 
@@ -18195,13 +18862,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const safeJobId = jobId.trim();
 
     if (!safeJobId) {
-      setGenerateError("Generation job is missing.");
-      setStatus("Generation failed");
+      setGenerateError(workspaceText(locale, "Задача генерации не найдена.", "Generation job is missing."));
+      setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
       return;
     }
 
     setIsGenerating(true);
-    setStatus(getStudioStatusLabel(initialStatus));
+    setStatus(getStudioStatusLabel(initialStatus, locale));
     generationRunRef.current += 1;
     const runId = generationRunRef.current;
 
@@ -18224,7 +18891,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
 
         latestStatus = statusPayload.data.status;
-        setStatus(getStudioStatusLabel(latestStatus));
+        setStatus(getStudioStatusLabel(latestStatus, locale));
 
         if (statusPayload.data.generation) {
           doneWithoutPreviewAttempts = 0;
@@ -18239,7 +18906,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             segmentEditorRouteRestoreKeyRef.current = null;
             segmentEditorHandledRouteRestoreKeyRef.current = null;
             clearDetachedSegmentEditorDraft();
-            clearPersistedSegmentEditorDraftForProject(options?.clearStoredSegmentEditorDraftProjectId);
+            clearPersistedSegmentEditorStateForProject(options?.clearStoredSegmentEditorDraftProjectId);
             setCreateMode("default");
             setSegmentEditorAppliedSession(null);
             setSegmentEditorDraft(null);
@@ -18742,9 +19409,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       previewVideoRef.current?.pause();
       resetStudioPreviewPlaybackPosition();
       stopPreviewModalVideoElement(previewModalVideoRef.current);
-      setTopicInput(safeTopic);
+      setTopicInput("");
       updateDismissedStudioPreviewKey(null);
-      if (!currentComposerSourceIdea && composerSourceIdea) {
+      if (composerSourceIdea) {
         setComposerSourceIdea(null);
         setSelectedContentPlanIdeaId((current) => (current === composerSourceIdea.ideaId ? null : current));
       }
@@ -18772,11 +19439,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setStatus(options?.segmentEditorSession ? "Подготавливаем сегменты..." : "Task queued");
     });
 
-    if (location.pathname.startsWith("/app/studio")) {
+    if (location.pathname.startsWith(localizePath("/app/studio"))) {
       const currentStudioUrl = `${location.pathname}${location.search}`;
       markPendingStudioRouteSection("create");
-      if (currentStudioUrl !== "/app/studio") {
-        navigate("/app/studio", { replace: true });
+      if (currentStudioUrl !== localizePath("/app/studio")) {
+        navigate(localizePath("/app/studio"), { replace: true });
       }
     }
 
@@ -19109,7 +19776,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     setActiveTab("studio");
     setStudioView("create");
-    await ensureSegmentEditorDraftForProject(project.adId);
+    await ensureSegmentEditorDraftForProject(project.adId, {
+      bypassCache: true,
+      discardLocalDraft: true,
+      forceRefresh: true,
+    });
   };
 
   const handleOpenMediaLibraryItem = (item: WorkspaceMediaLibraryItem) => {
@@ -19431,7 +20102,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     previewKind: WorkspaceSegmentPreviewKind,
   ) => {
     if (segmentArrayIndex !== activeSegmentIndex) {
-      const pendingPlaybackIndex = previewKind === "video" ? segmentPlaybackIndex : null;
+      const pendingPlaybackIndex = segmentPlaybackIndex;
       logSegmentEditorDiagnostics("client.segment-editor.card.click.switch-active", {
         activeSegmentIndex,
         pendingPlaybackIndex,
@@ -19914,19 +20585,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
 
         if (latestGeneration.status === "done") {
-          setStatus("Подготавливаем видео...");
+          setStatus(workspaceText(locale, "Подготавливаем видео...", "Preparing video..."));
           void pollGenerationJob(latestGeneration.jobId, "preparing_preview");
           return;
         }
 
         if (latestGeneration.status === "failed") {
-          setStatus("Generation failed");
-          setGenerateError(latestGeneration.error ?? "Generation failed.");
+          setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
+          setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
           return;
         }
 
-        setStatus(getStudioStatusLabel(latestGeneration.status));
+        setStatus(getStudioStatusLabel(latestGeneration.status, locale));
         void pollGenerationJob(latestGeneration.jobId, latestGeneration.status);
       } catch (error) {
         if (isCancelled || isAbortLikeError(error)) return;
@@ -19943,17 +20614,30 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     return () => {
       isCancelled = true;
     };
-  }, [session.email]);
+  }, [locale, session.email]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const publishParam = Number(searchParams.get("publish") ?? 0);
+    const routeProjectParam = Number(searchParams.get("projectId") ?? 0);
     const youtubeError = searchParams.get("youtube_error");
-    if (!Number.isFinite(publishParam) || publishParam <= 0 || !hasLoadedProjects || isProjectsLoading) {
+    const shouldResumePublishAfterYouTubeConnect =
+      searchParams.get("youtube_connected") === "1" &&
+      (!Number.isFinite(publishParam) || publishParam <= 0) &&
+      Number.isFinite(routeProjectParam) &&
+      routeProjectParam > 0;
+    const publishTargetParam =
+      Number.isFinite(publishParam) && publishParam > 0
+        ? publishParam
+        : shouldResumePublishAfterYouTubeConnect
+          ? routeProjectParam
+          : 0;
+
+    if (!Number.isFinite(publishTargetParam) || publishTargetParam <= 0 || !hasLoadedProjects || isProjectsLoading) {
       return;
     }
 
-    const targetProject = projects.find((project) => project.adId === publishParam) ?? null;
+    const targetProject = projects.find((project) => project.adId === publishTargetParam) ?? null;
     if (targetProject?.videoUrl) {
       flushSync(() => {
         setIsPreviewModalOpen(false);
@@ -19965,18 +20649,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     void openPublishModalForVideoProject(
-      publishParam,
-      targetProject?.title ?? "Публикация в YouTube",
+      publishTargetParam,
+      targetProject?.title ?? workspaceText(locale, "Публикация в YouTube", "YouTube publishing"),
       youtubeError ?? null,
     );
     searchParams.delete("publish");
     searchParams.delete("youtube_error");
+    searchParams.delete("youtube_connected");
     navigate(buildStudioRouteUrl(`?${searchParams.toString()}`, "create"), { replace: true });
-  }, [hasLoadedProjects, isProjectsLoading, location.search, navigate, projects]);
+  }, [hasLoadedProjects, isProjectsLoading, locale, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
-  const effectivePublishStatus = publishJobStatus?.status ?? "";
-  const isPublishInFlight = isPublishSubmitting || effectivePublishStatus === "queued" || effectivePublishStatus === "processing";
+  const effectivePublishStatus = normalizePublishJobStatus(publishJobStatus?.status);
+  const publishStatusPublication = publishJobStatus?.publication ?? publishBootstrap?.publication ?? null;
+  const isPublishConfirmed = hasConfirmedYouTubePublication(publishStatusPublication);
+  const isPublishInFlight = isPublishSubmitting || isPublishJobProgressStatus(effectivePublishStatus);
+  const publishSuccessNotice =
+    !publishError && !isPublishInFlight && isPublishConfirmed && (isPublishJobSuccessStatus(effectivePublishStatus) || publishStatusPublication)
+        ? {
+            link: publishStatusPublication?.link ?? null,
+          text: getYouTubePublicationMetaLabel(publishStatusPublication, locale) || workspaceText(locale, "YouTube подтвердил публикацию.", "YouTube confirmed publication."),
+          title: publishStatusPublication?.state === "scheduled"
+            ? workspaceText(locale, "Публикация запланирована", "Publication scheduled")
+            : workspaceText(locale, "Shorts опубликован", "Shorts published"),
+        }
+      : null;
   const publishChannels = publishBootstrap?.channels ?? [];
   const publishCanSubmit =
     Boolean(selectedPublishChannelPk) &&
@@ -19986,14 +20683,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const selectedPublishChannel = publishChannels.find((channel) => channel.pk === selectedPublishChannelPk) ?? null;
   const publishScheduledDate = parsePublishDateTimeLocalValue(publishScheduledAtInput);
   const publishCalendarDays = buildPublishCalendarDays(publishCalendarMonth);
+  const publishWeekdayLabels = publishCalendarWeekdayLabels[locale];
   const publishTimeValue = formatPublishTimeValue(publishScheduledDate) || "12:00";
-  const publishPrimaryActionLabel = publishMode === "schedule" ? "Запланировать публикацию" : "Опубликовать в YouTube";
+  const publishPrimaryActionLabel = publishMode === "schedule"
+    ? workspaceText(locale, "Запланировать публикацию", "Schedule publication")
+    : workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube");
   const publishScheduleSummary =
     publishMode === "schedule"
       ? publishScheduledDate
-        ? formatProjectDate(publishScheduledDate.toISOString())
-        : "Выберите день и время публикации"
-      : "Видео отправится в YouTube сразу после подтверждения.";
+        ? formatProjectDate(publishScheduledDate.toISOString(), locale)
+        : workspaceText(locale, "Выберите день и время публикации", "Choose publication date and time")
+      : workspaceText(locale, "Видео отправится в YouTube сразу после подтверждения.", "The video will be sent to YouTube after confirmation.");
   const shouldRenderStudioContentPlanRail = createMode !== "segment-editor";
   const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible;
   const renderContentPlanIdeaCard = (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
@@ -20011,7 +20711,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             className={`studio-content-plan__idea-status${idea.isUsed ? " is-active" : ""}`}
             type="button"
             aria-pressed={idea.isUsed}
-            aria-label={idea.isUsed ? "Пометить как неиспользованную" : "Пометить как использованную"}
+            aria-label={
+              idea.isUsed
+                ? workspaceText(locale, "Пометить как неиспользованную", "Mark as unused")
+                : workspaceText(locale, "Пометить как использованную", "Mark as used")
+            }
             aria-busy={isUpdatingIdea || isDeletingIdea}
             disabled={isUpdatingIdea || isDeletingIdea}
             onClick={() => void handleToggleContentPlanIdeaUsed(plan, idea)}
@@ -20045,7 +20749,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           <button
             className="studio-content-plan__idea-delete"
             type="button"
-            aria-label={`Удалить идею ${idea.title}`}
+            aria-label={workspaceText(locale, `Удалить идею ${idea.title}`, `Delete idea ${idea.title}`)}
             disabled={isDeletingIdea}
             onClick={() => void handleDeleteContentPlanIdea(plan, idea)}
           >
@@ -20081,11 +20785,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         >
           <span className="studio-content-plan__plan-toggle-copy">
             <strong>{plan.query}</strong>
-            <span>{formatProjectDate(plan.updatedAt)}</span>
+            <span>{formatProjectDate(plan.updatedAt, locale)}</span>
           </span>
           <span className="studio-content-plan__plan-toggle-meta">
             <span className="studio-content-plan__plan-toggle-stats">
-              {unusedIdeas.length}/{plan.ideas.length} новых
+              {workspaceText(locale, `${unusedIdeas.length}/${plan.ideas.length} новых`, `${unusedIdeas.length}/${plan.ideas.length} new`)}
             </span>
             <span className={`studio-content-plan__plan-chevron${isExpandedPlan ? " is-expanded" : ""}`} aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -20110,7 +20814,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 </div>
               ) : (
                 <div className="studio-content-plan__state is-compact">
-                  <p>В этом плане не осталось новых идей. Можно открыть использованные ниже или сгенерировать ещё.</p>
+                  <p>
+                    {workspaceText(
+                      locale,
+                      "В этом плане не осталось новых идей. Можно открыть использованные ниже или сгенерировать ещё.",
+                      "This plan has no new ideas left. Open used ideas below or generate more.",
+                    )}
+                  </p>
                 </div>
               )}
             </div>
@@ -20125,8 +20835,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     setExpandedContentPlanUsedIdeasPlanId((current) => (current === plan.id ? null : plan.id))
                   }
                 >
-                  <span>Использованные</span>
-                  <span>{formatWorkspaceContentPlanIdeaCount(usedIdeas.length)}</span>
+                  <span>{workspaceText(locale, "Использованные", "Used")}</span>
+                  <span>{formatWorkspaceContentPlanIdeaCount(usedIdeas.length, locale)}</span>
                 </button>
 
                 {isUsedIdeasExpanded ? (
@@ -20144,7 +20854,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 disabled={contentPlanDeletingPlanId === plan.id || isContentPlanGenerating}
                 onClick={() => void handleRegenerateContentPlan(plan)}
               >
-                {isContentPlanGenerating ? "Создаём..." : "Создать еще"}
+                {isContentPlanGenerating
+                  ? workspaceText(locale, "Создаём...", "Creating...")
+                  : workspaceText(locale, "Создать еще", "Create more")}
               </button>
               <button
                 className="studio-content-plan__ghost-btn is-danger"
@@ -20152,7 +20864,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 disabled={contentPlanDeletingPlanId === plan.id}
                 onClick={() => void handleDeleteContentPlan(plan)}
               >
-                {contentPlanDeletingPlanId === plan.id ? "Удаляем..." : "Удалить"}
+                {contentPlanDeletingPlanId === plan.id
+                  ? workspaceText(locale, "Удаляем...", "Deleting...")
+                  : workspaceText(locale, "Удалить", "Delete")}
               </button>
             </div>
           </div>
@@ -20164,17 +20878,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     <aside
       ref={contentPlanPanelRef}
       className={`studio-content-plan${isStudioContentPlanRailVisible ? " is-visible" : ""}`}
-      aria-label="Контент-план"
+      aria-label={workspaceText(locale, "Контент-план", "Content plan")}
       aria-hidden={!isStudioContentPlanRailVisible}
     >
       <div className="studio-content-plan__header">
         <div className="studio-content-plan__copy">
-          <strong>Контент-план</strong>
+          <strong>{workspaceText(locale, "Контент-план", "Content plan")}</strong>
         </div>
         <button
           className="studio-content-plan__collapse-btn"
           type="button"
-          aria-label="Скрыть контент-план"
+          aria-label={workspaceText(locale, "Скрыть контент-план", "Hide content plan")}
           onClick={handleToggleContentPlanVisibility}
         >
           <span aria-hidden="true">−</span>
@@ -20187,14 +20901,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             id="studio-content-plan-query"
             className="studio-content-plan__input"
             type="text"
-            placeholder="Введите тему для контент-плана"
+            placeholder={workspaceText(locale, "Введите тему для контент-плана", "Enter a topic for the content plan")}
             value={contentPlanQueryInput}
             onChange={handleContentPlanQueryInputChange}
           />
           <button
             className="studio-content-plan__primary-btn"
             type="button"
-            aria-label="Создать контент-план"
+            aria-label={workspaceText(locale, "Создать контент-план", "Create content plan")}
             disabled={isContentPlanGenerating || isContentPlansLoading}
             onClick={() => void handleGenerateContentPlan()}
           >
@@ -20215,7 +20929,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             {contentPlansError}
           </p>
           <button className="studio-content-plan__ghost-btn" type="button" onClick={handleRetryContentPlansLoad}>
-            Повторить
+            {workspaceText(locale, "Повторить", "Retry")}
           </button>
         </div>
       ) : null}
@@ -20224,12 +20938,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         {isContentPlansLoading ? (
           <div className="studio-content-plan__state">
             <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-            <p>Загружаем контент-планы...</p>
+            <p>{workspaceText(locale, "Загружаем контент-планы...", "Loading content plans...")}</p>
           </div>
         ) : contentPlans.length === 0 ? (
           <div className="studio-content-plan__state">
-            <strong>Планов пока нет</strong>
-            <p>Введите тему и получите готовые идеи для Shorts.</p>
+            <strong>{workspaceText(locale, "Планов пока нет", "No plans yet")}</strong>
+            <p>{workspaceText(locale, "Введите тему и получите готовые идеи для Shorts.", "Enter a topic and get ready-made ideas for Shorts.")}</p>
           </div>
         ) : (
           <section className="studio-content-plan__section">
@@ -20459,20 +21173,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
   };
   const promptVisualActionLabel = isPromptAiPhotoMode
-    ? "Создать ИИ фото"
+    ? workspaceText(locale, "Создать ИИ фото", "Create AI photo")
     : isPromptAiVideoMode
-      ? "Создать ИИ видео"
+      ? workspaceText(locale, "Создать ИИ видео", "Create AI video")
       : isPromptPhotoAnimationMode
-        ? "Анимировать фото"
+        ? workspaceText(locale, "Анимировать фото", "Animate photo")
         : isPromptImageEditMode
-          ? "Дорисовать фото"
+          ? workspaceText(locale, "Дорисовать", "Image edit")
           : isPromptUpscaleMode
-            ? "Улучшить качество"
+            ? workspaceText(locale, "Улучшить качество", "Upscale image")
             : isPromptLibraryMode
-              ? "Выбрать визуал"
+              ? workspaceText(locale, "Выбрать визуал", "Select visual")
               : segmentAiPhotoModalCustomFileName
-                ? "Заменить визуал"
-                : "Загрузить визуал";
+                ? workspaceText(locale, "Заменить визуал", "Replace visual")
+                : workspaceText(locale, "Загрузить визуал", "Upload visual");
   const renderSegmentEditorPromptToolIcon = (
     kind:
       | "ai_photo"
@@ -20488,75 +21202,157 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       kind === "ai_photo" || kind === "ai_video" || kind === "photo_animation" || kind === "image_edit" || kind === "image_upscale" ? (
       <span className="studio-segment-editor__prompt-tool-icon__badge">AI</span>
       ) : null;
+    const iconId = `segment-editor-tool-${kind.replace("_", "-")}`;
+    const glassGradientId = `${iconId}-glass`;
+    const shineGradientId = `${iconId}-shine`;
+    const cyanGradientId = `${iconId}-cyan`;
+    const violetGradientId = `${iconId}-violet`;
+    const glowFilterId = `${iconId}-glow`;
+    const generatedIconSrc =
+      kind === "ai_photo"
+        ? "/icons/segment-ai-photo-glyph-icon-generated.png"
+        : kind === "ai_video"
+          ? "/icons/segment-ai-video-glyph-icon-generated.png"
+          : kind === "library"
+            ? "/icons/segment-library-glyph-icon-generated.png"
+            : kind === "upload"
+              ? "/icons/segment-upload-glyph-icon-generated.png"
+            : kind === "photo_animation"
+              ? "/icons/segment-photo-animation-icon-generated.png"
+              : kind === "image_edit"
+                ? "/icons/segment-image-edit-icon-generated.png"
+                : kind === "image_upscale"
+                  ? "/icons/segment-image-upscale-icon-generated.png"
+                  : null;
+    const renderIconSvg = (children: ReactNode) => (
+      <span className={iconClassName} aria-hidden="true">
+        {aiBadge}
+        <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 64 64" fill="none">
+          <defs>
+            <linearGradient id={glassGradientId} x1="16" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#f8fbff" stopOpacity="0.92" />
+              <stop offset="0.42" stopColor="#8fb6d9" stopOpacity="0.56" />
+              <stop offset="1" stopColor="#172436" stopOpacity="0.84" />
+            </linearGradient>
+            <linearGradient id={shineGradientId} x1="18" y1="13" x2="42" y2="47" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#ffffff" stopOpacity="0.76" />
+              <stop offset="0.45" stopColor="#c7ddff" stopOpacity="0.24" />
+              <stop offset="1" stopColor="#6bd3ff" stopOpacity="0.08" />
+            </linearGradient>
+            <linearGradient id={cyanGradientId} x1="14" y1="17" x2="48" y2="51" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#eff9ff" />
+              <stop offset="0.48" stopColor="#8fd8ff" />
+              <stop offset="1" stopColor="#4f7dff" />
+            </linearGradient>
+            <linearGradient id={violetGradientId} x1="18" y1="12" x2="50" y2="52" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#f7e8ff" />
+              <stop offset="0.46" stopColor="#a787ff" />
+              <stop offset="1" stopColor="#4aa8ff" />
+            </linearGradient>
+            <filter id={glowFilterId} x="-26%" y="-26%" width="152%" height="152%" colorInterpolationFilters="sRGB">
+              <feGaussianBlur stdDeviation="2.4" result="blur" />
+              <feColorMatrix
+                in="blur"
+                type="matrix"
+                values="0 0 0 0 0.45 0 0 0 0 0.76 0 0 0 0 1 0 0 0 0.62 0"
+                result="glow"
+              />
+              <feMerge>
+                <feMergeNode in="glow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {children}
+        </svg>
+      </span>
+    );
+
+    if (generatedIconSrc) {
+      return (
+        <span className={`${iconClassName} studio-segment-editor__prompt-tool-icon--asset`} aria-hidden="true">
+          <img
+            className="studio-segment-editor__prompt-tool-icon-asset"
+            src={generatedIconSrc}
+            alt=""
+            draggable={false}
+          />
+        </span>
+      );
+    }
 
     if (kind === "ai_photo") {
-      return (
-        <span className={iconClassName} aria-hidden="true">
-          {aiBadge}
-          <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 40 40" fill="none">
-            <rect x="8.5" y="12.5" width="23" height="18" rx="4.5" />
-            <path d="m11.5 27 6.4-6.6 4.5 4.7 2.9-3.1 4.2 5" />
-            <circle cx="26.3" cy="17.8" r="1.8" />
-          </svg>
-        </span>
+      return renderIconSvg(
+        <>
+          <rect x="15" y="17" width="38" height="32" rx="8.5" fill={`url(#${glassGradientId})`} opacity="0.28" />
+          <rect x="15" y="17" width="38" height="32" rx="8.5" stroke={`url(#${shineGradientId})`} strokeWidth="3" filter={`url(#${glowFilterId})`} />
+          <path d="M19.5 42.5 29 32.2l6.4 7.1 4.1-4.5 8.7 7.7" fill={`url(#${violetGradientId})`} opacity="0.92" />
+          <circle cx="43.5" cy="25.5" r="4.2" fill={`url(#${cyanGradientId})`} opacity="0.95" />
+          <path d="M22 21.5h25" stroke="white" strokeOpacity="0.34" strokeWidth="1.6" />
+          <path d="m51.5 12.5 1.8 4 4.2 1.6-4.2 1.6-1.8 4-1.8-4-4.2-1.6 4.2-1.6 1.8-4Z" fill="white" opacity="0.95" />
+        </>,
       );
     }
 
     if (kind === "ai_video" || kind === "photo_animation") {
-      return (
-        <span className={iconClassName} aria-hidden="true">
-          {aiBadge}
-          <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 40 40" fill="none">
-            <rect x="9" y="11" width="22" height="19" rx="4.5" />
-            <path d="M12.5 15h17M12.5 26h17" />
-            <path d="m18 17.6 7 4.4-7 4.4v-8.8Z" />
-            {kind === "photo_animation" ? <path d="M13.5 9.5c4.8-3.3 11.7-2.1 15.1 2.6M30 8.5v4.4h-4.4" /> : null}
-          </svg>
-        </span>
+      return renderIconSvg(
+        <>
+          <rect x="19" y="16" width="34" height="29" rx="7.5" fill={`url(#${glassGradientId})`} opacity="0.28" />
+          <rect x="16" y="21" width="34" height="29" rx="8" fill="#07111f" fillOpacity="0.78" stroke={`url(#${shineGradientId})`} strokeWidth="2.6" filter={`url(#${glowFilterId})`} />
+          <path d="M18 24.5h31" stroke="white" strokeOpacity="0.42" strokeWidth="2" />
+          <path d="M23 24.5 29.5 18M32 24.5 38.5 18M41 24.5 47.5 18" stroke={`url(#${violetGradientId})`} strokeWidth="3" strokeLinecap="round" />
+          <path d="m30 30.5 11 6.7-11 6.7V30.5Z" fill={`url(#${cyanGradientId})`} filter={`url(#${glowFilterId})`} />
+          {kind === "photo_animation" ? (
+            <>
+              <path d="M17.5 14.5c6.8-5 17-3.8 22.3 2.8" stroke={`url(#${cyanGradientId})`} strokeWidth="2.4" strokeLinecap="round" />
+              <path d="M41.5 11.5v7.2h-7.2" stroke={`url(#${cyanGradientId})`} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            </>
+          ) : null}
+        </>,
       );
     }
 
     if (kind === "library") {
-      return (
-        <span className={iconClassName} aria-hidden="true">
-          <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 40 40" fill="none">
-            <path d="M8.5 14.5v-1.7c0-2 1.4-3.3 3.4-3.3h6.3l2.7 3h7.2c2 0 3.4 1.3 3.4 3.3v1.7" />
-            <rect x="7.5" y="14.5" width="25" height="16" rx="4.5" />
-            <path d="M13.5 20.5h4.5v4.5h-4.5zM21.8 20.5h4.7M21.8 25h4.7" />
-          </svg>
-        </span>
+      return renderIconSvg(
+        <>
+          <path d="M14 22.5v-3.7c0-3.5 2.4-5.8 5.9-5.8h9.4l4.4 4.6h10.4c3.5 0 5.9 2.3 5.9 5.8v2.1" fill="#0b1523" fillOpacity="0.9" stroke={`url(#${shineGradientId})`} strokeWidth="2.4" />
+          <rect x="12" y="22" width="40" height="28" rx="8" fill={`url(#${glassGradientId})`} fillOpacity="0.32" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
+          <rect x="19" y="29" width="10" height="10" rx="3" fill={`url(#${violetGradientId})`} opacity="0.92" />
+          <rect x="34" y="29" width="11" height="10" rx="3" fill={`url(#${cyanGradientId})`} opacity="0.9" />
+          <path d="M20 43h25" stroke="white" strokeOpacity="0.46" strokeWidth="2.2" strokeLinecap="round" />
+        </>,
       );
     }
 
     if (kind === "upload" || kind === "image_edit") {
-      return (
-        <span className={iconClassName} aria-hidden="true">
-          {aiBadge}
-          <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 40 40" fill="none">
-            <rect x="9" y="11" width="21" height="18" rx="4.5" />
-            <path d="m12 25 5.5-5.7 4 4.1 2.5-2.7 4 4.6" />
-            {kind === "upload" ? (
-              <>
-                <path d="M28.5 9.5v10M24.5 13.5l4-4 4 4" />
-                <path d="M24.5 31h8" />
-              </>
-            ) : (
-              <path d="m25.5 30.5 5.9-5.9c.8-.8 2-.8 2.8 0s.8 2 0 2.8l-5.9 5.9-3.6.8.8-3.6Z" />
-            )}
-          </svg>
-        </span>
+      return renderIconSvg(
+        <>
+          <rect x="14" y="16" width="36" height="30" rx="8" fill={`url(#${glassGradientId})`} opacity="0.26" />
+          <rect x="14" y="16" width="36" height="30" rx="8" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
+          <path d="M18.5 40.5 27 31.3l5.3 5.8 3.6-3.8 8.8 7.2" fill={`url(#${violetGradientId})`} opacity="0.86" />
+          <circle cx="41.5" cy="24.2" r="3.6" fill={`url(#${cyanGradientId})`} />
+          {kind === "upload" ? (
+            <>
+              <path d="M47 12v16M40.5 18.5 47 12l6.5 6.5" stroke={`url(#${cyanGradientId})`} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M38.5 51h17" stroke="white" strokeOpacity="0.46" strokeWidth="2.4" strokeLinecap="round" />
+            </>
+          ) : (
+            <>
+              <path d="m40 49 10.8-10.8c1.6-1.6 4.1-1.6 5.7 0s1.6 4.1 0 5.7L45.7 54.7 39 56l1-7Z" fill={`url(#${cyanGradientId})`} filter={`url(#${glowFilterId})`} />
+              <path d="M49.2 39.8 54.8 45.4" stroke="white" strokeOpacity="0.6" strokeWidth="1.7" strokeLinecap="round" />
+            </>
+          )}
+        </>,
       );
     }
 
-    return (
-      <span className={iconClassName} aria-hidden="true">
-        {aiBadge}
-        <svg className="studio-segment-editor__prompt-tool-icon__svg" viewBox="0 0 40 40" fill="none">
-          <rect x="10" y="10" width="20" height="20" rx="5" />
-          <path d="M15 18v-4h4M15 14l6 6M25 22v4h-4M25 26l-6-6" />
-          <path d="m28.3 11.7.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8.8-1.7Z" />
-        </svg>
-      </span>
+    return renderIconSvg(
+      <>
+        <rect x="15" y="15" width="34" height="34" rx="9" fill={`url(#${glassGradientId})`} opacity="0.3" />
+        <rect x="15" y="15" width="34" height="34" rx="9" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
+        <path d="M25 28v-8h8M25 20l12 12M39 36v8h-8M39 44 27 32" stroke={`url(#${cyanGradientId})`} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" filter={`url(#${glowFilterId})`} />
+        <path d="m48.5 11.5 1.8 4 4.2 1.6-4.2 1.6-1.8 4-1.8-4-4.2-1.6 4.2-1.6 1.8-4Z" fill="white" opacity="0.92" />
+      </>,
     );
   };
   const renderSegmentEditorPromptToolButtonContent = (
@@ -20580,10 +21376,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       <div className="studio-canvas-prompt__inner studio-canvas-prompt__inner--editor studio-segment-editor__prompt-panel">
         <div className="studio-canvas-prompt__editor-layout">
           <div className="studio-canvas-prompt__editor-pane">
-            <div className="studio-segment-editor__prompt-topbar" aria-label="Режим панели">
+            <div className="studio-segment-editor__prompt-topbar" aria-label={workspaceText(locale, "Режим панели", "Panel mode")}>
               <div className="studio-segment-editor__prompt-header">
                 <div className="studio-segment-editor__prompt-title">
-                  Сцена {activeSegmentDisplayNumber}
+                  {workspaceText(locale, `Сцена ${activeSegmentDisplayNumber}`, `Scene ${activeSegmentDisplayNumber}`)}
                 </div>
                 <div className="studio-segment-editor__prompt-mode-switch">
                   <button
@@ -20594,7 +21390,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       handleSegmentEditorPromptSceneModeSelect("create");
                     }}
                   >
-                    Создать сцену
+                    {workspaceText(locale, "Создать сцену", "Create scene")}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-mode-button${segmentEditorPromptSceneMode === "edit" ? " is-active" : ""}`}
@@ -20604,98 +21400,98 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       handleSegmentEditorPromptSceneModeSelect("edit");
                     }}
                   >
-                    Редактировать сцену
+                    {workspaceText(locale, "Редактировать сцену", "Edit scene")}
                   </button>
                 </div>
               </div>
               {segmentEditorPromptSceneMode === "create" ? (
-                <div className="studio-segment-editor__prompt-submenu" aria-label="Инструменты создания сцены">
+                <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "ai_photo" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="ИИ фото"
+                    aria-label={workspaceText(locale, "ИИ фото", "AI photo")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("ai_photo")}
-                    title="ИИ фото"
+                    title={workspaceText(locale, "ИИ фото", "AI photo")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("ai_photo");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("ai_photo", "ИИ фото")}
+                    {renderSegmentEditorPromptToolButtonContent("ai_photo", workspaceText(locale, "ИИ фото", "AI photo"))}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "ai_video" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="ИИ видео"
+                    aria-label={workspaceText(locale, "ИИ видео", "AI video")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("ai_video")}
-                    title="ИИ видео"
+                    title={workspaceText(locale, "ИИ видео", "AI video")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("ai_video");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("ai_video", "ИИ видео")}
+                    {renderSegmentEditorPromptToolButtonContent("ai_video", workspaceText(locale, "ИИ видео", "AI video"))}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "library" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="Медиатека"
+                    aria-label={workspaceText(locale, "Медиатека", "Media library")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("library")}
-                    title="Медиатека"
+                    title={workspaceText(locale, "Медиатека", "Media library")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("library");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("library", "Медиатека")}
+                    {renderSegmentEditorPromptToolButtonContent("library", workspaceText(locale, "Медиатека", "Media library"))}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "upload" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="Свой визуал"
+                    aria-label={workspaceText(locale, "Свой визуал", "Custom visual")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("upload")}
-                    title="Свой визуал"
+                    title={workspaceText(locale, "Свой визуал", "Custom visual")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("upload");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("upload", "Свой визуал")}
+                    {renderSegmentEditorPromptToolButtonContent("upload", workspaceText(locale, "Свой визуал", "Custom visual"))}
                   </button>
                 </div>
               ) : (
-                <div className="studio-segment-editor__prompt-submenu" aria-label="Инструменты редактирования сцены">
+                <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "photo_animation" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="ИИ анимация фото"
+                    aria-label={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("photo_animation")}
-                    title="ИИ анимация фото"
+                    title={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("photo_animation");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("photo_animation", "ИИ анимация")}
+                    {renderSegmentEditorPromptToolButtonContent("photo_animation", workspaceText(locale, "ИИ анимация", "AI animation"))}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "image_edit" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="Дорисовать фото"
+                    aria-label={workspaceText(locale, "Дорисовать", "Image edit")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("image_edit")}
-                    title="Дорисовать фото"
+                    title={workspaceText(locale, "Дорисовать", "Image edit")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("image_edit");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("image_edit", "Дорисовать")}
+                    {renderSegmentEditorPromptToolButtonContent("image_edit", workspaceText(locale, "Дорисовать", "Image edit"))}
                   </button>
                   <button
                     className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "image_upscale" ? " is-active" : ""}`}
                     type="button"
-                    aria-label="Улучшить качество"
+                    aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
-                    title="Улучшить качество"
+                    title={workspaceText(locale, "Улучшить качество", "Upscale image")}
                     onClick={() => {
                       handleSegmentEditorPromptVisualToolSelect("image_upscale");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("image_upscale", "Улучшить")}
+                    {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить", "Upscale"))}
                   </button>
                 </div>
               )}
@@ -20715,14 +21511,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   {isPromptLibraryMode ? (
                     <div className="studio-segment-editor__prompt-library">
                       {segmentAiPhotoModalLibraryItems.length > 0 ? (
-                        <div className="studio-segment-editor__prompt-library-filters" aria-label="Фильтр медиатеки">
+                        <div className="studio-segment-editor__prompt-library-filters" aria-label={workspaceText(locale, "Фильтр медиатеки", "Media library filter")}>
                           <button
                             className={`studio-segment-editor__prompt-library-filter${segmentAiPhotoModalLibraryFilter === "all" ? " is-active" : ""}`}
                             type="button"
                             aria-pressed={segmentAiPhotoModalLibraryFilter === "all"}
                             onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
                           >
-                            Все
+                            {workspaceText(locale, "Все", "All")}
                           </button>
                           <button
                             className={`studio-segment-editor__prompt-library-filter${segmentAiPhotoModalLibraryFilter === "photo" ? " is-active" : ""}`}
@@ -20730,7 +21526,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             aria-pressed={segmentAiPhotoModalLibraryFilter === "photo"}
                             onClick={() => setSegmentAiPhotoModalLibraryFilter((current) => (current === "photo" ? "all" : "photo"))}
                           >
-                            ИИ фото
+                            {workspaceText(locale, "ИИ фото", "AI photos")}
                           </button>
                           <button
                             className={`studio-segment-editor__prompt-library-filter${segmentAiPhotoModalLibraryFilter === "video" ? " is-active" : ""}`}
@@ -20738,64 +21534,68 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             aria-pressed={segmentAiPhotoModalLibraryFilter === "video"}
                             onClick={() => setSegmentAiPhotoModalLibraryFilter((current) => (current === "video" ? "all" : "video"))}
                           >
-                            ИИ видео
+                            {workspaceText(locale, "ИИ видео", "AI videos")}
                           </button>
                         </div>
                       ) : null}
                       <div className="studio-segment-editor__prompt-library-body">
                         {!shouldRenderSegmentAiPhotoModalLibraryGrid && segmentAiPhotoModalLibraryItems.length > 0 ? (
                           <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
-                            <strong>Открываем медиатеку</strong>
-                            <span>Подготавливаем превью.</span>
+                            <strong>{workspaceText(locale, "Открываем медиатеку", "Opening media library")}</strong>
+                            <span>{workspaceText(locale, "Подготавливаем превью.", "Preparing previews.")}</span>
                           </div>
                         ) : isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
                           <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
-                            <strong>Загружаем медиатеку</strong>
-                            <span>Собираем AI-визуалы.</span>
+                            <strong>{workspaceText(locale, "Загружаем медиатеку", "Loading media library")}</strong>
+                            <span>{workspaceText(locale, "Собираем AI-визуалы.", "Collecting AI visuals.")}</span>
                           </div>
                         ) : mediaLibraryError && segmentAiPhotoModalLibraryItems.length === 0 ? (
                           <div className="studio-segment-editor__prompt-info-card is-error" role="alert">
-                            <strong>Не удалось загрузить медиатеку</strong>
+                            <strong>{workspaceText(locale, "Не удалось загрузить медиатеку", "Could not load media library")}</strong>
                             <span>{mediaLibraryError}</span>
                             <button
                               className="studio-segment-editor__prompt-library-retry"
                               type="button"
                               onClick={() => setMediaLibraryReloadToken((current) => current + 1)}
                             >
-                              Повторить
+                              {workspaceText(locale, "Повторить", "Retry")}
                             </button>
                           </div>
                         ) : isMediaLibraryResolvingVisibleItems ? (
                           <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
-                            <strong>Загружаем медиатеку</strong>
-                            <span>Подбираем доступные AI-визуалы.</span>
+                            <strong>{workspaceText(locale, "Загружаем медиатеку", "Loading media library")}</strong>
+                            <span>{workspaceText(locale, "Подбираем доступные AI-визуалы.", "Selecting available AI visuals.")}</span>
                           </div>
                         ) : segmentAiPhotoModalLibraryItems.length === 0 ? (
                           <div className="studio-segment-editor__prompt-info-card">
-                            <strong>Медиатека пока пуста</strong>
-                            <span>Сначала сохраните хотя бы один AI-визуал.</span>
+                            <strong>{workspaceText(locale, "Медиатека пока пуста", "Media library is empty")}</strong>
+                            <span>{workspaceText(locale, "Сначала сохраните хотя бы один AI-визуал.", "Save at least one AI visual first.")}</span>
                           </div>
                         ) : filteredSegmentAiPhotoModalLibraryItems.length === 0 ? (
                           <div className="studio-segment-editor__prompt-info-card">
-                            <strong>{segmentAiPhotoModalLibraryFilter === "photo" ? "Нет ИИ фото" : "Нет ИИ видео"}</strong>
+                            <strong>
+                              {segmentAiPhotoModalLibraryFilter === "photo"
+                                ? workspaceText(locale, "Нет ИИ фото", "No AI photos")
+                                : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
+                            </strong>
                             <span>
                               {segmentAiPhotoModalLibraryFilter === "photo"
-                                ? "В медиатеке сейчас нет доступных фото для этого фильтра."
-                                : "В медиатеке сейчас нет доступных видео для этого фильтра."}
+                                ? workspaceText(locale, "В медиатеке сейчас нет доступных фото для этого фильтра.", "No photos are available for this filter right now.")
+                                : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
                             </span>
                             <button
                               className="studio-segment-editor__prompt-library-retry"
                               type="button"
                               onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
                             >
-                              Сбросить фильтр
+                              {workspaceText(locale, "Сбросить фильтр", "Reset filter")}
                             </button>
                           </div>
                         ) : (
                           <div className="studio-segment-editor__prompt-library-grid">
                             {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
                               const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
-                              const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind);
+                              const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                               const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
                               const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(
                                 item,
@@ -20811,7 +21611,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       : " studio-segment-editor__prompt-library-card--photo"
                                   }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                   type="button"
-                                  aria-label={`Выбрать ${itemKindLabel} из медиатеки`}
+                                  aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
                                   disabled={!activeSegment || isSegmentEditorStructureActionBusy}
                                   onClick={() => {
                                     if (!activeSegment) {
@@ -20852,13 +21652,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div className="studio-segment-editor__prompt-info-card">
                       <strong>
                         {isPromptUploadMode
-                            ? segmentAiPhotoModalCustomFileLabel ?? "Свой визуал"
-                            : "Улучшить качество"}
+                            ? segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")
+                            : workspaceText(locale, "Улучшить качество", "Upscale image")}
                       </strong>
                       <span>
                         {isPromptUploadMode
-                            ? "Загрузите фото или видео для текущего сегмента."
-                            : "Улучшение качества изображения."}
+                            ? workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")
+                            : workspaceText(locale, "Улучшение качества изображения.", "Image quality upscaling.")}
                       </span>
                     </div>
                   ) : (
@@ -20869,13 +21669,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         value={promptVisualTextareaValue}
                         onChange={handlePromptVisualTextareaChange}
                         rows={6}
-                        placeholder="Опишите что должно быть в сцене..."
+                        placeholder={workspaceText(locale, "Опишите что должно быть в сцене...", "Describe what should be in the scene...")}
                       />
                       <button
                         className="studio-segment-editor__prompt-improve"
                         type="button"
-                        aria-label="Улучшить описание"
-                        title="Улучшить описание"
+                        aria-label={workspaceText(locale, "Улучшить описание", "Improve prompt")}
+                        title={workspaceText(locale, "Улучшить описание", "Improve prompt")}
                         disabled={isPromptImproveDisabled}
                         onClick={() => {
                           void handleSegmentAiPhotoModalImprovePrompt();
@@ -20986,8 +21786,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           className={`studio-canvas-prompt__btn studio-segment-editor__prompt-submit${isGenerating ? " is-generating" : ""}`}
           type="button"
           aria-busy={isGenerating ? true : undefined}
-          aria-label={`Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST)}`}
-          title={`Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST)}`}
+          aria-label={workspaceText(
+            locale,
+            `Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST, locale)}`,
+            `Create Shorts for ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST, locale)}`,
+          )}
+          title={workspaceText(
+            locale,
+            `Создать Shorts за ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST, locale)}`,
+            `Create Shorts for ${formatCreditsCountLabel(STUDIO_VIDEO_GENERATION_CREDIT_COST, locale)}`,
+          )}
           disabled={isSegmentEditorCreateShortsDisabled}
           onClick={() => {
             void handleCreateShortsFromSegmentEditor();
@@ -20996,27 +21804,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           {isGenerating ? (
             <>
               <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
-              <span>Генерируем Shorts</span>
+              <span>{workspaceText(locale, "Генерируем Shorts", "Generating Shorts")}</span>
             </>
           ) : (
-            <span className="studio-canvas-prompt__btn-label">Создать Shorts {STUDIO_VIDEO_GENERATION_CREDIT_COST} ⚡</span>
+            <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
+              <span>{workspaceText(locale, "Создать Shorts", "Create Shorts")}</span>
+              <span className="studio-canvas-prompt__btn-cost">{STUDIO_VIDEO_GENERATION_CREDIT_COST}</span>
+              <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
+            </span>
           )}
         </button>
       </div>
     </div>
   );
   const studioSidebar = (
-    <aside className="studio-sidebar" aria-label="Параметры редактирования">
+    <aside className="studio-sidebar" aria-label={workspaceText(locale, "Параметры редактирования", "Editing settings")}>
       {studioSidebarProjectTitle ? (
-        <div className="studio-sidebar__project" aria-label="Название проекта">
-          <span className="studio-sidebar__project-label">Проект</span>
+        <div className="studio-sidebar__project" aria-label={workspaceText(locale, "Название проекта", "Project title")}>
+          <span className="studio-sidebar__project-label">{workspaceText(locale, "Проект", "Project")}</span>
           <strong className="studio-sidebar__project-title" title={studioSidebarProjectTitle}>
             {studioSidebarProjectTitle}
           </strong>
         </div>
       ) : null}
 
-      <div className="studio-sidebar__nav studio-sidebar__nav--settings" aria-label="Параметры видео">
+      <div className="studio-sidebar__nav studio-sidebar__nav--settings" aria-label={workspaceText(locale, "Параметры видео", "Video settings")}>
         <StudioSubtitleSelectorChip
           isEnabled={studioSidebarSubtitlesEnabled}
           variant="sidebar"
@@ -21064,8 +21876,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const renderStudioShortsGenerationStatus = () => (
     <div className="studio-canvas-preview__generation-status">
       <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
-      <strong>Генерируем Shorts</strong>
-      <span>Собираем сегменты в видео</span>
+      <strong>{locale === "en" ? "Generating Shorts" : "Генерируем Shorts"}</strong>
+      <span>{locale === "en" ? "Assembling segments into a video" : "Собираем сегменты в видео"}</span>
     </div>
   );
 
@@ -21077,7 +21889,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       >
         <header className="site-header site-header--workspace">
           <div className="container site-header__inner">
-            <Link className="brand" to="/" aria-label="AdShorts AI">
+            <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
               <img src="/logo.png" alt="" width="44" height="44" />
               <span>AdShorts AI</span>
             </Link>
@@ -21093,9 +21905,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             />
 
             <div className="site-header__actions">
+              <LanguageSwitcher />
               <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
               <AccountMenuButton email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
-        </div>
+            </div>
           </div>
         </header>
 
@@ -21118,7 +21931,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             {showStudioCanvasPageTitle ? (
               <div
                 className={`studio-canvas-page-title${createMode === "segment-editor" ? " is-segment-editor" : ""}`}
-                aria-label="Заголовок страницы"
+                aria-label={locale === "en" ? "Page title" : "Заголовок страницы"}
               >
                 <h1>{studioCanvasPageTitle}</h1>
               </div>
@@ -21130,7 +21943,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	                  {generateError}
 	                </div>
 	              ) : null}
-	              {createMode === "default" && segmentEditorError ? (
+	              {segmentEditorError ? (
 	                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
 	                  {segmentEditorError}
 	                </div>
@@ -21161,7 +21974,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <button
                               className="studio-segment-editor__arrow"
                               type="button"
-                              aria-label="Предыдущий сегмент"
+                              aria-label={locale === "en" ? "Previous segment" : "Предыдущий сегмент"}
                               disabled={activeSegmentIndex <= 0}
                               onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex - 1)}
                             >
@@ -21190,11 +22003,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         type="button"
                                         style={getSegmentCarouselCardStyle(offset, { isAddCard: true })}
                                         disabled={isSegmentEditorStructureActionBusy}
-                                        aria-label="Добавить сегмент"
+                                        aria-label={locale === "en" ? "Add segment" : "Добавить сегмент"}
                                         title={
                                           isSegmentEditorStructureActionBusy
-                                            ? "Сейчас нельзя менять состав сегментов"
-                                            : "Добавить сегмент"
+                                            ? locale === "en"
+                                              ? "Segment structure cannot be changed right now"
+                                              : "Сейчас нельзя менять состав сегментов"
+                                            : locale === "en"
+                                              ? "Add segment"
+                                              : "Добавить сегмент"
                                         }
                                         onClick={handleAddSegmentEditorSegment}
                                       >
@@ -21203,7 +22020,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                             <span className="studio-segment-editor__card-add-icon" aria-hidden="true">
                                               +
                                             </span>
-                                            <strong>Добавить сегмент</strong>
+                                            <strong>{locale === "en" ? "Add segment" : "Добавить сегмент"}</strong>
                                           </div>
                                         </div>
                                       </button>
@@ -21254,6 +22071,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segment.index] ?? 0 : 0;
                                 const isVisualEdited = isWorkspaceSegmentDraftVisualEdited(segment);
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
+                                const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
                                 const hasResettableVisual =
                                   isVisualEdited ||
                                   segment.visualReset ||
@@ -21344,7 +22162,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           data-preview-kind={mediaKind}
                                           data-segment-array-index={nextSegmentArrayIndex}
                                           data-segment-playback-index={segment.index}
-                                          aria-label={`Переключиться на сегмент ${segmentNumber}`}
+                                          aria-label={workspaceText(
+                                            locale,
+                                            `Переключиться и воспроизвести сегмент ${segmentNumber}`,
+                                            `Switch to and play segment ${segmentNumber}`,
+                                          )}
                                           onClick={handleSideSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
                                             segment.index,
@@ -21358,13 +22180,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           type="button"
                                           disabled={isVisualGenerationPending}
                                           aria-label={
-                                            mediaKind === "video"
+                                            mediaKind === "video" || studioSidebarSubtitlesEnabled
                                               ? isSegmentPlaying
-                                                ? `Остановить сегмент ${segmentNumber}`
-                                                : `Воспроизвести сегмент ${segmentNumber}`
-                                              : `Сегмент ${segmentNumber}`
+                                                ? workspaceText(locale, `Остановить сегмент ${segmentNumber}`, `Stop segment ${segmentNumber}`)
+                                                : workspaceText(locale, `Воспроизвести сегмент ${segmentNumber}`, `Play segment ${segmentNumber}`)
+                                              : workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)
                                           }
-                                          aria-pressed={mediaKind === "video" ? isSegmentPlaying : undefined}
+                                          aria-pressed={mediaKind === "video" || studioSidebarSubtitlesEnabled ? isSegmentPlaying : undefined}
                                           onClick={handleActiveSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
                                             segment.index,
@@ -21392,16 +22214,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           <span className="studio-segment-editor__card-loader-spinner" aria-hidden="true"></span>
                                           <strong>
                                             {isImageUpscalePending
-                                              ? "Улучшаем качество фото"
+                                              ? workspaceText(locale, "Улучшаем качество фото", "Upscaling photo")
                                               : isPhotoAnimationGenerationPending
-                                              ? "Анимируем фото"
+                                              ? workspaceText(locale, "Анимируем фото", "Animating photo")
                                               : isAiVideoGenerationPending
-                                                ? "Генерируем ИИ видео"
+                                                ? workspaceText(locale, "Генерируем ИИ видео", "Generating AI video")
                                                 : isImageEditGenerationPending
-                                                  ? "Редактируем фото"
-                                                  : "Генерируем фото"}
+                                                  ? workspaceText(locale, "Дорисовываем", "Editing image")
+                                                  : workspaceText(locale, "Генерируем фото", "Generating photo")}
                                           </strong>
-                                          <span>Сегмент {segmentNumber} обновится автоматически</span>
+                                          <span>
+                                            {workspaceText(
+                                              locale,
+                                              `Сегмент ${segmentNumber} обновится автоматически`,
+                                              `Segment ${segmentNumber} will update automatically`,
+                                            )}
+                                          </span>
                                         </div>
                                       ) : null}
                                       <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
@@ -21409,7 +22237,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           <div className="studio-segment-editor__card-overlay-footer">
                                             <div className="studio-segment-editor__card-overlay-main">
                                               <div className="studio-segment-editor__card-copy">
-                                                <strong>Сегмент {segmentNumber}</strong>
+                                                <strong>{workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)}</strong>
                                                 <span>
                                                   {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
                                                   {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
@@ -21420,14 +22248,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                             </div>
                                             <div className="studio-segment-editor__card-footer-actions">
                                               {segmentSourceLabel !== "Сток" ? (
-                                                <small className="studio-segment-editor__card-badge">{segmentSourceLabel}</small>
+                                                <small className="studio-segment-editor__card-badge">{segmentSourceDisplayLabel}</small>
                                               ) : null}
                                             </div>
                                           </div>
                                         ) : (
                                           <div className="studio-segment-editor__card-overlay-main">
                                             <div className="studio-segment-editor__card-copy">
-                                              <strong>Сегмент {segmentNumber}</strong>
+                                              <strong>{workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)}</strong>
                                               <span>
                                                 {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
                                                 {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
@@ -21436,7 +22264,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                               </span>
                                             </div>
                                             {segmentSourceLabel !== "Сток" ? (
-                                              <small className="studio-segment-editor__card-badge">{segmentSourceLabel}</small>
+                                              <small className="studio-segment-editor__card-badge">{segmentSourceDisplayLabel}</small>
                                             ) : null}
                                           </div>
                                         )}
@@ -21445,7 +22273,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     {isActiveCard ? (
                                       <div className="studio-segment-editor__card-visual-meta">
                                         {canResetVisual ? (
-                                          <span className="studio-segment-editor__card-visual-status">Визуал изменен</span>
+                                          <span className="studio-segment-editor__card-visual-status">{workspaceText(locale, "Визуал изменен", "Visual changed")}</span>
                                         ) : (
                                           <span className="studio-segment-editor__card-visual-spacer" aria-hidden="true"></span>
                                         )}
@@ -21454,8 +22282,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                             <button
                                               className="studio-segment-editor__card-visual-reset"
                                               type="button"
-                                              aria-label="Сбросить визуал сегмента"
-                                              title="Сбросить визуал сегмента"
+                                              aria-label={workspaceText(locale, "Сбросить визуал сегмента", "Reset segment visual")}
+                                              title={workspaceText(locale, "Сбросить визуал сегмента", "Reset segment visual")}
                                               onPointerDown={(event) => {
                                                 event.stopPropagation();
                                               }}
@@ -21494,7 +22322,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <button
                               className="studio-segment-editor__arrow"
                               type="button"
-                              aria-label="Следующий сегмент"
+                              aria-label={workspaceText(locale, "Следующий сегмент", "Next segment")}
                               disabled={activeSegmentIndex >= segmentEditorDraft.segments.length - 1}
                               onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + 1)}
                             >
@@ -21506,8 +22334,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             {isGenerating ? (
                               <div className="studio-segment-editor__generation-overlay" role="status" aria-live="polite">
                                 <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
-                                <strong>Генерируем Shorts</strong>
-                                <span>Собираем сегменты в видео</span>
+                                <strong>{workspaceText(locale, "Генерируем Shorts", "Generating Shorts")}</strong>
+                                <span>{workspaceText(locale, "Собираем сегменты в видео", "Assembling segments into a video")}</span>
                               </div>
                             ) : null}
                           </div>
@@ -21518,7 +22346,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               ref={segmentThumbStripRef}
                               className="studio-segment-editor__thumbstrip"
                               role="list"
-                              aria-label="Все сцены"
+                              aria-label={workspaceText(locale, "Все сцены", "All scenes")}
                             >
                               {visibleSegmentThumbInsertIndex === 0 ? (
                                 <div className="studio-segment-editor__thumb-gap" aria-hidden="true">
@@ -21544,7 +22372,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         type="button"
                                         aria-pressed={isActiveThumb}
                                         aria-grabbed={isDraggedThumb ? true : undefined}
-                                        aria-label={`Открыть сцену ${index + 1}`}
+                                        aria-label={workspaceText(locale, `Открыть сцену ${index + 1}`, `Open scene ${index + 1}`)}
                                         onPointerCancel={(event) => finishSegmentThumbPointerDrag(index)(event, { cancelled: true })}
                                         onPointerDown={handleSegmentThumbPointerDown(index)}
                                         onPointerMove={handleSegmentThumbPointerMove(index)}
@@ -21585,7 +22413,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                             </span>
                                           )}
                                           <span className="studio-segment-editor__thumb-copy">
-                                            <strong>Сцена {index + 1}</strong>
+                                            <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
                                             <small>
                                               {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
                                               {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
@@ -21599,11 +22427,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         className="studio-segment-editor__thumb-delete"
                                         type="button"
                                         disabled={!canDeleteSegmentEditorSegment || isSegmentEditorStructureActionBusy}
-                                        aria-label={`Удалить сцену ${index + 1}`}
+                                        aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
                                         title={
                                           canDeleteSegmentEditorSegment
-                                            ? "Удалить сцену"
-                                            : `Нужно оставить минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент`
+                                            ? workspaceText(locale, "Удалить сцену", "Delete scene")
+                                            : workspaceText(
+                                                locale,
+                                                `Нужно оставить минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент`,
+                                                `Keep at least ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} segments`,
+                                              )
                                         }
                                         onClick={(event) => {
                                           event.preventDefault();
@@ -21643,11 +22475,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     className="studio-segment-editor__thumb studio-segment-editor__thumb--add"
                                     type="button"
                                     disabled={isSegmentEditorStructureActionBusy}
-                                    aria-label="Добавить сегмент"
+                                    aria-label={workspaceText(locale, "Добавить сегмент", "Add segment")}
                                     title={
                                       isSegmentEditorStructureActionBusy
-                                        ? "Сейчас нельзя менять состав сегментов"
-                                        : "Добавить сегмент"
+                                        ? workspaceText(locale, "Сейчас нельзя менять состав сегментов", "Segment structure cannot be changed right now")
+                                        : workspaceText(locale, "Добавить сегмент", "Add segment")
                                     }
                                     onClick={handleAddSegmentEditorSegment}
                                   >
@@ -21657,7 +22489,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       </span>
                                     </span>
                                     <span className="studio-segment-editor__thumb-copy">
-                                      <strong>Добавить сегмент</strong>
+                                      <strong>{workspaceText(locale, "Добавить сегмент", "Add segment")}</strong>
                                     </span>
                                   </button>
                                 </div>
@@ -21667,6 +22499,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         </div>
                       </div>
                     </div>
+                ) : createMode === "segment-editor" ? (
+                  <div
+                    className={`studio-canvas-preview__placeholder studio-canvas-preview__placeholder--segment-editor${
+                      isSegmentEditorLoading ? " is-loading" : ""
+                    }`}
+                    role={isSegmentEditorLoading ? "status" : segmentEditorError ? "alert" : undefined}
+                    aria-live={isSegmentEditorLoading || segmentEditorError ? "polite" : undefined}
+                  >
+                    {isSegmentEditorLoading ? (
+                      <>
+                        <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+                        <strong>{workspaceText(locale, "Загрузка...", "Loading...")}</strong>
+                      </>
+                    ) : segmentEditorError ? (
+                      <>
+                        <strong>{workspaceText(locale, "Редактор не открылся", "Editor did not open")}</strong>
+                        <p>{segmentEditorError}</p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+                        <strong>{workspaceText(locale, "Подготавливаем редактор", "Preparing editor")}</strong>
+                      </>
+                    )}
+                  </div>
                 ) : visibleGeneratedVideo && visibleGeneratedVideoPlaybackUrl && !isGeneratedVideoPlaybackBroken ? (
                   <div className="studio-canvas-preview__player-shell">
                     <WorkspaceModalVideoPlayer
@@ -21681,11 +22538,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <button
                               className="studio-canvas-preview__quick-action"
                               type="button"
-                              aria-label="Открыть Shorts по сегментам"
+                              aria-label={workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")}
                               title={
                                 visibleGeneratedVideo?.adId
-                                  ? "Открыть Shorts по сегментам"
-                                  : "Shorts по сегментам доступны после сохранения проекта"
+                                  ? workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")
+                                  : workspaceText(locale, "Shorts по сегментам доступны после сохранения проекта", "Segment editor is available after the project is saved")
                               }
                               disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
                               onClick={() => void handleOpenSegmentEditor()}
@@ -21698,8 +22555,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <button
                               className="studio-canvas-preview__quick-action"
                               type="button"
-                              aria-label="Опубликовать в YouTube"
-                              title="Опубликовать"
+                              aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
+                              title={workspaceText(locale, "Опубликовать", "Publish")}
                               onClick={() => void handlePublishPreview()}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -21712,8 +22569,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <button
                                 className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--accent"
                                 type="button"
-                                aria-label="Добавить видео в локальные примеры"
-                                title="Добавить в примеры"
+                                aria-label={workspaceText(locale, "Добавить видео в локальные примеры", "Add video to local examples")}
+                                title={workspaceText(locale, "Добавить в примеры", "Add to examples")}
                                 disabled={!canSaveGeneratedVideoToLocalExamples || isSavingLocalExample}
                                 onClick={openLocalExampleModal}
                               >
@@ -21731,8 +22588,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               className="studio-canvas-preview__quick-action"
                               href={visibleGeneratedVideoPlaybackUrl}
                               download={studioInlinePreviewDownloadName}
-                              aria-label="Скачать видео"
-                              title="Скачать"
+                              aria-label={workspaceText(locale, "Скачать видео", "Download video")}
+                              title={workspaceText(locale, "Скачать", "Download")}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -21741,8 +22598,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <button
                               className="studio-canvas-preview__quick-action"
                               type="button"
-                              aria-label="Закрыть текущее видео"
-                              title="Закрыть"
+                              aria-label={workspaceText(locale, "Закрыть текущее видео", "Close current video")}
+                              title={workspaceText(locale, "Закрыть", "Close")}
                               onClick={handleDismissStudioPreview}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -21762,7 +22619,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     {isSegmentEditorLoading ? (
                       <div className="studio-canvas-preview__overlay">
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                        <span>Загружаем сегменты...</span>
+                        <span>{workspaceText(locale, "Загружаем сегменты...", "Loading segments...")}</span>
                       </div>
                     ) : isGenerating ? (
                       <div className="studio-canvas-preview__overlay is-generating" role="status" aria-live="polite">
@@ -21780,13 +22637,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       renderStudioShortsGenerationStatus()
                     ) : generateError ? (
                       <>
-                        <strong>Ошибка генерации</strong>
+                        <strong>{workspaceText(locale, "Ошибка генерации", "Generation error")}</strong>
                         <p>{generateError}</p>
                       </>
                     ) : isWorkspaceBootstrapPending ? (
                       <>
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                        <strong>Загрузка...</strong>
+                        <strong>{workspaceText(locale, "Загрузка...", "Loading...")}</strong>
                       </>
                     ) : (
                       <>
@@ -21796,8 +22653,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                           </svg>
                         </div>
-                        <strong>Создайте свой Shorts</strong>
-                        <p>Введите тему и нажмите «Создать»</p>
+                        <strong>{workspaceText(locale, "Создайте свой Shorts", "Create your Shorts")}</strong>
+                        <p>{workspaceText(locale, "Введите тему и нажмите «Создать»", "Enter a topic and press Create")}</p>
                       </>
 	                    )}
 	                  </div>
@@ -21820,10 +22677,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           {composerSourceIdea ? (
                             <div className="studio-canvas-prompt__head">
                               <div className="studio-canvas-prompt__source">
-                                <span className="studio-canvas-prompt__source-label">Из контент-плана</span>
+                                <span className="studio-canvas-prompt__source-label">{workspaceText(locale, "Из контент-плана", "From content plan")}</span>
                                 <strong>{composerSourceIdea.title}</strong>
                                 <button type="button" onClick={handleClearComposerSourceIdea}>
-                                  Сбросить
+                                  {workspaceText(locale, "Сбросить", "Reset")}
                                 </button>
                               </div>
                               <div className="studio-canvas-prompt__topbar">
@@ -21833,7 +22690,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   data-studio-content-plan-toggle="true"
                                   onClick={handleToggleContentPlanVisibility}
                                 >
-                                  План
+                                  {workspaceText(locale, "План", "Plan")}
                                 </button>
                               </div>
                             </div>
@@ -21841,14 +22698,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	                        {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
 	                        {hasAppliedSegmentEditorSession ? (
 	                          <p className="studio-canvas-prompt__notice">
-	                            Сегменты сохранены: {currentAppliedSegmentEditorSession?.segments.length ?? 0}. Следующий запуск обновит текущий проект.
+	                            {workspaceText(
+                                locale,
+                                `Сегменты сохранены: ${currentAppliedSegmentEditorSession?.segments.length ?? 0}. Следующий запуск обновит текущий проект.`,
+                                `Segments saved: ${currentAppliedSegmentEditorSession?.segments.length ?? 0}. The next run will update the current project.`,
+                              )}
                           </p>
                         ) : null}
                         <div className="studio-canvas-prompt__input-row">
                           <div className="studio-canvas-prompt__input-main">
                             <textarea
                               className="studio-canvas-prompt__textarea"
-                              placeholder="Опишите идею для Shorts..."
+                              placeholder={workspaceText(locale, "Опишите идею для Shorts...", "Describe your Shorts idea...")}
                               value={topicInput}
                               onChange={(event) => setTopicInput(event.target.value)}
                               rows={1}
@@ -21862,7 +22723,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 data-studio-content-plan-toggle="true"
                                 onClick={handleToggleContentPlanVisibility}
                               >
-                                План
+                                {workspaceText(locale, "План", "Plan")}
                               </button>
                             </div>
                           ) : null}
@@ -21939,8 +22800,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	                            <button
                                 className={`studio-canvas-prompt__btn${isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
                                 type="button"
-                                aria-label={`Создать Shorts за ${formatCreditsCountLabel(studioCreateRequiredCredits)}`}
-                                title={`Создать Shorts за ${studioCreateCostLabel}`}
+                                aria-label={workspaceText(
+                                  locale,
+                                  `Создать Shorts за ${formatCreditsCountLabel(studioCreateRequiredCredits, locale)}`,
+                                  `Create Shorts for ${formatCreditsCountLabel(studioCreateRequiredCredits, locale)}`,
+                                )}
+                                title={workspaceText(locale, `Создать Shorts за ${studioCreateCostLabel}`, `Create Shorts for ${studioCreateCostLabel}`)}
                                 disabled={isGenerating || isPreparingCustomVideo || isPreparingCustomMusic}
                                 onClick={() =>
                                   hasAppliedSegmentEditorSession
@@ -21979,18 +22844,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               {isProjectsLoading ? (
                 <div className="studio-projects__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>Загружаем проекты...</p>
+                  <p>{workspaceText(locale, "Загружаем проекты...", "Loading projects...")}</p>
                 </div>
               ) : projectsError ? (
                 <div className="studio-projects__error">
-                  <strong>Не удалось загрузить</strong>
+                  <strong>{workspaceText(locale, "Не удалось загрузить", "Could not load")}</strong>
                   <p>{projectsError}</p>
                   <button
                     className="studio-projects__retry"
                     type="button"
                     onClick={() => setHasLoadedProjects(false)}
                   >
-                    Повторить
+                    {workspaceText(locale, "Повторить", "Retry")}
                   </button>
                 </div>
               ) : projects.length === 0 ? (
@@ -22000,8 +22865,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
                   </div>
-                  <strong>Проектов пока нет</strong>
-                  <p>Создайте свой Shorts, и он появится здесь</p>
+                  <strong>{workspaceText(locale, "Проектов пока нет", "No projects yet")}</strong>
+                  <p>{workspaceText(locale, "Создайте свой Shorts, и он появится здесь", "Create your Shorts and it will appear here")}</p>
                   <button
                     className="studio-projects__create"
                     type="button"
@@ -22010,7 +22875,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       syncStudioRouteSection("create");
                     }}
                   >
-                    Создать Shorts
+                    {workspaceText(locale, "Создать Shorts", "Create Shorts")}
                   </button>
                 </div>
               ) : (
@@ -22083,7 +22948,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
                             onToggleStack={toggleStack}
                             project={group.leadProject}
-                            stackBadgeLabel={formatProjectVersionsLabel(group.projects.length)}
+                            stackBadgeLabel={formatProjectVersionsLabel(group.projects.length, locale)}
                           />
                         </div>
                       </div>
@@ -22099,7 +22964,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 <>
                   <div className="studio-media-library__head">
                     <div className="studio-media-library__copy">
-                      <strong>Медиатека ИИ визуалов</strong>
+                      <strong>{workspaceText(locale, "Медиатека ИИ визуалов", "AI visual media library")}</strong>
                     </div>
                     <div className="studio-media-library__pills">
                       <button
@@ -22116,7 +22981,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         aria-pressed={mediaLibraryFilter === "photo"}
                         onClick={() => setMediaLibraryFilter((current) => (current === "photo" ? "all" : "photo"))}
                       >
-                        ИИ фото: {visibleAiPhotoGroupMediaItemsCount}
+                        {workspaceText(locale, "ИИ фото", "AI photos")}: {visibleAiPhotoGroupMediaItemsCount}
                       </button>
                       <button
                         className={`studio-media-library__pill${mediaLibraryFilter === "video" ? " is-active" : ""}`}
@@ -22124,7 +22989,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         aria-pressed={mediaLibraryFilter === "video"}
                         onClick={() => setMediaLibraryFilter((current) => (current === "video" ? "all" : "video"))}
                       >
-                        ИИ видео: {visibleAiVideoGroupMediaItemsCount}
+                        {workspaceText(locale, "ИИ видео", "AI videos")}: {visibleAiVideoGroupMediaItemsCount}
                       </button>
                     </div>
                   </div>
@@ -22132,11 +22997,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   {filteredVisibleMediaLibraryItems.length > 0 ? (
                     <div className="studio-media-library__grid">
                       {filteredVisibleMediaLibraryItems.map((item) => {
-                      const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind);
+                      const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                       const itemKindLabelLower = itemKindLabel.toLowerCase();
                       const canDownloadSegment = Boolean(item.downloadUrl);
-                      const openPhotoLabel = `Открыть ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`;
-                      const deletePhotoLabel = `Удалить из медиатеки ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`;
+                      const openPhotoLabel = workspaceText(
+                        locale,
+                        `Открыть ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`,
+                        `Open ${itemKindLabelLower}, project ${item.projectTitle}, segment ${item.segmentNumber}`,
+                      );
+                      const deletePhotoLabel = workspaceText(
+                        locale,
+                        `Удалить из медиатеки ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`,
+                        `Delete ${itemKindLabelLower} from media library, project ${item.projectTitle}, segment ${item.segmentNumber}`,
+                      );
                       const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-library-tile");
 
                       return (
@@ -22178,9 +23051,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               className={`studio-media-library__download${canDownloadSegment ? "" : " is-disabled"}`}
                               href={item.downloadUrl ?? undefined}
                               download={item.downloadName}
-                              aria-label={`Скачать ${itemKindLabelLower}`}
+                              aria-label={workspaceText(locale, `Скачать ${itemKindLabelLower}`, `Download ${itemKindLabelLower}`)}
                               tabIndex={canDownloadSegment ? 0 : -1}
-                              title="Скачать"
+                              title={workspaceText(locale, "Скачать", "Download")}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 if (!canDownloadSegment) {
@@ -22202,7 +23075,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               className="studio-media-library__delete"
                               type="button"
                               aria-label={deletePhotoLabel}
-                              title="Удалить из медиатеки"
+                              title={workspaceText(locale, "Удалить из медиатеки", "Delete from media library")}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 dismissMediaLibraryItem(item);
@@ -22233,18 +23106,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                         </svg>
                       </div>
-                      <strong>{mediaLibraryFilter === "photo" ? "Нет ИИ фото" : "Нет ИИ видео"}</strong>
+                      <strong>
+                        {mediaLibraryFilter === "photo"
+                          ? workspaceText(locale, "Нет ИИ фото", "No AI photos")
+                          : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
+                      </strong>
                       <p>
                         {mediaLibraryFilter === "photo"
-                          ? "В медиатеке сейчас нет доступных фото для этого фильтра."
-                          : "В медиатеке сейчас нет доступных видео для этого фильтра."}
+                          ? workspaceText(locale, "В медиатеке сейчас нет доступных фото для этого фильтра.", "No photos are available for this filter right now.")
+                          : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
                       </p>
                       <button
                         className="studio-projects__retry"
                         type="button"
                         onClick={() => setMediaLibraryFilter("all")}
                       >
-                        Сбросить фильтр
+                        {workspaceText(locale, "Сбросить фильтр", "Reset filter")}
                       </button>
                     </div>
                   )}
@@ -22258,7 +23135,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {isMediaLibraryLoadingMore ? (
                         <>
                           <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                          <span>Загрузка...</span>
+                          <span>{workspaceText(locale, "Загрузка...", "Loading...")}</span>
                         </>
                       ) : null}
                     </div>
@@ -22267,18 +23144,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               ) : !hasLoadedProjects && isProjectsLoading ? (
                 <div className="studio-projects__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>Загружаем проекты для медиатеки...</p>
+                  <p>{workspaceText(locale, "Загружаем проекты для медиатеки...", "Loading projects for the media library...")}</p>
                 </div>
               ) : projectsError ? (
                 <div className="studio-projects__error">
-                  <strong>Не удалось загрузить проекты</strong>
+                  <strong>{workspaceText(locale, "Не удалось загрузить проекты", "Could not load projects")}</strong>
                   <p>{projectsError}</p>
                   <button
                     className="studio-projects__retry"
                     type="button"
                     onClick={() => setHasLoadedProjects(false)}
                   >
-                    Повторить
+                    {workspaceText(locale, "Повторить", "Retry")}
                   </button>
                 </div>
               ) : mediaLibraryProjects.length === 0 && resolvedMediaLibraryItems.length === 0 ? (
@@ -22289,8 +23166,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                     </svg>
                   </div>
-                  <strong>Медиатека появится после генерации AI визуалов</strong>
-                  <p>Сгенерируйте ИИ фото, ИИ видео или анимацию фото в редакторе сегментов, чтобы они появились здесь сразу.</p>
+                  <strong>{workspaceText(locale, "Медиатека появится после генерации AI визуалов", "Media library appears after AI visuals are generated")}</strong>
+                  <p>
+                    {workspaceText(
+                      locale,
+                      "Сгенерируйте ИИ фото, ИИ видео или анимацию фото в редакторе сегментов, чтобы они появились здесь сразу.",
+                      "Generate AI photos, AI videos or photo animations in the segment editor and they will appear here.",
+                    )}
+                  </p>
                   <button
                     className="studio-projects__create"
                     type="button"
@@ -22300,30 +23183,30 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       void handleStudioCreateModeSwitch("default");
                     }}
                   >
-                    Создать Shorts
+                    {workspaceText(locale, "Создать Shorts", "Create Shorts")}
                   </button>
                 </div>
               ) : isMediaLibraryLoading && resolvedMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>Загружаем медиатеку...</p>
+                  <p>{workspaceText(locale, "Загружаем медиатеку...", "Loading media library...")}</p>
                 </div>
               ) : mediaLibraryError && resolvedMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__error">
-                  <strong>Не удалось открыть медиатеку</strong>
+                  <strong>{workspaceText(locale, "Не удалось открыть медиатеку", "Could not open media library")}</strong>
                   <p>{mediaLibraryError}</p>
                   <button
                     className="studio-projects__retry"
                     type="button"
                     onClick={() => setMediaLibraryReloadToken((current) => current + 1)}
                   >
-                    Повторить
+                    {workspaceText(locale, "Повторить", "Retry")}
                   </button>
                 </div>
               ) : isMediaLibraryResolvingVisibleItems ? (
                 <div className="studio-projects__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>Подбираем доступные медиа...</p>
+                  <p>{workspaceText(locale, "Подбираем доступные медиа...", "Selecting available media...")}</p>
                 </div>
               ) : visibleMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__empty">
@@ -22333,8 +23216,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                     </svg>
                   </div>
-                  <strong>Медиатека пока пуста</strong>
-                  <p>В этой сессии и в готовых проектах пока нет доступных ИИ визуалов.</p>
+                  <strong>{workspaceText(locale, "Медиатека пока пуста", "Media library is empty")}</strong>
+                  <p>{workspaceText(locale, "В этой сессии и в готовых проектах пока нет доступных ИИ визуалов.", "There are no available AI visuals in this session or finished projects yet.")}</p>
                 </div>
               ) : null}
             </div>
@@ -22381,7 +23264,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   );
                 })()}
                 <span className="studio-segment-editor__thumb-copy">
-                  <strong>Сцена {segmentThumbDragState.draggedIndex + 1}</strong>
+                  <strong>{workspaceText(locale, `Сцена ${segmentThumbDragState.draggedIndex + 1}`, `Scene ${segmentThumbDragState.draggedIndex + 1}`)}</strong>
                   <small>
                     {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segmentThumbDragSegment))} -{" "}
                     {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segmentThumbDragSegment), {
@@ -22411,7 +23294,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 <button
                   className="studio-local-example-modal__backdrop route-close"
                   type="button"
-                  aria-label="Закрыть окно добавления в примеры"
+                  aria-label={workspaceText(locale, "Закрыть окно добавления в примеры", "Close add-to-examples dialog")}
                   onClick={closeLocalExampleModal}
                 />
 
@@ -22419,7 +23302,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <button
                     className="studio-local-example-modal__close route-close"
                     type="button"
-                    aria-label="Закрыть окно добавления в примеры"
+                    aria-label={workspaceText(locale, "Закрыть окно добавления в примеры", "Close add-to-examples dialog")}
                     onClick={closeLocalExampleModal}
                     disabled={isSavingLocalExample}
                   >
@@ -22427,43 +23310,50 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   </button>
 
                   <div className="studio-local-example-modal__hero">
-                    <span className="studio-local-example-modal__eyebrow">Локальные примеры</span>
-                    <strong id="studio-local-example-title">Добавить видео в примеры</strong>
+                    <span className="studio-local-example-modal__eyebrow">{workspaceText(locale, "Локальные примеры", "Local examples")}</span>
+                    <strong id="studio-local-example-title">{workspaceText(locale, "Добавить видео в примеры", "Add video to examples")}</strong>
                     <p>
-                      Видео сохранится локально для вашего аккаунта и останется в примерах даже после удаления проекта.
+                      {workspaceText(
+                        locale,
+                        "Видео сохранится локально для вашего аккаунта и останется в примерах даже после удаления проекта.",
+                        "The video will be saved locally for your account and remain in examples even after the project is deleted.",
+                      )}
                     </p>
                   </div>
 
                   <div className="studio-local-example-modal__summary">
-                    <span>Заголовок видео</span>
+                    <span>{workspaceText(locale, "Заголовок видео", "Video title")}</span>
                     <strong>{localExampleSource.title}</strong>
-                    <p>{localExampleSource.prompt || "Тема будет сохранена из выбранного проекта."}</p>
+                    <p>{localExampleSource.prompt || workspaceText(locale, "Тема будет сохранена из выбранного проекта.", "The topic will be saved from the selected project.")}</p>
                   </div>
 
                   <div className="studio-local-example-modal__section">
                     <div className="studio-local-example-modal__section-head">
-                      <strong>Куда добавить</strong>
-                      <span>При нажатии «Использовать» в примерах в студию подставится эта тема из базы.</span>
+                      <strong>{workspaceText(locale, "Куда добавить", "Where to add")}</strong>
+                      <span>{workspaceText(locale, "При нажатии «Использовать» в примерах в студию подставится эта тема из базы.", "When Use is clicked in examples, this topic will be inserted into the studio from the database.")}</span>
                     </div>
 
-                    <div className="studio-local-example-modal__goal-grid" role="list" aria-label="Раздел примеров">
-                      {workspaceLocalExampleGoalOptions.map((option) => (
-                        <button
-                          key={option.id}
-                          className={`studio-local-example-modal__goal${selectedLocalExampleGoal === option.id ? " is-selected" : ""}`}
-                          type="button"
-                          onClick={() => setSelectedLocalExampleGoal(option.id)}
-                        >
-                          <strong>{option.label}</strong>
-                          <span>{option.description}</span>
-                        </button>
-                      ))}
+                    <div className="studio-local-example-modal__goal-grid" role="list" aria-label={workspaceText(locale, "Раздел примеров", "Examples section")}>
+                      {workspaceLocalExampleGoalOptions.map((option) => {
+                        const optionCopy = getWorkspaceLocalExampleGoalCopy(option, locale);
+                        return (
+                          <button
+                            key={option.id}
+                            className={`studio-local-example-modal__goal${selectedLocalExampleGoal === option.id ? " is-selected" : ""}`}
+                            type="button"
+                            onClick={() => setSelectedLocalExampleGoal(option.id)}
+                          >
+                            <strong>{optionCopy.label}</strong>
+                            <span>{optionCopy.description}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {selectedLocalExampleGoalOption ? (
                     <p className="studio-local-example-modal__hint">
-                      Раздел: <strong>{selectedLocalExampleGoalOption.label}</strong>. {selectedLocalExampleGoalOption.description}
+                      {workspaceText(locale, "Раздел", "Section")}: <strong>{selectedLocalExampleGoalOptionCopy.label}</strong>. {selectedLocalExampleGoalOptionCopy.description}
                     </p>
                   ) : null}
 
@@ -22480,7 +23370,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       onClick={closeLocalExampleModal}
                       disabled={isSavingLocalExample}
                     >
-                      Отмена
+                      {workspaceText(locale, "Отмена", "Cancel")}
                     </button>
                     <button
                       className="studio-local-example-modal__action studio-local-example-modal__action--primary"
@@ -22491,10 +23381,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {isSavingLocalExample ? (
                         <>
                           <span className="studio-local-example-modal__spinner" aria-hidden="true"></span>
-                          Сохраняем...
+                          {workspaceText(locale, "Сохраняем...", "Saving...")}
                         </>
                       ) : (
-                        "Добавить в примеры"
+                        workspaceText(locale, "Добавить в примеры", "Add to examples")
                       )}
                     </button>
                   </div>
@@ -22506,25 +23396,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
         {projectPendingDelete && typeof document !== "undefined"
           ? createPortal(
-              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label="Удаление проекта">
+              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Удаление проекта", "Project deletion")}>
                 <button
                   className="workspace-confirm-modal__backdrop route-close"
                   type="button"
-                  aria-label="Закрыть подтверждение удаления проекта"
+                  aria-label={workspaceText(locale, "Закрыть подтверждение удаления проекта", "Close project deletion confirmation")}
                   onClick={closeProjectDeleteModal}
                 />
                 <div className="workspace-confirm-modal__panel" role="document">
                   <button
                     className="workspace-confirm-modal__close route-close"
                     type="button"
-                    aria-label="Закрыть подтверждение удаления проекта"
+                    aria-label={workspaceText(locale, "Закрыть подтверждение удаления проекта", "Close project deletion confirmation")}
                     onClick={closeProjectDeleteModal}
                     disabled={isProjectDeleteSubmitting}
                   >
                     ×
                   </button>
 
-                  <div className="workspace-confirm-modal__hero">
+                  <div className="workspace-confirm-modal__header">
                     <div className="workspace-confirm-modal__icon" aria-hidden="true">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                         <path d="M4 7h16" strokeLinecap="round" />
@@ -22534,19 +23424,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
-                      <span className="workspace-confirm-modal__eyebrow">
-                        {projectPendingDeleteProjects.length > 1 ? "Удаление стопки" : "Удаление проекта"}
-                      </span>
+                    <div className="workspace-confirm-modal__copy">
+                      <h2 className="workspace-confirm-modal__title">
+                        {projectPendingDeleteProjects.length > 1
+                          ? workspaceText(locale, "Удалить проекты?", "Delete projects?")
+                          : workspaceText(locale, "Удалить проект?", "Delete project?")}
+                      </h2>
+                      {projectPendingDeleteProjects.length > 1 ? (
+                        <p className="workspace-confirm-modal__message">
+                          {workspaceText(
+                            locale,
+                            `Будет удалено проектов: ${projectPendingDeleteProjects.length}. Действие нельзя отменить.`,
+                            `${projectPendingDeleteProjects.length} projects will be deleted. This cannot be undone.`,
+                          )}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <div className="workspace-confirm-modal__project">
-                    <span>
-                      {projectPendingDeleteProjects.length > 1
-                        ? `Будет удалено проектов: ${projectPendingDeleteProjects.length}`
-                        : "Будет удалён"}
-                    </span>
-                    <strong>{getWorkspaceProjectDisplayTitle(projectPendingDelete)}</strong>
-                  </div>
+                  <p className="workspace-confirm-modal__project">
+                    {getWorkspaceProjectDisplayTitle(projectPendingDelete)}
+                  </p>
 
                   {projectDeleteError ? (
                     <p className="workspace-confirm-modal__error" role="alert">
@@ -22561,7 +23459,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       onClick={closeProjectDeleteModal}
                       disabled={isProjectDeleteSubmitting}
                     >
-                      Отмена
+                      {workspaceText(locale, "Отмена", "Cancel")}
                     </button>
                     <button
                       className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
@@ -22572,10 +23470,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {isProjectDeleteSubmitting ? (
                         <>
                           <span className="workspace-confirm-modal__spinner" aria-hidden="true"></span>
-                          Удаляем...
+                          {workspaceText(locale, "Удаляем...", "Deleting...")}
                         </>
                       ) : (
-                        projectPendingDeleteProjects.length > 1 ? "Удалить стопку" : "Удалить проект"
+                        workspaceText(locale, "Удалить", "Delete")
                       )}
                     </button>
                   </div>
@@ -22600,7 +23498,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <button
                     className="studio-ai-photo-modal__close route-close"
                     type="button"
-                    aria-label="Закрыть окно редактирования визуала"
+                    aria-label={workspaceText(locale, "Закрыть окно редактирования визуала", "Close visual editor")}
                     onClick={() => {
                       closeSegmentAiPhotoModal();
                     }}
@@ -22624,21 +23522,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         <div className="studio-ai-photo-modal__control-topline">
                           <div className="studio-ai-photo-modal__control-title">
                             <span className="studio-ai-photo-modal__control-kicker" id="segment-visual-modal-title">
-                              Визуал сегмента {segmentAiPhotoModalSegmentNumber ?? segmentAiPhotoModalSegment.index + 1}
+                              {workspaceText(
+                                locale,
+                                `Визуал сегмента ${segmentAiPhotoModalSegmentNumber ?? segmentAiPhotoModalSegment.index + 1}`,
+                                `Segment ${segmentAiPhotoModalSegmentNumber ?? segmentAiPhotoModalSegment.index + 1} visual`,
+                              )}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="studio-ai-photo-modal__tool-groups" aria-label="Инструменты визуала">
+                      <div className="studio-ai-photo-modal__tool-groups" aria-label={workspaceText(locale, "Инструменты визуала", "Visual tools")}>
                         <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-create">
                           <div className="studio-ai-photo-modal__tool-group-head">
-                            <strong id="segment-visual-group-create">Создание сцены</strong>
+                            <strong id="segment-visual-group-create">{workspaceText(locale, "Создание сцены", "Scene creation")}</strong>
                           </div>
-                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Создание сцены">
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label={workspaceText(locale, "Создание сцены", "Scene creation")}>
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "ИИ фото",
-                              description: "Сцена по описанию",
+                              title: workspaceText(locale, "ИИ фото", "AI photo"),
+                              description: workspaceText(locale, "Сцена по описанию", "Scene from description"),
                               isActive: segmentAiPhotoModalTab === "ai_photo",
                               footer: segmentAiPhotoModalAiPhotoStatus ? (
                                 <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiPhotoStatus.tone}`}>
@@ -22652,8 +23554,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               },
                             })}
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "ИИ видео",
-                              description: "Сцена и движение",
+                              title: workspaceText(locale, "ИИ видео", "AI video"),
+                              description: workspaceText(locale, "Сцена и движение", "Scene and motion"),
                               isActive: segmentAiPhotoModalTab === "ai_video",
                               footer: segmentAiPhotoModalAiVideoStatus ? (
                                 <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalAiVideoStatus.tone}`}>
@@ -22667,11 +23569,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               },
                             })}
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "ИИ анимация фото",
-                              description: "Движение из выбранного фото",
+                              title: workspaceText(locale, "ИИ анимация фото", "AI photo animation"),
+                              description: workspaceText(locale, "Движение из выбранного фото", "Motion from selected photo"),
                               isActive: segmentAiPhotoModalTab === "photo_animation",
                               disabled: !canAnimateSegmentPhoto,
-                              buttonTitle: !canAnimateSegmentPhoto ? segmentPhotoToolUnavailableReason : "Анимировать фото",
+                              buttonTitle: !canAnimateSegmentPhoto ? segmentPhotoToolUnavailableReason : workspaceText(locale, "Анимировать фото", "Animate photo"),
                               footer: canAnimateSegmentPhoto ? (
                                 segmentAiPhotoModalPhotoAnimationStatus ? (
                                   <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalPhotoAnimationStatus.tone}`}>
@@ -22690,15 +23592,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                         <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-edit">
                           <div className="studio-ai-photo-modal__tool-group-head">
-                            <strong id="segment-visual-group-edit">Редактирование сцены</strong>
+                            <strong id="segment-visual-group-edit">{workspaceText(locale, "Редактирование сцены", "Scene editing")}</strong>
                           </div>
-                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Редактирование сцены">
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label={workspaceText(locale, "Редактирование сцены", "Scene editing")}>
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "Дорисовать фото",
-                              description: "Изменить фото",
+                              title: workspaceText(locale, "Дорисовать", "Image edit"),
+                              description: workspaceText(locale, "Изменить фото", "Edit photo"),
                               isActive: segmentAiPhotoModalTab === "image_edit",
                               disabled: !canEditSegmentImage,
-                              buttonTitle: !canEditSegmentImage ? segmentPhotoToolUnavailableReason : "Изменить фото",
+                              buttonTitle: !canEditSegmentImage ? segmentPhotoToolUnavailableReason : workspaceText(locale, "Изменить фото", "Edit photo"),
                               footer: canEditSegmentImage ? (
                                 segmentAiPhotoModalImageEditStatus ? (
                                   <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalImageEditStatus.tone}`}>
@@ -22713,13 +23615,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               },
                             })}
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "Улучшить качество",
-                              description: "Апскейл выбранного фото",
+                              title: workspaceText(locale, "Улучшить качество", "Upscale image"),
+                              description: workspaceText(locale, "Апскейл выбранного фото", "Upscale selected photo"),
                               isActive: segmentAiPhotoModalTab === "image_upscale",
                               disabled: !canUpscaleSegmentImage,
                               buttonTitle: !canUpscaleSegmentImage
                                 ? segmentPhotoToolUnavailableReason
-                                : "Улучшить качество выбранного фото",
+                                : workspaceText(locale, "Улучшить качество выбранного фото", "Upscale selected photo"),
                               footer: canUpscaleSegmentImage ? (
                                 segmentAiPhotoModalUpscaleStatus ? (
                                   <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUpscaleStatus.tone}`}>
@@ -22738,12 +23640,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                         <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-pick">
                           <div className="studio-ai-photo-modal__tool-group-head">
-                            <strong id="segment-visual-group-pick">Использование готовой сцены</strong>
+                            <strong id="segment-visual-group-pick">{workspaceText(locale, "Использование готовой сцены", "Use ready scene")}</strong>
                           </div>
-                          <div className="studio-ai-photo-modal__source-switcher" aria-label="Использование готовой сцены">
+                          <div className="studio-ai-photo-modal__source-switcher" aria-label={workspaceText(locale, "Использование готовой сцены", "Use ready scene")}>
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "Медиатека",
-                              description: "Готовые AI-визуалы",
+                              title: workspaceText(locale, "Медиатека", "Media library"),
+                              description: workspaceText(locale, "Готовые AI-визуалы", "Ready AI visuals"),
                               isActive: segmentAiPhotoModalTab === "library",
                               footer: segmentAiPhotoModalLibraryStatus ? (
                                 <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalLibraryStatus.tone}`}>
@@ -22757,8 +23659,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               },
                             })}
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: "Свой файл",
-                              description: "Фото или видео",
+                              title: workspaceText(locale, "Свой файл", "Custom file"),
+                              description: workspaceText(locale, "Фото или видео", "Photo or video"),
                               isActive: segmentAiPhotoModalTab === "upload",
                               footer: segmentAiPhotoModalUploadStatus ? (
                                 <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUploadStatus.tone}`}>
@@ -22778,8 +23680,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {segmentAiPhotoModalTab === "ai_video" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>ИИ видео</strong>
-                            <p>Короткое точное описание сцены и движения работает лучше.</p>
+                            <strong>{workspaceText(locale, "ИИ видео", "AI video")}</strong>
+                            <p>{workspaceText(locale, "Короткое точное описание сцены и движения работает лучше.", "A short precise scene and motion description works best.")}</p>
                           </div>
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
@@ -22792,9 +23694,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("ai_video");
                               }}
-                              aria-label="Промт для генерации ИИ видео"
+                              aria-label={workspaceText(locale, "Промт для генерации ИИ видео", "AI video generation prompt")}
                               rows={6}
-                              placeholder="Кинематографичный крупный план астронавта в пыльной буре на Марсе, драматичный свет, плавное движение камеры"
+                              placeholder={workspaceText(
+                                locale,
+                                "Кинематографичный крупный план астронавта в пыльной буре на Марсе, драматичный свет, плавное движение камеры",
+                                "Cinematic close-up of an astronaut in a dust storm on Mars, dramatic light, smooth camera movement",
+                              )}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -22816,25 +23722,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 {isSegmentAiPhotoPromptImproving ? (
                                   <>
                                     <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                                    Улучшаем...
+                                    {workspaceText(locale, "Улучшаем...", "Improving...")}
                                   </>
                                 ) : (
-                                  "✨ Улучшить описание"
+                                  workspaceText(locale, "✨ Улучшить описание", "✨ Improve prompt")
                                 )}
                               </button>
                             </div>
                           </div>
 
                           {isSegmentAiPhotoPromptImproved ? (
-                            <p className="studio-ai-photo-modal__field-note is-success">Описание обновлено.</p>
+                            <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={`Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`}
-                              title={`Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`}
+                              aria-label={workspaceText(locale, `Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`, `Generate video for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Сгенерировать видео за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`, `Generate video for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST)}`)}
                               disabled={
                                 isSegmentEditorGeneratingImageEdit ||
                                 isSegmentEditorGeneratingAiVideo ||
@@ -22853,10 +23759,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                "Сгенерировать видео",
+                                workspaceText(locale, "Сгенерировать видео", "Generate video"),
                                 STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
                                 isSegmentAiVideoModalGeneratingCurrentSegment,
-                                "Генерируем...",
+                                workspaceText(locale, "Генерируем...", "Generating..."),
                               )}
                             </button>
                           </div>
@@ -22864,8 +23770,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "photo_animation" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>ИИ анимация фото</strong>
-                            <p>Добавляет движение к текущему фото сегмента.</p>
+                            <strong>{workspaceText(locale, "ИИ анимация фото", "AI photo animation")}</strong>
+                            <p>{workspaceText(locale, "Добавляет движение к текущему фото сегмента.", "Adds motion to the current segment photo.")}</p>
                           </div>
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
@@ -22878,9 +23784,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("photo_animation");
                               }}
-                              aria-label="Промт для ИИ анимации фото"
+                              aria-label={workspaceText(locale, "Промт для ИИ анимации фото", "AI photo animation prompt")}
                               rows={6}
-                              placeholder="Плавный наезд камеры, легкое движение волос и ткани, атмосферный свет, кинематографичный параллакс"
+                              placeholder={workspaceText(
+                                locale,
+                                "Плавный наезд камеры, легкое движение волос и ткани, атмосферный свет, кинематографичный параллакс",
+                                "Smooth camera push-in, light hair and fabric movement, atmospheric light, cinematic parallax",
+                              )}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -22902,25 +23812,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 {isSegmentAiPhotoPromptImproving ? (
                                   <>
                                     <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                                    Улучшаем...
+                                    {workspaceText(locale, "Улучшаем...", "Improving...")}
                                   </>
                                 ) : (
-                                  "✨ Улучшить описание"
+                                  workspaceText(locale, "✨ Улучшить описание", "✨ Improve prompt")
                                 )}
                               </button>
                             </div>
                           </div>
 
                           {isSegmentAiPhotoPromptImproved ? (
-                            <p className="studio-ai-photo-modal__field-note is-success">Описание обновлено.</p>
+                            <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={`Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`}
-                              title={`Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`}
+                              aria-label={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST)}`)}
                               disabled={
                                 !canAnimateSegmentPhoto ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -22940,10 +23850,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                "Анимировать фото",
+                                workspaceText(locale, "Анимировать фото", "Animate photo"),
                                 STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
                                 isSegmentPhotoAnimationModalGeneratingCurrentSegment,
-                                "Анимируем...",
+                                workspaceText(locale, "Анимируем...", "Animating..."),
                               )}
                             </button>
                           </div>
@@ -22951,8 +23861,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "image_edit" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>Дорисовать фото</strong>
-                            <p>Меняет текущее фото сегмента по вашему описанию.</p>
+                            <strong>{workspaceText(locale, "Дорисовать", "Image edit")}</strong>
+                            <p>{workspaceText(locale, "Меняет текущее фото сегмента по вашему описанию.", "Changes the current segment photo from your description.")}</p>
                           </div>
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
@@ -22965,9 +23875,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("image_edit");
                               }}
-                              aria-label="Промт для дорисовки фото"
+                              aria-label={workspaceText(locale, "Промт для дорисовки фото", "Image edit prompt")}
                               rows={6}
-                              placeholder="Сохрани композицию, замени фон на неоновый ночной Токио, добавь дождь, кинематографичный свет, фотореализм"
+                              placeholder={workspaceText(
+                                locale,
+                                "Сохрани композицию, замени фон на неоновый ночной Токио, добавь дождь, кинематографичный свет, фотореализм",
+                                "Keep the composition, replace the background with neon night Tokyo, add rain, cinematic light, photorealism",
+                              )}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -22989,24 +23903,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 {isSegmentAiPhotoPromptImproving ? (
                                   <>
                                     <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                                    Улучшаем...
+                                    {workspaceText(locale, "Улучшаем...", "Improving...")}
                                   </>
                                 ) : (
-                                  "✨ Улучшить описание"
+                                  workspaceText(locale, "✨ Улучшить описание", "✨ Improve prompt")
                                 )}
                               </button>
                             </div>
                           </div>
 
                           {isSegmentAiPhotoPromptImproved ? (
-                            <p className="studio-ai-photo-modal__field-note is-success">Описание обновлено.</p>
+                            <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={`Дорисовать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`}
-                              title={`Дорисовать фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`}
+                              aria-label={workspaceText(locale, `Дорисовать за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`, `Edit image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Дорисовать за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`, `Edit image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST)}`)}
                               disabled={
                                 !canEditSegmentImage ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -23026,10 +23940,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                "Дорисовать фото",
+                                workspaceText(locale, "Дорисовать", "Image edit"),
                                 STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
                                 isSegmentImageEditModalGeneratingCurrentSegment,
-                                "Дорисовываем...",
+                                workspaceText(locale, "Дорисовываем...", "Editing..."),
                               )}
                             </button>
                           </div>
@@ -23037,21 +23951,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "image_upscale" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>Улучшить качество</strong>
-                            <p>Повышает детализацию и чёткость текущего фото сегмента.</p>
+                            <strong>{workspaceText(locale, "Улучшить качество", "Upscale image")}</strong>
+                            <p>{workspaceText(locale, "Повышает детализацию и чёткость текущего фото сегмента.", "Increases detail and sharpness for the current segment photo.")}</p>
                           </div>
 
                           <div className="studio-ai-photo-modal__info-card">
-                            <strong>Используем текущее фото сегмента</strong>
-                            <p>После обработки фото в сегменте заменится на улучшенную версию.</p>
+                            <strong>{workspaceText(locale, "Используем текущее фото сегмента", "Using current segment photo")}</strong>
+                            <p>{workspaceText(locale, "После обработки фото в сегменте заменится на улучшенную версию.", "After processing, the segment photo will be replaced with the upscaled version.")}</p>
                           </div>
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={`Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`}
-                              title={`Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`}
+                              aria-label={workspaceText(locale, `Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`, `Upscale image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`, `Upscale image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`)}
                               disabled={
                                 !canUpscaleSegmentImage ||
                                 isSegmentEditorGeneratingAiPhoto ||
@@ -23071,10 +23985,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                "Улучшить качество",
+                                workspaceText(locale, "Улучшить качество", "Upscale image"),
                                 STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
                                 isSegmentImageUpscaleCurrentSegment,
-                                "Улучшаем...",
+                                workspaceText(locale, "Улучшаем...", "Upscaling..."),
                               )}
                             </button>
                           </div>
@@ -23082,8 +23996,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "ai_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>ИИ фото</strong>
-                            <p>Короткое точное описание работает лучше.</p>
+                            <strong>{workspaceText(locale, "ИИ фото", "AI photo")}</strong>
+                            <p>{workspaceText(locale, "Короткое точное описание работает лучше.", "A short precise description works best.")}</p>
                           </div>
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
@@ -23096,9 +24010,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("ai_photo");
                               }}
-                              aria-label="Описание сцены для генерации"
+                              aria-label={workspaceText(locale, "Описание сцены для генерации", "Scene generation description")}
                               rows={6}
-                              placeholder="Скелет в пустыне находит блестящий смартфон, закат, песок, драматичный свет"
+                              placeholder={workspaceText(
+                                locale,
+                                "Скелет в пустыне находит блестящий смартфон, закат, песок, драматичный свет",
+                                "A skeleton in the desert finds a shiny smartphone, sunset, sand, dramatic light",
+                              )}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -23121,25 +24039,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 {isSegmentAiPhotoPromptImproving ? (
                                   <>
                                     <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                                    Улучшаем...
+                                    {workspaceText(locale, "Улучшаем...", "Improving...")}
                                   </>
                                 ) : (
-                                  "✨ Улучшить описание"
+                                  workspaceText(locale, "✨ Улучшить описание", "✨ Improve prompt")
                                 )}
                               </button>
                             </div>
                           </div>
 
                           {isSegmentAiPhotoPromptImproved ? (
-                            <p className="studio-ai-photo-modal__field-note is-success">Описание обновлено.</p>
+                            <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={`Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`}
-                              title={`Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`}
+                              aria-label={workspaceText(locale, `Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`, `Generate AI photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`, `Generate AI photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST)}`)}
                               disabled={
                                 isSegmentEditorGeneratingAiPhoto ||
                                 isSegmentEditorGeneratingImageEdit ||
@@ -23159,10 +24077,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                "Сгенерировать ИИ фото",
+                                workspaceText(locale, "Сгенерировать ИИ фото", "Generate AI photo"),
                                 STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
                                 isSegmentAiPhotoModalGeneratingCurrentSegment,
-                                "Генерируем...",
+                                workspaceText(locale, "Генерируем...", "Generating..."),
                               )}
                             </button>
                           </div>
@@ -23170,18 +24088,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : segmentAiPhotoModalTab === "library" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>Медиатека</strong>
+                            <strong>{workspaceText(locale, "Медиатека", "Media library")}</strong>
                           </div>
 
                           {segmentAiPhotoModalLibraryItems.length > 0 ? (
-                            <div className="studio-media-library__pills" aria-label="Фильтр медиатеки">
+                            <div className="studio-media-library__pills" aria-label={workspaceText(locale, "Фильтр медиатеки", "Media library filter")}>
                               <button
                                 className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "all" ? " is-active" : ""}`}
                                 type="button"
                                 aria-pressed={segmentAiPhotoModalLibraryFilter === "all"}
                                 onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
                               >
-                                Все
+                                {workspaceText(locale, "Все", "All")}
                               </button>
                               <button
                                 className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "photo" ? " is-active" : ""}`}
@@ -23191,7 +24109,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   setSegmentAiPhotoModalLibraryFilter((current) => (current === "photo" ? "all" : "photo"))
                                 }
                               >
-                                ИИ фото
+                                {workspaceText(locale, "ИИ фото", "AI photos")}
                               </button>
                               <button
                                 className={`studio-media-library__pill${segmentAiPhotoModalLibraryFilter === "video" ? " is-active" : ""}`}
@@ -23201,7 +24119,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   setSegmentAiPhotoModalLibraryFilter((current) => (current === "video" ? "all" : "video"))
                                 }
                               >
-                                ИИ видео
+                                {workspaceText(locale, "ИИ видео", "AI videos")}
                               </button>
                             </div>
                           ) : null}
@@ -23211,22 +24129,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
                                 <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>Открываем медиатеку</strong>
-                                  <p>Подготавливаем превью.</p>
+                                  <strong>{workspaceText(locale, "Открываем медиатеку", "Opening media library")}</strong>
+                                  <p>{workspaceText(locale, "Подготавливаем превью.", "Preparing previews.")}</p>
                                 </div>
                               </div>
                             ) : isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
                               <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
                                 <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>Загружаем медиатеку</strong>
-                                  <p>Собираем AI-визуалы.</p>
+                                  <strong>{workspaceText(locale, "Загружаем медиатеку", "Loading media library")}</strong>
+                                  <p>{workspaceText(locale, "Собираем AI-визуалы.", "Collecting AI visuals.")}</p>
                                 </div>
                               </div>
                             ) : mediaLibraryError && segmentAiPhotoModalLibraryItems.length === 0 ? (
                               <div className="studio-ai-photo-modal__library-state studio-ai-photo-modal__library-state--error" role="alert">
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>Не удалось загрузить медиатеку</strong>
+                                  <strong>{workspaceText(locale, "Не удалось загрузить медиатеку", "Could not load media library")}</strong>
                                   <p>{mediaLibraryError}</p>
                                 </div>
                                 <button
@@ -23234,32 +24152,36 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   type="button"
                                   onClick={() => setMediaLibraryReloadToken((current) => current + 1)}
                                 >
-                                  Повторить
+                                  {workspaceText(locale, "Повторить", "Retry")}
                                 </button>
                               </div>
                             ) : isMediaLibraryResolvingVisibleItems ? (
                               <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
                                 <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>Загружаем медиатеку</strong>
-                                  <p>Подбираем доступные AI-визуалы.</p>
+                                  <strong>{workspaceText(locale, "Загружаем медиатеку", "Loading media library")}</strong>
+                                  <p>{workspaceText(locale, "Подбираем доступные AI-визуалы.", "Selecting available AI visuals.")}</p>
                                 </div>
                               </div>
                             ) : segmentAiPhotoModalLibraryItems.length === 0 ? (
                               <div className="studio-ai-photo-modal__library-state">
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>Медиатека пока пуста</strong>
-                                  <p>Сначала сохраните хотя бы один AI-визуал.</p>
+                                  <strong>{workspaceText(locale, "Медиатека пока пуста", "Media library is empty")}</strong>
+                                  <p>{workspaceText(locale, "Сначала сохраните хотя бы один AI-визуал.", "Save at least one AI visual first.")}</p>
                                 </div>
                               </div>
                             ) : filteredSegmentAiPhotoModalLibraryItems.length === 0 ? (
                               <div className="studio-ai-photo-modal__library-state">
                                 <div className="studio-ai-photo-modal__library-state-copy">
-                                  <strong>{segmentAiPhotoModalLibraryFilter === "photo" ? "Нет ИИ фото" : "Нет ИИ видео"}</strong>
+                                  <strong>
+                                    {segmentAiPhotoModalLibraryFilter === "photo"
+                                      ? workspaceText(locale, "Нет ИИ фото", "No AI photos")
+                                      : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
+                                  </strong>
                                   <p>
                                     {segmentAiPhotoModalLibraryFilter === "photo"
-                                      ? "В медиатеке сейчас нет доступных фото для этого фильтра."
-                                      : "В медиатеке сейчас нет доступных видео для этого фильтра."}
+                                      ? workspaceText(locale, "В медиатеке сейчас нет доступных фото для этого фильтра.", "No photos are available for this filter right now.")
+                                      : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
                                   </p>
                                 </div>
                                 <button
@@ -23267,14 +24189,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   type="button"
                                   onClick={() => setSegmentAiPhotoModalLibraryFilter("all")}
                                 >
-                                  Сбросить фильтр
+                                  {workspaceText(locale, "Сбросить фильтр", "Reset filter")}
                                 </button>
                               </div>
                             ) : (
                               <div className="studio-ai-photo-modal__library-grid">
                                 {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
                                 const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
-                                const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind);
+                                const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                                 const itemKindLabel = rawItemKindLabel;
                                 const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
                                 const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(
@@ -23291,7 +24213,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         : " studio-ai-photo-modal__library-card--photo"
                                     }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                     type="button"
-                                    aria-label={`Выбрать ${itemKindLabel} из медиатеки`}
+                                    aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
                                     disabled={isSegmentEditorStructureActionBusy}
                                     onClick={() => {
                                       setSegmentEditorVideoError(null);
@@ -23330,22 +24252,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>Свой файл</strong>
+                            <strong>{workspaceText(locale, "Свой файл", "Custom file")}</strong>
                             <p>JPG, PNG, WEBP, AVIF, MP4, MOV, WEBM, M4V.</p>
                           </div>
 
                           <div className={`studio-ai-photo-modal__upload-card${segmentAiPhotoModalCustomFileLabel ? " is-active" : ""}`}>
                             <div className="studio-ai-photo-modal__upload-copy">
-                              <strong>{segmentAiPhotoModalCustomFileLabel ?? "Файл не выбран"}</strong>
+                              <strong>{segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Файл не выбран", "No file selected")}</strong>
                               <span>
-                                {segmentAiPhotoModalCustomFileLabel ? "Файл готов к применению." : "Загрузите фото или видео для сегмента."}
+                                {segmentAiPhotoModalCustomFileLabel
+                                  ? workspaceText(locale, "Файл готов к применению.", "File is ready to apply.")
+                                  : workspaceText(locale, "Загрузите фото или видео для сегмента.", "Upload a photo or video for the segment.")}
                               </span>
                             </div>
 
                             <button
                               className={`studio-ai-photo-modal__upload-btn${segmentAiPhotoModalCustomFileName ? " is-active" : ""}`}
                               type="button"
-                              title={segmentAiPhotoModalCustomFileName || "Загрузить файл"}
+                              title={segmentAiPhotoModalCustomFileName || workspaceText(locale, "Загрузить файл", "Upload file")}
                               disabled={
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentEditorGeneratingAiPhoto ||
@@ -23361,10 +24285,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                             >
                               {isSegmentEditorPreparingCustomVideo
-                                ? "Загрузка..."
+                                ? workspaceText(locale, "Загрузка...", "Uploading...")
                                 : segmentAiPhotoModalCustomFileName
-                                  ? "Заменить файл"
-                                  : "Загрузить файл"}
+                                  ? workspaceText(locale, "Заменить файл", "Replace file")
+                                  : workspaceText(locale, "Загрузить файл", "Upload file")}
                             </button>
                           </div>
                         </div>
@@ -23382,16 +24306,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             className="studio-video-modal is-open"
             role="dialog"
             aria-modal="true"
-            aria-label="Просмотр медиа из медиатеки"
+            aria-label={workspaceText(locale, "Просмотр медиа из медиатеки", "Media library preview")}
           >
             <button
               className="studio-video-modal__backdrop route-close"
               type="button"
-              aria-label="Закрыть просмотр визуала"
+              aria-label={workspaceText(locale, "Закрыть просмотр визуала", "Close visual preview")}
               onClick={closePreviewModals}
             />
             <div className="studio-video-modal__panel studio-video-modal__panel--video-only" role="document">
-              <button className="studio-video-modal__close route-close" type="button" aria-label="Закрыть просмотр визуала" onClick={closePreviewModals}>
+              <button className="studio-video-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть просмотр визуала", "Close visual preview")} onClick={closePreviewModals}>
                 ×
               </button>
               <div className="studio-video-modal__layout studio-video-modal__layout--video-only">
@@ -23417,8 +24341,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           className="studio-video-modal__top-action"
                           href={mediaLibraryPreviewModal.downloadUrl ?? mediaLibraryPreviewModal.previewUrl}
                           download={mediaLibraryPreviewModal.downloadName}
-                          aria-label="Скачать визуал"
-                          title="Скачать визуал"
+                          aria-label={workspaceText(locale, "Скачать визуал", "Download visual")}
+                          title={workspaceText(locale, "Скачать визуал", "Download visual")}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
@@ -23451,12 +24375,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             aria-hidden={!isAnyPreviewModalOpen}
             aria-modal={isAnyPreviewModalOpen ? "true" : undefined}
             aria-labelledby={isProjectPreviewModalOpen ? undefined : "studio-video-modal-title"}
-            aria-label={isProjectPreviewModalOpen ? "Просмотр видео проекта" : undefined}
+            aria-label={isProjectPreviewModalOpen ? workspaceText(locale, "Просмотр видео проекта", "Project video preview") : undefined}
           >
             <button
               className="studio-video-modal__backdrop route-close"
               type="button"
-              aria-label="Закрыть превью"
+              aria-label={workspaceText(locale, "Закрыть превью", "Close preview")}
               onClick={closePreviewModals}
             />
             <div
@@ -23464,7 +24388,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               role="document"
               style={projectPreviewModalPanelStyle}
             >
-              <button className="studio-video-modal__close route-close" type="button" aria-label="Закрыть превью" onClick={closePreviewModals}>
+              <button className="studio-video-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть превью", "Close preview")} onClick={closePreviewModals}>
                 ×
               </button>
               <div className={`studio-video-modal__layout${isProjectPreviewModalOpen ? " studio-video-modal__layout--video-only" : ""}`}>
@@ -23477,7 +24401,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           <p>{previewModalPlaybackError}</p>
                           <div className="studio-video-modal__error-actions">
                             <button className="studio-video-modal__error-btn" type="button" onClick={handleRetryPreviewModalPlayback}>
-                              Повторить
+                              {workspaceText(locale, "Повторить", "Retry")}
                             </button>
                             <a
                               className="studio-video-modal__error-btn"
@@ -23485,7 +24409,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              Открыть напрямую
+                              {workspaceText(locale, "Открыть напрямую", "Open directly")}
                             </a>
                           </div>
                         </div>
@@ -23504,8 +24428,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           className="studio-video-modal__top-action"
                           href={previewModalVideoPlaybackUrl}
                           download={previewModalDownloadName}
-                          aria-label="Скачать видео"
-                          title="Скачать видео"
+                          aria-label={workspaceText(locale, "Скачать видео", "Download video")}
+                          title={workspaceText(locale, "Скачать видео", "Download video")}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
@@ -23530,7 +24454,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 <div className="studio-video-modal__sidebar">
                   <div className="studio-video-modal__section studio-video-modal__section--hero">
                     <div className="studio-video-modal__title-block">
-                      <p className="studio-video-modal__eyebrow">Готово к публикации</p>
+                      <p className="studio-video-modal__eyebrow">{workspaceText(locale, "Готово к публикации", "Ready to publish")}</p>
                       <strong id="studio-video-modal-title">{previewModalTitle}</strong>
                     </div>
                     {previewModalStatusLink ? (
@@ -23553,41 +24477,41 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                   <div className="studio-video-modal__section">
                     <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">Тема</span>
-                      <p className="studio-video-modal__description">{previewModalTopic || "Без темы"}</p>
+                      <span className="studio-video-modal__label">{workspaceText(locale, "Тема", "Topic")}</span>
+                      <p className="studio-video-modal__description">{previewModalTopic || workspaceText(locale, "Без темы", "No topic")}</p>
                     </div>
                     <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">Заголовок</span>
+                      <span className="studio-video-modal__label">{workspaceText(locale, "Заголовок", "Title")}</span>
                       <p className="studio-video-modal__description">{previewModalTitle}</p>
                     </div>
                     {hasPreviewModalDescription ? (
                       <div className="studio-video-modal__meta">
-                        <span className="studio-video-modal__label">Описание</span>
+                        <span className="studio-video-modal__label">{workspaceText(locale, "Описание", "Description")}</span>
                         <p className="studio-video-modal__description">{previewModalDescription}</p>
                       </div>
                     ) : null}
                     <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">Хэштеги</span>
+                      <span className="studio-video-modal__label">{workspaceText(locale, "Хэштеги", "Hashtags")}</span>
                       {hasPreviewModalHashtags ? (
-                        <div className="studio-video-modal__hashtags" aria-label="Хэштеги">
+                        <div className="studio-video-modal__hashtags" aria-label={workspaceText(locale, "Хэштеги", "Hashtags")}>
                           {previewModalHashtags.map((tag) => (
                             <span key={tag}>{tag}</span>
                           ))}
                         </div>
                       ) : (
                         <p className="studio-video-modal__description studio-video-modal__description--subtle">
-                          Хэштеги не добавлены
+                          {workspaceText(locale, "Хэштеги не добавлены", "No hashtags added")}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="studio-video-modal__actions" aria-label="Действия с видео">
+                  <div className="studio-video-modal__actions" aria-label={workspaceText(locale, "Действия с видео", "Video actions")}>
                         <button className="studio-video-modal__action studio-video-modal__action--primary route-button" type="button" onClick={() => void handlePublishPreview()}>
-                          Опубликовать
+                          {workspaceText(locale, "Опубликовать", "Publish")}
                         </button>
                         <button className="studio-video-modal__action route-button" type="button" onClick={() => void handleRegeneratePreview()}>
-                          Перегенерировать
+                          {workspaceText(locale, "Перегенерировать", "Regenerate")}
                         </button>
                   </div>
                 </div>
@@ -23598,27 +24522,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ) : null}
         {isPublishModalOpen ? (
           <div className="studio-publish-modal" role="dialog" aria-modal="true" aria-labelledby="studio-publish-modal-title">
-            <button className="studio-publish-modal__backdrop route-close" type="button" aria-label="Закрыть публикацию" onClick={closePublishModal} />
+            <button className="studio-publish-modal__backdrop route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={closePublishModal} />
             <div className="studio-publish-modal__panel" role="document">
-              <button className="studio-publish-modal__close route-close" type="button" aria-label="Закрыть публикацию" onClick={closePublishModal}>
+              <button className="studio-publish-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={closePublishModal}>
                 ×
               </button>
 
               <div className="studio-publish-modal__header">
                 <div className="studio-publish-modal__header-copy">
-                  <p className="studio-publish-modal__eyebrow">Публикация в YouTube</p>
-                  <strong id="studio-publish-modal-title">{publishTargetTitle || "Готово к публикации"}</strong>
+                  <p className="studio-publish-modal__eyebrow">{workspaceText(locale, "Публикация в YouTube", "YouTube publishing")}</p>
+                  <strong id="studio-publish-modal-title">{publishTargetTitle || workspaceText(locale, "Готово к публикации", "Ready to publish")}</strong>
                 </div>
               </div>
 
               {isPublishBootstrapLoading && !publishBootstrap ? (
                 <div className="studio-publish-modal__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>Загружаем настройки публикации...</p>
+                  <p>{workspaceText(locale, "Загружаем настройки публикации...", "Loading publishing settings...")}</p>
                 </div>
               ) : publishBootstrapError && !publishBootstrap ? (
                 <div className="studio-publish-modal__error">
-                  <strong>Не удалось открыть публикацию</strong>
+                  <strong>{workspaceText(locale, "Не удалось открыть публикацию", "Could not open publishing")}</strong>
                   <p>{publishBootstrapError}</p>
                 </div>
               ) : (
@@ -23628,15 +24552,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {publishError ? (
                         <div className="studio-publish-modal__inline-state is-error">
                           <div>
-                            <strong>Ошибка публикации</strong>
+                            <strong>{workspaceText(locale, "Ошибка публикации", "Publishing error")}</strong>
                             <p>{publishError}</p>
+                          </div>
+                        </div>
+                      ) : null}
+                      {publishSuccessNotice ? (
+                        <div className="studio-publish-modal__inline-state is-success">
+                          <div>
+                            <strong>{publishSuccessNotice.title}</strong>
+                            <p>{publishSuccessNotice.text}</p>
+                            {publishSuccessNotice.link ? (
+                              <a href={publishSuccessNotice.link} target="_blank" rel="noopener noreferrer">
+                                {workspaceText(locale, "Открыть на YouTube", "Open on YouTube")}
+                              </a>
+                            ) : null}
                           </div>
                         </div>
                       ) : null}
                       <section className="studio-publish-modal__section">
                         <div className="studio-publish-modal__section-head">
                           <div>
-                            <span className="studio-publish-modal__section-kicker">Канал</span>
+                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Канал", "Channel")}</span>
                           </div>
                           <div className="studio-publish-modal__section-tools">
                             {selectedPublishChannel ? (
@@ -23644,8 +24581,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
                                 type="button"
                                 disabled={isDisconnectingPublishChannel || isPublishInFlight}
-                                aria-label="Отключить канал"
-                                title="Отключить канал"
+                                aria-label={workspaceText(locale, "Отключить канал", "Disconnect channel")}
+                                title={workspaceText(locale, "Отключить канал", "Disconnect channel")}
                                 onClick={() => void handleDisconnectPublishChannel()}
                               >
                                 {isDisconnectingPublishChannel ? "…" : "−"}
@@ -23656,8 +24593,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
                                 type="button"
                                 disabled={isDisconnectingPublishChannel || isPublishInFlight}
-                                aria-label="Подключить ещё канал"
-                                title="Подключить ещё канал"
+                                aria-label={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
+                                title={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
                                 onClick={() => void handleStartYouTubeConnect()}
                               >
                                 +
@@ -23667,7 +24604,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         </div>
 
                           {publishChannels.length ? (
-                          <div className="studio-publish-modal__channel-grid" role="radiogroup" aria-label="Канал YouTube">
+                          <div className="studio-publish-modal__channel-grid" role="radiogroup" aria-label={workspaceText(locale, "Канал YouTube", "YouTube channel")}>
                             {publishChannels.map((channel) => {
                               const isSelected = channel.pk === selectedPublishChannelPk;
 
@@ -23695,14 +24632,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           <div className="studio-publish-modal__inline-state">
                             <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                             <div>
-                              <strong>Синхронизируем каналы</strong>
-                              <p>Окно уже готово, список подключённых YouTube-каналов подтягивается фоном.</p>
+                              <strong>{workspaceText(locale, "Синхронизируем каналы", "Syncing channels")}</strong>
+                              <p>{workspaceText(locale, "Окно уже готово, список подключённых YouTube-каналов подтягивается фоном.", "The dialog is ready while connected YouTube channels load in the background.")}</p>
                             </div>
                           </div>
                         ) : publishBootstrapError ? (
                           <div className="studio-publish-modal__inline-state is-error">
                             <div>
-                              <strong>Не удалось получить каналы</strong>
+                              <strong>{workspaceText(locale, "Не удалось получить каналы", "Could not load channels")}</strong>
                               <p>{publishBootstrapError}</p>
                             </div>
                           </div>
@@ -23715,11 +24652,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               </svg>
                             </div>
                             <div className="studio-publish-modal__empty-copy">
-                              <strong>Канал ещё не подключён</strong>
-                              <p>Подключите YouTube-канал и публикуйте Shorts прямо из студии.</p>
+                              <strong>{workspaceText(locale, "Канал ещё не подключён", "No channel connected yet")}</strong>
+                              <p>{workspaceText(locale, "Подключите YouTube-канал и публикуйте Shorts прямо из студии.", "Connect a YouTube channel and publish Shorts directly from the studio.")}</p>
                             </div>
                             <button className="studio-publish-modal__primary-btn" type="button" onClick={() => void handleStartYouTubeConnect()}>
-                              Подключить YouTube
+                              {workspaceText(locale, "Подключить YouTube", "Connect YouTube")}
                             </button>
                           </div>
                         )}
@@ -23728,14 +24665,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <section className="studio-publish-modal__section">
                         <div className="studio-publish-modal__section-head">
                           <div>
-                            <span className="studio-publish-modal__section-kicker">НАСТРОЙКИ ПУБЛИКАЦИИ</span>
+                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "НАСТРОЙКИ ПУБЛИКАЦИИ", "PUBLISHING SETTINGS")}</span>
                           </div>
                         </div>
 
                         <div className="studio-publish-modal__field-grid">
                           <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishTitleFieldId}>
                             <span className="studio-publish-modal__field-label">
-                              <span>Заголовок</span>
+                              <span>{workspaceText(locale, "Заголовок", "Title")}</span>
                               <small>{publishTitle.length}/100</small>
                             </span>
                             <input
@@ -23743,13 +24680,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               value={publishTitle}
                               onChange={(event) => setPublishTitle(event.target.value)}
                               maxLength={100}
-                              placeholder="Например: 3 секрета viral Shorts"
+                              placeholder={workspaceText(locale, "Например: 3 секрета viral Shorts", "For example: 3 secrets of viral Shorts")}
                             />
                           </label>
 
                           <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishDescriptionFieldId}>
                             <span className="studio-publish-modal__field-label">
-                              <span>Описание</span>
+                              <span>{workspaceText(locale, "Описание", "Description")}</span>
                               <small>{publishDescription.length}/5000</small>
                             </span>
                             <textarea
@@ -23758,13 +24695,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               onChange={(event) => setPublishDescription(event.target.value)}
                               rows={5}
                               maxLength={5000}
-                              placeholder="Добавьте описание ролика, CTA и полезный контекст."
+                              placeholder={workspaceText(locale, "Добавьте описание ролика, CTA и полезный контекст.", "Add a video description, CTA and useful context.")}
                             />
                           </label>
 
                           <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishHashtagsFieldId}>
                             <span className="studio-publish-modal__field-label">
-                              <span>Хэштеги</span>
+                              <span>{workspaceText(locale, "Хэштеги", "Hashtags")}</span>
                             </span>
                             <input
                               id={publishHashtagsFieldId}
@@ -23779,7 +24716,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       <section className="studio-publish-modal__section">
                         <div className="studio-publish-modal__section-head">
                           <div>
-                            <span className="studio-publish-modal__section-kicker">Планирование</span>
+                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Планирование", "Scheduling")}</span>
                           </div>
                         </div>
 
@@ -23789,18 +24726,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             type="button"
                             onClick={() => handlePublishModeChange("now")}
                           >
-                            <span>Сразу</span>
-                            <strong>Опубликовать сейчас</strong>
-                            <p>Shorts уйдёт в канал сразу после подтверждения.</p>
+                            <span>{workspaceText(locale, "Сразу", "Now")}</span>
+                            <strong>{workspaceText(locale, "Опубликовать сейчас", "Publish now")}</strong>
+                            <p>{workspaceText(locale, "Shorts уйдёт в канал сразу после подтверждения.", "The Shorts will go to the channel right after confirmation.")}</p>
                           </button>
                           <button
                             className={`studio-publish-modal__mode-card${publishMode === "schedule" ? " is-active" : ""}`}
                             type="button"
                             onClick={() => handlePublishModeChange("schedule")}
                           >
-                            <span>По расписанию</span>
-                            <strong>Запланировать публикацию</strong>
-                            <p>Выберите день и точное время выхода в ленту.</p>
+                            <span>{workspaceText(locale, "По расписанию", "Schedule")}</span>
+                            <strong>{workspaceText(locale, "Запланировать публикацию", "Schedule publication")}</strong>
+                            <p>{workspaceText(locale, "Выберите день и точное время выхода в ленту.", "Choose the exact date and time for publishing.")}</p>
                           </button>
                         </div>
 
@@ -23808,7 +24745,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           <>
                             <div className="studio-publish-modal__schedule-inline">
                               <div className="studio-publish-modal__schedule-preview">
-                                <span>Дата и время</span>
+                                <span>{workspaceText(locale, "Дата и время", "Date and time")}</span>
                                 <strong>{publishScheduleSummary}</strong>
                               </div>
                               <button
@@ -23820,7 +24757,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 aria-controls={publishPlannerPopoverId}
                                 onClick={() => setIsPublishPlannerOpen((open) => !open)}
                               >
-                                <span>{isPublishPlannerOpen ? "Скрыть календарь" : "Открыть календарь"}</span>
+                                <span>
+                                  {isPublishPlannerOpen
+                                    ? workspaceText(locale, "Скрыть календарь", "Hide calendar")
+                                    : workspaceText(locale, "Открыть календарь", "Open calendar")}
+                                </span>
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                                   <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
@@ -23834,7 +24775,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     className="studio-publish-modal__planner-popover"
                                     id={publishPlannerPopoverId}
                                     role="dialog"
-                                    aria-label="Календарь публикации"
+                                    aria-label={workspaceText(locale, "Календарь публикации", "Publication calendar")}
                                     style={publishPlannerStyle}
                                   >
                                     <div className="studio-publish-modal__planner-popover-grid">
@@ -23843,16 +24784,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           <button
                                             className="studio-publish-modal__calendar-nav"
                                             type="button"
-                                            aria-label="Предыдущий месяц"
+                                            aria-label={workspaceText(locale, "Предыдущий месяц", "Previous month")}
                                             onClick={() => setPublishCalendarMonth((currentMonth) => shiftPublishMonth(currentMonth, -1))}
                                           >
                                             ‹
                                           </button>
-                                          <strong>{formatPublishCalendarMonth(publishCalendarMonth)}</strong>
+                                          <strong>{formatPublishCalendarMonth(publishCalendarMonth, locale)}</strong>
                                           <button
                                             className="studio-publish-modal__calendar-nav"
                                             type="button"
-                                            aria-label="Следующий месяц"
+                                            aria-label={workspaceText(locale, "Следующий месяц", "Next month")}
                                             onClick={() => setPublishCalendarMonth((currentMonth) => shiftPublishMonth(currentMonth, 1))}
                                           >
                                             ›
@@ -23860,7 +24801,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         </div>
 
                                         <div className="studio-publish-modal__calendar-weekdays" aria-hidden="true">
-                                          {publishCalendarWeekdayLabels.map((weekday) => (
+                                          {publishWeekdayLabels.map((weekday) => (
                                             <span key={weekday}>{weekday}</span>
                                           ))}
                                         </div>
@@ -23887,10 +24828,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       <div className="studio-publish-modal__time-card">
                                         <label className="studio-publish-modal__field studio-publish-modal__field--time" htmlFor={publishTimeFieldId}>
                                           <span className="studio-publish-modal__field-label">
-                                            <span>Время публикации</span>
+                                            <span>{workspaceText(locale, "Время публикации", "Publication time")}</span>
                                           </span>
                                           <input
-                                            aria-label="Время публикации"
+                                            aria-label={workspaceText(locale, "Время публикации", "Publication time")}
                                             id={publishTimeFieldId}
                                             type="time"
                                             step={300}
@@ -23900,7 +24841,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         </label>
 
                                         <button className="studio-publish-modal__utility-btn" type="button" onClick={() => setIsPublishPlannerOpen(false)}>
-                                          Готово
+                                          {workspaceText(locale, "Готово", "Done")}
                                         </button>
                                       </div>
                                     </div>
@@ -23918,7 +24859,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <div className="studio-publish-modal__footer">
                     <div className="studio-publish-modal__actions">
                       <button className="studio-publish-modal__secondary-btn" type="button" onClick={closePublishModal}>
-                        Отмена
+                        {workspaceText(locale, "Отмена", "Cancel")}
                       </button>
                       <button
                         className="studio-publish-modal__primary-btn"
@@ -23926,7 +24867,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         disabled={!publishCanSubmit || !publishChannels.length}
                         onClick={() => void handleSubmitPublish()}
                       >
-                        {isPublishInFlight ? "Публикуем..." : publishPrimaryActionLabel}
+                        {isPublishInFlight ? workspaceText(locale, "Публикуем...", "Publishing...") : publishPrimaryActionLabel}
                       </button>
                     </div>
                   </div>
@@ -23939,7 +24880,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       <div className="route-page workspace-route" hidden={isStudioRouteVisible}>
       <header className="site-header site-header--workspace">
         <div className="container site-header__inner">
-          <Link className="brand" to="/" aria-label="AdShorts AI">
+          <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
@@ -23952,6 +24893,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           />
 
           <div className="site-header__actions">
+            <LanguageSwitcher />
             <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
             <a
               className="site-header__link"
@@ -23981,39 +24923,39 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         <aside className="account-shell__sidebar">
           <div className="account-user account-user--summary">
             <div className="account-user__summary-row">
-              <span>Тариф</span>
+              <span>{workspaceText(locale, "Тариф", "Plan")}</span>
               <strong>{workspacePlanLabel}</strong>
             </div>
             <div className="account-user__summary-row">
-              <span>Баланс</span>
+              <span>{workspaceText(locale, "Баланс", "Balance")}</span>
               <strong>{workspaceBalance === null ? "…" : `${workspaceBalance} credits`}</strong>
             </div>
           </div>
 
-          <nav className="account-nav" aria-label="Личный кабинет">
+          <nav className="account-nav" aria-label={workspaceText(locale, "Личный кабинет", "Workspace")}>
             <button
               className={`account-nav__item${activeTab === "overview" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("overview")}
             >
-              <strong>Обзор</strong>
-              <span>Метрики и активность</span>
+              <strong>{workspaceText(locale, "Обзор", "Overview")}</strong>
+              <span>{workspaceText(locale, "Метрики и активность", "Metrics and activity")}</span>
             </button>
             <button
               className="account-nav__item"
               type="button"
               onClick={() => setActiveTab("studio")}
             >
-              <strong>Студия</strong>
-              <span>Создание Shorts</span>
+              <strong>{workspaceText(locale, "Студия", "Studio")}</strong>
+              <span>{workspaceText(locale, "Создание Shorts", "Shorts creation")}</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "generations" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("generations")}
             >
-              <strong>Проекты</strong>
-              <span>Все созданные Shorts</span>
+              <strong>{workspaceText(locale, "Проекты", "Projects")}</strong>
+              <span>{workspaceText(locale, "Все созданные Shorts", "All created Shorts")}</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "billing" ? " is-active" : ""}`}
@@ -24021,15 +24963,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               onClick={() => setActiveTab("billing")}
             >
               <strong>Billing</strong>
-              <span>Тариф, кредиты и пополнение</span>
+              <span>{workspaceText(locale, "Тариф, кредиты и пополнение", "Plan, credits and top-ups")}</span>
             </button>
             <button
               className={`account-nav__item${activeTab === "settings" ? " is-active" : ""}`}
               type="button"
               onClick={() => setActiveTab("settings")}
             >
-              <strong>Настройки</strong>
-              <span>Профиль и интеграции</span>
+              <strong>{workspaceText(locale, "Настройки", "Settings")}</strong>
+              <span>{workspaceText(locale, "Профиль и интеграции", "Profile and integrations")}</span>
             </button>
           </nav>
 
@@ -24049,15 +24991,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               <section className="account-panel is-active" data-account-panel="overview">
                 <div className="account-stats">
                   <article className="account-stat">
-                    <span>Кредиты</span>
+                    <span>{workspaceText(locale, "Кредиты", "Credits")}</span>
                     <strong>184</strong>
                   </article>
                   <article className="account-stat">
-                    <span>Экспортов в марте</span>
+                    <span>{workspaceText(locale, "Экспортов в марте", "Exports in March")}</span>
                     <strong>126</strong>
                   </article>
                   <article className="account-stat">
-                    <span>Подключенные каналы</span>
+                    <span>{workspaceText(locale, "Подключенные каналы", "Connected channels")}</span>
                     <strong>2</strong>
                   </article>
                 </div>
@@ -24067,8 +25009,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <article className="account-card">
                       <div className="account-card__head">
                         <div>
-                          <h3>Публикация</h3>
-                          <p>Текущая готовность каналов и автопостинга.</p>
+                          <h3>{workspaceText(locale, "Публикация", "Publishing")}</h3>
+                          <p>{workspaceText(locale, "Текущая готовность каналов и автопостинга.", "Current channel and autoposting readiness.")}</p>
                         </div>
                       </div>
 
@@ -24091,8 +25033,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <article className="account-card">
                       <div className="account-card__head">
                         <div>
-                          <h3>План и usage</h3>
-                          <p>Текущий тариф и расход на команду.</p>
+                          <h3>{workspaceText(locale, "План и usage", "Plan and usage")}</h3>
+                          <p>{workspaceText(locale, "Текущий тариф и расход на команду.", "Current plan and team usage.")}</p>
                         </div>
                         <span className="account-pill">Growth</span>
                       </div>
@@ -24116,26 +25058,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               <section className="account-panel is-active" data-account-panel="generations">
                 <div className="account-card__head account-card__head--panel">
                   <div>
-                    <h3>Проекты аккаунта</h3>
-                    <p>Список генераций и готовых Shorts, найденных для текущего аккаунта в общей БД.</p>
+                    <h3>{workspaceText(locale, "Проекты аккаунта", "Account projects")}</h3>
+                    <p>{workspaceText(locale, "Список генераций и готовых Shorts, найденных для текущего аккаунта в общей БД.", "Generations and finished Shorts found for this account in the shared database.")}</p>
                   </div>
                   <div className="account-pills">
-                    <span className="account-pill">Готово: {readyProjectsCount}</span>
-                    <span className="account-pill">В работе: {activeProjectsCount}</span>
-                    <span className="account-pill">Ошибки: {failedProjectsCount}</span>
+                    <span className="account-pill">{workspaceText(locale, "Готово", "Ready")}: {readyProjectsCount}</span>
+                    <span className="account-pill">{workspaceText(locale, "В работе", "In progress")}: {activeProjectsCount}</span>
+                    <span className="account-pill">{workspaceText(locale, "Ошибки", "Failed")}: {failedProjectsCount}</span>
                   </div>
                 </div>
 
                 {isProjectsLoading ? (
                   <article className="account-empty-state">
-                    <strong>Загружаем проекты...</strong>
-                    <p>Собираем список генераций и готовых видео из базы данных аккаунта.</p>
+                    <strong>{workspaceText(locale, "Загружаем проекты...", "Loading projects...")}</strong>
+                    <p>{workspaceText(locale, "Собираем список генераций и готовых видео из базы данных аккаунта.", "Collecting generations and finished videos from the account database.")}</p>
                   </article>
                 ) : null}
 
                 {!isProjectsLoading && projectsError ? (
                   <article className="account-empty-state account-empty-state--error">
-                    <strong>Не удалось загрузить проекты</strong>
+                    <strong>{workspaceText(locale, "Не удалось загрузить проекты", "Could not load projects")}</strong>
                     <p>{projectsError}</p>
                           <button
                       className="account-linkbtn route-button"
@@ -24145,15 +25087,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         setHasLoadedProjects(false);
                       }}
                     >
-                      Повторить загрузку
+                      {workspaceText(locale, "Повторить загрузку", "Retry loading")}
                           </button>
                   </article>
                 ) : null}
 
                 {!isProjectsLoading && !projectsError && !projects.length ? (
                   <article className="account-empty-state">
-                    <strong>Проектов пока нет</strong>
-                    <p>Как только в этом аккаунте появятся созданные Shorts, они отобразятся в этой вкладке.</p>
+                    <strong>{workspaceText(locale, "Проектов пока нет", "No projects yet")}</strong>
+                    <p>{workspaceText(locale, "Как только в этом аккаунте появятся созданные Shorts, они отобразятся в этой вкладке.", "Created Shorts for this account will appear in this tab.")}</p>
                   </article>
                         ) : null}
 
@@ -24207,7 +25149,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 onDelete={() => requestProjectStackDelete(group.projects)}
                                 onToggleStack={toggleStack}
                                 project={group.leadProject}
-                                stackBadgeLabel={formatProjectVersionsLabel(group.projects.length)}
+                                stackBadgeLabel={formatProjectVersionsLabel(group.projects.length, locale)}
                               />
                             </div>
 	                        </div>
@@ -24224,7 +25166,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   <article className="account-card">
                     <div className="account-card__head">
                       <div>
-                        <h3>Текущий тариф</h3>
+                        <h3>{workspaceText(locale, "Текущий тариф", "Current plan")}</h3>
                         <p>{workspaceBillingDescription}</p>
                       </div>
                       <span className="account-pill">{workspacePlanLabel}</span>
@@ -24232,16 +25174,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                     <div className="account-billing">
                       <div className="account-billing__row">
-                        <span>Тариф</span>
+                        <span>{workspaceText(locale, "Тариф", "Plan")}</span>
                         <strong>{workspacePlanLabel}</strong>
                       </div>
                       <div className="account-billing__row">
-                        <span>Баланс кредитов</span>
+                        <span>{workspaceText(locale, "Баланс кредитов", "Credit balance")}</span>
                         <strong>{workspaceBalance === null ? "…" : `${workspaceBalance} credits`}</strong>
                       </div>
                       <div className="account-billing__row">
-                        <span>Дополнительные пакеты</span>
-                        <strong>{workspaceCanPurchaseCreditPacks ? "Доступны" : "Только PRO / ULTRA"}</strong>
+                        <span>{workspaceText(locale, "Дополнительные пакеты", "Add-on packs")}</span>
+                        <strong>{workspaceCanPurchaseCreditPacks ? workspaceText(locale, "Доступны", "Available") : workspaceText(locale, "Только PRO / ULTRA", "PRO / ULTRA only")}</strong>
                       </div>
                     </div>
 
@@ -24258,13 +25200,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <article className="account-card">
                       <div className="account-card__head">
                         <div>
-                          <h3>Пакеты кредитов</h3>
-                          <p>Дополнительные пакеты доступны только для пользователей PRO и ULTRA.</p>
+                          <h3>{workspaceText(locale, "Пакеты кредитов", "Credit packs")}</h3>
+                          <p>{workspaceText(locale, "Дополнительные пакеты доступны только для пользователей PRO и ULTRA.", "Add-on packs are available only to PRO and ULTRA users.")}</p>
                         </div>
                       </div>
 
                       <div className="account-topups__grid">
-                        {workspaceCreditTopupPacks.map((pack) => (
+                        {workspaceCreditTopupPacks.map((packByLocale) => {
+                          const pack = packByLocale[locale];
+                          return (
                           <article
                             key={pack.name}
                             className={`account-topup${workspaceCanPurchaseCreditPacks ? "" : " is-locked"}`}
@@ -24280,37 +25224,40 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               onClick={openWorkspaceCreditPacks}
                               disabled={!workspaceCanPurchaseCreditPacks}
                             >
-                              {workspaceCanPurchaseCreditPacks ? "Выбрать пакет" : "Нужен PRO / ULTRA"}
+                              {workspaceCanPurchaseCreditPacks
+                                ? workspaceText(locale, "Выбрать пакет", "Choose pack")
+                                : workspaceText(locale, "Нужен PRO / ULTRA", "Requires PRO / ULTRA")}
                             </button>
                           </article>
-                        ))}
+                          );
+                        })}
                         </div>
 
                       <p className="account-topups__footnote">
-                        Пакеты не меняют тариф и начисляются поверх текущего баланса кредитов.
+                        {workspaceText(locale, "Пакеты не меняют тариф и начисляются поверх текущего баланса кредитов.", "Packs do not change the plan and are added on top of the current credit balance.")}
                       </p>
                     </article>
 
                     <article className="account-card">
                       <div className="account-card__head">
                         <div>
-                          <h3>Как будет работать пополнение</h3>
-                          <p>Сценарий для PRO и ULTRA внутри интерфейса.</p>
+                          <h3>{workspaceText(locale, "Как будет работать пополнение", "How top-ups work")}</h3>
+                          <p>{workspaceText(locale, "Сценарий для PRO и ULTRA внутри интерфейса.", "The PRO and ULTRA flow inside the interface.")}</p>
                         </div>
                       </div>
 
                       <div className="account-credit-flow">
                         <div className="account-credit-flow__item">
                           <strong>1</strong>
-                          <span>Во вкладке Billing пользователь видит пакеты 100 / 500 / 1000 кредитов.</span>
+                          <span>{workspaceText(locale, "Во вкладке Billing пользователь видит пакеты 100 / 500 / 1000 кредитов.", "In Billing, the user sees 100 / 500 / 1000 credit packs.")}</span>
                         </div>
                         <div className="account-credit-flow__item">
                           <strong>2</strong>
-                          <span>На FREE и START интерфейс ведёт на апгрейд до PRO или ULTRA.</span>
+                          <span>{workspaceText(locale, "На FREE и START интерфейс ведёт на апгрейд до PRO или ULTRA.", "On FREE and START, the interface leads to a PRO or ULTRA upgrade.")}</span>
                         </div>
                         <div className="account-credit-flow__item">
                           <strong>3</strong>
-                          <span>На PRO и ULTRA открывается сценарий выбора пакета и пополнения текущего баланса.</span>
+                          <span>{workspaceText(locale, "На PRO и ULTRA открывается сценарий выбора пакета и пополнения текущего баланса.", "On PRO and ULTRA, users can choose a pack and top up the current balance.")}</span>
                         </div>
                       </div>
                     </article>
@@ -24326,7 +25273,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div className="account-card__head">
                       <div>
                         <h3>Profile</h3>
-                        <p>Основные данные аккаунта и workspace owner.</p>
+                        <p>{workspaceText(locale, "Основные данные аккаунта и workspace owner.", "Basic account data and workspace owner.")}</p>
                       </div>
                     </div>
 
@@ -24350,7 +25297,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div className="account-card__head">
                       <div>
                         <h3>Integrations</h3>
-                        <p>Подключения и состояние API/каналов.</p>
+                        <p>{workspaceText(locale, "Подключения и состояние API/каналов.", "Connections and API/channel status.")}</p>
                       </div>
                     </div>
 
@@ -24374,7 +25321,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div className="account-card__head">
                       <div>
                         <h3>Notifications</h3>
-                        <p>Что будет приходить команде по email и в product UI.</p>
+                        <p>{workspaceText(locale, "Что будет приходить команде по email и в product UI.", "What the team receives by email and in product UI.")}</p>
                       </div>
                     </div>
 
@@ -24398,7 +25345,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div className="account-card__head">
                       <div>
                         <h3>Security</h3>
-                        <p>Доступ, сессии и безопасность аккаунта.</p>
+                        <p>{workspaceText(locale, "Доступ, сессии и безопасность аккаунта.", "Access, sessions and account security.")}</p>
                       </div>
                     </div>
 
@@ -24418,7 +25365,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     </div>
 
                     <button className="account-linkbtn account-linkbtn--danger route-button" type="button" onClick={onLogout}>
-                      Выйти из аккаунта
+                      {workspaceText(locale, "Выйти из аккаунта", "Log out")}
                     </button>
                   </article>
                 </div>

@@ -2,7 +2,7 @@ import { env } from "./env.js";
 import { getWorkspaceProjects } from "./projects.js";
 import { buildWorkspaceMediaAssetRef, fetchProjectMediaEnvelope, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
 import { assertAdsflowConfigured, buildAdsflowUrl, fetchAdsflowJson as fetchAdsflowJsonWithPolicy, UpstreamFetchError, UpstreamHttpError, upstreamPolicies, } from "./upstream-client.js";
-import { listWorkspaceGenerationHistory } from "./workspace-history.js";
+import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory } from "./workspace-history.js";
 export class WorkspaceSegmentEditorError extends Error {
     statusCode;
     constructor(message, statusCode = 400) {
@@ -12,6 +12,10 @@ export class WorkspaceSegmentEditorError extends Error {
     }
 }
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeWorkspaceSegmentEditorLanguage = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "en" || normalized === "ru" ? normalized : "";
+};
 const normalizeInteger = (value) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric))
@@ -43,6 +47,15 @@ export const resolveWorkspaceSegmentEditorCustomMusicMetadata = (projectDetailsP
             projectDetailsPayload?.music_asset_id) ?? null,
         customMusicFileName: normalizeText(generationSettings?.custom_music_original_name ?? projectDetailsPayload?.music_name),
     };
+};
+const resolveWorkspaceSegmentEditorLanguage = (payload, projectDetailsPayload) => {
+    const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+        ? projectDetailsPayload.generation_settings
+        : null;
+    return (normalizeWorkspaceSegmentEditorLanguage(payload.language) ||
+        normalizeWorkspaceSegmentEditorLanguage(generationSettings?.content_language) ||
+        normalizeWorkspaceSegmentEditorLanguage(generationSettings?.requested_language) ||
+        "");
 };
 const isWorkspaceRenderableMediaUrl = (value) => {
     const normalized = normalizeUrl(value);
@@ -290,6 +303,26 @@ const cacheProjectAccess = (user, projectId) => {
     }
     projectAccessCache.set(cacheKey, Date.now() + PROJECT_ACCESS_CACHE_TTL_MS);
 };
+const clearCachedProjectAccess = (user, projectId) => {
+    const exactCacheKey = typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
+        ? getProjectAccessCacheKey(user, projectId)
+        : null;
+    if (exactCacheKey) {
+        projectAccessCache.delete(exactCacheKey);
+        return;
+    }
+    const userId = normalizeText(user.id);
+    const email = normalizeText(user.email).toLowerCase();
+    const cachePrefix = userId ? `user:${userId}:project:` : email ? `email:${email}:project:` : null;
+    if (!cachePrefix) {
+        return;
+    }
+    for (const key of projectAccessCache.keys()) {
+        if (key.startsWith(cachePrefix)) {
+            projectAccessCache.delete(key);
+        }
+    }
+};
 const getSegmentEditorSessionCacheKey = (user, projectId) => {
     const userId = normalizeText(user.id);
     if (userId) {
@@ -311,11 +344,26 @@ const getCachedSegmentEditorSession = (user, projectId) => {
         segmentEditorSessionCache.delete(cacheKey);
         return null;
     }
+    if (cachedEntry.session.projectId !== projectId) {
+        console.warn("[segment-editor] Dropping cached session with mismatched project id", {
+            cachedProjectId: cachedEntry.session.projectId,
+            requestedProjectId: projectId,
+        });
+        segmentEditorSessionCache.delete(cacheKey);
+        return null;
+    }
     return cachedEntry.session;
 };
 const setCachedSegmentEditorSession = (user, projectId, session) => {
     const cacheKey = getSegmentEditorSessionCacheKey(user, projectId);
     if (!cacheKey) {
+        return;
+    }
+    if (session.projectId !== projectId) {
+        console.warn("[segment-editor] Refusing to cache session with mismatched project id", {
+            requestedProjectId: projectId,
+            sessionProjectId: session.projectId,
+        });
         return;
     }
     segmentEditorSessionCache.set(cacheKey, {
@@ -324,6 +372,7 @@ const setCachedSegmentEditorSession = (user, projectId, session) => {
     });
 };
 export const invalidateWorkspaceSegmentEditorSessionCache = (user, projectId) => {
+    clearCachedProjectAccess(user, projectId);
     const exactCacheKey = typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
         ? getSegmentEditorSessionCacheKey(user, projectId)
         : null;
@@ -366,6 +415,10 @@ const withTimeout = async (promise, timeoutMs, errorMessage) => {
     }
 };
 const assertWorkspaceProjectAccess = async (user, projectId) => {
+    const deletedProjects = await listWorkspaceDeletedProjects(user).catch(() => []);
+    if (deletedProjects.some((entry) => entry.adId === projectId || entry.projectId === `project:${projectId}`)) {
+        throw new WorkspaceSegmentEditorError("Проект удалён и недоступен для редактирования.", 404);
+    }
     if (hasCachedProjectAccess(user, projectId)) {
         return;
     }
@@ -440,6 +493,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         customMusicAssetId: customMusicMetadata.customMusicAssetId,
         customMusicFileName: customMusicMetadata.customMusicFileName,
         description: normalizeText(payload.description),
+        language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
         musicType: normalizeText(payload.music_type),
         projectId: sessionProjectId,
         segments,

@@ -17,6 +17,13 @@ import {
   type ExamplePrefillStudioSettings,
 } from "../shared/example-prefill.js";
 import {
+  DEFAULT_LOCALE,
+  DEFAULT_STUDIO_VOICE_ID,
+  SUPPORTED_LOCALES,
+  isSupportedLocale,
+  type Locale,
+} from "../shared/locales.js";
+import {
   ensureWorkspaceProjectPlayback,
   getWorkspaceProjectPlaybackCacheKey,
   warmWorkspaceProjectPlayback,
@@ -31,8 +38,10 @@ import {
 } from "./project-posters.js";
 import {
   getWorkspaceGenerationHistoryEntry,
+  listWorkspaceDeletedProjects,
   listWorkspaceGenerationHistory,
   saveWorkspaceGenerationHistory,
+  type WorkspaceDeletedProjectEntry,
   type WorkspaceGenerationHistoryEntry,
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
@@ -550,7 +559,28 @@ const studioSupportedPromptImproveModes = new Set([
 
 const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"]);
 
-const studioSupportedLanguages = new Set(["en", "ru"]);
+const studioRussianVoiceIds = new Set([
+  "Bys_24000",
+  "Nec_24000",
+  "Tur_24000",
+  "May_24000",
+  "Ost_24000",
+  "Pon_24000",
+  "male-qn-jingying",
+  "Rma_24000",
+  "Rnu_24000",
+]);
+const studioEnglishVoiceIds = new Set([
+  "Aiden",
+  "Ryan",
+  "Serena",
+  "Vivian",
+  "Uncle_Fu",
+  "Dylan",
+  "Eric",
+  "Ono_Anna",
+  "Sohee",
+]);
 const WORKSPACE_BOOTSTRAP_CACHE_TTL_MS = 5 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS = 10 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS = 5_000;
@@ -658,9 +688,52 @@ const normalizeStudioVideoMode = (value: string | null | undefined) => {
   return studioSupportedVideoModes.has(normalized) ? normalized : "standard";
 };
 
-const normalizeStudioLanguage = (value: string | null | undefined): "en" | "ru" => {
+const normalizeStudioLanguage = (value: string | null | undefined): Locale => {
   const normalized = String(value ?? "").trim().toLowerCase();
-  return studioSupportedLanguages.has(normalized) ? (normalized as "en" | "ru") : "ru";
+  return isSupportedLocale(normalized) ? normalized : DEFAULT_LOCALE;
+};
+
+export const resolveStudioGenerationLanguage = (
+  prompt: string,
+  requestedLanguage?: string | null,
+): Locale => normalizeStudioLanguage(requestedLanguage);
+
+const getStudioVoiceLanguage = (voiceId: string | null | undefined): Locale | null => {
+  const normalizedVoiceId = normalizeGenerationText(voiceId);
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  if (studioRussianVoiceIds.has(normalizedVoiceId)) {
+    return "ru";
+  }
+
+  if (studioEnglishVoiceIds.has(normalizedVoiceId)) {
+    return "en";
+  }
+
+  return null;
+};
+
+const getDefaultStudioVoiceId = (language: Locale) => DEFAULT_STUDIO_VOICE_ID[language];
+
+for (const language of SUPPORTED_LOCALES) {
+  if (getStudioVoiceLanguage(getDefaultStudioVoiceId(language)) !== language) {
+    throw new Error(`Default studio voice is not configured for locale "${language}".`);
+  }
+}
+
+export const normalizeStudioVoiceIdForLanguage = (
+  voiceId: string | null | undefined,
+  language: Locale,
+) => {
+  const normalizedVoiceId = normalizeGenerationText(voiceId);
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return undefined;
+  }
+
+  const voiceLanguage = getStudioVoiceLanguage(normalizedVoiceId);
+  return voiceLanguage === language ? normalizedVoiceId : getDefaultStudioVoiceId(language);
 };
 
 const normalizePositiveInteger = (value: unknown) => {
@@ -2780,6 +2853,52 @@ const buildStudioGenerationStatusFromHistoryEntry = (
   };
 };
 
+const isStudioGenerationStatusDeleted = (
+  status: StudioGenerationStatus | null | undefined,
+  deletedProjects: WorkspaceDeletedProjectEntry[],
+) => {
+  if (!status) {
+    return false;
+  }
+
+  const generation = status.generation;
+  const adId =
+    typeof generation?.adId === "number" && Number.isFinite(generation.adId) && generation.adId > 0
+      ? Math.trunc(generation.adId)
+      : null;
+  const jobId = normalizeGenerationText(generation?.id || status.jobId);
+  const projectIds = new Set<string>();
+
+  if (adId !== null) {
+    projectIds.add(`project:${adId}`);
+  }
+
+  if (jobId) {
+    projectIds.add(`task:${jobId}`);
+  }
+
+  return deletedProjects.some((deletedProject) => {
+    if (deletedProject.projectId && projectIds.has(deletedProject.projectId)) {
+      return true;
+    }
+
+    if (deletedProject.adId !== null && adId !== null && deletedProject.adId === adId) {
+      return true;
+    }
+
+    if (deletedProject.jobId && jobId && deletedProject.jobId === jobId) {
+      return true;
+    }
+
+    return false;
+  });
+};
+
+const removeDeletedStudioGenerationStatus = (
+  status: StudioGenerationStatus | null,
+  deletedProjects: WorkspaceDeletedProjectEntry[],
+) => (isStudioGenerationStatusDeleted(status, deletedProjects) ? null : status);
+
 const extractStudioVideoPathFromProxyUrl = (value: string | null | undefined) => {
   const normalized = normalizeGenerationText(value);
   if (!normalized) {
@@ -2843,6 +2962,7 @@ const isWorkspaceProjectPlaybackUrl = (value: string | null | undefined) => {
 const findWorkspaceHistoryFallbackGeneration = async (
   user: StudioUser,
   excludedVideoUrls: string[] = [],
+  deletedProjects: WorkspaceDeletedProjectEntry[] = [],
 ) => {
   const excludedVideoUrlSet = new Set(
     excludedVideoUrls
@@ -2852,6 +2972,11 @@ const findWorkspaceHistoryFallbackGeneration = async (
 
   const historyEntries = await listWorkspaceGenerationHistory(user, 60);
   for (const historyEntry of historyEntries) {
+    const fallbackStatus = buildStudioGenerationStatusFromHistoryEntry(historyEntry);
+    if (isStudioGenerationStatusDeleted(fallbackStatus, deletedProjects)) {
+      continue;
+    }
+
     const fallbackGeneration = buildStudioGenerationFromHistoryEntry(historyEntry);
     if (!fallbackGeneration) {
       continue;
@@ -3287,6 +3412,10 @@ const refundWorkspaceGenerationCredit = async (
 export async function getWorkspaceBootstrap(user: StudioUser): Promise<WorkspaceBootstrap> {
   const externalUserId = await resolveStudioExternalUserId(user);
   const cachedBootstrap = getCachedWorkspaceBootstrap(externalUserId);
+  const deletedProjectsPromise = listWorkspaceDeletedProjects(user).catch((error) => {
+    console.error("[studio] Failed to load deleted workspace projects for bootstrap", error);
+    return [] as WorkspaceDeletedProjectEntry[];
+  });
 
   try {
     const payloadText = await postAdsflowTextWithPolicy(
@@ -3319,9 +3448,13 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
     const latestHistoryEntry = payload.latest_generation?.job_id
       ? await getWorkspaceGenerationHistoryEntry(user, String(payload.latest_generation.job_id)).catch(() => null)
       : null;
-    const latestGeneration = await prepareStudioLatestGenerationForBootstrap(
-      buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry),
-      user,
+    const deletedProjects = await deletedProjectsPromise;
+    const latestGeneration = removeDeletedStudioGenerationStatus(
+      await prepareStudioLatestGenerationForBootstrap(
+        buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry),
+        user,
+      ),
+      deletedProjects,
     );
 
     const bootstrap = {
@@ -3339,12 +3472,13 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
   } catch (error) {
     console.error("[studio] Falling back to local workspace bootstrap", error);
 
-    let latestGeneration = cachedBootstrap?.latestGeneration ?? null;
+    const deletedProjects = await deletedProjectsPromise;
+    let latestGeneration = removeDeletedStudioGenerationStatus(cachedBootstrap?.latestGeneration ?? null, deletedProjects);
     const excludedFallbackVideoUrls = latestGeneration?.generation ? [latestGeneration.generation.videoUrl] : [];
 
     if (!latestGeneration?.generation) {
       try {
-        const historyGeneration = await findWorkspaceHistoryFallbackGeneration(user, excludedFallbackVideoUrls);
+        const historyGeneration = await findWorkspaceHistoryFallbackGeneration(user, excludedFallbackVideoUrls, deletedProjects);
         if (historyGeneration) {
           latestGeneration = {
             error: latestGeneration?.error,
@@ -3358,7 +3492,10 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
       }
     }
 
-    latestGeneration = await prepareStudioLatestGenerationForBootstrap(latestGeneration, user);
+    latestGeneration = removeDeletedStudioGenerationStatus(
+      await prepareStudioLatestGenerationForBootstrap(latestGeneration, user),
+      deletedProjects,
+    );
 
     if (latestGeneration?.generation) {
       warmStudioGenerationPlayback(latestGeneration.generation, user);
@@ -3410,7 +3547,8 @@ export async function createStudioGenerationJob(
     throw new Error("Prompt is required.");
   }
 
-  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const requestedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
   const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
   const requiredCredits = STUDIO_GENERATION_CREDIT_COST;
   const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
@@ -3420,7 +3558,7 @@ export async function createStudioGenerationJob(
     creditReservation.consumed.subscription > 0 &&
     creditReservation.consumed.purchased <= 0;
   const isVoiceEnabled = options?.voiceEnabled !== false;
-  const normalizedVoiceId = isVoiceEnabled ? String(options?.voiceId ?? "").trim() || undefined : undefined;
+  const normalizedVoiceId = isVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
   const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
   const isSubtitleEnabled = options?.subtitleEnabled !== false;
   const normalizedSubtitleStyleId = isSubtitleEnabled ? normalizeStudioSubtitleStyle(options?.subtitleStyleId) : undefined;
@@ -3486,6 +3624,9 @@ export async function createStudioGenerationJob(
       hasBrandLogo: Boolean(normalizedBrandLogoFileDataUrl),
       hasBrandText: Boolean(normalizedBrandText),
       isRegeneration: Boolean(options?.isRegeneration),
+      requestedLanguage,
+      resolvedLanguage: normalizedLanguage,
+      resolvedVoiceId: normalizedVoiceId ?? null,
       projectId: normalizedProjectId ?? null,
       segmentEditorActive: Boolean(normalizedSegmentEditor),
     });
@@ -3993,7 +4134,7 @@ export async function improveStudioSegmentAiPhotoPrompt(
     throw new Error("Prompt is required.");
   }
 
-  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, options?.language);
   const normalizedMode = normalizeStudioSegmentPromptImproveMode(options?.mode);
   const modelCandidates = getStudioOpenRouterPromptEnhancementModelCandidates();
   let lastError: Error | null = null;

@@ -9,7 +9,7 @@ import { authDatabaseConfig } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
 import { appendWorkspaceContentPlanIdeas, createWorkspaceContentPlan, deleteWorkspaceContentPlanIdea, deleteWorkspaceContentPlan, getWorkspaceContentPlan, listWorkspaceContentPlans, updateWorkspaceContentPlanIdeaUsedState, } from "./content-plans.js";
-import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, startWorkspaceYoutubePublish, } from "./publish.js";
+import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, isWorkspacePublishSuccessStatus, startWorkspaceYoutubePublish, } from "./publish.js";
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
@@ -1184,7 +1184,9 @@ app.delete("/api/workspace/projects/:projectId", async (req, res) => {
     }
     try {
         await deleteWorkspaceProject(session.user, projectId);
+        await invalidateWorkspaceBootstrapCache(session.user);
         invalidateWorkspaceMediaLibraryCache(session.user);
+        invalidateWorkspaceSegmentEditorSessionCache(session.user);
         res.json({ data: { projectId } });
     }
     catch (error) {
@@ -1789,7 +1791,7 @@ app.get("/api/workspace/publish/jobs/:jobId", async (req, res) => {
     }
     try {
         const data = await getWorkspacePublishJobStatus(session.user, jobId);
-        if (data.status === "done" && data.videoProjectId) {
+        if (isWorkspacePublishSuccessStatus(data.status) && data.videoProjectId) {
             await invalidateWorkspaceProjectsCache(session.user);
         }
         res.json({ data });
@@ -1873,8 +1875,10 @@ app.post("/api/studio/generate", async (req, res) => {
         hasBrandLogo: Boolean(brandLogoFileDataUrl),
         hasBrandText: Boolean(brandText.trim()),
         isRegeneration,
+        language: language || null,
         projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
         segmentEditorActive: Boolean(segmentEditor),
+        voiceId: voiceId || null,
     });
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });

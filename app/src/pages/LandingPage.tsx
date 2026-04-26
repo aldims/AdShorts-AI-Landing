@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
+import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type Session = {
@@ -27,11 +29,93 @@ type Props = {
   onOpenWorkspace: () => void;
 };
 
-const heroPromptText = "Как нейросети меняют маркетинг в 2026";
-const heroChips = ["Визуал", "Озвучка", "Субтитры", "Музыка", "Язык"];
 const heroPreviewImageSrc = "/hero_image.webp";
 const landingRefineCarouselImageSrc = "/t1.png";
 const heroPreviewMaxScroll = 600;
+
+const landingMessages = defineMessages({
+  accountSignIn: { ru: "Войти", en: "Sign in" },
+  autoPublish: { ru: "Автопубликация в YouTube", en: "YouTube auto-publishing" },
+  checkoutOpening: { ru: "Открываем оплату...", en: "Opening checkout..." },
+  chooseStart: { ru: "Выбрать START", en: "Choose START" },
+  choosePro: { ru: "Выбрать PRO", en: "Choose PRO" },
+  chooseUltra: { ru: "Выбрать ULTRA", en: "Choose ULTRA" },
+  footerEnglish: { ru: "English", en: "Русский" },
+  fullStudioAccess: { ru: "Полный доступ к созданию Shorts", en: "Full Shorts creation access" },
+  guidesAll: { ru: "Все материалы", en: "All guides" },
+  guidesAria: { ru: "Полезные материалы по созданию Shorts", en: "Useful Shorts creation guides" },
+  heroAlt: { ru: "Интерфейс AdShorts AI", en: "AdShorts AI interface" },
+  heroAria: {
+    ru: "Shorts / Reels / TikTok за 1 минуту. В один клик.",
+    en: "Shorts / Reels / TikTok in 1 minute. In one click.",
+  },
+  heroCta: { ru: "Создать Shorts бесплатно", en: "Create Shorts for free" },
+  heroLine2: { ru: "за\u00a01\u00a0минуту. В один клик.", en: "in\u00a01\u00a0minute. In one click." },
+  heroPreview: { ru: "Превью студии", en: "Studio preview" },
+  heroPrompt: {
+    ru: "Как нейросети меняют маркетинг в 2026",
+    en: "How AI changes marketing in 2026",
+  },
+  heroSub: { ru: "Введите идею — остальное сделает AdShorts AI.", en: "Enter an idea — AdShorts AI handles the rest." },
+  idealFor: { ru: "ИДЕАЛЬНО ДЛЯ", en: "BUILT FOR" },
+  noEditing: { ru: "Без монтажа", en: "No editing" },
+  noWatermark: { ru: "Без водяного знака", en: "No watermark" },
+  planPackage: { ru: "/ пакет", en: "/ pack" },
+  planPopular: { ru: "Популярный", en: "Popular" },
+  planScaleEyebrow: { ru: "ТАРИФЫ", en: "PRICING" },
+  planScaleHeading: { ru: "Создавайте Shorts в любом масштабе", en: "Create Shorts at any scale" },
+  planScaleSub: {
+    ru: "От первых видео до стабильного потока и роста канала",
+    en: "From first videos to a steady content flow and channel growth",
+  },
+  priorityGeneration: { ru: "Приоритетная генерация", en: "Priority generation" },
+  readyToPublish: { ru: "Готово к публикации", en: "Ready to publish" },
+  refineEyebrow: { ru: "ПОЛНЫЙ КОНТРОЛЬ", en: "FULL CONTROL" },
+  refineHeading: { ru: "Доведите Shorts до идеала", en: "Refine every Shorts until it works" },
+  refineSub: {
+    ru: "Изменяйте любой сегмент: генерируйте, дорисовывайте, анимируйте, улучшайте или загружайте свой контент",
+    en: "Edit any segment: generate, extend, animate, improve or upload your own content",
+  },
+  regularEyebrow: { ru: "РЕГУЛЯРНОСТЬ", en: "CONSISTENCY" },
+  regularHeading: { ru: "Публикуйте Shorts регулярно", en: "Publish Shorts consistently" },
+  regularSub: {
+    ru: "Запусти канал, который приносит просмотры каждый день",
+    en: "Build a channel that can bring views every day",
+  },
+  scaleCreators: { ru: "Авторы", en: "Creators" },
+  scaleBrands: { ru: "Бренды", en: "Brands" },
+  scaleAgencies: { ru: "Агентства", en: "Agencies" },
+  seeExamples: { ru: "Смотреть примеры", en: "View examples" },
+  segment: { ru: "Сегмент", en: "Segment" },
+  segmentText: { ru: "Текст сегмента", en: "Segment text" },
+  segmentTextStrong: {
+    ru: "Редактируйте текст сцены прямо на карточке сегмента",
+    en: "Edit scene text directly on the segment card",
+  },
+  startTagline: { ru: "Для первого запуска", en: "For the first launch" },
+  proTagline: { ru: "Для регулярного контент-потока", en: "For a regular content flow" },
+  ultraTagline: { ru: "Для максимального объёма", en: "For maximum volume" },
+  topUpCredits: { ru: "Можно докупать кредиты", en: "Credit top-ups available" },
+  used: { ru: "Использован", en: "Used" },
+  visualChanged: { ru: "Визуал изменен", en: "Visual updated" },
+  workflowEyebrow: { ru: "КАК ЭТО РАБОТАЕТ", en: "HOW IT WORKS" },
+  workflowHeading: { ru: "От идеи до готового Shorts за 3 шага", en: "From idea to finished Shorts in 3 steps" },
+  workflowSub: {
+    ru: "Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.",
+    en: "Enter an idea — AI creates the script, voiceover and video. The Shorts is ready to publish.",
+  },
+});
+
+const landingLocalizedLists = {
+  heroChips: {
+    ru: ["Визуал", "Озвучка", "Субтитры", "Музыка", "Язык"],
+    en: ["Visual", "Voiceover", "Subtitles", "Music", "Language"],
+  },
+  servicePills: {
+    ru: ["AI сценарий", "Визуал", "Озвучка", "Субтитры", "Музыка"],
+    en: ["AI script", "Visuals", "Voiceover", "Subtitles", "Music"],
+  },
+};
 
 function getHeroPreviewTransform(scrollY: number) {
   const progress = Math.min(scrollY / heroPreviewMaxScroll, 1);
@@ -43,7 +127,8 @@ function getHeroPreviewTransform(scrollY: number) {
   return `rotateY(${rotateY}deg) rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateY(${translateY}px)`;
 }
 
-const landingRefineProofs = [
+const landingRefineProofs: Record<Locale, Array<{ label: string; title: string; description: string }>> = {
+  ru: [
   {
     label: "ГЕНЕРАЦИЯ",
     title: "Генерация по описанию",
@@ -59,8 +144,36 @@ const landingRefineProofs = [
     title: "Анимация сцен",
     description: "Добавляйте движение и оживляйте изображения.",
   },
-] as const;
-const landingRefineCarouselCards = [
+  ],
+  en: [
+    {
+      label: "GENERATION",
+      title: "Generate from a brief",
+      description: "Create scenes with AI.",
+    },
+    {
+      label: "EDITING",
+      title: "Change scenes",
+      description: "Extend and adjust individual scene elements.",
+    },
+    {
+      label: "ANIMATION",
+      title: "Animate scenes",
+      description: "Add movement and bring images to life.",
+    },
+  ],
+};
+const landingRefineCarouselCards: Record<Locale, Array<{
+  number: string;
+  title: string;
+  time: string;
+  source: string;
+  tone: string;
+  media: string;
+  slotClass: string;
+  isEdited: boolean;
+}>> = {
+  ru: [
   {
     number: "02",
     title: "Аргумент",
@@ -91,9 +204,43 @@ const landingRefineCarouselCards = [
     slotClass: "is-side is-right",
     isEdited: false,
   },
-] as const;
+  ],
+  en: [
+    {
+      number: "02",
+      title: "Argument",
+      time: "00:05 - 00:10",
+      source: "Stock",
+      tone: "argument",
+      media: "hero",
+      slotClass: "is-side is-left",
+      isEdited: false,
+    },
+    {
+      number: "03",
+      title: "Final emphasis",
+      time: "00:11 - 00:17",
+      source: "Custom",
+      tone: "accent",
+      media: "hero",
+      slotClass: "is-active",
+      isEdited: true,
+    },
+    {
+      number: "04",
+      title: "CTA",
+      time: "00:18 - 00:22",
+      source: "AI photo",
+      tone: "cta",
+      media: "hero",
+      slotClass: "is-side is-right",
+      isEdited: false,
+    },
+  ],
+};
 const landingGuidesIndexHref = "https://adshortsai.com/shorts-guides/";
-const landingGuideCards = [
+const landingGuideCards: Record<Locale, Array<{ label: string; title: string; description: string; href: string }>> = {
+  ru: [
   {
     label: "БАЗА",
     title: "Все гайды по Shorts в одном месте",
@@ -112,8 +259,30 @@ const landingGuideCards = [
     description: "Как субтитры помогают коротким видео работать даже без звука и не терять удержание.",
     href: "https://adshortsai.com/subtitry-dlya-shorts-avtomatom/",
   },
-] as const;
+  ],
+  en: [
+    {
+      label: "BASE",
+      title: "All Shorts guides in one place",
+      description: "A single entry point for ideas, structure, retention, packaging and publishing.",
+      href: "https://adshortsai.com/en/shorts-guides/",
+    },
+    {
+      label: "HOOK",
+      title: "How to create a strong first screen",
+      description: "What keeps attention and reduces swipes in the first seconds of a video.",
+      href: "https://adshortsai.com/en/how-to-create-a-hook-in-shorts/",
+    },
+    {
+      label: "SUBTITLES",
+      title: "Automatic subtitles",
+      description: "How subtitles help short videos work without sound and keep retention.",
+      href: "https://adshortsai.com/en/automatic-subtitles-for-youtube-shorts/",
+    },
+  ],
+};
 export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+  const { locale, localizePath, t } = useLocale();
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const revealRootRef = useRef<HTMLElement>(null);
@@ -122,6 +291,12 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
+  const heroChips = landingLocalizedLists.heroChips[locale];
+  const servicePills = landingLocalizedLists.servicePills[locale];
+  const refineProofs = landingRefineProofs[locale];
+  const refineCarouselCards = landingRefineCarouselCards[locale];
+  const guideCards = landingGuideCards[locale];
+  const guidesIndexHref = locale === "en" ? "https://adshortsai.com/en/shorts-guides/" : landingGuidesIndexHref;
 
   const animateCounter = useCallback((el: HTMLElement, target: string) => {
     const numericMatch = target.match(/[\d,.]+/);
@@ -392,7 +567,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     <div className="route-page">
       <header className="site-header" id="top">
         <div className="container site-header__inner">
-          <Link className="brand" to="/" aria-label="AdShorts AI">
+          <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
@@ -400,6 +575,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <PrimarySiteNav activeItem="home" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
+            <LanguageSwitcher />
             {session ? (
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
@@ -407,7 +583,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </>
             ) : (
               <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
-                Войти
+                {t(landingMessages.accountSignIn)}
               </button>
             )}
           </div>
@@ -430,20 +606,18 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <div className="container hero__grid">
             {/* Left: copy */}
             <div className="hero__copy">
-              <h1 aria-label="Shorts / Reels / TikTok за 1 минуту. В один клик.">
+              <h1 aria-label={t(landingMessages.heroAria)}>
                 <span className="hero__title-line1">
                   <span className="hero__title-highlight">Shorts / Reels / TikTok</span>
                 </span>
-                <span className="hero__title-line2">за&nbsp;1&nbsp;минуту. В один клик.</span>
+                <span className="hero__title-line2">{t(landingMessages.heroLine2)}</span>
               </h1>
 
-              <p className="hero__lead">
-                Введите идею — остальное сделает AdShorts AI.
-              </p>
+              <p className="hero__lead">{t(landingMessages.heroSub)}</p>
 
               <div className="hero__actions">
                 <button className="btn btn--primary btn--hero btn--premium-cta route-button" type="button" onClick={openPrimaryFlow}>
-                  <span className="btn--premium-cta__label">Создать Shorts бесплатно</span>
+                  <span className="btn--premium-cta__label">{t(landingMessages.heroCta)}</span>
                   <svg className="btn--premium-cta__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
@@ -451,37 +625,33 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               </div>
 
               <ul className="hero__features">
-                <li>Без монтажа</li>
-                <li>Полностью автоматически</li>
-                <li>Готово к публикации</li>
+                <li>{t(landingMessages.noEditing)}</li>
+                <li>{locale === "en" ? "Fully automatic" : "Полностью автоматически"}</li>
+                <li>{t(landingMessages.readyToPublish)}</li>
               </ul>
 
-              <div className="hero__service-pills" aria-label="Что входит в ролик">
-                <span className="hero__service-pill">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zM4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                  AI сценарий
-                </span>
-                <span className="hero__service-pill">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                  Визуал
-                </span>
-                <span className="hero__service-pill">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 1v22M9 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 5h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4"/></svg>
-                  Озвучка
-                </span>
-                <span className="hero__service-pill">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10"/></svg>
-                  Субтитры
-                </span>
-                <span className="hero__service-pill">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                  Музыка
-                </span>
+              <div className="hero__service-pills" aria-label={locale === "en" ? "What is included in the video" : "Что входит в ролик"}>
+                {servicePills.map((pill, index) => (
+                  <span className="hero__service-pill" key={pill}>
+                    {index === 0 ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zM4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                    ) : index === 1 ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    ) : index === 2 ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 1v22M9 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M15 5h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4"/></svg>
+                    ) : index === 3 ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10"/></svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    )}
+                    {pill}
+                  </span>
+                ))}
               </div>
             </div>
 
             {/* Right: phone mockup */}
-            <aside className="hero-live-preview" aria-label="Превью студии">
+            <aside className="hero-live-preview" aria-label={t(landingMessages.heroPreview)}>
               <div className="hero-live-preview__perspective" ref={previewRef}>
                 <div className="hero-live-preview__glow" aria-hidden="true"></div>
                 <div className="hero-live-preview__reflection" aria-hidden="true"></div>
@@ -490,7 +660,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                     <img
                       className="hero-live-preview__image"
                       src={heroPreviewImageSrc}
-                      alt="Интерфейс AdShorts AI"
+                      alt={t(landingMessages.heroAlt)}
                       loading="eager"
                       fetchPriority="high"
                       decoding="async"
@@ -499,11 +669,11 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                     {/* Overlay label */}
                     <div className="hero-live-preview__video-label" aria-hidden="true">
                       <span className="hero-live-preview__video-label-dot"></span>
-                      Генерация…
+                      {locale === "en" ? "Generating…" : "Генерация…"}
                     </div>
                   </div>
                   <div className="hero-live-preview__prompt">
-                    <span className="hero-live-preview__prompt-text">{heroPromptText}</span>
+                    <span className="hero-live-preview__prompt-text">{t(landingMessages.heroPrompt)}</span>
                     <button className="hero-live-preview__btn" type="button" aria-label="Generate" tabIndex={-1}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M5 12h14M12 5l7 7-7 7" />
@@ -522,14 +692,14 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
           {/* Trust strip */}
           <div className="container hero__trust">
-            <span className="hero__trust-label">ИДЕАЛЬНО ДЛЯ</span>
+            <span className="hero__trust-label">{t(landingMessages.idealFor)}</span>
             <div className="hero__trust-list">
               <span>YouTube Shorts</span>
               <span>Instagram Reels</span>
               <span>TikTok</span>
-              <span>Авторы</span>
-              <span>Бренды</span>
-              <span>Агентства</span>
+              <span>{t(landingMessages.scaleCreators)}</span>
+              <span>{t(landingMessages.scaleBrands)}</span>
+              <span>{t(landingMessages.scaleAgencies)}</span>
             </div>
           </div>
         </section>
@@ -537,30 +707,28 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section lp-section lp-section--a lp-section--workflow">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">КАК ЭТО РАБОТАЕТ</p>
-              <h2>От идеи до готового Shorts за 3 шага</h2>
-              <p>
-                Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.
-              </p>
+              <p className="lp-eyebrow">{t(landingMessages.workflowEyebrow)}</p>
+              <h2>{t(landingMessages.workflowHeading)}</h2>
+              <p>{t(landingMessages.workflowSub)}</p>
             </div>
 
             <div className="steps-grid" data-reveal-group="">
               <article className="step-card" data-reveal="" data-reveal-delay="1">
                 <div className="step-card__num">01</div>
-                <h3>Введите идею</h3>
-                <p>Напишите, о чём должен быть ролик.</p>
+                <h3>{locale === "en" ? "Enter an idea" : "Введите идею"}</h3>
+                <p>{locale === "en" ? "Write what the video should be about." : "Напишите, о чём должен быть ролик."}</p>
               </article>
 
               <article className="step-card" data-reveal="" data-reveal-delay="2">
                 <div className="step-card__num">02</div>
-                <h3>Получите готовый Shorts</h3>
-                <p>Видео создаётся автоматически: визуал, озвучка и субтитры.</p>
+                <h3>{locale === "en" ? "Get a finished Shorts" : "Получите готовый Shorts"}</h3>
+                <p>{locale === "en" ? "The video is generated automatically: visuals, voiceover and subtitles." : "Видео создаётся автоматически: визуал, озвучка и субтитры."}</p>
               </article>
 
               <article className="step-card" data-reveal="" data-reveal-delay="3">
                 <div className="step-card__num">03</div>
-                <h3>Опубликуйте в один клик</h3>
-                <p>Отправьте ролик в YouTube Shorts прямо из сервиса.</p>
+                <h3>{locale === "en" ? "Publish in one click" : "Опубликуйте в один клик"}</h3>
+                <p>{locale === "en" ? "Send the video to YouTube Shorts directly from the service." : "Отправьте ролик в YouTube Shorts прямо из сервиса."}</p>
               </article>
             </div>
           </div>
@@ -570,13 +738,13 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <div className="container landing-refine-layout">
             <div className="landing-refine-copy">
               <div className="lp-section-head lp-section-head--left landing-refine-head" data-reveal="">
-                <p className="lp-eyebrow">ПОЛНЫЙ КОНТРОЛЬ</p>
-                <h2 id="landing-refine-heading">Доведите Shorts до идеала</h2>
-                <p>Изменяйте любой сегмент: генерируйте, дорисовывайте, анимируйте, улучшайте или загружайте свой контент</p>
+                <p className="lp-eyebrow">{t(landingMessages.refineEyebrow)}</p>
+                <h2 id="landing-refine-heading">{t(landingMessages.refineHeading)}</h2>
+                <p>{t(landingMessages.refineSub)}</p>
               </div>
 
               <div className="landing-refine-proof-list" data-reveal-group="">
-                {landingRefineProofs.map((proof, index) => (
+                {refineProofs.map((proof, index) => (
                   <article className="landing-refine-proof" key={proof.title} data-reveal="" data-reveal-delay={String(index + 1)}>
                     <span className="landing-refine-proof__index">{String(index + 1).padStart(2, "0")}</span>
                     <div className="landing-refine-proof__copy">
@@ -601,7 +769,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                       </button>
 
                       <div className="studio-segment-editor__cards">
-                        {landingRefineCarouselCards.map((card) => {
+                        {refineCarouselCards.map((card) => {
                           const isActiveCard = card.slotClass === "is-active";
 
                           return (
@@ -625,7 +793,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                                 {isActiveCard ? (
                                   <>
                                     <div className="studio-segment-editor__card-visual-meta">
-                                      <span className="studio-segment-editor__card-visual-status">Визуал изменен</span>
+                                      <span className="studio-segment-editor__card-visual-status">{t(landingMessages.visualChanged)}</span>
                                       <div className="studio-segment-editor__card-visual-actions">
                                         <button
                                           className="studio-segment-editor__card-visual-edit"
@@ -654,8 +822,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                                     </div>
 
                                     <div className="landing-refine-board__editor-caption">
-                                      <span>Текст сегмента</span>
-                                      <strong>Редактируйте текст сцены прямо на карточке сегмента</strong>
+                                      <span>{t(landingMessages.segmentText)}</span>
+                                      <strong>{t(landingMessages.segmentTextStrong)}</strong>
                                     </div>
                                   </>
                                 ) : null}
@@ -665,7 +833,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                                     <div className="studio-segment-editor__card-overlay-footer">
                                       <div className="studio-segment-editor__card-overlay-main">
                                         <div className="studio-segment-editor__card-copy">
-                                          <strong>Сегмент {card.number}</strong>
+                                          <strong>{t(landingMessages.segment)} {card.number}</strong>
                                           <span>{card.time}</span>
                                         </div>
                                       </div>
@@ -676,7 +844,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                                   ) : (
                                     <div className="studio-segment-editor__card-overlay-main">
                                       <div className="studio-segment-editor__card-copy">
-                                        <strong>Сегмент {card.number}</strong>
+                                        <strong>{t(landingMessages.segment)} {card.number}</strong>
                                         <span>{card.time}</span>
                                       </div>
                                       <small className="studio-segment-editor__card-badge">{card.source}</small>
@@ -705,9 +873,9 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section lp-section lp-section--a section--tight section--publish-regular" aria-labelledby="publish-regular-heading">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">РЕГУЛЯРНОСТЬ</p>
-              <h2 id="publish-regular-heading">Публикуйте Shorts регулярно</h2>
-              <p>Запусти канал, который приносит просмотры каждый день</p>
+              <p className="lp-eyebrow">{t(landingMessages.regularEyebrow)}</p>
+              <h2 id="publish-regular-heading">{t(landingMessages.regularHeading)}</h2>
+              <p>{t(landingMessages.regularSub)}</p>
             </div>
             <div className="landing-publish-regular">
               <div className="steps-grid landing-publish-regular__grid" data-reveal-group="">
@@ -717,8 +885,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
                   </div>
-                  <h3>Идеи и контент-план с AI</h3>
-                  <p>Введите тему — AI предложит идеи и готовые сценарии для регулярных Shorts.</p>
+                  <h3>{locale === "en" ? "AI ideas and content plan" : "Идеи и контент-план с AI"}</h3>
+                  <p>{locale === "en" ? "Enter a topic — AI suggests ideas and ready scripts for regular Shorts." : "Введите тему — AI предложит идеи и готовые сценарии для регулярных Shorts."}</p>
                 </article>
 
                 <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="2">
@@ -727,8 +895,8 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                       <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                     </svg>
                   </div>
-                  <h3>Быстрое создание Shorts</h3>
-                  <p>Создавайте готовые Shorts без лишних действий и задержек.</p>
+                  <h3>{locale === "en" ? "Fast Shorts creation" : "Быстрое создание Shorts"}</h3>
+                  <p>{locale === "en" ? "Create ready-to-use Shorts without extra steps or delays." : "Создавайте готовые Shorts без лишних действий и задержек."}</p>
                 </article>
 
                 <article className="step-card landing-publish-regular__card" data-reveal="" data-reveal-delay="3">
@@ -737,14 +905,14 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                       <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                     </svg>
                   </div>
-                  <h3>Мгновенная публикация</h3>
-                  <p>Готовый ролик отправляется в YouTube Shorts прямо из студии.</p>
+                  <h3>{locale === "en" ? "Instant publishing" : "Мгновенная публикация"}</h3>
+                  <p>{locale === "en" ? "Send the finished video to YouTube Shorts directly from the studio." : "Готовый ролик отправляется в YouTube Shorts прямо из студии."}</p>
                 </article>
               </div>
 
               <div className="landing-publish-regular__actions">
                 <button className="btn btn--primary btn--premium-cta route-button" type="button" onClick={openPrimaryFlow}>
-                  <span className="btn--premium-cta__label">Создать Shorts бесплатно</span>
+                  <span className="btn--premium-cta__label">{t(landingMessages.heroCta)}</span>
                   <svg
                     className="btn--premium-cta__arrow"
                     width="18"
@@ -768,47 +936,47 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section lp-section lp-section--b section--tight section--examples-cta" aria-labelledby="examples-cta-heading">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">ПРИМЕРЫ</p>
-              <h2 id="examples-cta-heading">Вдохновляйтесь примерами Shorts</h2>
-              <p>Используйте готовые шаблоны, чтобы создавать похожие видео</p>
+              <p className="lp-eyebrow">{locale === "en" ? "EXAMPLES" : "ПРИМЕРЫ"}</p>
+              <h2 id="examples-cta-heading">{locale === "en" ? "Get inspired by Shorts examples" : "Вдохновляйтесь примерами Shorts"}</h2>
+              <p>{locale === "en" ? "Use ready templates to create similar videos" : "Используйте готовые шаблоны, чтобы создавать похожие видео"}</p>
             </div>
 
             <div className="landing-examples-cta">
               <div className="landing-examples-cta__grid" data-reveal-group="">
-                <Link className="landing-examples-cta__card" to="/examples?filter=ads" aria-label="Открыть примеры Shorts: Рекламные Shorts" data-reveal="" data-reveal-delay="1">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=ads")} aria-label={locale === "en" ? "Open Shorts examples: ad Shorts" : "Открыть примеры Shorts: Рекламные Shorts"} data-reveal="" data-reveal-delay="1">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
                     </svg>
                   </div>
-                  <h3>Рекламные Shorts</h3>
-                  <p>Продвигайте продукт или услугу и ведите зрителя к действию.</p>
+                  <h3>{locale === "en" ? "Ad Shorts" : "Рекламные Shorts"}</h3>
+                  <p>{locale === "en" ? "Promote a product or service and guide viewers to action." : "Продвигайте продукт или услугу и ведите зрителя к действию."}</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to="/examples?filter=growth" aria-label="Открыть примеры Shorts: Shorts для роста канала" data-reveal="" data-reveal-delay="2">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=growth")} aria-label={locale === "en" ? "Open Shorts examples: channel growth Shorts" : "Открыть примеры Shorts: Shorts для роста канала"} data-reveal="" data-reveal-delay="2">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
                     </svg>
                   </div>
-                  <h3>Shorts для роста канала</h3>
-                  <p>Набирайте просмотры и привлекайте новых подписчиков.</p>
+                  <h3>{locale === "en" ? "Channel growth Shorts" : "Shorts для роста канала"}</h3>
+                  <p>{locale === "en" ? "Gain views and bring in new subscribers." : "Набирайте просмотры и привлекайте новых подписчиков."}</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to="/examples?filter=expert" aria-label="Открыть примеры Shorts: Экспертные Shorts" data-reveal="" data-reveal-delay="3">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=expert")} aria-label={locale === "en" ? "Open Shorts examples: expert Shorts" : "Открыть примеры Shorts: Экспертные Shorts"} data-reveal="" data-reveal-delay="3">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><line x1="12" y1="12" x2="12" y2="14"/>
                     </svg>
                   </div>
-                  <h3>Экспертные Shorts</h3>
-                  <p>Делитесь знаниями и формируйте доверие аудитории.</p>
+                  <h3>{locale === "en" ? "Expert Shorts" : "Экспертные Shorts"}</h3>
+                  <p>{locale === "en" ? "Share knowledge and build audience trust." : "Делитесь знаниями и формируйте доверие аудитории."}</p>
                 </Link>
               </div>
 
               <div className="landing-examples-cta__actions">
-                <Link className="btn btn--primary btn--premium-cta route-button" to="/examples">
-                  <span className="btn--premium-cta__label">Смотреть примеры</span>
+                <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/examples")}>
+                  <span className="btn--premium-cta__label">{t(landingMessages.seeExamples)}</span>
                   <svg
                     className="btn--premium-cta__arrow"
                     width="18"
@@ -832,9 +1000,9 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section lp-section lp-section--pricing" id="pricing">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">ТАРИФЫ</p>
-              <h2>Создавайте Shorts в любом масштабе</h2>
-              <p>От первых видео до стабильного потока и роста канала</p>
+              <p className="lp-eyebrow">{t(landingMessages.planScaleEyebrow)}</p>
+              <h2>{t(landingMessages.planScaleHeading)}</h2>
+              <p>{t(landingMessages.planScaleSub)}</p>
             </div>
 
             <div className="plan-grid" data-reveal-group="">
@@ -847,35 +1015,35 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 <div className="plan-card__header">
                   <span className="plan-card__label">START</span>
                   {isStartPlanUsed ? (
-                    <span className="plan-card__badge plan-card__badge--used">Использован</span>
+                    <span className="plan-card__badge plan-card__badge--used">{t(landingMessages.used)}</span>
                   ) : null}
                 </div>
                 <div className="plan-card__price">
                   <strong>390 ₽</strong>
-                  <span className="plan-card__per">/ пакет</span>
+                  <span className="plan-card__per">{t(landingMessages.planPackage)}</span>
                 </div>
                 <div className="plan-card__output">
-                  <span>50 кредитов</span>
-                  <small>До 5 Shorts</small>
+                  <span>{locale === "en" ? "50 credits" : "50 кредитов"}</span>
+                  <small>{locale === "en" ? "Up to 5 Shorts" : "До 5 Shorts"}</small>
                 </div>
-                <p className="plan-card__tagline">Для первого запуска</p>
+                <p className="plan-card__tagline">{t(landingMessages.startTagline)}</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Полный доступ к созданию Shorts
+                    {t(landingMessages.fullStudioAccess)}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Без водяного знака
+                    {t(landingMessages.noWatermark)}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Редактирование в студии
+                    {locale === "en" ? "Studio editing" : "Редактирование в студии"}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Автопубликация в YouTube
+                    {t(landingMessages.autoPublish)}
                   </li>
                 </ul>
                 <button
@@ -885,44 +1053,44 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   disabled={isStartPlanUsed || activeCheckoutProductId === "start"}
                 >
                   {isStartPlanUsed
-                    ? "Использован"
+                    ? t(landingMessages.used)
                     : activeCheckoutProductId === "start"
-                      ? "Открываем оплату..."
-                      : "Выбрать START"}
+                      ? t(landingMessages.checkoutOpening)
+                      : t(landingMessages.chooseStart)}
                 </button>
               </article>
 
               <article className="plan-card plan-card--accent" data-reveal="" data-reveal-delay="2">
                 <div className="plan-card__header">
                   <span className="plan-card__label">PRO</span>
-                  <span className="plan-card__badge">Популярный</span>
+                  <span className="plan-card__badge">{t(landingMessages.planPopular)}</span>
                 </div>
                 <div className="plan-card__price">
                   <strong>1 490 ₽</strong>
-                  <span className="plan-card__per">/ пакет</span>
+                  <span className="plan-card__per">{t(landingMessages.planPackage)}</span>
                 </div>
                 <div className="plan-card__output">
-                  <span>250 кредитов</span>
-                  <small>До 25 Shorts</small>
+                  <span>{locale === "en" ? "250 credits" : "250 кредитов"}</span>
+                  <small>{locale === "en" ? "Up to 25 Shorts" : "До 25 Shorts"}</small>
                 </div>
-                <p className="plan-card__tagline">Для регулярного контент-потока</p>
+                <p className="plan-card__tagline">{t(landingMessages.proTagline)}</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Всё из START
+                    {locale === "en" ? "Everything in START" : "Всё из START"}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Приоритетная генерация
+                    {t(landingMessages.priorityGeneration)}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Можно докупать кредиты
+                    {t(landingMessages.topUpCredits)}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Подходит для регулярного контента
+                    {locale === "en" ? "Built for regular content" : "Подходит для регулярного контента"}
                   </li>
                 </ul>
                 <button
@@ -931,7 +1099,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   onClick={() => void handlePlanCheckout("pro")}
                   disabled={activeCheckoutProductId === "pro"}
                 >
-                  {activeCheckoutProductId === "pro" ? "Открываем оплату..." : "Выбрать PRO"}
+                  {activeCheckoutProductId === "pro" ? t(landingMessages.checkoutOpening) : t(landingMessages.choosePro)}
                 </button>
               </article>
 
@@ -941,30 +1109,30 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                 </div>
                 <div className="plan-card__price">
                   <strong>4 990 ₽</strong>
-                  <span className="plan-card__per">/ пакет</span>
+                  <span className="plan-card__per">{t(landingMessages.planPackage)}</span>
                 </div>
                 <div className="plan-card__output">
-                  <span>1000 кредитов</span>
-                  <small>До 100 Shorts</small>
+                  <span>{locale === "en" ? "1000 credits" : "1000 кредитов"}</span>
+                  <small>{locale === "en" ? "Up to 100 Shorts" : "До 100 Shorts"}</small>
                 </div>
-                <p className="plan-card__tagline">Для максимального объёма</p>
+                <p className="plan-card__tagline">{t(landingMessages.ultraTagline)}</p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Всё из PRO
+                    {locale === "en" ? "Everything in PRO" : "Всё из PRO"}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Максимальный приоритет
+                    {locale === "en" ? "Maximum priority" : "Максимальный приоритет"}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Ранний доступ к новым функциям
+                    {locale === "en" ? "Early access to new features" : "Ранний доступ к новым функциям"}
                   </li>
                   <li>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                    Лучшие лимиты для активного использования
+                    {locale === "en" ? "Best limits for active use" : "Лучшие лимиты для активного использования"}
                   </li>
                 </ul>
                 <button
@@ -973,14 +1141,14 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   onClick={() => void handlePlanCheckout("ultra")}
                   disabled={activeCheckoutProductId === "ultra"}
                 >
-                  {activeCheckoutProductId === "ultra" ? "Открываем оплату..." : "Выбрать ULTRA"}
+                  {activeCheckoutProductId === "ultra" ? t(landingMessages.checkoutOpening) : t(landingMessages.chooseUltra)}
                 </button>
               </article>
             </div>
 
             <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
-              <Link className="btn btn--primary btn--premium-cta route-button" to="/pricing">
-                <span className="btn--premium-cta__label">Все тарифы</span>
+              <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing")}>
+                <span className="btn--premium-cta__label">{locale === "en" ? "All plans" : "Все тарифы"}</span>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
@@ -992,16 +1160,17 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         <section className="section lp-section lp-section--b section--guides" id="guides" aria-labelledby="guides-heading">
           <div className="container guides-strip">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
-              <p className="lp-eyebrow">ГАЙДЫ</p>
-              <h2 id="guides-heading">Полезные материалы по созданию Shorts</h2>
+              <p className="lp-eyebrow">{locale === "en" ? "GUIDES" : "ГАЙДЫ"}</p>
+              <h2 id="guides-heading">{t(landingMessages.guidesAria)}</h2>
               <p>
-                Короткие разборы по хуку, структуре и оформлению помогают быстрее понять, как собрать Shorts,
-                которые удерживают внимание и доводят зрителя до CTA.
+                {locale === "en"
+                  ? "Short guides on hooks, structure and packaging help you understand how to assemble Shorts that hold attention and move viewers to a CTA."
+                  : "Короткие разборы по хуку, структуре и оформлению помогают быстрее понять, как собрать Shorts, которые удерживают внимание и доводят зрителя до CTA."}
               </p>
             </div>
 
             <div className="guides-strip__cards" data-reveal-group="">
-              {landingGuideCards.map((guide, index) => (
+              {guideCards.map((guide, index) => (
                 <a
                   key={guide.href}
                   className="guide-card route-guide-link"
@@ -1033,12 +1202,12 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
             <a
               className="guides-strip__cta route-linkbtn"
-              href={landingGuidesIndexHref}
+              href={guidesIndexHref}
               target="_blank"
               rel="noopener noreferrer"
               data-reveal=""
             >
-              Все материалы
+              {t(landingMessages.guidesAll)}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{marginLeft: 8}}>
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
@@ -1050,7 +1219,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
       <footer className="footer">
         <div className="container footer__inner">
 
-          <Link className="footer__brand-link" to="/" aria-label="AdShorts AI">
+          <Link className="footer__brand-link" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="30" height="30" style={{borderRadius: 8}} />
             <span className="footer__brand-name">AdShorts AI</span>
           </Link>
@@ -1058,11 +1227,12 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <nav className="footer__links" aria-label="Footer navigation">
             <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>
             <a href="https://t.me/AdShortsAIBot" target="_blank" rel="noopener noreferrer">Telegram</a>
-            <a href="https://adshortsai.com/terms-of-use/" target="_blank" rel="noopener noreferrer">Условия</a>
-            <a href="https://adshortsai.com/terms/" target="_blank" rel="noopener noreferrer">Соглашение</a>
-            <a href="https://adshortsai.com/privacy/" target="_blank" rel="noopener noreferrer">Конфиденциальность</a>
-            <a href="https://adshortsai.com/data-deletion.html" target="_blank" rel="noopener noreferrer">Удаление данных</a>
-            <a href="https://adshortsai.com/en/" target="_blank" rel="noopener noreferrer">English</a>
+            <a href="https://adshortsai.com/offer/" target="_blank" rel="noopener noreferrer">{locale === "en" ? "Public Offer" : "Оферта"}</a>
+            <a href={locale === "en" ? "https://adshortsai.com/en/terms-of-use/" : "https://adshortsai.com/terms-of-use/"} target="_blank" rel="noopener noreferrer">{locale === "en" ? "Terms" : "Условия"}</a>
+            <a href={locale === "en" ? "https://adshortsai.com/en/terms/" : "https://adshortsai.com/terms/"} target="_blank" rel="noopener noreferrer">{locale === "en" ? "Agreement" : "Соглашение"}</a>
+            <a href={locale === "en" ? "https://adshortsai.com/en/privacy/" : "https://adshortsai.com/privacy/"} target="_blank" rel="noopener noreferrer">{locale === "en" ? "Privacy" : "Конфиденциальность"}</a>
+            <a href={locale === "en" ? "https://adshortsai.com/en/data-deletion/" : "https://adshortsai.com/data-deletion.html"} target="_blank" rel="noopener noreferrer">{locale === "en" ? "Data deletion" : "Удаление данных"}</a>
+            <a href={locale === "en" ? "https://adshortsai.com/" : "https://adshortsai.com/en/"} target="_blank" rel="noopener noreferrer">{t(landingMessages.footerEnglish)}</a>
           </nav>
 
           <p className="footer__copyright">© {new Date().getFullYear()} AdShorts AI</p>

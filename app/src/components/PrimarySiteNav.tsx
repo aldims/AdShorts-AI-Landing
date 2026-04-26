@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
+import { defineMessages, useLocale } from "../lib/i18n";
 import { type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type NavItem = "examples" | "home" | "pricing" | "studio";
@@ -14,14 +15,48 @@ type Props = {
   onStudioBack?: (() => void) | null;
 };
 
-const studioNavItems: Array<{
-  id: StudioEntryIntentSection;
-  label: string;
-}> = [
-  { id: "create", label: "Создать Shorts" },
-  { id: "projects", label: "Проекты" },
-  { id: "media", label: "Медиатека" },
-];
+const navMessages = defineMessages({
+  ariaMain: {
+    ru: "Главная навигация",
+    en: "Main navigation",
+  },
+  ariaStudioSections: {
+    ru: "Разделы студии",
+    en: "Studio sections",
+  },
+  backToStudio: {
+    ru: "Вернуться в студию",
+    en: "Back to studio",
+  },
+  examples: {
+    ru: "Примеры",
+    en: "Examples",
+  },
+  home: {
+    ru: "Главная",
+    en: "Home",
+  },
+  media: {
+    ru: "Медиатека",
+    en: "Media library",
+  },
+  pricing: {
+    ru: "Тарифы",
+    en: "Pricing",
+  },
+  projects: {
+    ru: "Проекты",
+    en: "Projects",
+  },
+  studio: {
+    ru: "Студия",
+    en: "Studio",
+  },
+  studioCreate: {
+    ru: "Создать Shorts",
+    en: "Create Shorts",
+  },
+});
 
 export function PrimarySiteNav({
   activeItem = null,
@@ -32,6 +67,7 @@ export function PrimarySiteNav({
   studioSectionLabels,
   onStudioBack = null,
 }: Props) {
+  const { localizePath, t } = useLocale();
   const isStudioActive = activeItem === "studio";
   const resolvedActiveStudioSection = activeStudioSection === "edit" ? "create" : activeStudioSection;
   const studioMenuId = useId();
@@ -73,12 +109,12 @@ export function PrimarySiteNav({
   };
 
   return (
-    <nav className="site-nav" aria-label="Главная навигация">
-      <Link className={`site-nav__item${activeItem === "home" ? " site-nav__item--active" : ""}`} to="/">
-        Главная
+    <nav className="site-nav" aria-label={t(navMessages.ariaMain)}>
+      <Link className={`site-nav__item${activeItem === "home" ? " site-nav__item--active" : ""}`} to={localizePath("/")}>
+        {t(navMessages.home)}
       </Link>
-      <Link className={`site-nav__item${activeItem === "examples" ? " site-nav__item--active" : ""}`} to="/examples">
-        Примеры
+      <Link className={`site-nav__item${activeItem === "examples" ? " site-nav__item--active" : ""}`} to={localizePath("/examples")}>
+        {t(navMessages.examples)}
       </Link>
 
       <div className={`site-nav__menu-shell${isStudioMenuOpen ? " is-open" : ""}`}>
@@ -90,18 +126,18 @@ export function PrimarySiteNav({
           aria-haspopup="menu"
           onClick={handleStudioPrimaryClick}
         >
-          <span>Студия</span>
+          <span>{t(navMessages.studio)}</span>
         </button>
 
         <div className="site-nav__submenu-viewport" aria-hidden={!isStudioMenuOpen}>
           <div className="site-nav__submenu-viewport-inner">
-            <div id={studioMenuId} className="site-nav__submenu" role="menu" aria-label="Разделы студии">
+            <div id={studioMenuId} className="site-nav__submenu" role="menu" aria-label={t(navMessages.ariaStudioSections)}>
               {onStudioBack ? (
                 <button
                   className="site-nav__submenu-back"
                   type="button"
                   role="menuitem"
-                  aria-label="Вернуться в студию"
+                  aria-label={t(navMessages.backToStudio)}
                   tabIndex={isStudioMenuOpen ? 0 : -1}
                   onClick={onStudioBack}
                 >
@@ -110,7 +146,11 @@ export function PrimarySiteNav({
                   </svg>
                 </button>
               ) : null}
-              {studioNavItems.map((item) => (
+              {([
+                { id: "create", label: t(navMessages.studioCreate) },
+                { id: "projects", label: t(navMessages.projects) },
+                { id: "media", label: t(navMessages.media) },
+              ] as Array<{ id: StudioEntryIntentSection; label: string }>).map((item) => (
                 <button
                   key={item.id}
                   className={`site-nav__submenu-item${isStudioActive && resolvedActiveStudioSection === item.id ? " is-active" : ""}`}
@@ -128,8 +168,8 @@ export function PrimarySiteNav({
         </div>
       </div>
 
-      <Link className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`} to="/pricing">
-        Тарифы
+      <Link className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`} to={localizePath("/pricing")}>
+        {t(navMessages.pricing)}
       </Link>
     </nav>
   );

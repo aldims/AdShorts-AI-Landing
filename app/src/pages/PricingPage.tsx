@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
+import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { clearPricingEntryIntent, readPricingEntryIntent } from "../lib/pricing-entry-intent";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
@@ -71,108 +73,222 @@ type PricingFAQ = {
 
 const PENDING_CHECKOUT_STORAGE_KEY = "adshorts.pending-checkout-plan";
 const PACKAGE_RESTRICTION_ERROR_FRAGMENT = "PRO and ULTRA";
-const START_PLAN_USED_MESSAGE = "Тариф START уже использован для этого аккаунта.";
 const CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
-const pricingPlans: PricingPlan[] = [
+const DEFAULT_FEATURED_PLAN_ID: PlanCheckoutProductId = "pro";
+
+const pricingMessages = defineMessages({
+  addonBuy: {
+    ru: "Купить пакет",
+    en: "Buy pack",
+  },
+  addonHeading: {
+    ru: "Пополняйте кредиты не меняя тарифный план",
+    en: "Top up credits without changing your plan",
+  },
+  addonNeedsPro: {
+    ru: "Нужен PRO / ULTRA",
+    en: "Requires PRO / ULTRA",
+  },
+  checkoutOpening: {
+    ru: "Открываем оплату...",
+    en: "Opening checkout...",
+  },
+  checkoutTimeout: {
+    ru: "Страница оплаты отвечает слишком долго. Попробуйте ещё раз через несколько секунд.",
+    en: "Checkout is taking too long. Try again in a few seconds.",
+  },
+  checkoutUnavailable: {
+    ru: "Не удалось открыть страницу оплаты.",
+    en: "Could not open checkout.",
+  },
+  enterpriseCta: {
+    ru: "Оставить заявку",
+    en: "Request a plan",
+  },
+  enterpriseHeading: {
+    ru: "Нужен объём выше Ultra или запуск для команды?",
+    en: "Need more than Ultra or a team rollout?",
+  },
+  enterpriseIntro: {
+    ru: "Если вы ведёте несколько брендов, рубрик или клиентских потоков, оставьте заявку и мы подберём расширенный сценарий подключения.",
+    en: "If you manage several brands, formats or client pipelines, send a request and we will suggest a larger setup.",
+  },
+  enterpriseItemContentSeries: {
+    ru: "Поддержка запуска контент-серий",
+    en: "Content-series launch support",
+  },
+  enterpriseItemMonthly: {
+    ru: "Кастомный месячный объём",
+    en: "Custom monthly volume",
+  },
+  enterpriseItemUpgrade: {
+    ru: "Путь апгрейда от solo creator к team workflow",
+    en: "Upgrade path from solo creator to team workflow",
+  },
+  faqHeading: {
+    ru: "Как работают тарифы",
+    en: "How plans work",
+  },
+  heroHeading: {
+    ru: "Выберите свой тариф",
+    en: "Choose your plan",
+  },
+  signIn: {
+    ru: "Войти",
+    en: "Sign in",
+  },
+  startUsed: {
+    ru: "Тариф START уже использован для этого аккаунта.",
+    en: "The START plan has already been used for this account.",
+  },
+  used: {
+    ru: "Использован",
+    en: "Used",
+  },
+});
+
+type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge" | "ctaLabel" | "credits" | "features" | "subnote"> & {
+  audience: Record<Locale, string>;
+  audienceLines?: Record<Locale, string[]>;
+  badge?: Record<Locale, string>;
+  ctaLabel: Record<Locale, string>;
+  credits: Record<Locale, string>;
+  features: Record<Locale, string[]>;
+  subnote?: Record<Locale, string>;
+};
+
+const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "start",
     name: "START",
-    audience: "Для первого запуска",
-    audienceLines: ["Для первого", "запуска"],
+    audience: { ru: "Для первого запуска", en: "For the first launch" },
+    audienceLines: { ru: ["Для первого", "запуска"], en: ["For the first", "launch"] },
     price: "390 ₽",
     billing: "",
-    credits: "50 кредитов",
-    subnote: "До 5 Shorts",
-    features: [
-      "Полный доступ к созданию Shorts",
-      "Без водяного знака",
-      "Редактирование в студии",
-      "Автопубликация в YouTube",
-    ],
-    ctaLabel: "Оплатить START",
+    credits: { ru: "50 кредитов", en: "50 credits" },
+    subnote: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
+    features: {
+      ru: ["Полный доступ к созданию Shorts", "Без водяного знака", "Редактирование в студии", "Автопубликация в YouTube"],
+      en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube auto-publishing"],
+    },
+    ctaLabel: { ru: "Оплатить START", en: "Pay for START" },
   },
   {
     checkoutProductId: "pro",
     name: "PRO",
-    audience: "Для регулярного контент-потока",
-    audienceLines: ["Для регулярного", "контент-потока"],
+    audience: { ru: "Для регулярного контент-потока", en: "For a regular content flow" },
+    audienceLines: { ru: ["Для регулярного", "контент-потока"], en: ["For a regular", "content flow"] },
     price: "1 490 ₽",
     billing: "",
-    credits: "250 кредитов",
-    subnote: "До 25 Shorts",
-    features: [
-      "Всё из START",
-      "Приоритетная генерация",
-      "Можно докупать кредиты",
-      "Подходит для регулярного контента",
-    ],
-    badge: "Самый популярный",
+    credits: { ru: "250 кредитов", en: "250 credits" },
+    subnote: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
+    features: {
+      ru: ["Всё из START", "Приоритетная генерация", "Можно докупать кредиты", "Подходит для регулярного контента"],
+      en: ["Everything in START", "Priority generation", "Credit top-ups available", "Built for regular content"],
+    },
+    badge: { ru: "Самый популярный", en: "Most popular" },
     featured: true,
-    ctaLabel: "Оплатить PRO",
+    ctaLabel: { ru: "Оплатить PRO", en: "Pay for PRO" },
   },
   {
     checkoutProductId: "ultra",
     name: "ULTRA",
-    audience: "Для максимального объёма",
-    audienceLines: ["Для максимального", "объёма"],
+    audience: { ru: "Для максимального объёма", en: "For maximum volume" },
+    audienceLines: { ru: ["Для максимального", "объёма"], en: ["For maximum", "volume"] },
     price: "4 990 ₽",
     billing: "",
-    credits: "1000 кредитов",
-    subnote: "До 100 Shorts",
-    features: [
-      "Всё из PRO",
-      "Максимальный приоритет",
-      "Ранний доступ к новым функциям",
-      "Лучшие лимиты для активного использования",
-    ],
-    badge: "Лучшая выгода",
-    ctaLabel: "Оплатить ULTRA",
+    credits: { ru: "1000 кредитов", en: "1000 credits" },
+    subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
+    features: {
+      ru: ["Всё из PRO", "Максимальный приоритет", "Ранний доступ к новым функциям", "Лучшие лимиты для активного использования"],
+      en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
+    },
+    badge: { ru: "Лучшая выгода", en: "Best value" },
+    ctaLabel: { ru: "Оплатить ULTRA", en: "Pay for ULTRA" },
   },
 ];
 
-const DEFAULT_FEATURED_PLAN_ID: PlanCheckoutProductId =
-  pricingPlans.find((plan) => plan.featured)?.checkoutProductId ?? "pro";
+type LocalizedPackCopy = Omit<PricingPack, "badge" | "credits" | "subnote"> & {
+  badge?: Record<Locale, string>;
+  credits: Record<Locale, string>;
+  subnote: Record<Locale, string>;
+};
 
-const pricingPacks: PricingPack[] = [
+const pricingPackCopy: LocalizedPackCopy[] = [
   {
     checkoutProductId: "package_10",
     name: "Pack 100",
-    credits: "100 кредитов",
+    credits: { ru: "100 кредитов", en: "100 credits" },
     price: "690 ₽",
-    subnote: "До 10 Shorts",
+    subnote: { ru: "До 10 Shorts", en: "Up to 10 Shorts" },
   },
   {
     checkoutProductId: "package_50",
     name: "Pack 500",
-    credits: "500 кредитов",
+    credits: { ru: "500 кредитов", en: "500 credits" },
     price: "2 750 ₽",
-    subnote: "До 50 Shorts",
+    subnote: { ru: "До 50 Shorts", en: "Up to 50 Shorts" },
   },
   {
     checkoutProductId: "package_100",
     name: "Pack 1000",
-    credits: "1000 кредитов",
+    credits: { ru: "1000 кредитов", en: "1000 credits" },
     price: "4 990 ₽",
-    subnote: "До 100 Shorts",
-    badge: "Выгодно",
+    subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
+    badge: { ru: "Выгодно", en: "Good value" },
   },
 ];
 
-const pricingFaqs: PricingFAQ[] = [
+const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<Locale, string> }> = [
   {
-    question: "1 видео = 10 кредитов",
-    answer: "Каждая генерация Shorts списывает 10 кредитов. Это единая логика для всех тарифов.",
+    question: { ru: "1 видео = 10 кредитов", en: "1 video = 10 credits" },
+    answer: {
+      ru: "Каждая генерация Shorts списывает 10 кредитов. Это единая логика для всех тарифов.",
+      en: "Each Shorts generation spends 10 credits. The same rule applies to every plan.",
+    },
   },
   {
-    question: "Срок действия функций",
-    answer: "Функции тарифа активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
+    question: { ru: "Срок действия функций", en: "Feature access period" },
+    answer: {
+      ru: "Функции тарифа активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
+      en: "Plan features are active for 30 days. Unused credits stay on the account and do not expire.",
+    },
   },
   {
-    question: "Что включено в оплату",
-    answer: "Все видео идут без водяного знака. Автопродления нет, повторная оплата только вручную.",
+    question: { ru: "Что включено в оплату", en: "What payment includes" },
+    answer: {
+      ru: "Все видео идут без водяного знака. Автопродления нет, повторная оплата только вручную.",
+      en: "All videos are generated without a watermark. There is no auto-renewal; repeat payments are manual.",
+    },
   },
 ];
+
+const getPricingPlans = (locale: Locale): PricingPlan[] =>
+  pricingPlanCopy.map((plan) => ({
+    ...plan,
+    audience: plan.audience[locale],
+    audienceLines: plan.audienceLines?.[locale],
+    badge: plan.badge?.[locale],
+    credits: plan.credits[locale],
+    ctaLabel: plan.ctaLabel[locale],
+    features: plan.features[locale],
+    subnote: plan.subnote?.[locale],
+  }));
+
+const getPricingPacks = (locale: Locale): PricingPack[] =>
+  pricingPackCopy.map((pack) => ({
+    ...pack,
+    badge: pack.badge?.[locale],
+    credits: pack.credits[locale],
+    subnote: pack.subnote[locale],
+  }));
+
+const getPricingFaqs = (locale: Locale): PricingFAQ[] =>
+  pricingFaqCopy.map((faq) => ({
+    answer: faq.answer[locale],
+    question: faq.question[locale],
+  }));
 
 export function PricingPage({
   session,
@@ -182,6 +298,10 @@ export function PricingPage({
   onLogout,
   onOpenWorkspace,
 }: Props) {
+  const { locale, localizePath, t } = useLocale();
+  const pricingPlans = getPricingPlans(locale);
+  const pricingPacks = getPricingPacks(locale);
+  const pricingFaqs = getPricingFaqs(locale);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
@@ -190,10 +310,16 @@ export function PricingPage({
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const addonsEligibilityNote = canPurchaseAddonCredits
-    ? `На тарифе ${currentPlanLabel} вам доступны пакеты дополнительных кредитов. Нажмите на нужный пакет, чтобы перейти к оплате.`
+    ? locale === "en"
+      ? `Your ${currentPlanLabel} plan can buy extra credit packs. Pick a pack to continue to checkout.`
+      : `На тарифе ${currentPlanLabel} вам доступны пакеты дополнительных кредитов. Нажмите на нужный пакет, чтобы перейти к оплате.`
       : currentPlanLabel
-        ? `На тарифе ${currentPlanLabel} пакеты недоступны. Дополнительные кредиты можно покупать только на PRO и ULTRA.`
-        : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
+        ? locale === "en"
+          ? `Credit packs are not available on ${currentPlanLabel}. Extra credits can be purchased only on PRO and ULTRA.`
+          : `На тарифе ${currentPlanLabel} пакеты недоступны. Дополнительные кредиты можно покупать только на PRO и ULTRA.`
+        : locale === "en"
+          ? "Extra credits can be purchased only on PRO and ULTRA plans."
+          : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
   const openPrimaryFlow = () => {
     if (session) {
       onOpenWorkspace();
@@ -213,7 +339,7 @@ export function PricingPage({
 
   const requestCheckout = async (productId: CheckoutProductId) => {
     if (productId === "start" && isStartPlanUsed) {
-      setCheckoutError(START_PLAN_USED_MESSAGE);
+      setCheckoutError(t(pricingMessages.startUsed));
       return;
     }
 
@@ -234,7 +360,7 @@ export function PricingPage({
         return;
       }
 
-      const errorMessage = payload?.error ?? "Не удалось открыть страницу оплаты.";
+      const errorMessage = payload?.error ?? t(pricingMessages.checkoutUnavailable);
       if (!response.ok || !payload?.data?.url) {
         if (productId.startsWith("package_") && errorMessage.includes(PACKAGE_RESTRICTION_ERROR_FRAGMENT)) {
           setActivePlanId("pro");
@@ -252,10 +378,10 @@ export function PricingPage({
     } catch (error) {
       const message =
         error instanceof DOMException && error.name === "TimeoutError"
-          ? "Страница оплаты отвечает слишком долго. Попробуйте ещё раз через несколько секунд."
+          ? t(pricingMessages.checkoutTimeout)
           : error instanceof Error
             ? error.message
-            : "Не удалось открыть страницу оплаты.";
+            : t(pricingMessages.checkoutUnavailable);
       setCheckoutError(message);
     } finally {
       setActiveCheckoutProductId(null);
@@ -320,7 +446,7 @@ export function PricingPage({
 
     window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
     if (pendingCheckoutProductId === "start" && isStartPlanUsed) {
-      setCheckoutError(START_PLAN_USED_MESSAGE);
+      setCheckoutError(t(pricingMessages.startUsed));
       return;
     }
 
@@ -337,7 +463,7 @@ export function PricingPage({
     <div className="route-page pricing-page">
       <header className="site-header" id="top">
         <div className="container site-header__inner">
-          <Link className="brand" to="/" aria-label="AdShorts AI">
+          <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
@@ -345,6 +471,7 @@ export function PricingPage({
           <PrimarySiteNav activeItem="pricing" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
+            <LanguageSwitcher />
             {session ? (
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
@@ -357,7 +484,7 @@ export function PricingPage({
               </>
             ) : (
               <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
-                Войти
+                {t(pricingMessages.signIn)}
               </button>
             )}
           </div>
@@ -368,7 +495,7 @@ export function PricingPage({
         <section className="section pricing-max-hero">
           <div className="container">
             <div className="pricing-max-hero__heading">
-              <h1>Выберите свой тариф</h1>
+              <h1>{t(pricingMessages.heroHeading)}</h1>
               {checkoutError ? (
                 <p className="pricing-max-hero__status" role="alert">
                   {checkoutError}
@@ -429,7 +556,7 @@ export function PricingPage({
                         </h3>
                       </div>
                       {isUsedStartPlan ? (
-                        <span className="pricing-max-card__badge pricing-max-card__badge--used">Использован</span>
+                        <span className="pricing-max-card__badge pricing-max-card__badge--used">{t(pricingMessages.used)}</span>
                       ) : plan.badge ? (
                         <span className="pricing-max-card__badge">{plan.badge}</span>
                       ) : null}
@@ -458,9 +585,9 @@ export function PricingPage({
                       disabled={isUsedStartPlan || activeCheckoutProductId === plan.checkoutProductId}
                     >
                       {isUsedStartPlan
-                        ? "Использован"
+                        ? t(pricingMessages.used)
                         : activeCheckoutProductId === plan.checkoutProductId
-                          ? "Открываем оплату..."
+                          ? t(pricingMessages.checkoutOpening)
                           : plan.ctaLabel}
                     </button>
                   </article>
@@ -478,21 +605,18 @@ export function PricingPage({
               >
                 <div className="pricing-max-enterprise__copy">
                   <span className="pricing-max-enterprise__eyebrow">Agency / Teams</span>
-                  <h3>Нужен объём выше Ultra или запуск для команды?</h3>
-                  <p>
-                    Если вы ведёте несколько брендов, рубрик или клиентских потоков, оставьте заявку и мы подберём
-                    расширенный сценарий подключения.
-                  </p>
+                  <h3>{t(pricingMessages.enterpriseHeading)}</h3>
+                  <p>{t(pricingMessages.enterpriseIntro)}</p>
                 </div>
 
                 <ul className="pricing-max-enterprise__list">
-                  <li>Кастомный месячный объём</li>
-                  <li>Поддержка запуска контент-серий</li>
-                  <li>Путь апгрейда от solo creator к team workflow</li>
+                  <li>{t(pricingMessages.enterpriseItemMonthly)}</li>
+                  <li>{t(pricingMessages.enterpriseItemContentSeries)}</li>
+                  <li>{t(pricingMessages.enterpriseItemUpgrade)}</li>
                 </ul>
 
                 <span className="btn pricing-max-button pricing-max-button--ghost pricing-max-enterprise__cta">
-                  Оставить заявку
+                  {t(pricingMessages.enterpriseCta)}
                 </span>
               </button>
             </div>
@@ -504,7 +628,7 @@ export function PricingPage({
           <div className="container">
             <div className="pricing-max-section-head">
               <div>
-                <h2>Пополняйте кредиты не меняя тарифный план</h2>
+                <h2>{t(pricingMessages.addonHeading)}</h2>
               </div>
             </div>
 
@@ -529,10 +653,10 @@ export function PricingPage({
                     disabled={activeCheckoutProductId === pack.checkoutProductId || !canPurchaseAddonCredits}
                   >
                     {activeCheckoutProductId === pack.checkoutProductId
-                      ? "Открываем оплату..."
+                      ? t(pricingMessages.checkoutOpening)
                       : canPurchaseAddonCredits
-                        ? "Купить пакет"
-                        : "Нужен PRO / ULTRA"}
+                        ? t(pricingMessages.addonBuy)
+                        : t(pricingMessages.addonNeedsPro)}
                   </button>
                 </article>
               ))}
@@ -544,7 +668,7 @@ export function PricingPage({
         <section className="section pricing-max-faq">
           <div className="container pricing-max-faq__frame">
             <div className="pricing-max-faq__lead">
-              <h2>Как работают тарифы</h2>
+              <h2>{t(pricingMessages.faqHeading)}</h2>
             </div>
 
             <div className="pricing-max-faq__grid">

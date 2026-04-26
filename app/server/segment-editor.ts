@@ -13,7 +13,7 @@ import {
   UpstreamHttpError,
   upstreamPolicies,
 } from "./upstream-client.js";
-import { listWorkspaceGenerationHistory } from "./workspace-history.js";
+import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory } from "./workspace-history.js";
 import type { ProjectMediaEnvelope, WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type SegmentEditorUser = {
@@ -46,6 +46,7 @@ type AdsflowSegmentEditorSegmentPayload = {
 
 export type AdsflowSegmentEditorResponse = {
   description?: string | null;
+  language?: string | null;
   music_type?: string | null;
   project_id?: number | string | null;
   segments?: AdsflowSegmentEditorSegmentPayload[] | null;
@@ -78,11 +79,13 @@ type AdsflowProjectMediaEntryPayload = {
 
 type AdsflowProjectGenerationSettingsPayload = {
   background_urls?: AdsflowProjectMediaEntryPayload[] | null;
+  content_language?: string | null;
   custom_music_asset_id?: number | string | null;
   custom_music_original_name?: string | null;
   current_rendered_segments?: AdsflowProjectMediaEntryPayload[] | null;
   music_asset_id?: number | string | null;
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
+  requested_language?: string | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
 
@@ -143,6 +146,7 @@ export type WorkspaceSegmentEditorSession = {
   customMusicAssetId: number | null;
   customMusicFileName: string;
   description: string;
+  language: string;
   musicType: string;
   projectId: number;
   segments: WorkspaceSegmentEditorSegment[];
@@ -164,6 +168,11 @@ export class WorkspaceSegmentEditorError extends Error {
 }
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
+
+const normalizeWorkspaceSegmentEditorLanguage = (value: unknown) => {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === "en" || normalized === "ru" ? normalized : "";
+};
 
 const normalizeInteger = (value: unknown) => {
   const numeric = Number(value);
@@ -211,6 +220,23 @@ export const resolveWorkspaceSegmentEditorCustomMusicMetadata = (
       generationSettings?.custom_music_original_name ?? projectDetailsPayload?.music_name,
     ),
   };
+};
+
+const resolveWorkspaceSegmentEditorLanguage = (
+  payload: AdsflowSegmentEditorResponse,
+  projectDetailsPayload?: AdsflowProjectDetailsResponse | null,
+) => {
+  const generationSettings =
+    projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+      ? projectDetailsPayload.generation_settings
+      : null;
+
+  return (
+    normalizeWorkspaceSegmentEditorLanguage(payload.language) ||
+    normalizeWorkspaceSegmentEditorLanguage(generationSettings?.content_language) ||
+    normalizeWorkspaceSegmentEditorLanguage(generationSettings?.requested_language) ||
+    ""
+  );
 };
 
 const isWorkspaceRenderableMediaUrl = (value: string | null | undefined) => {
@@ -568,6 +594,32 @@ const cacheProjectAccess = (user: SegmentEditorUser, projectId: number) => {
   projectAccessCache.set(cacheKey, Date.now() + PROJECT_ACCESS_CACHE_TTL_MS);
 };
 
+const clearCachedProjectAccess = (user: SegmentEditorUser, projectId?: number) => {
+  const exactCacheKey =
+    typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
+      ? getProjectAccessCacheKey(user, projectId)
+      : null;
+
+  if (exactCacheKey) {
+    projectAccessCache.delete(exactCacheKey);
+    return;
+  }
+
+  const userId = normalizeText(user.id);
+  const email = normalizeText(user.email).toLowerCase();
+  const cachePrefix = userId ? `user:${userId}:project:` : email ? `email:${email}:project:` : null;
+
+  if (!cachePrefix) {
+    return;
+  }
+
+  for (const key of projectAccessCache.keys()) {
+    if (key.startsWith(cachePrefix)) {
+      projectAccessCache.delete(key);
+    }
+  }
+};
+
 const getSegmentEditorSessionCacheKey = (user: SegmentEditorUser, projectId: number) => {
   const userId = normalizeText(user.id);
   if (userId) {
@@ -594,6 +646,15 @@ const getCachedSegmentEditorSession = (user: SegmentEditorUser, projectId: numbe
     return null;
   }
 
+  if (cachedEntry.session.projectId !== projectId) {
+    console.warn("[segment-editor] Dropping cached session with mismatched project id", {
+      cachedProjectId: cachedEntry.session.projectId,
+      requestedProjectId: projectId,
+    });
+    segmentEditorSessionCache.delete(cacheKey);
+    return null;
+  }
+
   return cachedEntry.session;
 };
 
@@ -607,6 +668,14 @@ const setCachedSegmentEditorSession = (
     return;
   }
 
+  if (session.projectId !== projectId) {
+    console.warn("[segment-editor] Refusing to cache session with mismatched project id", {
+      requestedProjectId: projectId,
+      sessionProjectId: session.projectId,
+    });
+    return;
+  }
+
   segmentEditorSessionCache.set(cacheKey, {
     expiresAt: Date.now() + SEGMENT_EDITOR_SESSION_CACHE_TTL_MS,
     session,
@@ -614,6 +683,8 @@ const setCachedSegmentEditorSession = (
 };
 
 export const invalidateWorkspaceSegmentEditorSessionCache = (user: SegmentEditorUser, projectId?: number) => {
+  clearCachedProjectAccess(user, projectId);
+
   const exactCacheKey =
     typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
       ? getSegmentEditorSessionCacheKey(user, projectId)
@@ -665,6 +736,11 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, errorMessa
 };
 
 const assertWorkspaceProjectAccess = async (user: SegmentEditorUser, projectId: number) => {
+  const deletedProjects = await listWorkspaceDeletedProjects(user).catch(() => []);
+  if (deletedProjects.some((entry) => entry.adId === projectId || entry.projectId === `project:${projectId}`)) {
+    throw new WorkspaceSegmentEditorError("Проект удалён и недоступен для редактирования.", 404);
+  }
+
   if (hasCachedProjectAccess(user, projectId)) {
     return;
   }
@@ -771,6 +847,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     customMusicAssetId: customMusicMetadata.customMusicAssetId,
     customMusicFileName: customMusicMetadata.customMusicFileName,
     description: normalizeText(payload.description),
+    language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
     musicType: normalizeText(payload.music_type),
     projectId: sessionProjectId,
     segments,

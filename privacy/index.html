@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="../styles.css?v=18" />
+    <link rel="stylesheet" href="../styles.css?v=53" />
     <link rel="preload" as="image" href="../logo.png?v=2" />
     <link rel="icon" href="../favicon.svg" />
     <style>
@@ -21,7 +21,7 @@
       .logo{display:inline-flex;align-items:center;gap:10px}
       .logo__icon{display:inline-block}
     </style>
-    <script defer src="../script.js?v=4"></script>
+    <script defer src="../script.js?v=6"></script>
 
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
@@ -46,23 +46,25 @@
     </script>
   </head>
   <body>
-    <header class="header">
+    <header class="header header--app-static">
       <div class="container header__inner">
         <a class="logo" href="../" aria-label="AdShorts AI">
           <img class="logo__icon" src="../logo.png?v=2" alt="" role="presentation" width="46" height="46" />
           <span class="logo__wordmark">AdShorts<span>AI</span></span>
         </a>
-        <nav class="nav" aria-label="Основная навигация">
+        <nav class="nav" aria-label="Главная навигация">
           <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">Меню</button>
           <ul id="nav-menu" class="nav__list">
-            <li><a href="../#how-it-works">Как это работает</a></li>
-            <li><a href="../#benefits">Преимущества</a></li>
-            <li><a href="../#pricing">Тарифы</a></li>
-            <li><a href="../#shorts-guides">Гайды по Shorts</a></li>
-            <li><a href="../#faq">FAQ</a></li>
-            <li><a href="../en/privacy/" class="lang-switch" title="English">🇷🇺 RU</a></li>
+            <li><a class="nav__home-link" href="../">Главная</a></li>
+            <li><a href="../examples">Примеры</a></li>
+            <li><a href="../app/studio">Студия</a></li>
+            <li><a href="../pricing">Тарифы</a></li>
           </ul>
         </nav>
+        <div class="header__actions">
+          <details class="lang-switcher"><summary class="lang-switcher__trigger" aria-label="Язык: Русский" title="Язык: Русский"><svg class="lang-switcher__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.2 2.35 3.4 5.35 3.4 9s-1.2 6.65-3.4 9M12 3c-2.2 2.35-3.4 5.35-3.4 9s1.2 6.65 3.4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>RU</span></summary><div class="lang-switcher__menu" role="menu" aria-label="Выбор языка"><a class="lang-switcher__option is-active" href="./" role="menuitem" aria-label="RU Русский" aria-current="page"><span class="lang-switcher__code">RU</span><span class="lang-switcher__label">Русский</span></a><a class="lang-switcher__option" href="../en/privacy/" role="menuitem" aria-label="EN English"><span class="lang-switcher__code">EN</span><span class="lang-switcher__label">English</span></a></div></details>
+          <a class="header__signin-link" href="../app/studio">Войти</a>
+        </div>
       </div>
     </header>
 
@@ -179,7 +181,7 @@
           <ul>
             <li>OAuth-токены доступа хранятся в зашифрованном виде.</li>
             <li>Токены используются только для выполнения авторизованных действий.</li>
-            <li>Пользователь может отозвать доступ в любой момент через <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">настройки аккаунта Google</a>.</li>
+            <li>Пользователь может отозвать доступ в любой момент через <a href="https://myaccount.google.com/permissions" rel="noopener nofollow">настройки аккаунта Google</a>.</li>
             <li>При отключении канала хранимые токены удаляются безвозвратно.</li>
             <li>Данные контента YouTube не хранятся постоянно — только в объёме, строго необходимом для обеспечения функции публикации.</li>
             <li>Название и ID канала могут храниться только для обеспечения функции публикации и удаляются по запросу пользователя.</li>
@@ -187,7 +189,7 @@
 
           <h3>7.4. Соответствие требованиям Limited Use</h3>
           <p>
-            Использование информации, полученной от Google API Services, в AdShorts AI соответствует <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования об ограниченном использовании (Limited Use).
+            Использование информации, полученной от Google API Services, в AdShorts AI соответствует <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener nofollow">Google API Services User Data Policy</a>, включая требования об ограниченном использовании (Limited Use).
           </p>
           <p>Данные пользователей Google:</p>
           <ul>
@@ -197,7 +199,7 @@
             <li>не используются для обучения моделей искусственного интеллекта или машинного обучения.</li>
           </ul>
           <p>
-            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener nofollow">Условиями использования YouTube</a> и Политикой конфиденциальности Google: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener nofollow">https://policies.google.com/privacy</a>.
+            Подключая YouTube через Сервис, Пользователь также соглашается с <a href="https://www.youtube.com/t/terms" rel="noopener nofollow">Условиями использования YouTube</a> и Политикой конфиденциальности Google: <a href="https://policies.google.com/privacy" rel="noopener nofollow">https://policies.google.com/privacy</a>.
           </p>
 
           <h2>8. Отзыв доступа и удаление данных</h2>
@@ -205,7 +207,7 @@
             Пользователь может:
           </p>
           <ul>
-            <li>отозвать доступ к Google-аккаунту в настройках разрешений: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener nofollow">myaccount.google.com/permissions</a>;</li>
+            <li>отозвать доступ к Google-аккаунту в настройках разрешений: <a href="https://myaccount.google.com/permissions" rel="noopener nofollow">myaccount.google.com/permissions</a>;</li>
             <li>запросить удаление данных через страницу <a href="../data-deletion.html">Удаление данных</a> или по адресу <a href="mailto:support@adshortsai.com">support@adshortsai.com</a>.</li>
           </ul>
 
@@ -230,6 +232,7 @@
         <a class="logo" href="../">AdShorts<span>AI</span></a>
         <div class="footer__links">
           <span style="color: var(--muted);">Контакты: <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="../offer/">Публичная оферта</a>
           <a href="../terms-of-use/">Условия использования</a>
           <a href="../terms/">Пользовательское соглашение</a>
           <a href="../privacy/">Политика конфиденциальности</a>

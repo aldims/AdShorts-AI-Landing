@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { authClient } from "../lib/auth-client";
+import { useLocale, type Locale } from "../lib/i18n";
 
 type AuthMode = "signup" | "signin";
 
@@ -34,24 +35,51 @@ type Props = {
   onSignedIn: () => void;
 };
 
-const copy = {
+const copy: Record<AuthMode, Record<Locale, {
+  eyebrow: string;
+  title: string;
+  lead: string;
+  submit: string;
+  switchLabel: string;
+  switchMode: string;
+}>> = {
   signup: {
+    ru: {
     eyebrow: "Регистрация",
     title: "Создайте аккаунт",
     lead: "",
     submit: "Создать аккаунт",
     switchLabel: "Уже есть аккаунт?",
     switchMode: "Войти",
+    },
+    en: {
+      eyebrow: "Sign up",
+      title: "Create an account",
+      lead: "",
+      submit: "Create account",
+      switchLabel: "Already have an account?",
+      switchMode: "Sign in",
+    },
   },
   signin: {
-    eyebrow: "Вход",
-    title: "Войдите в личный кабинет AdShorts AI",
-    lead: "",
-    submit: "Войти",
-    switchLabel: "Новый пользователь?",
-    switchMode: "Создать аккаунт",
+    ru: {
+      eyebrow: "Вход",
+      title: "Войдите в личный кабинет AdShorts AI",
+      lead: "",
+      submit: "Войти",
+      switchLabel: "Новый пользователь?",
+      switchMode: "Создать аккаунт",
+    },
+    en: {
+      eyebrow: "Sign in",
+      title: "Sign in to AdShorts AI",
+      lead: "",
+      submit: "Sign in",
+      switchLabel: "New user?",
+      switchMode: "Create account",
+    },
   },
-} as const;
+};
 
 const emptyStatus: AuthStatus = {
   googleEnabled: false,
@@ -90,6 +118,7 @@ const resolveAuthActionErrorMessage = (error: unknown, fallback: string) => {
 };
 
 export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: Props) {
+  const { locale } = useLocale();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -99,7 +128,8 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
   const [devEmailPreview, setDevEmailPreview] = useState<DevEmailPreview | null>(null);
   const [authBackendIssue, setAuthBackendIssue] = useState<string | null>(null);
 
-  const content = copy[mode];
+  const content = copy[mode][locale];
+  const closeLabel = locale === "en" ? "Close" : "Закрыть";
   const isBusy = busyAction !== null;
   const callbackURL = useMemo(() => {
     if (typeof window === "undefined") return "http://127.0.0.1:4174/";
@@ -184,7 +214,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         if (error) {
           setFeedback({
             kind: "error",
-            message: resolveAuthActionErrorMessage(error, "Не удалось создать аккаунт."),
+            message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not create the account." : "Не удалось создать аккаунт."),
           });
           setBusyAction(null);
           return;
@@ -194,8 +224,12 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
           kind: "success",
           message:
             status.mailMode === "smtp"
-              ? "Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам». После подтверждения аккаунт будет активирован."
-              : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
+              ? locale === "en"
+                ? "Confirmation email sent. Check Inbox and Spam. The account will activate after confirmation."
+                : "Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам». После подтверждения аккаунт будет активирован."
+              : locale === "en"
+                ? "Account created. For local testing, open the email preview below and confirm the email."
+                : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
         });
 
         if (status.mailMode === "ethereal") {
@@ -204,7 +238,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       } catch (error) {
         setFeedback({
           kind: "error",
-          message: resolveAuthActionErrorMessage(error, "Не удалось создать аккаунт."),
+          message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not create the account." : "Не удалось создать аккаунт."),
         });
         setBusyAction(null);
         return;
@@ -235,7 +269,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         if (error.status === 403) {
           setFeedback({
             kind: "info",
-            message: "Почта еще не подтверждена. Отправьте письмо повторно и завершите верификацию.",
+            message: locale === "en" ? "Email is not confirmed yet. Send the email again and finish verification." : "Почта еще не подтверждена. Отправьте письмо повторно и завершите верификацию.",
           });
 
           if (status.mailMode === "ethereal") {
@@ -244,14 +278,14 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         } else {
           setFeedback({
             kind: "error",
-            message: resolveAuthActionErrorMessage(error, "Не удалось войти в аккаунт."),
+            message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in." : "Не удалось войти в аккаунт."),
           });
         }
       }
     } catch (error) {
       setFeedback({
         kind: "error",
-        message: resolveAuthActionErrorMessage(error, "Не удалось войти в аккаунт."),
+        message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in." : "Не удалось войти в аккаунт."),
       });
     }
 
@@ -276,14 +310,14 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       if (error) {
         setFeedback({
           kind: "error",
-          message: resolveAuthActionErrorMessage(error, "Не удалось запустить вход через Google."),
+          message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not start Google sign-in." : "Не удалось запустить вход через Google."),
         });
         setBusyAction(null);
       }
     } catch (error) {
       setFeedback({
         kind: "error",
-        message: resolveAuthActionErrorMessage(error, "Не удалось запустить вход через Google."),
+        message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not start Google sign-in." : "Не удалось запустить вход через Google."),
       });
       setBusyAction(null);
     }
@@ -303,11 +337,11 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       <button
         className="signup-modal__backdrop route-close"
         type="button"
-        aria-label="Закрыть"
+        aria-label={closeLabel}
         onClick={onClose}
       />
       <div className="signup-modal__panel" role="document">
-        <button className="signup-modal__close route-close" type="button" aria-label="Закрыть" onClick={onClose}>
+        <button className="signup-modal__close route-close" type="button" aria-label={closeLabel} onClick={onClose}>
           ×
         </button>
         <p className="signup-modal__eyebrow">{content.eyebrow}</p>
@@ -326,7 +360,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             </span>
             <span className="signup-social__copy">
               <span>Google</span>
-              {!status.googleEnabled ? <small>Не настроено</small> : null}
+              {!status.googleEnabled ? <small>{locale === "en" ? "Not configured" : "Не настроено"}</small> : null}
             </span>
           </button>
           <button
@@ -339,25 +373,25 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             </span>
             <span className="signup-social__copy">
               <span>Telegram</span>
-              <small>Скоро</small>
+              <small>{locale === "en" ? "Soon" : "Скоро"}</small>
             </span>
           </button>
         </div>
 
         <div className="signup-modal__divider">
-          <span>или через email</span>
+          <span>{locale === "en" ? "or use email" : "или через email"}</span>
         </div>
 
         <form className="signup-form" onSubmit={handleSubmit}>
           {mode === "signup" && (
             <label className="signup-field">
-              <span>Имя</span>
+              <span>{locale === "en" ? "Name" : "Имя"}</span>
               <input
                 autoComplete="name"
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Ваше имя"
+                placeholder={locale === "en" ? "Your name" : "Ваше имя"}
                 required
               />
             </label>
@@ -377,13 +411,13 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
           </label>
 
           <label className="signup-field">
-            <span>Пароль</span>
+            <span>{locale === "en" ? "Password" : "Пароль"}</span>
             <input
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Минимум 8 символов"
+              placeholder={locale === "en" ? "At least 8 characters" : "Минимум 8 символов"}
               minLength={8}
               required
             />
@@ -394,7 +428,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             type="submit"
             disabled={isBusy || Boolean(authBackendIssue)}
           >
-            {busyAction === "signup" || busyAction === "signin" ? "Подождите..." : content.submit}
+            {busyAction === "signup" || busyAction === "signin" ? (locale === "en" ? "Please wait..." : "Подождите...") : content.submit}
           </button>
         </form>
 
@@ -414,7 +448,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             target="_blank"
             rel="noopener noreferrer"
           >
-            Открыть preview письма
+            {locale === "en" ? "Open email preview" : "Открыть preview письма"}
           </a>
         )}
 

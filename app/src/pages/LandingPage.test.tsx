@@ -4,18 +4,21 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import { LocaleProvider, type Locale } from "../lib/i18n";
 import { LandingPage } from "./LandingPage";
 
-const renderLandingPage = () =>
+const renderLandingPage = (locale: Locale = "ru") =>
   render(
     <MemoryRouter>
-      <LandingPage
-        session={null}
-        onOpenSignup={() => undefined}
-        onOpenSignin={() => undefined}
-        onLogout={() => undefined}
-        onOpenWorkspace={() => undefined}
-      />
+      <LocaleProvider locale={locale}>
+        <LandingPage
+          session={null}
+          onOpenSignup={() => undefined}
+          onOpenSignin={() => undefined}
+          onLogout={() => undefined}
+          onOpenWorkspace={() => undefined}
+        />
+      </LocaleProvider>
     </MemoryRouter>,
   );
 
@@ -28,6 +31,18 @@ describe("LandingPage guides section", () => {
         name: /Shorts \/ Reels \/ TikTok за\s*1\s*минуту\. В один клик\./,
       }),
     ).toBeTruthy();
+  });
+
+  it("renders the English hero and localized internal links", () => {
+    renderLandingPage("en");
+
+    expect(
+      screen.getByRole("heading", {
+        name: /Shorts \/ Reels \/ TikTok in\s*1\s*minute\. In one click\./,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Examples" }).getAttribute("href")).toBe("/en/examples");
+    expect(screen.getByRole("link", { name: "Pricing" }).getAttribute("href")).toBe("/en/pricing");
   });
 
   it("syncs the hero preview position with the current scroll on initial render", () => {

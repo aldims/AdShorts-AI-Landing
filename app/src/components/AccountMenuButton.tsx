@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useLocale } from "../lib/i18n";
 
 type Props = {
   email: string;
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
+  const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -55,7 +57,7 @@ export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
         className={`site-header__account route-button${isOpen ? " is-active" : ""}`}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        aria-label={`Аккаунт ${name}`}
+        aria-label={`${locale === "en" ? "Account" : "Аккаунт"} ${name}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-controls={menuId}
@@ -65,7 +67,7 @@ export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
       </button>
 
       {isOpen ? (
-        <div className="account-menu" id={menuId} role="dialog" aria-label="Аккаунт">
+        <div className="account-menu" id={menuId} role="dialog" aria-label={locale === "en" ? "Account" : "Аккаунт"}>
           <div className="account-menu__panel">
             <div className="account-menu__badge">{plan.toUpperCase()}</div>
             <div className="account-menu__identity">
@@ -73,7 +75,7 @@ export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
               <span>{email}</span>
             </div>
             <button className="account-menu__action route-button" type="button" onClick={handleLogout}>
-              Выход
+              {locale === "en" ? "Log out" : "Выход"}
             </button>
           </div>
         </div>

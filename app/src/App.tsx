@@ -2,6 +2,17 @@ import { type ReactNode, Suspense, lazy, useEffect, useMemo, useState } from "re
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { authClient } from "./lib/auth-client";
+import {
+  LocaleProvider,
+  defineMessages,
+  localizePathForLocale,
+  pathnameHasLocalePrefix,
+  persistPreferredLocale,
+  readPreferredLocale,
+  resolveLocaleFromPathname,
+  stripLocalePrefix,
+  useLocale,
+} from "./lib/i18n";
 
 const AuthModal = lazy(() =>
   import("./components/AuthModal").then((module) => ({
@@ -59,6 +70,21 @@ type AuthState = {
 };
 
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
+
+const appMessages = defineMessages({
+  loadingSession: {
+    ru: "Проверяем сессию…",
+    en: "Checking session…",
+  },
+  metaDescription: {
+    ru: "AdShorts AI: веб-студия для создания Shorts, Reels и TikTok с AI-сценарием, озвучкой, субтитрами и публикацией.",
+    en: "AdShorts AI: a web studio for creating Shorts, Reels and TikTok videos with AI scripts, voiceover, subtitles and publishing.",
+  },
+  title: {
+    ru: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
+    en: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
+  },
+});
 
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 const isAbortLikeError = (error: unknown) =>
@@ -151,11 +177,13 @@ const persistWorkspaceProfile = (email: string | null | undefined, profile: Work
 };
 
 function LoadingScreen() {
+  const { t } = useLocale();
+
   return (
     <div className="route-page route-page--loading">
       <div className="route-loading">
         <span className="route-loading__eyebrow">Auth</span>
-        <strong>Проверяем сессию…</strong>
+        <strong>{t(appMessages.loadingSession)}</strong>
       </div>
     </div>
   );
@@ -168,6 +196,10 @@ function RouteSuspense({ children }: { children: ReactNode }) {
 export function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const locale = useMemo(() => resolveLocaleFromPathname(location.pathname), [location.pathname]);
+  const appPathname = useMemo(() => stripLocalePrefix(location.pathname), [location.pathname]);
+  const localizePath = useMemo(() => (path: string) => localizePathForLocale(locale, path), [locale]);
+  const hasExplicitLocalePrefix = useMemo(() => pathnameHasLocalePrefix(location.pathname), [location.pathname]);
   const { data: authSession, isPending: isSessionPending } = authClient.useSession();
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
@@ -250,6 +282,24 @@ export function App() {
   const shouldBlockWorkspaceRoute = Boolean(session && !workspaceProfile && isWorkspaceProfilePending);
 
   useEffect(() => {
+    if (hasExplicitLocalePrefix) {
+      persistPreferredLocale(locale);
+      return;
+    }
+
+    const preferredLocale = readPreferredLocale();
+    if (!preferredLocale || preferredLocale === locale) {
+      return;
+    }
+
+    const currentPath = `${location.pathname}${location.search}${location.hash}`;
+    const preferredPath = localizePathForLocale(preferredLocale, currentPath);
+    if (preferredPath !== currentPath) {
+      navigate(preferredPath, { replace: true });
+    }
+  }, [hasExplicitLocalePrefix, locale, location.hash, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
     document.body.classList.toggle("modal-open", authState.isOpen);
     return () => {
       document.body.classList.remove("modal-open");
@@ -277,20 +327,30 @@ export function App() {
           setWorkspaceProfile(null);
           setIsWorkspaceProfilePending(false);
           closeAuth();
-          navigate("/");
+          navigate(localizePath("/"));
         },
       },
     });
   };
 
   const workspaceEntryTab = useMemo<WorkspaceTab>(() => {
-    if (location.pathname.startsWith("/app/studio")) return "studio";
-    if (location.pathname.startsWith("/app/projects")) return "generations";
+    if (appPathname.startsWith("/app/studio")) return "studio";
+    if (appPathname.startsWith("/app/projects")) return "generations";
     return "overview";
-  }, [location.pathname]);
+  }, [appPathname]);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.title = appMessages.title[locale];
+
+    const metaDescription = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.content = appMessages.metaDescription[locale];
+    }
+  }, [locale]);
 
   return (
-    <>
+    <LocaleProvider locale={locale}>
       <Routes>
         <Route
           path="/"
@@ -302,7 +362,22 @@ export function App() {
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
-                onOpenWorkspace={() => navigate("/app/studio")}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+              />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="/en"
+          element={
+            <RouteSuspense>
+              <LandingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
               />
             </RouteSuspense>
           }
@@ -317,7 +392,22 @@ export function App() {
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
-                onOpenWorkspace={() => navigate("/app/studio")}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+              />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="/en/pricing"
+          element={
+            <RouteSuspense>
+              <PricingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
               />
             </RouteSuspense>
           }
@@ -332,7 +422,22 @@ export function App() {
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
-                onOpenWorkspace={() => navigate("/app/studio")}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+              />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="/en/examples"
+          element={
+            <RouteSuspense>
+              <ExamplesPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
               />
             </RouteSuspense>
           }
@@ -355,7 +460,29 @@ export function App() {
                 />
               </RouteSuspense>
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to={localizePath("/")} replace />
+            )
+          }
+        />
+        <Route
+          path="/en/app"
+          element={
+            isSessionPending ? (
+              <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
+            ) : session ? (
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab={workspaceEntryTab}
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
+            ) : (
+              <Navigate to={localizePath("/")} replace />
             )
           }
         />
@@ -377,7 +504,29 @@ export function App() {
                 />
               </RouteSuspense>
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to={localizePath("/")} replace />
+            )
+          }
+        />
+        <Route
+          path="/en/app/studio"
+          element={
+            isSessionPending ? (
+              <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
+            ) : session ? (
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab="studio"
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
+            ) : (
+              <Navigate to={localizePath("/")} replace />
             )
           }
         />
@@ -399,7 +548,29 @@ export function App() {
                 />
               </RouteSuspense>
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to={localizePath("/")} replace />
+            )
+          }
+        />
+        <Route
+          path="/en/app/projects"
+          element={
+            isSessionPending ? (
+              <LoadingScreen />
+            ) : shouldBlockWorkspaceRoute ? (
+              <LoadingScreen />
+            ) : session ? (
+              <RouteSuspense>
+                <WorkspacePage
+                  defaultTab="generations"
+                  initialProfile={workspaceProfile}
+                  onLogout={handleLogout}
+                  onProfileChange={setWorkspaceProfile}
+                  session={session}
+                />
+              </RouteSuspense>
+            ) : (
+              <Navigate to={localizePath("/")} replace />
             )
           }
         />
@@ -416,6 +587,6 @@ export function App() {
           />
         </Suspense>
       ) : null}
-    </>
+    </LocaleProvider>
   );
 }

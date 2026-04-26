@@ -1,4 +1,6 @@
-export type ExamplePrefillStudioLanguage = "ru" | "en";
+import { isSupportedLocale, type Locale } from "./locales.js";
+
+export type ExamplePrefillStudioLanguage = Locale;
 
 export type ExamplePrefillStudioMusicType =
   | "ai"
@@ -53,7 +55,7 @@ export const normalizeExamplePrefillStudioSettings = (
   const voiceId = normalizeText(payload.voiceId);
   const brandText = normalizeText(payload.brandText);
 
-  if (language === "ru" || language === "en") {
+  if (isSupportedLocale(language)) {
     settings.language = language;
   }
 

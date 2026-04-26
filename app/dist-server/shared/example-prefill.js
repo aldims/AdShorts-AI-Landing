@@ -1,3 +1,4 @@
+import { isSupportedLocale } from "./locales.js";
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 export const normalizeExamplePrefillStudioSettings = (value) => {
     if (!value || typeof value !== "object") {
@@ -12,7 +13,7 @@ export const normalizeExamplePrefillStudioSettings = (value) => {
     const videoMode = normalizeText(payload.videoMode);
     const voiceId = normalizeText(payload.voiceId);
     const brandText = normalizeText(payload.brandText);
-    if (language === "ru" || language === "en") {
+    if (isSupportedLocale(language)) {
         settings.language = language;
     }
     if (musicType) {

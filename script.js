@@ -1,4 +1,9 @@
 // Language detection and suggestion banner
+function setPreferredLanguage(lang) {
+  localStorage.setItem('manual_lang', lang);
+  localStorage.setItem('adshorts.locale', lang);
+}
+
 (function initLanguageDetection() {
   // Don't show banner for bots/crawlers
   const ua = navigator.userAgent || '';
@@ -39,22 +44,43 @@
     });
     
     banner.querySelector('a[href="/en/"]').addEventListener('click', () => {
-      localStorage.setItem('manual_lang', 'en');
+      setPreferredLanguage('en');
     });
   }
 })();
 
 // Save manual language selection
 (function initLanguageSwitcher() {
-  document.querySelectorAll('a.lang-switch').forEach(link => {
+  document.querySelectorAll('a.lang-switch, a.lang-switcher__option').forEach(link => {
     link.addEventListener('click', function() {
       const href = this.getAttribute('href') || '';
-      if (href.includes('/en/')) {
-        localStorage.setItem('manual_lang', 'en');
+      const label = `${this.getAttribute('aria-label') || ''} ${this.textContent || ''}`.trim().toLowerCase();
+      if (label.startsWith('en') || href.includes('/en/')) {
+        setPreferredLanguage('en');
       } else {
-        localStorage.setItem('manual_lang', 'ru');
+        setPreferredLanguage('ru');
       }
     });
+  });
+})();
+
+// Local static preview serves pages and the React app on different ports.
+(function initLocalStudioPreviewLinks() {
+  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  if (!isLocalHost || window.location.port === '4174') return;
+
+  document.querySelectorAll('a[href]').forEach((link) => {
+    const rawHref = link.getAttribute('href');
+    if (!rawHref) return;
+
+    const url = new URL(rawHref, window.location.href);
+    const isLocalAppRoute = url.origin === window.location.origin && /^\/(?:en\/)?app(?:\/|$)/.test(url.pathname);
+    if (!isLocalAppRoute) return;
+
+    url.protocol = 'http:';
+    url.hostname = 'localhost';
+    url.port = '4174';
+    link.href = url.toString();
   });
 })();
 

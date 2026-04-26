@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { defineMessages, useLocale } from "../lib/i18n";
 
 type WorkspaceProfile = {
   balance: number;
@@ -33,50 +34,80 @@ const normalizeExpiry = (value: unknown) => {
   return parsed;
 };
 
-const formatExpiryDate = (value: Date) =>
-  new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(value);
-
 const getDaysLeft = (value: Date) => {
   const diffMs = value.getTime() - Date.now();
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 };
 
+const workspaceStatusMessages = defineMessages({
+  balance: {
+    ru: "Баланс",
+    en: "Balance",
+  },
+  freePlanTooltip: {
+    ru: "Бесплатный тариф без даты окончания.",
+    en: "Free plan with no expiration date.",
+  },
+  openPlan: {
+    ru: "Открыть тариф",
+    en: "Open plan",
+  },
+  plan: {
+    ru: "Тариф",
+    en: "Plan",
+  },
+  refillBalance: {
+    ru: "Пополнить баланс",
+    en: "Top up balance",
+  },
+  tariffActive: {
+    ru: "Тариф активен.",
+    en: "Plan is active.",
+  },
+});
+
 export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
+  const { locale, localizePath, t } = useLocale();
   const normalizedPlan = normalizePlan(profile?.plan);
   const expiryDate = normalizeExpiry(profile?.expiresAt);
   const daysLeft = expiryDate ? getDaysLeft(expiryDate) : null;
   const hasPaidPlan = normalizedPlan !== "FREE" && normalizedPlan !== "…";
   const isExpiringSoon = Boolean(hasPaidPlan && daysLeft !== null && daysLeft <= 3);
 
-  let tooltipText = "Бесплатный тариф без даты окончания.";
+  let tooltipText = t(workspaceStatusMessages.freePlanTooltip);
   if (hasPaidPlan && expiryDate) {
+    const formattedExpiryDate = new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(expiryDate);
     tooltipText =
       daysLeft !== null
-        ? `Активен до ${formatExpiryDate(expiryDate)}. Осталось ${daysLeft} дн.`
-        : `Активен до ${formatExpiryDate(expiryDate)}.`;
+        ? locale === "en"
+          ? `Active until ${formattedExpiryDate}. ${daysLeft} days left.`
+          : `Активен до ${formattedExpiryDate}. Осталось ${daysLeft} дн.`
+        : locale === "en"
+          ? `Active until ${formattedExpiryDate}.`
+          : `Активен до ${formattedExpiryDate}.`;
   } else if (hasPaidPlan) {
-    tooltipText = "Тариф активен.";
+    tooltipText = t(workspaceStatusMessages.tariffActive);
   }
 
   return (
     <>
       <Link
         className={`site-header__plan${isExpiringSoon ? " is-expiring-soon" : ""}`}
-        to="/pricing"
-        aria-label="Открыть тариф"
+        to={localizePath("/pricing")}
+        aria-label={t(workspaceStatusMessages.openPlan)}
       >
-        <span>Тариф</span>
+        <span>{t(workspaceStatusMessages.plan)}</span>
         <strong>{normalizedPlan}</strong>
         <span className="site-header__plan-tooltip" aria-hidden="true">
           {tooltipText}
         </span>
       </Link>
-      <Link className="site-header__credits" to="/pricing" aria-label="Пополнить баланс">
-        <span className="site-header__credits-label">Баланс</span>
+      <Link className="site-header__credits" to={localizePath("/pricing")} aria-label={t(workspaceStatusMessages.refillBalance)}>
+        <span className="site-header__credits-label">{t(workspaceStatusMessages.balance)}</span>
         <span className="site-header__credits-value">
           <strong>{normalizeBalance(profile?.balance)}</strong>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

@@ -55,6 +55,16 @@ type AdsflowYouTubeConnectUrlResponse = {
   url?: string | null;
 };
 
+export const normalizeWorkspacePublishStatus = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+export const isWorkspacePublishSuccessStatus = (status: string) =>
+  ["complete", "completed", "done", "published", "scheduled", "success", "succeeded"].includes(
+    normalizeWorkspacePublishStatus(status),
+  );
+
 export type WorkspaceYouTubePublication = {
   channelName: string | null;
   channelPk: number | null;
@@ -400,8 +410,13 @@ export async function startWorkspaceYoutubePublish(
     throw new Error("AdsFlow did not return a publish job id.");
   }
 
+  const enqueueError = normalizeText(payload.enqueue_error) || null;
+  if (enqueueError) {
+    throw new Error(enqueueError);
+  }
+
   return {
-    enqueueError: normalizeText(payload.enqueue_error) || null,
+    enqueueError,
     jobId,
     status: normalizeText(payload.status) || "queued",
     videoProjectId: Number(payload.video_project_id ?? options.videoProjectId) || options.videoProjectId,

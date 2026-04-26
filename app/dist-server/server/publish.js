@@ -1,5 +1,9 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+export const normalizeWorkspacePublishStatus = (value) => String(value ?? "")
+    .trim()
+    .toLowerCase();
+export const isWorkspacePublishSuccessStatus = (status) => ["complete", "completed", "done", "published", "scheduled", "success", "succeeded"].includes(normalizeWorkspacePublishStatus(status));
 const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 504]);
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
@@ -238,8 +242,12 @@ export async function startWorkspaceYoutubePublish(user, options) {
     if (!jobId) {
         throw new Error("AdsFlow did not return a publish job id.");
     }
+    const enqueueError = normalizeText(payload.enqueue_error) || null;
+    if (enqueueError) {
+        throw new Error(enqueueError);
+    }
     return {
-        enqueueError: normalizeText(payload.enqueue_error) || null,
+        enqueueError,
         jobId,
         status: normalizeText(payload.status) || "queued",
         videoProjectId: Number(payload.video_project_id ?? options.videoProjectId) || options.videoProjectId,

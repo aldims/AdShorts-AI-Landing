@@ -1,4 +1,5 @@
 import type { StudioCreditAction } from "../../shared/studio-credit-costs";
+import type { Locale } from "../../shared/locales";
 import type { PricingEntryIntentSection } from "./pricing-entry-intent";
 
 export type InsufficientCreditsContext = {
@@ -18,7 +19,11 @@ const formatCreditsLabel = (value: number | null) => {
   return String(Math.max(0, value));
 };
 
-const formatCreditsWord = (value: number) => {
+const formatCreditsWord = (value: number, locale: Locale = "ru") => {
+  if (locale === "en") {
+    return Math.abs(value) === 1 ? "credit" : "credits";
+  }
+
   const normalizedValue = Math.abs(value) % 100;
   const lastDigit = normalizedValue % 10;
 
@@ -37,7 +42,7 @@ const formatCreditsWord = (value: number) => {
   return "кредитов";
 };
 
-export const formatCreditsCountLabel = (value: number) => `${value} ${formatCreditsWord(value)}`;
+export const formatCreditsCountLabel = (value: number, locale: Locale = "ru") => `${value} ${formatCreditsWord(value, locale)}`;
 
 export const canPurchaseAddonCredits = (plan: string | null) => isAddonEligiblePlan(plan);
 
@@ -53,7 +58,7 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
     case "photo_animation":
       return "ИИ анимация фото";
     case "image_edit":
-      return "Дорисовать фото";
+      return "Дорисовать";
     case "image_upscale":
       return "Улучшение качества изображения";
     case "video_generation":

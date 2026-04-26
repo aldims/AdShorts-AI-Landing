@@ -24,6 +24,30 @@ describe("studio prompt enhancement", () => {
     expect(result.prompt).toContain("photorealistic");
   });
 
+  it("uses the selected English language for enhancement even when the prompt contains Cyrillic text", async () => {
+    env.openrouterApiKey = undefined;
+
+    const result = await improveStudioSegmentAiPhotoPrompt("бариста в уютной кофейне", {
+      language: "en",
+      mode: "ai_photo",
+    });
+
+    expect(result.prompt).toContain("Бариста в уютной кофейне");
+    expect(result.prompt).toContain("cinematic vertical 9:16 composition");
+  });
+
+  it("keeps an explicit English request written in Russian for prompt enhancement", async () => {
+    env.openrouterApiKey = undefined;
+
+    const result = await improveStudioSegmentAiPhotoPrompt("сделай на английском: бариста в уютной кофейне", {
+      language: "en",
+      mode: "ai_photo",
+    });
+
+    expect(result.prompt).toContain("cinematic vertical 9:16 composition");
+    expect(result.prompt).not.toContain("кинематографичная вертикальная композиция 9:16");
+  });
+
   it("throws when OpenRouter key is a placeholder instead of silently using fallback", async () => {
     env.openrouterApiKey = "your_api_key";
 

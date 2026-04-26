@@ -2,9 +2,11 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { readExamplePrefillIntent, writeExamplePrefillIntent, type ExamplePrefillIntent } from "../lib/example-prefill";
+import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 
@@ -73,34 +75,79 @@ type LocalExampleDeleteResponse = {
 
 const EXAMPLE_PREVIEW_PLAY_EVENT = "adshorts:example-preview-play";
 
-const exampleGoalCopy: Record<ExampleGoal, { label: string; shortLabel: string }> = {
-  ads: {
-    label: "📣 Рекламные Shorts",
-    shortLabel: "📣 Реклама",
+const examplesMessages = defineMessages({
+  all: { ru: "Все", en: "All" },
+  deleteExample: { ru: "Удалить общий пример", en: "Delete shared example" },
+  deleteFailed: { ru: "Не удалось удалить локальный пример.", en: "Could not delete the local example." },
+  emptyProject: { ru: "Нужен пустой проект без шаблона?", en: "Need a blank project without a template?" },
+  filters: { ru: "Фильтр примеров", en: "Example filter" },
+  heroAria: { ru: "Преимущества страницы", en: "Page benefits" },
+  heroHeading: { ru: "Готовые сцены для запуска Shorts", en: "Ready scenes for launching Shorts" },
+  heroLead: {
+    ru: "Выберите подходящий шаблон, нажмите «Использовать» и получите готовую структуру прямо в студии.",
+    en: "Choose a template, click Use and get a ready structure directly in the studio.",
   },
-  growth: {
-    label: "📈 Shorts для роста канала",
-    shortLabel: "📈 Рост канала",
+  howItWorks: { ru: "Как это работает", en: "How it works" },
+  oneClick: { ru: "1 клик", en: "1 click" },
+  openStudio: { ru: "Открыть студию", en: "Open studio" },
+  playExample: { ru: "Воспроизвести пример", en: "Play example" },
+  signIn: { ru: "Войти", en: "Sign in" },
+  startFast: { ru: "Быстрый старт за несколько секунд", en: "Quick start in seconds" },
+  stepChoose: { ru: "Выберите пример", en: "Choose an example" },
+  stepChooseText: { ru: "Реклама, рост канал, экспертиза.", en: "Ads, channel growth, expertise." },
+  stepGet: { ru: "Получите похожий Shorts", en: "Get a similar Shorts" },
+  stepGetText: { ru: "Добавляйте свои настройки при необходимости.", en: "Adjust settings whenever you need." },
+  stepUse: { ru: "Нажмите Использовать", en: "Click Use" },
+  stepUseText: { ru: "Все настройки уже готовы для генерации.", en: "All settings are ready for generation." },
+  studioDistance: { ru: "до студии", en: "to studio" },
+  use: { ru: "Использовать", en: "Use" },
+});
+
+const exampleGoalCopy: Record<Locale, Record<ExampleGoal, { label: string; shortLabel: string }>> = {
+  ru: {
+    ads: {
+      label: "📣 Рекламные Shorts",
+      shortLabel: "📣 Реклама",
+    },
+    growth: {
+      label: "📈 Shorts для роста канала",
+      shortLabel: "📈 Рост канала",
+    },
+    expert: {
+      label: "🎓 Экспертные Shorts",
+      shortLabel: "🎓 Экспертиза",
+    },
   },
-  expert: {
-    label: "🎓 Экспертные Shorts",
-    shortLabel: "🎓 Экспертиза",
+  en: {
+    ads: {
+      label: "📣 Ad Shorts",
+      shortLabel: "📣 Ads",
+    },
+    growth: {
+      label: "📈 Channel growth Shorts",
+      shortLabel: "📈 Growth",
+    },
+    expert: {
+      label: "🎓 Expert Shorts",
+      shortLabel: "🎓 Expertise",
+    },
   },
 };
 
 const exampleGoalOrder: ExampleGoal[] = ["ads", "growth", "expert"];
 
-const createRussianExamplePrefillSettings = (
+const createExamplePrefillSettings = (
+  locale: Locale,
   overrides: Partial<ExamplePrefillStudioSettings> = {},
 ): ExamplePrefillStudioSettings => ({
-  language: "ru",
+  language: locale,
   musicType: "ai",
   subtitleColorId: "purple",
   subtitleEnabled: true,
   subtitleStyleId: "modern",
   videoMode: "standard",
   voiceEnabled: true,
-  voiceId: "Bys_24000",
+  voiceId: locale === "en" ? "Aiden" : "Bys_24000",
   ...overrides,
 });
 
@@ -108,7 +155,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "story-future-city",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "inspirational",
       subtitleColorId: "cyan",
       subtitleStyleId: "story",
@@ -126,7 +173,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "sales-offer-contrast",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "business",
       subtitleColorId: "yellow",
       subtitleStyleId: "impact",
@@ -144,7 +191,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "facts-curiosity-loop",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "ai",
       subtitleColorId: "purple",
       subtitleStyleId: "modern",
@@ -162,7 +209,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "expert",
     id: "story-mini-scene",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "dramatic",
       subtitleColorId: "white",
       subtitleStyleId: "cinema",
@@ -180,7 +227,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "ads",
     id: "ugc-viral-find",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "fun",
       subtitleColorId: "orange",
       subtitleStyleId: "karaoke",
@@ -198,7 +245,7 @@ const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
     id: "effects-wow-frame",
-    prefillSettings: createRussianExamplePrefillSettings({
+    prefillSettings: createExamplePrefillSettings("ru", {
       musicType: "energetic",
       subtitleColorId: "blue",
       subtitleStyleId: "impact",
@@ -215,6 +262,86 @@ const exampleItems: ExampleItem[] = [
     videoSrc: "/1ru.mp4",
   },
 ];
+
+const englishExampleCopy: Record<string, Pick<ExampleItem, "promptHint" | "seedPrompt" | "summary" | "tags" | "title"> & {
+  prefillSettings?: Partial<ExamplePrefillStudioSettings>;
+}> = {
+  "story-future-city": {
+    prefillSettings: { musicType: "inspirational", subtitleColorId: "cyan", subtitleStyleId: "story", voiceId: "Serena" },
+    promptHint: "Atmospheric storytelling with a strong first frame.",
+    seedPrompt:
+      "Create a storytelling Shorts about how AI changes a familiar city: an atmospheric first frame, 3 short points and a clear final takeaway with no fluff.",
+    summary:
+      "A format for personal stories, trends and narrative videos where mood, pace and a complete scene matter from the first second.",
+    tags: ["Storytelling", "Atmosphere", "Hook"],
+    title: "Storytelling with a cinematic first frame",
+  },
+  "sales-offer-contrast": {
+    prefillSettings: { musicType: "business", subtitleColorId: "yellow", subtitleStyleId: "impact", voiceId: "Ryan" },
+    promptHint: "A sale through pain, solution and a short CTA.",
+    seedPrompt:
+      "Create a sales Shorts for an ad setup service: a strong hook about losing customers, then the solution and a short CTA to send a request.",
+    summary:
+      "Works for services, agencies and experts when you need to show the pain, solution and next step without a long explanation.",
+    tags: ["Sales", "Offer", "CTA"],
+    title: "Selling a service through contrast and a result promise",
+  },
+  "facts-curiosity-loop": {
+    prefillSettings: { voiceId: "Aiden" },
+    promptHint: "A curious fact with retention and payoff.",
+    seedPrompt:
+      "Create a Shorts in a curious fact format about cats: a bright hook, 3 quick observations and a short final takeaway that keeps retention.",
+    summary:
+      "A format for educational topics, lists and fact channels where curiosity loop, surprise and fast payoff matter.",
+    tags: ["Facts", "Retention", "Curiosity"],
+    title: "Fact video with a visual anchor",
+  },
+  "story-mini-scene": {
+    prefillSettings: { musicType: "dramatic", subtitleColorId: "white", subtitleStyleId: "cinema", voiceId: "Vivian" },
+    promptHint: "Rising interest and a visual scene.",
+    seedPrompt:
+      "Create a Shorts about a rare discovery in the Alps: an atmospheric first frame, rising interest, a sense of mystery and a short twist at the end.",
+    summary:
+      "Useful for videos that should feel like a small scene rather than a simple set of facts.",
+    tags: ["Scene", "Emotion", "Narrative"],
+    title: "Mini-story with rising interest",
+  },
+  "ugc-viral-find": {
+    prefillSettings: { musicType: "fun", subtitleColorId: "orange", subtitleStyleId: "karaoke", voiceId: "Dylan" },
+    promptHint: "A lively delivery that feels shot right now.",
+    seedPrompt:
+      "Create a viral-style Shorts about a product for a daily habit: conversational tone, fast hook, a live discovery feeling and a native CTA.",
+    summary:
+      "Works for tests, reactions, native integrations and videos that should feel alive, fast and not overproduced.",
+    tags: ["Viral", "Native", "Lively"],
+    title: "Viral delivery with a just-shot feel",
+  },
+  "effects-wow-frame": {
+    prefillSettings: { musicType: "energetic", subtitleColorId: "blue", subtitleStyleId: "impact", videoMode: "ai_video", voiceId: "Eric" },
+    promptHint: "A visual wow effect as the main hook.",
+    seedPrompt:
+      "Create a Shorts with a visual wow effect: the first frame should surprise, then 3 quick scene changes and a short final takeaway.",
+    summary:
+      "A format for videos where visual impression, montage dynamics and a catchy first frame do most of the work.",
+    tags: ["WOW", "Effect", "Dynamic"],
+    title: "WOW scene focused on a visual effect",
+  },
+};
+
+const getExampleItemsForLocale = (locale: Locale): ExampleItem[] => {
+  if (locale === "ru") return exampleItems;
+
+  return exampleItems.map((item) => {
+    const copy = englishExampleCopy[item.id];
+    if (!copy) return item;
+
+    return {
+      ...item,
+      ...copy,
+      prefillSettings: createExamplePrefillSettings("en", copy.prefillSettings),
+    };
+  });
+};
 
 const formatExampleOrdinal = (index: number) => String(index + 1).padStart(2, "0");
 
@@ -244,6 +371,7 @@ function ExampleVideoPreview({
   priority = false,
   videoClassName,
 }: ExampleVideoPreviewProps) {
+  const { t } = useLocale();
   const containerRef = useRef<HTMLButtonElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isInViewport, setIsInViewport] = useState(priority);
@@ -412,7 +540,7 @@ function ExampleVideoPreview({
       onMouseEnter={handlePreviewMouseEnter}
       onMouseLeave={handlePreviewMouseLeave}
       aria-pressed={playbackMode === "sound"}
-      aria-label={`Воспроизвести пример: ${example.title}`}
+      aria-label={`${t(examplesMessages.playExample)}: ${example.title}`}
     >
       {media}
     </button>
@@ -427,6 +555,7 @@ export function ExamplesPage({
   onLogout,
   onOpenWorkspace,
 }: Props) {
+  const { locale, localizePath, t } = useLocale();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
@@ -440,16 +569,18 @@ export function ExamplesPage({
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
   const knownGoals = new Set<string>(["ads", "growth", "expert"]);
   const filteredLocalExamples = localExamples.filter((e) => knownGoals.has(e.goal));
-  const allExamples = filteredLocalExamples.length > 0 ? filteredLocalExamples : exampleItems;
+  const localeExampleItems = getExampleItemsForLocale(locale);
+  const goalCopy = exampleGoalCopy[locale];
+  const allExamples = filteredLocalExamples.length > 0 ? filteredLocalExamples : localeExampleItems;
   const totalThemeCount = new Set(allExamples.map((example) => example.goal)).size;
   const totalSceneCount = allExamples.length;
   const exampleFilterOptions: Array<{ id: ExampleFilter; label: string }> = [
-    { id: "all", label: "Все" },
+    { id: "all", label: t(examplesMessages.all) },
     ...exampleGoalOrder
       .filter((goal) => allExamples.some((example) => example.goal === goal))
       .map((goal) => ({
         id: goal,
-        label: exampleGoalCopy[goal].shortLabel,
+        label: goalCopy[goal].shortLabel,
       })),
   ];
   const visibleExamples = activeFilter === "all" ? allExamples : allExamples.filter((example) => example.goal === activeFilter);
@@ -460,8 +591,8 @@ export function ExamplesPage({
     const pendingIntent = readExamplePrefillIntent();
     if (!pendingIntent) return;
 
-    navigate("/app/studio", { replace: true });
-  }, [navigate, session]);
+    navigate(localizePath("/app/studio"), { replace: true });
+  }, [localizePath, navigate, session]);
 
   useEffect(() => {
     let cancelled = false;
@@ -536,7 +667,7 @@ export function ExamplesPage({
     writeExamplePrefillIntent(intent);
 
     if (session) {
-      navigate("/app/studio");
+      navigate(localizePath("/app/studio"));
       return;
     }
 
@@ -558,12 +689,12 @@ export function ExamplesPage({
       const payload = (await response.json().catch(() => null)) as LocalExampleDeleteResponse | null;
 
       if (!response.ok || payload?.data?.exampleId !== exampleId) {
-        throw new Error(payload?.error ?? "Не удалось удалить локальный пример.");
+        throw new Error(payload?.error ?? t(examplesMessages.deleteFailed));
       }
 
       setLocalExamples((current) => current.filter((item) => item.id !== exampleId));
     } catch (error) {
-      setLocalExampleDeleteError(error instanceof Error ? error.message : "Не удалось удалить локальный пример.");
+      setLocalExampleDeleteError(error instanceof Error ? error.message : t(examplesMessages.deleteFailed));
     } finally {
       setDeletingLocalExampleId((current) => (current === exampleId ? null : current));
     }
@@ -573,7 +704,7 @@ export function ExamplesPage({
     <div className="route-page examples-page">
       <header className="site-header" id="top">
         <div className="container site-header__inner">
-          <Link className="brand" to="/" aria-label="AdShorts AI">
+          <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
@@ -581,6 +712,7 @@ export function ExamplesPage({
           <PrimarySiteNav activeItem="examples" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
 
           <div className="site-header__actions">
+            <LanguageSwitcher />
             {session ? (
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
@@ -588,7 +720,7 @@ export function ExamplesPage({
               </>
             ) : (
               <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>
-                Войти
+                {t(examplesMessages.signIn)}
               </button>
             )}
           </div>
@@ -600,53 +732,51 @@ export function ExamplesPage({
           <div className="container">
             <div className="examples-modern__hero-grid">
               <div className="examples-modern__hero-copy">
-                <h1>Готовые сцены для запуска Shorts</h1>
-                <p className="examples-modern__hero-lead">
-                  Выберите подходящий шаблон, нажмите «Использовать» и получите готовую структуру прямо в студии.
-                </p>
+                <h1>{t(examplesMessages.heroHeading)}</h1>
+                <p className="examples-modern__hero-lead">{t(examplesMessages.heroLead)}</p>
 
-                <div className="examples-modern__hero-facts" aria-label="Преимущества страницы">
+                <div className="examples-modern__hero-facts" aria-label={t(examplesMessages.heroAria)}>
                   <article className="examples-modern__hero-fact">
                     <strong>{totalThemeCount}</strong>
-                    <span>{getRussianPluralForm(totalThemeCount, ["тема", "темы", "тем"])}</span>
+                    <span>{locale === "en" ? (totalThemeCount === 1 ? "theme" : "themes") : getRussianPluralForm(totalThemeCount, ["тема", "темы", "тем"])}</span>
                   </article>
                   <article className="examples-modern__hero-fact">
                     <strong>{totalSceneCount}</strong>
-                    <span>{getRussianPluralForm(totalSceneCount, ["готовая сцена", "готовые сцены", "готовых сцен"])}</span>
+                    <span>{locale === "en" ? (totalSceneCount === 1 ? "ready scene" : "ready scenes") : getRussianPluralForm(totalSceneCount, ["готовая сцена", "готовые сцены", "готовых сцен"])}</span>
                   </article>
                   <article className="examples-modern__hero-fact">
-                    <strong>1 клик</strong>
-                    <span>до студии</span>
+                    <strong>{t(examplesMessages.oneClick)}</strong>
+                    <span>{t(examplesMessages.studioDistance)}</span>
                   </article>
                 </div>
               </div>
 
-              <aside className="examples-modern__hero-panel" aria-label="Как это работает">
-                <span className="examples-modern__hero-panel-label">Как это работает</span>
-                <strong className="examples-modern__hero-panel-title">Быстрый старт за несколько секунд</strong>
+              <aside className="examples-modern__hero-panel" aria-label={t(examplesMessages.howItWorks)}>
+                <span className="examples-modern__hero-panel-label">{t(examplesMessages.howItWorks)}</span>
+                <strong className="examples-modern__hero-panel-title">{t(examplesMessages.startFast)}</strong>
 
                 <div className="examples-modern__hero-steps">
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">01</span>
                     <div>
-                      <strong>Выберите пример</strong>
-                      <p>Реклама, рост канал, экспертиза.</p>
+                      <strong>{t(examplesMessages.stepChoose)}</strong>
+                      <p>{t(examplesMessages.stepChooseText)}</p>
                     </div>
                   </article>
 
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">02</span>
                     <div>
-                      <strong>Нажмите Использовать</strong>
-                      <p>Все настройки уже готовы для генерации.</p>
+                      <strong>{t(examplesMessages.stepUse)}</strong>
+                      <p>{t(examplesMessages.stepUseText)}</p>
                     </div>
                   </article>
 
                   <article className="examples-modern__hero-step">
                     <span className="examples-modern__hero-step-number">03</span>
                     <div>
-                      <strong>Получите похожий Shorts</strong>
-                      <p>Добавляйте свои настройки при необходимости.</p>
+                      <strong>{t(examplesMessages.stepGet)}</strong>
+                      <p>{t(examplesMessages.stepGetText)}</p>
                     </div>
                   </article>
                 </div>
@@ -658,7 +788,7 @@ export function ExamplesPage({
         <section className="section examples-modern__catalog">
           <div className="container examples-modern__catalog-inner">
             <div className="examples-modern__filters-shell">
-              <div className="examples-modern__filters" aria-label="Фильтр примеров">
+              <div className="examples-modern__filters" aria-label={t(examplesMessages.filters)}>
                 {exampleFilterOptions.map((item) => (
                   <button
                     key={item.id}
@@ -679,8 +809,8 @@ export function ExamplesPage({
                     <button
                       className="examples-modern__delete"
                       type="button"
-                      aria-label="Удалить общий пример"
-                      title="Удалить из общей базы примеров"
+                      aria-label={t(examplesMessages.deleteExample)}
+                      title={t(examplesMessages.deleteExample)}
                       disabled={deletingLocalExampleId === example.id}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -706,7 +836,7 @@ export function ExamplesPage({
                     overlay={
                       <>
                         <div className="examples-modern__preview-bar">
-                          <span className="examples-modern__preview-goal">{(exampleGoalCopy[example.goal] ?? exampleGoalCopy["ads"]).shortLabel}</span>
+                          <span className="examples-modern__preview-goal">{(goalCopy[example.goal] ?? goalCopy["ads"]).shortLabel}</span>
                           {!example.isLocal ? <span className="examples-modern__preview-index">{formatExampleOrdinal(index)}</span> : null}
                         </div>
                         <div className="examples-modern__preview-copy">
@@ -720,7 +850,7 @@ export function ExamplesPage({
 
                   <div className="examples-modern__card-body">
                     <button className="examples-modern__use route-button" type="button" onClick={() => openExampleInStudio(example)}>
-                      Использовать
+                      {t(examplesMessages.use)}
                     </button>
                   </div>
                 </article>
@@ -734,9 +864,9 @@ export function ExamplesPage({
             ) : null}
 
             <div className="examples-modern__catalog-footer">
-              <p>Нужен пустой проект без шаблона?</p>
+              <p>{t(examplesMessages.emptyProject)}</p>
               <button className="examples-modern__secondary route-button" type="button" onClick={openPrimaryFlow}>
-                Открыть студию
+                {t(examplesMessages.openStudio)}
               </button>
             </div>
           </div>
