@@ -23,14 +23,57 @@ const renderLandingPage = (locale: Locale = "ru") =>
   );
 
 describe("LandingPage guides section", () => {
-  it("renders the updated hero headline", () => {
+  it("keeps the language switcher in the landing header", () => {
     renderLandingPage();
+
+    expect(screen.getByRole("button", { name: "Язык: Русский" })).toBeTruthy();
+  });
+
+  it("renders the updated hero headline", () => {
+    const { container } = renderLandingPage();
 
     expect(
       screen.getByRole("heading", {
         name: /Shorts \/ Reels \/ TikTok за\s*1\s*минуту\. В один клик\./,
       }),
     ).toBeTruthy();
+    expect(screen.getByText("Введите идею — получите готовый Shorts с озвучкой, субтитрами и визуалом")).toBeTruthy();
+    expect(screen.getByText("Рост канала")).toBeTruthy();
+    expect(screen.getByText("Новые клиенты")).toBeTruthy();
+    expect(screen.getByText("Контент без усилий")).toBeTruthy();
+    expect(screen.queryByLabelText("Что входит в ролик")).toBeNull();
+    expect(screen.queryByText("AI сценарий")).toBeNull();
+    expect(screen.queryByText("Редактирование в студии")).toBeNull();
+    expect(screen.queryByText("Подходит для регулярного контента")).toBeNull();
+    expect(screen.queryByText("Лучшие лимиты для активного использования")).toBeNull();
+    expect(screen.queryByText("/ 50 кредитов")).toBeNull();
+    expect(screen.queryByText("/ 250 кредитов")).toBeNull();
+    expect(screen.queryByText("/ 1000 кредитов")).toBeNull();
+    expect(screen.getByText("До 5 Shorts")).toBeTruthy();
+    expect(screen.getByText("До 25 Shorts")).toBeTruthy();
+    expect(screen.getByText("До 100 Shorts")).toBeTruthy();
+    expect(screen.queryByText("Полный доступ к созданию Shorts")).toBeNull();
+    expect(screen.queryByText("Можно докупать кредиты")).toBeNull();
+    expect(screen.queryByText("Ранний доступ к новым функциям")).toBeNull();
+    expect(container.querySelector(".hero__trust")).toBeNull();
+    expect(screen.queryByText("ИДЕАЛЬНО ДЛЯ")).toBeNull();
+    expect(screen.queryByText("Авторы")).toBeNull();
+    expect(screen.queryByText("Бренды")).toBeNull();
+    expect(screen.queryByText("Агентства")).toBeNull();
+    expect(container.querySelector(".hero-live-preview__chips")).toBeNull();
+    expect(screen.queryByText("Визуал")).toBeNull();
+    expect(screen.queryByText("Озвучка")).toBeNull();
+    expect(screen.queryByText("Субтитры")).toBeNull();
+    expect(screen.queryByText("Музыка")).toBeNull();
+    expect(screen.getByText("Создавайте готовые ролики за минуты — от идеи до публикации в одном месте")).toBeTruthy();
+    expect(screen.queryByText("Запусти канал, который приносит просмотры каждый день")).toBeNull();
+    expect(screen.getByText("Всё создаётся автоматически")).toBeTruthy();
+    expect(screen.queryByText("Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Открыть примеры Shorts: Обучающие Shorts" }).getAttribute("href")).toBe("/examples?filter=expert");
+    expect(screen.getByText("Обучающие Shorts")).toBeTruthy();
+    expect(screen.queryByText("Экспертные Shorts")).toBeNull();
+    expect(screen.getByRole("link", { name: "Перейти к тарифам" }).getAttribute("href")).toBe("/pricing");
+    expect(screen.queryByText("Все тарифы")).toBeNull();
   });
 
   it("renders the English hero and localized internal links", () => {

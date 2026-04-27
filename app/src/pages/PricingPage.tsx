@@ -148,10 +148,11 @@ const pricingMessages = defineMessages({
   },
 });
 
-type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge" | "ctaLabel" | "credits" | "features" | "subnote"> & {
+type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge" | "billing" | "ctaLabel" | "credits" | "features" | "subnote"> & {
   audience: Record<Locale, string>;
   audienceLines?: Record<Locale, string[]>;
   badge?: Record<Locale, string>;
+  billing: Record<Locale, string>;
   ctaLabel: Record<Locale, string>;
   credits: Record<Locale, string>;
   features: Record<Locale, string[]>;
@@ -162,12 +163,12 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "start",
     name: "START",
-    audience: { ru: "Для первого запуска", en: "For the first launch" },
-    audienceLines: { ru: ["Для первого", "запуска"], en: ["For the first", "launch"] },
+    audience: { ru: "Идеально для первого запуска", en: "Ideal for the first launch" },
+    audienceLines: { ru: ["Идеально для первого", "запуска"], en: ["Ideal for the first", "launch"] },
     price: "390 ₽",
-    billing: "",
-    credits: { ru: "50 кредитов", en: "50 credits" },
-    subnote: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
+    billing: { ru: "/ 50 кредитов", en: "/ 50 credits" },
+    credits: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
+    subnote: { ru: "≈ 78 ₽ за Shorts", en: "≈ 78 ₽ per Short" },
     features: {
       ru: ["Полный доступ к созданию Shorts", "Без водяного знака", "Редактирование в студии", "Автопубликация в YouTube"],
       en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube auto-publishing"],
@@ -177,12 +178,12 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "pro",
     name: "PRO",
-    audience: { ru: "Для регулярного контент-потока", en: "For a regular content flow" },
-    audienceLines: { ru: ["Для регулярного", "контент-потока"], en: ["For a regular", "content flow"] },
+    audience: { ru: "Идеально для регулярного контент-потока", en: "Ideal for a regular content flow" },
+    audienceLines: { ru: ["Идеально для регулярного", "контент-потока"], en: ["Ideal for a regular", "content flow"] },
     price: "1 490 ₽",
-    billing: "",
-    credits: { ru: "250 кредитов", en: "250 credits" },
-    subnote: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
+    billing: { ru: "/ 250 кредитов", en: "/ 250 credits" },
+    credits: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
+    subnote: { ru: "≈ 60 ₽ за Shorts", en: "≈ 60 ₽ per Short" },
     features: {
       ru: ["Всё из START", "Приоритетная генерация", "Можно докупать кредиты", "Подходит для регулярного контента"],
       en: ["Everything in START", "Priority generation", "Credit top-ups available", "Built for regular content"],
@@ -194,12 +195,12 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "ultra",
     name: "ULTRA",
-    audience: { ru: "Для максимального объёма", en: "For maximum volume" },
-    audienceLines: { ru: ["Для максимального", "объёма"], en: ["For maximum", "volume"] },
+    audience: { ru: "Идеально для максимального объёма", en: "Ideal for maximum volume" },
+    audienceLines: { ru: ["Идеально для максимального", "объёма"], en: ["Ideal for maximum", "volume"] },
     price: "4 990 ₽",
-    billing: "",
-    credits: { ru: "1000 кредитов", en: "1000 credits" },
-    subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
+    billing: { ru: "/ 1000 кредитов", en: "/ 1000 credits" },
+    credits: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
+    subnote: { ru: "≈ 50 ₽ за Shorts", en: "≈ 50 ₽ per Short" },
     features: {
       ru: ["Всё из PRO", "Максимальный приоритет", "Ранний доступ к новым функциям", "Лучшие лимиты для активного использования"],
       en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
@@ -270,6 +271,7 @@ const getPricingPlans = (locale: Locale): PricingPlan[] =>
     audience: plan.audience[locale],
     audienceLines: plan.audienceLines?.[locale],
     badge: plan.badge?.[locale],
+    billing: plan.billing[locale],
     credits: plan.credits[locale],
     ctaLabel: plan.ctaLabel[locale],
     features: plan.features[locale],

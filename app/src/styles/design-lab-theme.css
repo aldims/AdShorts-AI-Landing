@@ -28967,6 +28967,18 @@ html, body {
   border-radius: 14px !important;
 }
 
+@media (max-width: 1180px) {
+  .pricing-max-hero {
+    padding-top: 230px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .pricing-max-hero {
+    padding-top: 300px !important;
+  }
+}
+
 /* Linear-style refine carousel shell */
 .section--landing-refine.lp-section {
   overflow: hidden;

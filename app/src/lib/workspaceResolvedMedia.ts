@@ -87,10 +87,11 @@ export const resolveWorkspaceMediaSurface = (
   if (previewKind === "video") {
     switch (input.context) {
       case "segment-carousel-card": {
+        const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
         mountVideoWhenIdle = isPlaybackRequested || forceMountVideoWhenIdle;
         preloadPolicy = isPlaybackRequested ? "auto" : forceMountVideoWhenIdle ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
         preferPosterFrame = !isPlaybackRequested;
-        primePausedFrame = false;
+        primePausedFrame = !isPlaybackRequested && forceMountVideoWhenIdle && !hasStablePosterFrame;
         subtitleMode = "active-only";
         break;
       }

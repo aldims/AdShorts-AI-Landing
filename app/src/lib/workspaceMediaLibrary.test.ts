@@ -4,7 +4,9 @@ import {
   dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryAssetIdentityKey,
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
+  getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceMediaLibraryResolvedDedupeKey,
+  isWorkspaceMediaLibraryItemHidden,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
 } from "./workspaceMediaLibrary";
@@ -220,5 +222,45 @@ describe("workspace media library display identity", () => {
     ]);
 
     expect(items).toHaveLength(2);
+  });
+
+  it("matches hidden persisted media by durable asset identity", () => {
+    const hiddenItem = createMediaLibraryItem({
+      assetId: 777,
+      itemKey: "live:ai_photo:job:abc",
+      dedupeKey: "asset:777",
+      source: "live",
+    });
+    const reloadedItem = createMediaLibraryItem({
+      assetId: 777,
+      itemKey: "persisted:asset:777",
+      dedupeKey: "asset:777",
+      source: "persisted",
+    });
+    const hiddenKeys = new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(hiddenItem));
+
+    expect(isWorkspaceMediaLibraryItemHidden(reloadedItem, hiddenKeys)).toBe(true);
+  });
+
+  it("matches hidden media when only the display identity survives reload", () => {
+    const hiddenItem = createMediaLibraryItem({
+      assetId: 101,
+      kind: "photo_animation",
+      itemKey: "persisted:asset:101",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/source-photo.jpg",
+      previewUrl: "https://cdn.example.com/generated-video-a.mp4",
+    });
+    const reloadedItem = createMediaLibraryItem({
+      assetId: null,
+      kind: "photo_animation",
+      itemKey: "persisted:project:55:segment:1",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/source-photo.jpg",
+      previewUrl: "https://cdn.example.com/generated-video-b.mp4",
+    });
+    const hiddenKeys = new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(hiddenItem));
+
+    expect(isWorkspaceMediaLibraryItemHidden(reloadedItem, hiddenKeys)).toBe(true);
   });
 });

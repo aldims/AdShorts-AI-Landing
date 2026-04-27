@@ -26,9 +26,12 @@ import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSe
 import {
   createWorkspaceMediaLibraryItem,
   dedupeWorkspaceMediaLibraryItems,
+  getWorkspaceMediaLibraryAssetIdentityKey,
+  getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceImageDownloadName,
   getWorkspaceProjectDisplayTitle,
   getWorkspaceVideoDownloadName,
+  isWorkspaceMediaLibraryItemHidden,
   normalizeWorkspaceMediaLibraryCreatedAt,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
@@ -1804,6 +1807,38 @@ const isWorkspaceSegmentDraftVisualEdited = (segment: WorkspaceSegmentEditorDraf
   return segment.currentSourceKind === "upload" && segment.originalSourceKind !== "upload";
 };
 
+export const isWorkspaceSegmentDraftVisualResettable = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (isWorkspaceSegmentVisualResetApplied(segment)) {
+    return false;
+  }
+
+  if (segment.visualReset) {
+    return true;
+  }
+
+  if (hasWorkspaceSegmentExplicitDraftVisual(segment)) {
+    return true;
+  }
+
+  if (segment.videoAction !== "original") {
+    return true;
+  }
+
+  return isWorkspaceSegmentDraftVisualEdited(segment);
+};
+
+export const resolveWorkspaceSegmentActivationPlaybackIndex = (
+  segments: Array<{ index: number }>,
+  boundedSegmentArrayIndex: number,
+  options?: { pendingPlaybackIndex?: number | null },
+) => {
+  if (options && "pendingPlaybackIndex" in options) {
+    return options.pendingPlaybackIndex ?? null;
+  }
+
+  return segments[boundedSegmentArrayIndex]?.index ?? null;
+};
+
 const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
   draft: WorkspaceSegmentEditorDraftSession,
   baseline?: WorkspaceSegmentEditorDraftSession | null,
@@ -2073,7 +2108,7 @@ const buildWorkspaceSegmentEditorChangeChecklist = (
       resetText = true;
     }
 
-    if (isWorkspaceSegmentDraftVisualEdited(segment)) {
+    if (isWorkspaceSegmentDraftVisualResettable(segment)) {
       segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
       resetVisual = true;
     }
@@ -2466,9 +2501,9 @@ const workspaceLocalExampleGoalOptions: Array<{
     label: "📈 Рост канала",
   },
   {
-    description: "Факты, разборы, объяснения и ролики с экспертной подачей.",
+    description: "Факты, разборы, объяснения и обучающие ролики.",
     id: "expert",
-    label: "🎓 Экспертиза",
+    label: "🎓 Обучение",
   },
 ];
 const workspaceLocalExampleGoalEnglishCopy: Record<WorkspaceLocalExampleGoal, Pick<(typeof workspaceLocalExampleGoalOptions)[number], "description" | "label">> = {
@@ -2477,8 +2512,8 @@ const workspaceLocalExampleGoalEnglishCopy: Record<WorkspaceLocalExampleGoal, Pi
     label: "📣 Ads",
   },
   expert: {
-    description: "Facts, explainers and expert-led videos.",
-    label: "🎓 Expertise",
+    description: "Facts, explainers and educational videos.",
+    label: "🎓 Education",
   },
   growth: {
     description: "Reach, retention, dynamic formats and channel growth.",
@@ -2635,6 +2670,9 @@ const buildWorkspaceMediaAssetPlaybackUrl = (assetId: number) =>
 const WORKSPACE_MEDIA_ASSET_RAW_PROXY_ROUTE_PATTERN =
   /^\/api\/(?:workspace\/media-assets\/\d+|media\/\d+\/download)(?:[/?#]|$)/i;
 const WORKSPACE_VIDEO_FILE_NAME_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
+
+const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
+  Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
 const getWorkspaceMediaAssetResolvedPreviewUrl = (
   asset:
@@ -3673,6 +3711,7 @@ const applyWorkspaceSegmentUpscaledImageAsset = (
     return {
       ...segment,
       aiPhotoAsset: nextAsset,
+      visualReset: false,
       videoAction: "ai_photo",
     };
   }
@@ -3681,6 +3720,7 @@ const applyWorkspaceSegmentUpscaledImageAsset = (
     return {
       ...segment,
       imageEditAsset: nextAsset,
+      visualReset: false,
       videoAction: "image_edit",
     };
   }
@@ -3688,6 +3728,7 @@ const applyWorkspaceSegmentUpscaledImageAsset = (
   return {
     ...segment,
     customVideo: nextAsset,
+    visualReset: false,
     videoAction: "custom",
   };
 };
@@ -3800,7 +3841,7 @@ const getWorkspaceSegmentFallbackPreviewKind = (
 const getWorkspaceSegmentSelectedVisualPreviewKind = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): WorkspaceSegmentPreviewKind => {
-  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
     return "image";
   }
 
@@ -3817,7 +3858,7 @@ const getWorkspaceSegmentSelectedVisualPreviewKind = (
 };
 
 const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDraftSegment): WorkspaceSegmentPreviewKind => {
-  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
     return "image";
   }
 
@@ -3915,6 +3956,15 @@ const isWorkspaceSegmentAiPhotoRenderedStill = (segment: WorkspaceSegmentEditorD
       isWorkspaceAiPhotoRenderedStillAsset(segment.originalAsset),
   );
 
+const hasWorkspaceSegmentExplicitDraftVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  (segment.videoAction === "custom" && Boolean(segment.customVideo)) ||
+  (segment.videoAction === "ai_photo" && Boolean(segment.aiPhotoAsset)) ||
+  (segment.videoAction === "image_edit" && Boolean(segment.imageEditAsset)) ||
+  ((segment.videoAction === "ai" || segment.videoAction === "photo_animation") && Boolean(segment.aiVideoAsset));
+
+const shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  isWorkspaceSegmentAiPhotoRenderedStill(segment) && !hasWorkspaceSegmentExplicitDraftVisual(segment);
+
 const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef | null | undefined) => {
   const assetId = Number(asset?.assetId);
   if (!Number.isFinite(assetId) || assetId <= 0 || !isWorkspaceVideoMediaAsset(asset)) {
@@ -3977,6 +4027,101 @@ const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null 
     asset?.originalUrl,
   ].find((value) => String(value ?? "").trim());
   return urlIdentity ? `url:${String(urlIdentity).trim()}` : null;
+};
+
+const getWorkspaceSegmentCurrentVisualIdentityKey = (
+  segment: Pick<
+    WorkspaceSegmentEditorSegment,
+    | "currentAsset"
+    | "currentExternalPlaybackUrl"
+    | "currentExternalPreviewUrl"
+    | "currentPlaybackUrl"
+    | "currentPreviewUrl"
+  >,
+) =>
+  getWorkspaceMediaAssetIdentityKey(segment.currentAsset) ??
+  [
+    segment.currentExternalPlaybackUrl,
+    segment.currentExternalPreviewUrl,
+    segment.currentPlaybackUrl,
+    segment.currentPreviewUrl,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean) ??
+  null;
+
+const getWorkspaceSegmentOriginalVisualIdentityKey = (
+  segment: Pick<
+    WorkspaceSegmentEditorSegment,
+    | "originalAsset"
+    | "originalExternalPlaybackUrl"
+    | "originalExternalPreviewUrl"
+    | "originalPlaybackUrl"
+    | "originalPreviewUrl"
+  >,
+) =>
+  getWorkspaceMediaAssetIdentityKey(segment.originalAsset) ??
+  [
+    segment.originalExternalPlaybackUrl,
+    segment.originalExternalPreviewUrl,
+    segment.originalPlaybackUrl,
+    segment.originalPreviewUrl,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean) ??
+  null;
+
+const isWorkspaceSegmentOriginalVisualCollapsedIntoCurrent = (segment: WorkspaceSegmentEditorSegment) => {
+  const currentIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
+  const originalIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(segment);
+
+  return Boolean(currentIdentity && originalIdentity && currentIdentity === originalIdentity);
+};
+
+export const preserveWorkspaceSegmentEditorOriginalVisualReferences = (
+  incomingSession: WorkspaceSegmentEditorSession,
+  baselineSession: WorkspaceSegmentEditorSession | null | undefined,
+): WorkspaceSegmentEditorSession => {
+  if (!baselineSession || baselineSession.projectId !== incomingSession.projectId) {
+    return incomingSession;
+  }
+
+  let hasChanges = false;
+  const baselineSegmentsByIndex = new Map(baselineSession.segments.map((segment) => [segment.index, segment] as const));
+  const segments = incomingSession.segments.map((segment) => {
+    if (!isWorkspaceSegmentOriginalVisualCollapsedIntoCurrent(segment)) {
+      return segment;
+    }
+
+    const baselineSegment = baselineSegmentsByIndex.get(segment.index);
+    if (!baselineSegment) {
+      return segment;
+    }
+
+    const baselineOriginalIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(baselineSegment);
+    const incomingCurrentIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
+    if (!baselineOriginalIdentity || baselineOriginalIdentity === incomingCurrentIdentity) {
+      return segment;
+    }
+
+    hasChanges = true;
+    return {
+      ...segment,
+      originalAsset: cloneWorkspaceMediaAssetRef(baselineSegment.originalAsset),
+      originalExternalPlaybackUrl: baselineSegment.originalExternalPlaybackUrl,
+      originalExternalPreviewUrl: baselineSegment.originalExternalPreviewUrl,
+      originalPlaybackUrl: baselineSegment.originalPlaybackUrl,
+      originalPreviewUrl: baselineSegment.originalPreviewUrl,
+      originalSourceKind: baselineSegment.originalSourceKind,
+    };
+  });
+
+  return hasChanges
+    ? {
+        ...incomingSession,
+        segments,
+      }
+    : incomingSession;
 };
 
 const isWorkspaceSegmentCurrentVisualDifferentFromOriginal = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -4389,6 +4534,12 @@ const isWorkspaceSegmentStaleUploadOriginalVisual = (segment: WorkspaceSegmentEd
   );
 };
 
+const shouldRewriteWorkspaceSegmentOriginalProxyOnReset = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  (segment.currentSourceKind === "upload" ||
+    segment.originalSourceKind === "upload" ||
+    (segment.visualReset && hasWorkspaceSegmentMediaAssetCurrentVisualUrl(segment))) &&
+  !hasWorkspaceSegmentOriginalVisualReference(segment);
+
 const isWorkspaceSegmentVisualResetApplied = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (!segment.visualReset) {
     return false;
@@ -4504,11 +4655,12 @@ const ensureWorkspaceSegmentOriginalProxyReference = (
   };
 };
 
-const resetWorkspaceSegmentDraftVisualToOriginal = (
+export const resetWorkspaceSegmentDraftVisualToOriginal = (
   segment: WorkspaceSegmentEditorDraftSegment,
   projectId?: number | null,
 ): WorkspaceSegmentEditorDraftSegment => {
-  const sourceSegment = isWorkspaceSegmentStaleUploadOriginalVisual(segment)
+  const shouldRewriteOriginalProxy = shouldRewriteWorkspaceSegmentOriginalProxyOnReset(segment);
+  const sourceSegment = shouldRewriteOriginalProxy
     ? ensureWorkspaceSegmentOriginalProxyReference(segment, projectId, { force: true })
     : segment;
   const resetSegment: WorkspaceSegmentEditorDraftSegment = {
@@ -4536,7 +4688,7 @@ const resetWorkspaceSegmentDraftVisualToOriginal = (
     return clearWorkspaceSegmentCurrentVisualReference(resetSegment);
   }
 
-  if (isWorkspaceSegmentStaleUploadOriginalVisual(sourceSegment)) {
+  if (shouldRewriteOriginalProxy) {
     const correctedOriginalSegment: WorkspaceSegmentEditorDraftSegment = {
       ...sourceSegment,
       originalAsset: null,
@@ -4762,6 +4914,12 @@ const createWorkspaceSegmentFreshPhotoAnimationAsset = (
       freshSegment.currentExternalPreviewUrl,
   });
 
+const shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  segment.visualReset ||
+  segment.videoAction !== "original" ||
+  hasWorkspaceSegmentExplicitDraftVisual(segment) ||
+  isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment);
+
 const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   liveSegment: WorkspaceSegmentEditorDraftSegment,
   freshSegment: WorkspaceSegmentEditorSegment,
@@ -4772,6 +4930,9 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const freshPhotoAnimationAsset = shouldUseFreshServerVideo
     ? createWorkspaceSegmentFreshPhotoAnimationAsset(normalizedFreshSegment)
     : null;
+  const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
+    ? liveSegment
+    : normalizedFreshSegment;
 
   return {
     ...normalizedFreshSegment,
@@ -4797,6 +4958,12 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       liveSegment.originalText,
       fallbackLanguage,
     ),
+    originalAsset: cloneWorkspaceMediaAssetRef(originalVisualSegment.originalAsset),
+    originalExternalPlaybackUrl: originalVisualSegment.originalExternalPlaybackUrl,
+    originalExternalPreviewUrl: originalVisualSegment.originalExternalPreviewUrl,
+    originalPlaybackUrl: originalVisualSegment.originalPlaybackUrl,
+    originalPreviewUrl: originalVisualSegment.originalPreviewUrl,
+    originalSourceKind: originalVisualSegment.originalSourceKind,
     photoAnimationSourceAsset: cloneStudioCustomVideoFile(liveSegment.photoAnimationSourceAsset),
     text: liveSegment.text,
     textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
@@ -4809,7 +4976,7 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   };
 };
 
-const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
+export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   liveDraft: WorkspaceSegmentEditorDraftSession,
   freshSession: WorkspaceSegmentEditorSession,
   options?: {
@@ -5182,9 +5349,16 @@ const writeStoredWorkspaceSegmentEditorSession = (
     return;
   }
 
+  const normalizedSession = normalizeWorkspaceSegmentEditorSession(session);
+  const storedBaselineSession = readStoredWorkspaceSegmentEditorSession(normalizedEmail, normalizedProjectId);
+  const sessionToStore = preserveWorkspaceSegmentEditorOriginalVisualReferences(
+    normalizedSession,
+    storedBaselineSession,
+  );
+
   writeWorkspaceSegmentEditorStorageValue(
     getWorkspaceSegmentEditorSessionStorageKey(normalizedEmail, normalizedProjectId),
-    JSON.stringify(normalizeWorkspaceSegmentEditorSession(session)),
+    JSON.stringify(sessionToStore),
   );
 };
 
@@ -5967,7 +6141,13 @@ const getWorkspaceSegmentVisualResetPreviewUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (isWorkspaceSegmentStaleUploadOriginalVisual(segment)) {
-    return segment.originalPreviewUrl ?? segment.originalPlaybackUrl ?? null;
+    return (
+      segment.originalPreviewUrl ??
+      segment.originalExternalPreviewUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      null
+    );
   }
 
   return (
@@ -5985,7 +6165,13 @@ const getWorkspaceSegmentVisualResetVideoUrl = (segment: WorkspaceSegmentEditorD
   }
 
   if (isWorkspaceSegmentStaleUploadOriginalVisual(segment)) {
-    return segment.originalPlaybackUrl ?? segment.originalPreviewUrl ?? null;
+    return (
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      segment.originalPreviewUrl ??
+      segment.originalExternalPreviewUrl ??
+      null
+    );
   }
 
   return (
@@ -5997,12 +6183,12 @@ const getWorkspaceSegmentVisualResetVideoUrl = (segment: WorkspaceSegmentEditorD
   );
 };
 
-const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (segment.visualReset) {
+export const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
     return getWorkspaceSegmentVisualResetPreviewUrl(segment);
   }
 
-  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
     return (
       getWorkspaceSegmentVideoAssetPosterUrl(segment) ??
       getWorkspaceSegmentPreferredStillPreviewUrl(segment) ??
@@ -6051,9 +6237,19 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
 
   if (segment.videoAction === "custom") {
     const customPreviewUrl = getStudioCustomAssetPreviewUrl(segment.customVideo);
-    return getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video"
-      ? getStudioCustomAssetPosterUrl(segment.customVideo)
-      : customPreviewUrl ?? fallbackPreviewUrl;
+    if (segment.customVideo?.source === "media-library") {
+      if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
+        return getStudioCustomAssetPosterUrl(segment.customVideo) ?? customPreviewUrl;
+      }
+
+      return customPreviewUrl;
+    }
+
+    if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
+      return getStudioCustomAssetPosterUrl(segment.customVideo) ?? customPreviewUrl ?? fallbackPreviewUrl;
+    }
+
+    return customPreviewUrl ?? fallbackPreviewUrl;
   }
 
   if (segment.videoAction === "image_edit") {
@@ -6125,7 +6321,7 @@ const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEditorDraft
 };
 
 const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (segment.visualReset) {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
     return null;
   }
 
@@ -6161,11 +6357,11 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   return null;
 };
 
-const getWorkspaceSegmentDraftPreviewFallbackUrls = (
+export const getWorkspaceSegmentDraftPreviewFallbackUrls = (
   segment: WorkspaceSegmentEditorDraftSegment,
   previewKind: WorkspaceSegmentPreviewKind,
 ) => {
-  if (segment.visualReset) {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
     return getUniqueWorkspaceSegmentPreviewUrls([
       segment.originalPlaybackUrl,
       segment.originalPreviewUrl,
@@ -6180,7 +6376,7 @@ const getWorkspaceSegmentDraftPreviewFallbackUrls = (
   if (previewKind === "image") {
     const stillPreviewFallbackUrls = getWorkspaceSegmentStillPreviewUrls(segment);
 
-    if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+    if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
       return getUniqueWorkspaceSegmentPreviewUrls([
         getWorkspaceSegmentVideoAssetPosterUrl(segment),
         ...stillPreviewFallbackUrls,
@@ -6188,6 +6384,12 @@ const getWorkspaceSegmentDraftPreviewFallbackUrls = (
     }
 
     if (latestVisualAction === "custom") {
+      if (segment.customVideo?.source === "media-library") {
+        return getUniqueWorkspaceSegmentPreviewUrls([
+          getStudioCustomAssetPreviewUrl(segment.customVideo),
+        ]);
+      }
+
       return getUniqueWorkspaceSegmentPreviewUrls([
         getStudioCustomAssetPreviewUrl(segment.customVideo),
         ...stillPreviewFallbackUrls,
@@ -6290,8 +6492,8 @@ const getWorkspaceSegmentDraftPreviewFallbackUrls = (
   ]);
 };
 
-const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (segment.visualReset) {
+export const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
     return getWorkspaceSegmentVisualResetVideoUrl(segment);
   }
 
@@ -6326,6 +6528,10 @@ const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditorDraftSe
   }
 
   if (segment.videoAction === "custom") {
+    if (segment.customVideo?.source === "media-library") {
+      return getStudioCustomAssetPreviewUrl(segment.customVideo);
+    }
+
     return (
       getStudioCustomAssetPreviewUrl(segment.customVideo) ??
       segment.currentPlaybackUrl ??
@@ -6405,6 +6611,54 @@ const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditorDraftSe
   );
 };
 
+const getStudioCustomAssetMediaIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
+  if (!asset) {
+    return null;
+  }
+
+  const previewUrl = getStudioCustomAssetPreviewUrl(asset);
+  return [
+    asset.source ? `source:${asset.source}` : "",
+    asset.libraryItemKey ? `library:${asset.libraryItemKey}` : "",
+    asset.assetId ? `asset:${asset.assetId}` : "",
+    asset.mimeType ? `mime:${asset.mimeType}` : "",
+    asset.fileName ? `file:${asset.fileName}` : "",
+    previewUrl ? `preview:${getWorkspaceMediaLibraryAssetIdentityKey(previewUrl)}` : "",
+    asset.posterUrl ? `poster:${getWorkspaceMediaLibraryAssetIdentityKey(asset.posterUrl)}` : "",
+  ]
+    .filter(Boolean)
+    .join(",");
+};
+
+export const getWorkspaceSegmentMediaIdentityKey = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  mediaSurface?: Pick<WorkspaceResolvedMediaSurface, "displayUrl" | "posterUrl" | "previewKind" | "viewerUrl"> | null,
+) => {
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+  const previewKind = mediaSurface?.previewKind ?? getWorkspaceSegmentPreviewKind(segment);
+  const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
+  const draftVisualIdentity = getStudioCustomAssetMediaIdentityKey(draftVisualAsset);
+  const displayUrl = mediaSurface?.displayUrl ?? getWorkspaceSegmentDraftPreviewUrl(segment);
+  const viewerUrl = mediaSurface?.viewerUrl ?? (previewKind === "video" ? getWorkspaceSegmentDraftVideoUrl(segment) : displayUrl);
+  const posterUrl = mediaSurface?.posterUrl ?? (previewKind === "video" ? getWorkspaceSegmentDraftPreviewUrl(segment) : null);
+
+  return [
+    `segment:${segment.index}`,
+    `action:${segment.videoAction}`,
+    `latest:${latestVisualAction}`,
+    `kind:${previewKind}`,
+    `reset:${segment.visualReset ? "1" : "0"}`,
+    draftVisualIdentity ? `visual:${draftVisualIdentity}` : "",
+    `current:${getWorkspaceSegmentCurrentVisualIdentityKey(segment) ?? "none"}`,
+    `original:${getWorkspaceSegmentOriginalVisualIdentityKey(segment) ?? "none"}`,
+    displayUrl ? `display:${getWorkspaceMediaLibraryAssetIdentityKey(displayUrl)}` : "display:none",
+    viewerUrl ? `viewer:${getWorkspaceMediaLibraryAssetIdentityKey(viewerUrl)}` : "viewer:none",
+    posterUrl ? `poster:${getWorkspaceMediaLibraryAssetIdentityKey(posterUrl)}` : "poster:none",
+  ]
+    .filter(Boolean)
+    .join("|");
+};
+
 const getWorkspaceSegmentResolvedMediaSurface = (
   segment: WorkspaceSegmentEditorDraftSegment,
   context: WorkspaceResolvedMediaContext,
@@ -6438,6 +6692,15 @@ const getWorkspaceMediaLibraryResolvedPosterUrl = (item: WorkspaceMediaLibraryIt
     ? null
     : item.previewPosterUrl;
 
+const getWorkspaceMediaLibrarySelectionPosterUrl = (item: WorkspaceMediaLibraryItem) => {
+  if (item.previewKind !== "video") {
+    return undefined;
+  }
+
+  const posterUrl = String(item.previewPosterUrl ?? "").trim();
+  return posterUrl || undefined;
+};
+
 const getWorkspaceMediaLibraryResolvedMediaSurface = (
   item: WorkspaceMediaLibraryItem,
   context: WorkspaceResolvedMediaContext,
@@ -6456,7 +6719,7 @@ const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraf
     return "Сток";
   }
 
-  if (isWorkspaceSegmentAiPhotoRenderedStill(segment)) {
+  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
     return "ИИ фото";
   }
 
@@ -6813,14 +7076,50 @@ const renderWorkspaceMediaLibraryPlayOverlay = (previewKind: WorkspaceMediaLibra
 const getWorkspaceMediaLibraryItemMimeType = (item: WorkspaceMediaLibraryItem) =>
   item.previewKind === "video" ? "video/mp4" : "image/jpeg";
 
-const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) => {
-  const assetId =
-    Number.isFinite(Number(item.assetId)) && Number(item.assetId) > 0
-      ? Math.trunc(Number(item.assetId))
-      : null;
+const getWorkspaceMediaLibraryItemAssetId = (item: Pick<WorkspaceMediaLibraryItem, "assetId">) =>
+  getPositiveWorkspaceMediaAssetId(item.assetId);
+
+const getWorkspaceMediaLibraryCanonicalAssetRouteId = (
+  value: string | null | undefined,
+  previewKind: WorkspaceMediaLibraryPreviewKind,
+) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)(?:\/(playback))?$/i);
+    if (!match) {
+      return null;
+    }
+
+    const assetId = getPositiveWorkspaceMediaAssetId(match[1]);
+    if (!assetId) {
+      return null;
+    }
+
+    const isPlaybackRoute = match[2] === "playback";
+    if (previewKind === "video" && !isPlaybackRoute) {
+      return null;
+    }
+
+    if (previewKind === "image" && isPlaybackRoute) {
+      return null;
+    }
+
+    return assetId;
+  } catch {
+    return null;
+  }
+};
+
+export const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) => {
+  const assetId = getWorkspaceMediaLibraryItemAssetId(item);
   const mimeType = getWorkspaceMediaLibraryItemMimeType(item);
 
-  if (assetId) {
+  if (item.source === "persisted" && assetId) {
     return getWorkspaceMediaAssetResolvedPreviewUrl({
       assetId,
       fileName: item.downloadName,
@@ -6828,21 +7127,44 @@ const getWorkspaceMediaLibraryItemRemoteUrl = (item: WorkspaceMediaLibraryItem) 
     });
   }
 
+  const previewUrl = String(item.previewUrl ?? "").trim();
+  if (previewUrl) {
+    return previewUrl;
+  }
+
   return getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId: null,
+    assetId,
     fileName: item.downloadName,
     mimeType,
-    remoteUrl: item.downloadUrl ?? item.previewUrl,
+    remoteUrl: item.downloadUrl,
   });
 };
 
-const createStudioCustomVideoFileFromMediaLibraryItem = (item: WorkspaceMediaLibraryItem): StudioCustomVideoFile => ({
-  assetId: item.assetId ?? undefined,
+const getWorkspaceMediaLibrarySelectionAssetId = (item: WorkspaceMediaLibraryItem) => {
+  const assetId = getWorkspaceMediaLibraryItemAssetId(item);
+  if (!assetId) {
+    return undefined;
+  }
+
+  if (item.source === "persisted") {
+    return assetId;
+  }
+
+  const selectionRemoteUrl = getWorkspaceMediaLibraryItemRemoteUrl(item);
+  return getWorkspaceMediaLibraryCanonicalAssetRouteId(selectionRemoteUrl, item.previewKind) === assetId
+    ? assetId
+    : undefined;
+};
+
+export const createStudioCustomVideoFileFromMediaLibraryItem = (
+  item: WorkspaceMediaLibraryItem,
+): StudioCustomVideoFile => ({
+  assetId: getWorkspaceMediaLibrarySelectionAssetId(item),
   fileName: item.downloadName,
   fileSize: 0,
   libraryItemKey: getWorkspaceMediaLibraryItemStorageKey(item),
   mimeType: getWorkspaceMediaLibraryItemMimeType(item),
-  posterUrl: item.previewKind === "video" ? getWorkspaceMediaLibraryResolvedPosterUrl(item) ?? undefined : undefined,
+  posterUrl: getWorkspaceMediaLibrarySelectionPosterUrl(item),
   remoteUrl: getWorkspaceMediaLibraryItemRemoteUrl(item) ?? undefined,
   source: "media-library",
 });
@@ -6853,7 +7175,68 @@ const getWorkspaceGeneratedMediaLibraryRestoreKey = (
   kind: WorkspaceMediaLibraryItemKind,
 ) => `${projectId}:${segmentIndex}:${kind}`;
 
-const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
+const doesWorkspaceGeneratedMediaLibraryItemMatchSegmentVisual = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  item: WorkspaceMediaLibraryItem,
+) => {
+  const itemAssetId = Number(item.assetId);
+  const itemAssetIdentity = Number.isFinite(itemAssetId) && itemAssetId > 0 ? `asset:${Math.trunc(itemAssetId)}` : null;
+  if (itemAssetIdentity) {
+    const segmentAssetIdentities = [
+      getWorkspaceMediaAssetIdentityKey(segment.currentAsset),
+      getWorkspaceMediaAssetIdentityKey(segment.originalAsset),
+    ].filter(Boolean);
+    if (segmentAssetIdentities.includes(itemAssetIdentity)) {
+      return true;
+    }
+  }
+
+  const itemUrls = getUniqueWorkspaceSegmentPreviewUrls([item.previewUrl, item.previewPosterUrl, item.downloadUrl]);
+  if (!itemUrls.length) {
+    return false;
+  }
+
+  const segmentUrls = getUniqueWorkspaceSegmentPreviewUrls([
+    segment.currentExternalPlaybackUrl,
+    segment.currentExternalPreviewUrl,
+    segment.currentPlaybackUrl,
+    segment.currentPreviewUrl,
+    segment.originalExternalPlaybackUrl,
+    segment.originalExternalPreviewUrl,
+    segment.originalPlaybackUrl,
+    segment.originalPreviewUrl,
+  ]);
+
+  return itemUrls.some((itemUrl) => segmentUrls.includes(itemUrl));
+};
+
+const shouldHydrateWorkspaceGeneratedMediaLibraryItem = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  item: WorkspaceMediaLibraryItem,
+  options: {
+    videoAction: WorkspaceSegmentEditorVideoAction;
+    aiVideoMode?: WorkspaceSegmentAiVideoMode;
+  },
+) => {
+  if (segment.visualReset || hasWorkspaceSegmentExplicitDraftVisual(segment)) {
+    return false;
+  }
+
+  if (
+    segment.videoAction === options.videoAction ||
+    (options.aiVideoMode && segment.aiVideoGeneratedMode === options.aiVideoMode)
+  ) {
+    return true;
+  }
+
+  if (segment.videoAction !== "original" || item.source !== "live") {
+    return false;
+  }
+
+  return doesWorkspaceGeneratedMediaLibraryItemMatchSegmentVisual(segment, item);
+};
+
+export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
   draft: WorkspaceSegmentEditorDraftSession | null | undefined,
   generatedEntries: WorkspaceGeneratedMediaLibraryEntry[],
 ): WorkspaceSegmentEditorDraftSession | null => {
@@ -6898,43 +7281,67 @@ const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
       latestItemsByRestoreKey.get(getWorkspaceGeneratedMediaLibraryRestoreKey(draft.projectId, segment.index, kind)) ?? null;
 
     if (!nextSegment.aiVideoAsset) {
-      const aiVideoItem =
-        nextSegment.videoAction === "ai" || nextSegment.aiVideoGeneratedMode === "ai_video"
-          ? resolveItem("ai_video")
-          : null;
-      if (aiVideoItem) {
+      const aiVideoItem = resolveItem("ai_video");
+      if (
+        aiVideoItem &&
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiVideoItem, {
+          aiVideoMode: "ai_video",
+          videoAction: "ai",
+        })
+      ) {
         applyPatch({
           aiVideoAsset: createStudioCustomVideoFileFromMediaLibraryItem(aiVideoItem),
           aiVideoGeneratedMode: "ai_video",
+          visualReset: false,
+          videoAction: "ai",
         });
       } else {
-        const photoAnimationItem =
-          nextSegment.videoAction === "photo_animation" || nextSegment.aiVideoGeneratedMode === "photo_animation"
-            ? resolveItem("photo_animation")
-            : null;
-        if (photoAnimationItem) {
+        const photoAnimationItem = resolveItem("photo_animation");
+        if (
+          photoAnimationItem &&
+          shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, photoAnimationItem, {
+            aiVideoMode: "photo_animation",
+            videoAction: "photo_animation",
+          })
+        ) {
           applyPatch({
             aiVideoAsset: createStudioCustomVideoFileFromMediaLibraryItem(photoAnimationItem),
             aiVideoGeneratedMode: "photo_animation",
+            visualReset: false,
+            videoAction: "photo_animation",
           });
         }
       }
     }
 
-    if (!nextSegment.aiPhotoAsset && nextSegment.videoAction === "ai_photo") {
+    if (!nextSegment.aiPhotoAsset) {
       const aiPhotoItem = resolveItem("ai_photo");
-      if (aiPhotoItem) {
+      if (
+        aiPhotoItem &&
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiPhotoItem, {
+          videoAction: "ai_photo",
+        })
+      ) {
         applyPatch({
           aiPhotoAsset: createStudioCustomVideoFileFromMediaLibraryItem(aiPhotoItem),
+          visualReset: false,
+          videoAction: "ai_photo",
         });
       }
     }
 
-    if (!nextSegment.imageEditAsset && nextSegment.videoAction === "image_edit") {
+    if (!nextSegment.imageEditAsset) {
       const imageEditItem = resolveItem("image_edit");
-      if (imageEditItem) {
+      if (
+        imageEditItem &&
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, imageEditItem, {
+          videoAction: "image_edit",
+        })
+      ) {
         applyPatch({
           imageEditAsset: createStudioCustomVideoFileFromMediaLibraryItem(imageEditItem),
+          visualReset: false,
+          videoAction: "image_edit",
         });
       }
     }
@@ -7169,21 +7576,32 @@ const isStoredWorkspaceGeneratedMediaLibraryEntry = (value: unknown): value is S
 
 const normalizeStoredWorkspaceGeneratedMediaLibraryEntry = (
   entry: StoredWorkspaceGeneratedMediaLibraryEntry,
-): WorkspaceGeneratedMediaLibraryEntry => ({
-  createdAt: Math.max(0, Number(entry.createdAt) || 0),
-  id: String(entry.id),
-  item: {
-    ...entry.item,
-    createdAt: normalizeWorkspaceMediaLibraryCreatedAt(entry.item.createdAt ?? entry.createdAt),
-    downloadUrl: entry.item.downloadUrl ?? null,
-    previewPosterUrl:
-      ((entry.item.kind === "photo_animation" && isStudioSegmentPhotoAnimationPosterUrl(entry.item.previewPosterUrl)) ||
-      (entry.item.kind === "ai_video" && isStudioSegmentAiVideoPosterUrl(entry.item.previewPosterUrl)))
-        ? null
-        : entry.item.previewPosterUrl ?? null,
-  },
-  sourceJobId: String(entry.sourceJobId),
-});
+): WorkspaceGeneratedMediaLibraryEntry => {
+  const assetId =
+    Number.isFinite(Number(entry.item.assetId)) && Number(entry.item.assetId) > 0
+      ? Math.trunc(Number(entry.item.assetId))
+      : null;
+  const previewUrl = assetId
+    ? entry.item.previewKind === "video"
+      ? buildWorkspaceMediaAssetPlaybackUrl(assetId)
+      : buildWorkspaceMediaAssetProxyUrl(assetId)
+    : entry.item.previewUrl;
+  const downloadUrl = assetId ? buildWorkspaceMediaAssetProxyUrl(assetId) : entry.item.downloadUrl ?? null;
+
+  return {
+    createdAt: Math.max(0, Number(entry.createdAt) || 0),
+    id: String(entry.id),
+    item: {
+      ...entry.item,
+      assetId,
+      createdAt: normalizeWorkspaceMediaLibraryCreatedAt(entry.item.createdAt ?? entry.createdAt),
+      downloadUrl,
+      previewPosterUrl: entry.item.previewPosterUrl ?? null,
+      previewUrl,
+    },
+    sourceJobId: String(entry.sourceJobId),
+  };
+};
 
 const readStoredGeneratedMediaLibraryEntries = (
   email: string | null | undefined,
@@ -9551,6 +9969,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   const [isPreferredPosterReady, setIsPreferredPosterReady] = useState(false);
   const [isPosterFrameLoadFailed, setIsPosterFrameLoadFailed] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isImageLoadFailed, setIsImageLoadFailed] = useState(false);
   const [previewCandidateIndex, setPreviewCandidateIndex] = useState(0);
   const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
   const normalizedPreviewUrl = previewUrl.trim();
@@ -9665,6 +10084,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
 
   useEffect(() => {
     setImageCandidateIndex(0);
+    setIsImageLoadFailed(false);
   }, [imageCandidateSignature, mediaKey, previewKind]);
 
   useEffect(() => {
@@ -9801,6 +10221,10 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   }, [autoplay, isPlaybackRequested, isVideoPlaying, preload, previewKind, resolvedPreviewUrl, shouldPrimePausedFrame]);
 
   if (previewKind === "image") {
+    if (isImageLoadFailed) {
+      return <div className="studio-segment-preview-card-media__idle-placeholder" aria-hidden="true" />;
+    }
+
     return (
       <img
         key={`${mediaKey}:${resolvedImageUrl}`}
@@ -9810,7 +10234,9 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
         decoding="async"
         draggable={false}
         onError={() => {
-          advanceImageCandidate();
+          if (!advanceImageCandidate()) {
+            setIsImageLoadFailed(true);
+          }
         }}
       />
     );
@@ -11342,6 +11768,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const activeSegmentPlaybackIndexRef = useRef<number | null>(null);
   const pendingSegmentEditorActivatedPlaybackIndexRef = useRef<number | null>(null);
   const queuedSegmentEditorPlaybackIndexRef = useRef<number | null>(null);
+  const segmentCarouselPointerPlaybackIntentRef = useRef<number | null>(null);
   const requestSegmentEditorVideoPlaybackRef = useRef<
     null | ((segmentPlaybackIndex: number, element: HTMLVideoElement, options?: { resetToStart?: boolean }) => Promise<unknown>)
   >(null);
@@ -11458,11 +11885,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const dismissMediaLibraryItem = useCallback(
     (item: WorkspaceMediaLibraryItem) => {
-      const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
+      const hiddenKeys = getWorkspaceMediaLibraryHiddenIdentityKeys(item);
+      const hiddenKeySet = new Set(hiddenKeys);
+      const doesMatchDismissedItem = (candidate: WorkspaceMediaLibraryItem) =>
+        isWorkspaceMediaLibraryItemHidden(candidate, hiddenKeySet);
+
+      setHiddenMediaLibraryItemKeys((current) => {
+        const nextKeys = Array.from(new Set([...current, ...hiddenKeys]));
+        if (nextKeys.length === current.length) {
+          return current;
+        }
+
+        persistHiddenMediaLibraryItemKeys(session.email, nextKeys);
+        return nextKeys;
+      });
+      setMediaLibraryItems((current) => current.filter((candidate) => !doesMatchDismissedItem(candidate)));
+      setGeneratedMediaLibraryEntries((current) =>
+        current.filter((entry) => !doesMatchDismissedItem(entry.item)),
+      );
 
       if (typeof item.assetId === "number" && item.assetId > 0) {
-        setMediaLibraryItems((current) => current.filter((candidate) => candidate.assetId !== item.assetId));
-
         void fetch(`/api/workspace/media-library/${encodeURIComponent(String(item.assetId))}`, {
           method: "DELETE",
         }).then(async (response) => {
@@ -11478,16 +11920,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         });
         return;
       }
-
-      setHiddenMediaLibraryItemKeys((current) => {
-        if (current.includes(itemKey)) {
-          return current;
-        }
-
-        const nextKeys = [...current, itemKey];
-        persistHiddenMediaLibraryItemKeys(session.email, nextKeys);
-        return nextKeys;
-      });
     },
     [session.email],
   );
@@ -11772,8 +12204,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const boundedSegmentArrayIndex = Math.max(0, Math.min(nextSegmentArrayIndex, segmentEditorDraft.segments.length - 1));
     if (boundedSegmentArrayIndex !== activeSegmentIndex) {
-      pendingSegmentEditorActivatedPlaybackIndexRef.current = options?.pendingPlaybackIndex ?? null;
+      const pendingPlaybackIndex = resolveWorkspaceSegmentActivationPlaybackIndex(
+        segmentEditorDraft.segments,
+        boundedSegmentArrayIndex,
+        options,
+      );
+      pendingSegmentEditorActivatedPlaybackIndexRef.current = pendingPlaybackIndex;
       resetSegmentEditorPreviewPlaybackState();
+      if (pendingPlaybackIndex !== null) {
+        queuedSegmentEditorPlaybackIndexRef.current = pendingPlaybackIndex;
+        setQueuedSegmentEditorPlaybackIndex(pendingPlaybackIndex);
+      }
     }
 
     setActiveSegmentIndex(boundedSegmentArrayIndex);
@@ -11809,6 +12250,40 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       },
       options?.level ?? "info",
     );
+  };
+
+  const getSegmentEditorAttachedPreviewVideoElement = (segmentIndex: number) => {
+    const referencedElement = segmentEditorPreviewVideoRefs.current[segmentIndex] ?? null;
+    if (referencedElement?.isConnected) {
+      return referencedElement;
+    }
+
+    if (typeof document === "undefined") {
+      return referencedElement;
+    }
+
+    const activeHitboxElement = document.querySelector(
+      `.studio-segment-editor__card.is-active .studio-segment-editor__card-hitbox[data-segment-playback-index="${segmentIndex}"]`,
+    );
+    const activeCardElement =
+      activeHitboxElement?.closest(".studio-segment-editor__card") ??
+      (activeSegmentStableIndex === segmentIndex ? document.querySelector(".studio-segment-editor__card.is-active") : null);
+    const recoveredElement = activeCardElement?.querySelector("video") ?? null;
+    if (!(recoveredElement instanceof HTMLVideoElement)) {
+      return referencedElement;
+    }
+
+    segmentEditorPreviewVideoRefs.current[segmentIndex] = recoveredElement;
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.preview-video.ref.recover",
+      {
+        mediaUrl: recoveredElement.currentSrc || recoveredElement.src || null,
+        readyState: recoveredElement.readyState,
+        segmentIndex,
+      },
+      { level: "warn" },
+    );
+    return recoveredElement;
   };
 
   useEffect(() => {
@@ -12265,6 +12740,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setIsSegmentEditorLoading(false);
     setIsSegmentEditorPreparingCustomVideo(false);
     setSegmentEditorPreviewTimes({});
+    queuedSegmentEditorPlaybackIndexRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPanelHeightLock(null);
     setActiveSegmentIndex(0);
@@ -12322,6 +12798,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       closeSegmentAiPhotoModal();
       setPlayingSegmentEditorPreviewIndex(null);
       setSegmentEditorPreviewTimes({});
+      queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       setSegmentEditorPanelHeightLock(null);
       return;
@@ -12340,6 +12817,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setIsSegmentEditorUpscalingImage(false);
     setSegmentEditorUpscalingImageSegmentIndex(null);
     setSegmentEditorPreviewTimes({});
+    queuedSegmentEditorPlaybackIndexRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPanelHeightLock(null);
     setActiveSegmentIndex(0);
@@ -12553,6 +13031,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             segmentPlaybackIndex: sideSegmentPlaybackIndex,
           }
         : undefined;
+    segmentCarouselPointerPlaybackIntentRef.current = clickTarget?.segmentPlaybackIndex ?? null;
 
     segmentCarouselDragStateRef.current = {
       clickTarget,
@@ -12621,6 +13100,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (shouldNavigate && segmentEditorDraft) {
       const nextProgress = deltaX < 0 ? -1 : 1;
+      queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       setIsSegmentCarouselDragging(false);
       setSegmentCarouselDragProgress(nextProgress);
@@ -12629,7 +13109,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
       segmentCarouselReleaseTimerRef.current = window.setTimeout(() => {
         segmentCarouselReleaseTimerRef.current = null;
-        activateSegmentEditorSegmentByArrayIndex(targetSegmentIndex);
+        activateSegmentEditorSegmentByArrayIndex(targetSegmentIndex, {
+          pendingPlaybackIndex: segmentEditorDraft.segments[targetSegmentIndex]?.index ?? null,
+        });
         setSegmentCarouselDragProgress(0);
       }, 150);
     } else if (!options?.cancelled && !dragState.dragDetected && dragState.clickTarget) {
@@ -12643,6 +13125,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         dragState.clickTarget.previewKind,
       );
     } else {
+      segmentCarouselPointerPlaybackIntentRef.current = null;
       setIsSegmentCarouselDragging(false);
       setSegmentCarouselDragProgress(0);
     }
@@ -13685,20 +14168,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       resolvedMediaLibraryItems.filter(
         (item) =>
           item.source === "persisted" &&
-          !(typeof item.assetId === "number" && item.assetId > 0) &&
-          hiddenMediaLibraryItemKeySet.has(getWorkspaceMediaLibraryItemStorageKey(item)),
+          isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet),
       ).length,
     [hiddenMediaLibraryItemKeySet, resolvedMediaLibraryItems],
   );
   const visibleMediaLibraryItems = useMemo(
     () =>
-      resolvedMediaLibraryItems.filter((item) => {
-        if (!hiddenMediaLibraryItemKeySet.has(getWorkspaceMediaLibraryItemStorageKey(item))) {
-          return true;
-        }
-
-        return item.source === "persisted" && typeof item.assetId === "number" && item.assetId > 0;
-      }),
+      resolvedMediaLibraryItems.filter((item) => !isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet)),
     [hiddenMediaLibraryItemKeySet, resolvedMediaLibraryItems],
   );
   const isMediaLibraryInitialLoading = isMediaLibraryLoading && !isMediaLibraryLoadingMore;
@@ -14037,16 +14513,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       previewModalPendingPlaybackRef.current = null;
     }
   }, [previewModalVideoPlaybackUrl]);
-  const activeSegmentMediaSurface = activeSegment
+  const activeSegmentResetMediaSurface = activeSegment
     ? getWorkspaceSegmentResolvedMediaSurface(activeSegment, "segment-carousel-card", {
-        isPlaybackRequested:
-          getWorkspaceSegmentPreviewKind(activeSegment) === "video" &&
-          (queuedSegmentEditorPlaybackIndex === activeSegment.index || playingSegmentEditorPreviewIndex === activeSegment.index),
+        isPlaybackRequested: false,
       })
     : null;
-  const activeSegmentMediaUrl = activeSegmentMediaSurface?.viewerUrl ?? null;
+  const activeSegmentMediaIdentityKey =
+    activeSegment && activeSegmentResetMediaSurface
+      ? getWorkspaceSegmentMediaIdentityKey(activeSegment, activeSegmentResetMediaSurface)
+      : null;
   const activeSegmentStableIndex = activeSegment?.index ?? null;
-  const activeSegmentPreviewKind = activeSegmentMediaSurface?.previewKind ?? null;
+  const activeSegmentPreviewKind = activeSegmentResetMediaSurface?.previewKind ?? null;
   const studioSidebarActiveItem =
     studioView === "projects" ? "projects" : studioView === "media" ? "media" : createMode === "segment-editor" ? "edit" : "create";
   const studioNavSectionLabels =
@@ -14233,6 +14710,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelSegmentEditorSyntheticPlayback();
     stopSegmentEditorPreviewVideoElements(options);
     setPlayingSegmentEditorPreviewIndex(null);
+    queuedSegmentEditorPlaybackIndexRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPreviewTimes({});
   };
@@ -14673,19 +15151,30 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     cancelSegmentEditorSyntheticPlayback();
     stopSegmentEditorPreviewVideoElements();
-    const pendingActivatedPlaybackIndex =
-      createMode === "segment-editor" &&
-      activeSegmentStableIndex !== null &&
-      pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentStableIndex
+    const queuedActivatedPlaybackIndex =
+      activeSegmentStableIndex !== null && queuedSegmentEditorPlaybackIndexRef.current === activeSegmentStableIndex
         ? activeSegmentStableIndex
+        : null;
+    const pointerActivatedPlaybackIndex =
+      activeSegmentStableIndex !== null && segmentCarouselPointerPlaybackIntentRef.current === activeSegmentStableIndex
+        ? activeSegmentStableIndex
+        : null;
+    const pendingActivatedPlaybackIndex =
+      createMode === "segment-editor" && activeSegmentStableIndex !== null
+        ? pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentStableIndex
+          ? activeSegmentStableIndex
+          : queuedActivatedPlaybackIndex ?? pointerActivatedPlaybackIndex
         : null;
     const shouldStartSyntheticPlayback =
       pendingActivatedPlaybackIndex !== null &&
       activeSegmentPreviewKind === "image" &&
       activeSegment;
+    const nextQueuedSegmentEditorPlaybackIndex = shouldStartSyntheticPlayback ? null : pendingActivatedPlaybackIndex;
 
     pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
-    setQueuedSegmentEditorPlaybackIndex(shouldStartSyntheticPlayback ? null : pendingActivatedPlaybackIndex);
+    segmentCarouselPointerPlaybackIntentRef.current = null;
+    queuedSegmentEditorPlaybackIndexRef.current = nextQueuedSegmentEditorPlaybackIndex;
+    setQueuedSegmentEditorPlaybackIndex(nextQueuedSegmentEditorPlaybackIndex);
     setPlayingSegmentEditorPreviewIndex(null);
     setSegmentEditorPreviewTimes({});
     if (shouldStartSyntheticPlayback) {
@@ -14694,7 +15183,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         getSegmentEditorSyntheticPlaybackDuration(activeSegment),
       );
     }
-  }, [activeSegmentMediaUrl, activeSegmentPreviewKind, activeSegmentStableIndex, createMode]);
+  }, [activeSegmentMediaIdentityKey, activeSegmentPreviewKind, activeSegmentStableIndex, createMode]);
 
   useEffect(() => {
     if (createMode !== "segment-editor") {
@@ -14707,53 +15196,84 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    const element = segmentEditorPreviewVideoRefs.current[queuedSegmentEditorPlaybackIndex] ?? null;
-    if (!element) {
+    let cancelled = false;
+    let retryAnimationFrameId: number | null = null;
+    let metadataListenerElement: HTMLVideoElement | null = null;
+    let metadataListener: (() => void) | null = null;
+    const queuedIndex = queuedSegmentEditorPlaybackIndex;
+    const previewKind = getWorkspaceSegmentPreviewKind(queuedSegment);
+
+    if (previewKind !== "video") {
+      queuedSegmentEditorPlaybackIndexRef.current = null;
+      setQueuedSegmentEditorPlaybackIndex(null);
+      startSegmentEditorSyntheticPlayback(queuedIndex, getSegmentEditorSyntheticPlaybackDuration(queuedSegment));
       return;
     }
 
-    let cancelled = false;
-    const queuedIndex = queuedSegmentEditorPlaybackIndex;
+    const clearMetadataListener = () => {
+      if (!metadataListenerElement || !metadataListener) {
+        return;
+      }
 
-    const startPlayback = async () => {
+      metadataListenerElement.removeEventListener("loadedmetadata", metadataListener);
+      metadataListenerElement = null;
+      metadataListener = null;
+    };
+
+    const startPlayback = async (element: HTMLVideoElement) => {
       if (cancelled) {
         return;
       }
 
-      const previewKind = getWorkspaceSegmentPreviewKind(queuedSegment);
+      await requestSegmentEditorVideoPlayback(queuedIndex, element, { resetToStart: true });
+    };
 
-      if (previewKind === "video") {
-        await requestSegmentEditorVideoPlayback(queuedIndex, element, { resetToStart: true });
+    const startWhenVideoElementReady = (attempt = 0) => {
+      if (cancelled) {
         return;
       }
 
-      element.muted = true;
-      element.defaultMuted = true;
-      setSegmentEditorPreviewTime(queuedIndex, 0);
-      setQueuedSegmentEditorPlaybackIndex(null);
-      startSegmentEditorSyntheticPlayback(queuedIndex, getSegmentEditorSyntheticPlaybackDuration(queuedSegment));
-      await playVideoElement(element, true);
-    };
+      const element = getSegmentEditorAttachedPreviewVideoElement(queuedIndex);
+      if (!element) {
+        if (attempt < 12) {
+          retryAnimationFrameId = window.requestAnimationFrame(() => {
+            retryAnimationFrameId = null;
+            startWhenVideoElementReady(attempt + 1);
+          });
+          return;
+        }
 
-    if (element.readyState >= 1) {
-      void startPlayback();
-      return () => {
-        cancelled = true;
+        logSegmentEditorDiagnostics("client.segment-editor.playback.missing-video-element", {
+          segmentPlaybackIndex: queuedIndex,
+        }, { level: "warn" });
+        return;
+      }
+
+      if (element.readyState >= 1) {
+        void startPlayback(element);
+        return;
+      }
+
+      clearMetadataListener();
+      metadataListenerElement = element;
+      metadataListener = () => {
+        clearMetadataListener();
+        void startPlayback(element);
       };
-    }
-
-    const handleLoadedMetadata = () => {
-      void startPlayback();
+      element.addEventListener("loadedmetadata", metadataListener, { once: true });
+      ensureVideoElementLoading(element, HTMLMediaElement.HAVE_METADATA);
     };
 
-    element.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
-    ensureVideoElementLoading(element, HTMLMediaElement.HAVE_METADATA);
+    startWhenVideoElementReady();
 
     return () => {
       cancelled = true;
-      element.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      if (retryAnimationFrameId !== null) {
+        window.cancelAnimationFrame(retryAnimationFrameId);
+      }
+      clearMetadataListener();
     };
-  }, [activeSegment, activeSegmentMediaUrl, activeSegmentStableIndex, createMode, queuedSegmentEditorPlaybackIndex]);
+  }, [activeSegment, activeSegmentMediaIdentityKey, activeSegmentStableIndex, createMode, queuedSegmentEditorPlaybackIndex]);
 
   useEffect(() => {
     if (!isVoiceoverEnabled || !resolvedSelectedVoiceId || resolvedSelectedVoiceId === selectedVoiceId) {
@@ -15353,7 +15873,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const response = await fetch(
         `/api/workspace/projects/${projectId}/segment-editor${options?.bypassCache || options?.forceRefresh ? "?refresh=1" : ""}`,
         {
-        signal: controller.signal,
+          signal: controller.signal,
         },
       );
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentEditorResponse | null;
@@ -15367,20 +15887,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       const normalizedSessionPayload = normalizeWorkspaceSegmentEditorSession(payload.data);
-      const normalizedSession =
+      const normalizedSessionCandidate =
         normalizedSessionPayload.projectId === projectId
           ? normalizedSessionPayload
           : {
               ...normalizedSessionPayload,
               projectId,
               segments: normalizedSessionPayload.segments.map((segment) => ({
-                  ...segment,
-                  currentPlaybackUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.currentPlaybackUrl, projectId),
-                  currentPreviewUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.currentPreviewUrl, projectId),
-                  originalPlaybackUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.originalPlaybackUrl, projectId),
-                  originalPreviewUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.originalPreviewUrl, projectId),
-                })),
+                ...segment,
+                currentPlaybackUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.currentPlaybackUrl, projectId),
+                currentPreviewUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.currentPreviewUrl, projectId),
+                originalPlaybackUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.originalPlaybackUrl, projectId),
+                originalPreviewUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.originalPreviewUrl, projectId),
+              })),
             };
+      const existingBaselineSession =
+        segmentEditorLoadedSession?.projectId === projectId
+          ? segmentEditorLoadedSession
+          : readStoredWorkspaceSegmentEditorSession(session.email, projectId);
+      const normalizedSession = preserveWorkspaceSegmentEditorOriginalVisualReferences(
+        normalizedSessionCandidate,
+        existingBaselineSession,
+      );
       setSegmentEditorLoadedSession(normalizedSession);
       const nextDraft = createWorkspaceSegmentEditorDraftSession(normalizedSession);
       const liveDraft = segmentEditorDraftRef.current;
@@ -16446,6 +16974,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           objectUrl,
           source: "upload",
         },
+        visualReset: false,
         videoAction: "custom",
       }));
 
@@ -16568,15 +17097,23 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
     cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
     resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+    const selectionAssetId = getWorkspaceMediaLibrarySelectionAssetId(item);
     logSegmentEditorDiagnostics("client.segment-editor.media-library.apply", {
+      assetId: item.assetId,
       itemKey: item.itemKey,
       itemKind: item.kind,
+      libraryItemKey: getWorkspaceMediaLibraryItemStorageKey(item),
+      previewUrl: item.previewUrl,
       previewKind: item.previewKind,
+      selectionAssetId: selectionAssetId ?? null,
+      selectionRemoteUrl: remoteUrl,
+      source: item.source,
       targetSegmentIndex,
     });
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       customVideo: createStudioCustomVideoFileFromMediaLibraryItem(item),
+      visualReset: false,
       videoAction: "custom",
     }));
 
@@ -16754,6 +17291,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             aiPhotoAsset: payload.data!.asset!,
             aiPhotoGeneratedFromPrompt: options.prompt,
             aiPhotoPromptInitialized: true,
+            visualReset: false,
             videoAction: "ai_photo",
           }));
           upsertGeneratedMediaLibraryEntry({
@@ -16829,6 +17367,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             imageEditGeneratedFromPrompt: options.prompt,
             imageEditPrompt: options.prompt,
             imageEditPromptInitialized: true,
+            visualReset: false,
             videoAction: "image_edit",
           }));
           upsertGeneratedMediaLibraryEntry({
@@ -16916,6 +17455,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             aiVideoGeneratedFromPrompt: options.prompt,
             aiVideoPrompt: options.prompt,
             aiVideoPromptInitialized: true,
+            visualReset: false,
             videoAction: "ai",
           }));
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
@@ -17089,6 +17629,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             aiVideoPromptInitialized: true,
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+            visualReset: false,
             videoAction: "photo_animation",
           }));
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
@@ -17249,6 +17790,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ...segment,
       aiPhotoPrompt: nextPrompt,
       aiPhotoPromptInitialized: true,
+      visualReset: false,
       videoAction: "ai_photo",
     }));
 
@@ -17365,6 +17907,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ...segment,
       imageEditPrompt: nextPrompt,
       imageEditPromptInitialized: true,
+      visualReset: false,
       videoAction: "image_edit",
     }));
 
@@ -17549,6 +18092,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ...segment,
       aiVideoPrompt: nextPrompt,
       aiVideoPromptInitialized: true,
+      visualReset: false,
       videoAction: "ai",
     }));
 
@@ -17705,6 +18249,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       aiVideoPrompt: nextPrompt,
       aiVideoPromptInitialized: true,
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
+      visualReset: false,
       videoAction: "photo_animation",
     }));
 
@@ -17874,6 +18419,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       aiVideoPrompt: job.prompt || segment.aiVideoPrompt,
       aiVideoPromptInitialized: Boolean(job.prompt || segment.aiVideoPrompt),
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(job.sourceAsset) ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+      visualReset: false,
       videoAction: "photo_animation",
     }));
     logSegmentEditorDiagnostics("client.segment-editor.photo-animation.resume", {
@@ -19855,7 +20401,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const markPlaybackStarted = () => {
       cleanupRetryListeners();
       if (!cancelled) {
-        setQueuedSegmentEditorPlaybackIndex((current) => (current === segmentPlaybackIndex ? null : current));
+        setQueuedSegmentEditorPlaybackIndex((current) => {
+          const nextQueuedIndex = current === segmentPlaybackIndex ? null : current;
+          queuedSegmentEditorPlaybackIndexRef.current = nextQueuedIndex;
+          return nextQueuedIndex;
+        });
       }
       logSegmentEditorDiagnostics("client.segment-editor.playback.started", {
         currentTime: element.currentTime,
@@ -19920,6 +20470,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       void tryStartPlayback();
     };
 
+    queuedSegmentEditorPlaybackIndexRef.current = segmentPlaybackIndex;
     setQueuedSegmentEditorPlaybackIndex(segmentPlaybackIndex);
     cleanupRetryListeners();
     element.addEventListener("loadeddata", handlePlaybackRetry, { once: true });
@@ -20004,7 +20555,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         return;
       }
 
-      delete segmentEditorPreviewVideoRefs.current[segmentIndex];
+      const currentElement = segmentEditorPreviewVideoRefs.current[segmentIndex] ?? null;
+      logSegmentEditorDiagnostics("client.segment-editor.preview-video.ref.detach", {
+        hasConnectedElement: Boolean(currentElement?.isConnected),
+        mediaUrl: currentElement?.currentSrc || currentElement?.src || null,
+        segmentIndex,
+      });
+      if (!currentElement?.isConnected) {
+        delete segmentEditorPreviewVideoRefs.current[segmentIndex];
+      }
     };
 
     segmentEditorPreviewVideoRefCallbacks.current[segmentIndex] = callback;
@@ -20061,7 +20620,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segmentEditorSyntheticPlaybackFinishTimeoutRef.current = window.setTimeout(() => {
           segmentEditorSyntheticPlaybackFinishTimeoutRef.current = null;
 
-          const previewElement = segmentEditorPreviewVideoRefs.current[segmentIndex] ?? null;
+          const previewElement = getSegmentEditorAttachedPreviewVideoElement(segmentIndex);
           if (previewElement) {
             previewElement.pause();
             previewElement.muted = true;
@@ -20118,6 +20677,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const segment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
     if (!segment) {
+      queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       return;
     }
@@ -20136,16 +20696,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         cancelSegmentEditorSyntheticPlayback();
         setPlayingSegmentEditorPreviewIndex((current) => (current === segmentPlaybackIndex ? null : current));
         setSegmentEditorPreviewTime(segmentPlaybackIndex, 0);
+        queuedSegmentEditorPlaybackIndexRef.current = null;
         setQueuedSegmentEditorPlaybackIndex(null);
         return;
       }
 
       startSegmentEditorSyntheticPlayback(segmentPlaybackIndex, getSegmentEditorSyntheticPlaybackDuration(segment));
+      queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       return;
     }
 
-    const element = segmentEditorPreviewVideoRefs.current[segmentPlaybackIndex] ?? null;
+    const element = getSegmentEditorAttachedPreviewVideoElement(segmentPlaybackIndex);
     const isVideoPlaybackActive = Boolean(element && !element.paused && !element.ended);
     logSegmentEditorDiagnostics("client.segment-editor.card.click.video-state", {
       hasElement: Boolean(element),
@@ -20165,6 +20727,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       setPlayingSegmentEditorPreviewIndex((current) => (current === segmentPlaybackIndex ? null : current));
+      queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       return;
     }
@@ -20173,6 +20736,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       logSegmentEditorDiagnostics("client.segment-editor.card.click.queue-without-video-element", {
         segmentPlaybackIndex,
       });
+      queuedSegmentEditorPlaybackIndexRef.current = segmentPlaybackIndex;
       setQueuedSegmentEditorPlaybackIndex(segmentPlaybackIndex);
       return;
     }
@@ -22065,22 +22629,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 );
                                 const mediaKind = segmentMediaSurface.previewKind;
                                 const mediaUrl = segmentMediaSurface.displayUrl;
-                                const mediaKey = mediaUrl
-                                  ? `${segment.index}:${mediaKind}:${mediaUrl}:${segmentMediaSurface.posterUrl ?? "no-poster"}`
-                                  : "";
+                                const mediaKey = mediaUrl ? getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface) : "";
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segment.index] ?? 0 : 0;
-                                const isVisualEdited = isWorkspaceSegmentDraftVisualEdited(segment);
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
-                                const hasResettableVisual =
-                                  isVisualEdited ||
-                                  segment.visualReset ||
-                                  segment.videoAction === "custom" ||
-                                  Boolean(segment.customVideo) ||
-                                  segmentSourceLabel === "Свой визуал" ||
-                                  segmentSourceLabel === "Медиатека";
-                                const canResetVisual =
-                                  hasResettableVisual && !isWorkspaceSegmentVisualResetApplied(segment);
+                                const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
                                 const shouldShowEditableSubtitleOverlay =
                                   isActiveCard &&
                                   studioSidebarSubtitlesEnabled;
@@ -22178,6 +22731,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         <button
                                           className="studio-segment-editor__card-hitbox"
                                           type="button"
+                                          data-preview-kind={mediaKind}
+                                          data-segment-array-index={nextSegmentArrayIndex}
+                                          data-segment-playback-index={segment.index}
                                           disabled={isVisualGenerationPending}
                                           aria-label={
                                             mediaKind === "video" || studioSidebarSubtitlesEnabled
@@ -22358,7 +22914,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const thumbPreviewKind = thumbMediaSurface.previewKind;
                                 const thumbUrl = thumbMediaSurface.displayUrl;
                                 const isActiveThumb = index === activeSegmentIndex;
-                                const isThumbVisualEdited = isWorkspaceSegmentDraftVisualEdited(segment);
+                                const isThumbVisualEdited = isWorkspaceSegmentDraftVisualResettable(segment);
                                 const isDraggedThumb = index === draggedSegmentThumbIndex;
 
                                 return (
@@ -22396,7 +22952,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                               fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
                                               imageLoading="lazy"
                                               loop={false}
-                                              mediaKey={`thumb:${segment.index}:${thumbPreviewKind}:${thumbUrl}:${thumbMediaSurface.posterUrl ?? "no-poster"}`}
+                                              mediaKey={`thumb:${getWorkspaceSegmentMediaIdentityKey(segment, thumbMediaSurface)}`}
                                               mountVideoWhenIdle={thumbMediaSurface.mountVideoWhenIdle}
                                               muted
                                               posterUrl={thumbMediaSurface.posterUrl}
@@ -23245,7 +23801,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           fallbackPosterUrl={ghostMediaSurface.fallbackPosterUrl}
                           imageLoading="lazy"
                           loop={false}
-                          mediaKey={`thumb-ghost:${segmentThumbDragSegment.index}:${ghostPreviewKind}:${ghostPreviewUrl}:${ghostMediaSurface.posterUrl ?? "no-poster"}`}
+                          mediaKey={`thumb-ghost:${getWorkspaceSegmentMediaIdentityKey(segmentThumbDragSegment, ghostMediaSurface)}`}
                           mountVideoWhenIdle={ghostMediaSurface.mountVideoWhenIdle}
                           muted
                           posterUrl={ghostMediaSurface.posterUrl}

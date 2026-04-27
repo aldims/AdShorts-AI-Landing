@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildWorkspaceDurableMediaLibraryItem,
   buildWorkspacePersistedMediaLibraryItems,
   dedupeWorkspaceMediaLibraryPageItems,
   getWorkspaceMediaLibraryKindFromDurableAsset,
@@ -347,6 +348,33 @@ describe("media library durable assets", () => {
     });
 
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("photo_animation");
+  });
+
+  it("uses stable media asset playback urls for durable video previews", () => {
+    const item = buildWorkspaceDurableMediaLibraryItem({
+      created_at: "2026-04-09T00:00:00.000Z",
+      download_path: "/api/media/786/download",
+      id: 786,
+      kind: "rendered_segment",
+      library_kind: "photo_animation",
+      media_type: "video",
+      mime_type: "video/mp4",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 6,
+      source_kind: "ai_generated",
+      status: "ready",
+      storage_key: "users/1/assets/786/rendered_segment/786-wavespeed_wan_0.mp4",
+    });
+
+    expect(item).toMatchObject({
+      assetId: 786,
+      downloadUrl: "/api/workspace/media-assets/786",
+      kind: "photo_animation",
+      previewKind: "video",
+      previewUrl: "/api/workspace/media-assets/786/playback",
+      segmentIndex: 6,
+    });
   });
 
   it("keeps durable source_ai_image assets in the media library even when source_kind is missing", () => {

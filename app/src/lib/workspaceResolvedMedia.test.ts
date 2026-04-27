@@ -48,7 +48,24 @@ describe("workspace resolved media surface", () => {
     expect(surface.mountVideoWhenIdle).toBe(true);
     expect(surface.preloadPolicy).toBe("auto");
     expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(false);
     expect(surface.posterUrl).toBe("https://cdn.example.com/poster.jpg");
+  });
+
+  it("primes warmed carousel video when no stable poster exists", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "segment-carousel-card",
+      displayUrl: "/api/workspace/media-assets/900/playback",
+      forceMountVideoWhenIdle: true,
+      previewKind: "video",
+      viewerUrl: "/api/workspace/media-assets/900/playback",
+    });
+
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("auto");
+    expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.posterUrl).toBeNull();
   });
 
   it("keeps generated AI video poster routes when the poster comes from the generated video", () => {

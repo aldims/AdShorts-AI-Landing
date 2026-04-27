@@ -114,8 +114,8 @@ const exampleGoalCopy: Record<Locale, Record<ExampleGoal, { label: string; short
       shortLabel: "📈 Рост канала",
     },
     expert: {
-      label: "🎓 Экспертные Shorts",
-      shortLabel: "🎓 Экспертиза",
+      label: "🎓 Обучающие Shorts",
+      shortLabel: "🎓 Обучение",
     },
   },
   en: {
@@ -128,8 +128,8 @@ const exampleGoalCopy: Record<Locale, Record<ExampleGoal, { label: string; short
       shortLabel: "📈 Growth",
     },
     expert: {
-      label: "🎓 Expert Shorts",
-      shortLabel: "🎓 Expertise",
+      label: "🎓 Educational Shorts",
+      shortLabel: "🎓 Education",
     },
   },
 };

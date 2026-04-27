@@ -164,6 +164,31 @@ export const getWorkspaceMediaLibraryResolvedDedupeKey = (item: Pick<
   "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
 >) => `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
 
+export const getWorkspaceMediaLibraryHiddenIdentityKeys = (item: Pick<
+  WorkspaceMediaLibraryItem,
+  "assetId" | "dedupeKey" | "itemKey" | "kind" | "previewPosterUrl" | "previewUrl"
+>) =>
+  Array.from(
+    new Set(
+      [
+        item.itemKey,
+        item.dedupeKey,
+        getWorkspaceMediaLibraryResolvedDedupeKey(item),
+        typeof item.assetId === "number" && item.assetId > 0 ? `asset:${Math.trunc(item.assetId)}` : "",
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+export const isWorkspaceMediaLibraryItemHidden = (
+  item: Pick<
+    WorkspaceMediaLibraryItem,
+    "assetId" | "dedupeKey" | "itemKey" | "kind" | "previewPosterUrl" | "previewUrl"
+  >,
+  hiddenKeys: ReadonlySet<string>,
+) => getWorkspaceMediaLibraryHiddenIdentityKeys(item).some((key) => hiddenKeys.has(key));
+
 const getWorkspaceMediaLibraryVideoModeSlotKey = (item: Pick<
   WorkspaceMediaLibraryItem,
   "kind" | "projectId" | "segmentIndex"
