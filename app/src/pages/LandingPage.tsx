@@ -42,7 +42,6 @@ const landingMessages = defineMessages({
   chooseUltra: { ru: "Выбрать ULTRA", en: "Choose ULTRA" },
   footerEnglish: { ru: "English", en: "Русский" },
   guidesAll: { ru: "Все материалы", en: "All guides" },
-  guidesAria: { ru: "Полезные материалы по созданию Shorts", en: "Useful Shorts creation guides" },
   heroAlt: { ru: "Интерфейс AdShorts AI", en: "AdShorts AI interface" },
   heroAria: {
     ru: "Shorts / Reels / TikTok за 1 минуту. В один клик.",
@@ -96,10 +95,6 @@ const landingMessages = defineMessages({
   visualChanged: { ru: "Визуал изменен", en: "Visual updated" },
   workflowEyebrow: { ru: "КАК ЭТО РАБОТАЕТ", en: "HOW IT WORKS" },
   workflowHeading: { ru: "От идеи до готового Shorts за 3 шага", en: "From idea to finished Shorts in 3 steps" },
-  workflowSub: {
-    ru: "Всё создаётся автоматически",
-    en: "Everything is created automatically",
-  },
 });
 
 function getHeroPreviewTransform(scrollY: number) {
@@ -658,7 +653,6 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
             <div className="lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">{t(landingMessages.workflowEyebrow)}</p>
               <h2>{t(landingMessages.workflowHeading)}</h2>
-              <p>{t(landingMessages.workflowSub)}</p>
             </div>
 
             <div className="steps-grid" data-reveal-group="">
@@ -671,7 +665,11 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
               <article className="step-card" data-reveal="" data-reveal-delay="2">
                 <div className="step-card__num">02</div>
                 <h3>{locale === "en" ? "Get a finished Shorts" : "Получите готовый Shorts"}</h3>
-                <p>{locale === "en" ? "The video is generated automatically: visuals, voiceover and subtitles." : "Видео создаётся автоматически: визуал, озвучка и субтитры."}</p>
+                <p>
+                  {locale === "en"
+                    ? "AI creates the video structure, visuals, voiceover and subtitles."
+                    : "AI сам создаст структуру ролика, визуал, озвучку и субтитры."}
+                </p>
               </article>
 
               <article className="step-card" data-reveal="" data-reveal-delay="3">
@@ -1080,11 +1078,25 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
           <div className="container guides-strip">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">{locale === "en" ? "GUIDES" : "ГАЙДЫ"}</p>
-              <h2 id="guides-heading">{t(landingMessages.guidesAria)}</h2>
+              <h2 id="guides-heading">
+                {locale === "en" ? (
+                  <>
+                    {"Useful Shorts "}
+                    <br />
+                    guides
+                  </>
+                ) : (
+                  <>
+                    {"Полезные материалы "}
+                    <br />
+                    по Shorts
+                  </>
+                )}
+              </h2>
               <p>
                 {locale === "en"
-                  ? "Short guides on hooks, structure and packaging help you understand how to assemble Shorts that hold attention and move viewers to a CTA."
-                  : "Короткие разборы по хуку, структуре и оформлению помогают быстрее понять, как собрать Shorts, которые удерживают внимание и доводят зрителя до CTA."}
+                  ? "Walkthroughs on hooks, structure, and subtitles—to help your Shorts hold attention better."
+                  : "Разборы по хукам, структуре и субтитрам — чтобы ваши Shorts лучше удерживали внимание."}
               </p>
             </div>
 

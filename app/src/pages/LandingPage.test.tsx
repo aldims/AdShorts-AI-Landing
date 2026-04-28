@@ -67,7 +67,6 @@ describe("LandingPage guides section", () => {
     expect(screen.queryByText("Музыка")).toBeNull();
     expect(screen.getByText("Создавайте готовые ролики за минуты — от идеи до публикации в одном месте")).toBeTruthy();
     expect(screen.queryByText("Запусти канал, который приносит просмотры каждый день")).toBeNull();
-    expect(screen.getByText("Всё создаётся автоматически")).toBeTruthy();
     expect(screen.queryByText("Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.")).toBeNull();
     expect(screen.getByRole("link", { name: "Открыть примеры Shorts: Обучающие Shorts" }).getAttribute("href")).toBe("/examples?filter=expert");
     expect(screen.getByText("Обучающие Shorts")).toBeTruthy();
@@ -118,7 +117,7 @@ describe("LandingPage guides section", () => {
     renderLandingPage();
 
     const guidesSection = screen.getByRole("region", {
-      name: "Полезные материалы по созданию Shorts",
+      name: "Полезные материалы по Shorts",
     });
     const guideCards = Array.from(guidesSection.querySelectorAll<HTMLAnchorElement>(".guide-card"));
 
@@ -146,7 +145,7 @@ describe("LandingPage guides section", () => {
     renderLandingPage("en");
 
     const guidesSection = screen.getByRole("region", {
-      name: "Useful Shorts creation guides",
+      name: "Useful Shorts guides",
     });
     const guideCards = Array.from(guidesSection.querySelectorAll<HTMLAnchorElement>(".guide-card"));
 

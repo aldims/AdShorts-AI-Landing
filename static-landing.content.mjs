@@ -165,7 +165,6 @@ export const staticLandingContent = {
         ru: "Готовый вертикальный ролик менее чем за минуту — с заголовком, описанием и хештегами, полностью готовый к публикации. Можно подключить YouTube-канал через Google OAuth и публиковать видео прямо из сервиса.",
         en: "A ready vertical video in less than a minute — with title, description, and hashtags, fully ready to publish. You can connect your YouTube channel via Google OAuth and publish directly from the Service.",
       },
-      note: { ru: "Всё создаётся автоматически — в один клик.", en: "Everything is created automatically — in one click." },
       type: "main",
     },
     {
