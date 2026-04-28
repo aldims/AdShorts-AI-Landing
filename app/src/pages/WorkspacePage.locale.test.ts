@@ -238,6 +238,14 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
   });
 
+  it("restores the last valid voice for the target Studio language", () => {
+    expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru, "Ryan")).toBe("Ryan");
+    expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en, "Rma_24000")).toBe("Rma_24000");
+    expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru, "invalid")).toBe(
+      DEFAULT_STUDIO_VOICE_ID.en,
+    );
+  });
+
   it("does not mark untouched generated source media as resettable", () => {
     const originalAsset = createMediaAsset(101);
     const segment = createDraftSegment({

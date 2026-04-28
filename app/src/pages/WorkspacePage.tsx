@@ -2352,8 +2352,10 @@ export const getDefaultStudioVoiceId = (language: StudioLanguage): StudioVoiceOp
 export const resolveStudioVoiceIdForLanguage = (
   language: StudioLanguage,
   voiceId: string | null | undefined,
+  fallbackVoiceId?: string | null | undefined,
 ): StudioVoiceOption["id"] =>
   studioVoiceOptionsByLanguage[language].find((voice) => voice.id === String(voiceId ?? "").trim())?.id ??
+  studioVoiceOptionsByLanguage[language].find((voice) => voice.id === String(fallbackVoiceId ?? "").trim())?.id ??
   getDefaultStudioVoiceId(language);
 
 export const getWorkspaceInitialStudioDefaults = (
@@ -11619,6 +11621,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [selectedVoiceId, setSelectedVoiceId] = useState<StudioVoiceOption["id"]>(
     routeStudioDefaults.voiceId,
   );
+  const selectedVoiceIdByLanguageRef = useRef<Record<StudioLanguage, StudioVoiceOption["id"]>>({
+    ru: getDefaultStudioVoiceId("ru"),
+    en: getDefaultStudioVoiceId("en"),
+  });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>("standard");
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<StudioCustomVideoFile | null>(null);
   const [isPreparingCustomVideo, setIsPreparingCustomVideo] = useState(false);
@@ -11647,9 +11653,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSelectedLanguage((current) => (current === previousRouteLanguage ? routeLocaleLanguage : current));
     setSelectedVoiceId((currentVoiceId) => {
       const currentVoiceLanguage = getStudioLanguageForVoiceId(currentVoiceId);
-      return currentVoiceLanguage === previousRouteLanguage || !currentVoiceLanguage
-        ? routeStudioDefaults.voiceId
-        : currentVoiceId;
+      if (currentVoiceLanguage !== previousRouteLanguage && currentVoiceLanguage) {
+        return currentVoiceId;
+      }
+
+      return resolveStudioVoiceIdForLanguage(
+        routeLocaleLanguage,
+        selectedVoiceIdByLanguageRef.current[routeLocaleLanguage],
+        routeStudioDefaults.voiceId,
+      );
     });
   }, [routeLocaleLanguage, routeStudioDefaults.voiceId]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -13949,7 +13961,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const hasPreviewModalDescription = Boolean(previewModalDescription);
   const hasPreviewModalHashtags = previewModalHashtags.length > 0;
   const selectedVoiceOptions = studioVoiceOptionsByLanguage[selectedLanguage];
-  const resolvedSelectedVoiceId = resolveStudioVoiceIdForLanguage(selectedLanguage, selectedVoiceId);
+  const resolvedSelectedVoiceId = resolveStudioVoiceIdForLanguage(
+    selectedLanguage,
+    selectedVoiceId,
+    selectedVoiceIdByLanguageRef.current[selectedLanguage],
+  );
   const buildCurrentExamplePrefillSettings = (): ExamplePrefillStudioSettings => {
     const settings: ExamplePrefillStudioSettings = {
       language: selectedLanguage,
@@ -13982,11 +13998,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const nextLanguage = settings.language === "ru" || settings.language === "en" ? settings.language : null;
     const effectiveLanguage = nextLanguage ?? selectedLanguage;
-    const nextVoiceOptions = studioVoiceOptionsByLanguage[effectiveLanguage];
     const requestedVoiceId = typeof settings.voiceId === "string" ? settings.voiceId.trim() : "";
-    const nextVoiceId =
-      nextVoiceOptions.find((voice) => voice.id === requestedVoiceId)?.id ??
-      (requestedVoiceId ? nextVoiceOptions[0]?.id ?? "" : "");
+    const nextVoiceId = requestedVoiceId
+      ? resolveStudioVoiceIdForLanguage(
+          effectiveLanguage,
+          requestedVoiceId,
+          selectedVoiceIdByLanguageRef.current[effectiveLanguage],
+        )
+      : "";
     const nextMusicType =
       typeof settings.musicType === "string" && settings.musicType !== "custom"
         ? studioMusicOptions.find((option) => option.id === settings.musicType)?.id ?? null
@@ -15338,6 +15357,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [activeSegment, activeSegmentMediaIdentityKey, activeSegmentStableIndex, createMode, queuedSegmentEditorPlaybackIndex]);
 
   useEffect(() => {
+    const currentVoiceLanguage = getStudioLanguageForVoiceId(selectedVoiceId);
+    const normalizedVoiceId = String(selectedVoiceId ?? "").trim();
+    if (!currentVoiceLanguage || !normalizedVoiceId || normalizedVoiceId === "none") {
+      return;
+    }
+
+    selectedVoiceIdByLanguageRef.current[currentVoiceLanguage] = normalizedVoiceId as StudioVoiceOption["id"];
+  }, [selectedVoiceId]);
+
+  useEffect(() => {
     if (!isVoiceoverEnabled || !resolvedSelectedVoiceId || resolvedSelectedVoiceId === selectedVoiceId) {
       return;
     }
@@ -15458,6 +15487,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const handleVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
     setIsVoiceoverEnabled(true);
+    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
   };
 
@@ -15609,13 +15639,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           getStudioLanguageForVoiceId(draftVoiceId) ??
           getStudioLanguageForVoiceId(projectVoiceId) ??
           selectedLanguage;
-    const nextVoiceOptions = studioVoiceOptionsByLanguage[nextLanguage];
-    const nextVoiceId =
-      nextVoiceOptions.find((voice) => voice.id === draftVoiceId)?.id ??
-      nextVoiceOptions.find((voice) => voice.id === projectVoiceId)?.id ??
-      nextVoiceOptions.find((voice) => voice.id === selectedVoiceId)?.id ??
-      nextVoiceOptions[0]?.id ??
-      "";
+    const nextVoiceId = resolveStudioVoiceIdForLanguage(
+      nextLanguage,
+      draftVoiceId || projectVoiceId || selectedVoiceId,
+      selectedVoiceIdByLanguageRef.current[nextLanguage],
+    );
     const nextMusicType =
       studioMusicOptions.find((option) => option.id === draftMusicType)?.id ??
       (typeof projectSettings?.musicType === "string"
@@ -15635,6 +15663,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSelectedLanguage(nextLanguage);
 
     if (nextVoiceId) {
+      selectedVoiceIdByLanguageRef.current[nextLanguage] = nextVoiceId;
       setSelectedVoiceId(nextVoiceId);
     }
 
@@ -16590,13 +16619,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSelectedLanguage(language);
     setSegmentEditorError(null);
 
-    const nextVoiceOptions = studioVoiceOptionsByLanguage[language];
-    const nextVoiceId =
-      nextVoiceOptions.find((voice) => voice.id === studioSidebarVoiceId)?.id ??
-      nextVoiceOptions[0]?.id ??
-      studioSidebarVoiceId;
+    const nextVoiceId = resolveStudioVoiceIdForLanguage(
+      language,
+      studioSidebarVoiceId,
+      selectedVoiceIdByLanguageRef.current[language],
+    );
 
     if (nextVoiceId) {
+      selectedVoiceIdByLanguageRef.current[language] = nextVoiceId;
       setSelectedVoiceId(nextVoiceId);
       if (wasVoiceoverEnabledInDraft) {
         updateSegmentEditorDraft((currentDraft) => ({
@@ -16736,6 +16766,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const handleSegmentEditorVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
+    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
     updateSegmentEditorDraft((currentDraft) => ({
       ...currentDraft,
