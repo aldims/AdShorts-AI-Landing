@@ -8,6 +8,7 @@ import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStat
 import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { clearPricingEntryIntent, readPricingEntryIntent } from "../lib/pricing-entry-intent";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
+import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 
 type Session = {
   name: string;
@@ -52,9 +53,16 @@ type PackageCheckoutProductId = "package_10" | "package_50" | "package_100";
 
 type CheckoutResponse = {
   data?: {
-    url: string;
+    url?: string;
+    widget?: {
+      confirmationToken: string;
+      paymentId: string;
+      returnUrl: string;
+      url?: string;
+    };
   };
   error?: string;
+  warning?: string;
 };
 
 type PricingPack = {
@@ -163,14 +171,14 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "start",
     name: "START",
-    audience: { ru: "Идеально для первого запуска", en: "Ideal for the first launch" },
-    audienceLines: { ru: ["Идеально для первого", "запуска"], en: ["Ideal for the first", "launch"] },
+    audience: { ru: "Разовый пакет для первого запуска", en: "Ideal for the first launch" },
+    audienceLines: { ru: ["Разовый пакет для", "первого запуска"], en: ["Ideal for the first", "launch"] },
     price: "390 ₽",
     billing: { ru: "/ 50 кредитов", en: "/ 50 credits" },
     credits: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
     subnote: { ru: "≈ 78 ₽ за Shorts", en: "≈ 78 ₽ per Short" },
     features: {
-      ru: ["Полный доступ к созданию Shorts", "Без водяного знака", "Редактирование в студии", "Автопубликация в YouTube"],
+      ru: ["Без водяного знака"],
       en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube auto-publishing"],
     },
     ctaLabel: { ru: "Оплатить START", en: "Pay for START" },
@@ -185,7 +193,7 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     credits: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
     subnote: { ru: "≈ 60 ₽ за Shorts", en: "≈ 60 ₽ per Short" },
     features: {
-      ru: ["Всё из START", "Приоритетная генерация", "Можно докупать кредиты", "Подходит для регулярного контента"],
+      ru: ["Без водяного знака", "Приоритетная генерация", "Можно докупать пакеты"],
       en: ["Everything in START", "Priority generation", "Credit top-ups available", "Built for regular content"],
     },
     badge: { ru: "Самый популярный", en: "Most popular" },
@@ -202,7 +210,7 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     credits: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
     subnote: { ru: "≈ 50 ₽ за Shorts", en: "≈ 50 ₽ per Short" },
     features: {
-      ru: ["Всё из PRO", "Максимальный приоритет", "Ранний доступ к новым функциям", "Лучшие лимиты для активного использования"],
+      ru: ["Без водяного знака", "Максимальный приоритет", "Можно докупать пакеты", "Ранний доступ к новым функциям"],
       en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
     },
     badge: { ru: "Лучшая выгода", en: "Best value" },
@@ -250,10 +258,10 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
     },
   },
   {
-    question: { ru: "Срок действия функций", en: "Feature access period" },
+    question: { ru: "Срок действия тарифа", en: "Feature access period" },
     answer: {
-      ru: "Функции тарифа активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
-      en: "Plan features are active for 30 days. Unused credits stay on the account and do not expire.",
+      ru: "START — разовый пакет без срока действия. PRO и ULTRA активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
+      en: "START is a one-time package with no expiration. PRO and ULTRA are active for 30 days. Unused credits stay on the account and do not expire.",
     },
   },
   {
@@ -349,7 +357,7 @@ export function PricingPage({
     setActiveCheckoutProductId(productId);
 
     try {
-      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}`, {
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?mode=widget`, {
         signal: AbortSignal.timeout(CHECKOUT_REQUEST_TIMEOUT_MS),
       });
       const payload = (await response.json().catch(() => null)) as CheckoutResponse | null;
@@ -363,7 +371,7 @@ export function PricingPage({
       }
 
       const errorMessage = payload?.error ?? t(pricingMessages.checkoutUnavailable);
-      if (!response.ok || !payload?.data?.url) {
+      if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
         if (productId.startsWith("package_") && errorMessage.includes(PACKAGE_RESTRICTION_ERROR_FRAGMENT)) {
           setActivePlanId("pro");
           await requestCheckout("pro");
@@ -375,7 +383,24 @@ export function PricingPage({
 
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
-        window.location.assign(payload.data.url);
+        if (payload.data.widget?.confirmationToken) {
+          try {
+            await openYooKassaPaymentWidget({
+              confirmationToken: payload.data.widget.confirmationToken,
+              returnUrl: payload.data.widget.returnUrl || window.location.href,
+              onError: setCheckoutError,
+            });
+            return;
+          } catch (widgetError) {
+            if (!payload.data.url) {
+              throw widgetError;
+            }
+          }
+        }
+
+        if (payload.data.url) {
+          window.location.assign(payload.data.url);
+        }
       }
     } catch (error) {
       const message =

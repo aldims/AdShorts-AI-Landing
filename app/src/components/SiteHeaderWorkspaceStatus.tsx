@@ -67,7 +67,7 @@ const workspaceStatusMessages = defineMessages({
 });
 
 export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
-  const { locale, localizePath, t } = useLocale();
+  const { localizePath, t } = useLocale();
   const normalizedPlan = normalizePlan(profile?.plan);
   const expiryDate = normalizeExpiry(profile?.expiresAt);
   const daysLeft = expiryDate ? getDaysLeft(expiryDate) : null;
@@ -75,21 +75,7 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
   const isExpiringSoon = Boolean(hasPaidPlan && daysLeft !== null && daysLeft <= 3);
 
   let tooltipText = t(workspaceStatusMessages.freePlanTooltip);
-  if (hasPaidPlan && expiryDate) {
-    const formattedExpiryDate = new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(expiryDate);
-    tooltipText =
-      daysLeft !== null
-        ? locale === "en"
-          ? `Active until ${formattedExpiryDate}. ${daysLeft} days left.`
-          : `Активен до ${formattedExpiryDate}. Осталось ${daysLeft} дн.`
-        : locale === "en"
-          ? `Active until ${formattedExpiryDate}.`
-          : `Активен до ${formattedExpiryDate}.`;
-  } else if (hasPaidPlan) {
+  if (hasPaidPlan) {
     tooltipText = t(workspaceStatusMessages.tariffActive);
   }
 

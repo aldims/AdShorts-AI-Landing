@@ -80,4 +80,25 @@ describe("studio subscription expiry resolution", () => {
       startPlanUsed: false,
     });
   });
+
+  it("ignores legacy START expiry because START has no expiration date", () => {
+    const details = resolveWorkspaceSubscriptionDetailsFromAdminPayload({
+      payments: [
+        {
+          paid_at: "2026-04-10T09:45:00.000Z",
+          plan_code: "start",
+          status: "succeeded",
+        },
+      ],
+      user: {
+        subscription_expires_at: "2026-05-10T09:45:00.000Z",
+        subscription_type: "start",
+      },
+    });
+
+    expect(details).toEqual({
+      expiresAt: null,
+      startPlanUsed: true,
+    });
+  });
 });

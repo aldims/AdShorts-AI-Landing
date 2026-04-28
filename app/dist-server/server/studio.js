@@ -13,21 +13,21 @@ const normalizeWorkspaceSubscriptionPlanCode = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return normalized === "start" || normalized === "pro" || normalized === "ultra" ? normalized : null;
 };
-const getWorkspaceSubscriptionPlanDurationDays = (planCode) => planCode === "start" || planCode === "pro" || planCode === "ultra" ? 30 : 0;
+const getWorkspaceSubscriptionPlanDurationDays = (planCode) => planCode === "pro" || planCode === "ultra" ? 30 : 0;
 export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (payload, options) => {
     const successfulPayments = Array.isArray(payload.payments)
         ? payload.payments.filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
         : [];
     const startPlanUsed = successfulPayments.some((payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === "start");
-    const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
+    const currentPlan = normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
+        normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
+    const directExpiry = currentPlan === "start" ? null : normalizeGenerationText(payload.user?.subscription_expires_at) || null;
     if (directExpiry) {
         return {
             expiresAt: directExpiry,
             startPlanUsed,
         };
     }
-    const currentPlan = normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
-        normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
     const candidatePayments = currentPlan
         ? successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) === currentPlan)
         : successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) !== null);
@@ -737,7 +737,7 @@ const buildWorkspaceProfile = (payload) => {
     const plan = String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE";
     return {
         balance: Math.max(0, Number(payload?.balance ?? 0)),
-        expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
+        expiresAt: plan === "START" ? null : normalizeGenerationText(payload?.subscription_expires_at) || null,
         plan,
         startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
     };
@@ -1730,7 +1730,7 @@ const fetchAdsflowSubscriptionDetails = async (userId, options) => {
 };
 const enrichWorkspaceProfile = async (payload, options) => {
     const profile = buildWorkspaceProfile(payload);
-    if (profile.startPlanUsed && (profile.plan === "FREE" || profile.expiresAt)) {
+    if (profile.startPlanUsed && (profile.plan === "FREE" || profile.plan === "START" || profile.expiresAt)) {
         return profile;
     }
     try {

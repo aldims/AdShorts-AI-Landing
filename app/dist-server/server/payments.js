@@ -370,7 +370,19 @@ const resolveDynamicCheckoutUrl = async (checkoutUrl) => {
     }
     return firstHop.location;
 };
-const buildDynamicCheckoutUrl = async (productId, user, checkoutContext) => {
+const normalizeCheckoutLinkUrl = (productId, checkoutLink) => {
+    const normalizedCheckoutLink = normalizeText(checkoutLink);
+    if (!normalizedCheckoutLink) {
+        return "";
+    }
+    try {
+        return new URL(normalizedCheckoutLink).toString();
+    }
+    catch {
+        throw new CheckoutConfigError(`Checkout URL for ${productId.toUpperCase()} is invalid.`);
+    }
+};
+const buildDynamicCheckoutUrl = async (productId, user, checkoutContext, options) => {
     const resolvedCheckoutContext = checkoutContext ?? (await getAdsflowCheckoutContext(user));
     const params = {
         user_id: resolvedCheckoutContext.userId,
@@ -379,12 +391,62 @@ const buildDynamicCheckoutUrl = async (productId, user, checkoutContext) => {
         source: isPackageCheckoutProductId(productId) ? "pricing_addons_web" : "pricing_site",
         origin_screen: isPackageCheckoutProductId(productId) ? "pricing_addons_web" : "pricing_page_web",
     };
+    if (options?.checkoutMode === "embedded") {
+        params.checkout_mode = "embedded";
+    }
     const checkoutUrl = new URL("/payment/start-subscription", getBaseCheckoutUrl());
     Object.entries(params).forEach(([key, value]) => {
         checkoutUrl.searchParams.set(key, value);
     });
     checkoutUrl.searchParams.set("sig", signCheckoutParams(params));
     return checkoutUrl.toString();
+};
+const fetchDynamicCheckoutWidgetSession = async (checkoutUrl) => {
+    const fallbackUrl = buildAdsflowDirectFallbackUrl(checkoutUrl);
+    const candidateUrls = fallbackUrl ? [checkoutUrl, fallbackUrl] : [checkoutUrl];
+    let lastError = null;
+    for (const candidateUrl of candidateUrls) {
+        try {
+            const response = await fetch(candidateUrl, {
+                headers: {
+                    Accept: "application/json",
+                },
+                signal: AbortSignal.timeout(CHECKOUT_RESOLVE_TIMEOUT_MS),
+            });
+            const payloadText = await response.text();
+            if (!response.ok) {
+                const error = new CheckoutConfigError(extractErrorDetail(payloadText) ?? `Payment widget request failed (${response.status}).`);
+                if (candidateUrl !== fallbackUrl && fallbackUrl && checkoutUpstreamFallbackStatuses.has(response.status)) {
+                    lastError = error;
+                    continue;
+                }
+                throw error;
+            }
+            const payload = parseJson(payloadText);
+            const confirmationToken = normalizeText(payload?.confirmation_token);
+            const paymentId = normalizeText(payload?.payment_id);
+            const returnUrl = normalizeText(payload?.return_url);
+            if (!confirmationToken || !paymentId || !returnUrl) {
+                throw new CheckoutConfigError("Payment widget response is incomplete.");
+            }
+            return {
+                confirmationToken,
+                paymentId,
+                returnUrl,
+            };
+        }
+        catch (error) {
+            const normalizedError = error instanceof CheckoutConfigError
+                ? error
+                : new CheckoutConfigError(error instanceof Error ? `Payment widget unavailable: ${error.message}` : "Payment widget unavailable.");
+            if (candidateUrl !== fallbackUrl && fallbackUrl) {
+                lastError = normalizedError;
+                continue;
+            }
+            throw normalizedError;
+        }
+    }
+    throw lastError ?? new CheckoutConfigError("Payment widget unavailable.");
 };
 export const isCheckoutProductId = (value) => checkoutProductIds.includes(value);
 export const getCheckoutUrl = async (productId, user) => {
@@ -397,14 +459,28 @@ export const getCheckoutUrl = async (productId, user) => {
     if (productId === "start" && checkoutContext?.startPlanUsed) {
         throw new CheckoutProductUnavailableError("Тариф START уже использован для этого аккаунта.");
     }
-    const checkoutLink = productId === "start" ? "" : checkoutLinks[productId]?.trim();
+    const checkoutLink = normalizeCheckoutLinkUrl(productId, productId === "start" ? "" : checkoutLinks[productId]);
     if (checkoutLink) {
-        try {
-            return new URL(checkoutLink).toString();
-        }
-        catch {
-            throw new CheckoutConfigError(`Checkout URL for ${productId.toUpperCase()} is invalid.`);
-        }
+        return checkoutLink;
     }
     return resolveDynamicCheckoutUrl(await buildDynamicCheckoutUrl(productId, user, checkoutContext ?? undefined));
+};
+export const getCheckoutWidgetSession = async (productId, user) => {
+    const checkoutContext = isPackageCheckoutProductId(productId) || productId === "start"
+        ? await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" })
+        : await getAdsflowCheckoutContext(user);
+    if (isPackageCheckoutProductId(productId) && checkoutContext && !canBuyGenerationPacks(checkoutContext.plan)) {
+        throw new CheckoutConfigError("Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.");
+    }
+    if (productId === "start" && checkoutContext?.startPlanUsed) {
+        throw new CheckoutProductUnavailableError("Тариф START уже использован для этого аккаунта.");
+    }
+    const fallbackLink = normalizeCheckoutLinkUrl(productId, productId === "start" ? "" : checkoutLinks[productId]);
+    const fallbackUrl = fallbackLink || (await buildDynamicCheckoutUrl(productId, user, checkoutContext, { checkoutMode: "redirect" }));
+    const widgetUrl = await buildDynamicCheckoutUrl(productId, user, checkoutContext, { checkoutMode: "embedded" });
+    const widgetSession = await fetchDynamicCheckoutWidgetSession(widgetUrl);
+    return {
+        ...widgetSession,
+        url: fallbackUrl,
+    };
 };

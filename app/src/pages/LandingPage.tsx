@@ -6,6 +6,7 @@ import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
+import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 
 type Session = {
   name: string;
@@ -509,10 +510,21 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
     setActiveCheckoutProductId(productId);
     try {
-      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}`, {
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?mode=widget`, {
         signal: AbortSignal.timeout(20_000),
       });
-      const payload = (await response.json().catch(() => null)) as { data?: { url: string }; error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        data?: {
+          url?: string;
+          widget?: {
+            confirmationToken: string;
+            paymentId: string;
+            returnUrl: string;
+            url?: string;
+          };
+        };
+        error?: string;
+      } | null;
 
       if (response.status === 401) {
         if (typeof window !== "undefined") {
@@ -522,13 +534,30 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         return;
       }
 
-      if (!response.ok || !payload?.data?.url) {
+      if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
         return;
       }
 
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem("adshorts.pending-checkout-plan");
-        window.location.assign(payload.data.url);
+        if (payload.data.widget?.confirmationToken) {
+          try {
+            await openYooKassaPaymentWidget({
+              confirmationToken: payload.data.widget.confirmationToken,
+              returnUrl: payload.data.widget.returnUrl || window.location.href,
+              onError: () => {},
+            });
+            return;
+          } catch {
+            if (!payload.data.url) {
+              return;
+            }
+          }
+        }
+
+        if (payload.data.url) {
+          window.location.assign(payload.data.url);
+        }
       }
     } finally {
       setActiveCheckoutProductId(null);
@@ -969,7 +998,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   <strong>390 ₽</strong>
                 </div>
                 <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for the first launch" : "Идеально для первого запуска"}
+                  {locale === "en" ? "Ideal for the first launch" : "Разовый пакет для первого запуска"}
                 </p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">

@@ -109,7 +109,7 @@ const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
   const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown; startPlanUsed?: unknown };
   const parsedBalance = Number(profile.balance);
   const normalizedPlan = String(profile.plan ?? "").trim().toUpperCase();
-  const normalizedExpiresAt = String(profile.expiresAt ?? "").trim() || null;
+  const normalizedExpiresAt = normalizedPlan === "START" ? null : String(profile.expiresAt ?? "").trim() || null;
   const normalizedStartPlanUsed = normalizeWorkspaceBooleanFlag(profile.startPlanUsed) ?? normalizedPlan === "START";
 
   if (!Number.isFinite(parsedBalance) || !normalizedPlan) {

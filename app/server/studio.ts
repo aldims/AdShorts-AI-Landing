@@ -258,7 +258,7 @@ const normalizeWorkspaceSubscriptionPlanCode = (value: unknown) => {
 };
 
 const getWorkspaceSubscriptionPlanDurationDays = (planCode: string | null | undefined) =>
-  planCode === "start" || planCode === "pro" || planCode === "ultra" ? 30 : 0;
+  planCode === "pro" || planCode === "ultra" ? 30 : 0;
 
 export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
   payload: AdsflowAdminUserDetailsResponse,
@@ -273,7 +273,11 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
     (payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === "start",
   );
 
-  const directExpiry = normalizeGenerationText(payload.user?.subscription_expires_at) || null;
+  const currentPlan =
+    normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
+    normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
+
+  const directExpiry = currentPlan === "start" ? null : normalizeGenerationText(payload.user?.subscription_expires_at) || null;
   if (directExpiry) {
     return {
       expiresAt: directExpiry,
@@ -281,9 +285,6 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
     };
   }
 
-  const currentPlan =
-    normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
-    normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
   const candidatePayments = currentPlan
     ? successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) === currentPlan)
     : successfulPayments.filter((payment) => normalizeWorkspaceSubscriptionPlanCode(payment?.plan_code) !== null);
@@ -1333,7 +1334,7 @@ const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfil
 
   return {
     balance: Math.max(0, Number(payload?.balance ?? 0)),
-    expiresAt: normalizeGenerationText(payload?.subscription_expires_at) || null,
+    expiresAt: plan === "START" ? null : normalizeGenerationText(payload?.subscription_expires_at) || null,
     plan,
     startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
   };
@@ -2618,7 +2619,7 @@ const enrichWorkspaceProfile = async (
   options?: { rawUserId?: string | null },
 ): Promise<WorkspaceProfile> => {
   const profile = buildWorkspaceProfile(payload);
-  if (profile.startPlanUsed && (profile.plan === "FREE" || profile.expiresAt)) {
+  if (profile.startPlanUsed && (profile.plan === "FREE" || profile.plan === "START" || profile.expiresAt)) {
     return profile;
   }
 

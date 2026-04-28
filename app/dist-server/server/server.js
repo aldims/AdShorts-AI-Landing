@@ -18,7 +18,7 @@ import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheK
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview } from "./voice-preview.js";
-import { CheckoutConfigError, CheckoutProductUnavailableError, getCheckoutUrl, isCheckoutProductId } from "./payments.js";
+import { CheckoutConfigError, CheckoutProductUnavailableError, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, } from "./payments.js";
 import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
@@ -1512,6 +1512,25 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
         return;
     }
     try {
+        const mode = String(req.query.mode ?? "").trim().toLowerCase();
+        if (mode === "widget") {
+            try {
+                const widget = await getCheckoutWidgetSession(productId, session.user);
+                res.json({ data: { widget, url: widget.url } });
+                return;
+            }
+            catch (widgetError) {
+                if (widgetError instanceof CheckoutProductUnavailableError) {
+                    throw widgetError;
+                }
+                const url = await getCheckoutUrl(productId, session.user);
+                res.json({
+                    data: { url },
+                    warning: widgetError instanceof Error ? widgetError.message : "Payment widget unavailable.",
+                });
+                return;
+            }
+        }
         const url = await getCheckoutUrl(productId, session.user);
         res.json({ data: { url } });
     }
