@@ -322,6 +322,56 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(hydratedSegment && isWorkspaceSegmentDraftVisualResettable(hydratedSegment)).toBe(true);
   });
 
+  it("restores AI video playback from a fresh server session when a pending draft lost its local asset", () => {
+    const originalAsset = createMediaAsset(101, {
+      kind: "segment_original",
+      mediaType: "photo",
+      role: "segment_original",
+      sourceKind: "stock",
+    });
+    const generatedVideoAsset = createMediaAsset(707, {
+      kind: "segment_current",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const liveSegment = createDraftSegment({
+      aiVideoGeneratedFromPrompt: "A futuristic city fly-through",
+      aiVideoPrompt: "A futuristic city fly-through",
+      aiVideoPromptInitialized: true,
+      currentAsset: originalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "ai",
+    });
+    const freshSegment = createDraftSegment({
+      currentAsset: generatedVideoAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/707/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/707/playback",
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(liveSegment),
+      createFreshSession(freshSegment),
+    );
+    const refreshedSegment = refreshedDraft.segments[0];
+
+    expect(refreshedSegment?.videoAction).toBe("ai");
+    expect(refreshedSegment?.aiVideoGeneratedMode).toBe("ai_video");
+    expect(refreshedSegment?.aiVideoAsset?.assetId).toBe(707);
+    expect(refreshedSegment?.aiVideoAsset?.remoteUrl).toBe("/api/workspace/media-assets/707/playback");
+    expect(getWorkspaceSegmentDraftVideoUrl(refreshedSegment!)).toBe("/api/workspace/media-assets/707/playback");
+  });
+
   it("applies draft and live media-library items by the visible preview url instead of stale asset ids", () => {
     const item = createMediaLibraryItem({
       assetId: 303,

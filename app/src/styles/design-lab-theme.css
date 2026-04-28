@@ -28425,6 +28425,7 @@ html, body {
 /* Три карточки тарифов занимают один ряд — subgrid по строкам */
 .pricing-max-card {
   display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: subgrid !important;
   /* 5 строк: head, price, output, features, cta */
   grid-row: span 5 !important;
@@ -28589,21 +28590,36 @@ html, body {
 .pricing-max-card__output {
   margin-bottom: 0;
   margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  align-items: start;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 14px 18px !important;
   border-radius: 16px !important;
   background: rgba(255,255,255,0.04) !important;
   border: 1px solid rgba(255,255,255,0.06);
-  align-self: start;
+  align-self: stretch;
 }
 
 .pricing-max-card__output span {
+  min-width: 0;
   font-size: 1rem !important;
   color: var(--text-primary);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .pricing-max-card__output small {
+  min-width: 0;
   font-size: 0.82rem !important;
   color: rgba(255,255,255,0.35) !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 /* ── Features list ── */
