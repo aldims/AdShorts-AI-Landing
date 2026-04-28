@@ -26,7 +26,7 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
         </button>
 
         <div className="icm__toprow">
-          <p className="icm__eyebrow">{locale === "en" ? "Out of credits" : "Кредиты закончились"}</p>
+          <p className="icm__eyebrow">{locale === "en" ? "Out of credits" : "Бесплатное видео использовано"}</p>
           <div className="icm__badge">
             <span className="icm__badge-dot" aria-hidden="true" />
             {locale === "en" ? "Plan" : "Тариф"} {planLabel}
@@ -34,8 +34,8 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
         </div>
 
         <div className="icm__body">
-          <h2 className="icm__title" id="icm-title">{locale === "en" ? "Top up your balance" : "Пополните баланс"}</h2>
-          <p className="icm__desc">{locale === "en" ? "Keep publishing Shorts without interruptions." : "Продолжайте выпускать Shorts без ограничений."}</p>
+          <h2 className="icm__title" id="icm-title">{locale === "en" ? "Top up your balance" : "Продолжайте без ограничений"}</h2>
+          <p className="icm__desc">{locale === "en" ? "Keep publishing Shorts without interruptions." : "Вы создали бесплатный Shorts. Перейдите на платный тариф, чтобы продолжить создавать видео."}</p>
         </div>
 
         <div className="icm__actions">
