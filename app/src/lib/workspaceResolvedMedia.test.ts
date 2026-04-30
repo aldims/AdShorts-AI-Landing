@@ -46,7 +46,7 @@ describe("workspace resolved media surface", () => {
     });
 
     expect(surface.mountVideoWhenIdle).toBe(true);
-    expect(surface.preloadPolicy).toBe("auto");
+    expect(surface.preloadPolicy).toBe("metadata");
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(false);
     expect(surface.posterUrl).toBe("https://cdn.example.com/poster.jpg");
@@ -62,7 +62,7 @@ describe("workspace resolved media surface", () => {
     });
 
     expect(surface.mountVideoWhenIdle).toBe(true);
-    expect(surface.preloadPolicy).toBe("auto");
+    expect(surface.preloadPolicy).toBe("metadata");
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(true);
     expect(surface.posterUrl).toBeNull();
@@ -100,7 +100,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.preferPosterFrame).toBe(true);
   });
 
-  it("mounts thumb video when a segment has no poster", () => {
+  it("keeps thumb videos unmounted while poster capture resolves", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-thumb",
       displayUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
@@ -109,13 +109,13 @@ describe("workspace resolved media surface", () => {
       viewerUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
     });
 
-    expect(surface.mountVideoWhenIdle).toBe(true);
-    expect(surface.preloadPolicy).toBe("metadata");
+    expect(surface.mountVideoWhenIdle).toBe(false);
+    expect(surface.preloadPolicy).toBe("none");
     expect(surface.preferPosterFrame).toBe(true);
-    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(false);
   });
 
-  it("always mounts media-library video tiles and primes a paused frame", () => {
+  it("keeps media-library video tiles poster-only until the viewer opens", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "media-library-tile",
       displayUrl: "/api/studio/segment-photo-animation/jobs/job-2/video",
@@ -123,10 +123,10 @@ describe("workspace resolved media surface", () => {
       viewerUrl: "/api/studio/segment-photo-animation/jobs/job-2/video",
     });
 
-    expect(surface.mountVideoWhenIdle).toBe(true);
-    expect(surface.preloadPolicy).toBe("auto");
+    expect(surface.mountVideoWhenIdle).toBe(false);
+    expect(surface.preloadPolicy).toBe("none");
     expect(surface.preferPosterFrame).toBe(true);
-    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(false);
     expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 

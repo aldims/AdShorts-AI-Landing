@@ -6,11 +6,17 @@ import {
 } from "./media-assets.js";
 import {
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
+  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
+  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY,
+  STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
-  STUDIO_VIDEO_GENERATION_CREDIT_COST as STUDIO_GENERATION_CREDIT_COST,
+  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
+  STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
+  type StudioSegmentVisualQuality,
 } from "../shared/studio-credit-costs.js";
 import {
   normalizeExamplePrefillStudioSettings,
@@ -46,6 +52,11 @@ import {
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
+import {
+  createWaveSpeedKlingImageToVideoJob,
+  getWaveSpeedPredictionOutputUrl,
+  getWaveSpeedPredictionStatus,
+} from "./wavespeed-worker.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type StudioUser = {
@@ -95,6 +106,9 @@ type AdsflowJobStatusResponse = {
   job_id?: string;
   media_asset_id?: number | null;
   prompt?: string | null;
+  project_status?: string | null;
+  ready?: boolean | null;
+  ready_reason?: string | null;
   status?: string;
   title?: string | null;
 };
@@ -132,6 +146,9 @@ type AdsflowLatestGenerationPayload = {
   job_id?: string;
   media_asset_id?: number | null;
   prompt?: string | null;
+  project_status?: string | null;
+  ready?: boolean | null;
+  ready_reason?: string | null;
   status?: string;
   task_type?: string | null;
   title?: string | null;
@@ -463,9 +480,12 @@ export type StudioGeneration = {
   generatedAt: string;
   hashtags: string[];
   id: string;
+  isReadyForEditor: boolean | null;
   modelLabel: string;
   prefillSettings: ExamplePrefillStudioSettings | null;
   prompt: string;
+  projectStatus: string | null;
+  readyReason: string | null;
   title: string;
   videoFallbackUrl: string | null;
   videoUrl: string;
@@ -481,7 +501,10 @@ export type StudioGenerationJob = {
 export type StudioGenerationStatus = {
   error?: string;
   generation?: StudioGeneration;
+  isReadyForEditor?: boolean | null;
   jobId: string;
+  projectStatus?: string | null;
+  readyReason?: string | null;
   status: string;
 };
 
@@ -557,6 +580,8 @@ const studioSupportedPromptImproveModes = new Set([
   "photo_animation",
   "image_edit",
 ]);
+
+const studioSupportedSegmentVisualQualities = new Set(["standard", "premium"]);
 
 const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"]);
 
@@ -687,6 +712,71 @@ const getDefaultStudioSubtitleColorForStyle = (styleId: string) =>
 const normalizeStudioVideoMode = (value: string | null | undefined) => {
   const normalized = String(value ?? "").trim().toLowerCase();
   return studioSupportedVideoModes.has(normalized) ? normalized : "standard";
+};
+
+const normalizeStudioSegmentVisualQuality = (value: unknown): StudioSegmentVisualQuality => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return studioSupportedSegmentVisualQualities.has(normalized)
+    ? (normalized as StudioSegmentVisualQuality)
+    : "standard";
+};
+
+const getStudioSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
+  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
+
+const getStudioSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
+  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
+
+const getStudioSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQuality) =>
+  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
+
+const buildStudioSegmentVisualQualityPayload = (quality: StudioSegmentVisualQuality) =>
+  quality === "premium"
+    ? {
+        generation_quality: quality,
+        quality,
+      }
+    : {};
+
+const WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX = "wavespeed:";
+const studioWaveSpeedSegmentAiVideoJobContexts = new Map<
+  string,
+  {
+    ownerExternalUserId: string;
+    profile: WorkspaceProfile;
+  }
+>();
+
+const buildWaveSpeedSegmentAiVideoJobId = (predictionId: string) =>
+  `${WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX}${normalizeGenerationText(predictionId)}`;
+
+const parseWaveSpeedSegmentAiVideoPredictionId = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId.startsWith(WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX)) {
+    return null;
+  }
+
+  const predictionId = normalizeGenerationText(normalizedJobId.slice(WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX.length));
+  return predictionId || null;
+};
+
+const normalizeWaveSpeedSegmentAiVideoFileName = (jobId: string) =>
+  `segment-ai-video-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
+
+const normalizeWaveSpeedSegmentPhotoAnimationFileName = (jobId: string) =>
+  `segment-photo-animation-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
+
+const getStudioGenerationCreditCost = (
+  videoMode: string,
+  options?: { isSegmentEditorGeneration?: boolean },
+) => {
+  if (options?.isSegmentEditorGeneration) {
+    return STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST;
+  }
+
+  return videoMode === "ai_photo"
+    ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
+    : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 };
 
 const normalizeStudioLanguage = (value: string | null | undefined): Locale => {
@@ -2490,6 +2580,38 @@ const normalizeAdsflowSegmentAiVideoAsset = (
   };
 };
 
+const normalizeWaveSpeedSegmentAiVideoAsset = (jobId: string): StudioGeneratedVideoAsset => {
+  const remoteUrl = buildStudioSegmentAiVideoJobVideoProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated video is unavailable.");
+  }
+
+  return {
+    assetId: null,
+    fileName: normalizeWaveSpeedSegmentAiVideoFileName(jobId),
+    fileSize: 0,
+    mimeType: "video/mp4",
+    posterUrl: buildStudioSegmentAiVideoJobPosterProxyUrl(jobId),
+    remoteUrl,
+  };
+};
+
+const normalizeWaveSpeedSegmentPhotoAnimationAsset = (jobId: string): StudioGeneratedVideoAsset => {
+  const remoteUrl = buildStudioSegmentPhotoAnimationJobVideoProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated video is unavailable.");
+  }
+
+  return {
+    assetId: null,
+    fileName: normalizeWaveSpeedSegmentPhotoAnimationFileName(jobId),
+    fileSize: 0,
+    mimeType: "video/mp4",
+    posterUrl: buildStudioSegmentPhotoAnimationJobPosterProxyUrl(jobId),
+    remoteUrl,
+  };
+};
+
 const normalizeAdsflowSegmentPhotoAnimationAsset = (
   jobId: string,
   payload?: AdsflowSegmentAiVideoAssetPayload | null,
@@ -2685,8 +2807,11 @@ const buildStudioGeneration = (
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
+    isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : null,
     modelLabel: "AdsFlow pipeline",
     prefillSettings: options?.historyEntry?.prefillSettings ?? null,
+    projectStatus: normalizeGenerationText(payload.project_status) || null,
+    readyReason: normalizeGenerationText(payload.ready_reason) || null,
     aspectRatio: "9:16",
     generatedAt: payload.generated_at ?? new Date().toISOString(),
   };
@@ -2743,8 +2868,11 @@ const buildStudioGenerationFromLatest = (
     videoFallbackUrl: videoUrls.videoFallbackUrl,
     videoUrl: videoUrls.videoUrl,
     durationLabel: "Ready",
+    isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : null,
     modelLabel: "AdsFlow pipeline",
     prefillSettings: historyEntry?.prefillSettings ?? null,
+    projectStatus: normalizeGenerationText(payload.project_status) || null,
+    readyReason: normalizeGenerationText(payload.ready_reason) || null,
     aspectRatio: "9:16",
     generatedAt: payload.generated_at ?? new Date().toISOString(),
   };
@@ -2795,9 +2923,12 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
     generatedAt: entry.generatedAt ?? entry.updatedAt ?? entry.createdAt,
     hashtags: metadata.hashtags,
     id: jobId,
+    isReadyForEditor: null,
     modelLabel: "AdsFlow pipeline",
     prefillSettings: entry.prefillSettings ?? null,
     prompt: metadata.prompt,
+    projectStatus: null,
+    readyReason: null,
     title: metadata.title,
     finalAsset,
     videoFallbackUrl: videoUrls.videoFallbackUrl,
@@ -2823,7 +2954,10 @@ const buildLatestGenerationStatus = (
   return {
     error: payload.error ?? undefined,
     generation: generation ?? undefined,
+    isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
     jobId: String(payload.job_id),
+    projectStatus: normalizeGenerationText(payload.project_status) || undefined,
+    readyReason: normalizeGenerationText(payload.ready_reason) || undefined,
     status,
   };
 };
@@ -3551,13 +3685,6 @@ export async function createStudioGenerationJob(
   const requestedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
   const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
-  const requiredCredits = STUDIO_GENERATION_CREDIT_COST;
-  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
-  const externalUserId = await resolveStudioExternalUserId(user);
-  const shouldAddWatermark =
-    creditReservation.profile.plan === "FREE" &&
-    creditReservation.consumed.subscription > 0 &&
-    creditReservation.consumed.purchased <= 0;
   const isVoiceEnabled = options?.voiceEnabled !== false;
   const normalizedVoiceId = isVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
   const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
@@ -3585,6 +3712,15 @@ export async function createStudioGenerationJob(
   const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
+  const requiredCredits = getStudioGenerationCreditCost(normalizedVideoMode, {
+    isSegmentEditorGeneration: Boolean(normalizedSegmentEditor),
+  });
+  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const shouldAddWatermark =
+    creditReservation.profile.plan === "FREE" &&
+    creditReservation.consumed.subscription > 0 &&
+    creditReservation.consumed.purchased <= 0;
   const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
   const prefillSettings = normalizeExamplePrefillStudioSettings({
     brandText: normalizedBrandText,
@@ -3816,6 +3952,7 @@ export async function generateStudioSegmentAiPhoto(
   prompt: string,
   user: StudioUser,
   options?: {
+    quality?: string;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -3829,12 +3966,14 @@ export async function generateStudioSegmentAiPhoto(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+  const requiredCredits = getStudioSegmentAiPhotoCreditCost(normalizedQuality);
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
-  const creditReservation = await consumeWorkspaceGenerationCredit(user, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, normalizedLanguage);
+  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
   const externalUserId = await resolveStudioExternalUserId(user);
   let assetReady = false;
 
@@ -3842,6 +3981,7 @@ export async function generateStudioSegmentAiPhoto(
     const payload = await postAdsflowJson<AdsflowSegmentAiPhotoGenerateResponse>("/api/web/segment-ai-photo/generate", {
       admin_token: env.adsflowAdminToken,
       external_user_id: externalUserId,
+      ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
       language: normalizedLanguage,
       project_id: normalizedProjectId,
       prompt: upstreamPrompt,
@@ -3857,7 +3997,7 @@ export async function generateStudioSegmentAiPhoto(
       profile: creditReservation.profile,
     };
   } catch (error) {
-    if (!(error instanceof WorkspaceCreditLimitError)) {
+    if (!(error instanceof WorkspaceCreditLimitError) && normalizedQuality === "standard") {
       try {
         const fallbackAsset = await generateDirectStudioSegmentAiPhoto(upstreamPrompt, {
           segmentIndex: normalizedSegmentIndex,
@@ -4272,6 +4412,7 @@ export async function createStudioSegmentAiPhotoJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    quality?: string;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -4285,6 +4426,8 @@ export async function createStudioSegmentAiPhotoJob(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+  const requiredCredits = getStudioSegmentAiPhotoCreditCost(normalizedQuality);
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
@@ -4293,8 +4436,9 @@ export async function createStudioSegmentAiPhotoJob(
   const externalUserId = await resolveStudioExternalUserId(user);
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-ai-photo/jobs", {
     admin_token: env.adsflowAdminToken,
-    credit_cost: STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
+    credit_cost: requiredCredits,
     external_user_id: externalUserId,
+    ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
     language: normalizedLanguage,
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
@@ -4321,6 +4465,11 @@ export async function createStudioSegmentAiVideoJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    imageAssetId?: number;
+    imageDataUrl?: string;
+    imageFileName?: string;
+    imageMimeType?: string;
+    quality?: string;
     language?: string;
     projectId?: number;
     segmentIndex?: number;
@@ -4334,22 +4483,61 @@ export async function createStudioSegmentAiVideoJob(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+  const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedQuality);
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedImageDataUrl = normalizeGenerationText(options?.imageDataUrl);
+  const normalizedImageFileName = normalizeGenerationText(options?.imageFileName);
+  const normalizedImageMimeType = normalizeGenerationText(options?.imageMimeType);
+  if (normalizedQuality === "premium" && !normalizedImageDataUrl) {
+    throw new Error("Для премиум ИИ видео нужно выбрать исходное фото.");
+  }
   const externalUserId = await resolveStudioExternalUserId(user);
 
   // Same billing model as /api/web/segment-ai-photo/generate: debit via /api/web/credits/consume first so the
-  // amount matches STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST. Upstream previously debited a lower default (e.g. 3) from job creation alone.
-  const creditReservation = await consumeWorkspaceGenerationCredit(user, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, normalizedLanguage);
+  // amount matches the selected AI video quality. Upstream previously debited a lower default (e.g. 3) from job creation alone.
+  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
 
   try {
+    if (normalizedQuality === "premium") {
+      const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
+      const sourceImageMimeType = inferStudioGeneratedImageMimeType(
+        normalizedImageMimeType || decodedImage.mimeType,
+        normalizedImageFileName,
+      );
+      const sourceImageName = (normalizedImageFileName.split(/[\\/]/).pop() ?? "").trim();
+      const sourceImageFileName = /\.(avif|gif|jpe?g|png|webp)$/i.test(sourceImageName)
+        ? sourceImageName
+        : `${sourceImageName || "segment-ai-video-source"}${getStudioGeneratedImageExtension(sourceImageMimeType)}`;
+      const waveSpeedJob = await createWaveSpeedKlingImageToVideoJob({
+        duration: 5,
+        image: decodedImage.bytes,
+        imageFileName: sourceImageFileName,
+        imageMimeType: sourceImageMimeType,
+        prompt: upstreamPrompt,
+      });
+      const jobId = buildWaveSpeedSegmentAiVideoJobId(waveSpeedJob.id);
+      studioWaveSpeedSegmentAiVideoJobContexts.set(jobId, {
+        ownerExternalUserId: externalUserId,
+        profile: creditReservation.profile,
+      });
+
+      return {
+        jobId,
+        profile: creditReservation.profile,
+        status: waveSpeedJob.status || "created",
+      };
+    }
+
     const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
       admin_token: env.adsflowAdminToken,
       credit_cost: 0,
       external_user_id: externalUserId,
+      ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
       language: normalizedLanguage,
       project_id: normalizedProjectId,
       prompt: upstreamPrompt,
@@ -4391,6 +4579,7 @@ export async function createStudioSegmentPhotoAnimationJob(
     customVideoFileName?: string;
     language?: string;
     projectId?: number;
+    quality?: string;
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiVideoJob> {
@@ -4402,6 +4591,8 @@ export async function createStudioSegmentPhotoAnimationJob(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+  const requiredCredits = getStudioSegmentPhotoAnimationCreditCost(normalizedQuality);
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
   });
@@ -4412,9 +4603,53 @@ export async function createStudioSegmentPhotoAnimationJob(
   if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
     throw new Error("Photo source asset id or image data URL is required.");
   }
+  if (normalizedQuality === "premium" && !normalizedCustomVideoFileDataUrl) {
+    throw new Error("Для премиум ИИ анимации нужно выбрать исходное фото.");
+  }
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const externalUserId = await resolveStudioExternalUserId(user);
+  if (normalizedQuality === "premium") {
+    const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
+
+    try {
+      const decodedImage = decodeDataUrlBytes(normalizedCustomVideoFileDataUrl as string);
+      const sourceImageMimeType = inferStudioGeneratedImageMimeType(
+        normalizedCustomVideoFileMimeType || decodedImage.mimeType,
+        normalizedCustomVideoFileName,
+      );
+      const sourceImageName = ((normalizedCustomVideoFileName ?? "").split(/[\\/]/).pop() ?? "").trim();
+      const sourceImageFileName = /\.(avif|gif|jpe?g|png|webp)$/i.test(sourceImageName)
+        ? sourceImageName
+        : `${sourceImageName || "segment-photo-animation-source"}${getStudioGeneratedImageExtension(sourceImageMimeType)}`;
+      const waveSpeedJob = await createWaveSpeedKlingImageToVideoJob({
+        duration: 5,
+        image: decodedImage.bytes,
+        imageFileName: sourceImageFileName,
+        imageMimeType: sourceImageMimeType,
+        prompt: upstreamPrompt,
+      });
+      const jobId = buildWaveSpeedSegmentAiVideoJobId(waveSpeedJob.id);
+      studioWaveSpeedSegmentAiVideoJobContexts.set(jobId, {
+        ownerExternalUserId: externalUserId,
+        profile: creditReservation.profile,
+      });
+
+      return {
+        jobId,
+        profile: creditReservation.profile,
+        status: waveSpeedJob.status || "created",
+      };
+    } catch (error) {
+      try {
+        await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+      } catch (refundError) {
+        console.error("[studio] Failed to refund segment photo animation credits", refundError);
+      }
+
+      throw error;
+    }
+  }
   const customVideoAssetId =
     normalizedCustomVideoAssetId
       ? normalizedCustomVideoAssetId
@@ -4434,7 +4669,7 @@ export async function createStudioSegmentPhotoAnimationJob(
       : undefined;
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-photo-animation/jobs", {
     admin_token: env.adsflowAdminToken,
-    credit_cost: STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
+    credit_cost: requiredCredits,
     custom_video_asset_id: customVideoAssetId,
     custom_video_mime_type: normalizedCustomVideoFileMimeType,
     custom_video_original_name: normalizedCustomVideoFileName,
@@ -4491,6 +4726,26 @@ export async function getStudioSegmentAiVideoJobStatus(
   user: StudioUser,
 ): Promise<StudioSegmentAiVideoJobStatus> {
   const safeJobId = String(jobId ?? "").trim();
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+
+  if (waveSpeedPredictionId) {
+    const profile = await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const prediction = await getWaveSpeedPredictionStatus(waveSpeedPredictionId);
+    const status = prediction.status || "processing";
+    const asset = prediction.outputUrl ? normalizeWaveSpeedSegmentAiVideoAsset(safeJobId) : undefined;
+    if (asset) {
+      warmStudioGeneratedVideoPlayback("segment-ai-video", safeJobId, user);
+      warmStudioGeneratedVideoPoster("segment-ai-video", safeJobId, user);
+    }
+
+    return {
+      asset,
+      error: prediction.error || undefined,
+      jobId: safeJobId,
+      profile,
+      status,
+    };
+  }
 
   try {
     const payload = await fetchAdsflowSegmentAiVideoJobStatus(jobId, user);
@@ -4532,6 +4787,26 @@ export async function getStudioSegmentPhotoAnimationJobStatus(
   user: StudioUser,
 ): Promise<StudioSegmentAiVideoJobStatus> {
   const safeJobId = String(jobId ?? "").trim();
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+
+  if (waveSpeedPredictionId) {
+    const profile = await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const prediction = await getWaveSpeedPredictionStatus(waveSpeedPredictionId);
+    const status = prediction.status || "processing";
+    const asset = prediction.outputUrl ? normalizeWaveSpeedSegmentPhotoAnimationAsset(safeJobId) : undefined;
+    if (asset) {
+      warmStudioGeneratedVideoPlayback("segment-photo-animation", safeJobId, user);
+      warmStudioGeneratedVideoPoster("segment-photo-animation", safeJobId, user);
+    }
+
+    return {
+      asset,
+      error: prediction.error || undefined,
+      jobId: safeJobId,
+      profile,
+      status,
+    };
+  }
 
   try {
     const payload = await fetchAdsflowSegmentPhotoAnimationJobStatus(jobId, user);
@@ -4645,6 +4920,9 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
         jobId: safeJobId,
         status,
         error: "Готовое видео недоступно как прямой media-файл.",
+        isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
+        projectStatus: normalizeGenerationText(payload.project_status) || undefined,
+        readyReason: normalizeGenerationText(payload.ready_reason) || undefined,
       };
     }
 
@@ -4654,6 +4932,9 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       jobId: safeJobId,
       status,
       generation,
+      isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
+      projectStatus: normalizeGenerationText(payload.project_status) || undefined,
+      readyReason: normalizeGenerationText(payload.ready_reason) || undefined,
     };
   }
 
@@ -4661,6 +4942,9 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
     jobId: safeJobId,
     status,
     error: payload.error ?? undefined,
+    isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
+    projectStatus: normalizeGenerationText(payload.project_status) || undefined,
+    readyReason: normalizeGenerationText(payload.ready_reason) || undefined,
   };
 }
 
@@ -4736,6 +5020,20 @@ const getCachedWorkspaceProfileForUser = async (user: StudioUser): Promise<Works
   return getCachedWorkspaceBootstrap(externalUserId)?.profile ?? buildWorkspaceProfile();
 };
 
+const getWaveSpeedSegmentAiVideoJobProfile = async (jobId: string, user: StudioUser): Promise<WorkspaceProfile> => {
+  const context = studioWaveSpeedSegmentAiVideoJobContexts.get(jobId);
+  if (!context) {
+    return getCachedWorkspaceProfileForUser(user);
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  if (context.ownerExternalUserId !== externalUserId) {
+    throw new Error("WaveSpeed segment AI video job is not available for this user.");
+  }
+
+  return { ...context.profile };
+};
+
 const probeStudioGeneratedVideoFileAvailability = async (
   kind: StudioGeneratedVideoPosterKind,
   jobId: string,
@@ -4808,12 +5106,23 @@ const recoverStudioSegmentGeneratedVideoJobStatus = async (
 };
 
 export async function getStudioSegmentAiVideoJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
-  assertAdsflowConfigured();
-
   const safeJobId = normalizeGenerationText(jobId);
   if (!safeJobId) {
     throw new Error("Job id is required.");
   }
+
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+  if (waveSpeedPredictionId) {
+    await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const outputUrl = await getWaveSpeedPredictionOutputUrl(waveSpeedPredictionId);
+    if (!outputUrl) {
+      throw new Error("WaveSpeed generated video is not ready yet.");
+    }
+
+    return new URL(outputUrl);
+  }
+
+  assertAdsflowConfigured();
 
   const externalUserId = await resolveStudioExternalUserId(user);
   return buildAdsflowUrl(`/api/web/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}/file`, {
@@ -4823,12 +5132,23 @@ export async function getStudioSegmentAiVideoJobFileProxyTarget(jobId: string, u
 }
 
 export async function getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
-  assertAdsflowConfigured();
-
   const safeJobId = String(jobId ?? "").trim();
   if (!safeJobId) {
     throw new Error("Job id is required.");
   }
+
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+  if (waveSpeedPredictionId) {
+    await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const outputUrl = await getWaveSpeedPredictionOutputUrl(waveSpeedPredictionId);
+    if (!outputUrl) {
+      throw new Error("WaveSpeed generated photo animation is not ready yet.");
+    }
+
+    return new URL(outputUrl);
+  }
+
+  assertAdsflowConfigured();
 
   const externalUserId = await resolveStudioExternalUserId(user);
 

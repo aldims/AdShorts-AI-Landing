@@ -6,6 +6,7 @@ import { buildExternalUserId, resolveExternalUserIdentity } from "./external-use
 export const checkoutProductIds = ["start", "pro", "ultra", "package_10", "package_50", "package_100"] as const;
 
 export type CheckoutProductId = (typeof checkoutProductIds)[number];
+type PlanCheckoutProductId = "start" | "pro" | "ultra";
 type PackageCheckoutProductId = "package_10" | "package_50" | "package_100";
 
 export class CheckoutConfigError extends Error {}
@@ -24,15 +25,39 @@ type AdsflowBootstrapPayload = {
     startPlanUsed?: boolean | number | string | null;
     start_plan_available?: boolean | number | string | null;
     start_plan_used?: boolean | number | string | null;
+    subscriptionType?: string | null;
+    subscription_type?: string | null;
     user_id?: number | string | null;
   } | null;
 };
 
 type AdsflowAdminUserDetailsResponse = {
+  user?: {
+    subscription_expires_at?: string | null;
+    subscription_type?: string | null;
+  };
   payments?: Array<{
     plan_code?: string | null;
     status?: string | null;
   }>;
+};
+
+type SimulatedPaymentProfile = {
+  balance: number;
+  expiresAt: string | null;
+  plan: string;
+  startPlanUsed: boolean;
+};
+
+type SimulatedCheckoutPayment = {
+  addedCredits: number;
+  paymentId: string;
+  productId: CheckoutProductId;
+  profile: SimulatedPaymentProfile;
+};
+
+type SimulatedPaymentProfileOverride = SimulatedPaymentProfile & {
+  updatedAt: number;
 };
 
 type AdsflowCheckoutContext = {
@@ -64,6 +89,11 @@ const checkoutLinks: Record<CheckoutProductId, string | undefined> = {
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizePlan = (value: unknown) => normalizeText(value).toUpperCase();
+const resolveBootstrapPlan = (payload: AdsflowBootstrapPayload | null | undefined) =>
+  normalizePlan(payload?.user?.plan) ||
+  normalizePlan(payload?.user?.subscription_type) ||
+  normalizePlan(payload?.user?.subscriptionType) ||
+  null;
 const normalizeBooleanFlag = (value: unknown) => {
   if (typeof value === "boolean") {
     return value;
@@ -90,6 +120,8 @@ const normalizeBooleanFlag = (value: unknown) => {
 };
 const isPackageCheckoutProductId = (value: CheckoutProductId): value is PackageCheckoutProductId =>
   value.startsWith("package_");
+const isPlanCheckoutProductId = (value: CheckoutProductId): value is PlanCheckoutProductId =>
+  value === "start" || value === "pro" || value === "ultra";
 const canBuyGenerationPacks = (plan: string | null) => plan === "PRO" || plan === "ULTRA";
 const checkoutRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 const adsflowPostFallbackStatuses = new Set([500, 502, 503, 504]);
@@ -98,8 +130,12 @@ const ADSFLOW_POST_TIMEOUT_MS = 10_000;
 const ADSFLOW_ADMIN_FETCH_TIMEOUT_MS = 5_000;
 const ADSFLOW_START_PLAN_USAGE_CACHE_TTL_MS = 60_000;
 const CHECKOUT_RESOLVE_TIMEOUT_MS = 15_000;
+const LOCAL_TEST_PAYMENT_EMAIL = "aldima@mail.com";
+const LOCAL_TEST_START_PLAN_DAYS = 30;
+const LOCAL_TEST_PAYMENT_PROFILE_OVERRIDE_TTL_MS = 15_000;
 const adsflowStartPlanUsageCache = new Map<string, AdsflowStartPlanUsageCacheEntry>();
 const adsflowStartPlanUsageInFlight = new Map<string, Promise<boolean>>();
+const simulatedPaymentProfileOverrides = new Map<string, SimulatedPaymentProfileOverride>();
 
 const parseJson = (value: string) => {
   try {
@@ -263,6 +299,64 @@ const fetchAdsflowAdminJson = async <T>(path: string): Promise<T> => {
   throw lastError ?? new CheckoutConfigError("AdsFlow admin unavailable.");
 };
 
+const postAdsflowAdminJson = async <T>(path: string): Promise<T> => {
+  assertAdsflowConfigured();
+
+  const candidateUrls = buildAdsflowCandidateUrls(path);
+  let lastError: CheckoutConfigError | null = null;
+
+  for (let index = 0; index < candidateUrls.length; index += 1) {
+    const candidateUrl = candidateUrls[index];
+    const isLastCandidate = index === candidateUrls.length - 1;
+
+    try {
+      const response = await fetch(candidateUrl, {
+        method: "POST",
+        headers: {
+          "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
+        signal: AbortSignal.timeout(ADSFLOW_ADMIN_FETCH_TIMEOUT_MS),
+      });
+      const payloadText = await response.text();
+
+      if (!response.ok) {
+        const error = new CheckoutConfigError(
+          extractErrorDetail(payloadText) ?? `AdsFlow admin request failed (${response.status}).`,
+        );
+        if (!isLastCandidate && adsflowPostFallbackStatuses.has(response.status)) {
+          lastError = error;
+          continue;
+        }
+
+        throw error;
+      }
+
+      const payload = parseJson(payloadText);
+      if (!payload) {
+        throw new CheckoutConfigError("AdsFlow admin returned an invalid response.");
+      }
+
+      return payload as T;
+    } catch (error) {
+      const normalizedError =
+        error instanceof CheckoutConfigError
+          ? error
+          : new CheckoutConfigError(
+              error instanceof Error ? `AdsFlow admin unavailable: ${error.message}` : "AdsFlow admin unavailable.",
+            );
+
+      if (!isLastCandidate) {
+        lastError = normalizedError;
+        continue;
+      }
+
+      throw normalizedError;
+    }
+  }
+
+  throw lastError ?? new CheckoutConfigError("AdsFlow admin unavailable.");
+};
+
 const resolvePreferredExternalUserId = async (user: WorkspaceUser) => {
   try {
     return (await resolveExternalUserIdentity(user)).preferred;
@@ -370,10 +464,17 @@ const getAdsflowCheckoutContext = async (
 
   const parsedPayload = parseJson(payload) as AdsflowBootstrapPayload | null;
   const userId = extractBootstrapUserId(payload) || normalizeText(parsedPayload?.user?.user_id);
-  const plan = normalizePlan(parsedPayload?.user?.plan) || null;
+  const bootstrapPlan = resolveBootstrapPlan(parsedPayload);
   if (!userId || !/^\d+$/.test(userId)) {
     throw new CheckoutConfigError("AdsFlow did not return a valid payment user.");
   }
+
+  const details = bootstrapPlan
+    ? null
+    : await fetchAdsflowAdminJson<AdsflowAdminUserDetailsResponse>(
+        `/api/admin/users/${encodeURIComponent(userId)}`,
+      ).catch(() => null);
+  const plan = bootstrapPlan || normalizePlan(details?.user?.subscription_type) || null;
 
   const bootstrapStartPlanUsed = extractBootstrapStartPlanUsed(parsedPayload, plan);
   const startPlanUsed =
@@ -385,6 +486,174 @@ const getAdsflowCheckoutContext = async (
     plan,
     startPlanUsed,
     userId,
+  };
+};
+
+const getPlanCreditAmount = (productId: CheckoutProductId) => {
+  switch (productId) {
+    case "start":
+      return 50;
+    case "pro":
+      return 250;
+    case "ultra":
+      return 1000;
+    case "package_10":
+      return 100;
+    case "package_50":
+      return 500;
+    case "package_100":
+      return 1000;
+    default:
+      return 0;
+  }
+};
+
+const assertPlanCheckoutAvailable = (productId: PlanCheckoutProductId, checkoutContext: AdsflowCheckoutContext) => {
+  if (checkoutContext.plan === "ULTRA" && productId === "ultra") {
+    throw new CheckoutProductUnavailableError("Тариф ULTRA уже активен для этого аккаунта.");
+  }
+
+  if (checkoutContext.plan === "ULTRA" && (productId === "start" || productId === "pro")) {
+    throw new CheckoutProductUnavailableError("Этот тариф недоступен на активном ULTRA.");
+  }
+
+  if (checkoutContext.plan === "PRO" && productId === "pro") {
+    throw new CheckoutProductUnavailableError("Тариф PRO уже активен для этого аккаунта.");
+  }
+
+  if (checkoutContext.plan === "PRO" && productId === "start") {
+    throw new CheckoutProductUnavailableError("Тариф START недоступен на активном PRO.");
+  }
+
+  if (productId === "start" && checkoutContext.startPlanUsed) {
+    throw new CheckoutProductUnavailableError("Тариф START уже использован для этого аккаунта.");
+  }
+};
+
+const fetchSimulatedPaymentProfile = async (
+  user: WorkspaceUser,
+  fallbackUserId: string,
+): Promise<SimulatedPaymentProfile> => {
+  const externalUserId = await resolvePreferredExternalUserId(user);
+  const payload = await postAdsflowText("/api/web/bootstrap", {
+    admin_token: env.adsflowAdminToken,
+    external_user_id: externalUserId,
+    language: "ru",
+    referral_source: "landing_site_test_payment",
+    user_email: user.email ?? undefined,
+    user_email_verified: true,
+    user_name: user.name ?? undefined,
+  });
+
+  const parsedPayload = parseJson(payload) as AdsflowBootstrapPayload & {
+    user?: {
+      balance?: number | string | null;
+      subscription_expires_at?: string | null;
+    } | null;
+  };
+  const balance = Math.max(0, Number(parsedPayload?.user?.balance ?? 0));
+  const details = await fetchAdsflowAdminJson<AdsflowAdminUserDetailsResponse>(
+    `/api/admin/users/${encodeURIComponent(fallbackUserId)}`,
+  ).catch(() => null);
+  const plan = resolveBootstrapPlan(parsedPayload) || normalizePlan(details?.user?.subscription_type) || "FREE";
+
+  return {
+    balance: Number.isFinite(balance) ? balance : 0,
+    expiresAt:
+      plan === "START"
+        ? null
+        : normalizeText(parsedPayload?.user?.subscription_expires_at) ||
+          normalizeText(details?.user?.subscription_expires_at) ||
+          null,
+    plan,
+    startPlanUsed: extractBootstrapStartPlanUsed(parsedPayload, plan) === true || plan === "START",
+  };
+};
+
+export const shouldSimulateCheckoutPayment = (user: WorkspaceUser) => {
+  if (env.isProduction) {
+    return false;
+  }
+
+  return normalizeText(user.email).toLowerCase() === LOCAL_TEST_PAYMENT_EMAIL;
+};
+
+export const applySimulatedCheckoutProfileOverride = <T extends SimulatedPaymentProfile | null | undefined>(
+  user: WorkspaceUser,
+  profile: T,
+): T => {
+  if (!shouldSimulateCheckoutPayment(user)) {
+    return profile;
+  }
+
+  const email = normalizeText(user.email).toLowerCase();
+  const override = simulatedPaymentProfileOverrides.get(email);
+  if (!override) {
+    return profile;
+  }
+
+  if (Date.now() - override.updatedAt > LOCAL_TEST_PAYMENT_PROFILE_OVERRIDE_TTL_MS) {
+    simulatedPaymentProfileOverrides.delete(email);
+    return profile;
+  }
+
+  const balance = Number(profile?.balance);
+  return {
+    ...(profile ?? override),
+    balance: Number.isFinite(balance) ? Math.max(0, balance) : override.balance,
+    expiresAt: override.expiresAt,
+    plan: override.plan,
+    startPlanUsed: Boolean(profile?.startPlanUsed || override.startPlanUsed),
+  } as T;
+};
+
+export const simulateCheckoutPayment = async (
+  productId: CheckoutProductId,
+  user: WorkspaceUser,
+): Promise<SimulatedCheckoutPayment> => {
+  if (!shouldSimulateCheckoutPayment(user)) {
+    throw new CheckoutConfigError("Test payment simulation is not available for this account.");
+  }
+
+  const checkoutContext = await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" });
+  const addedCredits = getPlanCreditAmount(productId);
+
+  if (isPackageCheckoutProductId(productId)) {
+    if (!canBuyGenerationPacks(checkoutContext.plan)) {
+      throw new CheckoutConfigError("Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.");
+    }
+
+    await postAdsflowAdminJson(`/api/admin/users/${encodeURIComponent(checkoutContext.userId)}/add-generations?amount=${addedCredits}`);
+  } else {
+    assertPlanCheckoutAvailable(productId, checkoutContext);
+    const days = productId === "start" ? LOCAL_TEST_START_PLAN_DAYS : 30;
+    await postAdsflowAdminJson(
+      `/api/admin/users/${encodeURIComponent(checkoutContext.userId)}/change-subscription?subscription_type=${productId}&days=${days}`,
+    );
+    await postAdsflowAdminJson(`/api/admin/users/${encodeURIComponent(checkoutContext.userId)}/add-generations?amount=${addedCredits}`);
+  }
+
+  const fetchedProfile = await fetchSimulatedPaymentProfile(user, checkoutContext.userId);
+  const profile = isPackageCheckoutProductId(productId)
+    ? fetchedProfile
+    : {
+        ...fetchedProfile,
+        plan: productId.toUpperCase(),
+        startPlanUsed: fetchedProfile.startPlanUsed || productId === "start",
+      };
+  simulatedPaymentProfileOverrides.set(normalizeText(user.email).toLowerCase(), {
+    ...profile,
+    updatedAt: Date.now(),
+  });
+  if (productId === "start") {
+    setCachedStartPlanUsage(checkoutContext.userId, true);
+  }
+
+  return {
+    addedCredits,
+    paymentId: `test_${productId}_${Date.now()}`,
+    productId,
+    profile,
   };
 };
 
@@ -619,14 +888,14 @@ export const isCheckoutProductId = (value: string): value is CheckoutProductId =
 
 export const getCheckoutUrl = async (productId: CheckoutProductId, user: WorkspaceUser) => {
   const checkoutContext =
-    isPackageCheckoutProductId(productId) || productId === "start"
+    isPackageCheckoutProductId(productId) || isPlanCheckoutProductId(productId)
       ? await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" })
       : null;
   if (isPackageCheckoutProductId(productId) && checkoutContext && !canBuyGenerationPacks(checkoutContext.plan)) {
     throw new CheckoutConfigError("Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.");
   }
-  if (productId === "start" && checkoutContext?.startPlanUsed) {
-    throw new CheckoutProductUnavailableError("Тариф START уже использован для этого аккаунта.");
+  if (isPlanCheckoutProductId(productId) && checkoutContext) {
+    assertPlanCheckoutAvailable(productId, checkoutContext);
   }
 
   const checkoutLink = normalizeCheckoutLinkUrl(productId, productId === "start" ? "" : checkoutLinks[productId]);
@@ -642,14 +911,14 @@ export const getCheckoutWidgetSession = async (
   user: WorkspaceUser,
 ): Promise<CheckoutWidgetSession> => {
   const checkoutContext =
-    isPackageCheckoutProductId(productId) || productId === "start"
+    isPackageCheckoutProductId(productId) || isPlanCheckoutProductId(productId)
       ? await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" })
       : await getAdsflowCheckoutContext(user);
   if (isPackageCheckoutProductId(productId) && checkoutContext && !canBuyGenerationPacks(checkoutContext.plan)) {
     throw new CheckoutConfigError("Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.");
   }
-  if (productId === "start" && checkoutContext?.startPlanUsed) {
-    throw new CheckoutProductUnavailableError("Тариф START уже использован для этого аккаунта.");
+  if (isPlanCheckoutProductId(productId)) {
+    assertPlanCheckoutAvailable(productId, checkoutContext);
   }
 
   const fallbackLink = normalizeCheckoutLinkUrl(productId, productId === "start" ? "" : checkoutLinks[productId]);

@@ -89,21 +89,17 @@ export const resolveWorkspaceMediaSurface = (
       case "segment-carousel-card": {
         const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
         mountVideoWhenIdle = isPlaybackRequested || forceMountVideoWhenIdle;
-        preloadPolicy = isPlaybackRequested ? "auto" : forceMountVideoWhenIdle ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
+        preloadPolicy = isPlaybackRequested ? "auto" : mountVideoWhenIdle ? "metadata" : "none";
         preferPosterFrame = !isPlaybackRequested;
         primePausedFrame = !isPlaybackRequested && forceMountVideoWhenIdle && !hasStablePosterFrame;
         subtitleMode = "active-only";
         break;
       }
       case "segment-thumb": {
-        const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
-        // Thumb previews must never stay blank while waiting for async poster capture.
-        // When no stable poster is available, mount the paused video directly so the
-        // browser can render a frame without requiring a page refresh.
-        mountVideoWhenIdle = forceMountVideoWhenIdle || !hasStablePosterFrame;
-        preloadPolicy = mountVideoWhenIdle ? "metadata" : "none";
+        mountVideoWhenIdle = false;
+        preloadPolicy = "none";
         preferPosterFrame = true;
-        primePausedFrame = mountVideoWhenIdle;
+        primePausedFrame = false;
         break;
       }
       case "segment-drag-ghost": {
@@ -119,10 +115,10 @@ export const resolveWorkspaceMediaSurface = (
       }
       case "media-library-tile":
       case "segment-modal-library-tile": {
-        mountVideoWhenIdle = true;
-        preloadPolicy = "auto";
+        mountVideoWhenIdle = false;
+        preloadPolicy = "none";
         preferPosterFrame = true;
-        primePausedFrame = true;
+        primePausedFrame = false;
         break;
       }
       case "media-viewer": {

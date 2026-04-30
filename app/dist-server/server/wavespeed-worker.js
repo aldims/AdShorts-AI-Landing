@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env } from "./env.js";
-const WAVESPEED_API_BASE_URL = "https://api.wavespeed.ai/api/v3";
+const WAVESPEED_API_BASE_URL = "https://api.wavespeed.ai/api/v3/";
+export const WAVESPEED_KLING_V2_6_STD_IMAGE_TO_VIDEO_MODEL = "kwaivgi/kling-v2.6-std/image-to-video";
 const WAVESPEED_PREVIEW_CACHE_DIR = join(env.dataDir, "voice-previews", "wavespeed");
 const WAVESPEED_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const WAVESPEED_KLING_IMAGE_TO_VIDEO_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 mkdirSync(WAVESPEED_PREVIEW_CACHE_DIR, { recursive: true });
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const getPreviewCachePath = (options) => {
@@ -35,9 +37,10 @@ const readCachedPreview = (cachePath) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fetchWaveSpeed = async (path, init, timeoutMs = 30_000) => {
     if (!env.wavespeedApiKey) {
-        throw new Error("WaveSpeed preview is not configured on this server.");
+        throw new Error("WaveSpeed API is not configured on this server.");
     }
-    const response = await fetch(new URL(path, WAVESPEED_API_BASE_URL), {
+    const normalizedPath = path.replace(/^\/+/u, "");
+    const response = await fetch(new URL(normalizedPath, WAVESPEED_API_BASE_URL), {
         ...init,
         headers: {
             Authorization: `Bearer ${env.wavespeedApiKey}`,
@@ -60,6 +63,9 @@ const getWaveSpeedErrorMessage = (payload, fallback) => {
         normalizeText(payload?.message) ||
         fallback);
 };
+const getWaveSpeedMediaUploadErrorMessage = (payload, fallback) => {
+    return normalizeText(payload?.message) || fallback;
+};
 const extractWaveSpeedOutputUrl = (payload) => {
     const outputs = payload?.data?.outputs;
     if (!Array.isArray(outputs) || outputs.length === 0) {
@@ -77,6 +83,28 @@ const extractWaveSpeedOutputUrl = (payload) => {
         return firstOutput.url.trim();
     }
     return null;
+};
+const extractWaveSpeedMediaUploadUrl = (payload) => {
+    const candidates = [payload?.data?.download_url, payload?.data?.url];
+    for (const candidate of candidates) {
+        const normalized = normalizeText(candidate);
+        if (normalized) {
+            return normalized;
+        }
+    }
+    return null;
+};
+const assertValidWaveSpeedHttpUrl = (value, fallbackError) => {
+    try {
+        const url = new URL(value);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+            return url.toString();
+        }
+    }
+    catch {
+        // Fall through to the shared error below.
+    }
+    throw new Error(fallbackError);
 };
 const pollWaveSpeedPrediction = async (predictionId) => {
     const startedAt = Date.now();
@@ -100,6 +128,100 @@ const pollWaveSpeedPrediction = async (predictionId) => {
     }
     throw new Error("WaveSpeed preview timed out.");
 };
+const uploadWaveSpeedMedia = async (options) => {
+    const normalizedFileName = normalizeText(options.fileName) || "wavespeed-source.png";
+    const normalizedMimeType = normalizeText(options.mimeType) || "image/png";
+    if (options.bytes.byteLength <= 0) {
+        throw new Error("WaveSpeed source file is empty.");
+    }
+    const formData = new FormData();
+    formData.append("file", new Blob([new Uint8Array(options.bytes)], {
+        type: normalizedMimeType,
+    }), normalizedFileName);
+    const response = await fetchWaveSpeed("/media/upload/binary", {
+        body: formData,
+        method: "POST",
+    }, 90_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedMediaUploadErrorMessage(payload, `WaveSpeed media upload failed (${response.status}).`));
+    }
+    const uploadedUrl = extractWaveSpeedMediaUploadUrl(payload);
+    if (!uploadedUrl) {
+        throw new Error("WaveSpeed media upload did not return a file URL.");
+    }
+    return assertValidWaveSpeedHttpUrl(uploadedUrl, "WaveSpeed media upload returned an invalid file URL.");
+};
+export async function getWaveSpeedPredictionStatus(predictionId) {
+    const normalizedPredictionId = normalizeText(predictionId);
+    if (!normalizedPredictionId) {
+        throw new Error("WaveSpeed prediction id is required.");
+    }
+    const response = await fetchWaveSpeed(`/predictions/${encodeURIComponent(normalizedPredictionId)}/result`, undefined, 30_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedErrorMessage(payload, `WaveSpeed prediction status failed (${response.status}).`));
+    }
+    const outputUrl = extractWaveSpeedOutputUrl(payload);
+    return {
+        error: normalizeText(payload?.data?.error) || undefined,
+        id: normalizeText(payload?.data?.id) || normalizedPredictionId,
+        outputUrl: outputUrl ? assertValidWaveSpeedHttpUrl(outputUrl, "WaveSpeed prediction returned an invalid output URL.") : null,
+        status: normalizeText(payload?.data?.status).toLowerCase() || "processing",
+    };
+}
+export async function getWaveSpeedPredictionOutputUrl(predictionId) {
+    const status = await getWaveSpeedPredictionStatus(predictionId);
+    if (status.status === "failed") {
+        throw new Error(status.error || "WaveSpeed prediction failed.");
+    }
+    return status.outputUrl;
+}
+export async function createWaveSpeedKlingImageToVideoJob(options) {
+    const normalizedPrompt = normalizeText(options.prompt);
+    if (!normalizedPrompt) {
+        throw new Error("WaveSpeed image-to-video prompt is required.");
+    }
+    if (options.image.byteLength <= 0) {
+        throw new Error("WaveSpeed image-to-video source image is empty.");
+    }
+    if (options.image.byteLength > WAVESPEED_KLING_IMAGE_TO_VIDEO_MAX_IMAGE_BYTES) {
+        throw new Error("WaveSpeed image-to-video source image must be 10MB or smaller.");
+    }
+    const imageUrl = await uploadWaveSpeedMedia({
+        bytes: options.image,
+        fileName: options.imageFileName || "segment-ai-video-source.png",
+        mimeType: options.imageMimeType || "image/png",
+    });
+    const negativePrompt = normalizeText(options.negativePrompt);
+    const response = await fetchWaveSpeed(`/${WAVESPEED_KLING_V2_6_STD_IMAGE_TO_VIDEO_MODEL}`, {
+        body: JSON.stringify({
+            duration: options.duration ?? 5,
+            image: imageUrl,
+            ...(negativePrompt ? { negative_prompt: negativePrompt } : {}),
+            prompt: normalizedPrompt,
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
+        method: "POST",
+    }, 60_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedErrorMessage(payload, `WaveSpeed image-to-video request failed (${response.status}).`));
+    }
+    const predictionId = normalizeText(payload?.data?.id);
+    if (!predictionId) {
+        throw new Error("WaveSpeed did not return an image-to-video prediction id.");
+    }
+    const outputUrl = extractWaveSpeedOutputUrl(payload);
+    return {
+        error: normalizeText(payload?.data?.error) || undefined,
+        id: predictionId,
+        outputUrl: outputUrl ? assertValidWaveSpeedHttpUrl(outputUrl, "WaveSpeed prediction returned an invalid output URL.") : null,
+        status: normalizeText(payload?.data?.status).toLowerCase() || "created",
+    };
+}
 export async function generateWaveSpeedSpeechPreview(options) {
     const normalizedText = normalizeText(options.text);
     const normalizedVoiceId = normalizeText(options.voiceId);

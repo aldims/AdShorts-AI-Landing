@@ -92,9 +92,12 @@ import { getStudioVoicePreview } from "./voice-preview.js";
 import {
   CheckoutConfigError,
   CheckoutProductUnavailableError,
+  applySimulatedCheckoutProfileOverride,
   getCheckoutUrl,
   getCheckoutWidgetSession,
   isCheckoutProductId,
+  shouldSimulateCheckoutPayment,
+  simulateCheckoutPayment,
 } from "./payments.js";
 import {
   deleteLocalExample,
@@ -1050,10 +1053,12 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
       await invalidateWorkspaceProjectsCache(session.user);
     }
 
+    const profile = applySimulatedCheckoutProfileOverride(session.user, workspace.profile);
+
     res.json({
       data: {
         latestGeneration: workspace.latestGeneration,
-        profile: workspace.profile,
+        profile,
         studioOptions: workspace.studioOptions,
       },
     });
@@ -1899,6 +1904,12 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 
   try {
     const mode = String(req.query.mode ?? "").trim().toLowerCase();
+    if (mode === "widget" && shouldSimulateCheckoutPayment(session.user)) {
+      const simulatedPayment = await simulateCheckoutPayment(productId, session.user);
+      res.json({ data: { simulatedPayment } });
+      return;
+    }
+
     if (mode === "widget") {
       try {
         const widget = await getCheckoutWidgetSession(productId, session.user);
@@ -2398,6 +2409,7 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -2409,6 +2421,7 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
   try {
     const result = await generateStudioSegmentAiPhoto(prompt, session.user, {
       language,
+      quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
@@ -2630,6 +2643,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -2641,6 +2655,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   try {
     const job = await createStudioSegmentAiPhotoJob(prompt, session.user, {
       language,
+      quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
@@ -2688,6 +2703,11 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
+  const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
+  const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
+  const imageMimeType = typeof req.body?.imageMimeType === "string" ? req.body.imageMimeType.trim() : "";
+  const imageAssetId = Number(req.body?.imageAssetId ?? 0);
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -2698,7 +2718,12 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
 
   try {
     const job = await createStudioSegmentAiVideoJob(prompt, session.user, {
+      imageAssetId: Number.isFinite(imageAssetId) && imageAssetId > 0 ? imageAssetId : undefined,
+      imageDataUrl: imageDataUrl || undefined,
+      imageFileName: imageFileName || undefined,
+      imageMimeType: imageMimeType || undefined,
       language,
+      quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
@@ -2799,6 +2824,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
   const customVideoFileDataUrl =
     typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
@@ -2827,6 +2853,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
       customVideoFileName: customVideoFileName || undefined,
       language,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+      quality,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
     res.json({ data: job });

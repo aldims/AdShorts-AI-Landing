@@ -108,6 +108,31 @@ export function PrimarySiteNav({
     onOpenStudio();
   };
 
+  if (isStudioActive && onOpenStudioSection) {
+    return (
+      <nav className="site-nav site-nav--studio-tabs" aria-label={t(navMessages.ariaStudioSections)}>
+        {([
+          { id: "create", label: t(navMessages.studioCreate) },
+          { id: "projects", label: t(navMessages.projects) },
+          { id: "media", label: t(navMessages.media) },
+        ] as Array<{ id: StudioEntryIntentSection; label: string }>).map((item) => (
+          <button
+            key={item.id}
+            className={`site-nav__item route-button${resolvedActiveStudioSection === item.id ? " site-nav__item--active" : ""}`}
+            type="button"
+            onClick={() => handleStudioSectionSelect(item.id)}
+          >
+            <span>{item.label}</span>
+            {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
+          </button>
+        ))}
+        <Link className="site-nav__item" to={localizePath("/pricing")}>
+          {t(navMessages.pricing)}
+        </Link>
+      </nav>
+    );
+  }
+
   return (
     <nav className="site-nav" aria-label={t(navMessages.ariaMain)}>
       <Link className={`site-nav__item${activeItem === "home" ? " site-nav__item--active" : ""}`} to={localizePath("/")}>

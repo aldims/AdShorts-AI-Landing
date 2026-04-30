@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import {
   createStudioCustomVideoFileFromMediaLibraryItem,
+  distributeWorkspaceSegmentBulkSubtitleText,
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getWorkspaceInitialStudioDefaults,
@@ -217,6 +218,70 @@ const createMediaLibraryItem = (overrides: Partial<MediaLibraryItem> = {}): Medi
   segmentNumber: 1,
   source: "draft",
   ...overrides,
+});
+
+describe("WorkspacePage segment subtitle bulk text", () => {
+  it("keeps one sentence per segment when sentence and segment counts match", () => {
+    const text = "Первое. Второе. Третье. Четвертое. Пятое. Шестое.";
+    const result = distributeWorkspaceSegmentBulkSubtitleText(text, 6);
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual(["Первое.", "Второе.", "Третье.", "Четвертое.", "Пятое.", "Шестое."]);
+  });
+
+  it("splits fewer sentences into enough non-empty segments by words", () => {
+    const text = "Первое предложение про героя задает ритм. Второе предложение завершает историю красиво сейчас.";
+    const result = distributeWorkspaceSegmentBulkSubtitleText(text, 5);
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual([
+      "Первое предложение",
+      "про героя",
+      "задает ритм.",
+      "Второе предложение завершает",
+      "историю красиво сейчас.",
+    ]);
+    expect(result.texts.join(" ")).toBe(text);
+  });
+
+  it("groups extra sentences into neighboring segment text", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("One. Two. Three. Four. Five. Six.", 3);
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual(["One. Two.", "Three. Four.", "Five. Six."]);
+  });
+
+  it("splits a text without sentence punctuation evenly by words", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("one two three four five six seven eight nine ten", 3);
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual([
+      "one two three four",
+      "five six seven",
+      "eight nine ten",
+    ]);
+  });
+
+  it("normalizes extra spaces and line breaks", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("  one \n\n two\t three   four  ", 2);
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual(["one two", "three four"]);
+  });
+
+  it("rejects empty input without producing draft texts", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("   \n\t  ", 3);
+
+    expect(result.error).toBe("Введите текст субтитров.");
+    expect(result.texts).toEqual([]);
+  });
+
+  it("rejects text with fewer words than segments", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("one two", 5);
+
+    expect(result.error).toBe("Для 5 сегментов нужно минимум 5 слов.");
+    expect(result.texts).toEqual([]);
+  });
 });
 
 describe("WorkspacePage studio locale defaults", () => {

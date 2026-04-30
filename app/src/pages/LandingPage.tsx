@@ -5,6 +5,7 @@ import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { defineMessages, useLocale, type Locale } from "../lib/i18n";
+import { buildPaymentReturnUrl, writePreCheckoutProfile } from "../lib/payment-return";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 
@@ -24,6 +25,7 @@ type WorkspaceProfile = {
 type Props = {
   session: Session;
   workspaceProfile?: WorkspaceProfile;
+  useLayeredHero?: boolean;
   onOpenSignup: () => void;
   onOpenSignin: () => void;
   onLogout: () => void | Promise<void>;
@@ -264,7 +266,7 @@ const landingGuideCards: Record<Locale, Array<{ label: string; title: string; de
     },
   ],
 };
-export function LandingPage({ session, workspaceProfile = null, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+export function LandingPage({ session, workspaceProfile = null, useLayeredHero = false, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
   const { locale, localizePath, t } = useLocale();
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -509,12 +511,20 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
     }
 
     setActiveCheckoutProductId(productId);
+    writePreCheckoutProfile(productId, {
+      balance: workspaceProfile?.balance ?? 0,
+      plan: currentPlanLabel ?? "FREE",
+    });
     try {
       const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?mode=widget`, {
         signal: AbortSignal.timeout(20_000),
       });
       const payload = (await response.json().catch(() => null)) as {
         data?: {
+          simulatedPayment?: {
+            paymentId: string;
+            productId: "start" | "pro" | "ultra";
+          };
           url?: string;
           widget?: {
             confirmationToken: string;
@@ -534,6 +544,18 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
         return;
       }
 
+      if (payload?.data?.simulatedPayment && typeof window !== "undefined") {
+        window.sessionStorage.removeItem("adshorts.pending-checkout-plan");
+        window.location.assign(
+          buildPaymentReturnUrl({
+            paymentId: payload.data.simulatedPayment.paymentId,
+            pricingPath: localizePath("/pricing"),
+            productId: payload.data.simulatedPayment.productId,
+          }),
+        );
+        return;
+      }
+
       if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
         return;
       }
@@ -541,10 +563,15 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem("adshorts.pending-checkout-plan");
         if (payload.data.widget?.confirmationToken) {
+          const returnUrl = buildPaymentReturnUrl({
+            paymentId: payload.data.widget.paymentId,
+            pricingPath: localizePath("/pricing"),
+            productId,
+          });
           try {
             await openYooKassaPaymentWidget({
               confirmationToken: payload.data.widget.confirmationToken,
-              returnUrl: payload.data.widget.returnUrl || window.location.href,
+              returnUrl,
               onError: () => {},
             });
             return;
@@ -573,7 +600,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
   };
 
   return (
-    <div className="route-page">
+    <div className={useLayeredHero ? "route-page route-page--layered-hero" : "route-page route-page--video-hero"}>
       <header className="site-header" id="top">
         <div className="container site-header__inner">
           <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
@@ -601,6 +628,35 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
 
       <main ref={revealRootRef}>
         <section className="hero">
+          {useLayeredHero ? (
+            <>
+              <div className="hero__layered-background" aria-hidden="true">
+                <picture className="hero__layered-background-media">
+                  <img src="/background/bg.png" alt="" decoding="async" fetchPriority="high" />
+                </picture>
+              </div>
+              <div className="hero__motion-layer" aria-hidden="true">
+                <div className="hero__particle-field">
+                  {Array.from({ length: 25 }, (_, index) => (
+                    <span className="hero__particle" key={index} />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <video
+              className="hero__background-video"
+              src="/bg_wavespeed_upscaled_pingpong_4_5x_slow.mp4"
+              poster="/background.png"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              aria-hidden="true"
+            />
+          )}
+
           {/* Background scene */}
           <div className="hero__scene" aria-hidden="true">
             <span className="hero__scene-stars"></span>
@@ -1035,7 +1091,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   <strong>1 490 ₽</strong>
                 </div>
                 <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for a regular content flow" : "Идеально для регулярного контент-потока"}
+                  {locale === "en" ? "Ideal for a regular content flow" : "Для регулярного создания Shorts"}
                 </p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
@@ -1067,7 +1123,7 @@ export function LandingPage({ session, workspaceProfile = null, onOpenSignup, on
                   <strong>4 990 ₽</strong>
                 </div>
                 <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for maximum volume" : "Идеально для максимального объёма"}
+                  {locale === "en" ? "Ideal for maximum volume" : "Для максимального объёма"}
                 </p>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">

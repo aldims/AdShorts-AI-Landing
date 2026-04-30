@@ -359,6 +359,7 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
@@ -374,6 +375,39 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                useLayeredHero
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+              />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="/hero-background-test"
+          element={
+            <RouteSuspense>
+              <LandingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                useLayeredHero
+                onOpenSignup={() => openAuth("signup")}
+                onOpenSignin={() => openAuth("signin")}
+                onLogout={handleLogout}
+                onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+              />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="/en/hero-background-test"
+          element={
+            <RouteSuspense>
+              <LandingPage
+                session={session}
+                workspaceProfile={workspaceProfile}
+                useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
@@ -393,6 +427,7 @@ export function App() {
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
                 onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+                onWorkspaceProfileChange={setWorkspaceProfile}
               />
             </RouteSuspense>
           }
@@ -408,6 +443,7 @@ export function App() {
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
                 onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+                onWorkspaceProfileChange={setWorkspaceProfile}
               />
             </RouteSuspense>
           }
