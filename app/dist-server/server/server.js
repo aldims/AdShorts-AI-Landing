@@ -13,6 +13,7 @@ import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWor
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
+import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
@@ -332,6 +333,16 @@ const normalizeRequestNonNegativeInteger = (value) => {
     }
     const rounded = Math.trunc(numeric);
     return rounded >= 0 ? rounded : undefined;
+};
+const isStudioSegmentVisualJobReadyStatus = (value) => {
+    const status = String(value ?? "").trim().toLowerCase();
+    return ["completed", "done", "ready", "success", "succeeded"].includes(status);
+};
+const invalidateWorkspaceSegmentVisualCaches = async (user) => {
+    await invalidateWorkspaceProjectsCache(user);
+    invalidateWorkspaceMediaLibraryCache(user);
+    invalidateWorkspaceSegmentEditorSessionCache(user);
+    await clearWorkspaceMediaIndex(user);
 };
 const buildMultipartFileDataUrl = async (file) => {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -2027,6 +2038,9 @@ app.get("/api/studio/segment-image-upscale/jobs/:jobId", async (req, res) => {
     }
     try {
         const status = await getStudioSegmentImageUpscaleJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
         res.json({ data: status });
     }
     catch (error) {
@@ -2089,6 +2103,9 @@ app.get("/api/studio/segment-image-edit/jobs/:jobId", async (req, res) => {
     }
     try {
         const status = await getStudioSegmentImageEditJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
         res.json({ data: status });
     }
     catch (error) {
@@ -2196,6 +2213,9 @@ app.get("/api/studio/segment-ai-photo/jobs/:jobId", async (req, res) => {
     }
     try {
         const status = await getStudioSegmentAiPhotoJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
         res.json({ data: status });
     }
     catch (error) {
@@ -2257,6 +2277,9 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId", async (req, res) => {
     }
     try {
         const status = await getStudioSegmentAiVideoJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
         res.json({ data: status });
     }
     catch (error) {
@@ -2371,6 +2394,9 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId", async (req, res) => {
     }
     try {
         const status = await getStudioSegmentPhotoAnimationJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
         res.json({ data: status });
     }
     catch (error) {

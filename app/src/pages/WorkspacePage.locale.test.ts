@@ -9,7 +9,9 @@ import {
   distributeWorkspaceSegmentBulkSubtitleText,
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
+  getStudioVoiceCreditCost,
   getWorkspaceInitialStudioDefaults,
+  getWorkspaceSegmentEditorGenerationOverrides,
   getWorkspaceSegmentDraftPosterUrl,
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
@@ -307,8 +309,11 @@ describe("WorkspacePage studio locale defaults", () => {
   it("keeps voice ids inside the selected Studio language", () => {
     expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.ru)).toBe("ru");
     expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.en)).toBe("en");
+    expect(getStudioLanguageForVoiceId("Liam")).toBe("ru");
     expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru)).toBe(DEFAULT_STUDIO_VOICE_ID.en);
     expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(resolveStudioVoiceIdForLanguage("ru", "Liam")).toBe("Liam");
+    expect(getStudioVoiceCreditCost("Liam")).toBe(5);
   });
 
   it("restores the last valid voice for the target Studio language", () => {
@@ -317,6 +322,18 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru, "invalid")).toBe(
       DEFAULT_STUDIO_VOICE_ID.en,
     );
+  });
+
+  it("carries the segment editor language with the selected voice for regeneration", () => {
+    const overrides = getWorkspaceSegmentEditorGenerationOverrides({
+      ...createDraftSession(createDraftSegment()),
+      language: "en",
+      voiceType: "Ryan",
+    });
+
+    expect(overrides.language).toBe("en");
+    expect(overrides.voiceEnabled).toBe(true);
+    expect(overrides.voiceId).toBe("Ryan");
   });
 
   it("does not mark untouched generated source media as resettable", () => {

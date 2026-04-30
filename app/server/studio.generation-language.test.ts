@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeStudioVoiceIdForLanguage, resolveStudioGenerationLanguage } from "./studio.js";
+import { getStudioVoiceCreditCost, normalizeStudioVoiceIdForLanguage, resolveStudioGenerationLanguage } from "./studio.js";
 
 describe("studio generation language resolution", () => {
   it("keeps the requested English language even for Cyrillic prompts", () => {
@@ -25,5 +25,10 @@ describe("studio generation language resolution", () => {
   it("replaces a mismatched voice with the default voice for the requested language", () => {
     expect(normalizeStudioVoiceIdForLanguage("Bys_24000", "en")).toBe("Aiden");
     expect(normalizeStudioVoiceIdForLanguage("Aiden", "ru")).toBe("Bys_24000");
+  });
+
+  it("keeps the explicit ElevenLabs premium voice for Russian generation", () => {
+    expect(normalizeStudioVoiceIdForLanguage("Liam", "ru")).toBe("Liam");
+    expect(getStudioVoiceCreditCost("Liam")).toBe(5);
   });
 });

@@ -12,7 +12,7 @@ const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v3";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v4";
 const workspaceMediaLibraryCache = new Map();
 const workspaceMediaLibraryInFlight = new Map();
 const workspaceMediaLibraryIndexWarmInFlight = new Set();
@@ -131,7 +131,7 @@ export const getWorkspaceMediaLibraryNextCursorForPage = (options) => {
         : null;
 };
 const getWorkspaceMediaLibraryProjectVersion = (project) => `${normalizeText(project.updatedAt || project.generatedAt || project.createdAt || project.id)}:${WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION}`;
-const getWorkspaceMediaLibraryProjectCreatedAt = (project) => normalizeWorkspaceMediaLibraryCreatedAt(project.updatedAt || project.generatedAt || project.createdAt);
+const getWorkspaceMediaLibraryProjectCreatedAt = (project) => normalizeWorkspaceMediaLibraryCreatedAt(project.generatedAt || project.createdAt || project.updatedAt);
 const getWorkspaceMediaLibraryIndexWarmKey = (user, projectId) => {
     const cacheKey = getWorkspaceMediaLibraryCacheKey(user);
     return cacheKey ? `${cacheKey}:project:${projectId}` : `anonymous:project:${projectId}`;
@@ -536,6 +536,7 @@ const toWorkspaceMediaIndexStoredItems = (items) => items.map((item) => ({
     assetKind: item.assetKind,
     assetLifecycle: item.assetLifecycle,
     assetMediaType: item.assetMediaType,
+    createdAt: item.createdAt,
     kind: item.kind,
     previewKind: item.previewKind,
     previewPosterUrl: item.previewPosterUrl,
@@ -546,7 +547,7 @@ const toWorkspaceMediaIndexStoredItems = (items) => items.map((item) => ({
 const hydrateWorkspaceMediaLibraryIndexEntry = (project, entry) => {
     const projectTitle = getWorkspaceProjectDisplayTitle(project);
     const downloadToken = getWorkspaceMediaLibraryProjectVersion(project);
-    const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
+    const fallbackCreatedAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
     return entry.items
         .filter((item) => isWorkspaceMediaLibraryAssetVisible(item.assetId ?? null, item.assetLifecycle ?? null))
         .map((item) => {
@@ -563,7 +564,7 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (project, entry) => {
             assetKind: item.assetKind ?? null,
             assetLifecycle: item.assetLifecycle ?? null,
             assetMediaType: item.assetMediaType ?? null,
-            createdAt,
+            createdAt: item.createdAt ?? fallbackCreatedAt,
             downloadName: buildWorkspaceMediaLibraryDownloadName(projectTitle, item.segmentListIndex, item.kind),
             downloadUrl,
             kind: item.kind,
@@ -594,7 +595,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
     const projectId = project.adId;
     const projectTitle = getWorkspaceProjectDisplayTitle(project);
     const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
-    const createdAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
+    const fallbackCreatedAt = getWorkspaceMediaLibraryProjectCreatedAt(project);
     return session.segments.flatMap((segment, segmentListIndex) => {
         const originalPreviewUrl = segment.originalPreviewUrl;
         const originalPlaybackUrl = segment.originalPlaybackUrl ?? segment.originalPreviewUrl;
@@ -625,7 +626,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                         assetKind: segment.currentAsset?.kind ?? null,
                         assetLifecycle: segment.currentAsset?.lifecycle ?? null,
                         assetMediaType: segment.currentAsset?.mediaType ?? null,
-                        createdAt,
+                        createdAt: segment.currentAsset?.createdAt ?? fallbackCreatedAt,
                         downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-${videoSuffix}`),
                         downloadUrl: appendUrlToken(currentPlaybackUrl ?? aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:${videoSuffix}`),
                         kind: videoKind,
@@ -667,7 +668,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                 assetKind: segment.originalAsset?.kind ?? null,
                 assetLifecycle: segment.originalAsset?.lifecycle ?? null,
                 assetMediaType: segment.originalAsset?.mediaType ?? null,
-                createdAt,
+                createdAt: segment.originalAsset?.createdAt ?? fallbackCreatedAt,
                 downloadName: getWorkspaceImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
                 downloadUrl: appendUrlToken(originalPhotoDownloadUrl ?? originalPhotoPreviewUrl, "download", `${downloadToken}:${segment.index}:original`),
                 kind: "ai_photo",
@@ -708,7 +709,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                     assetKind: segment.currentAsset?.kind ?? null,
                     assetLifecycle: segment.currentAsset?.lifecycle ?? null,
                     assetMediaType: segment.currentAsset?.mediaType ?? null,
-                    createdAt,
+                    createdAt: segment.currentAsset?.createdAt ?? fallbackCreatedAt,
                     downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
                     downloadUrl: appendUrlToken(animatedDownloadUrl ?? animatedPreviewUrl, "download", `${downloadToken}:${segment.index}:animation`),
                     kind: "photo_animation",

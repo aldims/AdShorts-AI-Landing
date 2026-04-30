@@ -51,6 +51,7 @@ import {
   invalidateWorkspaceMediaLibraryCache,
   WorkspaceMediaLibraryPreviewError,
 } from "./media-library.js";
+import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import {
   ensureWorkspaceVideoPoster,
   getWorkspaceVideoPosterCacheKey,
@@ -542,6 +543,18 @@ const normalizeRequestNonNegativeInteger = (value: unknown) => {
 
   const rounded = Math.trunc(numeric);
   return rounded >= 0 ? rounded : undefined;
+};
+
+const isStudioSegmentVisualJobReadyStatus = (value: unknown) => {
+  const status = String(value ?? "").trim().toLowerCase();
+  return ["completed", "done", "ready", "success", "succeeded"].includes(status);
+};
+
+const invalidateWorkspaceSegmentVisualCaches = async (user: { email?: string | null; id?: string | null }) => {
+  await invalidateWorkspaceProjectsCache(user);
+  invalidateWorkspaceMediaLibraryCache(user);
+  invalidateWorkspaceSegmentEditorSessionCache(user);
+  await clearWorkspaceMediaIndex(user);
 };
 
 const buildMultipartFileDataUrl = async (file: File) => {
@@ -2489,6 +2502,9 @@ app.get("/api/studio/segment-image-upscale/jobs/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioSegmentImageUpscaleJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to get segment image upscale status", error);
@@ -2560,6 +2576,9 @@ app.get("/api/studio/segment-image-edit/jobs/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioSegmentImageEditJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to get segment image edit status", error);
@@ -2682,6 +2701,9 @@ app.get("/api/studio/segment-ai-photo/jobs/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioSegmentAiPhotoJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to fetch segment AI photo job status", error);
@@ -2750,6 +2772,9 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioSegmentAiVideoJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to fetch segment AI video job status", error);
@@ -2879,6 +2904,9 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId", async (req, res) => {
 
   try {
     const status = await getStudioSegmentPhotoAnimationJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
     res.json({ data: status });
   } catch (error) {
     console.error("[studio] Failed to fetch segment photo animation job status", error);

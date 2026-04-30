@@ -81,6 +81,7 @@ import {
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
+  STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   type StudioCreditAction,
@@ -1119,6 +1120,8 @@ type WorkspacePublishJobStatusResponse = {
 };
 
 type StudioVoiceOption = {
+  badgeLabel?: string;
+  creditCost?: number;
   id: string;
   label: string;
   description: string;
@@ -2463,6 +2466,13 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       label: "Борис",
       description: "Базовый мужской голос",
       previewSampleUrl: `/voice-previews/boris.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+    },
+    {
+      id: "Liam",
+      label: "Liam",
+      description: "ElevenLabs, выразительный premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
     },
     {
       id: "Nec_24000",
@@ -4608,6 +4618,42 @@ const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
     ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
     : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 };
+
+export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
+  const normalizedVoiceId = String(voiceId ?? "").trim();
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return 0;
+  }
+
+  for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
+    const voice = voiceOptions.find((option) => option.id === normalizedVoiceId);
+    if (voice) {
+      return voice.creditCost ?? 0;
+    }
+  }
+
+  return 0;
+};
+
+const getStudioGenerationRequiredCredits = (
+  videoMode: StudioVideoMode,
+  options?: { isSegmentEditorGeneration?: boolean; voiceEnabled?: boolean; voiceId?: string | null },
+) => {
+  const baseCredits = options?.isSegmentEditorGeneration
+    ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
+    : getRequiredCreditsForVideoMode(videoMode);
+  const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
+  return baseCredits + voiceCredits;
+};
+
+const getStudioEditVideoGenerationRequiredCredits = (
+  options?: { voiceEnabled?: boolean; voiceId?: string | null },
+) =>
+  getStudioGenerationRequiredCredits("standard", {
+    isSegmentEditorGeneration: true,
+    voiceEnabled: options?.voiceEnabled,
+    voiceId: options?.voiceId,
+  });
 
 const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
@@ -7370,9 +7416,11 @@ const formatWorkspaceSegmentEditorTime = (value: number, options?: { roundUp?: b
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
-const getWorkspaceSegmentEditorGenerationOverrides = (
+export const getWorkspaceSegmentEditorGenerationOverrides = (
   session?: WorkspaceSegmentEditorDraftSession | null,
 ) => ({
+  language:
+    normalizeStudioLanguageValue(session?.language) ?? getStudioLanguageForVoiceId(session?.voiceType) ?? undefined,
   musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType),
   subtitleEnabled: normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none",
   subtitleColorId:
@@ -10541,7 +10589,15 @@ function StudioVoiceSelectorChip({
                           setIsOpen(false);
                         }}
                       >
-                        <span>{voice.label}</span>
+                        <span className="studio-voice-selector__option-title">
+                          <span>{voice.label}</span>
+                          {voice.badgeLabel ? (
+                            <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
+                          ) : null}
+                          {voice.creditCost ? (
+                            <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
+                          ) : null}
+                        </span>
                         <small>{voice.description}</small>
                       </button>
                       <button
@@ -14571,7 +14627,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const workspaceCreditPackNote = workspaceCanPurchaseCreditPacks
     ? workspaceText(locale, "Пакеты пополняют текущий баланс и не меняют сам тариф.", "Packs top up the current balance without changing the plan.")
     : workspaceText(locale, "Сначала нужен активный тариф PRO или ULTRA, после этого откроется докупка пакетов.", "An active PRO or ULTRA plan is required before add-on packs become available.");
-  const studioCreateRequiredCredits = getRequiredCreditsForVideoMode(selectedVideoMode);
   const generatedVideoTopic = generatedVideo?.prompt ?? "";
   const generatedVideoTitle = generatedVideo?.title ?? "";
   const generatedVideoDescription = generatedVideo?.description ?? "";
@@ -14858,6 +14913,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     selectedVoiceId,
     selectedVoiceIdByLanguageRef.current[selectedLanguage],
   );
+  const studioCreateRequiredCredits = getStudioGenerationRequiredCredits(selectedVideoMode, {
+    voiceEnabled: isVoiceoverEnabled,
+    voiceId: resolvedSelectedVoiceId,
+  });
   const buildCurrentExamplePrefillSettings = (): ExamplePrefillStudioSettings => {
     const settings: ExamplePrefillStudioSettings = {
       language: selectedLanguage,
@@ -14952,6 +15011,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
   const isCurrentDraftSubtitleDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none";
   const isCurrentDraftVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType) === "none";
+  const segmentEditorCreateShortsRequiredCredits = getStudioEditVideoGenerationRequiredCredits({
+    voiceEnabled: !isCurrentDraftVoiceDisabled,
+    voiceId: segmentEditorDraft?.voiceType,
+  });
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
@@ -14966,7 +15029,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     currentProjectId && segmentEditorAppliedSession?.projectId === currentProjectId ? segmentEditorAppliedSession : null;
   const hasAppliedSegmentEditorSession = Boolean(currentAppliedSegmentEditorSession);
   const studioPrimaryActionRequiredCredits = hasAppliedSegmentEditorSession
-    ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
+    ? getStudioEditVideoGenerationRequiredCredits({
+        voiceEnabled: normalizeWorkspaceSegmentEditorSetting(currentAppliedSegmentEditorSession?.voiceType) !== "none",
+        voiceId: currentAppliedSegmentEditorSession?.voiceType,
+      })
     : studioCreateRequiredCredits;
   const studioPrimaryActionCostLabel = `${studioPrimaryActionRequiredCredits} ⚡`;
   const studioPrimaryActionLabel = hasAppliedSegmentEditorSession
@@ -20223,9 +20289,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (workspaceBalance !== null && workspaceBalance < STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST) {
+    const requiredCredits = getStudioEditVideoGenerationRequiredCredits({
+      voiceEnabled: normalizeWorkspaceSegmentEditorSetting(effectiveDraft.voiceType) !== "none",
+      voiceId: effectiveDraft.voiceType,
+    });
+
+    if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setSegmentEditorVideoError(null);
-      openInsufficientCreditsModal("video_generation", STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST);
+      openInsufficientCreditsModal("video_generation", requiredCredits);
       return;
     }
 
@@ -21196,6 +21267,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       clearAppliedSegmentEditorOnSuccess?: boolean;
       editedFromProjectAdId?: number;
       isRegeneration?: boolean;
+      language?: StudioLanguage | string;
       musicType?: StudioMusicType | string;
       projectId?: number;
       segmentEditor?: WorkspaceSegmentEditorPayload;
@@ -21242,9 +21314,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       selectedVideoMode,
     });
     preserveExamplePrefillRef.current = false;
-    const requiredCredits = isSegmentEditorGeneration
-      ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
-      : getRequiredCreditsForVideoMode(effectiveVideoMode);
+    const safeTopic = nextTopic.trim();
+    const effectiveLanguage = normalizeStudioLanguageValue(options?.language) ?? selectedLanguage;
+    const effectiveVoiceEnabled = options?.voiceEnabled ?? isVoiceoverEnabled;
+    const effectiveVoiceId = effectiveVoiceEnabled
+      ? resolveStudioVoiceIdForLanguage(
+          effectiveLanguage,
+          options?.voiceId ?? (effectiveLanguage === selectedLanguage ? resolvedSelectedVoiceId : undefined),
+          selectedVoiceIdByLanguageRef.current[effectiveLanguage],
+        )
+      : undefined;
+    const requiredCredits = getStudioGenerationRequiredCredits(effectiveVideoMode, {
+      isSegmentEditorGeneration,
+      voiceEnabled: effectiveVoiceEnabled,
+      voiceId: effectiveVoiceId,
+    });
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setGenerateError(null);
@@ -21252,8 +21336,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       openInsufficientCreditsModal("video_generation", requiredCredits);
       return;
     }
-
-    const safeTopic = nextTopic.trim();
 
     if (!safeTopic.trim()) {
       reportGeneratePreflightFailure("Введите prompt для генерации.", "Prompt required");
@@ -21330,10 +21412,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     });
     const effectiveMusicType = effectiveMusicRequest.effectiveMusicType;
     const effectiveSubtitleEnabled = options?.subtitleEnabled ?? areSubtitlesEnabled;
-    const effectiveVoiceEnabled = options?.voiceEnabled ?? isVoiceoverEnabled;
     const effectiveSubtitleColorId = effectiveSubtitleEnabled ? options?.subtitleColorId ?? selectedSubtitleColorId : undefined;
     const effectiveSubtitleStyleId = effectiveSubtitleEnabled ? options?.subtitleStyleId ?? selectedSubtitleStyleId : undefined;
-    const effectiveVoiceId = effectiveVoiceEnabled ? options?.voiceId ?? (resolvedSelectedVoiceId || undefined) : undefined;
 
     if (effectiveMusicRequest.requiresCustomMusic && !effectiveMusicRequest.hasAnyCustomMusicSource) {
       reportGeneratePreflightFailure("Загрузите свой аудиофайл или выберите другой режим музыки.", "Music required");
@@ -21406,7 +21486,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
       const effectiveSegmentEditorBuild = options?.segmentEditorSession
         ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession, {
-            language: selectedLanguage,
+            language: effectiveLanguage,
           })
         : null;
       if (effectiveSegmentEditorBuild) {
@@ -21421,7 +21501,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       appendStudioFormValue(formData, "prompt", safeTopic);
       appendStudioFormValue(formData, "editedFromProjectAdId", options?.editedFromProjectAdId);
       appendStudioFormValue(formData, "isRegeneration", Boolean(options?.isRegeneration));
-      appendStudioFormValue(formData, "language", selectedLanguage);
+      appendStudioFormValue(formData, "language", effectiveLanguage);
       appendStudioFormValue(formData, "musicType", effectiveMusicType);
       appendStudioFormValue(formData, "projectId", options?.projectId);
       appendStudioFormValue(formData, "subtitleEnabled", effectiveSubtitleEnabled);
@@ -21443,7 +21523,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           fallbackFileName: selectedBrandLogo.fileName || "brand-logo.png",
           fallbackMimeType: selectedBrandLogo.mimeType,
           kind: "brand_logo",
-          language: selectedLanguage,
+          language: effectiveLanguage,
           mediaType: "photo",
           projectId: options?.projectId,
           role: "brand_logo",
@@ -21456,7 +21536,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           fallbackFileName: selectedCustomMusic.fileName || "custom-music.mp3",
           fallbackMimeType: "audio/mpeg",
           kind: "custom_music",
-          language: selectedLanguage,
+          language: effectiveLanguage,
           mediaType: "audio",
           projectId: options?.projectId,
           role: "music",
@@ -21469,7 +21549,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           fallbackFileName: selectedCustomVideo.fileName || "custom-visual.mp4",
           fallbackMimeType: selectedCustomVideo.mimeType,
           kind: "custom_video",
-          language: selectedLanguage,
+          language: effectiveLanguage,
           mediaType: getWorkspaceSegmentCustomPreviewKind(selectedCustomVideo) === "image" ? "photo" : "video",
           projectId: options?.projectId,
           role: "custom_video",
@@ -24179,19 +24259,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           aria-label={workspaceText(
             locale,
             hasSegmentEditorChanges
-              ? `Создать Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
             hasSegmentEditorChanges
-              ? `Create Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
           )}
           title={workspaceText(
             locale,
             hasSegmentEditorChanges
-              ? `Создать Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
             hasSegmentEditorChanges
-              ? `Create Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
           )}
           disabled={isSegmentEditorCreateShortsDisabled}
@@ -24209,7 +24289,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               {hasSegmentEditorChanges ? (
                 <>
                   <span>{workspaceText(locale, "Создать Shorts", "Create Shorts")}</span>
-                  <span className="studio-canvas-prompt__btn-cost">{STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST}</span>
+                  <span className="studio-canvas-prompt__btn-cost">{segmentEditorCreateShortsRequiredCredits}</span>
                   <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
                 </>
               ) : (
