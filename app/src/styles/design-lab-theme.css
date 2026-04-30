@@ -30009,8 +30009,8 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel {
-  --segment-editor-panel-line: rgba(255, 255, 255, 0.095);
-  --segment-editor-panel-line-strong: rgba(235, 241, 248, 0.2);
+  --segment-editor-panel-line: rgba(255, 255, 255, 0.08);
+  --segment-editor-panel-line-strong: rgba(238, 242, 247, 0.18);
   --segment-editor-tab-track: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.012)),
     rgba(7, 10, 14, 0.72);
   --segment-editor-tab-idle: linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)),
@@ -30028,29 +30028,28 @@ html, body {
   flex: 1 1 0;
   overflow: hidden;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.095);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0) 19%),
-    radial-gradient(120% 76% at 12% -10%, rgba(255, 255, 255, 0.075), transparent 42%),
-    radial-gradient(92% 68% at 94% 2%, rgba(174, 184, 197, 0.06), transparent 44%),
-    radial-gradient(72% 56% at 76% 108%, rgba(255, 255, 255, 0.035), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0) 16%),
+    radial-gradient(92% 48% at 10% -12%, rgba(255, 255, 255, 0.046), transparent 38%),
+    radial-gradient(84% 58% at 96% 4%, rgba(190, 198, 208, 0.032), transparent 42%),
     linear-gradient(
       145deg,
-      rgba(31, 34, 39, 0.9) 0%,
-      rgba(14, 16, 20, 0.96) 50%,
-      rgba(6, 7, 10, 0.99) 100%
+      rgba(27, 29, 33, 0.94) 0%,
+      rgba(14, 15, 18, 0.98) 46%,
+      rgba(6, 7, 9, 0.99) 100%
     ),
-    rgba(8, 9, 12, 0.92);
-  backdrop-filter: blur(44px) saturate(112%) brightness(0.82);
-  -webkit-backdrop-filter: blur(44px) saturate(112%) brightness(0.82);
+    rgba(8, 9, 11, 0.94);
+  backdrop-filter: blur(28px) saturate(104%) brightness(0.9);
+  -webkit-backdrop-filter: blur(28px) saturate(104%) brightness(0.9);
   box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.12),
-    inset -1px -1px 0 rgba(255, 255, 255, 0.035),
-    inset 0 -34px 70px rgba(5, 6, 8, 0.52),
-    0 30px 78px -24px rgba(0, 0, 0, 0.86),
-    0 14px 38px -24px rgba(0, 0, 0, 0.68),
-    0 0 44px -32px rgba(225, 231, 238, 0.2);
+    inset 1px 1px 0 rgba(255, 255, 255, 0.095),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.025),
+    inset 0 -22px 46px rgba(2, 3, 5, 0.48),
+    0 28px 70px -26px rgba(0, 0, 0, 0.9),
+    0 10px 26px -20px rgba(0, 0, 0, 0.72),
+    0 0 0 0.5px rgba(255, 255, 255, 0.025);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel::before {
@@ -30060,13 +30059,12 @@ html, body {
   z-index: 0;
   border-radius: 23px;
   background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.035) 0 0.55px, transparent 0.85px),
-    radial-gradient(circle at 72% 34%, rgba(255, 255, 255, 0.028) 0 0.5px, transparent 0.8px),
-    radial-gradient(circle at 44% 78%, rgba(0, 0, 0, 0.18) 0 0.65px, transparent 1px),
-    linear-gradient(115deg, rgba(255, 255, 255, 0.022), transparent 34%, rgba(255, 255, 255, 0.016) 72%, transparent);
-  background-size: 19px 23px, 29px 31px, 37px 41px, auto;
-  opacity: 0.28;
-  mix-blend-mode: overlay;
+    radial-gradient(circle at 16% 24%, rgba(255, 255, 255, 0.026) 0 0.45px, transparent 0.78px),
+    radial-gradient(circle at 74% 36%, rgba(255, 255, 255, 0.018) 0 0.45px, transparent 0.78px),
+    radial-gradient(circle at 46% 78%, rgba(0, 0, 0, 0.2) 0 0.55px, transparent 0.95px);
+  background-size: 23px 29px, 31px 37px, 41px 47px;
+  opacity: 0.2;
+  mix-blend-mode: soft-light;
   pointer-events: none;
 }
 
@@ -30077,22 +30075,21 @@ html, body {
   z-index: 0;
   border-radius: 23px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.068) 0%, rgba(255, 255, 255, 0.022) 18%, transparent 40%),
-    radial-gradient(ellipse at 8% 6%, rgba(255, 255, 255, 0.058), transparent 31%),
-    radial-gradient(ellipse at 88% 88%, rgba(255, 255, 255, 0.024), transparent 42%);
-  opacity: 0.42;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.058) 0%, rgba(255, 255, 255, 0.016) 15%, transparent 34%),
+    linear-gradient(315deg, rgba(255, 255, 255, 0.022), transparent 24%);
+  opacity: 0.36;
   pointer-events: none;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel:focus-within {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.105);
   box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.14),
-    inset -1px -1px 0 rgba(255, 255, 255, 0.04),
-    inset 0 -34px 70px rgba(5, 6, 8, 0.5),
-    0 34px 84px -24px rgba(0, 0, 0, 0.88),
-    0 16px 40px -25px rgba(0, 0, 0, 0.7),
-    0 0 50px -34px rgba(225, 231, 238, 0.24);
+    inset 1px 1px 0 rgba(255, 255, 255, 0.11),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 -22px 46px rgba(2, 3, 5, 0.46),
+    0 30px 74px -26px rgba(0, 0, 0, 0.92),
+    0 12px 28px -20px rgba(0, 0, 0, 0.76),
+    0 0 0 0.5px rgba(255, 255, 255, 0.035);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__editor-layout,
