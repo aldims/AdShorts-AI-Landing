@@ -2127,6 +2127,7 @@ type WorkspaceSegmentEditorChecklistItem =
       label: string;
       resetText: boolean;
       resetVisual: boolean;
+      restoreVisual: boolean;
       segmentIndex: number;
     }
   | {
@@ -2223,6 +2224,10 @@ const getWorkspaceSegmentEditorChecklistTextLabel = (segment: WorkspaceSegmentEd
 };
 
 const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (segment.visualReset && isWorkspaceSegmentVisualResetApplied(segment)) {
+    return "сброшен визуал";
+  }
+
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
   if (latestVisualAction === "ai") {
@@ -2324,13 +2329,25 @@ const getWorkspaceSegmentEditorChecklistOrderLabel = (
   return "Сегменты: изменен порядок";
 };
 
-const buildWorkspaceSegmentEditorChangeChecklist = (
+const isWorkspaceSegmentAppliedVisualResetChange = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  Boolean(
+    baselineSegment &&
+      segment.visualReset &&
+      isWorkspaceSegmentVisualResetApplied(segment) &&
+      isWorkspaceSegmentDraftVisualResettable(baselineSegment),
+  );
+
+export const buildWorkspaceSegmentEditorChangeChecklist = (
   draft: WorkspaceSegmentEditorDraftSession,
   baseline?: WorkspaceSegmentEditorDraftSession | null,
   options?: WorkspaceSegmentEditorChecklistBuildOptions,
 ) => {
   const pendingInsertedSegmentIndices = getWorkspaceSegmentEditorPendingInsertedSegmentIndices(draft, baseline);
   const comparableDraft = createWorkspaceSegmentEditorComparableDraftSession(draft, baseline);
+  const baselineSegmentsByIndex = new Map((baseline?.segments ?? []).map((segment) => [segment.index, segment] as const));
   const items: WorkspaceSegmentEditorChecklistItem[] = [];
 
   draft.segments.forEach((segment, index) => {
@@ -2342,15 +2359,20 @@ const buildWorkspaceSegmentEditorChangeChecklist = (
     const segmentChanges: string[] = [];
     let resetText = false;
     let resetVisual = false;
+    let restoreVisual = false;
+    const baselineSegment = baselineSegmentsByIndex.get(segment.index);
 
     if (isWorkspaceSegmentDraftTextEdited(segment)) {
       segmentChanges.push(getWorkspaceSegmentEditorChecklistTextLabel(segment));
       resetText = true;
     }
 
-    if (isWorkspaceSegmentDraftVisualResettable(segment)) {
+    const isVisualEdited = isWorkspaceSegmentDraftVisualResettable(segment);
+    const isVisualResetChange = isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment);
+    if (isVisualEdited || isVisualResetChange) {
       segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
-      resetVisual = true;
+      resetVisual = isVisualEdited;
+      restoreVisual = isVisualResetChange;
     }
 
     if (segmentChanges.length > 0) {
@@ -2360,6 +2382,7 @@ const buildWorkspaceSegmentEditorChangeChecklist = (
         label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
         resetText,
         resetVisual,
+        restoreVisual,
         segmentIndex: segment.index,
       });
     }
@@ -5121,6 +5144,45 @@ export const resetWorkspaceSegmentDraftVisualToOriginal = (
     mediaType: getWorkspaceSegmentOriginalMediaType(sourceSegment),
   };
 };
+
+const restoreWorkspaceSegmentDraftVisualFromBaseline = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment,
+): WorkspaceSegmentEditorDraftSegment => ({
+  ...segment,
+  aiPhotoAsset: cloneStudioCustomVideoFile(baselineSegment.aiPhotoAsset),
+  aiPhotoGeneratedFromPrompt: baselineSegment.aiPhotoGeneratedFromPrompt,
+  aiPhotoPrompt: baselineSegment.aiPhotoPrompt,
+  aiPhotoPromptInitialized: baselineSegment.aiPhotoPromptInitialized,
+  aiVideoAsset: cloneStudioCustomVideoFile(baselineSegment.aiVideoAsset),
+  aiVideoGeneratedMode: baselineSegment.aiVideoGeneratedMode,
+  aiVideoGeneratedFromPrompt: baselineSegment.aiVideoGeneratedFromPrompt,
+  aiVideoPrompt: baselineSegment.aiVideoPrompt,
+  aiVideoPromptInitialized: baselineSegment.aiVideoPromptInitialized,
+  currentAsset: cloneWorkspaceMediaAssetRef(baselineSegment.currentAsset),
+  currentExternalPlaybackUrl: baselineSegment.currentExternalPlaybackUrl,
+  currentExternalPreviewUrl: baselineSegment.currentExternalPreviewUrl,
+  currentPlaybackUrl: baselineSegment.currentPlaybackUrl,
+  currentPosterUrl: baselineSegment.currentPosterUrl,
+  currentPreviewUrl: baselineSegment.currentPreviewUrl,
+  currentSourceKind: baselineSegment.currentSourceKind,
+  customVideo: cloneStudioCustomVideoFile(baselineSegment.customVideo),
+  imageEditAsset: cloneStudioCustomVideoFile(baselineSegment.imageEditAsset),
+  imageEditGeneratedFromPrompt: baselineSegment.imageEditGeneratedFromPrompt,
+  imageEditPrompt: baselineSegment.imageEditPrompt,
+  imageEditPromptInitialized: baselineSegment.imageEditPromptInitialized,
+  mediaType: baselineSegment.mediaType,
+  originalAsset: cloneWorkspaceMediaAssetRef(baselineSegment.originalAsset),
+  originalExternalPlaybackUrl: baselineSegment.originalExternalPlaybackUrl,
+  originalExternalPreviewUrl: baselineSegment.originalExternalPreviewUrl,
+  originalPlaybackUrl: baselineSegment.originalPlaybackUrl,
+  originalPosterUrl: baselineSegment.originalPosterUrl,
+  originalPreviewUrl: baselineSegment.originalPreviewUrl,
+  originalSourceKind: baselineSegment.originalSourceKind,
+  photoAnimationSourceAsset: cloneStudioCustomVideoFile(baselineSegment.photoAnimationSourceAsset),
+  videoAction: baselineSegment.videoAction,
+  visualReset: Boolean(baselineSegment.visualReset),
+});
 
 const normalizeWorkspaceSegmentEditorSetting = (value: unknown) => {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -15204,14 +15266,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
   const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS;
-  const isSegmentEditorStructureActionBusy =
-    isGenerating ||
-    isSegmentEditorPreparingCustomVideo ||
+  const isAnySegmentEditorVisualJobBusy =
     isSegmentEditorGeneratingAiPhoto ||
     isSegmentEditorGeneratingAiVideo ||
     isSegmentEditorGeneratingPhotoAnimation ||
     isSegmentEditorGeneratingImageEdit ||
     isSegmentEditorUpscalingImage;
+  const isWorkspaceSegmentVisualJobBusy = (segmentIndex: number | null | undefined) =>
+    typeof segmentIndex === "number" &&
+    ((isSegmentEditorGeneratingAiPhoto && segmentEditorGeneratingAiPhotoSegmentIndex === segmentIndex) ||
+      (isSegmentEditorGeneratingAiVideo && segmentEditorGeneratingAiVideoSegmentIndex === segmentIndex) ||
+      (isSegmentEditorGeneratingPhotoAnimation && segmentEditorGeneratingPhotoAnimationSegmentIndex === segmentIndex) ||
+      (isSegmentEditorGeneratingImageEdit && segmentEditorGeneratingImageEditSegmentIndex === segmentIndex) ||
+      (isSegmentEditorUpscalingImage && segmentEditorUpscalingImageSegmentIndex === segmentIndex));
+  const isActiveSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
+  const isSegmentEditorStructureActionBusy =
+    isGenerating ||
+    isSegmentEditorPreparingCustomVideo ||
+    isAnySegmentEditorVisualJobBusy;
   const segmentAiPhotoModalSegment =
     typeof segmentAiPhotoModalSegmentIndex === "number"
       ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentAiPhotoModalSegmentIndex) ?? null
@@ -15338,6 +15410,32 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       isSegmentEditorUpscalingImage &&
       segmentEditorUpscalingImageSegmentIndex === segmentAiPhotoModalSegment.index,
   );
+  const isSegmentAiPhotoModalSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
+  const isSegmentAiPhotoGenerationBusyElsewhere = Boolean(
+    segmentAiPhotoModalSegment &&
+      isSegmentEditorGeneratingAiPhoto &&
+      segmentEditorGeneratingAiPhotoSegmentIndex !== segmentAiPhotoModalSegment.index,
+  );
+  const isSegmentAiVideoGenerationBusyElsewhere = Boolean(
+    segmentAiPhotoModalSegment &&
+      isSegmentEditorGeneratingAiVideo &&
+      segmentEditorGeneratingAiVideoSegmentIndex !== segmentAiPhotoModalSegment.index,
+  );
+  const isSegmentPhotoAnimationGenerationBusyElsewhere = Boolean(
+    segmentAiPhotoModalSegment &&
+      isSegmentEditorGeneratingPhotoAnimation &&
+      segmentEditorGeneratingPhotoAnimationSegmentIndex !== segmentAiPhotoModalSegment.index,
+  );
+  const isSegmentImageEditGenerationBusyElsewhere = Boolean(
+    segmentAiPhotoModalSegment &&
+      isSegmentEditorGeneratingImageEdit &&
+      segmentEditorGeneratingImageEditSegmentIndex !== segmentAiPhotoModalSegment.index,
+  );
+  const isSegmentImageUpscaleBusyElsewhere = Boolean(
+    segmentAiPhotoModalSegment &&
+      isSegmentEditorUpscalingImage &&
+      segmentEditorUpscalingImageSegmentIndex !== segmentAiPhotoModalSegment.index,
+  );
   const canEditSegmentImage = canWorkspaceSegmentEditPhoto(segmentAiPhotoModalSegment);
   const canUpscaleSegmentImage = canWorkspaceSegmentUpscalePhoto(segmentAiPhotoModalSegment);
   const segmentPhotoToolUnavailableReason = getWorkspaceSegmentPhotoToolUnavailableReason(
@@ -15414,7 +15512,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       {footer}
     </button>
   );
-  const isSegmentThumbReorderEnabled = Boolean(segmentEditorDraft && segmentEditorDraft.segments.length > 1);
+  const isSegmentThumbReorderEnabled = Boolean(
+    segmentEditorDraft && segmentEditorDraft.segments.length > 1 && !isSegmentEditorStructureActionBusy,
+  );
   const draggedSegmentThumbIndex = segmentThumbDragState?.draggedIndex ?? null;
   const visibleSegmentThumbInsertIndex = getVisibleInsertIndexForDraggedItem(
     segmentEditorDraft?.segments.length ?? 0,
@@ -18041,6 +18141,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return false;
     }
 
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return false;
+    }
+
     if (!isSupportedWorkspaceSegmentVisualFile(file.name)) {
       setSegmentEditorVideoError("Поддерживаются фото и видео: .jpg, .jpeg, .png, .webp, .avif, .mp4, .mov, .webm и .m4v.");
       return false;
@@ -18184,6 +18289,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   ) => {
     const targetSegmentIndex = options?.segmentIndex ?? activeSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
+      return false;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
       return false;
     }
 
@@ -18377,6 +18487,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const resetSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
     setSegmentEditorVideoError(null);
     resetSegmentEditorPreviewPlaybackState();
     cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
@@ -18386,6 +18501,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
       resetWorkspaceSegmentDraftVisualToOriginal(segment, segmentEditorDraftRef.current?.projectId ?? segmentEditorDraft?.projectId),
+    );
+  };
+
+  const restoreSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (segment) => segment.index === targetSegmentIndex,
+    );
+    if (!baselineSegment) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    resetSegmentEditorPreviewPlaybackState();
+    cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
+    cancelPendingSegmentAiVideoRun(targetSegmentIndex);
+    cancelPendingSegmentImageEditRun(targetSegmentIndex);
+    cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
+    cancelPendingSegmentImageUpscaleRun(targetSegmentIndex);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
+      restoreWorkspaceSegmentDraftVisualFromBaseline(segment, baselineSegment),
     );
   };
 
@@ -18921,6 +19061,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (isSegmentEditorGeneratingAiPhoto && segmentEditorGeneratingAiPhotoSegmentIndex !== targetSegmentIndex) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации ИИ фото в другом сегменте.");
+      return;
+    }
+
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -19028,6 +19178,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const targetSegmentIndex = options?.segmentIndex ?? activeSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
+      return;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (isSegmentEditorGeneratingImageEdit && segmentEditorGeneratingImageEditSegmentIndex !== targetSegmentIndex) {
+      setSegmentEditorVideoError("Дождитесь завершения дорисовки фото в другом сегменте.");
       return;
     }
 
@@ -19227,6 +19387,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (isSegmentEditorGeneratingAiVideo && segmentEditorGeneratingAiVideoSegmentIndex !== targetSegmentIndex) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации ИИ видео в другом сегменте.");
+      return;
+    }
+
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -19369,6 +19539,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         activeSegmentIndex,
         requestedSegmentIndex: options?.segmentIndex ?? null,
       });
+      return;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.segment-busy", {
+        targetSegmentIndex,
+      });
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (
+      isSegmentEditorGeneratingPhotoAnimation &&
+      segmentEditorGeneratingPhotoAnimationSegmentIndex !== targetSegmentIndex
+    ) {
+      logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.same-type-busy", {
+        currentSegmentIndex: segmentEditorGeneratingPhotoAnimationSegmentIndex,
+        targetSegmentIndex,
+      });
+      setSegmentEditorVideoError("Дождитесь завершения ИИ анимации фото в другом сегменте.");
       return;
     }
 
@@ -19684,6 +19874,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const targetSegmentIndex = options?.segmentIndex ?? activeSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
+      return;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (isSegmentEditorUpscalingImage && segmentEditorUpscalingImageSegmentIndex !== targetSegmentIndex) {
+      setSegmentEditorVideoError("Дождитесь завершения улучшения качества в другом сегменте.");
       return;
     }
 
@@ -23012,6 +23212,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     resetSegmentEditorVisualByIndex(item.segmentIndex);
                   }
 
+                  if (item.restoreVisual) {
+                    restoreSegmentEditorVisualByIndex(item.segmentIndex);
+                  }
+
                   return;
                 }
 
@@ -23050,11 +23254,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     !hasSegmentEditorChanges ||
     isGenerating ||
     isSegmentEditorPreparingCustomVideo ||
-    isSegmentEditorGeneratingAiPhoto ||
-    isSegmentEditorGeneratingImageEdit ||
-    isSegmentEditorGeneratingAiVideo ||
-    isSegmentEditorGeneratingPhotoAnimation ||
-    isSegmentEditorUpscalingImage;
+    isAnySegmentEditorVisualJobBusy;
   const handleSegmentEditorPromptVisualToolSelect = (tab: WorkspaceSegmentVisualModalTab) => {
     if (!activeSegment) {
       return;
@@ -23144,19 +23344,34 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     (isPromptImageEditMode && isSegmentImageEditModalGeneratingCurrentSegment) ||
     (isPromptUpscaleMode && isSegmentImageUpscaleCurrentSegment) ||
     (isPromptUploadMode && isSegmentEditorPreparingCustomVideo);
+  const isPromptVisualSameTypeJobBusyElsewhere =
+    (isPromptAiPhotoMode &&
+      isSegmentEditorGeneratingAiPhoto &&
+      segmentEditorGeneratingAiPhotoSegmentIndex !== activeSegmentStableIndex) ||
+    (isPromptAiVideoMode &&
+      isSegmentEditorGeneratingAiVideo &&
+      segmentEditorGeneratingAiVideoSegmentIndex !== activeSegmentStableIndex) ||
+    (isPromptPhotoAnimationMode &&
+      isSegmentEditorGeneratingPhotoAnimation &&
+      segmentEditorGeneratingPhotoAnimationSegmentIndex !== activeSegmentStableIndex) ||
+    (isPromptImageEditMode &&
+      isSegmentEditorGeneratingImageEdit &&
+      segmentEditorGeneratingImageEditSegmentIndex !== activeSegmentStableIndex) ||
+    (isPromptUpscaleMode &&
+      isSegmentEditorUpscalingImage &&
+      segmentEditorUpscalingImageSegmentIndex !== activeSegmentStableIndex);
   const isPromptVisualBaseDisabled =
     !activeSegment ||
-    isSegmentEditorGeneratingAiPhoto ||
-    isSegmentEditorGeneratingImageEdit ||
-    isSegmentEditorGeneratingAiVideo ||
-    isSegmentEditorGeneratingPhotoAnimation ||
+    isActiveSegmentVisualJobBusy ||
     isSegmentEditorPreparingCustomVideo ||
-    isSegmentEditorUpscalingImage ||
     isSegmentAiPhotoPromptImproving ||
     (isPromptPhotoAnimationMode && !canAnimateSegmentPhoto) ||
     (isPromptImageEditMode && !canEditSegmentImage) ||
     (isPromptUpscaleMode && !canUpscaleSegmentImage);
-  const isPromptVisualActionDisabled = isPromptVisualBaseDisabled || isPromptVisualPromptEmpty;
+  const isPromptVisualActionDisabled =
+    isPromptVisualBaseDisabled ||
+    isPromptVisualPromptEmpty ||
+    isPromptVisualSameTypeJobBusyElsewhere;
   const canImprovePromptVisual =
     isPromptImageEditMode
       ? canImproveSegmentImageEditPrompt
@@ -23767,7 +23982,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                   type="button"
                                   aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                  disabled={!activeSegment || isSegmentEditorStructureActionBusy}
+                                  disabled={!activeSegment || isActiveSegmentVisualJobBusy || isSegmentEditorPreparingCustomVideo}
                                   onClick={() => {
                                     if (!activeSegment) {
                                       return;
@@ -24483,6 +24698,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                             <button
                                               className="studio-segment-editor__card-visual-reset"
                                               type="button"
+                                              disabled={isWorkspaceSegmentVisualJobBusy(segment.index)}
                                               aria-label={workspaceText(locale, "Сбросить визуал сегмента", "Reset segment visual")}
                                               title={workspaceText(locale, "Сбросить визуал сегмента", "Reset segment visual")}
                                               onPointerDown={(event) => {
@@ -25925,12 +26141,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             ariaLabel: workspaceText(locale, "Качество ИИ видео", "AI video quality"),
                             costForQuality: getSegmentAiVideoCreditCost,
                             disabled:
-                              isSegmentEditorGeneratingImageEdit ||
-                              isSegmentEditorGeneratingAiVideo ||
-                              isSegmentEditorGeneratingPhotoAnimation ||
+                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
                               isSegmentEditorPreparingCustomVideo ||
-                              isSegmentAiPhotoPromptImproving ||
-                              isSegmentEditorUpscalingImage,
+                              isSegmentAiPhotoPromptImproving,
                             label: workspaceText(locale, "Качество AI видео", "AI video quality"),
                             onChange: setSelectedSegmentAiVideoQuality,
                             value: selectedSegmentAiVideoQuality,
@@ -25961,11 +26174,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 disabled={
                                   !canImproveSegmentAiVideoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
-                                  isSegmentEditorGeneratingImageEdit ||
-                                  isSegmentEditorGeneratingAiVideo ||
-                                  isSegmentEditorGeneratingPhotoAnimation ||
-                                  isSegmentEditorPreparingCustomVideo ||
-                                  isSegmentEditorUpscalingImage
+                                  isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                  isSegmentEditorPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -25995,12 +26205,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               title={workspaceText(locale, `Сгенерировать видео за ${formatSegmentVisualCreditsLabel(segmentAiVideoRequiredCredits)}`, `Generate video for ${formatSegmentVisualCreditsLabel(segmentAiVideoRequiredCredits)}`)}
                               disabled={
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentAiVideoGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
-                                isSegmentAiPhotoPromptImproving ||
-                                isSegmentEditorUpscalingImage
+                                isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
@@ -26020,29 +26228,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             </button>
                           </div>
                         </div>
-	                      ) : segmentAiPhotoModalTab === "photo_animation" ? (
-	                        <div className="studio-ai-photo-modal__tab-panel">
-	                          <div className="studio-ai-photo-modal__tab-panel-head">
-	                            <strong>{workspaceText(locale, "ИИ анимация фото", "AI photo animation")}</strong>
-	                            <p>{workspaceText(locale, "Добавляет движение к текущему фото сегмента.", "Adds motion to the current segment photo.")}</p>
-	                          </div>
+                      ) : segmentAiPhotoModalTab === "photo_animation" ? (
+                        <div className="studio-ai-photo-modal__tab-panel">
+                          <div className="studio-ai-photo-modal__tab-panel-head">
+                            <strong>{workspaceText(locale, "ИИ анимация фото", "AI photo animation")}</strong>
+                            <p>{workspaceText(locale, "Добавляет движение к текущему фото сегмента.", "Adds motion to the current segment photo.")}</p>
+                          </div>
 
-	                          {renderSegmentVisualQualitySwitch({
-	                            ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
-	                            costForQuality: getSegmentPhotoAnimationCreditCost,
-	                            disabled:
-	                              isSegmentEditorGeneratingImageEdit ||
-	                              isSegmentEditorGeneratingAiVideo ||
-	                              isSegmentEditorGeneratingPhotoAnimation ||
-	                              isSegmentEditorPreparingCustomVideo ||
-	                              isSegmentAiPhotoPromptImproving ||
-	                              isSegmentEditorUpscalingImage,
-	                            label: workspaceText(locale, "Качество AI анимации", "AI animation quality"),
-	                            onChange: setSelectedSegmentPhotoAnimationQuality,
-	                            value: selectedSegmentPhotoAnimationQuality,
-	                          })}
+                          {renderSegmentVisualQualitySwitch({
+                            ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
+                            costForQuality: getSegmentPhotoAnimationCreditCost,
+                            disabled:
+                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                              isSegmentEditorPreparingCustomVideo ||
+                              isSegmentAiPhotoPromptImproving,
+                            label: workspaceText(locale, "Качество AI анимации", "AI animation quality"),
+                            onChange: setSelectedSegmentPhotoAnimationQuality,
+                            value: selectedSegmentPhotoAnimationQuality,
+                          })}
 
-	                          <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
+                          <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                             <textarea
                               ref={segmentAiPhotoModalTextareaRef}
                               className="studio-ai-photo-modal__textarea"
@@ -26067,11 +26272,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 disabled={
                                   !canImproveSegmentAiVideoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
-                                  isSegmentEditorGeneratingImageEdit ||
-                                  isSegmentEditorGeneratingAiVideo ||
-                                  isSegmentEditorGeneratingPhotoAnimation ||
-                                  isSegmentEditorPreparingCustomVideo ||
-                                  isSegmentEditorUpscalingImage
+                                  isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                  isSegmentEditorPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -26093,38 +26295,36 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
-	                          <div className="studio-ai-photo-modal__tab-actions">
-	                            <button
-	                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
-	                              type="button"
-	                              aria-label={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`)}
-	                              title={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`)}
+                          <div className="studio-ai-photo-modal__tab-actions">
+                            <button
+                              className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
+                              type="button"
+                              aria-label={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`)}
+                              title={workspaceText(locale, `Анимировать фото за ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`, `Animate photo for ${formatSegmentVisualCreditsLabel(segmentPhotoAnimationRequiredCredits)}`)}
                               disabled={
                                 !canAnimateSegmentPhoto ||
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentPhotoAnimationGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
-                                isSegmentAiPhotoPromptImproving ||
-                                isSegmentEditorUpscalingImage
-	                              }
-	                              onClick={() => {
-	                                handleSegmentAiPhotoModalPaidAction((snapshot) =>
-	                                  handleSegmentPhotoAnimationModalGenerate({
-	                                    prompt: snapshot.aiVideoPrompt,
-	                                    quality: selectedSegmentPhotoAnimationQuality,
-	                                    segmentIndex: snapshot.segmentIndex,
-	                                  }),
-	                                );
-	                              }}
-	                            >
-	                              {renderSegmentPaidActionContent(
-	                                workspaceText(locale, "Анимировать фото", "Animate photo"),
-	                                segmentPhotoAnimationRequiredCredits,
-	                                isSegmentPhotoAnimationModalGeneratingCurrentSegment,
-	                                workspaceText(locale, "Анимируем...", "Animating..."),
-	                              )}
+                                isSegmentAiPhotoPromptImproving
+                              }
+                              onClick={() => {
+                                handleSegmentAiPhotoModalPaidAction((snapshot) =>
+                                  handleSegmentPhotoAnimationModalGenerate({
+                                    prompt: snapshot.aiVideoPrompt,
+                                    quality: selectedSegmentPhotoAnimationQuality,
+                                    segmentIndex: snapshot.segmentIndex,
+                                  }),
+                                );
+                              }}
+                            >
+                              {renderSegmentPaidActionContent(
+                                workspaceText(locale, "Анимировать фото", "Animate photo"),
+                                segmentPhotoAnimationRequiredCredits,
+                                isSegmentPhotoAnimationModalGeneratingCurrentSegment,
+                                workspaceText(locale, "Анимируем...", "Animating..."),
+                              )}
                             </button>
                           </div>
                         </div>
@@ -26160,11 +26360,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 disabled={
                                   !canImproveSegmentImageEditPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
-                                  isSegmentEditorGeneratingImageEdit ||
-                                  isSegmentEditorGeneratingAiVideo ||
-                                  isSegmentEditorGeneratingPhotoAnimation ||
-                                  isSegmentEditorPreparingCustomVideo ||
-                                  isSegmentEditorUpscalingImage
+                                  isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                  isSegmentEditorPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -26194,12 +26391,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               disabled={
                                 !canEditSegmentImage ||
                                 isSegmentImageEditModalPromptEmpty ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentImageEditGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
-                                isSegmentAiPhotoPromptImproving ||
-                                isSegmentEditorUpscalingImage
+                                isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
@@ -26239,12 +26434,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               title={workspaceText(locale, `Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`, `Upscale image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`)}
                               disabled={
                                 !canUpscaleSegmentImage ||
-                                isSegmentEditorGeneratingAiPhoto ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentImageUpscaleBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
-                                isSegmentEditorUpscalingImage ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -26275,13 +26467,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
                             costForQuality: getSegmentAiPhotoCreditCost,
                             disabled:
-                              isSegmentEditorGeneratingAiPhoto ||
-                              isSegmentEditorGeneratingImageEdit ||
-                              isSegmentEditorGeneratingAiVideo ||
-                              isSegmentEditorGeneratingPhotoAnimation ||
+                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
                               isSegmentEditorPreparingCustomVideo ||
-                              isSegmentAiPhotoPromptImproving ||
-                              isSegmentEditorUpscalingImage,
+                              isSegmentAiPhotoPromptImproving,
                             label: workspaceText(locale, "Качество AI фото", "AI photo quality"),
                             onChange: setSelectedSegmentAiPhotoQuality,
                             value: selectedSegmentAiPhotoQuality,
@@ -26312,12 +26500,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 disabled={
                                   !canImproveSegmentAiPhotoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
-                                  isSegmentEditorGeneratingAiPhoto ||
-                                  isSegmentEditorGeneratingImageEdit ||
-                                  isSegmentEditorGeneratingAiVideo ||
-                                  isSegmentEditorGeneratingPhotoAnimation ||
-                                  isSegmentEditorPreparingCustomVideo ||
-                                  isSegmentEditorUpscalingImage
+                                  isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                  isSegmentEditorPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -26347,13 +26531,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               title={workspaceText(locale, `Сгенерировать ИИ фото за ${formatSegmentVisualCreditsLabel(segmentAiPhotoRequiredCredits)}`, `Generate AI photo for ${formatSegmentVisualCreditsLabel(segmentAiPhotoRequiredCredits)}`)}
                               disabled={
                                 isSegmentAiPhotoModalAiPhotoPromptEmpty ||
-                                isSegmentEditorGeneratingAiPhoto ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentAiPhotoGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
-                                isSegmentAiPhotoPromptImproving ||
-                                isSegmentEditorUpscalingImage
+                                isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
@@ -26502,7 +26683,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                     type="button"
                                     aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                    disabled={isSegmentEditorStructureActionBusy}
+                                    disabled={isSegmentAiPhotoModalSegmentVisualJobBusy || isSegmentEditorPreparingCustomVideo}
                                     onClick={() => {
                                       setSegmentEditorVideoError(null);
                                       setSegmentAiPhotoModalTab("library");
@@ -26560,14 +26741,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               className={`studio-ai-photo-modal__upload-btn${segmentAiPhotoModalCustomFileName ? " is-active" : ""}`}
                               type="button"
                               title={segmentAiPhotoModalCustomFileName || workspaceText(locale, "Загрузить файл", "Upload file")}
-                              disabled={
-                                isSegmentEditorPreparingCustomVideo ||
-                                isSegmentEditorGeneratingAiPhoto ||
-                                isSegmentEditorGeneratingImageEdit ||
-                                isSegmentEditorGeneratingAiVideo ||
-                                isSegmentEditorGeneratingPhotoAnimation ||
-                                isSegmentEditorUpscalingImage
-                              }
+                              disabled={isSegmentEditorPreparingCustomVideo || isSegmentAiPhotoModalSegmentVisualJobBusy}
                               onClick={() => {
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("upload");

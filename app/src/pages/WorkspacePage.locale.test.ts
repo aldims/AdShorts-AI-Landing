@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import {
+  buildWorkspaceSegmentEditorChangeChecklist,
   createStudioCustomVideoFileFromMediaLibraryItem,
   distributeWorkspaceSegmentBulkSubtitleText,
   getWorkspaceMediaLibraryItemRemoteUrl,
@@ -696,6 +697,81 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resetSegment.imageEditAsset).toBeNull();
     expect(resetSegment.videoAction).toBe("original");
     expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+  });
+
+  it("keeps an applied AI photo reset as a pending segment change", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const generatedAsset = createMediaAsset(303, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const appliedSegment = createDraftSegment({
+      currentAsset: generatedAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(appliedSegment, 77);
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(resetSegment),
+      createDraftSession(appliedSegment),
+    );
+
+    expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+    expect(isWorkspaceSegmentDraftVisualResettable(resetSegment)).toBe(false);
+    expect(checklist).toEqual([
+      expect.objectContaining({
+        label: "Сегмент 1: сброшен визуал",
+        resetVisual: false,
+        restoreVisual: true,
+        segmentIndex: 0,
+      }),
+    ]);
+  });
+
+  it("does not keep a draft-only AI photo undo as a pending segment change", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const baselineSegment = createDraftSegment({
+      currentAsset: originalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+    const draftAiPhotoSegment = createDraftSegment({
+      ...baselineSegment,
+      aiPhotoAsset: {
+        assetId: 303,
+        fileName: "segment-ai-photo-1.png",
+        fileSize: 0,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      videoAction: "ai_photo",
+    });
+
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(draftAiPhotoSegment, 77);
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(resetSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+    expect(checklist).toEqual([]);
   });
 
   it("preserves stored original visual references when a fresh server session collapses them into current", () => {
