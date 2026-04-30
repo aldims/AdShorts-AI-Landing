@@ -473,6 +473,7 @@ type StudioGenerateMultipartSegment = {
 };
 
 type StudioGenerateMultipartSegmentEditor = {
+  allowStructureChange?: unknown;
   projectId?: unknown;
   segments?: unknown;
 };
@@ -667,6 +668,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
   const segmentEditor =
     segmentEditorRecord && rawSegments.length > 0
       ? {
+          allowStructureChange: Boolean(segmentEditorRecord.allowStructureChange),
           projectId: segmentEditorRecord.projectId,
           segments: await Promise.all(
             rawSegments.map(async (segment) => {

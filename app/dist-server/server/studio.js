@@ -389,6 +389,7 @@ const normalizeStudioSegmentEditorPayload = (value, fallbackProjectId) => {
         throw new Error(`Segment editor supports up to ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} segments.`);
     }
     return {
+        allowStructureChange: Boolean(record.allowStructureChange),
         projectId,
         segments,
     };
@@ -2641,6 +2642,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 : undefined;
         const normalizedSegmentEditorAssetPayload = normalizedSegmentEditor
             ? {
+                allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
                 segments: await Promise.all(normalizedSegmentEditor.segments.map(async (segment) => {
                     const segmentAssetId = segment.videoAction === "custom" && segment.customVideoAssetId
                         ? segment.customVideoAssetId

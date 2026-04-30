@@ -527,6 +527,7 @@ export type StudioSegmentEditorSegment = {
 };
 
 export type StudioSegmentEditorPayload = {
+  allowStructureChange?: boolean;
   projectId: number;
   segments: StudioSegmentEditorSegment[];
 };
@@ -890,6 +891,7 @@ const normalizeStudioSegmentEditorPayload = (
   }
 
   const record = value as {
+    allowStructureChange?: unknown;
     projectId?: unknown;
     segments?: unknown;
   };
@@ -966,6 +968,7 @@ const normalizeStudioSegmentEditorPayload = (
   }
 
   return {
+    allowStructureChange: Boolean(record.allowStructureChange),
     projectId,
     segments,
   };
@@ -3861,6 +3864,7 @@ export async function createStudioGenerationJob(
         : undefined;
     const normalizedSegmentEditorAssetPayload = normalizedSegmentEditor
       ? {
+          allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
           segments: await Promise.all(
             normalizedSegmentEditor.segments.map(async (segment) => {
               const segmentAssetId =

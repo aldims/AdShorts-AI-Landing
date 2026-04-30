@@ -641,6 +641,7 @@ type WorkspaceSegmentEditorPayloadSegment = {
 };
 
 type WorkspaceSegmentEditorPayload = {
+  allowStructureChange?: boolean;
   projectId: number;
   segments: WorkspaceSegmentEditorPayloadSegment[];
 };
@@ -6702,6 +6703,7 @@ const resolveWorkspaceSegmentExportVideoAction = (
 const buildWorkspaceSegmentEditorPayload = async (
   session: WorkspaceSegmentEditorDraftSession,
   options: {
+    allowStructureChange?: boolean;
     language: StudioLanguage;
   },
 ): Promise<{ payload: WorkspaceSegmentEditorPayload; uploads: WorkspaceSegmentEditorUploadFile[] }> => {
@@ -6785,6 +6787,7 @@ const buildWorkspaceSegmentEditorPayload = async (
 
   return {
     payload: {
+      allowStructureChange: Boolean(options.allowStructureChange),
       projectId: session.projectId,
       segments,
     },
@@ -12694,6 +12697,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
+  const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
   const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
   const detachedSegmentEditorDraftRef = useRef<{
@@ -13262,6 +13266,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       },
       options?.level ?? "info",
     );
+  };
+
+  const markSegmentEditorExplicitStructureChange = (projectId: number | null | undefined) => {
+    const normalizedProjectId = Number(projectId);
+    if (Number.isInteger(normalizedProjectId) && normalizedProjectId > 0) {
+      segmentEditorExplicitStructureChangeProjectIdsRef.current.add(normalizedProjectId);
+    }
+  };
+
+  const clearSegmentEditorExplicitStructureChange = (projectId: number | null | undefined) => {
+    const normalizedProjectId = Number(projectId);
+    if (Number.isInteger(normalizedProjectId) && normalizedProjectId > 0) {
+      segmentEditorExplicitStructureChangeProjectIdsRef.current.delete(normalizedProjectId);
+    }
   };
 
   const getSegmentEditorAttachedPreviewVideoElement = (segmentIndex: number) => {
@@ -16229,6 +16247,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       previousOrder: currentOrder,
     });
 
+    markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     setSegmentEditorDraft((currentDraft) =>
@@ -17767,6 +17786,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       insertAt,
       segmentCountBefore: segmentEditorDraft.segments.length,
     }, { includeOrder: true });
+    markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     const nextSegment = createWorkspaceSegmentEditorInsertedSegment({
@@ -17823,6 +17843,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       targetSegmentIndex,
     }, { includeOrder: true });
 
+    markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     if (segmentAiPhotoModalSegmentIndex === targetSegment.index) {
@@ -18206,6 +18227,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       nextOrder: getSegmentEditorOrderSnapshot({ segments: nextSegments }),
     }, { includeOrder: true });
 
+    clearSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     if (
@@ -20445,6 +20467,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       };
     })();
     setSegmentEditorAppliedSession(nextAppliedSession);
+    const allowSegmentStructureChange = Boolean(
+      segmentEditorChecklistBaseSession &&
+        !areWorkspaceSegmentEditorSegmentOrdersEqual(effectiveDraft, segmentEditorChecklistBaseSession) &&
+        segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId),
+    );
 
     const regenerationPrompt = resolveWorkspaceRegenerationPrompt({
       draftDescription: effectiveDraft.description,
@@ -20459,12 +20486,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.apply", {
+      allowSegmentStructureChange,
       projectId: effectiveDraft.projectId,
       regenerationPromptLength: regenerationPrompt.length,
       segmentCount: effectiveDraft.segments.length,
     }, { includeOrder: true, draft: effectiveDraft });
     navigateToStudioCreateWaitingRoute({ replace: true });
-    await handleGenerate(regenerationPrompt, buildCurrentRegenerationOptions(nextAppliedSession));
+    await handleGenerate(regenerationPrompt, {
+      ...buildCurrentRegenerationOptions(nextAppliedSession),
+      segmentEditorAllowStructureChange: allowSegmentStructureChange,
+    });
   };
 
   const applyPublicationToLocalState = (
@@ -20515,6 +20546,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     );
     if (targetProject.adId !== null) {
       clearPersistedSegmentEditorStateForProject(targetProject.adId);
+      clearSegmentEditorExplicitStructureChange(targetProject.adId);
       setMediaLibraryItems((currentItems) =>
         currentItems.filter((item) => item.projectId !== targetProject.adId),
       );
@@ -21408,6 +21440,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       musicType?: StudioMusicType | string;
       projectId?: number;
       segmentEditor?: WorkspaceSegmentEditorPayload;
+      segmentEditorAllowStructureChange?: boolean;
       segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null;
       subtitleEnabled?: boolean;
       subtitleColorId?: string;
@@ -21621,6 +21654,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
       const effectiveSegmentEditorBuild = options?.segmentEditorSession
         ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession, {
+            allowStructureChange: Boolean(options.segmentEditorAllowStructureChange),
             language: effectiveLanguage,
           })
         : null;

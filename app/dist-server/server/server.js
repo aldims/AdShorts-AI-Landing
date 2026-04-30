@@ -433,6 +433,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
     const rawSegments = Array.isArray(segmentEditorRecord?.segments) ? segmentEditorRecord.segments : [];
     const segmentEditor = segmentEditorRecord && rawSegments.length > 0
         ? {
+            allowStructureChange: Boolean(segmentEditorRecord.allowStructureChange),
             projectId: segmentEditorRecord.projectId,
             segments: await Promise.all(rawSegments.map(async (segment) => {
                 const segmentRecord = segment && typeof segment === "object" ? segment : {};
