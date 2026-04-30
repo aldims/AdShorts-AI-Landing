@@ -24,6 +24,7 @@ import {
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resetWorkspaceSegmentDraftVisualToOriginal,
+  resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
@@ -292,6 +293,48 @@ describe("WorkspacePage segment subtitle bulk text", () => {
 
     expect(result.error).toBe("Для 5 сегментов нужно минимум 5 слов.");
     expect(result.texts).toEqual([]);
+  });
+});
+
+describe("WorkspacePage example prefill settings", () => {
+  it("keeps example subtitle style and color when workspace bootstrap arrives later", () => {
+    const styleBase = {
+      defaultColorId: "purple",
+      description: "",
+      fontFamily: "Manrope",
+      fontSize: 96,
+      label: "",
+      logicMode: "block",
+      marginBottom: 420,
+      outlineWidth: 3,
+      position: "bottom_center",
+      transitionMode: "hard_cut",
+      usesAccentColor: true,
+      windowSize: 3,
+      wordEffect: "none",
+    };
+
+    const selection = resolveWorkspaceExamplePrefillSubtitleSelection({
+      prefillSettings: {
+        subtitleColorId: "cyan",
+        subtitleStyleId: "story",
+      },
+      selectedSubtitleColorId: "purple",
+      selectedSubtitleStyleId: "modern",
+      subtitleColorOptions: [
+        { accent: "#8B5CF6", id: "purple", label: "Purple", outline: "", surface: "", text: "" },
+        { accent: "#22D3EE", id: "cyan", label: "Cyan", outline: "", surface: "", text: "" },
+      ],
+      subtitleStyleOptions: [
+        { ...styleBase, id: "modern", label: "Modern" },
+        { ...styleBase, defaultColorId: "cyan", id: "story", label: "Story" },
+      ],
+    });
+
+    expect(selection).toEqual({
+      subtitleColorId: "cyan",
+      subtitleStyleId: "story",
+    });
   });
 });
 

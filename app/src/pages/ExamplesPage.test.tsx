@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,9 +37,21 @@ describe("ExamplesPage copy", () => {
       configurable: true,
       value: vi.fn(),
     });
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => ({ data: { enabled: false } }),
+        ok: true,
+      })),
+    );
   });
 
   afterEach(() => {
+    window.sessionStorage.clear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -52,5 +64,36 @@ describe("ExamplesPage copy", () => {
     expect(screen.queryByText("🎓 Экспертиза")).toBeNull();
     expect(screen.queryByText("🎓 Экспертные Shorts")).toBeNull();
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/examples/local"));
+  });
+
+  it("stores the example studio settings together with the prompt", async () => {
+    render(
+      <MemoryRouter initialEntries={["/examples"]}>
+        <LocaleProvider locale="ru">
+          <ExamplesPage
+            session={{ email: "user@example.com", name: "User", plan: "FREE" }}
+            onOpenSignup={() => undefined}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={() => undefined}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findAllByRole("button", { name: "Использовать" }).then((buttons) => buttons[0]));
+
+    const storedIntent = JSON.parse(window.sessionStorage.getItem("adshorts.example-prefill-intent") ?? "{}");
+    expect(storedIntent.prompt).toContain("AI меняет привычный город");
+    expect(storedIntent.settings).toMatchObject({
+      language: "ru",
+      musicType: "inspirational",
+      subtitleColorId: "cyan",
+      subtitleEnabled: true,
+      subtitleStyleId: "story",
+      videoMode: "standard",
+      voiceEnabled: true,
+      voiceId: "Nec_24000",
+    });
   });
 });
