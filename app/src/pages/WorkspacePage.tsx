@@ -1192,6 +1192,30 @@ type StudioCustomVideoFile = {
   source?: WorkspaceSegmentCustomVisualSource;
 };
 
+type WorkspaceSegmentVisualRunState = Record<number, number>;
+
+const hasWorkspaceSegmentVisualRun = (
+  runState: WorkspaceSegmentVisualRunState,
+  segmentIndex: number | null | undefined,
+) => typeof segmentIndex === "number" && Boolean(runState[segmentIndex]);
+
+const hasAnyWorkspaceSegmentVisualRun = (runState: WorkspaceSegmentVisualRunState) =>
+  Object.keys(runState).length > 0;
+
+const clearWorkspaceSegmentVisualRunState = (
+  runState: WorkspaceSegmentVisualRunState,
+  segmentIndex: number,
+  runId?: number,
+): WorkspaceSegmentVisualRunState => {
+  if (!runState[segmentIndex] || (typeof runId === "number" && runState[segmentIndex] !== runId)) {
+    return runState;
+  }
+
+  const nextRunState = { ...runState };
+  delete nextRunState[segmentIndex];
+  return nextRunState;
+};
+
 type StudioBrandLogoFile = {
   assetId?: number;
   dataUrl?: string;
@@ -12511,16 +12535,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
   const [isSegmentAiPhotoPromptImproved, setIsSegmentAiPhotoPromptImproved] = useState(false);
   const [isSegmentAiPhotoPromptHighlighted, setIsSegmentAiPhotoPromptHighlighted] = useState(false);
-  const [isSegmentEditorGeneratingAiPhoto, setIsSegmentEditorGeneratingAiPhoto] = useState(false);
-  const [segmentEditorGeneratingAiPhotoSegmentIndex, setSegmentEditorGeneratingAiPhotoSegmentIndex] = useState<number | null>(null);
-  const [isSegmentEditorGeneratingAiVideo, setIsSegmentEditorGeneratingAiVideo] = useState(false);
-  const [segmentEditorGeneratingAiVideoSegmentIndex, setSegmentEditorGeneratingAiVideoSegmentIndex] = useState<number | null>(null);
-  const [isSegmentEditorGeneratingPhotoAnimation, setIsSegmentEditorGeneratingPhotoAnimation] = useState(false);
-  const [segmentEditorGeneratingPhotoAnimationSegmentIndex, setSegmentEditorGeneratingPhotoAnimationSegmentIndex] = useState<number | null>(null);
-  const [isSegmentEditorGeneratingImageEdit, setIsSegmentEditorGeneratingImageEdit] = useState(false);
-  const [segmentEditorGeneratingImageEditSegmentIndex, setSegmentEditorGeneratingImageEditSegmentIndex] = useState<number | null>(null);
-  const [isSegmentEditorUpscalingImage, setIsSegmentEditorUpscalingImage] = useState(false);
-  const [segmentEditorUpscalingImageSegmentIndex, setSegmentEditorUpscalingImageSegmentIndex] = useState<number | null>(null);
+  const [segmentEditorGeneratingAiPhotoRunIds, setSegmentEditorGeneratingAiPhotoRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const [segmentEditorGeneratingAiVideoRunIds, setSegmentEditorGeneratingAiVideoRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const [segmentEditorGeneratingPhotoAnimationRunIds, setSegmentEditorGeneratingPhotoAnimationRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const [segmentEditorGeneratingImageEditRunIds, setSegmentEditorGeneratingImageEditRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const [segmentEditorUpscalingImageRunIds, setSegmentEditorUpscalingImageRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const isSegmentEditorGeneratingAiPhoto = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds);
+  const isSegmentEditorGeneratingAiVideo = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds);
+  const isSegmentEditorGeneratingPhotoAnimation = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds);
+  const isSegmentEditorGeneratingImageEdit = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds);
+  const isSegmentEditorUpscalingImage = hasAnyWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds);
   const [isSegmentEditorPreparingCustomVideo, setIsSegmentEditorPreparingCustomVideo] = useState(false);
   const [segmentEditorPanelHeightLock, setSegmentEditorPanelHeightLock] = useState<number | null>(null);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
@@ -12616,12 +12645,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorLanguageTranslateRunRef = useRef(0);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
-  const segmentAiPhotoRunRef = useRef(0);
-  const segmentAiVideoRunRef = useRef(0);
-  const segmentPhotoAnimationRunRef = useRef(0);
-  const segmentPhotoAnimationActiveJobIdRef = useRef<string | null>(null);
-  const segmentImageEditRunRef = useRef(0);
-  const segmentImageUpscaleRunRef = useRef(0);
+  const segmentAiPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentPhotoAnimationActiveJobIdsRef = useRef<Set<string>>(new Set());
+  const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentEditorRunRef = useRef(0);
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
@@ -12697,6 +12726,64 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const publishHashtagsFieldId = useId();
   const publishTimeFieldId = useId();
   const publishPlannerPopoverId = useId();
+  const startSegmentVisualRun = (
+    runRef: { current: WorkspaceSegmentVisualRunState },
+    setRunState: (value: WorkspaceSegmentVisualRunState | ((current: WorkspaceSegmentVisualRunState) => WorkspaceSegmentVisualRunState)) => void,
+    segmentIndex: number,
+  ) => {
+    const runId = (runRef.current[segmentIndex] ?? 0) + 1;
+    runRef.current = {
+      ...runRef.current,
+      [segmentIndex]: runId,
+    };
+    setRunState((current) => ({
+      ...current,
+      [segmentIndex]: runId,
+    }));
+    return runId;
+  };
+  const isSegmentVisualRunCurrent = (
+    runRef: { current: WorkspaceSegmentVisualRunState },
+    segmentIndex: number,
+    runId: number,
+  ) => runRef.current[segmentIndex] === runId;
+  const clearSegmentVisualRun = (
+    runRef: { current: WorkspaceSegmentVisualRunState },
+    setRunState: (value: WorkspaceSegmentVisualRunState | ((current: WorkspaceSegmentVisualRunState) => WorkspaceSegmentVisualRunState)) => void,
+    segmentIndex: number,
+    runId?: number,
+  ) => {
+    if (typeof runId === "number" && runRef.current[segmentIndex] !== runId) {
+      return;
+    }
+
+    runRef.current = {
+      ...runRef.current,
+      [segmentIndex]: (runRef.current[segmentIndex] ?? 0) + 1,
+    };
+    setRunState((current) => clearWorkspaceSegmentVisualRunState(current, segmentIndex, runId));
+  };
+  const clearAllSegmentVisualRuns = () => {
+    const clearRunRef = (runRef: { current: WorkspaceSegmentVisualRunState }) => {
+      const nextRunState: WorkspaceSegmentVisualRunState = {};
+      Object.entries(runRef.current).forEach(([segmentIndex, runId]) => {
+        nextRunState[Number(segmentIndex)] = Number(runId) + 1;
+      });
+      runRef.current = nextRunState;
+    };
+
+    clearRunRef(segmentAiPhotoRunRef);
+    clearRunRef(segmentAiVideoRunRef);
+    clearRunRef(segmentPhotoAnimationRunRef);
+    clearRunRef(segmentImageEditRunRef);
+    clearRunRef(segmentImageUpscaleRunRef);
+    segmentPhotoAnimationActiveJobIdsRef.current.clear();
+    setSegmentEditorGeneratingAiPhotoRunIds({});
+    setSegmentEditorGeneratingAiVideoRunIds({});
+    setSegmentEditorGeneratingPhotoAnimationRunIds({});
+    setSegmentEditorGeneratingImageEditRunIds({});
+    setSegmentEditorUpscalingImageRunIds({});
+  };
   const subtitleColorOptions = subtitleColorCatalog.length
     ? buildStudioSubtitleColorOptions(subtitleColorCatalog)
     : [fallbackStudioSubtitleColorOption];
@@ -12801,17 +12888,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   );
   const isSegmentVisualGenerationPending = useCallback(
     (segmentIndex: number) =>
-      segmentEditorGeneratingAiPhotoSegmentIndex === segmentIndex ||
-      segmentEditorGeneratingImageEditSegmentIndex === segmentIndex ||
-      segmentEditorGeneratingAiVideoSegmentIndex === segmentIndex ||
-      segmentEditorGeneratingPhotoAnimationSegmentIndex === segmentIndex ||
-      segmentEditorUpscalingImageSegmentIndex === segmentIndex,
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex),
     [
-      segmentEditorGeneratingAiPhotoSegmentIndex,
-      segmentEditorGeneratingAiVideoSegmentIndex,
-      segmentEditorGeneratingImageEditSegmentIndex,
-      segmentEditorGeneratingPhotoAnimationSegmentIndex,
-      segmentEditorUpscalingImageSegmentIndex,
+      segmentEditorGeneratingAiPhotoRunIds,
+      segmentEditorGeneratingAiVideoRunIds,
+      segmentEditorGeneratingImageEditRunIds,
+      segmentEditorGeneratingPhotoAnimationRunIds,
+      segmentEditorUpscalingImageRunIds,
     ],
   );
   const getSegmentVisualPlaceholderLabel = useCallback(
@@ -13620,12 +13707,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorError(null);
     setSegmentEditorVideoError(null);
     closeSegmentAiPhotoModal({ immediate: true });
-    segmentAiPhotoRunRef.current += 1;
-    setIsSegmentEditorGeneratingAiPhoto(false);
-    setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
-    segmentImageUpscaleRunRef.current += 1;
-    setIsSegmentEditorUpscalingImage(false);
-    setSegmentEditorUpscalingImageSegmentIndex(null);
+    clearAllSegmentVisualRuns();
     setIsSegmentEditorLoading(false);
     setIsSegmentEditorPreparingCustomVideo(false);
     setSegmentEditorPreviewTimes({});
@@ -13699,12 +13781,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorDraft(null);
     setSegmentEditorVideoError(null);
     closeSegmentAiPhotoModal({ immediate: true });
-    segmentAiPhotoRunRef.current += 1;
-    segmentImageUpscaleRunRef.current += 1;
-    setIsSegmentEditorGeneratingAiPhoto(false);
-    setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
-    setIsSegmentEditorUpscalingImage(false);
-    setSegmentEditorUpscalingImageSegmentIndex(null);
+    clearAllSegmentVisualRuns();
     setSegmentEditorPreviewTimes({});
     queuedSegmentEditorPlaybackIndexRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
@@ -15399,11 +15476,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isSegmentEditorUpscalingImage;
   const isWorkspaceSegmentVisualJobBusy = (segmentIndex: number | null | undefined) =>
     typeof segmentIndex === "number" &&
-    ((isSegmentEditorGeneratingAiPhoto && segmentEditorGeneratingAiPhotoSegmentIndex === segmentIndex) ||
-      (isSegmentEditorGeneratingAiVideo && segmentEditorGeneratingAiVideoSegmentIndex === segmentIndex) ||
-      (isSegmentEditorGeneratingPhotoAnimation && segmentEditorGeneratingPhotoAnimationSegmentIndex === segmentIndex) ||
-      (isSegmentEditorGeneratingImageEdit && segmentEditorGeneratingImageEditSegmentIndex === segmentIndex) ||
-      (isSegmentEditorUpscalingImage && segmentEditorUpscalingImageSegmentIndex === segmentIndex));
+    (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex));
   const isActiveSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
   const isSegmentEditorStructureActionBusy =
     isGenerating ||
@@ -15512,55 +15589,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const canAnimateSegmentPhoto = canWorkspaceSegmentAnimatePhoto(segmentAiPhotoModalSegment);
   const isSegmentAiPhotoModalGeneratingCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingAiPhoto &&
-      segmentEditorGeneratingAiPhotoSegmentIndex === segmentAiPhotoModalSegment.index,
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentAiPhotoModalSegment.index),
   );
   const isSegmentAiVideoModalGeneratingCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingAiVideo &&
-      segmentEditorGeneratingAiVideoSegmentIndex === segmentAiPhotoModalSegment.index,
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentAiPhotoModalSegment.index),
   );
   const isSegmentPhotoAnimationModalGeneratingCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingPhotoAnimation &&
-      segmentEditorGeneratingPhotoAnimationSegmentIndex === segmentAiPhotoModalSegment.index,
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentAiPhotoModalSegment.index),
   );
   const isSegmentImageEditModalGeneratingCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingImageEdit &&
-      segmentEditorGeneratingImageEditSegmentIndex === segmentAiPhotoModalSegment.index,
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentAiPhotoModalSegment.index),
   );
   const isSegmentImageUpscaleCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      isSegmentEditorUpscalingImage &&
-      segmentEditorUpscalingImageSegmentIndex === segmentAiPhotoModalSegment.index,
+      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentAiPhotoModalSegment.index),
   );
   const isSegmentAiPhotoModalSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
-  const isSegmentAiPhotoGenerationBusyElsewhere = Boolean(
-    segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingAiPhoto &&
-      segmentEditorGeneratingAiPhotoSegmentIndex !== segmentAiPhotoModalSegment.index,
-  );
-  const isSegmentAiVideoGenerationBusyElsewhere = Boolean(
-    segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingAiVideo &&
-      segmentEditorGeneratingAiVideoSegmentIndex !== segmentAiPhotoModalSegment.index,
-  );
-  const isSegmentPhotoAnimationGenerationBusyElsewhere = Boolean(
-    segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingPhotoAnimation &&
-      segmentEditorGeneratingPhotoAnimationSegmentIndex !== segmentAiPhotoModalSegment.index,
-  );
-  const isSegmentImageEditGenerationBusyElsewhere = Boolean(
-    segmentAiPhotoModalSegment &&
-      isSegmentEditorGeneratingImageEdit &&
-      segmentEditorGeneratingImageEditSegmentIndex !== segmentAiPhotoModalSegment.index,
-  );
-  const isSegmentImageUpscaleBusyElsewhere = Boolean(
-    segmentAiPhotoModalSegment &&
-      isSegmentEditorUpscalingImage &&
-      segmentEditorUpscalingImageSegmentIndex !== segmentAiPhotoModalSegment.index,
-  );
   const canEditSegmentImage = canWorkspaceSegmentEditPhoto(segmentAiPhotoModalSegment);
   const canUpscaleSegmentImage = canWorkspaceSegmentUpscalePhoto(segmentAiPhotoModalSegment);
   const segmentPhotoToolUnavailableReason = getWorkspaceSegmentPhotoToolUnavailableReason(
@@ -16958,11 +17005,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentEditorDraftRef.current = nextDraftSnapshot;
     setSegmentEditorDraft(nextDraftSnapshot);
     setSegmentEditorVideoError(null);
-    segmentAiPhotoRunRef.current += 1;
-    setIsSegmentEditorGeneratingAiPhoto(false);
-    segmentImageUpscaleRunRef.current += 1;
-    setIsSegmentEditorUpscalingImage(false);
-    setSegmentEditorUpscalingImageSegmentIndex(null);
+    clearAllSegmentVisualRuns();
     const boundedSegmentIndex =
       options?.initialSegmentMode === "route"
         ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraftSnapshot, options?.initialSegmentIndex ?? 0)
@@ -18206,53 +18249,43 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [segmentAiPhotoModalTab]);
 
   const cancelPendingSegmentAiPhotoRun = (targetSegmentIndex: number) => {
-    if (segmentEditorGeneratingAiPhotoSegmentIndex !== targetSegmentIndex) {
+    if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex)) {
       return;
     }
 
-    segmentAiPhotoRunRef.current += 1;
-    setIsSegmentEditorGeneratingAiPhoto(false);
-    setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
+    clearSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex);
   };
 
   const cancelPendingSegmentAiVideoRun = (targetSegmentIndex: number) => {
-    if (segmentEditorGeneratingAiVideoSegmentIndex !== targetSegmentIndex) {
+    if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, targetSegmentIndex)) {
       return;
     }
 
-    segmentAiVideoRunRef.current += 1;
-    setIsSegmentEditorGeneratingAiVideo(false);
-    setSegmentEditorGeneratingAiVideoSegmentIndex(null);
+    clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, targetSegmentIndex);
   };
 
   const cancelPendingSegmentImageEditRun = (targetSegmentIndex: number) => {
-    if (segmentEditorGeneratingImageEditSegmentIndex !== targetSegmentIndex) {
+    if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, targetSegmentIndex)) {
       return;
     }
 
-    segmentImageEditRunRef.current += 1;
-    setIsSegmentEditorGeneratingImageEdit(false);
-    setSegmentEditorGeneratingImageEditSegmentIndex(null);
+    clearSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, targetSegmentIndex);
   };
 
   const cancelPendingSegmentPhotoAnimationRun = (targetSegmentIndex: number) => {
-    if (segmentEditorGeneratingPhotoAnimationSegmentIndex !== targetSegmentIndex) {
+    if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, targetSegmentIndex)) {
       return;
     }
 
-    segmentPhotoAnimationRunRef.current += 1;
-    setIsSegmentEditorGeneratingPhotoAnimation(false);
-    setSegmentEditorGeneratingPhotoAnimationSegmentIndex(null);
+    clearSegmentVisualRun(segmentPhotoAnimationRunRef, setSegmentEditorGeneratingPhotoAnimationRunIds, targetSegmentIndex);
   };
 
   const cancelPendingSegmentImageUpscaleRun = (targetSegmentIndex: number) => {
-    if (segmentEditorUpscalingImageSegmentIndex !== targetSegmentIndex) {
+    if (!hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, targetSegmentIndex)) {
       return;
     }
 
-    segmentImageUpscaleRunRef.current += 1;
-    setIsSegmentEditorUpscalingImage(false);
-    setSegmentEditorUpscalingImageSegmentIndex(null);
+    clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex);
   };
 
   const handleSegmentEditorCustomVideoSelect = async (
@@ -18673,7 +18706,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const startedAt = Date.now();
 
     try {
-      while (segmentAiPhotoRunRef.current === options.runId) {
+      while (isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
           throw new Error("ИИ фото генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
@@ -18685,7 +18718,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           throw new Error(payload?.error ?? "Не удалось получить статус ИИ фото.");
         }
 
-        if (segmentAiPhotoRunRef.current !== options.runId) {
+        if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
           return;
         }
 
@@ -18722,9 +18755,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2000));
       }
     } finally {
-      if (segmentAiPhotoRunRef.current === options.runId) {
-        setIsSegmentEditorGeneratingAiPhoto(false);
-        setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
+      if (isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
+        clearSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, options.segmentIndex, options.runId);
       }
     }
   };
@@ -18748,7 +18780,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const startedAt = Date.now();
 
     try {
-      while (segmentImageEditRunRef.current === options.runId) {
+      while (isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
           throw new Error("Дорисовка фото занимает слишком много времени. Попробуйте ещё раз.");
         }
@@ -18760,7 +18792,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           throw new Error(payload?.error ?? "Не удалось получить статус дорисовки фото.");
         }
 
-        if (segmentImageEditRunRef.current !== options.runId) {
+        if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
           return;
         }
 
@@ -18798,9 +18830,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2000));
       }
     } finally {
-      if (segmentImageEditRunRef.current === options.runId) {
-        setIsSegmentEditorGeneratingImageEdit(false);
-        setSegmentEditorGeneratingImageEditSegmentIndex(null);
+      if (isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
+        clearSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, options.segmentIndex, options.runId);
       }
     }
   };
@@ -18824,7 +18855,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const startedAt = Date.now();
 
     try {
-      while (segmentAiVideoRunRef.current === options.runId) {
+      while (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS) {
           throw new Error("ИИ видео генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
@@ -18836,7 +18867,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           throw new Error(payload?.error ?? "Не удалось получить статус ИИ видео.");
         }
 
-        if (segmentAiVideoRunRef.current !== options.runId) {
+        if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
           return;
         }
 
@@ -18897,9 +18928,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
-      if (segmentAiVideoRunRef.current === options.runId) {
-        setIsSegmentEditorGeneratingAiVideo(false);
-        setSegmentEditorGeneratingAiVideoSegmentIndex(null);
+      if (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
+        clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, options.segmentIndex, options.runId);
       }
     }
   };
@@ -18924,10 +18954,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     let latestStatus = initialStatus;
     const startedAt = Date.now();
     let transientStatusFailures = 0;
-    segmentPhotoAnimationActiveJobIdRef.current = safeJobId;
+    segmentPhotoAnimationActiveJobIdsRef.current.add(safeJobId);
 
     try {
-      while (segmentPhotoAnimationRunRef.current === options.runId) {
+      while (isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS) {
           throw new Error("ИИ анимация фото генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
@@ -18985,7 +19015,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
         transientStatusFailures = 0;
 
-        if (segmentPhotoAnimationRunRef.current !== options.runId) {
+        if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, options.segmentIndex, options.runId)) {
           return;
         }
 
@@ -19097,12 +19127,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
-      if (segmentPhotoAnimationActiveJobIdRef.current === safeJobId) {
-        segmentPhotoAnimationActiveJobIdRef.current = null;
-      }
-      if (segmentPhotoAnimationRunRef.current === options.runId) {
-        setIsSegmentEditorGeneratingPhotoAnimation(false);
-        setSegmentEditorGeneratingPhotoAnimationSegmentIndex(null);
+      segmentPhotoAnimationActiveJobIdsRef.current.delete(safeJobId);
+      if (isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, options.segmentIndex, options.runId)) {
+        clearSegmentVisualRun(
+          segmentPhotoAnimationRunRef,
+          setSegmentEditorGeneratingPhotoAnimationRunIds,
+          options.segmentIndex,
+          options.runId,
+        );
       }
     }
   };
@@ -19125,7 +19157,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const startedAt = Date.now();
 
     try {
-      while (segmentImageUpscaleRunRef.current === options.runId) {
+      while (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
           throw new Error("Улучшение качества изображения занимает слишком много времени. Попробуйте ещё раз.");
         }
@@ -19137,7 +19169,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           throw new Error(payload?.error ?? "Не удалось получить статус улучшения изображения.");
         }
 
-        if (segmentImageUpscaleRunRef.current !== options.runId) {
+        if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
           return;
         }
 
@@ -19162,9 +19194,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
-      if (segmentImageUpscaleRunRef.current === options.runId) {
-        setIsSegmentEditorUpscalingImage(false);
-        setSegmentEditorUpscalingImageSegmentIndex(null);
+      if (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
+        clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, options.segmentIndex, options.runId);
       }
     }
   };
@@ -19188,11 +19219,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
-      return;
-    }
-
-    if (isSegmentEditorGeneratingAiPhoto && segmentEditorGeneratingAiPhotoSegmentIndex !== targetSegmentIndex) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации ИИ фото в другом сегменте.");
       return;
     }
 
@@ -19224,10 +19250,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     cancelPendingSegmentAiVideoRun(targetSegmentIndex);
 
-    const runId = segmentAiPhotoRunRef.current + 1;
-    segmentAiPhotoRunRef.current = runId;
-    setIsSegmentEditorGeneratingAiPhoto(true);
-    setSegmentEditorGeneratingAiPhotoSegmentIndex(targetSegmentIndex);
+    const runId = startSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex);
     setSegmentEditorVideoError(null);
     setInsufficientCreditsContext(null);
 
@@ -19254,9 +19277,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
 
       if (response.status === 402) {
-        if (segmentAiPhotoRunRef.current === runId) {
-          setIsSegmentEditorGeneratingAiPhoto(false);
-          setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
+        if (isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
+          clearSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex, runId);
         }
         openInsufficientCreditsModal("ai_photo", requiredCredits);
         return;
@@ -19266,7 +19288,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить генерацию ИИ фото.");
       }
 
-      if (segmentAiPhotoRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
@@ -19278,14 +19300,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segmentIndex: targetSegmentIndex,
       });
     } catch (error) {
-      if (segmentAiPhotoRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
         return;
       }
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать ИИ фото.");
     } finally {
-      if (!pollStarted && segmentAiPhotoRunRef.current === runId) {
-        setIsSegmentEditorGeneratingAiPhoto(false);
-        setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex, runId);
       }
     }
   };
@@ -19308,11 +19329,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
-      return;
-    }
-
-    if (isSegmentEditorGeneratingImageEdit && segmentEditorGeneratingImageEditSegmentIndex !== targetSegmentIndex) {
-      setSegmentEditorVideoError("Дождитесь завершения дорисовки фото в другом сегменте.");
       return;
     }
 
@@ -19354,10 +19370,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentAiVideoRun(targetSegmentIndex);
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
 
-    const runId = segmentImageEditRunRef.current + 1;
-    segmentImageEditRunRef.current = runId;
-    setIsSegmentEditorGeneratingImageEdit(true);
-    setSegmentEditorGeneratingImageEditSegmentIndex(targetSegmentIndex);
+    const runId = startSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, targetSegmentIndex);
     setSegmentEditorVideoError(null);
     setInsufficientCreditsContext(null);
 
@@ -19459,9 +19472,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       if (response.status === 402) {
-        if (segmentImageEditRunRef.current === runId) {
-          setIsSegmentEditorGeneratingImageEdit(false);
-          setSegmentEditorGeneratingImageEditSegmentIndex(null);
+        if (isSegmentVisualRunCurrent(segmentImageEditRunRef, targetSegmentIndex, runId)) {
+          clearSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, targetSegmentIndex, runId);
         }
         openInsufficientCreditsModal("image_edit", STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST);
         return;
@@ -19471,7 +19483,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить дорисовку фото.");
       }
 
-      if (segmentImageEditRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
@@ -19483,14 +19495,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segmentIndex: targetSegmentIndex,
       });
     } catch (error) {
-      if (segmentImageEditRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, targetSegmentIndex, runId)) {
         return;
       }
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось выполнить дорисовку фото.");
     } finally {
-      if (!pollStarted && segmentImageEditRunRef.current === runId) {
-        setIsSegmentEditorGeneratingImageEdit(false);
-        setSegmentEditorGeneratingImageEditSegmentIndex(null);
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentImageEditRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, targetSegmentIndex, runId);
       }
     }
   };
@@ -19514,11 +19525,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
-      return;
-    }
-
-    if (isSegmentEditorGeneratingAiVideo && segmentEditorGeneratingAiVideoSegmentIndex !== targetSegmentIndex) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации ИИ видео в другом сегменте.");
       return;
     }
 
@@ -19560,10 +19566,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
     cancelPendingSegmentPhotoAnimationRun(targetSegmentIndex);
 
-    const runId = segmentAiVideoRunRef.current + 1;
-    segmentAiVideoRunRef.current = runId;
-    setIsSegmentEditorGeneratingAiVideo(true);
-    setSegmentEditorGeneratingAiVideoSegmentIndex(targetSegmentIndex);
+    const runId = startSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, targetSegmentIndex);
     setSegmentEditorVideoError(null);
     setInsufficientCreditsContext(null);
 
@@ -19601,9 +19604,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobCreateResponse | null;
 
       if (response.status === 402) {
-        if (segmentAiVideoRunRef.current === runId) {
-          setIsSegmentEditorGeneratingAiVideo(false);
-          setSegmentEditorGeneratingAiVideoSegmentIndex(null);
+        if (isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
+          clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, targetSegmentIndex, runId);
         }
         openInsufficientCreditsModal("ai_video", requiredCredits);
         return;
@@ -19613,7 +19615,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить генерацию ИИ видео.");
       }
 
-      if (segmentAiVideoRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
@@ -19625,14 +19627,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segmentIndex: targetSegmentIndex,
       });
     } catch (error) {
-      if (segmentAiVideoRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
         return;
       }
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать ИИ видео.");
     } finally {
-      if (!pollStarted && segmentAiVideoRunRef.current === runId) {
-        setIsSegmentEditorGeneratingAiVideo(false);
-        setSegmentEditorGeneratingAiVideoSegmentIndex(null);
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, targetSegmentIndex, runId);
       }
     }
   };
@@ -19672,18 +19673,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         targetSegmentIndex,
       });
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
-      return;
-    }
-
-    if (
-      isSegmentEditorGeneratingPhotoAnimation &&
-      segmentEditorGeneratingPhotoAnimationSegmentIndex !== targetSegmentIndex
-    ) {
-      logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.same-type-busy", {
-        currentSegmentIndex: segmentEditorGeneratingPhotoAnimationSegmentIndex,
-        targetSegmentIndex,
-      });
-      setSegmentEditorVideoError("Дождитесь завершения ИИ анимации фото в другом сегменте.");
       return;
     }
 
@@ -19758,10 +19747,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelPendingSegmentAiPhotoRun(targetSegmentIndex);
     cancelPendingSegmentAiVideoRun(targetSegmentIndex);
 
-    const runId = segmentPhotoAnimationRunRef.current + 1;
-    segmentPhotoAnimationRunRef.current = runId;
-    setIsSegmentEditorGeneratingPhotoAnimation(true);
-    setSegmentEditorGeneratingPhotoAnimationSegmentIndex(targetSegmentIndex);
+    const runId = startSegmentVisualRun(
+      segmentPhotoAnimationRunRef,
+      setSegmentEditorGeneratingPhotoAnimationRunIds,
+      targetSegmentIndex,
+    );
     setSegmentEditorVideoError(null);
     setInsufficientCreditsContext(null);
 
@@ -19837,9 +19827,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       });
 
       if (response.status === 402) {
-        if (segmentPhotoAnimationRunRef.current === runId) {
-          setIsSegmentEditorGeneratingPhotoAnimation(false);
-          setSegmentEditorGeneratingPhotoAnimationSegmentIndex(null);
+        if (isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, targetSegmentIndex, runId)) {
+          clearSegmentVisualRun(
+            segmentPhotoAnimationRunRef,
+            setSegmentEditorGeneratingPhotoAnimationRunIds,
+            targetSegmentIndex,
+            runId,
+          );
         }
         openInsufficientCreditsModal("photo_animation", requiredCredits);
         return;
@@ -19849,7 +19843,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить ИИ анимацию фото.");
       }
 
-      if (segmentPhotoAnimationRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
@@ -19882,20 +19876,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             : String(error),
         targetSegmentIndex,
       });
-      if (segmentPhotoAnimationRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, targetSegmentIndex, runId)) {
         return;
       }
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось анимировать фото сегмента.");
     } finally {
-      if (!pollStarted && segmentPhotoAnimationRunRef.current === runId) {
-        setIsSegmentEditorGeneratingPhotoAnimation(false);
-        setSegmentEditorGeneratingPhotoAnimationSegmentIndex(null);
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(
+          segmentPhotoAnimationRunRef,
+          setSegmentEditorGeneratingPhotoAnimationRunIds,
+          targetSegmentIndex,
+          runId,
+        );
       }
     }
   };
 
   const resumePendingSegmentPhotoAnimationJob = (job: StoredWorkspaceSegmentPhotoAnimationJob) => {
-    if (segmentPhotoAnimationActiveJobIdRef.current) {
+    if (segmentPhotoAnimationActiveJobIdsRef.current.size > 0) {
       return false;
     }
 
@@ -19910,10 +19908,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return false;
     }
 
-    const runId = segmentPhotoAnimationRunRef.current + 1;
-    segmentPhotoAnimationRunRef.current = runId;
-    setIsSegmentEditorGeneratingPhotoAnimation(true);
-    setSegmentEditorGeneratingPhotoAnimationSegmentIndex(job.segmentIndex);
+    const runId = startSegmentVisualRun(
+      segmentPhotoAnimationRunRef,
+      setSegmentEditorGeneratingPhotoAnimationRunIds,
+      job.segmentIndex,
+    );
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
       ...segment,
@@ -19936,7 +19935,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentIndex: job.segmentIndex,
       sourceAsset: cloneStudioCustomVideoFile(job.sourceAsset),
     }).catch((error) => {
-      if (segmentPhotoAnimationRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, job.segmentIndex, runId)) {
         return;
       }
 
@@ -19951,7 +19950,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     const tryResumePendingPhotoAnimation = () => {
-      if (segmentPhotoAnimationActiveJobIdRef.current) {
+      if (segmentPhotoAnimationActiveJobIdsRef.current.size > 0) {
         return;
       }
 
@@ -20007,11 +20006,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (isSegmentEditorUpscalingImage && segmentEditorUpscalingImageSegmentIndex !== targetSegmentIndex) {
-      setSegmentEditorVideoError("Дождитесь завершения улучшения качества в другом сегменте.");
-      return;
-    }
-
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -20032,10 +20026,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    const runId = segmentImageUpscaleRunRef.current + 1;
-    segmentImageUpscaleRunRef.current = runId;
-    setIsSegmentEditorUpscalingImage(true);
-    setSegmentEditorUpscalingImageSegmentIndex(targetSegmentIndex);
+    const runId = startSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex);
     setSegmentEditorVideoError(null);
     setInsufficientCreditsContext(null);
 
@@ -20072,9 +20063,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentImageUpscaleJobCreateResponse | null;
 
       if (response.status === 402) {
-        if (segmentImageUpscaleRunRef.current === runId) {
-          setIsSegmentEditorUpscalingImage(false);
-          setSegmentEditorUpscalingImageSegmentIndex(null);
+        if (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
+          clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex, runId);
         }
         openInsufficientCreditsModal("image_upscale", STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST);
         return;
@@ -20084,7 +20074,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         throw new Error(payload?.error ?? "Не удалось запустить улучшение качества изображения.");
       }
 
-      if (segmentImageUpscaleRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
@@ -20095,15 +20085,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         segmentIndex: targetSegmentIndex,
       });
     } catch (error) {
-      if (segmentImageUpscaleRunRef.current !== runId) {
+      if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось улучшить качество изображения.");
     } finally {
-      if (!pollStarted && segmentImageUpscaleRunRef.current === runId) {
-        setIsSegmentEditorUpscalingImage(false);
-        setSegmentEditorUpscalingImageSegmentIndex(null);
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex, runId);
       }
     }
   };
@@ -21515,9 +21504,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setBrandSelectionError(null);
       setSegmentEditorError(null);
       setSegmentEditorVideoError(null);
-      segmentAiPhotoRunRef.current += 1;
-      setIsSegmentEditorGeneratingAiPhoto(false);
-      setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
+      clearAllSegmentVisualRuns();
       closeSegmentAiPhotoModal({ immediate: true });
       setSegmentEditorDraft(null);
       setCreateMode("default");
@@ -23483,22 +23470,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     (isPromptImageEditMode && isSegmentImageEditModalGeneratingCurrentSegment) ||
     (isPromptUpscaleMode && isSegmentImageUpscaleCurrentSegment) ||
     (isPromptUploadMode && isSegmentEditorPreparingCustomVideo);
-  const isPromptVisualSameTypeJobBusyElsewhere =
-    (isPromptAiPhotoMode &&
-      isSegmentEditorGeneratingAiPhoto &&
-      segmentEditorGeneratingAiPhotoSegmentIndex !== activeSegmentStableIndex) ||
-    (isPromptAiVideoMode &&
-      isSegmentEditorGeneratingAiVideo &&
-      segmentEditorGeneratingAiVideoSegmentIndex !== activeSegmentStableIndex) ||
-    (isPromptPhotoAnimationMode &&
-      isSegmentEditorGeneratingPhotoAnimation &&
-      segmentEditorGeneratingPhotoAnimationSegmentIndex !== activeSegmentStableIndex) ||
-    (isPromptImageEditMode &&
-      isSegmentEditorGeneratingImageEdit &&
-      segmentEditorGeneratingImageEditSegmentIndex !== activeSegmentStableIndex) ||
-    (isPromptUpscaleMode &&
-      isSegmentEditorUpscalingImage &&
-      segmentEditorUpscalingImageSegmentIndex !== activeSegmentStableIndex);
   const isPromptVisualBaseDisabled =
     !activeSegment ||
     isActiveSegmentVisualJobBusy ||
@@ -23509,8 +23480,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     (isPromptUpscaleMode && !canUpscaleSegmentImage);
   const isPromptVisualActionDisabled =
     isPromptVisualBaseDisabled ||
-    isPromptVisualPromptEmpty ||
-    isPromptVisualSameTypeJobBusyElsewhere;
+    isPromptVisualPromptEmpty;
   const canImprovePromptVisual =
     isPromptImageEditMode
       ? canImproveSegmentImageEditPrompt
@@ -24589,12 +24559,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                                 const isActiveCard = offset === 0;
                                 const segmentNumber = nextSegmentArrayIndex + 1;
-                                const isAiPhotoGenerationPending = segmentEditorGeneratingAiPhotoSegmentIndex === segment.index;
-                                const isImageEditGenerationPending = segmentEditorGeneratingImageEditSegmentIndex === segment.index;
-                                const isAiVideoGenerationPending = segmentEditorGeneratingAiVideoSegmentIndex === segment.index;
+                                const isAiPhotoGenerationPending = hasWorkspaceSegmentVisualRun(
+                                  segmentEditorGeneratingAiPhotoRunIds,
+                                  segment.index,
+                                );
+                                const isImageEditGenerationPending = hasWorkspaceSegmentVisualRun(
+                                  segmentEditorGeneratingImageEditRunIds,
+                                  segment.index,
+                                );
+                                const isAiVideoGenerationPending = hasWorkspaceSegmentVisualRun(
+                                  segmentEditorGeneratingAiVideoRunIds,
+                                  segment.index,
+                                );
                                 const isPhotoAnimationGenerationPending =
-                                  segmentEditorGeneratingPhotoAnimationSegmentIndex === segment.index;
-                                const isImageUpscalePending = segmentEditorUpscalingImageSegmentIndex === segment.index;
+                                  hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segment.index);
+                                const isImageUpscalePending = hasWorkspaceSegmentVisualRun(
+                                  segmentEditorUpscalingImageRunIds,
+                                  segment.index,
+                                );
                                 const isVisualGenerationPending =
                                   isAiPhotoGenerationPending ||
                                   isImageEditGenerationPending ||
@@ -26349,7 +26331,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               disabled={
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentAiVideoGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
@@ -26448,7 +26429,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 !canAnimateSegmentPhoto ||
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentPhotoAnimationGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
@@ -26535,7 +26515,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 !canEditSegmentImage ||
                                 isSegmentImageEditModalPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentImageEditGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
@@ -26578,7 +26557,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               disabled={
                                 !canUpscaleSegmentImage ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentImageUpscaleBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
@@ -26675,7 +26653,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               disabled={
                                 isSegmentAiPhotoModalAiPhotoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentAiPhotoGenerationBusyElsewhere ||
                                 isSegmentEditorPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
