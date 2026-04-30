@@ -20811,8 +20811,9 @@ textarea {
 }
 
 .studio-segment-editor__prompt-info-card--action-card {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 92px;
+  align-content: start;
 }
 
 .studio-segment-editor__prompt-note {
@@ -31421,8 +31422,9 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-info-card--action-card {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 92px;
+  align-content: start;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row {
