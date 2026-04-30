@@ -30,6 +30,7 @@ const englishVoiceAliases = new Map([
     ["sohee", "Sohee"],
 ]);
 const russianWaveSpeedVoiceAliases = new Map([
+    ["liam", "Liam"],
     ["bys_24000", "Bys_24000"],
     ["nec_24000", "Nec_24000"],
     ["tur_24000", "Tur_24000"],

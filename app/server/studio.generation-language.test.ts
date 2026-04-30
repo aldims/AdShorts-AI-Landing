@@ -29,6 +29,8 @@ describe("studio generation language resolution", () => {
 
   it("keeps the explicit ElevenLabs premium voice for Russian generation", () => {
     expect(normalizeStudioVoiceIdForLanguage("Liam", "ru")).toBe("Liam");
+    expect(normalizeStudioVoiceIdForLanguage("liam", "ru")).toBe("Liam");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
+    expect(getStudioVoiceCreditCost("liam")).toBe(5);
   });
 });

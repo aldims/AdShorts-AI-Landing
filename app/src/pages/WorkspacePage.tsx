@@ -2462,17 +2462,18 @@ const studioRussianVoicePreviewAssetVersion = "20260419-5";
 const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
   ru: [
     {
+      id: "Liam",
+      label: "Liam",
+      description: "Выразительный premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewText: "Послушайте, как звучит premium-голос, его темп, интонация и общее восприятие.",
+    },
+    {
       id: "Bys_24000",
       label: "Борис",
       description: "Базовый мужской голос",
       previewSampleUrl: `/voice-previews/boris.wav?v=${studioRussianVoicePreviewAssetVersion}`,
-    },
-    {
-      id: "Liam",
-      label: "Liam",
-      description: "ElevenLabs, выразительный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
     },
     {
       id: "Nec_24000",
@@ -2605,8 +2606,9 @@ export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined):
     return null;
   }
 
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
   for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
-    if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id === normalizedVoiceId)) {
+    if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)) {
       return language;
     }
   }
@@ -2626,10 +2628,15 @@ export const resolveStudioVoiceIdForLanguage = (
   language: StudioLanguage,
   voiceId: string | null | undefined,
   fallbackVoiceId?: string | null | undefined,
-): StudioVoiceOption["id"] =>
-  studioVoiceOptionsByLanguage[language].find((voice) => voice.id === String(voiceId ?? "").trim())?.id ??
-  studioVoiceOptionsByLanguage[language].find((voice) => voice.id === String(fallbackVoiceId ?? "").trim())?.id ??
-  getDefaultStudioVoiceId(language);
+): StudioVoiceOption["id"] => {
+  const requestedVoiceKey = String(voiceId ?? "").trim().toLowerCase();
+  const fallbackVoiceKey = String(fallbackVoiceId ?? "").trim().toLowerCase();
+  return (
+    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === requestedVoiceKey)?.id ??
+    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === fallbackVoiceKey)?.id ??
+    getDefaultStudioVoiceId(language)
+  );
+};
 
 export const getWorkspaceInitialStudioDefaults = (
   locale: Locale,
@@ -4625,8 +4632,9 @@ export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => 
     return 0;
   }
 
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
   for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
-    const voice = voiceOptions.find((option) => option.id === normalizedVoiceId);
+    const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
     if (voice) {
       return voice.creditCost ?? 0;
     }

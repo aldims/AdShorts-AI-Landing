@@ -234,9 +234,22 @@ const getStudioSegmentAiPhotoCreditCost = (quality) => STUDIO_SEGMENT_AI_PHOTO_C
 const getStudioSegmentAiVideoCreditCost = (quality) => STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
 const getStudioSegmentPhotoAnimationCreditCost = (quality) => STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
 const studioPremiumVoiceIds = new Set(["Liam"]);
-export const getStudioVoiceCreditCost = (voiceId) => {
+const getCanonicalStudioVoiceId = (voiceId) => {
     const normalizedVoiceId = normalizeGenerationText(voiceId);
-    return studioPremiumVoiceIds.has(normalizedVoiceId) ? STUDIO_PREMIUM_VOICE_CREDIT_COST : 0;
+    if (!normalizedVoiceId || normalizedVoiceId === "none") {
+        return null;
+    }
+    const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+    for (const candidateVoiceId of [...studioRussianVoiceIds, ...studioEnglishVoiceIds]) {
+        if (candidateVoiceId.toLowerCase() === normalizedVoiceKey) {
+            return candidateVoiceId;
+        }
+    }
+    return null;
+};
+export const getStudioVoiceCreditCost = (voiceId) => {
+    const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+    return canonicalVoiceId && studioPremiumVoiceIds.has(canonicalVoiceId) ? STUDIO_PREMIUM_VOICE_CREDIT_COST : 0;
 };
 const buildStudioSegmentVisualQualityPayload = (quality) => quality === "premium"
     ? {
@@ -272,14 +285,14 @@ const normalizeStudioLanguage = (value) => {
 };
 export const resolveStudioGenerationLanguage = (prompt, requestedLanguage) => normalizeStudioLanguage(requestedLanguage);
 const getStudioVoiceLanguage = (voiceId) => {
-    const normalizedVoiceId = normalizeGenerationText(voiceId);
-    if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+    if (!canonicalVoiceId) {
         return null;
     }
-    if (studioRussianVoiceIds.has(normalizedVoiceId)) {
+    if (studioRussianVoiceIds.has(canonicalVoiceId)) {
         return "ru";
     }
-    if (studioEnglishVoiceIds.has(normalizedVoiceId)) {
+    if (studioEnglishVoiceIds.has(canonicalVoiceId)) {
         return "en";
     }
     return null;
@@ -295,8 +308,9 @@ export const normalizeStudioVoiceIdForLanguage = (voiceId, language) => {
     if (!normalizedVoiceId || normalizedVoiceId === "none") {
         return undefined;
     }
-    const voiceLanguage = getStudioVoiceLanguage(normalizedVoiceId);
-    return voiceLanguage === language ? normalizedVoiceId : getDefaultStudioVoiceId(language);
+    const canonicalVoiceId = getCanonicalStudioVoiceId(normalizedVoiceId);
+    const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
+    return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
 };
 const normalizePositiveInteger = (value) => {
     const numeric = Number(value);

@@ -734,9 +734,25 @@ const getStudioSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQu
 
 const studioPremiumVoiceIds = new Set(["Liam"]);
 
-export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
+const getCanonicalStudioVoiceId = (voiceId: string | null | undefined) => {
   const normalizedVoiceId = normalizeGenerationText(voiceId);
-  return studioPremiumVoiceIds.has(normalizedVoiceId) ? STUDIO_PREMIUM_VOICE_CREDIT_COST : 0;
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  for (const candidateVoiceId of [...studioRussianVoiceIds, ...studioEnglishVoiceIds]) {
+    if (candidateVoiceId.toLowerCase() === normalizedVoiceKey) {
+      return candidateVoiceId;
+    }
+  }
+
+  return null;
+};
+
+export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
+  const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+  return canonicalVoiceId && studioPremiumVoiceIds.has(canonicalVoiceId) ? STUDIO_PREMIUM_VOICE_CREDIT_COST : 0;
 };
 
 const buildStudioSegmentVisualQualityPayload = (quality: StudioSegmentVisualQuality) =>
@@ -800,16 +816,16 @@ export const resolveStudioGenerationLanguage = (
 ): Locale => normalizeStudioLanguage(requestedLanguage);
 
 const getStudioVoiceLanguage = (voiceId: string | null | undefined): Locale | null => {
-  const normalizedVoiceId = normalizeGenerationText(voiceId);
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+  const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+  if (!canonicalVoiceId) {
     return null;
   }
 
-  if (studioRussianVoiceIds.has(normalizedVoiceId)) {
+  if (studioRussianVoiceIds.has(canonicalVoiceId)) {
     return "ru";
   }
 
-  if (studioEnglishVoiceIds.has(normalizedVoiceId)) {
+  if (studioEnglishVoiceIds.has(canonicalVoiceId)) {
     return "en";
   }
 
@@ -833,8 +849,9 @@ export const normalizeStudioVoiceIdForLanguage = (
     return undefined;
   }
 
-  const voiceLanguage = getStudioVoiceLanguage(normalizedVoiceId);
-  return voiceLanguage === language ? normalizedVoiceId : getDefaultStudioVoiceId(language);
+  const canonicalVoiceId = getCanonicalStudioVoiceId(normalizedVoiceId);
+  const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
+  return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
 };
 
 const normalizePositiveInteger = (value: unknown) => {
