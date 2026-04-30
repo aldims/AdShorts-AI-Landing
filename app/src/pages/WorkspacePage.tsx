@@ -15727,6 +15727,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       : null;
   const activeSegmentStableIndex = activeSegment?.index ?? null;
   const activeSegmentPreviewKind = activeSegmentResetMediaSurface?.previewKind ?? null;
+  const activeSegmentSyntheticPlaybackDuration = activeSegment
+    ? getWorkspaceSegmentEditorPlaybackDuration(activeSegment)
+    : 0;
   const studioSidebarActiveItem =
     studioView === "projects" ? "projects" : studioView === "media" ? "media" : createMode === "segment-editor" ? "edit" : "create";
   const studioNavSectionLabels =
@@ -16481,7 +16484,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     cancelSegmentEditorSyntheticPlayback();
     stopSegmentEditorPreviewVideoElements();
-    const activeSegmentPlaybackIndex = activeSegment ? activeSegmentIndex : null;
+    const activeSegmentPlaybackIndex = activeSegmentStableIndex !== null ? activeSegmentIndex : null;
     const queuedActivatedPlaybackIndex =
       activeSegmentPlaybackIndex !== null && queuedSegmentEditorPlaybackIndexRef.current === activeSegmentPlaybackIndex
         ? activeSegmentPlaybackIndex
@@ -16499,7 +16502,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const shouldStartSyntheticPlayback =
       pendingActivatedPlaybackIndex !== null &&
       activeSegmentPreviewKind === "image" &&
-      activeSegment;
+      activeSegmentStableIndex !== null;
     const nextQueuedSegmentEditorPlaybackIndex = shouldStartSyntheticPlayback ? null : pendingActivatedPlaybackIndex;
 
     pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
@@ -16511,10 +16514,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (shouldStartSyntheticPlayback) {
       startSegmentEditorSyntheticPlayback(
         pendingActivatedPlaybackIndex,
-        getSegmentEditorSyntheticPlaybackDuration(activeSegment),
+        activeSegmentSyntheticPlaybackDuration,
       );
     }
-  }, [activeSegment, activeSegmentIndex, activeSegmentMediaIdentityKey, activeSegmentPreviewKind, createMode]);
+  }, [
+    activeSegmentIndex,
+    activeSegmentMediaIdentityKey,
+    activeSegmentPreviewKind,
+    activeSegmentStableIndex,
+    activeSegmentSyntheticPlaybackDuration,
+    createMode,
+  ]);
 
   useEffect(() => {
     if (createMode !== "segment-editor") {
@@ -18875,7 +18885,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         applyWorkspaceProfile(payload.data.profile);
 
         if (payload.data.asset) {
-          const currentSegment = segmentEditorDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+          const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+          const currentSegment = currentDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+          const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
           const preferredPosterUrl = currentSegment
             ? getWorkspaceAiVideoPreferredPosterUrl(currentSegment, payload.data.asset)
             : null;
@@ -18896,15 +18908,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             visualReset: false,
             videoAction: "ai",
           }));
-          const didQueuePlayback = queueActiveSegmentEditorPlayback(options.segmentIndex);
+          const didQueuePlayback = queueActiveSegmentEditorPlayback(segmentPlaybackIndex);
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
-            options.segmentIndex,
+            segmentPlaybackIndex,
             getStudioCustomAssetPreviewUrl(nextAiVideoAsset),
           );
           logSegmentEditorDiagnostics("client.segment-editor.ai-video.warmup", {
             didQueuePlayback,
             didWarmVideoPlayback,
             jobId: safeJobId,
+            segmentPlaybackIndex,
             targetSegmentIndex: options.segmentIndex,
           });
           upsertGeneratedMediaLibraryEntry({
@@ -19058,6 +19071,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 posterUrl: preferredPosterUrl,
               }
             : payload.data.asset;
+          const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
@@ -19071,13 +19085,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             visualReset: false,
             videoAction: "photo_animation",
           }));
+          const didQueuePlayback = queueActiveSegmentEditorPlayback(segmentPlaybackIndex);
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
-            options.segmentIndex,
+            segmentPlaybackIndex,
             getStudioCustomAssetPreviewUrl(nextPhotoAnimationAsset),
           );
           logSegmentEditorDiagnostics("client.segment-editor.photo-animation.warmup", {
+            didQueuePlayback,
             didWarmVideoPlayback,
             jobId: safeJobId,
+            segmentPlaybackIndex,
             targetSegmentIndex: options.segmentIndex,
           });
           upsertGeneratedMediaLibraryEntry({
@@ -19096,6 +19113,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               initialSegmentMode: "route",
               openDraft: false,
               syncRoute: false,
+            }).then((refreshedDraft) => {
+              if (!didQueuePlayback) {
+                return;
+              }
+
+              const refreshedPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(
+                refreshedDraft ?? segmentEditorDraftRef.current,
+                options.segmentIndex,
+              );
+              if (activeSegmentPlaybackIndexRef.current !== refreshedPlaybackIndex) {
+                return;
+              }
+
+              const attachedElement = getSegmentEditorAttachedPreviewVideoElement(refreshedPlaybackIndex);
+              if (attachedElement && !attachedElement.paused && !attachedElement.ended) {
+                return;
+              }
+
+              const didQueuePlaybackAfterRefresh = queueActiveSegmentEditorPlayback(refreshedPlaybackIndex);
+              logSegmentEditorDiagnostics("client.segment-editor.photo-animation.requeue-after-refresh", {
+                didQueuePlayback: didQueuePlaybackAfterRefresh,
+                jobId: safeJobId,
+                segmentPlaybackIndex: refreshedPlaybackIndex,
+                targetSegmentIndex: options.segmentIndex,
+              });
             });
           }
           return;
