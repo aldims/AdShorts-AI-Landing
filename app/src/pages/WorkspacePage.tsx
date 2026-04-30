@@ -1005,6 +1005,7 @@ type WorkspaceSegmentAiVideoJobStatusResponse = {
 };
 
 type WorkspaceSegmentPreviewCardMediaProps = {
+  allowBrowserPosterCapture?: boolean;
   autoplay?: boolean;
   fallbackPosterUrl?: string | null;
   imageLoading?: "eager" | "lazy";
@@ -2061,7 +2062,7 @@ export const resolveWorkspaceSegmentActivationPlaybackIndex = (
     return options.pendingPlaybackIndex ?? null;
   }
 
-  return segments[boundedSegmentArrayIndex]?.index ?? null;
+  return segments[boundedSegmentArrayIndex] ? boundedSegmentArrayIndex : null;
 };
 
 const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
@@ -4527,8 +4528,6 @@ const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
     ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
     : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 };
-
-const segmentVisualQualityOptions: StudioSegmentVisualQuality[] = ["standard", "premium"];
 
 const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
@@ -10359,13 +10358,14 @@ function StudioVoiceSelectorChip({
 }
 
 const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCardMedia({
-  autoplay = true,
+  allowBrowserPosterCapture = false,
+  autoplay = false,
   fallbackPosterUrl,
   imageLoading = "eager",
   isPlaybackRequested = false,
   loop,
   mediaKey,
-  mountVideoWhenIdle = true,
+  mountVideoWhenIdle = false,
   muted = true,
   onVideoError,
   onVideoEnded,
@@ -10404,7 +10404,9 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   const resolvedPreviewUrl = previewCandidateUrls[previewCandidateIndex] ?? normalizedPreviewUrl;
   const segmentPreviewPosterCacheKey = `${resolvedPreviewUrl}::segment-preview-poster:v3-late-frame`;
   const [capturedPosterUrl, setCapturedPosterUrl] = useState<string | null>(() =>
-    canCapturePosterInBrowser(resolvedPreviewUrl) ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey) : null,
+    allowBrowserPosterCapture && canCapturePosterInBrowser(resolvedPreviewUrl)
+      ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey)
+      : null,
   );
   const resolvedPosterUrl =
     (isPreferredPosterReady ? normalizedPosterUrl : normalizedFallbackPosterUrl || normalizedPosterUrl) ||
@@ -10417,6 +10419,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     (primePausedFrame || (preferPosterFrame && !canUseResolvedPosterFrame));
   const shouldKeepVideoUnmountedWhileIdle =
     previewKind === "video" && !autoplay && !isPlaybackRequested && !mountVideoWhenIdle;
+  const shouldAllowVideoPlayback = previewKind === "video" && (autoplay || isPlaybackRequested);
   const imageCandidateUrls = useMemo(
     () =>
       getUniqueWorkspaceSegmentPreviewUrls([
@@ -10447,6 +10450,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
       if (
         !element ||
         previewKind !== "video" ||
+        !allowBrowserPosterCapture ||
         normalizedPosterUrl ||
         normalizedFallbackPosterUrl ||
         !canCapturePosterInBrowser(resolvedPreviewUrl)
@@ -10473,6 +10477,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     [
       normalizedFallbackPosterUrl,
       normalizedPosterUrl,
+      allowBrowserPosterCapture,
       previewKind,
       resolvedPreviewUrl,
       segmentPreviewPosterCacheKey,
@@ -10500,9 +10505,11 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
 
   useEffect(() => {
     const cachedPoster =
-      canCapturePosterInBrowser(resolvedPreviewUrl) ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey) : null;
+      allowBrowserPosterCapture && canCapturePosterInBrowser(resolvedPreviewUrl)
+        ? getProjectPosterCacheValue(segmentPreviewPosterCacheKey)
+        : null;
     setCapturedPosterUrl(cachedPoster);
-  }, [resolvedPreviewUrl, segmentPreviewPosterCacheKey]);
+  }, [allowBrowserPosterCapture, resolvedPreviewUrl, segmentPreviewPosterCacheKey]);
 
   useEffect(() => {
     setIsPosterFrameLoadFailed(false);
@@ -10512,6 +10519,21 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     setIsVideoPlaying(false);
     setHasPresentedVideoFrame(false);
   }, [mediaKey, resolvedPreviewUrl]);
+
+  useEffect(() => {
+    if (previewKind !== "video" || shouldAllowVideoPlayback) {
+      return;
+    }
+
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.pause();
+    element.muted = true;
+    element.defaultMuted = true;
+  }, [mediaKey, previewKind, resolvedPreviewUrl, shouldAllowVideoPlayback]);
 
   useEffect(() => {
     setPreviewCandidateIndex(0);
@@ -10563,6 +10585,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
       previewKind !== "video" ||
       normalizedPosterUrl ||
       normalizedFallbackPosterUrl ||
+      !allowBrowserPosterCapture ||
       autoplay ||
       isPlaybackRequested ||
       isVideoPlaying ||
@@ -10595,6 +10618,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   }, [
     normalizedFallbackPosterUrl,
     normalizedPosterUrl,
+    allowBrowserPosterCapture,
     autoplay,
     isPlaybackRequested,
     isVideoPlaying,
@@ -10734,7 +10758,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
         key={`${mediaKey}:${resolvedPreviewUrl}`}
         ref={setVideoElementRef}
         src={resolvedPreviewUrl}
-        autoPlay={autoplay}
+        autoPlay={autoplay && shouldAllowVideoPlayback}
         loop={loop ?? autoplay}
         muted={muted}
         poster={canUseResolvedPosterFrame ? resolvedPosterUrl ?? undefined : undefined}
@@ -10768,7 +10792,13 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
           }
           onVideoPause?.();
         }}
-        onPlay={() => {
+        onPlay={(event) => {
+          if (!shouldAllowVideoPlayback) {
+            event.currentTarget.pause();
+            setIsVideoPlaying(false);
+            return;
+          }
+
           setIsVideoPlaying(true);
           setHasPresentedVideoFrame(true);
           onVideoPlay?.();
@@ -12025,11 +12055,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>("standard");
   const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
+    useState<StudioSegmentVisualQuality>("premium");
   const [selectedSegmentAiVideoQuality, setSelectedSegmentAiVideoQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
+    useState<StudioSegmentVisualQuality>("premium");
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
+    useState<StudioSegmentVisualQuality>("premium");
+  const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
+    id: string;
+    left: number;
+    placement: "top" | "bottom";
+    text: string;
+    top: number;
+  } | null>(null);
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<StudioCustomVideoFile | null>(null);
   const [isPreparingCustomVideo, setIsPreparingCustomVideo] = useState(false);
   const [videoSelectionError, setVideoSelectionError] = useState<string | null>(null);
@@ -12115,6 +12152,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentImageEditModalPrompt, setSegmentImageEditModalPrompt] = useState("");
   const [segmentAiVideoModalPrompt, setSegmentAiVideoModalPrompt] = useState("");
   const [segmentAiPhotoModalTab, setSegmentAiPhotoModalTab] = useState<WorkspaceSegmentVisualModalTab>("ai_photo");
+  const [releasedSegmentEditorPromptTool, setReleasedSegmentEditorPromptTool] =
+    useState<WorkspaceSegmentVisualModalTab | null>(null);
   const [segmentEditorPromptSceneMode, setSegmentEditorPromptSceneMode] = useState<"create" | "edit">("create");
   const [segmentAiPhotoModalLibraryFilter, setSegmentAiPhotoModalLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
@@ -12205,6 +12244,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaLibraryScrollRootRef = useRef<HTMLDivElement | null>(null);
   const mediaLibraryLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const mediaLibraryLoadMoreAbortControllerRef = useRef<AbortController | null>(null);
   const mediaLibraryLoadMoreCursorRef = useRef<string | null>(null);
   const mediaLibraryPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewModalVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -12252,6 +12292,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const pendingSegmentEditorActivatedPlaybackIndexRef = useRef<number | null>(null);
   const queuedSegmentEditorPlaybackIndexRef = useRef<number | null>(null);
   const segmentCarouselPointerPlaybackIntentRef = useRef<number | null>(null);
+  const segmentEditorVideoPlaybackCleanupRef = useRef<null | (() => void)>(null);
   const requestSegmentEditorVideoPlaybackRef = useRef<
     null | ((segmentPlaybackIndex: number, element: HTMLVideoElement, options?: { resetToStart?: boolean }) => Promise<unknown>)
   >(null);
@@ -13622,7 +13663,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentCarouselReleaseTimerRef.current = window.setTimeout(() => {
         segmentCarouselReleaseTimerRef.current = null;
         activateSegmentEditorSegmentByArrayIndex(targetSegmentIndex, {
-          pendingPlaybackIndex: segmentEditorDraft.segments[targetSegmentIndex]?.index ?? null,
+          pendingPlaybackIndex: segmentEditorDraft.segments[targetSegmentIndex] ? targetSegmentIndex : null,
         });
         setSegmentCarouselDragProgress(0);
       }, 150);
@@ -13954,11 +13995,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const shouldLoadSegmentModalMediaLibrary =
     (isSegmentAiPhotoModalOpen || (activeTab === "studio" && studioView === "create" && createMode === "segment-editor")) &&
     segmentAiPhotoModalTab === "library";
-  const shouldWarmStudioMediaLibrary = activeTab === "studio";
-  const shouldLoadMediaLibrary = shouldWarmStudioMediaLibrary || shouldLoadSegmentModalMediaLibrary;
+  const shouldLoadMediaLibrary = isMediaLibraryStudioView || shouldLoadSegmentModalMediaLibrary;
 
   useEffect(() => {
     if (!shouldLoadMediaLibrary) {
+      mediaLibraryLoadMoreAbortControllerRef.current?.abort();
+      mediaLibraryLoadMoreAbortControllerRef.current = null;
+      mediaLibraryLoadMoreCursorRef.current = null;
       setIsMediaLibraryLoading(false);
       setIsMediaLibraryLoadingMore(false);
       return;
@@ -14070,7 +14113,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     mediaLibraryLoadMoreCursorRef.current = requestCursor;
+    mediaLibraryLoadMoreAbortControllerRef.current?.abort();
     const controller = new AbortController();
+    mediaLibraryLoadMoreAbortControllerRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort("media-library-timeout"), MEDIA_LIBRARY_REQUEST_TIMEOUT_MS);
     setIsMediaLibraryLoading(true);
     setIsMediaLibraryLoadingMore(true);
@@ -14100,12 +14145,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       setMediaLibraryError(error instanceof Error ? error.message : "Не удалось загрузить медиатеку.");
     } finally {
+      const isCurrentLoadMoreRequest = mediaLibraryLoadMoreAbortControllerRef.current === controller;
       if (mediaLibraryLoadMoreCursorRef.current === requestCursor) {
         mediaLibraryLoadMoreCursorRef.current = null;
       }
+      if (isCurrentLoadMoreRequest) {
+        mediaLibraryLoadMoreAbortControllerRef.current = null;
+        setIsMediaLibraryLoading(false);
+        setIsMediaLibraryLoadingMore(false);
+      }
       window.clearTimeout(timeoutId);
-      setIsMediaLibraryLoading(false);
-      setIsMediaLibraryLoadingMore(false);
     }
   }, [isMediaLibraryLoading, mediaLibraryNextCursor]);
 
@@ -14462,40 +14511,97 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     );
   const renderSegmentVisualQualitySwitch = (options: {
     ariaLabel: string;
+    className?: string;
     costForQuality: (quality: StudioSegmentVisualQuality) => number;
     disabled?: boolean;
+    label?: string;
     onChange: (quality: StudioSegmentVisualQuality) => void;
     value: StudioSegmentVisualQuality;
-  }) => (
-    <div className="studio-segment-visual-quality" role="group" aria-label={options.ariaLabel}>
-      <span className="studio-segment-visual-quality__label">
-        {workspaceText(locale, "Качество", "Quality")}
-      </span>
-      <div className="studio-segment-visual-quality__control">
-        {segmentVisualQualityOptions.map((quality) => (
-          <button
-            key={quality}
-            className={`studio-segment-visual-quality__option studio-segment-visual-quality__option--${quality}${
-              options.value === quality ? " is-active" : ""
-            }`}
-            type="button"
-            aria-pressed={options.value === quality}
-            disabled={options.disabled}
-            onClick={() => {
-              options.onChange(quality);
-            }}
-          >
-            <span>
-              {quality === "premium"
-                ? workspaceText(locale, "Премиум", "Premium")
-                : workspaceText(locale, "Стандарт", "Standard")}
-            </span>
-            <small>{formatSegmentVisualCreditsLabel(options.costForQuality(quality))}</small>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  }) => {
+    const premiumTooltipId = `${options.className ?? "default"}:${options.ariaLabel}:premium`;
+    const premiumDescription = workspaceText(
+      locale,
+      "Используются продвинутые AI модели, качество визуала заметно выше.",
+      "Uses advanced AI models, and visual quality is noticeably higher.",
+    );
+    const isPremium = options.value === "premium";
+    const showPremiumTooltip = (button: HTMLButtonElement) => {
+      const rect = button.getBoundingClientRect();
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const tooltipHalfWidth = 156;
+      const left = Math.min(
+        Math.max(rect.left + rect.width / 2, tooltipHalfWidth + 10),
+        Math.max(tooltipHalfWidth + 10, viewportWidth - tooltipHalfWidth - 10),
+      );
+      const hasRoomAbove = rect.top > 96;
+
+      setSegmentVisualQualityTooltip({
+        id: premiumTooltipId,
+        left,
+        placement: hasRoomAbove ? "top" : "bottom",
+        text: premiumDescription,
+        top: hasRoomAbove ? rect.top : rect.bottom,
+      });
+    };
+    const hidePremiumTooltip = () => {
+      setSegmentVisualQualityTooltip((current) => (current?.id === premiumTooltipId ? null : current));
+    };
+
+    return (
+      <>
+        <div
+          className={`studio-segment-visual-quality${options.className ? ` ${options.className}` : ""}`}
+          role="group"
+          aria-label={options.ariaLabel}
+        >
+          {options.label ? <span className="studio-segment-visual-quality__caption">{options.label}</span> : null}
+          <div className="studio-segment-visual-quality__control">
+            <button
+              className={`studio-segment-visual-quality__switch${
+                isPremium ? " is-active" : ""
+              }`}
+              type="button"
+              role="switch"
+              aria-label={`Premium. ${premiumDescription}`}
+              aria-checked={isPremium}
+              disabled={options.disabled}
+              onBlur={hidePremiumTooltip}
+              onClick={() => {
+                options.onChange(isPremium ? "standard" : "premium");
+              }}
+              onFocus={(event) => {
+                showPremiumTooltip(event.currentTarget);
+              }}
+              onMouseEnter={(event) => {
+                showPremiumTooltip(event.currentTarget);
+              }}
+              onMouseLeave={hidePremiumTooltip}
+            >
+              <span className="studio-segment-visual-quality__switch-label">Premium</span>
+              <span className="studio-segment-visual-quality__switch-track" aria-hidden="true">
+                <span className="studio-segment-visual-quality__switch-thumb"></span>
+              </span>
+            </button>
+          </div>
+        </div>
+        {segmentVisualQualityTooltip?.id === premiumTooltipId && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className={`studio-segment-visual-quality-tooltip is-${segmentVisualQualityTooltip.placement}`}
+                role="tooltip"
+                style={{
+                  left: segmentVisualQualityTooltip.left,
+                  top: segmentVisualQualityTooltip.top,
+                }}
+              >
+                {segmentVisualQualityTooltip.text}
+              </div>,
+              document.body,
+            )
+          : null}
+      </>
+    );
+  };
   const hasPreviewModalDescription = Boolean(previewModalDescription);
   const hasPreviewModalHashtags = previewModalHashtags.length > 0;
   const selectedVoiceOptions = studioVoiceOptionsByLanguage[selectedLanguage];
@@ -14616,7 +14722,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : studioCreateRequiredCredits;
   const studioPrimaryActionCostLabel = `${studioPrimaryActionRequiredCredits} ⚡`;
   const studioPrimaryActionLabel = hasAppliedSegmentEditorSession
-    ? workspaceText(locale, "Обновить Shorts", "Update Shorts")
+    ? workspaceText(locale, "Создать Shorts", "Create Shorts")
     : workspaceText(locale, "Создать Shorts", "Create Shorts");
   const isStudioPrimaryActionPromptEmpty = topicInput.trim().length === 0;
   const segmentEditorProjectId = segmentEditorDraft?.projectId ?? null;
@@ -14900,8 +15006,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentSubtitleBulkTextError(null);
   }, [segmentEditorDraft?.projectId]);
   useEffect(() => {
-    activeSegmentPlaybackIndexRef.current = activeSegment?.index ?? null;
-  }, [activeSegment?.index]);
+    activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
+  }, [activeSegment, activeSegmentIndex]);
   const segmentEditorChangeChecklist = segmentEditorDraft
     ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChecklistBaseSession, {
         subtitleColorOptions,
@@ -15316,7 +15422,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentThumbDragState(nextDragState);
     setSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(clientX, draggedIndex));
   };
+  const cancelSegmentEditorVideoPlaybackRequest = () => {
+    const cleanup = segmentEditorVideoPlaybackCleanupRef.current;
+    if (!cleanup) {
+      return;
+    }
+
+    segmentEditorVideoPlaybackCleanupRef.current = null;
+    cleanup();
+  };
+
   const stopSegmentEditorPreviewVideoElements = (options?: { clearRefs?: boolean }) => {
+    cancelSegmentEditorVideoPlaybackRequest();
     segmentEditorPreviewResetTokenRef.current += 1;
     segmentEditorPausedVideoPositionsRef.current = {};
 
@@ -15345,6 +15462,107 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentEditorPreviewVideoRefs.current = {};
     }
   };
+
+  const pauseOtherSegmentEditorPreviewVideoElements = (activeSegmentIndex: number) => {
+    Object.entries(segmentEditorPreviewVideoRefs.current).forEach(([segmentIndexKey, element]) => {
+      if (!element) {
+        return;
+      }
+
+      const segmentIndex = Number(segmentIndexKey);
+      if (Number.isFinite(segmentIndex) && segmentIndex === activeSegmentIndex) {
+        return;
+      }
+
+      element.pause();
+      element.muted = true;
+      element.defaultMuted = true;
+      delete element.dataset.previewPrimed;
+    });
+  };
+
+  const isSegmentEditorCarouselVideoPlaybackAllowed = useCallback(
+    (element: HTMLVideoElement) => {
+      const cardElement = element.closest(".studio-segment-editor__card");
+      if (!(cardElement instanceof HTMLElement) || !cardElement.classList.contains("is-active")) {
+        return false;
+      }
+
+      const hitboxElement = cardElement.querySelector<HTMLElement>(
+        ".studio-segment-editor__card-hitbox[data-segment-playback-index]",
+      );
+      const playbackIndex = Number(hitboxElement?.dataset.segmentPlaybackIndex);
+      if (!Number.isInteger(playbackIndex)) {
+        return false;
+      }
+
+      return (
+        queuedSegmentEditorPlaybackIndexRef.current === playbackIndex ||
+        pendingSegmentEditorActivatedPlaybackIndexRef.current === playbackIndex ||
+        playingSegmentEditorPreviewIndex === playbackIndex
+      );
+    },
+    [playingSegmentEditorPreviewIndex],
+  );
+
+  const pauseUnexpectedSegmentEditorCarouselVideo = useCallback(
+    (element: HTMLVideoElement) => {
+      if (isSegmentEditorCarouselVideoPlaybackAllowed(element)) {
+        return;
+      }
+
+      element.autoplay = false;
+      element.removeAttribute("autoplay");
+      element.pause();
+      element.muted = true;
+      element.defaultMuted = true;
+      if (element.preload !== "none") {
+        element.preload = "none";
+      }
+      delete element.dataset.previewPrimed;
+    },
+    [isSegmentEditorCarouselVideoPlaybackAllowed],
+  );
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const pauseUnexpectedVideos = () => {
+      document
+        .querySelectorAll<HTMLVideoElement>(
+          ".studio-segment-editor__carousel video, .studio-segment-editor__thumbbar video",
+        )
+        .forEach((element) => {
+          pauseUnexpectedSegmentEditorCarouselVideo(element);
+        });
+    };
+
+    const handleVideoPlay = (event: Event) => {
+      if (
+        event.target instanceof HTMLVideoElement &&
+        event.target.closest(".studio-segment-editor__carousel, .studio-segment-editor__thumbbar")
+      ) {
+        pauseUnexpectedSegmentEditorCarouselVideo(event.target);
+      }
+    };
+
+    document.addEventListener("play", handleVideoPlay, true);
+    pauseUnexpectedVideos();
+    const animationFrameId = window.requestAnimationFrame(pauseUnexpectedVideos);
+
+    return () => {
+      document.removeEventListener("play", handleVideoPlay, true);
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [
+    activeSegmentIndex,
+    createMode,
+    pauseUnexpectedSegmentEditorCarouselVideo,
+    queuedSegmentEditorPlaybackIndex,
+    segmentEditorDraft,
+  ]);
 
   const resetSegmentEditorPreviewPlaybackState = (options?: { clearRefs?: boolean }) => {
     cancelSegmentEditorSyntheticPlayback();
@@ -15797,18 +16015,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     cancelSegmentEditorSyntheticPlayback();
     stopSegmentEditorPreviewVideoElements();
+    const activeSegmentPlaybackIndex = activeSegment ? activeSegmentIndex : null;
     const queuedActivatedPlaybackIndex =
-      activeSegmentStableIndex !== null && queuedSegmentEditorPlaybackIndexRef.current === activeSegmentStableIndex
-        ? activeSegmentStableIndex
+      activeSegmentPlaybackIndex !== null && queuedSegmentEditorPlaybackIndexRef.current === activeSegmentPlaybackIndex
+        ? activeSegmentPlaybackIndex
         : null;
     const pointerActivatedPlaybackIndex =
-      activeSegmentStableIndex !== null && segmentCarouselPointerPlaybackIntentRef.current === activeSegmentStableIndex
-        ? activeSegmentStableIndex
+      activeSegmentPlaybackIndex !== null && segmentCarouselPointerPlaybackIntentRef.current === activeSegmentPlaybackIndex
+        ? activeSegmentPlaybackIndex
         : null;
     const pendingActivatedPlaybackIndex =
-      createMode === "segment-editor" && activeSegmentStableIndex !== null
-        ? pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentStableIndex
-          ? activeSegmentStableIndex
+      createMode === "segment-editor" && activeSegmentPlaybackIndex !== null
+        ? pendingSegmentEditorActivatedPlaybackIndexRef.current === activeSegmentPlaybackIndex
+          ? activeSegmentPlaybackIndex
           : queuedActivatedPlaybackIndex ?? pointerActivatedPlaybackIndex
         : null;
     const shouldStartSyntheticPlayback =
@@ -15829,14 +16048,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         getSegmentEditorSyntheticPlaybackDuration(activeSegment),
       );
     }
-  }, [activeSegmentMediaIdentityKey, activeSegmentPreviewKind, activeSegmentStableIndex, createMode]);
+  }, [activeSegment, activeSegmentIndex, activeSegmentMediaIdentityKey, activeSegmentPreviewKind, createMode]);
 
   useEffect(() => {
     if (createMode !== "segment-editor") {
       return;
     }
 
-    const queuedSegment = activeSegmentStableIndex === queuedSegmentEditorPlaybackIndex ? activeSegment : null;
+    const queuedSegment = activeSegment && activeSegmentIndex === queuedSegmentEditorPlaybackIndex ? activeSegment : null;
 
     if (queuedSegmentEditorPlaybackIndex === null || !queuedSegment) {
       return;
@@ -15921,7 +16140,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
       clearMetadataListener();
     };
-  }, [activeSegment, activeSegmentMediaIdentityKey, activeSegmentStableIndex, createMode, queuedSegmentEditorPlaybackIndex]);
+  }, [activeSegment, activeSegmentIndex, activeSegmentMediaIdentityKey, createMode, queuedSegmentEditorPlaybackIndex]);
 
   useEffect(() => {
     const currentVoiceLanguage = getStudioLanguageForVoiceId(selectedVoiceId);
@@ -20772,11 +20991,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setStatus(options?.segmentEditorSession ? "Подготавливаем сегменты..." : "Task queued");
     });
 
-    if (location.pathname.startsWith(localizePath("/app/studio"))) {
+    const studioCreatePath = localizePath("/app/studio");
+    if (isSegmentEditorGeneration || location.pathname.startsWith(studioCreatePath)) {
       const currentStudioUrl = `${location.pathname}${location.search}`;
       markPendingStudioRouteSection("create");
-      if (currentStudioUrl !== localizePath("/app/studio")) {
-        navigate(localizePath("/app/studio"), { replace: true });
+      if (currentStudioUrl !== studioCreatePath) {
+        navigate(studioCreatePath, { replace: true });
       }
     }
 
@@ -21201,6 +21421,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     element: HTMLVideoElement,
     options?: { resetToStart?: boolean },
   ) => {
+    cancelSegmentEditorVideoPlaybackRequest();
+
     let cancelled = false;
     const requestToken = segmentEditorPreviewResetTokenRef.current;
 
@@ -21219,8 +21441,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       element.removeEventListener("canplay", handlePlaybackRetry);
     };
 
+    const cleanupPlaybackRequest = () => {
+      cancelled = true;
+      cleanupRetryListeners();
+    };
+
+    const clearPlaybackRequestCleanup = () => {
+      if (segmentEditorVideoPlaybackCleanupRef.current === cleanupPlaybackRequest) {
+        segmentEditorVideoPlaybackCleanupRef.current = null;
+      }
+    };
+
     const markPlaybackStarted = () => {
       cleanupRetryListeners();
+      clearPlaybackRequestCleanup();
       if (!cancelled) {
         setQueuedSegmentEditorPlaybackIndex((current) => {
           const nextQueuedIndex = current === segmentPlaybackIndex ? null : current;
@@ -21282,7 +21516,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       element.muted = true;
       element.defaultMuted = true;
+      pauseOtherSegmentEditorPreviewVideoElements(segmentPlaybackIndex);
       await playVideoElement(element, true);
+
+      if (cancelled || segmentEditorPreviewResetTokenRef.current !== requestToken) {
+        element.pause();
+        element.muted = true;
+        element.defaultMuted = true;
+        delete element.dataset.previewPrimed;
+        return false;
+      }
 
       if (!cancelled && segmentEditorPreviewResetTokenRef.current === requestToken && !element.paused && !element.ended) {
         markPlaybackStarted();
@@ -21306,6 +21549,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       void tryStartPlayback();
     };
 
+    segmentEditorVideoPlaybackCleanupRef.current = cleanupPlaybackRequest;
     queuedSegmentEditorPlaybackIndexRef.current = segmentPlaybackIndex;
     setQueuedSegmentEditorPlaybackIndex(segmentPlaybackIndex);
     cleanupRetryListeners();
@@ -21315,6 +21559,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const startedImmediately = await tryStartPlayback();
     if (startedImmediately || cancelled) {
       cleanupRetryListeners();
+      if (cancelled) {
+        clearPlaybackRequestCleanup();
+      }
       return;
     }
 
@@ -21331,8 +21578,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     return () => {
-      cancelled = true;
-      cleanupRetryListeners();
+      cleanupPlaybackRequest();
+      clearPlaybackRequestCleanup();
     };
   };
   const queueActiveSegmentEditorPlayback = (segmentPlaybackIndex: number) => {
@@ -21360,11 +21607,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
   const clearSegmentEditorPlaybackRequest = (segmentPlaybackIndex?: number | null) => {
     if (segmentPlaybackIndex === null || typeof segmentPlaybackIndex === "undefined") {
+      cancelSegmentEditorVideoPlaybackRequest();
       pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
       queuedSegmentEditorPlaybackIndexRef.current = null;
       segmentCarouselPointerPlaybackIntentRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       return;
+    }
+
+    if (
+      pendingSegmentEditorActivatedPlaybackIndexRef.current === segmentPlaybackIndex ||
+      queuedSegmentEditorPlaybackIndexRef.current === segmentPlaybackIndex ||
+      segmentCarouselPointerPlaybackIntentRef.current === segmentPlaybackIndex
+    ) {
+      cancelSegmentEditorVideoPlaybackRequest();
     }
 
     if (pendingSegmentEditorActivatedPlaybackIndexRef.current === segmentPlaybackIndex) {
@@ -22544,6 +22800,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     syncSegmentAiPhotoModalForSegment(activeSegment, { preserveTab: true, resetLibraryFilter: tab === "library" });
     setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(activeSegment, tab));
   };
+  const handleSegmentEditorPromptVisualToolButtonClick = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    tab: WorkspaceSegmentVisualModalTab,
+  ) => {
+    event.currentTarget.blur();
+    setReleasedSegmentEditorPromptTool(tab);
+    handleSegmentEditorPromptVisualToolSelect(tab);
+  };
+  const clearSegmentEditorPromptToolHoverRelease = (tab: WorkspaceSegmentVisualModalTab) => {
+    setReleasedSegmentEditorPromptTool((current) => (current === tab ? null : current));
+  };
+  const getSegmentEditorPromptVisualToolButtonClass = (tab: WorkspaceSegmentVisualModalTab) =>
+    `studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${
+      segmentAiPhotoModalTab === tab ? " is-active" : ""
+    }${releasedSegmentEditorPromptTool === tab ? " is-hover-released" : ""}`;
   const handleSegmentEditorPromptSceneModeSelect = (mode: "create" | "edit") => {
     if (!activeSegment) {
       return;
@@ -23001,49 +23272,57 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               {segmentEditorPromptSceneMode === "create" ? (
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "ai_photo" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("ai_photo")}
                     type="button"
                     aria-label={workspaceText(locale, "ИИ фото", "AI photo")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("ai_photo")}
                     title={workspaceText(locale, "ИИ фото", "AI photo")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("ai_photo");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "ai_photo");
                     }}
                   >
 	                    {renderSegmentEditorPromptToolButtonContent("ai_photo", workspaceText(locale, "ИИ фото", "AI photo"))}
                   </button>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "ai_video" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("ai_video")}
                     type="button"
                     aria-label={workspaceText(locale, "ИИ видео", "AI video")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("ai_video")}
                     title={workspaceText(locale, "ИИ видео", "AI video")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("ai_video");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "ai_video");
                     }}
                   >
 	                    {renderSegmentEditorPromptToolButtonContent("ai_video", workspaceText(locale, "ИИ видео", "AI video"))}
                   </button>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "library" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("library")}
                     type="button"
                     aria-label={workspaceText(locale, "Медиатека", "Media library")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("library")}
                     title={workspaceText(locale, "Медиатека", "Media library")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("library");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("library")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("library")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "library");
                     }}
                   >
                     {renderSegmentEditorPromptToolButtonContent("library", workspaceText(locale, "Медиатека", "Media library"))}
                   </button>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "upload" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("upload")}
                     type="button"
                     aria-label={workspaceText(locale, "Свой визуал", "Custom visual")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("upload")}
                     title={workspaceText(locale, "Свой визуал", "Custom visual")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("upload");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("upload")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("upload")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "upload");
                     }}
                   >
 	                    {renderSegmentEditorPromptToolButtonContent("upload", workspaceText(locale, "Свой визуал", "Custom visual"))}
@@ -23052,40 +23331,46 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               ) : (
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "photo_animation" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("photo_animation")}
                     type="button"
                     aria-label={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("photo_animation")}
                     title={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("photo_animation");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "photo_animation");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("photo_animation", workspaceText(locale, "Анимация", "Motion"))}
+                    {renderSegmentEditorPromptToolButtonContent("photo_animation", workspaceText(locale, "ИИ анимация", "AI animation"))}
                   </button>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "image_edit" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("image_edit")}
                     type="button"
                     aria-label={workspaceText(locale, "Дорисовать", "Image edit")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("image_edit")}
                     title={workspaceText(locale, "Дорисовать", "Image edit")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("image_edit");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "image_edit");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("image_edit", workspaceText(locale, "Правка", "Edit"))}
+                    {renderSegmentEditorPromptToolButtonContent("image_edit", workspaceText(locale, "Дорисовать", "Image edit"))}
                   </button>
                   <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${segmentAiPhotoModalTab === "image_upscale" ? " is-active" : ""}`}
+                    className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
                     type="button"
                     aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
                     title={workspaceText(locale, "Улучшить качество", "Upscale image")}
-                    onClick={() => {
-                      handleSegmentEditorPromptVisualToolSelect("image_upscale");
+                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
+                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
+                    onClick={(event) => {
+                      handleSegmentEditorPromptVisualToolButtonClick(event, "image_upscale");
                     }}
                   >
-                    {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Качество", "Quality"))}
+                    {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить качество", "Upscale image"))}
                   </button>
                 </div>
               )}
@@ -23230,6 +23515,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   <span className="studio-segment-editor__prompt-library-media">
                                     {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                     <WorkspaceSegmentPreviewCardMedia
+                                      allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
                                       autoplay={false}
                                       imageLoading="lazy"
                                       mediaKey={`segment-editor-panel-library:${itemKey}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
@@ -23251,7 +23537,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       </div>
                     </div>
                   ) : isPromptUploadMode || isPromptUpscaleMode ? (
-                    <div className="studio-segment-editor__prompt-info-card">
+                    <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
                       <strong>
                         {isPromptUploadMode
                             ? segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")
@@ -23265,31 +23551,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     </div>
                   ) : (
                     <>
-                      {isPromptAiPhotoMode
-                        ? renderSegmentVisualQualitySwitch({
-                            ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
-                            costForQuality: getSegmentAiPhotoCreditCost,
-                            disabled: isPromptVisualBaseDisabled,
-                            onChange: setSelectedSegmentAiPhotoQuality,
-                            value: selectedSegmentAiPhotoQuality,
-                          })
-                        : isPromptAiVideoMode
-                          ? renderSegmentVisualQualitySwitch({
-                              ariaLabel: workspaceText(locale, "Качество ИИ видео", "AI video quality"),
-                              costForQuality: getSegmentAiVideoCreditCost,
-                              disabled: isPromptVisualBaseDisabled,
-                              onChange: setSelectedSegmentAiVideoQuality,
-                              value: selectedSegmentAiVideoQuality,
-                            })
-                          : isPromptPhotoAnimationMode
-                            ? renderSegmentVisualQualitySwitch({
-                                ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
-                                costForQuality: getSegmentPhotoAnimationCreditCost,
-                                disabled: isPromptVisualBaseDisabled,
-                                onChange: setSelectedSegmentPhotoAnimationQuality,
-                                value: selectedSegmentPhotoAnimationQuality,
-                              })
-                            : null}
                       <div className={`studio-segment-editor__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                         <textarea
                           ref={segmentAiPhotoModalTextareaRef}
@@ -23332,23 +23593,51 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	                  ) : null}
 	                  {!isPromptLibraryMode ? (
 	                    <div className="studio-segment-editor__prompt-action-row">
-                      <button
-                        className="studio-segment-editor__prompt-action"
-                        type="button"
-                        disabled={isPromptVisualActionDisabled}
-                        onClick={handlePromptVisualAction}
-                      >
-                        {isPromptVisualBusy ? (
-                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                        ) : (
-                          <>
-                            <span>{promptVisualActionLabel}</span>
-                            {promptVisualActionCost !== null ? (
-                              <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
-                            ) : null}
-                          </>
-                        )}
-                      </button>
+                      {isPromptAiPhotoMode
+                        ? renderSegmentVisualQualitySwitch({
+                            ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
+                            className: "studio-segment-visual-quality--action-row",
+                            costForQuality: getSegmentAiPhotoCreditCost,
+                            disabled: isPromptVisualBaseDisabled,
+                            onChange: setSelectedSegmentAiPhotoQuality,
+                            value: selectedSegmentAiPhotoQuality,
+                          })
+                        : isPromptAiVideoMode
+                          ? renderSegmentVisualQualitySwitch({
+                              ariaLabel: workspaceText(locale, "Качество ИИ видео", "AI video quality"),
+                              className: "studio-segment-visual-quality--action-row",
+                              costForQuality: getSegmentAiVideoCreditCost,
+                              disabled: isPromptVisualBaseDisabled,
+                              onChange: setSelectedSegmentAiVideoQuality,
+                              value: selectedSegmentAiVideoQuality,
+                            })
+                          : isPromptPhotoAnimationMode
+                            ? renderSegmentVisualQualitySwitch({
+                                ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
+                                className: "studio-segment-visual-quality--action-row",
+                                costForQuality: getSegmentPhotoAnimationCreditCost,
+                                disabled: isPromptVisualBaseDisabled,
+                                onChange: setSelectedSegmentPhotoAnimationQuality,
+                                value: selectedSegmentPhotoAnimationQuality,
+                              })
+                            : null}
+                        <button
+                          className="studio-segment-editor__prompt-action"
+                          type="button"
+                          disabled={isPromptVisualActionDisabled}
+                          onClick={handlePromptVisualAction}
+                        >
+                          {isPromptVisualBusy ? (
+                            <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                          ) : (
+                            <>
+                              <span>{promptVisualActionLabel}</span>
+                              {promptVisualActionCost !== null ? (
+                                <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
+                              ) : null}
+                            </>
+                          )}
+                        </button>
                     </div>
                   ) : null}
                 </div>
@@ -23406,19 +23695,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           aria-label={workspaceText(
             locale,
             hasSegmentEditorChanges
-              ? `Обновить Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Создать Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
               : "Нет изменений для обновления",
             hasSegmentEditorChanges
-              ? `Update Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Create Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
               : "No changes to update",
           )}
           title={workspaceText(
             locale,
             hasSegmentEditorChanges
-              ? `Обновить Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Создать Shorts за ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
               : "Нет изменений для обновления",
             hasSegmentEditorChanges
-              ? `Update Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
+              ? `Create Shorts for ${formatCreditsCountLabel(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, locale)}`
               : "No changes to update",
           )}
           disabled={isSegmentEditorCreateShortsDisabled}
@@ -23435,7 +23724,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
               {hasSegmentEditorChanges ? (
                 <>
-                  <span>{workspaceText(locale, "Обновить Shorts", "Update Shorts")}</span>
+                  <span>{workspaceText(locale, "Создать Shorts", "Create Shorts")}</span>
                   <span className="studio-canvas-prompt__btn-cost">{STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST}</span>
                   <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
                 </>
@@ -23689,11 +23978,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   isAiVideoGenerationPending ||
                                   isPhotoAnimationGenerationPending ||
                                   isImageUpscalePending;
-                                const isSegmentPlaying = isActiveCard && playingSegmentEditorPreviewIndex === segment.index;
+                                const segmentPlaybackIndex = nextSegmentArrayIndex;
+                                const isSegmentPlaying = isActiveCard && playingSegmentEditorPreviewIndex === segmentPlaybackIndex;
                                 const isSegmentPlaybackRequested =
                                   isActiveCard &&
                                   getWorkspaceSegmentPreviewKind(segment) === "video" &&
-                                  (queuedSegmentEditorPlaybackIndex === segment.index || isSegmentPlaying);
+                                  (queuedSegmentEditorPlaybackIndex === segmentPlaybackIndex || isSegmentPlaying);
                                 const segmentMediaSurface = getWorkspaceSegmentResolvedMediaSurface(
                                   segment,
                                   "segment-carousel-card",
@@ -23703,8 +23993,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 );
                                 const mediaKind = segmentMediaSurface.previewKind;
                                 const mediaUrl = segmentMediaSurface.displayUrl;
-                                const mediaKey = mediaUrl ? getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface) : "";
-                                const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segment.index] ?? 0 : 0;
+                                const mediaKey = mediaUrl
+                                  ? `slot:${nextSegmentArrayIndex}|${getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface)}`
+                                  : "";
+                                const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
                                 const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
@@ -23714,7 +24006,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                                 return (
                                   <div
-                                    key={`segment:${segment.index}`}
+                                    key={`segment-card:${nextSegmentArrayIndex}:${segment.index}:${mediaKey}`}
                                     className={`studio-segment-editor__card ${slotClass}${isVisualGenerationPending ? " is-pending" : ""}${
                                       canResetVisual ? " is-visual-edited" : ""
                                     }`}
@@ -23725,6 +24017,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     <div className="studio-segment-editor__card-media">
                                       {mediaUrl ? (
                                         <WorkspaceSegmentPreviewCardMedia
+                                          allowBrowserPosterCapture={isActiveCard && segmentMediaSurface.allowBrowserPosterCapture}
                                           autoplay={false}
                                           fallbackPosterUrl={segmentMediaSurface.fallbackPosterUrl}
                                           imageLoading={isActiveCard ? "eager" : "lazy"}
@@ -23742,39 +24035,42 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           previewKind={mediaKind}
                                           videoRef={
                                             isActiveCard && mediaKind === "video"
-                                              ? getSegmentEditorPreviewVideoRef(segment.index)
+                                              ? getSegmentEditorPreviewVideoRef(segmentPlaybackIndex)
                                               : undefined
                                           }
-                                          onVideoTimeUpdate={handleSegmentEditorPreviewTimeUpdate(segment.index)}
+                                          onVideoTimeUpdate={handleSegmentEditorPreviewTimeUpdate(segmentPlaybackIndex)}
                                           onVideoEnded={() => {
                                             logSegmentEditorDiagnostics("client.segment-editor.preview-video.ended", {
+                                              playbackIndex: segmentPlaybackIndex,
                                               segmentIndex: segment.index,
                                             });
-                                            if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segment.index) {
+                                            if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segmentPlaybackIndex) {
                                               return;
                                             }
 
                                             setPlayingSegmentEditorPreviewIndex((current) =>
-                                              current === segment.index ? null : current,
+                                              current === segmentPlaybackIndex ? null : current,
                                             );
                                           }}
                                           onVideoPause={() => {
                                             logSegmentEditorDiagnostics("client.segment-editor.preview-video.paused", {
+                                              playbackIndex: segmentPlaybackIndex,
                                               segmentIndex: segment.index,
                                             });
-                                            if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segment.index) {
+                                            if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segmentPlaybackIndex) {
                                               return;
                                             }
 
                                             setPlayingSegmentEditorPreviewIndex((current) =>
-                                              current === segment.index ? null : current,
+                                              current === segmentPlaybackIndex ? null : current,
                                             );
                                           }}
                                           onVideoPlay={() => {
                                             logSegmentEditorDiagnostics("client.segment-editor.preview-video.playing", {
+                                              playbackIndex: segmentPlaybackIndex,
                                               segmentIndex: segment.index,
                                             });
-                                            setPlayingSegmentEditorPreviewIndex(segment.index);
+                                            setPlayingSegmentEditorPreviewIndex(segmentPlaybackIndex);
                                           }}
                                         />
                                       ) : (
@@ -23788,15 +24084,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           type="button"
                                           data-preview-kind={mediaKind}
                                           data-segment-array-index={nextSegmentArrayIndex}
-                                          data-segment-playback-index={segment.index}
+                                          data-segment-playback-index={segmentPlaybackIndex}
                                           aria-label={workspaceText(
                                             locale,
-                                            `Переключиться и воспроизвести сегмент ${segmentNumber}`,
-                                            `Switch to and play segment ${segmentNumber}`,
+                                            `Переключиться и воспроизвести сцену ${segmentNumber}`,
+                                            `Switch to and play scene ${segmentNumber}`,
                                           )}
                                           onClick={handleSideSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
-                                            segment.index,
+                                            segmentPlaybackIndex,
                                             mediaKind,
                                           )}
                                         />
@@ -23807,19 +24103,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           type="button"
                                           data-preview-kind={mediaKind}
                                           data-segment-array-index={nextSegmentArrayIndex}
-                                          data-segment-playback-index={segment.index}
+                                          data-segment-playback-index={segmentPlaybackIndex}
                                           disabled={isVisualGenerationPending}
                                           aria-label={
                                             mediaKind === "video" || studioSidebarSubtitlesEnabled
                                               ? isSegmentPlaying
-                                                ? workspaceText(locale, `Остановить сегмент ${segmentNumber}`, `Stop segment ${segmentNumber}`)
-                                                : workspaceText(locale, `Воспроизвести сегмент ${segmentNumber}`, `Play segment ${segmentNumber}`)
-                                              : workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)
+                                                ? workspaceText(locale, `Остановить сцену ${segmentNumber}`, `Stop scene ${segmentNumber}`)
+                                                : workspaceText(locale, `Воспроизвести сцену ${segmentNumber}`, `Play scene ${segmentNumber}`)
+                                              : workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)
                                           }
                                           aria-pressed={mediaKind === "video" || studioSidebarSubtitlesEnabled ? isSegmentPlaying : undefined}
                                           onClick={handleActiveSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
-                                            segment.index,
+                                            segmentPlaybackIndex,
                                             mediaKind,
                                           )}
                                         />
@@ -23856,8 +24152,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           <span>
                                             {workspaceText(
                                               locale,
-                                              `Сегмент ${segmentNumber} обновится автоматически`,
-                                              `Segment ${segmentNumber} will update automatically`,
+                                              `Сцена ${segmentNumber} обновится автоматически`,
+                                              `Scene ${segmentNumber} will update automatically`,
                                             )}
                                           </span>
                                         </div>
@@ -23867,7 +24163,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           <div className="studio-segment-editor__card-overlay-footer">
                                             <div className="studio-segment-editor__card-overlay-main">
                                               <div className="studio-segment-editor__card-copy">
-                                                <strong>{workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)}</strong>
+                                                <strong>{workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)}</strong>
                                                 <span>
                                                   {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
                                                   {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
@@ -23885,7 +24181,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         ) : (
                                           <div className="studio-segment-editor__card-overlay-main">
                                             <div className="studio-segment-editor__card-copy">
-                                              <strong>{workspaceText(locale, `Сегмент ${segmentNumber}`, `Segment ${segmentNumber}`)}</strong>
+                                              <strong>{workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)}</strong>
                                               <span>
                                                 {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
                                                 {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
@@ -24015,13 +24311,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
                                           event.preventDefault();
                                           if (index !== activeSegmentIndex) {
-                                            void handleSegmentEditorCardClick(index, segment.index, thumbPreviewKind);
+                                            void handleSegmentEditorCardClick(index, index, thumbPreviewKind);
                                           }
                                         }}
                                       >
                                         <span className="studio-segment-editor__thumb-media">
                                           {thumbUrl ? (
                                             <WorkspaceSegmentPreviewCardMedia
+                                              allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
                                               autoplay={false}
                                               fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
                                               imageLoading="lazy"
@@ -24693,6 +24990,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               <span className="studio-media-library__media">
                                 {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                 <WorkspaceSegmentPreviewCardMedia
+                                  allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
                                   autoplay={false}
                                   imageLoading="lazy"
                                   mediaKey={`media-library:${item.projectId}:${item.segmentIndex}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
@@ -24901,6 +25199,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <span className="studio-segment-editor__thumb-media">
                       {ghostPreviewUrl ? (
                         <WorkspaceSegmentPreviewCardMedia
+                          allowBrowserPosterCapture={ghostMediaSurface.allowBrowserPosterCapture}
                           autoplay={false}
                           fallbackPosterUrl={ghostMediaSurface.fallbackPosterUrl}
                           imageLoading="lazy"
@@ -25354,6 +25653,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               isSegmentEditorPreparingCustomVideo ||
                               isSegmentAiPhotoPromptImproving ||
                               isSegmentEditorUpscalingImage,
+                            label: workspaceText(locale, "Качество AI видео", "AI video quality"),
                             onChange: setSelectedSegmentAiVideoQuality,
                             value: selectedSegmentAiVideoQuality,
                           })}
@@ -25459,6 +25759,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	                              isSegmentEditorPreparingCustomVideo ||
 	                              isSegmentAiPhotoPromptImproving ||
 	                              isSegmentEditorUpscalingImage,
+	                            label: workspaceText(locale, "Качество AI анимации", "AI animation quality"),
 	                            onChange: setSelectedSegmentPhotoAnimationQuality,
 	                            value: selectedSegmentPhotoAnimationQuality,
 	                          })}
@@ -25703,6 +26004,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               isSegmentEditorPreparingCustomVideo ||
                               isSegmentAiPhotoPromptImproving ||
                               isSegmentEditorUpscalingImage,
+                            label: workspaceText(locale, "Качество AI фото", "AI photo quality"),
                             onChange: setSelectedSegmentAiPhotoQuality,
                             value: selectedSegmentAiPhotoQuality,
                           })}
@@ -25937,6 +26239,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     <span className="studio-ai-photo-modal__library-media">
                                       {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                       <WorkspaceSegmentPreviewCardMedia
+                                        allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
                                         autoplay={false}
                                         imageLoading="lazy"
                                         mediaKey={`segment-modal-library:${itemKey}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}

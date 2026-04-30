@@ -33,7 +33,6 @@ type Props = {
 };
 
 const heroPreviewImageSrc = "/hero_image.webp";
-const landingRefineCarouselImageSrc = "/t1.png";
 const heroPreviewMaxScroll = 600;
 
 const landingMessages = defineMessages({
@@ -88,14 +87,7 @@ const landingMessages = defineMessages({
     en: "Create finished videos in minutes — from idea to publishing in one place",
   },
   seeExamples: { ru: "Смотреть примеры", en: "View examples" },
-  segment: { ru: "Сегмент", en: "Segment" },
-  segmentText: { ru: "Текст сегмента", en: "Segment text" },
-  segmentTextStrong: {
-    ru: "Редактируйте текст сцены прямо на карточке сегмента",
-    en: "Edit scene text directly on the segment card",
-  },
   used: { ru: "Использован", en: "Used" },
-  visualChanged: { ru: "Визуал изменен", en: "Visual updated" },
   workflowEyebrow: { ru: "КАК ЭТО РАБОТАЕТ", en: "HOW IT WORKS" },
   workflowHeading: { ru: "От идеи до готового Shorts за 3 шага", en: "From idea to finished Shorts in 3 steps" },
 });
@@ -143,82 +135,6 @@ const landingRefineProofs: Record<Locale, Array<{ label: string; title: string; 
       label: "ANIMATION",
       title: "Animate scenes",
       description: "Add movement and bring images to life.",
-    },
-  ],
-};
-
-const landingRefineCarouselCards: Record<Locale, Array<{
-  number: string;
-  title: string;
-  time: string;
-  source: string;
-  tone: string;
-  media: string;
-  slotClass: string;
-  isEdited: boolean;
-}>> = {
-  ru: [
-    {
-      number: "02",
-      title: "Аргумент",
-      time: "00:05 - 00:10",
-      source: "Сток",
-      tone: "argument",
-      media: "hero",
-      slotClass: "is-side is-left",
-      isEdited: false,
-    },
-    {
-      number: "03",
-      title: "Финальный акцент",
-      time: "00:11 - 00:17",
-      source: "Кастом",
-      tone: "accent",
-      media: "hero",
-      slotClass: "is-active",
-      isEdited: true,
-    },
-    {
-      number: "04",
-      title: "CTA",
-      time: "00:18 - 00:22",
-      source: "AI фото",
-      tone: "cta",
-      media: "hero",
-      slotClass: "is-side is-right",
-      isEdited: false,
-    },
-  ],
-  en: [
-    {
-      number: "02",
-      title: "Argument",
-      time: "00:05 - 00:10",
-      source: "Stock",
-      tone: "argument",
-      media: "hero",
-      slotClass: "is-side is-left",
-      isEdited: false,
-    },
-    {
-      number: "03",
-      title: "Final emphasis",
-      time: "00:11 - 00:17",
-      source: "Custom",
-      tone: "accent",
-      media: "hero",
-      slotClass: "is-active",
-      isEdited: true,
-    },
-    {
-      number: "04",
-      title: "CTA",
-      time: "00:18 - 00:22",
-      source: "AI photo",
-      tone: "cta",
-      media: "hero",
-      slotClass: "is-side is-right",
-      isEdited: false,
     },
   ],
 };
@@ -277,7 +193,6 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const refineProofs = landingRefineProofs[locale];
-  const refineCarouselCards = landingRefineCarouselCards[locale];
   const guideCards = landingGuideCards[locale];
   const guidesIndexHref = localizePath(landingGuidesIndexHref);
 
@@ -733,7 +648,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
           </div>
         </section>
 
-        <section className="section lp-section lp-section--a lp-section--workflow">
+        <section className="section lp-section lp-section--a lp-section--workflow" id="workflow">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">{t(landingMessages.workflowEyebrow)}</p>
@@ -766,7 +681,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
           </div>
         </section>
 
-        <section className="section lp-section lp-section--b section--tight section--landing-refine" aria-labelledby="landing-refine-heading">
+        <section className="section lp-section lp-section--b section--tight section--landing-refine" id="control" aria-labelledby="landing-refine-heading">
           <div className="container landing-refine-layout">
             <div className="landing-refine-copy">
               <div className="lp-section-head lp-section-head--left landing-refine-head" data-reveal="">
@@ -789,116 +704,6 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
               </div>
             </div>
 
-            <div className="landing-refine-board" aria-hidden="true">
-              <div className="landing-refine-board__shell landing-refine-board__shell--linear" data-carousel-reveal="">
-                <div className="landing-refine-board__editor">
-                  <div className="studio-segment-editor__stage">
-                    <div className="studio-segment-editor__carousel">
-                      <button className="studio-segment-editor__arrow" type="button" tabIndex={-1} aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                          <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-
-                      <div className="studio-segment-editor__cards">
-                        {refineCarouselCards.map((card) => {
-                          const isActiveCard = card.slotClass === "is-active";
-
-                          return (
-                            <article
-                              className={`studio-segment-editor__card ${card.slotClass}${card.isEdited ? " is-visual-edited" : ""}`}
-                              key={card.number}
-                            >
-                              <div className="studio-segment-editor__card-media">
-                                <div className={`landing-refine-board__editor-shot landing-refine-board__editor-shot--${card.tone}`}>
-                                  {card.media === "hero" ? (
-                                    <img
-                                      className="landing-refine-board__editor-shot-image"
-                                      src={landingRefineCarouselImageSrc}
-                                      alt=""
-                                      loading="lazy"
-                                      decoding="async"
-                                    />
-                                  ) : null}
-                                </div>
-
-                                {isActiveCard ? (
-                                  <>
-                                    <div className="studio-segment-editor__card-visual-meta">
-                                      <span className="studio-segment-editor__card-visual-status">{t(landingMessages.visualChanged)}</span>
-                                      <div className="studio-segment-editor__card-visual-actions">
-                                        <button
-                                          className="studio-segment-editor__card-visual-edit"
-                                          type="button"
-                                          tabIndex={-1}
-                                          aria-hidden="true"
-                                        >
-                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                                            <path
-                                              d="M12 20h9"
-                                              stroke="currentColor"
-                                              strokeWidth="1.8"
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                            />
-                                            <path
-                                              d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
-                                              stroke="currentColor"
-                                              strokeWidth="1.8"
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                            />
-                                          </svg>
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="landing-refine-board__editor-caption">
-                                      <span>{t(landingMessages.segmentText)}</span>
-                                      <strong>{t(landingMessages.segmentTextStrong)}</strong>
-                                    </div>
-                                  </>
-                                ) : null}
-
-                                <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
-                                  {isActiveCard ? (
-                                    <div className="studio-segment-editor__card-overlay-footer">
-                                      <div className="studio-segment-editor__card-overlay-main">
-                                        <div className="studio-segment-editor__card-copy">
-                                          <strong>{t(landingMessages.segment)} {card.number}</strong>
-                                          <span>{card.time}</span>
-                                        </div>
-                                      </div>
-                                      <div className="studio-segment-editor__card-footer-actions">
-                                        <small className="studio-segment-editor__card-badge">{card.source}</small>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="studio-segment-editor__card-overlay-main">
-                                      <div className="studio-segment-editor__card-copy">
-                                        <strong>{t(landingMessages.segment)} {card.number}</strong>
-                                        <span>{card.time}</span>
-                                      </div>
-                                      <small className="studio-segment-editor__card-badge">{card.source}</small>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-
-                      <button className="studio-segment-editor__arrow" type="button" tabIndex={-1} aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                          <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -942,30 +747,11 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                 </article>
               </div>
 
-              <div className="landing-publish-regular__actions">
-                <button className="btn btn--primary btn--premium-cta route-button" type="button" onClick={openPrimaryFlow}>
-                  <span className="btn--premium-cta__label">{t(landingMessages.heroCta)}</span>
-                  <svg
-                    className="btn--premium-cta__arrow"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
             </div>
           </div>
         </section>
 
-        <section className="section lp-section lp-section--b section--tight section--examples-cta" aria-labelledby="examples-cta-heading">
+        <section id="examples" className="section lp-section lp-section--b section--tight section--examples-cta" aria-labelledby="examples-cta-heading">
           <div className="container">
             <div className="lp-section-head lp-section-head--left" data-reveal="">
               <p className="lp-eyebrow">{locale === "en" ? "EXAMPLES" : "ПРИМЕРЫ"}</p>

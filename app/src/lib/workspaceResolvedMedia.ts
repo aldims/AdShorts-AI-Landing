@@ -83,6 +83,7 @@ export const resolveWorkspaceMediaSurface = (
   let preloadPolicy: WorkspaceResolvedMediaPreloadPolicy = "none";
   let preferMutedAutoplay = false;
   let subtitleMode: WorkspaceResolvedMediaSubtitleMode = "none";
+  let allowBrowserPosterCapture = false;
 
   if (previewKind === "video") {
     switch (input.context) {
@@ -93,6 +94,7 @@ export const resolveWorkspaceMediaSurface = (
         preferPosterFrame = !isPlaybackRequested;
         primePausedFrame = !isPlaybackRequested && forceMountVideoWhenIdle && !hasStablePosterFrame;
         subtitleMode = "active-only";
+        allowBrowserPosterCapture = true;
         break;
       }
       case "segment-thumb": {
@@ -111,6 +113,7 @@ export const resolveWorkspaceMediaSurface = (
       case "segment-visual-preview": {
         mountVideoWhenIdle = true;
         preloadPolicy = "auto";
+        allowBrowserPosterCapture = true;
         break;
       }
       case "media-library-tile":
@@ -125,13 +128,15 @@ export const resolveWorkspaceMediaSurface = (
         mountVideoWhenIdle = true;
         preloadPolicy = "auto";
         preferMutedAutoplay = true;
+        allowBrowserPosterCapture = true;
         break;
       }
     }
   }
 
   return {
-    allowBrowserPosterCapture: previewKind === "video" && Boolean(viewerUrl) && canCapturePosterInBrowser(viewerUrl),
+    allowBrowserPosterCapture:
+      allowBrowserPosterCapture && previewKind === "video" && Boolean(viewerUrl) && canCapturePosterInBrowser(viewerUrl),
     displayUrl,
     fallbackPosterUrl: fallbackPosterUrl || null,
     fallbackUrls,

@@ -140,6 +140,31 @@ describe("media library photo sources", () => {
     });
   });
 
+  it("uses media asset creation dates for persisted library items", () => {
+    const segment = createPhotoSegment();
+    segment.originalAsset = segment.originalAsset
+      ? { ...segment.originalAsset, createdAt: "2026-04-09T10:00:00.000Z" }
+      : segment.originalAsset;
+    segment.currentAsset = segment.currentAsset
+      ? { ...segment.currentAsset, createdAt: "2026-04-10T10:00:00.000Z" }
+      : segment.currentAsset;
+    const editedProject = {
+      ...project,
+      createdAt: "2026-04-08T10:00:00.000Z",
+      generatedAt: "2026-04-08T10:00:00.000Z",
+      updatedAt: "2026-04-12T10:00:00.000Z",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(editedProject, session(segment));
+
+    expect(items.find((item) => item.kind === "ai_photo")?.createdAt).toBe(
+      Date.parse("2026-04-09T10:00:00.000Z"),
+    );
+    expect(items.find((item) => item.kind === "photo_animation")?.createdAt).toBe(
+      Date.parse("2026-04-10T10:00:00.000Z"),
+    );
+  });
+
   it("does not expose deleted segment assets even when preview urls are still present", () => {
     const segment = createPhotoSegment();
     segment.originalAsset = {

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { defineMessages, useLocale } from "../lib/i18n";
+import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 
 type WorkspaceProfile = {
   balance: number;
@@ -39,6 +39,13 @@ const getDaysLeft = (value: Date) => {
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 };
 
+const formatExpiryDate = (value: Date, locale: Locale) =>
+  new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
+    day: "2-digit",
+    month: locale === "en" ? "short" : "2-digit",
+    year: "numeric",
+  }).format(value);
+
 const workspaceStatusMessages = defineMessages({
   balance: {
     ru: "Баланс",
@@ -64,18 +71,25 @@ const workspaceStatusMessages = defineMessages({
     ru: "Тариф активен.",
     en: "Plan is active.",
   },
+  tariffActiveUntil: {
+    ru: "Тариф активен до {date}.",
+    en: "Plan is active until {date}.",
+  },
 });
 
 export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
-  const { localizePath, t } = useLocale();
+  const { locale, localizePath, t } = useLocale();
   const normalizedPlan = normalizePlan(profile?.plan);
   const expiryDate = normalizeExpiry(profile?.expiresAt);
   const daysLeft = expiryDate ? getDaysLeft(expiryDate) : null;
   const hasPaidPlan = normalizedPlan !== "FREE" && normalizedPlan !== "…";
+  const hasExpiringPlan = normalizedPlan === "PRO" || normalizedPlan === "ULTRA";
   const isExpiringSoon = Boolean(hasPaidPlan && daysLeft !== null && daysLeft <= 3);
 
   let tooltipText = t(workspaceStatusMessages.freePlanTooltip);
-  if (hasPaidPlan) {
+  if (hasExpiringPlan && expiryDate) {
+    tooltipText = t(workspaceStatusMessages.tariffActiveUntil).replace("{date}", formatExpiryDate(expiryDate, locale));
+  } else if (hasPaidPlan) {
     tooltipText = t(workspaceStatusMessages.tariffActive);
   }
 

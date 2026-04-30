@@ -113,6 +113,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.preloadPolicy).toBe("none");
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(false);
+    expect(surface.allowBrowserPosterCapture).toBe(false);
   });
 
   it("keeps media-library video tiles poster-only until the viewer opens", () => {
@@ -127,7 +128,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.preloadPolicy).toBe("none");
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(false);
-    expect(surface.allowBrowserPosterCapture).toBe(true);
+    expect(surface.allowBrowserPosterCapture).toBe(false);
   });
 
   it("configures viewer video for direct playback instead of poster-only mode", () => {
@@ -143,6 +144,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.preloadPolicy).toBe("auto");
     expect(surface.preferMutedAutoplay).toBe(true);
     expect(surface.preferPosterFrame).toBe(false);
+    expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
   it("leaves image surfaces free from video-specific policies", () => {

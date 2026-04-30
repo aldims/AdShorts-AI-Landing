@@ -571,8 +571,8 @@ describe("WorkspacePage studio locale defaults", () => {
   it("queues playback by default when activating another carousel segment", () => {
     const segments = [{ index: 0 }, { index: 7 }, { index: 12 }];
 
-    expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 1)).toBe(7);
-    expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 2)).toBe(12);
+    expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 1)).toBe(1);
+    expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 2)).toBe(2);
   });
 
   it("allows silent carousel activation when pending playback is explicitly disabled", () => {
