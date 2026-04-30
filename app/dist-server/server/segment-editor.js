@@ -168,7 +168,7 @@ const detectWorkspaceSegmentSourceKind = (entry) => {
 };
 const getProjectMediaEntryPreviewUrl = (entry) => getProjectMediaEntryRenderableUrl(entry, entry?.preview, entry?.download_url, entry?.url);
 const getProjectMediaEntryPlaybackUrl = (entry) => pickWorkspaceRenderableMediaUrl(entry?.download_url, entry?.url, entry?.preview);
-const getProjectOriginalMediaEntries = (payload) => pickProjectMediaEntries(payload?.source_video_urls, payload?.generation_settings?.original_videos);
+const getProjectOriginalMediaEntries = (payload) => pickProjectMediaEntries(payload?.source_video_urls, payload?.generation_settings?.source_video_urls, payload?.generation_settings?.original_videos);
 const getProjectCurrentMediaEntries = (payload, originalEntries) => pickProjectMediaEntries(payload?.generation_settings?.current_rendered_segments, payload?.video_urls, payload?.background_urls, payload?.generation_settings?.video_urls, payload?.generation_settings?.background_urls, originalEntries);
 const buildProjectMediaAssetIndex = (assets) => new Map(assets
     .filter((asset) => typeof asset.assetId === "number" && asset.assetId > 0)
@@ -455,6 +455,30 @@ const buildWorkspaceSegmentEditorVideoUrl = (projectId, segmentIndex, source, de
     }
     return `${previewUrl.pathname}${previewUrl.search}`;
 };
+const buildWorkspaceMediaAssetPosterUrl = (asset) => {
+    const assetId = normalizeInteger(asset?.assetId);
+    if (assetId === null || assetId <= 0 || !isWorkspaceVideoMediaAssetRef(asset)) {
+        return null;
+    }
+    const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, env.appUrl);
+    const version = [
+        asset?.createdAt,
+        asset?.expiresAt,
+        asset?.storageKey,
+        asset?.mimeType,
+        asset?.downloadPath,
+        asset?.downloadUrl,
+        asset?.playbackUrl,
+        asset?.originalUrl,
+    ]
+        .map(normalizeText)
+        .filter(Boolean)
+        .join(":");
+    if (version) {
+        posterUrl.searchParams.set("v", version);
+    }
+    return `${posterUrl.pathname}${posterUrl.search}`;
+};
 export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId, payload, options = {}) => {
     const sessionProjectId = normalizePositiveProjectId(requestedProjectId) ?? requestedProjectId;
     const upstreamProjectId = normalizePositiveProjectId(payload.project_id);
@@ -553,6 +577,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         currentPlaybackUrl: hasCurrentVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "playback", currentVideoMarker)
             : null,
+        currentPosterUrl: buildWorkspaceMediaAssetPosterUrl(currentAsset),
         currentPreviewUrl: hasCurrentVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "preview", currentVideoMarker)
             : null,
@@ -567,6 +592,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         originalPlaybackUrl: hasOriginalVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "playback", originalVideoMarker)
             : null,
+        originalPosterUrl: buildWorkspaceMediaAssetPosterUrl(originalAsset),
         originalPreviewUrl: hasOriginalVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
             : null,

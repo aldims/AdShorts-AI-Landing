@@ -9,10 +9,12 @@ import {
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getWorkspaceInitialStudioDefaults,
+  getWorkspaceSegmentDraftPosterUrl,
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
   getWorkspaceSegmentDraftVideoUrl,
   getWorkspaceSegmentMediaIdentityKey,
+  getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   isWorkspaceSegmentDraftVisualResettable,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
@@ -20,6 +22,7 @@ import {
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveStudioVoiceIdForLanguage,
+  shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "./WorkspacePage";
 
 type DraftSegment = Parameters<typeof isWorkspaceSegmentDraftVisualResettable>[0];
@@ -78,6 +81,7 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   currentExternalPlaybackUrl: null,
   currentExternalPreviewUrl: null,
   currentPlaybackUrl: null,
+  currentPosterUrl: null,
   currentPreviewUrl: null,
   currentSourceKind: "unknown",
   customVideo: null,
@@ -93,6 +97,7 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   originalExternalPlaybackUrl: null,
   originalExternalPreviewUrl: null,
   originalPlaybackUrl: null,
+  originalPosterUrl: null,
   originalPreviewUrl: null,
   originalSourceKind: "unknown",
   originalText: "Segment",
@@ -138,6 +143,7 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
       currentExternalPlaybackUrl: segment.currentExternalPlaybackUrl,
       currentExternalPreviewUrl: segment.currentExternalPreviewUrl,
       currentPlaybackUrl: segment.currentPlaybackUrl,
+      currentPosterUrl: segment.currentPosterUrl,
       currentPreviewUrl: segment.currentPreviewUrl,
       currentSourceKind: segment.currentSourceKind,
       duration: segment.duration,
@@ -148,6 +154,7 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
       originalExternalPlaybackUrl: segment.originalExternalPlaybackUrl,
       originalExternalPreviewUrl: segment.originalExternalPreviewUrl,
       originalPlaybackUrl: segment.originalPlaybackUrl,
+      originalPosterUrl: segment.originalPosterUrl,
       originalPreviewUrl: segment.originalPreviewUrl,
       originalSourceKind: segment.originalSourceKind,
       speechDuration: segment.speechDuration,
@@ -540,9 +547,66 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentDraftVideoUrl(segment)).toBe("/api/workspace/media-assets/909/playback");
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe("/api/workspace/media-assets/909/poster");
     expect(getWorkspaceSegmentDraftPreviewFallbackUrls(segment, "video")).toEqual([
       "/api/workspace/media-assets/909/playback",
     ]);
+  });
+
+  it("uses server-provided posters for video segment previews", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(707, { mediaType: "video", role: "segment_current" }),
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&source=current&delivery=playback",
+      currentPosterUrl: "/api/workspace/media-assets/707/poster?v=current",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&source=current&delivery=preview",
+      mediaType: "video",
+      originalAsset: createMediaAsset(101, { mediaType: "video", role: "segment_original" }),
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&source=original&delivery=playback",
+      originalPosterUrl: "/api/workspace/media-assets/101/poster?v=original",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&source=original&delivery=preview",
+    });
+
+    expect(getWorkspaceSegmentDraftPreviewUrl(segment)).toContain("/api/workspace/project-segment-video");
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe("/api/workspace/media-assets/101/poster?v=original");
+  });
+
+  it("does not use a video asset proxy as a still poster for server photo animations", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(1692, {
+        kind: "rendered_segment",
+        mediaType: "video",
+        role: "rendered_segment",
+        sourceKind: "ai_generated",
+      }),
+      currentExternalPlaybackUrl: "/api/workspace/media-assets/1692",
+      currentExternalPreviewUrl: "/api/workspace/media-assets/1692",
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=0&source=current&delivery=playback",
+      currentPosterUrl: "/api/workspace/media-assets/1692/poster?v=current",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=0&source=current&delivery=preview",
+      mediaType: "video",
+      originalAsset: createMediaAsset(1632, {
+        kind: "source_ai_image",
+        mediaType: "photo",
+        role: "source_ai_image",
+        sourceKind: "ai_generated",
+      }),
+      originalExternalPlaybackUrl: "/api/workspace/media-assets/1632",
+      originalExternalPreviewUrl: "/api/workspace/media-assets/1632",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=0&source=original&delivery=preview",
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentDraftPreviewUrl(segment)).toBe("/api/workspace/media-assets/1632");
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe("/api/workspace/media-assets/1632");
+
+    const surface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: false,
+    });
+
+    expect(surface.previewKind).toBe("video");
+    expect(surface.displayUrl).toBe(segment.currentPlaybackUrl);
+    expect(surface.viewerUrl).toBe(segment.currentPlaybackUrl);
+    expect(surface.posterUrl).toBe("/api/workspace/media-assets/1632");
   });
 
   it("changes segment media identity when only the media-library item key changes", () => {
@@ -580,6 +644,30 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 1, { pendingPlaybackIndex: null })).toBeNull();
     expect(resolveWorkspaceSegmentActivationPlaybackIndex(segments, 1, { pendingPlaybackIndex: 42 })).toBe(42);
+  });
+
+  it("blocks segment preview video playback when the surface is not allowed to play", () => {
+    expect(
+      shouldAllowWorkspaceSegmentPreviewVideoPlayback({
+        allowVideoPlayback: false,
+        isPlaybackRequested: true,
+        previewKind: "video",
+      }),
+    ).toBe(false);
+    expect(
+      shouldAllowWorkspaceSegmentPreviewVideoPlayback({
+        allowVideoPlayback: true,
+        isPlaybackRequested: true,
+        previewKind: "video",
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowWorkspaceSegmentPreviewVideoPlayback({
+        allowVideoPlayback: true,
+        isPlaybackRequested: true,
+        previewKind: "image",
+      }),
+    ).toBe(false);
   });
 
   it("resets a media-library replacement back to the original visual", () => {

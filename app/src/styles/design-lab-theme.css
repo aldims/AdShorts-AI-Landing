@@ -21266,9 +21266,8 @@ textarea {
 .studio-segment-editor__generation-spinner {
   width: 42px;
   height: 42px;
-  border: 3px solid rgba(255, 255, 255, 0.14);
-  border-top-color: rgba(255, 255, 255, 0.92);
-  border-right-color: rgba(139, 92, 246, 0.86);
+  border: 3px solid transparent;
+  border-top-color: rgba(139, 92, 246, 0.92);
   border-radius: 999px;
   animation: studio-spin 0.8s linear infinite;
   box-shadow: 0 0 28px rgba(139, 92, 246, 0.28);
@@ -22678,8 +22677,8 @@ textarea {
   z-index: 1;
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: rgba(160, 130, 255, 0.9);
+  border: 2px solid transparent;
+  border-top-color: rgba(160, 130, 255, 0.92);
   border-radius: 999px;
   animation: studio-spin 0.75s linear infinite;
 }

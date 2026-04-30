@@ -67,6 +67,7 @@ import {
 import {
   filterWorkspaceStillAssetUrls,
   getWorkspaceSegmentPausedPreviewTime,
+  isLikelyVideoAssetUrl,
   sanitizeWorkspaceSegmentPosterUrl,
 } from "../lib/workspaceSegmentPreview";
 import { hasWorkspaceSegmentEditorStructureChanged } from "../lib/workspaceSegmentEditorStructure";
@@ -585,6 +586,7 @@ type WorkspaceSegmentEditorSegment = {
   currentExternalPlaybackUrl: string | null;
   currentExternalPreviewUrl: string | null;
   currentPlaybackUrl: string | null;
+  currentPosterUrl: string | null;
   currentPreviewUrl: string | null;
   currentSourceKind: WorkspaceSegmentSourceKind;
   duration: number;
@@ -595,6 +597,7 @@ type WorkspaceSegmentEditorSegment = {
   originalExternalPlaybackUrl: string | null;
   originalExternalPreviewUrl: string | null;
   originalPlaybackUrl: string | null;
+  originalPosterUrl: string | null;
   originalPreviewUrl: string | null;
   originalSourceKind: WorkspaceSegmentSourceKind;
   speechDuration: number | null;
@@ -1006,6 +1009,7 @@ type WorkspaceSegmentAiVideoJobStatusResponse = {
 
 type WorkspaceSegmentPreviewCardMediaProps = {
   allowBrowserPosterCapture?: boolean;
+  allowVideoPlayback?: boolean;
   autoplay?: boolean;
   fallbackPosterUrl?: string | null;
   imageLoading?: "eager" | "lazy";
@@ -1028,6 +1032,16 @@ type WorkspaceSegmentPreviewCardMediaProps = {
   previewUrl: string;
   videoRef?: (element: HTMLVideoElement | null) => void;
 };
+
+export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
+  allowVideoPlayback?: boolean;
+  autoplay?: boolean;
+  isPlaybackRequested?: boolean;
+  previewKind: WorkspaceSegmentPreviewKind;
+}) =>
+  options.previewKind === "video" &&
+  (options.allowVideoPlayback ?? true) &&
+  Boolean(options.autoplay || options.isPlaybackRequested);
 
 type WorkspaceSegmentSubtitleOverlayProps = {
   clipCurrentTime: number;
@@ -3746,7 +3760,7 @@ const getWorkspaceSegmentOriginalPhotoAsset = (segment: WorkspaceSegmentEditorDr
 
 const getWorkspaceSegmentCurrentPhotoAsset = (segment: WorkspaceSegmentEditorDraftSegment): StudioCustomVideoFile | null => {
   const currentStillUrl =
-    filterWorkspaceStillAssetUrls([
+    getWorkspaceSegmentStillPreviewUrlsFromValues(segment, [
       segment.currentExternalPreviewUrl,
       segment.currentExternalPlaybackUrl,
       segment.currentPreviewUrl,
@@ -4195,6 +4209,38 @@ const isWorkspaceVideoMediaAsset = (asset: WorkspaceMediaAssetRef | null | undef
   return mediaType === "video" || mimeType.startsWith("video/");
 };
 
+const getWorkspaceMediaAssetBaseProxyUrlAssetId = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)$/i);
+    if (!match) {
+      return null;
+    }
+
+    const assetId = Number(match[1]);
+    return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
+  } catch {
+    return null;
+  }
+};
+
+const isWorkspaceMediaAssetRefAssetId = (
+  asset: WorkspaceMediaAssetRef | null | undefined,
+  assetId: number | null,
+) => {
+  if (assetId === null) {
+    return false;
+  }
+
+  const candidateAssetId = Number(asset?.assetId);
+  return Number.isFinite(candidateAssetId) && Math.trunc(candidateAssetId) === assetId;
+};
+
 const isWorkspaceAiPhotoRenderedStillAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
   if (!isWorkspaceVideoMediaAsset(asset)) {
     return false;
@@ -4276,6 +4322,12 @@ const getWorkspaceSegmentVideoAssetPosterUrl = (
         ],
   )[0] ?? null;
 
+const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  segment.currentPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.currentAsset);
+
+const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  segment.originalPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.originalAsset);
+
 const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {
   const assetId = Number(asset?.assetId);
   if (Number.isFinite(assetId) && assetId > 0) {
@@ -4303,6 +4355,7 @@ const getWorkspaceSegmentCurrentVisualIdentityKey = (
     | "currentExternalPlaybackUrl"
     | "currentExternalPreviewUrl"
     | "currentPlaybackUrl"
+    | "currentPosterUrl"
     | "currentPreviewUrl"
   >,
 ) =>
@@ -4310,6 +4363,7 @@ const getWorkspaceSegmentCurrentVisualIdentityKey = (
   [
     segment.currentExternalPlaybackUrl,
     segment.currentExternalPreviewUrl,
+    segment.currentPosterUrl,
     segment.currentPlaybackUrl,
     segment.currentPreviewUrl,
   ]
@@ -4324,6 +4378,7 @@ const getWorkspaceSegmentOriginalVisualIdentityKey = (
     | "originalExternalPlaybackUrl"
     | "originalExternalPreviewUrl"
     | "originalPlaybackUrl"
+    | "originalPosterUrl"
     | "originalPreviewUrl"
   >,
 ) =>
@@ -4331,6 +4386,7 @@ const getWorkspaceSegmentOriginalVisualIdentityKey = (
   [
     segment.originalExternalPlaybackUrl,
     segment.originalExternalPreviewUrl,
+    segment.originalPosterUrl,
     segment.originalPlaybackUrl,
     segment.originalPreviewUrl,
   ]
@@ -4378,6 +4434,7 @@ export const preserveWorkspaceSegmentEditorOriginalVisualReferences = (
       originalExternalPlaybackUrl: baselineSegment.originalExternalPlaybackUrl,
       originalExternalPreviewUrl: baselineSegment.originalExternalPreviewUrl,
       originalPlaybackUrl: baselineSegment.originalPlaybackUrl,
+      originalPosterUrl: baselineSegment.originalPosterUrl,
       originalPreviewUrl: baselineSegment.originalPreviewUrl,
       originalSourceKind: baselineSegment.originalSourceKind,
     };
@@ -4716,20 +4773,65 @@ const getUniqueWorkspaceSegmentPreviewUrls = (values: Array<string | null | unde
     ),
   );
 
+const getWorkspaceSegmentStillPreviewUrlsFromValues = (
+  segment: Pick<
+    WorkspaceSegmentEditorDraftSegment,
+    | "currentAsset"
+    | "originalAsset"
+  >,
+  values: Array<string | null | undefined>,
+) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter((value) => {
+          if (!value) {
+            return false;
+          }
+
+          const mediaAssetId = getWorkspaceMediaAssetBaseProxyUrlAssetId(value);
+          if (mediaAssetId !== null) {
+            if (
+              (isWorkspaceVideoMediaAsset(segment.currentAsset) &&
+                isWorkspaceMediaAssetRefAssetId(segment.currentAsset, mediaAssetId)) ||
+              (isWorkspaceVideoMediaAsset(segment.originalAsset) &&
+                isWorkspaceMediaAssetRefAssetId(segment.originalAsset, mediaAssetId))
+            ) {
+              return false;
+            }
+
+            if (
+              (isWorkspacePhotoMediaAsset(segment.currentAsset) &&
+                isWorkspaceMediaAssetRefAssetId(segment.currentAsset, mediaAssetId)) ||
+              (isWorkspacePhotoMediaAsset(segment.originalAsset) &&
+                isWorkspaceMediaAssetRefAssetId(segment.originalAsset, mediaAssetId))
+            ) {
+              return true;
+            }
+          }
+
+          return !isLikelyVideoAssetUrl(value);
+        }),
+    ),
+  );
+
 const getWorkspaceSegmentStillPreviewUrls = (
   segment: Pick<
     WorkspaceSegmentEditorDraftSegment,
+    | "currentAsset"
     | "currentExternalPlaybackUrl"
     | "currentExternalPreviewUrl"
     | "currentPlaybackUrl"
     | "currentPreviewUrl"
+    | "originalAsset"
     | "originalExternalPlaybackUrl"
     | "originalExternalPreviewUrl"
     | "originalPlaybackUrl"
     | "originalPreviewUrl"
   >,
 ) =>
-  filterWorkspaceStillAssetUrls([
+  getWorkspaceSegmentStillPreviewUrlsFromValues(segment, [
     segment.currentExternalPreviewUrl,
     segment.originalExternalPreviewUrl,
     segment.currentExternalPlaybackUrl,
@@ -4743,10 +4845,12 @@ const getWorkspaceSegmentStillPreviewUrls = (
 const getWorkspaceSegmentPreferredStillPreviewUrl = (
   segment: Pick<
     WorkspaceSegmentEditorDraftSegment,
+    | "currentAsset"
     | "currentExternalPlaybackUrl"
     | "currentExternalPreviewUrl"
     | "currentPlaybackUrl"
     | "currentPreviewUrl"
+    | "originalAsset"
     | "originalExternalPlaybackUrl"
     | "originalExternalPreviewUrl"
     | "originalPlaybackUrl"
@@ -4874,6 +4978,7 @@ const clearWorkspaceSegmentCurrentVisualReference = (
   currentExternalPlaybackUrl: null,
   currentExternalPreviewUrl: null,
   currentPlaybackUrl: null,
+  currentPosterUrl: null,
   currentPreviewUrl: null,
   currentSourceKind: "unknown",
 });
@@ -4927,6 +5032,7 @@ const ensureWorkspaceSegmentOriginalProxyReference = (
     originalExternalPlaybackUrl: options?.force ? null : segment.originalExternalPlaybackUrl,
     originalExternalPreviewUrl: options?.force ? null : segment.originalExternalPreviewUrl,
     originalPlaybackUrl: buildWorkspaceSegmentOriginalProxyUrl(normalizedProjectId, segment.index, "playback"),
+    originalPosterUrl: options?.force ? null : segment.originalPosterUrl,
     originalPreviewUrl: buildWorkspaceSegmentOriginalProxyUrl(normalizedProjectId, segment.index, "preview"),
     originalSourceKind: options?.force || segment.originalSourceKind === "upload" ? "unknown" : segment.originalSourceKind,
   };
@@ -4971,6 +5077,7 @@ export const resetWorkspaceSegmentDraftVisualToOriginal = (
       originalAsset: null,
       originalExternalPlaybackUrl: null,
       originalExternalPreviewUrl: null,
+      originalPosterUrl: null,
       originalSourceKind: "unknown",
     };
 
@@ -4980,6 +5087,7 @@ export const resetWorkspaceSegmentDraftVisualToOriginal = (
         originalAsset: correctedOriginalSegment.originalAsset,
         originalExternalPlaybackUrl: correctedOriginalSegment.originalExternalPlaybackUrl,
         originalExternalPreviewUrl: correctedOriginalSegment.originalExternalPreviewUrl,
+        originalPosterUrl: correctedOriginalSegment.originalPosterUrl,
         originalSourceKind: correctedOriginalSegment.originalSourceKind,
       });
     }
@@ -4990,6 +5098,7 @@ export const resetWorkspaceSegmentDraftVisualToOriginal = (
       currentExternalPlaybackUrl: null,
       currentExternalPreviewUrl: null,
       currentPlaybackUrl: sourceSegment.originalPlaybackUrl,
+      currentPosterUrl: sourceSegment.originalPosterUrl,
       currentPreviewUrl: sourceSegment.originalPreviewUrl,
       currentSourceKind: "unknown",
       mediaType: getWorkspaceSegmentOriginalMediaType(correctedOriginalSegment),
@@ -5006,6 +5115,7 @@ export const resetWorkspaceSegmentDraftVisualToOriginal = (
     currentExternalPlaybackUrl: sourceSegment.originalExternalPlaybackUrl,
     currentExternalPreviewUrl: sourceSegment.originalExternalPreviewUrl,
     currentPlaybackUrl: sourceSegment.originalPlaybackUrl,
+    currentPosterUrl: sourceSegment.originalPosterUrl,
     currentPreviewUrl: sourceSegment.originalPreviewUrl,
     currentSourceKind: sourceSegment.originalSourceKind,
     mediaType: getWorkspaceSegmentOriginalMediaType(sourceSegment),
@@ -5022,12 +5132,14 @@ const normalizeWorkspaceSegmentEditorSegmentUrls = <
     currentExternalPlaybackUrl?: string | null;
     currentExternalPreviewUrl?: string | null;
     currentPlaybackUrl?: string | null;
+    currentPosterUrl?: string | null;
     currentPreviewUrl?: string | null;
     currentVideoUrl?: string | null;
     currentSourceKind?: WorkspaceSegmentSourceKind | string | null;
     originalExternalPlaybackUrl?: string | null;
     originalExternalPreviewUrl?: string | null;
     originalPlaybackUrl?: string | null;
+    originalPosterUrl?: string | null;
     originalPreviewUrl?: string | null;
     originalVideoUrl?: string | null;
     originalSourceKind?: WorkspaceSegmentSourceKind | string | null;
@@ -5041,6 +5153,7 @@ const normalizeWorkspaceSegmentEditorSegmentUrls = <
   currentPlaybackUrl: normalizeWorkspaceSegmentEditorUrl(
     segment.currentPlaybackUrl ?? segment.currentPreviewUrl ?? segment.currentVideoUrl,
   ),
+  currentPosterUrl: normalizeWorkspaceSegmentEditorUrl(segment.currentPosterUrl),
   currentPreviewUrl: normalizeWorkspaceSegmentEditorUrl(
     segment.currentPreviewUrl ?? segment.currentPlaybackUrl ?? segment.currentVideoUrl,
   ),
@@ -5050,6 +5163,7 @@ const normalizeWorkspaceSegmentEditorSegmentUrls = <
   originalPlaybackUrl: normalizeWorkspaceSegmentEditorUrl(
     segment.originalPlaybackUrl ?? segment.originalPreviewUrl ?? segment.originalVideoUrl,
   ),
+  originalPosterUrl: normalizeWorkspaceSegmentEditorUrl(segment.originalPosterUrl),
   originalPreviewUrl: normalizeWorkspaceSegmentEditorUrl(
     segment.originalPreviewUrl ?? segment.originalPlaybackUrl ?? segment.originalVideoUrl,
   ),
@@ -5083,10 +5197,12 @@ const shouldPreferEstimatedDurationForDraftSegment = (segment: WorkspaceSegmentE
     segment.currentAsset ||
       segment.originalAsset ||
       segment.currentPlaybackUrl ||
+      segment.currentPosterUrl ||
       segment.currentPreviewUrl ||
       segment.currentExternalPlaybackUrl ||
       segment.currentExternalPreviewUrl ||
       segment.originalPlaybackUrl ||
+      segment.originalPosterUrl ||
       segment.originalPreviewUrl ||
       segment.originalExternalPlaybackUrl ||
       segment.originalExternalPreviewUrl,
@@ -5297,6 +5413,7 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     originalExternalPlaybackUrl: originalVisualSegment.originalExternalPlaybackUrl,
     originalExternalPreviewUrl: originalVisualSegment.originalExternalPreviewUrl,
     originalPlaybackUrl: originalVisualSegment.originalPlaybackUrl,
+    originalPosterUrl: originalVisualSegment.originalPosterUrl,
     originalPreviewUrl: originalVisualSegment.originalPreviewUrl,
     originalSourceKind: originalVisualSegment.originalSourceKind,
     photoAnimationSourceAsset: cloneStudioCustomVideoFile(liveSegment.photoAnimationSourceAsset),
@@ -5438,6 +5555,7 @@ const createWorkspaceSegmentEditorInsertedSegment = (options: {
     currentExternalPlaybackUrl: null,
     currentExternalPreviewUrl: null,
     currentPlaybackUrl: null,
+    currentPosterUrl: null,
     currentPreviewUrl: null,
     currentSourceKind: "unknown",
     customVideo: null,
@@ -5453,6 +5571,7 @@ const createWorkspaceSegmentEditorInsertedSegment = (options: {
     originalExternalPlaybackUrl: null,
     originalExternalPreviewUrl: null,
     originalPlaybackUrl: null,
+    originalPosterUrl: null,
     originalPreviewUrl: null,
     originalSourceKind: "unknown",
     originalText: baseText,
@@ -5786,14 +5905,7 @@ const hasWorkspaceSegmentImmediateImagePreview = (segment: WorkspaceSegmentEdito
 
   return (
     Boolean(currentVisualAssetPreviewUrl) ||
-    filterWorkspaceStillAssetUrls([
-      segment.currentExternalPreviewUrl,
-      segment.currentExternalPlaybackUrl,
-      segment.originalExternalPreviewUrl,
-      segment.originalExternalPlaybackUrl,
-      segment.currentPreviewUrl,
-      segment.originalPreviewUrl,
-    ]).length > 0
+    getWorkspaceSegmentStillPreviewUrls(segment).length > 0
   );
 };
 
@@ -6223,11 +6335,13 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedSegment.currentExternalPlaybackUrl !== segment.currentExternalPlaybackUrl ||
       normalizedSegment.currentExternalPreviewUrl !== segment.currentExternalPreviewUrl ||
       normalizedSegment.currentPlaybackUrl !== segment.currentPlaybackUrl ||
+      normalizedSegment.currentPosterUrl !== segment.currentPosterUrl ||
       normalizedSegment.currentPreviewUrl !== segment.currentPreviewUrl ||
       normalizedSegment.currentSourceKind !== segment.currentSourceKind ||
       normalizedSegment.originalExternalPlaybackUrl !== segment.originalExternalPlaybackUrl ||
       normalizedSegment.originalExternalPreviewUrl !== segment.originalExternalPreviewUrl ||
       normalizedSegment.originalPlaybackUrl !== segment.originalPlaybackUrl ||
+      normalizedSegment.originalPosterUrl !== segment.originalPosterUrl ||
       normalizedSegment.originalPreviewUrl !== segment.originalPreviewUrl ||
       normalizedSegment.originalSourceKind !== segment.originalSourceKind;
     const hasOriginalTextChanges = normalizedOriginalText !== segment.originalText;
@@ -6673,6 +6787,43 @@ export const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEdit
   );
 };
 
+export const getWorkspaceSegmentDraftPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
+    return getWorkspaceSegmentOriginalPosterUrl(segment);
+  }
+
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+
+  if (latestVisualAction === "ai") {
+    return (
+      getWorkspaceAiVideoPreferredPosterUrl(segment, segment.aiVideoAsset) ??
+      getWorkspaceSegmentCurrentPosterUrl(segment) ??
+      getWorkspaceSegmentOriginalPosterUrl(segment)
+    );
+  }
+
+  if (latestVisualAction === "photo_animation") {
+    return (
+      getWorkspacePhotoAnimationPreferredPosterUrl(segment, segment.aiVideoAsset) ??
+      getWorkspacePhotoAnimationSourcePosterUrl(segment) ??
+      getWorkspaceSegmentCurrentPosterUrl(segment) ??
+      getWorkspaceSegmentOriginalPosterUrl(segment)
+    );
+  }
+
+  if (segment.videoAction === "custom" && getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
+    return getStudioCustomAssetPosterUrl(segment.customVideo);
+  }
+
+  if (segment.videoAction === "original") {
+    return isWorkspaceSegmentServerPhotoAnimationOverride(segment)
+      ? getWorkspaceSegmentCurrentPosterUrl(segment)
+      : getWorkspaceSegmentOriginalPosterUrl(segment);
+  }
+
+  return getWorkspaceSegmentCurrentPosterUrl(segment) ?? getWorkspaceSegmentOriginalPosterUrl(segment);
+};
+
 const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
     return null;
@@ -6683,7 +6834,8 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   if (latestVisualAction === "photo_animation") {
     return (
       getWorkspacePhotoAnimationSourcePosterUrl(segment) ??
-      getWorkspaceSegmentVideoAssetPosterUrl(segment) ??
+      getWorkspaceSegmentCurrentPosterUrl(segment) ??
+      getWorkspaceSegmentOriginalPosterUrl(segment) ??
       segment.currentExternalPreviewUrl ??
       segment.originalExternalPreviewUrl ??
       segment.currentPreviewUrl ??
@@ -6693,10 +6845,18 @@ const getWorkspaceSegmentDraftFallbackPosterUrl = (segment: WorkspaceSegmentEdit
   }
 
   if (segment.videoAction === "original" && segment.mediaType === "video") {
+    if (isWorkspaceSegmentServerPhotoAnimationOverride(segment)) {
+      return (
+        getWorkspaceSegmentCurrentPosterUrl(segment) ??
+        segment.currentExternalPreviewUrl ??
+        segment.currentPreviewUrl ??
+        null
+      );
+    }
+
     return (
-      getWorkspaceSegmentVideoAssetPosterUrl(segment, { preferOriginal: true }) ??
+      getWorkspaceSegmentOriginalPosterUrl(segment) ??
       segment.originalExternalPreviewUrl ??
-      segment.currentExternalPreviewUrl ??
       null
     );
   }
@@ -6993,7 +7153,7 @@ export const getWorkspaceSegmentMediaIdentityKey = (
   const draftVisualIdentity = getStudioCustomAssetMediaIdentityKey(draftVisualAsset);
   const displayUrl = mediaSurface?.displayUrl ?? getWorkspaceSegmentDraftPreviewUrl(segment);
   const viewerUrl = mediaSurface?.viewerUrl ?? (previewKind === "video" ? getWorkspaceSegmentDraftVideoUrl(segment) : displayUrl);
-  const posterUrl = mediaSurface?.posterUrl ?? (previewKind === "video" ? getWorkspaceSegmentDraftPreviewUrl(segment) : null);
+  const posterUrl = mediaSurface?.posterUrl ?? (previewKind === "video" ? getWorkspaceSegmentDraftPosterUrl(segment) : null);
 
   return [
     `segment:${segment.index}`,
@@ -7012,7 +7172,7 @@ export const getWorkspaceSegmentMediaIdentityKey = (
     .join("|");
 };
 
-const getWorkspaceSegmentResolvedMediaSurface = (
+export const getWorkspaceSegmentResolvedMediaSurface = (
   segment: WorkspaceSegmentEditorDraftSegment,
   context: WorkspaceResolvedMediaContext,
   options?: { isPlaybackRequested?: boolean },
@@ -7020,6 +7180,7 @@ const getWorkspaceSegmentResolvedMediaSurface = (
   const previewKind = getWorkspaceSegmentPreviewKind(segment);
   const previewUrl = getWorkspaceSegmentDraftPreviewUrl(segment);
   const viewerUrl = previewKind === "video" ? getWorkspaceSegmentDraftVideoUrl(segment) : previewUrl;
+  const posterUrl = previewKind === "video" ? getWorkspaceSegmentDraftPosterUrl(segment) : null;
   const fallbackPosterUrl = previewKind === "video" ? getWorkspaceSegmentDraftFallbackPosterUrl(segment) : null;
   const fallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(segment, previewKind);
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
@@ -7031,7 +7192,7 @@ const getWorkspaceSegmentResolvedMediaSurface = (
     fallbackUrls,
     isGeneratedVideo: latestVisualAction === "ai" || latestVisualAction === "photo_animation",
     isPlaybackRequested: options?.isPlaybackRequested,
-    posterUrl: previewKind === "video" ? previewUrl : null,
+    posterUrl,
     previewKind,
     viewerUrl,
   });
@@ -10359,6 +10520,7 @@ function StudioVoiceSelectorChip({
 
 const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCardMedia({
   allowBrowserPosterCapture = false,
+  allowVideoPlayback = true,
   autoplay = false,
   fallbackPosterUrl,
   imageLoading = "eager",
@@ -10412,14 +10574,21 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     (isPreferredPosterReady ? normalizedPosterUrl : normalizedFallbackPosterUrl || normalizedPosterUrl) ||
     capturedPosterUrl;
   const canUseResolvedPosterFrame = Boolean(resolvedPosterUrl) && !isPosterFrameLoadFailed;
+  const shouldAllowVideoPlayback = shouldAllowWorkspaceSegmentPreviewVideoPlayback({
+    allowVideoPlayback,
+    autoplay,
+    isPlaybackRequested,
+    previewKind,
+  });
+  const effectiveMountVideoWhenIdle = allowVideoPlayback ? mountVideoWhenIdle : false;
   const shouldPrimePausedFrame =
     previewKind === "video" &&
+    allowVideoPlayback &&
     !autoplay &&
     !hasPresentedVideoFrame &&
     (primePausedFrame || (preferPosterFrame && !canUseResolvedPosterFrame));
   const shouldKeepVideoUnmountedWhileIdle =
-    previewKind === "video" && !autoplay && !isPlaybackRequested && !mountVideoWhenIdle;
-  const shouldAllowVideoPlayback = previewKind === "video" && (autoplay || isPlaybackRequested);
+    previewKind === "video" && !shouldAllowVideoPlayback && !effectiveMountVideoWhenIdle;
   const imageCandidateUrls = useMemo(
     () =>
       getUniqueWorkspaceSegmentPreviewUrls([
@@ -10436,7 +10605,11 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     (element: HTMLVideoElement | null) => {
       const previousElement = localVideoRef.current;
       if (previousElement && previousElement !== element) {
-        disposeWorkspaceDetachedVideoElement(previousElement);
+        window.setTimeout(() => {
+          if (localVideoRef.current !== previousElement && !previousElement.isConnected) {
+            disposeWorkspaceDetachedVideoElement(previousElement);
+          }
+        }, 0);
       }
 
       localVideoRef.current = element;
@@ -10586,6 +10759,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
       normalizedPosterUrl ||
       normalizedFallbackPosterUrl ||
       !allowBrowserPosterCapture ||
+      !allowVideoPlayback ||
       autoplay ||
       isPlaybackRequested ||
       isVideoPlaying ||
@@ -10619,6 +10793,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     normalizedFallbackPosterUrl,
     normalizedPosterUrl,
     allowBrowserPosterCapture,
+    allowVideoPlayback,
     autoplay,
     isPlaybackRequested,
     isVideoPlaying,
@@ -12055,11 +12230,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>("standard");
   const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
-    useState<StudioSegmentVisualQuality>("premium");
+    useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentAiVideoQuality, setSelectedSegmentAiVideoQuality] =
-    useState<StudioSegmentVisualQuality>("premium");
+    useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
-    useState<StudioSegmentVisualQuality>("premium");
+    useState<StudioSegmentVisualQuality>("standard");
   const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
     id: string;
     left: number;
@@ -12662,6 +12837,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     navigate(nextUrl, { replace: options?.replace ?? false });
   };
 
+  const navigateToStudioCreateWaitingRoute = (options?: { replace?: boolean }) => {
+    const studioCreateUrl = localizePath("/app/studio");
+    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
+
+    markPendingStudioRouteSection("create");
+    if (currentUrl !== studioCreateUrl) {
+      navigate(studioCreateUrl, { replace: options?.replace ?? true });
+    }
+  };
+
   const getSegmentEditorOrderSnapshot = (draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined) =>
     draft?.segments.map((segment, arrayIndex) => ({
       arrayIndex,
@@ -13242,6 +13427,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSelectedVideoMode("standard");
     setSelectedSegmentAiPhotoQuality("standard");
     setSelectedSegmentAiVideoQuality("standard");
+    setSelectedSegmentPhotoAnimationQuality("standard");
     setSelectedCustomVideo(null);
     setVideoSelectionError(null);
     setIsPreparingCustomVideo(false);
@@ -15432,10 +15618,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cleanup();
   };
 
-  const stopSegmentEditorPreviewVideoElements = (options?: { clearRefs?: boolean }) => {
+  const stopSegmentEditorPreviewVideoElements = (options?: { clearRefs?: boolean; clearPausedPositions?: boolean }) => {
     cancelSegmentEditorVideoPlaybackRequest();
     segmentEditorPreviewResetTokenRef.current += 1;
-    segmentEditorPausedVideoPositionsRef.current = {};
+    const shouldResetPlaybackPositions = options?.clearPausedPositions === true || options?.clearRefs === true;
+
+    if (shouldResetPlaybackPositions) {
+      segmentEditorPausedVideoPositionsRef.current = {};
+    }
 
     Object.values(segmentEditorPreviewVideoRefs.current).forEach((element) => {
       if (!element) {
@@ -15451,10 +15641,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       delete element.dataset.previewPrimed;
 
-      try {
-        element.currentTime = 0;
-      } catch {
-        // Ignore reset errors while metadata is still loading.
+      if (shouldResetPlaybackPositions) {
+        try {
+          element.currentTime = 0;
+        } catch {
+          // Ignore reset errors while metadata is still loading.
+        }
       }
     });
 
@@ -15566,9 +15758,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const resetSegmentEditorPreviewPlaybackState = (options?: { clearRefs?: boolean }) => {
     cancelSegmentEditorSyntheticPlayback();
-    stopSegmentEditorPreviewVideoElements(options);
+    stopSegmentEditorPreviewVideoElements({ ...options, clearPausedPositions: true });
     setPlayingSegmentEditorPreviewIndex(null);
+    pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
     queuedSegmentEditorPlaybackIndexRef.current = null;
+    segmentCarouselPointerPlaybackIntentRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPreviewTimes({});
   };
@@ -19861,6 +20055,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       regenerationPromptLength: regenerationPrompt.length,
       segmentCount: effectiveDraft.segments.length,
     }, { includeOrder: true, draft: effectiveDraft });
+    navigateToStudioCreateWaitingRoute({ replace: true });
     await handleGenerate(regenerationPrompt, buildCurrentRegenerationOptions(nextAppliedSession));
   };
 
@@ -20967,10 +21162,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         setComposerSourceIdea(null);
         setSelectedContentPlanIdeaId((current) => (current === composerSourceIdea.ideaId ? null : current));
       }
-        setGeneratedVideo(null);
+      setGeneratedVideo(null);
       if (!isSegmentEditorGeneration) {
-          setSegmentEditorLoadedSession(null);
-          setSegmentEditorAppliedSession(null);
+        setSegmentEditorLoadedSession(null);
+        setSegmentEditorAppliedSession(null);
       }
       setIsGenerating(true);
       setIsPreviewModalOpen(false);
@@ -20985,19 +21180,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setIsSegmentEditorGeneratingAiPhoto(false);
       setSegmentEditorGeneratingAiPhotoSegmentIndex(null);
       closeSegmentAiPhotoModal({ immediate: true });
-        setSegmentEditorDraft(null);
-        setCreateMode("default");
+      setSegmentEditorDraft(null);
+      setCreateMode("default");
       setHasLoadedProjects(false);
       setStatus(options?.segmentEditorSession ? "Подготавливаем сегменты..." : "Task queued");
     });
 
-    const studioCreatePath = localizePath("/app/studio");
-    if (isSegmentEditorGeneration || location.pathname.startsWith(studioCreatePath)) {
-      const currentStudioUrl = `${location.pathname}${location.search}`;
-      markPendingStudioRouteSection("create");
-      if (currentStudioUrl !== studioCreatePath) {
-        navigate(studioCreatePath, { replace: true });
-      }
+    if (isSegmentEditorGeneration || location.pathname.startsWith(localizePath("/app/studio"))) {
+      navigateToStudioCreateWaitingRoute({ replace: true });
     }
 
     await new Promise<void>((resolve) => {
@@ -21424,7 +21614,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cancelSegmentEditorVideoPlaybackRequest();
 
     let cancelled = false;
+    let retryTimeoutId: number | null = null;
     const requestToken = segmentEditorPreviewResetTokenRef.current;
+    const maxRetryAttempts = 80;
+    let retryAttempt = 0;
 
     logSegmentEditorDiagnostics("client.segment-editor.playback.request", {
       hasElement: Boolean(element),
@@ -21439,6 +21632,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const cleanupRetryListeners = () => {
       element.removeEventListener("loadeddata", handlePlaybackRetry);
       element.removeEventListener("canplay", handlePlaybackRetry);
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+      }
     };
 
     const cleanupPlaybackRequest = () => {
@@ -21514,10 +21711,39 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
       }
 
+      const restoreResumePositionAfterPlay = (resumePosition: number | null) => {
+        if (
+          resumePosition === null ||
+          cancelled ||
+          segmentEditorPreviewResetTokenRef.current !== requestToken ||
+          element.paused ||
+          element.ended ||
+          element.currentTime >= resumePosition - 0.08
+        ) {
+          return;
+        }
+
+        try {
+          element.currentTime = resumePosition;
+          setSegmentEditorPreviewTime(segmentPlaybackIndex, resumePosition);
+        } catch {
+          // Ignore resume seek errors while playback is settling.
+        }
+      };
+
       element.muted = true;
       element.defaultMuted = true;
       pauseOtherSegmentEditorPreviewVideoElements(segmentPlaybackIndex);
       await playVideoElement(element, true);
+      const resumePosition = options?.resetToStart ? null : getSegmentEditorPausedVideoPosition(segmentPlaybackIndex, element);
+      restoreResumePositionAfterPlay(resumePosition);
+      if (resumePosition !== null) {
+        [40, 120, 240, 420].forEach((delay) => {
+          window.setTimeout(() => {
+            restoreResumePositionAfterPlay(resumePosition);
+          }, delay);
+        });
+      }
 
       if (cancelled || segmentEditorPreviewResetTokenRef.current !== requestToken) {
         element.pause();
@@ -21545,8 +21771,34 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return false;
     };
 
+    const schedulePlaybackRetry = () => {
+      if (
+        cancelled ||
+        segmentEditorPreviewResetTokenRef.current !== requestToken ||
+        retryTimeoutId !== null ||
+        retryAttempt >= maxRetryAttempts
+      ) {
+        return;
+      }
+
+      retryAttempt += 1;
+      retryTimeoutId = window.setTimeout(() => {
+        retryTimeoutId = null;
+        void tryStartPlayback().then((started) => {
+          if (!started && !cancelled) {
+            ensureVideoElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+            schedulePlaybackRetry();
+          }
+        });
+      }, 120);
+    };
+
     const handlePlaybackRetry = () => {
-      void tryStartPlayback();
+      void tryStartPlayback().then((started) => {
+        if (!started) {
+          schedulePlaybackRetry();
+        }
+      });
     };
 
     segmentEditorVideoPlaybackCleanupRef.current = cleanupPlaybackRequest;
@@ -21555,6 +21807,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     cleanupRetryListeners();
     element.addEventListener("loadeddata", handlePlaybackRetry, { once: true });
     element.addEventListener("canplay", handlePlaybackRetry, { once: true });
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+
+    if (cancelled || segmentEditorPreviewResetTokenRef.current !== requestToken) {
+      cleanupRetryListeners();
+      clearPlaybackRequestCleanup();
+      return;
+    }
 
     const startedImmediately = await tryStartPlayback();
     if (startedImmediately || cancelled) {
@@ -21575,6 +21841,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
         void tryStartPlayback();
       });
+    } else {
+      schedulePlaybackRetry();
     }
 
     return () => {
@@ -23267,7 +23535,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 <span className="studio-segment-editor__prompt-section-label">
                   {segmentEditorPromptSceneMode === "create"
                     ? workspaceText(locale, "Источник визуала", "Visual source")
-                    : workspaceText(locale, "Правка визуала", "Visual edit")}
+                    : workspaceText(locale, "Дорисовать", "Image edit")}
                 </span>
               {segmentEditorPromptSceneMode === "create" ? (
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
@@ -23516,6 +23784,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                     <WorkspaceSegmentPreviewCardMedia
                                       allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
+                                      allowVideoPlayback={false}
                                       autoplay={false}
                                       imageLoading="lazy"
                                       mediaKey={`segment-editor-panel-library:${itemKey}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
@@ -23996,6 +24265,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const mediaKey = mediaUrl
                                   ? `slot:${nextSegmentArrayIndex}|${getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface)}`
                                   : "";
+                                const segmentPreviewTime = segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0;
+                                const shouldKeepPausedVideoMounted =
+                                  isActiveCard && mediaKind === "video" && segmentPreviewTime > 0.04;
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
@@ -24018,13 +24290,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       {mediaUrl ? (
                                         <WorkspaceSegmentPreviewCardMedia
                                           allowBrowserPosterCapture={isActiveCard && segmentMediaSurface.allowBrowserPosterCapture}
+                                          allowVideoPlayback={isActiveCard}
                                           autoplay={false}
                                           fallbackPosterUrl={segmentMediaSurface.fallbackPosterUrl}
                                           imageLoading={isActiveCard ? "eager" : "lazy"}
                                           isPlaybackRequested={isSegmentPlaybackRequested}
                                           loop={false}
                                           mediaKey={mediaKey}
-                                          mountVideoWhenIdle={segmentMediaSurface.mountVideoWhenIdle}
+                                          mountVideoWhenIdle={
+                                            shouldKeepPausedVideoMounted || segmentMediaSurface.mountVideoWhenIdle
+                                          }
                                           muted
                                           posterUrl={segmentMediaSurface.posterUrl}
                                           preferPosterFrame={segmentMediaSurface.preferPosterFrame}
@@ -24319,6 +24594,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           {thumbUrl ? (
                                             <WorkspaceSegmentPreviewCardMedia
                                               allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
+                                              allowVideoPlayback={false}
                                               autoplay={false}
                                               fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
                                               imageLoading="lazy"
@@ -24991,6 +25267,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                 <WorkspaceSegmentPreviewCardMedia
                                   allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
+                                  allowVideoPlayback={false}
                                   autoplay={false}
                                   imageLoading="lazy"
                                   mediaKey={`media-library:${item.projectId}:${item.segmentIndex}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}
@@ -25200,6 +25477,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       {ghostPreviewUrl ? (
                         <WorkspaceSegmentPreviewCardMedia
                           allowBrowserPosterCapture={ghostMediaSurface.allowBrowserPosterCapture}
+                          allowVideoPlayback={false}
                           autoplay={false}
                           fallbackPosterUrl={ghostMediaSurface.fallbackPosterUrl}
                           imageLoading="lazy"
@@ -26240,6 +26518,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                       {renderWorkspaceMediaLibraryPlayOverlay(item.previewKind)}
                                       <WorkspaceSegmentPreviewCardMedia
                                         allowBrowserPosterCapture={mediaLibrarySurface.allowBrowserPosterCapture}
+                                        allowVideoPlayback={false}
                                         autoplay={false}
                                         imageLoading="lazy"
                                         mediaKey={`segment-modal-library:${itemKey}:${mediaLibrarySurface.displayUrl}:${mediaLibrarySurface.posterUrl ?? "no-poster"}`}

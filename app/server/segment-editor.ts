@@ -86,6 +86,7 @@ type AdsflowProjectGenerationSettingsPayload = {
   music_asset_id?: number | string | null;
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
   requested_language?: string | null;
+  source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
 
@@ -122,6 +123,7 @@ export type WorkspaceSegmentEditorSegment = {
   currentExternalPlaybackUrl: string | null;
   currentExternalPreviewUrl: string | null;
   currentPlaybackUrl: string | null;
+  currentPosterUrl: string | null;
   currentPreviewUrl: string | null;
   currentSourceKind: WorkspaceSegmentEditorSourceKind;
   duration: number;
@@ -132,6 +134,7 @@ export type WorkspaceSegmentEditorSegment = {
   originalExternalPlaybackUrl: string | null;
   originalExternalPreviewUrl: string | null;
   originalPlaybackUrl: string | null;
+  originalPosterUrl: string | null;
   originalPreviewUrl: string | null;
   originalSourceKind: WorkspaceSegmentEditorSourceKind;
   speechDuration: number | null;
@@ -397,6 +400,7 @@ const getProjectMediaEntryPlaybackUrl = (entry?: AdsflowProjectMediaEntryPayload
 const getProjectOriginalMediaEntries = (payload: AdsflowProjectDetailsResponse | null | undefined) =>
   pickProjectMediaEntries(
     payload?.source_video_urls,
+    payload?.generation_settings?.source_video_urls,
     payload?.generation_settings?.original_videos,
   );
 
@@ -794,6 +798,34 @@ const buildWorkspaceSegmentEditorVideoUrl = (
   return `${previewUrl.pathname}${previewUrl.search}`;
 };
 
+const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  const assetId = normalizeInteger(asset?.assetId);
+  if (assetId === null || assetId <= 0 || !isWorkspaceVideoMediaAssetRef(asset)) {
+    return null;
+  }
+
+  const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, env.appUrl);
+  const version = [
+    asset?.createdAt,
+    asset?.expiresAt,
+    asset?.storageKey,
+    asset?.mimeType,
+    asset?.downloadPath,
+    asset?.downloadUrl,
+    asset?.playbackUrl,
+    asset?.originalUrl,
+  ]
+    .map(normalizeText)
+    .filter(Boolean)
+    .join(":");
+
+  if (version) {
+    posterUrl.searchParams.set("v", version);
+  }
+
+  return `${posterUrl.pathname}${posterUrl.search}`;
+};
+
 export const buildWorkspaceSegmentEditorSessionFromPayload = (
   requestedProjectId: number,
   payload: AdsflowSegmentEditorResponse,
@@ -921,6 +953,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     currentPlaybackUrl: hasCurrentVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "playback", currentVideoMarker)
       : null,
+    currentPosterUrl: buildWorkspaceMediaAssetPosterUrl(currentAsset),
     currentPreviewUrl: hasCurrentVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "preview", currentVideoMarker)
       : null,
@@ -935,6 +968,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     originalPlaybackUrl: hasOriginalVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "playback", originalVideoMarker)
       : null,
+    originalPosterUrl: buildWorkspaceMediaAssetPosterUrl(originalAsset),
     originalPreviewUrl: hasOriginalVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
       : null,

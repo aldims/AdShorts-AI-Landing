@@ -82,7 +82,9 @@ describe("segment editor asset lifecycle mapping", () => {
 
     expect(segment?.mediaType).toBe("video");
     expect(segment?.currentAsset?.mediaType).toBe("video");
+    expect(segment?.currentPosterUrl).toContain("/api/workspace/media-assets/1201/poster");
     expect(segment?.originalAsset?.mediaType).toBe("photo");
+    expect(segment?.originalPosterUrl).toBeNull();
   });
 
   it("marks missing linked project assets as deleted when the media envelope was loaded", () => {
@@ -214,6 +216,61 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.title).toBe("Selected project");
     expect(session.segments[0]?.currentPlaybackUrl).toContain("projectId=3127");
     expect(session.segments[0]?.originalPlaybackUrl).toContain("projectId=3127");
+  });
+
+  it("uses generation_settings.source_video_urls as original source before rendered original_videos", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3201,
+      {
+        project_id: 3201,
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 4,
+            index: 0,
+            media_type: "video",
+            original_video: "original-marker",
+            text: "Segment",
+          },
+        ],
+        title: "Edited project",
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            current_rendered_segments: [
+              {
+                download_url: "/api/media/1692/download",
+                media_asset_id: 1692,
+                media_type: "video",
+                source: "rendered_segment",
+              },
+            ],
+            original_videos: [
+              {
+                download_url: "/api/media/1692/download",
+                media_asset_id: 1692,
+                media_type: "video",
+                source: "rendered_segment",
+              },
+            ],
+            source_video_urls: [
+              {
+                download_url: "/api/media/1632/download",
+                media_asset_id: 1632,
+                media_type: "photo",
+                source: "ai_generated",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session.segments[0]?.currentAsset?.assetId).toBe(1692);
+    expect(session.segments[0]?.currentAsset?.mediaType).toBe("video");
+    expect(session.segments[0]?.originalAsset?.assetId).toBe(1632);
+    expect(session.segments[0]?.originalAsset?.mediaType).toBe("photo");
   });
 
   it("resolves custom music metadata from project details for segment editor reuse", () => {
