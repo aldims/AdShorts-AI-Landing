@@ -347,10 +347,11 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
 
 export type StudioGeneratedImageAsset = {
   assetId?: number | null;
-  dataUrl: string;
+  dataUrl?: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
+  remoteUrl?: string;
 };
 
 export type StudioGeneratedVideoAsset = {
@@ -2551,11 +2552,28 @@ const fetchRemoteStudioGeneratedImage = async (url: URL) => {
 const normalizeAdsflowSegmentAiPhotoAsset = async (
   payload?: AdsflowSegmentAiPhotoAssetPayload | null,
 ): Promise<StudioGeneratedImageAsset> => {
+  const assetId = normalizePositiveInteger(payload?.media_asset_id) ?? null;
   const inlineDataUrl = normalizeGenerationText(payload?.data_url);
   const remoteUrl = resolveAdsflowAssetUrl(payload?.remote_url ?? payload?.download_url ?? payload?.url);
 
-  if (!inlineDataUrl && !remoteUrl) {
+  if (!assetId && !inlineDataUrl && !remoteUrl) {
     throw new Error("AdsFlow did not return a generated image.");
+  }
+
+  if (assetId) {
+    const mimeType = inferStudioGeneratedImageMimeType(
+      payload?.mime_type,
+      payload?.file_name,
+      payload?.remote_url ?? payload?.download_url ?? payload?.url,
+    );
+    const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
+    return {
+      assetId,
+      fileName,
+      fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+      mimeType,
+      remoteUrl: `/api/workspace/media-assets/${assetId}`,
+    };
   }
 
   let bytes: Buffer;
@@ -2580,7 +2598,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
   const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
 
   return {
-    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    assetId,
     dataUrl: inlineDataUrl || buildDataUrlFromBytes(bytes, mimeType),
     fileName,
     fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),

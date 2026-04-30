@@ -20,6 +20,7 @@ import {
   getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   isWorkspaceSegmentDraftVisualResettable,
+  normalizeStoredWorkspaceSegmentEditorDraftSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resetWorkspaceSegmentDraftVisualToOriginal,
@@ -393,6 +394,33 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedSegment?.originalAsset?.assetId).toBe(101);
     expect(refreshedSegment?.originalPreviewUrl).toBe("/api/workspace/media-assets/101");
     expect(refreshedSegment && isWorkspaceSegmentDraftVisualResettable(refreshedSegment)).toBe(true);
+  });
+
+  it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {
+    const largeDataUrl = `data:image/png;base64,${"a".repeat(900_000)}`;
+    const segment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 303,
+        dataUrl: largeDataUrl,
+        fileName: "premium-ai-photo.png",
+        fileSize: 700_000,
+        mimeType: "image/png",
+      },
+      aiPhotoGeneratedFromPrompt: "icy mountain dragon",
+      aiPhotoPrompt: "icy mountain dragon",
+      aiPhotoPromptInitialized: true,
+      videoAction: "ai_photo",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+    const normalizedSegment = normalized.segments[0];
+    const asset = normalizedSegment?.aiPhotoAsset;
+
+    expect(asset?.assetId).toBe(303);
+    expect(asset?.dataUrl).toBeUndefined();
+    expect(asset?.remoteUrl).toBe("/api/workspace/media-assets/303");
+    expect(normalizedSegment && getWorkspaceSegmentDraftPreviewUrl(normalizedSegment)).toBe("/api/workspace/media-assets/303");
+    expect(JSON.stringify(normalized)).not.toContain("data:image/png");
   });
 
   it("restores a live generated AI photo when server state lost the draft video action", () => {

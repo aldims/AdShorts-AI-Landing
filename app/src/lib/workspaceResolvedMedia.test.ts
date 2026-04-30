@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveWorkspaceMediaSurface } from "./workspaceResolvedMedia";
 
 describe("workspace resolved media surface", () => {
-  it("keeps generated carousel video idle until playback is requested", () => {
+  it("mounts generated carousel video without a stable poster so a frame can be captured", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-carousel-card",
       displayUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
@@ -12,9 +12,10 @@ describe("workspace resolved media surface", () => {
       viewerUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
     });
 
-    expect(surface.mountVideoWhenIdle).toBe(false);
-    expect(surface.preloadPolicy).toBe("none");
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
     expect(surface.posterUrl).toBeNull();
+    expect(surface.primePausedFrame).toBe(true);
     expect(surface.allowBrowserPosterCapture).toBe(true);
     expect(surface.subtitleMode).toBe("active-only");
   });
@@ -98,9 +99,11 @@ describe("workspace resolved media surface", () => {
     expect(surface.preloadPolicy).toBe("none");
     expect(surface.posterUrl).toBe("https://cdn.example.com/poster.jpg");
     expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(false);
+    expect(surface.allowBrowserPosterCapture).toBe(false);
   });
 
-  it("keeps thumb videos unmounted while poster capture resolves", () => {
+  it("mounts thumb videos without stable posters so a frame can be captured", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "segment-thumb",
       displayUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
@@ -109,11 +112,11 @@ describe("workspace resolved media surface", () => {
       viewerUrl: "/api/workspace/project-segment-video?projectId=2890&segmentIndex=1",
     });
 
-    expect(surface.mountVideoWhenIdle).toBe(false);
-    expect(surface.preloadPolicy).toBe("none");
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
     expect(surface.preferPosterFrame).toBe(true);
-    expect(surface.primePausedFrame).toBe(false);
-    expect(surface.allowBrowserPosterCapture).toBe(false);
+    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
   it("keeps media-library video tiles poster-only until the viewer opens", () => {

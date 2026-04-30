@@ -3017,6 +3017,31 @@ const getWorkspaceMediaAssetResolvedPreviewUrl = (
   return assetId ? buildWorkspaceMediaAssetProxyUrl(assetId) : null;
 };
 
+const getWorkspaceMediaAssetDurablePreviewUrl = (
+  asset:
+    | {
+        assetId?: number | null;
+        fileName?: string | null;
+        mimeType?: string | null;
+        remoteUrl?: string | null;
+      }
+    | null
+    | undefined,
+) => {
+  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  if (!assetId) {
+    return getWorkspaceMediaAssetResolvedPreviewUrl(asset);
+  }
+
+  const fileName = String(asset?.fileName ?? "").trim();
+  const mimeType = String(asset?.mimeType ?? "").trim().toLowerCase();
+  const isVideoAsset =
+    mimeType.startsWith("video/") ||
+    WORKSPACE_VIDEO_FILE_NAME_PATTERN.test(fileName);
+
+  return isVideoAsset ? buildWorkspaceMediaAssetPlaybackUrl(assetId) : buildWorkspaceMediaAssetProxyUrl(assetId);
+};
+
 const revokeStudioObjectUrl = (value: string | null | undefined) => {
   if (typeof URL === "undefined") {
     return;
@@ -4013,18 +4038,24 @@ const getWorkspaceSegmentImageUpscaleSource = (segment: WorkspaceSegmentEditorDr
 };
 
 const createWorkspaceSegmentGeneratedImageAsset = (
-  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType">,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType" | "remoteUrl">,
 ): StudioCustomVideoFile => ({
   assetId: asset.assetId,
   dataUrl: asset.dataUrl,
   fileName: asset.fileName,
   fileSize: asset.fileSize,
   mimeType: asset.mimeType,
+  remoteUrl: getWorkspaceMediaAssetDurablePreviewUrl({
+    assetId: asset.assetId ?? null,
+    fileName: asset.fileName,
+    mimeType: asset.mimeType,
+    remoteUrl: asset.remoteUrl,
+  }) ?? undefined,
 });
 
 const applyWorkspaceSegmentUpscaledImageAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType">,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "fileSize" | "mimeType" | "remoteUrl">,
 ): WorkspaceSegmentEditorDraftSegment => {
   const nextAsset = createWorkspaceSegmentGeneratedImageAsset(asset);
 
@@ -5954,6 +5985,7 @@ const removeStoredWorkspaceSegmentEditorSession = (
 };
 
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
+const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -5962,6 +5994,11 @@ const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: numb
 
 const getWorkspaceSegmentPhotoAnimationPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX}${email}`;
+
+const isWorkspaceSegmentEditorPersistableRemoteUrl = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized) && !normalized.startsWith("data:") && !normalized.startsWith("blob:");
+};
 
 const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | null | undefined): StudioCustomVideoFile | null => {
   if (!value) {
@@ -5975,24 +6012,31 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
   const libraryItemKey = typeof value.libraryItemKey === "string" ? value.libraryItemKey.trim() : "";
   const mimeType = typeof value.mimeType === "string" && value.mimeType.trim() ? value.mimeType : "application/octet-stream";
   const posterUrl = typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
-  const remoteUrl = getWorkspaceMediaAssetResolvedPreviewUrl({
+  const rawRemoteUrl = typeof value.remoteUrl === "string" ? value.remoteUrl.trim() : "";
+  const remoteUrl = getWorkspaceMediaAssetDurablePreviewUrl({
     assetId,
     fileName,
     mimeType,
-    remoteUrl: typeof value.remoteUrl === "string" ? value.remoteUrl : "",
+    remoteUrl: isWorkspaceSegmentEditorPersistableRemoteUrl(rawRemoteUrl) ? rawRemoteUrl : "",
   }) ?? "";
+  const shouldPersistDataUrl =
+    Boolean(dataUrl) &&
+    !assetId &&
+    !remoteUrl &&
+    !libraryItemKey &&
+    dataUrl.length <= WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS;
   const source =
     value.source === "media-library" || value.source === "upload"
       ? value.source
       : undefined;
 
-  if (!assetId && !dataUrl && !remoteUrl && !libraryItemKey) {
+  if (!assetId && !shouldPersistDataUrl && !remoteUrl && !libraryItemKey) {
     return null;
   }
 
   return {
     assetId: assetId ?? undefined,
-    dataUrl: dataUrl || undefined,
+    dataUrl: shouldPersistDataUrl ? dataUrl : undefined,
     fileName,
     fileSize,
     libraryItemKey: libraryItemKey || undefined,
@@ -6035,7 +6079,7 @@ const canRestoreStoredWorkspaceSegmentEditorDraftSession = (session: WorkspaceSe
     return hasWorkspaceSegmentImmediateImagePreview(segment);
   });
 
-const normalizeStoredWorkspaceSegmentEditorDraftSession = (
+export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
   const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
@@ -8284,7 +8328,8 @@ const persistGeneratedMediaLibraryEntries = (
     const normalizedEntries = entries
       .slice()
       .sort((left, right) => right.createdAt - left.createdAt)
-      .slice(0, WORKSPACE_GENERATED_MEDIA_LIBRARY_MAX_ENTRIES);
+      .slice(0, WORKSPACE_GENERATED_MEDIA_LIBRARY_MAX_ENTRIES)
+      .map((entry) => normalizeStoredWorkspaceGeneratedMediaLibraryEntry(entry));
 
     if (normalizedEntries.length === 0) {
       window.localStorage.removeItem(storageKey);
@@ -8593,7 +8638,13 @@ const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
   segmentListIndex: number;
   sourceJobId: string;
 }) => {
-  const previewUrl = getStudioCustomAssetPreviewUrl(options.asset);
+  const previewUrl =
+    getWorkspaceMediaAssetDurablePreviewUrl({
+      assetId: options.asset.assetId ?? null,
+      fileName: options.asset.fileName,
+      mimeType: options.asset.mimeType,
+      remoteUrl: options.asset.remoteUrl,
+    }) ?? getStudioCustomAssetPreviewUrl(options.asset);
   if (!previewUrl) {
     return null;
   }
@@ -24571,6 +24622,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const segmentPreviewTime = segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0;
                                 const shouldKeepPausedVideoMounted =
                                   isActiveCard && mediaKind === "video" && segmentPreviewTime > 0.04;
+                                const canMountSegmentPreviewVideo =
+                                  isActiveCard || segmentMediaSurface.mountVideoWhenIdle || shouldKeepPausedVideoMounted;
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
@@ -24592,8 +24645,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                     <div className="studio-segment-editor__card-media">
                                       {mediaUrl ? (
                                         <WorkspaceSegmentPreviewCardMedia
-                                          allowBrowserPosterCapture={isActiveCard && segmentMediaSurface.allowBrowserPosterCapture}
-                                          allowVideoPlayback={isActiveCard}
+                                          allowBrowserPosterCapture={
+                                            canMountSegmentPreviewVideo && segmentMediaSurface.allowBrowserPosterCapture
+                                          }
+                                          allowVideoPlayback={canMountSegmentPreviewVideo}
                                           autoplay={false}
                                           fallbackPosterUrl={segmentMediaSurface.fallbackPosterUrl}
                                           imageLoading={isActiveCard ? "eager" : "lazy"}
@@ -24898,7 +24953,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           {thumbUrl ? (
                                             <WorkspaceSegmentPreviewCardMedia
                                               allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
-                                              allowVideoPlayback={false}
+                                              allowVideoPlayback={thumbMediaSurface.mountVideoWhenIdle}
                                               autoplay={false}
                                               fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
                                               imageLoading="lazy"
