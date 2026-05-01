@@ -75,7 +75,7 @@ const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v4";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v5-video-posters";
 
 export type WorkspaceMediaLibraryPage = {
   items: WorkspaceMediaLibraryItem[];
@@ -985,27 +985,15 @@ export const buildWorkspacePersistedMediaLibraryItems = (
               ),
               kind: videoKind,
               previewKind: "video",
-              previewPosterUrl:
-                isPhotoAnimationVariant
-                  ? getWorkspacePhotoOriginalPreviewUrl(segment) ??
-                    buildWorkspaceMediaLibraryPreviewUrl({
-                      kind: videoKind,
-                      projectId,
-                      segmentIndex: segment.index,
-                      version: buildWorkspaceMediaLibraryPreviewVersion(
-                        currentPreviewUrl ?? currentPlaybackUrl ?? originalPreviewUrl,
-                        `${downloadToken}:${segment.index}:${videoSuffix}`,
-                      ),
-                    })
-                  : buildWorkspaceMediaLibraryPreviewUrl({
-                    kind: videoKind,
-                    projectId,
-                    segmentIndex: segment.index,
-                    version: buildWorkspaceMediaLibraryPreviewVersion(
-                      currentPreviewUrl ?? currentPlaybackUrl ?? originalPreviewUrl,
-                      `${downloadToken}:${segment.index}:${videoSuffix}`,
-                    ),
-                  }),
+              previewPosterUrl: buildWorkspaceMediaLibraryPreviewUrl({
+                kind: videoKind,
+                projectId,
+                segmentIndex: segment.index,
+                version: buildWorkspaceMediaLibraryPreviewVersion(
+                  currentPreviewUrl ?? currentPlaybackUrl ?? originalPreviewUrl,
+                  `${downloadToken}:${segment.index}:${videoSuffix}`,
+                ),
+              }),
               previewUrl: aiVideoPreviewUrl,
               projectId,
               projectTitle,
@@ -1085,17 +1073,15 @@ export const buildWorkspacePersistedMediaLibraryItems = (
     if (hasAnimatedVariant) {
       const animatedPreviewUrl = getWorkspacePhotoAnimationPreviewUrl(segment);
       const animatedDownloadUrl = getWorkspacePhotoAnimationDownloadUrl(segment);
-      const animatedPosterUrl =
-        originalPhotoPreviewUrl ??
-        buildWorkspaceMediaLibraryPreviewUrl({
-          kind: "photo_animation",
-          projectId,
-          segmentIndex: segment.index,
-          version: buildWorkspaceMediaLibraryPreviewVersion(
-            animatedPreviewUrl ?? animatedDownloadUrl ?? originalPhotoPreviewUrl,
-            `${downloadToken}:${segment.index}:photo-animation`,
-          ),
-        });
+      const animatedPosterUrl = buildWorkspaceMediaLibraryPreviewUrl({
+        kind: "photo_animation",
+        projectId,
+        segmentIndex: segment.index,
+        version: buildWorkspaceMediaLibraryPreviewVersion(
+          animatedPreviewUrl ?? animatedDownloadUrl ?? originalPhotoPreviewUrl,
+          `${downloadToken}:${segment.index}:photo-animation`,
+        ),
+      });
       if (animatedPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
         items.push(
           createWorkspaceMediaLibraryItem({
