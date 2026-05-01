@@ -2550,6 +2550,30 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       previewText: "Послушайте, как звучит premium-голос, его темп, интонация и общее восприятие.",
     },
     {
+      id: "English_ManWithDeepVoice",
+      label: "Глеб",
+      description: "Глубокий premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewText: "Послушайте, как звучит голос Глеб, его темп, интонация и общее восприятие.",
+    },
+    {
+      id: "Russian_BrightHeroine",
+      label: "Арина",
+      description: "Яркий premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewText: "Послушайте, как звучит голос Арина, его темп, интонация и общее восприятие.",
+    },
+    {
+      id: "Russian_HandsomeChildhoodFriend",
+      label: "Мила",
+      description: "Молодой premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewText: "Послушайте, как звучит голос Мила, его темп, интонация и общее восприятие.",
+    },
+    {
       id: "Bys_24000",
       label: "Борис",
       description: "Базовый мужской голос",
@@ -4533,6 +4557,32 @@ const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef | null 
     asset?.downloadUrl,
     asset?.playbackUrl,
     asset?.originalUrl,
+  ]
+    .map(normalizeWorkspaceMediaAssetToken)
+    .filter(Boolean)
+    .join(":");
+
+  if (version) {
+    posterUrl.searchParams.set("v", version);
+  }
+
+  return `${posterUrl.pathname}${posterUrl.search}`;
+};
+
+const buildWorkspaceMediaLibraryAssetPosterUrl = (item: WorkspaceMediaLibraryItem) => {
+  const assetId = getPositiveWorkspaceMediaAssetId(item.assetId);
+  if (!assetId || item.previewKind !== "video") {
+    return null;
+  }
+
+  const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, "http://localhost");
+  const version = [
+    item.createdAt ? String(item.createdAt) : null,
+    item.assetExpiresAt,
+    item.assetKind,
+    item.assetMediaType,
+    item.previewUrl,
+    item.downloadUrl,
   ]
     .map(normalizeWorkspaceMediaAssetToken)
     .filter(Boolean)
@@ -7618,11 +7668,26 @@ export const getWorkspaceSegmentResolvedMediaSurface = (
   });
 };
 
-const getWorkspaceMediaLibraryResolvedPosterUrl = (item: WorkspaceMediaLibraryItem) =>
-  ((item.kind === "photo_animation" && isStudioSegmentPhotoAnimationPosterUrl(item.previewPosterUrl)) ||
-    (item.kind === "ai_video" && isStudioSegmentAiVideoPosterUrl(item.previewPosterUrl)))
-    ? null
-    : item.previewPosterUrl;
+const isWorkspaceMediaLibraryGeneratedPosterProxyUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  return normalizedValue.includes("/api/workspace/media-library-preview");
+};
+
+const getWorkspaceMediaLibraryResolvedPosterUrl = (item: WorkspaceMediaLibraryItem) => {
+  const assetPosterUrl = buildWorkspaceMediaLibraryAssetPosterUrl(item);
+  const shouldPreferAssetPoster =
+    item.previewKind === "video" &&
+    Boolean(assetPosterUrl) &&
+    (isWorkspaceMediaLibraryGeneratedPosterProxyUrl(item.previewPosterUrl) ||
+      (item.kind === "photo_animation" && isStudioSegmentPhotoAnimationPosterUrl(item.previewPosterUrl)) ||
+      (item.kind === "ai_video" && isStudioSegmentAiVideoPosterUrl(item.previewPosterUrl)));
+
+  if (shouldPreferAssetPoster) {
+    return assetPosterUrl;
+  }
+
+  return item.previewPosterUrl || assetPosterUrl;
+};
 
 const getWorkspaceMediaLibrarySelectionPosterUrl = (item: WorkspaceMediaLibraryItem) => {
   if (item.previewKind !== "video") {
@@ -11017,10 +11082,18 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
     isPlaybackRequested,
     previewKind,
   });
-  const effectiveMountVideoWhenIdle = allowVideoPlayback ? mountVideoWhenIdle : false;
+  const hasPosterCaptureBlockingSource =
+    Boolean(normalizedPosterUrl || normalizedFallbackPosterUrl) && !isPosterFrameLoadFailed;
+  const canMountVideoForPosterCapture =
+    previewKind === "video" &&
+    allowBrowserPosterCapture &&
+    (mountVideoWhenIdle || isPosterFrameLoadFailed) &&
+    canCapturePosterInBrowser(resolvedPreviewUrl);
+  const effectiveMountVideoWhenIdle =
+    (allowVideoPlayback && mountVideoWhenIdle) || canMountVideoForPosterCapture;
   const shouldPrimePausedFrame =
     previewKind === "video" &&
-    allowVideoPlayback &&
+    (allowVideoPlayback || canMountVideoForPosterCapture) &&
     !autoplay &&
     !hasPresentedVideoFrame &&
     (primePausedFrame || (preferPosterFrame && !canUseResolvedPosterFrame));
@@ -11061,8 +11134,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
         !element ||
         previewKind !== "video" ||
         !allowBrowserPosterCapture ||
-        normalizedPosterUrl ||
-        normalizedFallbackPosterUrl ||
+        hasPosterCaptureBlockingSource ||
         !canCapturePosterInBrowser(resolvedPreviewUrl)
       ) {
         return;
@@ -11085,8 +11157,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
       setCapturedPosterUrl((current) => (shouldPrimePausedFrame ? cachedPoster : current ?? cachedPoster));
     },
     [
-      normalizedFallbackPosterUrl,
-      normalizedPosterUrl,
+      hasPosterCaptureBlockingSource,
       allowBrowserPosterCapture,
       previewKind,
       resolvedPreviewUrl,
@@ -11193,10 +11264,8 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
   useEffect(() => {
     if (
       previewKind !== "video" ||
-      normalizedPosterUrl ||
-      normalizedFallbackPosterUrl ||
+      hasPosterCaptureBlockingSource ||
       !allowBrowserPosterCapture ||
-      !allowVideoPlayback ||
       autoplay ||
       isPlaybackRequested ||
       isVideoPlaying ||
@@ -11227,10 +11296,8 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
       cancelled = true;
     };
   }, [
-    normalizedFallbackPosterUrl,
-    normalizedPosterUrl,
+    hasPosterCaptureBlockingSource,
     allowBrowserPosterCapture,
-    allowVideoPlayback,
     autoplay,
     isPlaybackRequested,
     isVideoPlaying,
@@ -15770,6 +15837,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isGenerating ||
     isSegmentEditorPreparingCustomVideo ||
     isAnySegmentEditorVisualJobBusy;
+  const isSegmentEditorThumbReorderBusy =
+    isGenerating ||
+    isSegmentEditorPreparingCustomVideo;
   const segmentAiPhotoModalSegment =
     typeof segmentAiPhotoModalSegmentIndex === "number"
       ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentAiPhotoModalSegmentIndex) ?? null
@@ -15969,7 +16039,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     </button>
   );
   const isSegmentThumbReorderEnabled = Boolean(
-    segmentEditorDraft && segmentEditorDraft.segments.length > 1 && !isSegmentEditorStructureActionBusy,
+    segmentEditorDraft && segmentEditorDraft.segments.length > 1 && !isSegmentEditorThumbReorderBusy,
   );
   const draggedSegmentThumbIndex = segmentThumbDragState?.draggedIndex ?? null;
   const visibleSegmentThumbInsertIndex = getVisibleInsertIndexForDraggedItem(
@@ -19880,17 +19950,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
       return;
     }
-    const premiumAiVideoSourceAsset = generationQuality === "premium" && targetSegment
-      ? getWorkspaceSegmentPhotoAnimationSourceAsset(targetSegment)
-      : null;
-    if (
-      generationQuality === "premium" &&
-      (!premiumAiVideoSourceAsset || getWorkspaceSegmentCustomPreviewKind(premiumAiVideoSourceAsset) !== "image")
-    ) {
-      setSegmentEditorVideoError("Для премиум ИИ видео сначала выберите фото для сегмента.");
-      return;
-    }
-
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       aiVideoPrompt: nextPrompt,
@@ -19914,13 +19973,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     let pollStarted = false;
 
     try {
-      const premiumAiVideoImageDataUrl = premiumAiVideoSourceAsset
-        ? await resolveStudioCustomAssetDataUrl(premiumAiVideoSourceAsset)
-        : undefined;
-      if (generationQuality === "premium" && !premiumAiVideoImageDataUrl) {
-        throw new Error("Не удалось подготовить исходное фото для премиум ИИ видео.");
-      }
-
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
       }
@@ -19931,10 +19983,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageAssetId: premiumAiVideoSourceAsset?.assetId,
-          imageDataUrl: premiumAiVideoImageDataUrl,
-          imageFileName: premiumAiVideoSourceAsset?.fileName,
-          imageMimeType: premiumAiVideoSourceAsset?.mimeType,
           language: selectedLanguage,
           projectId: segmentEditorDraft.projectId,
           prompt: normalizedPrompt,

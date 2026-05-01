@@ -137,8 +137,7 @@ describe("media library photo sources", () => {
       assetId: 202,
       kind: "photo_animation",
       previewKind: "video",
-      previewPosterUrl:
-        "/api/workspace/media-library-preview?kind=photo_animation&projectId=42&segmentIndex=0&v=current",
+      previewPosterUrl: expect.stringContaining("/api/workspace/media-assets/202/poster"),
       previewUrl: "/api/workspace/project-segment-video?projectId=42&segmentIndex=0&source=current&delivery=preview&v=current",
     });
   });
@@ -149,8 +148,7 @@ describe("media library photo sources", () => {
     const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
     const animation = items.find((item) => item.kind === "photo_animation");
 
-    expect(animation?.previewPosterUrl).toContain("/api/workspace/media-library-preview");
-    expect(animation?.previewPosterUrl).toContain("kind=photo_animation");
+    expect(animation?.previewPosterUrl).toContain("/api/workspace/media-assets/202/poster");
     expect(animation?.previewPosterUrl).not.toBe(segment.originalExternalPreviewUrl);
   });
 
@@ -375,8 +373,7 @@ describe("media library photo sources", () => {
       assetId: 303,
       kind: "photo_animation",
       previewKind: "video",
-      previewPosterUrl:
-        "/api/workspace/media-library-preview?kind=photo_animation&projectId=42&segmentIndex=0&v=current",
+      previewPosterUrl: expect.stringContaining("/api/workspace/media-assets/303/poster"),
     });
   });
 });

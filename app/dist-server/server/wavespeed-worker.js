@@ -243,9 +243,14 @@ export async function generateWaveSpeedSpeechPreview(options) {
             contentType: options.format === "mp3" ? "audio/mpeg" : "audio/wav",
         };
     }
-    const response = await fetchWaveSpeed("/minimax/speech-02-turbo", {
+    const modelPath = normalizeText(options.modelPath) || "minimax/speech-02-turbo";
+    const response = await fetchWaveSpeed(`/${modelPath.replace(/^\/+/, "")}`, {
         body: JSON.stringify({
             enable_sync_mode: true,
+            ...(typeof options.englishNormalization === "boolean"
+                ? { english_normalization: options.englishNormalization }
+                : {}),
+            ...(options.emotion ? { emotion: options.emotion } : {}),
             format: options.format ?? "wav",
             language_boost: options.languageBoost ?? "Russian",
             pitch: options.pitch ?? 0,

@@ -103,7 +103,7 @@ export const resolveWorkspaceMediaSurface = (
         preloadPolicy = hasStablePosterFrame ? "none" : "metadata";
         preferPosterFrame = true;
         primePausedFrame = !hasStablePosterFrame;
-        allowBrowserPosterCapture = !hasStablePosterFrame;
+        allowBrowserPosterCapture = true;
         break;
       }
       case "segment-drag-ghost": {
@@ -120,10 +120,12 @@ export const resolveWorkspaceMediaSurface = (
       }
       case "media-library-tile":
       case "segment-modal-library-tile": {
-        mountVideoWhenIdle = false;
-        preloadPolicy = "none";
+        const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
+        mountVideoWhenIdle = !hasStablePosterFrame;
+        preloadPolicy = hasStablePosterFrame ? "none" : "metadata";
         preferPosterFrame = true;
-        primePausedFrame = false;
+        primePausedFrame = !hasStablePosterFrame;
+        allowBrowserPosterCapture = !hasStablePosterFrame;
         break;
       }
       case "media-viewer": {

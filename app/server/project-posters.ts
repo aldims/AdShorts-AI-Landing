@@ -34,7 +34,8 @@ const PROJECT_POSTER_CAPTURE_CONCURRENCY = 4;
 const PROJECT_POSTER_CAPTURE_MAX_DIMENSION = 1280;
 const PROJECT_POSTER_FFMPEG_TIMEOUT_MS = env.upstreamPlaybackPreparationTimeoutMs;
 const PROJECT_POSTER_FFMPEG_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
-const PROJECT_POSTER_FRAME_TIMES_SECONDS = [0.15, 0];
+const PROJECT_POSTER_CAPTURE_SCHEMA_VERSION = "poster-v2-late-frame";
+const PROJECT_POSTER_FRAME_TIMES_SECONDS = [1.5, 0.75, 0.15, 0];
 const PROJECT_POSTER_ROOT_DIR = join(env.assetCacheDir, "project-posters");
 const PROJECT_POSTER_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const PROJECT_POSTER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -216,7 +217,7 @@ export const getWorkspaceVideoPosterCacheKey = (source: {
   const normalizedTargetUrl = new URL(source.targetUrl.toString());
   normalizedTargetUrl.searchParams.delete("admin_token");
 
-  return `${normalizedPosterId}:${normalizedVersion}:${normalizedTargetUrl.toString()}`;
+  return `${PROJECT_POSTER_CAPTURE_SCHEMA_VERSION}:${normalizedPosterId}:${normalizedVersion}:${normalizedTargetUrl.toString()}`;
 };
 
 export const getWorkspaceProjectPosterCacheKey = (source: {

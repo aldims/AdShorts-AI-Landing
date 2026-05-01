@@ -75,7 +75,7 @@ const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v5-video-posters";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v6-durable-video-posters";
 
 export type WorkspaceMediaLibraryPage = {
   items: WorkspaceMediaLibraryItem[];
@@ -567,6 +567,30 @@ const buildWorkspaceDurableMediaAssetPosterUrl = (
   return `${posterUrl.pathname}${posterUrl.search}`;
 };
 
+const buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem = (
+  assetId: number,
+  item: WorkspaceMediaIndexStoredItem,
+) => {
+  const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, env.appUrl);
+  const version = [
+    item.createdAt,
+    item.assetExpiresAt,
+    item.assetKind,
+    item.assetMediaType,
+    item.previewUrl,
+    assetId,
+  ]
+    .map(normalizeText)
+    .filter(Boolean)
+    .join(":");
+
+  if (version) {
+    posterUrl.searchParams.set("v", version);
+  }
+
+  return `${posterUrl.pathname}${posterUrl.search}`;
+};
+
 const getWorkspaceMediaLibraryItemSpecificityRank = (item: WorkspaceMediaLibraryItem) => {
   if (item.kind === "photo_animation" || item.kind === "image_edit") {
     return 3;
@@ -871,6 +895,11 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (
           `${downloadToken}:${item.segmentIndex}:${item.kind}`,
         );
 
+      const previewPosterUrl =
+        item.previewKind === "video" && assetId
+          ? buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem(assetId, item)
+          : item.previewPosterUrl;
+
       return createWorkspaceMediaLibraryItem({
         assetExpiresAt: item.assetExpiresAt ?? null,
         assetId,
@@ -882,7 +911,7 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (
         downloadUrl,
         kind: item.kind,
         previewKind: item.previewKind,
-        previewPosterUrl: item.previewPosterUrl,
+        previewPosterUrl,
         previewUrl,
         projectId: project.adId,
         projectTitle,
@@ -969,6 +998,9 @@ export const buildWorkspacePersistedMediaLibraryItems = (
             originalAssetMimeType.startsWith("image/");
           const videoKind = isPhotoAnimationVariant ? "photo_animation" : "ai_video";
           const videoSuffix = isPhotoAnimationVariant ? "animation" : "ai-video";
+          const assetPosterUrl = segment.currentAsset?.assetId
+            ? buildWorkspaceDurableMediaAssetPosterUrl(segment.currentAsset)
+            : segment.currentPosterUrl;
           items.push(
             createWorkspaceMediaLibraryItem({
               assetExpiresAt: segment.currentAsset?.expiresAt ?? null,
@@ -985,15 +1017,17 @@ export const buildWorkspacePersistedMediaLibraryItems = (
               ),
               kind: videoKind,
               previewKind: "video",
-              previewPosterUrl: buildWorkspaceMediaLibraryPreviewUrl({
-                kind: videoKind,
-                projectId,
-                segmentIndex: segment.index,
-                version: buildWorkspaceMediaLibraryPreviewVersion(
-                  currentPreviewUrl ?? currentPlaybackUrl ?? originalPreviewUrl,
-                  `${downloadToken}:${segment.index}:${videoSuffix}`,
-                ),
-              }),
+              previewPosterUrl:
+                assetPosterUrl ??
+                buildWorkspaceMediaLibraryPreviewUrl({
+                  kind: videoKind,
+                  projectId,
+                  segmentIndex: segment.index,
+                  version: buildWorkspaceMediaLibraryPreviewVersion(
+                    currentPreviewUrl ?? currentPlaybackUrl ?? originalPreviewUrl,
+                    `${downloadToken}:${segment.index}:${videoSuffix}`,
+                  ),
+                }),
               previewUrl: aiVideoPreviewUrl,
               projectId,
               projectTitle,
@@ -1083,6 +1117,9 @@ export const buildWorkspacePersistedMediaLibraryItems = (
         ),
       });
       if (animatedPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
+        const assetPosterUrl = segment.currentAsset?.assetId
+          ? buildWorkspaceDurableMediaAssetPosterUrl(segment.currentAsset)
+          : segment.currentPosterUrl;
         items.push(
           createWorkspaceMediaLibraryItem({
             assetExpiresAt: segment.currentAsset?.expiresAt ?? null,
@@ -1099,7 +1136,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (
             ),
             kind: "photo_animation",
             previewKind: "video",
-            previewPosterUrl: animatedPosterUrl,
+            previewPosterUrl: assetPosterUrl ?? animatedPosterUrl,
             previewUrl: animatedPreviewUrl,
             projectId,
             projectTitle,

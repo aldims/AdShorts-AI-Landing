@@ -31,6 +31,18 @@ const englishVoiceAliases = new Map([
 ]);
 const russianWaveSpeedVoiceAliases = new Map([
     ["liam", "Liam"],
+    ["english_manwithdeepvoice", "English_ManWithDeepVoice"],
+    ["english_man_with_deep_voice", "English_ManWithDeepVoice"],
+    ["gleb", "English_ManWithDeepVoice"],
+    ["глеб", "English_ManWithDeepVoice"],
+    ["russian_brightheroine", "Russian_BrightHeroine"],
+    ["russian_bright_heroine", "Russian_BrightHeroine"],
+    ["arina", "Russian_BrightHeroine"],
+    ["арина", "Russian_BrightHeroine"],
+    ["russian_handsomechildhoodfriend", "Russian_HandsomeChildhoodFriend"],
+    ["russian_handsome_childhood_friend", "Russian_HandsomeChildhoodFriend"],
+    ["mila", "Russian_HandsomeChildhoodFriend"],
+    ["мила", "Russian_HandsomeChildhoodFriend"],
     ["bys_24000", "Bys_24000"],
     ["nec_24000", "Nec_24000"],
     ["tur_24000", "Tur_24000"],
@@ -39,7 +51,7 @@ const russianWaveSpeedVoiceAliases = new Map([
     ["pon_24000", "Pon_24000"],
     ["rma_24000", "Rma_24000"],
     ["rnu_24000", "Rnu_24000"],
-    ["male-qn-jingying", "male-qn-jingying"],
+    ["male_qn_jingying", "male-qn-jingying"],
     ["aleksey", "male-qn-jingying"],
     ["alexey", "male-qn-jingying"],
     ["алексей", "male-qn-jingying"],
@@ -54,9 +66,14 @@ const normalizeEnglishVoiceId = (value) => {
     return englishVoiceAliases.get(normalized) ?? null;
 };
 const normalizeRussianWaveSpeedVoiceId = (value) => {
-    const normalized = String(value ?? "").trim().toLowerCase().replace(/[-\s]+/g, "-");
+    const normalized = String(value ?? "").trim().toLowerCase().replace(/[-\s]+/g, "_");
     return russianWaveSpeedVoiceAliases.get(normalized) ?? null;
 };
+const minimaxHdRussianVoiceIds = new Set([
+    "English_ManWithDeepVoice",
+    "Russian_BrightHeroine",
+    "Russian_HandsomeChildhoodFriend",
+]);
 const getDefaultPreviewText = (language) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : WAVESPEED_PREVIEW_TEXT_RU);
 const normalizePreviewText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const getPreviewCachePath = (voiceId, language, previewText) => {
@@ -240,11 +257,18 @@ export async function getStudioVoicePreview(options) {
                 error: adsflowError instanceof Error ? adsflowError.message : String(adsflowError),
                 voiceId: normalizedVoiceId,
             });
-            if (normalizedVoiceId !== "male-qn-jingying") {
+            if (normalizedVoiceId !== "male-qn-jingying" && !minimaxHdRussianVoiceIds.has(normalizedVoiceId)) {
                 throw adsflowError instanceof Error ? adsflowError : new Error("Russian voice preview failed.");
             }
         }
         return generateWaveSpeedSpeechPreview({
+            ...(minimaxHdRussianVoiceIds.has(normalizedVoiceId)
+                ? {
+                    emotion: "neutral",
+                    englishNormalization: false,
+                    modelPath: "minimax/speech-2.8-hd",
+                }
+                : {}),
             format: "wav",
             languageBoost: "Russian",
             text: previewText,

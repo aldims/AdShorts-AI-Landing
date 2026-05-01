@@ -100,7 +100,7 @@ describe("workspace resolved media surface", () => {
     expect(surface.posterUrl).toBe("https://cdn.example.com/poster.jpg");
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(false);
-    expect(surface.allowBrowserPosterCapture).toBe(false);
+    expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
   it("mounts thumb videos without stable posters so a frame can be captured", () => {
@@ -119,10 +119,11 @@ describe("workspace resolved media surface", () => {
     expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
-  it("keeps media-library video tiles poster-only until the viewer opens", () => {
+  it("keeps media-library video tiles poster-only when a stable poster exists", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "media-library-tile",
       displayUrl: "/api/studio/segment-photo-animation/jobs/job-2/video",
+      posterUrl: "/api/workspace/media-assets/202/poster?v=asset",
       previewKind: "video",
       viewerUrl: "/api/studio/segment-photo-animation/jobs/job-2/video",
     });
@@ -132,6 +133,21 @@ describe("workspace resolved media surface", () => {
     expect(surface.preferPosterFrame).toBe(true);
     expect(surface.primePausedFrame).toBe(false);
     expect(surface.allowBrowserPosterCapture).toBe(false);
+  });
+
+  it("mounts media-library video tiles without posters so a frame can be captured", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "media-library-tile",
+      displayUrl: "/api/workspace/media-assets/202/playback",
+      previewKind: "video",
+      viewerUrl: "/api/workspace/media-assets/202/playback",
+    });
+
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
+    expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
   it("configures viewer video for direct playback instead of poster-only mode", () => {

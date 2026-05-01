@@ -45,8 +45,11 @@ export type WaveSpeedPredictionStatusResult = {
 export type WaveSpeedImageToVideoJob = WaveSpeedPredictionStatusResult;
 
 type WaveSpeedSpeechPreviewOptions = {
+  emotion?: string;
+  englishNormalization?: boolean;
   format?: "flac" | "mp3" | "wav";
   languageBoost?: string;
+  modelPath?: string;
   pitch?: number;
   speed?: number;
   text: string;
@@ -383,11 +386,16 @@ export async function generateWaveSpeedSpeechPreview(
     };
   }
 
+  const modelPath = normalizeText(options.modelPath) || "minimax/speech-02-turbo";
   const response = await fetchWaveSpeed(
-    "/minimax/speech-02-turbo",
+    `/${modelPath.replace(/^\/+/, "")}`,
     {
       body: JSON.stringify({
         enable_sync_mode: true,
+        ...(typeof options.englishNormalization === "boolean"
+          ? { english_normalization: options.englishNormalization }
+          : {}),
+        ...(options.emotion ? { emotion: options.emotion } : {}),
         format: options.format ?? "wav",
         language_boost: options.languageBoost ?? "Russian",
         pitch: options.pitch ?? 0,
