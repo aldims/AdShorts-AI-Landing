@@ -1046,6 +1046,29 @@ export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
   (options.allowVideoPlayback ?? true) &&
   Boolean(options.autoplay || options.isPlaybackRequested);
 
+export const shouldShowWorkspaceMediaLibraryLoadingState = (options: {
+  hasVisibleItems: boolean;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasError: boolean;
+  hasNextCursor: boolean;
+  displayTotalCount: number | null;
+}) => {
+  if (options.hasError || !options.isLoading) {
+    return false;
+  }
+
+  if (options.hasVisibleItems) {
+    return true;
+  }
+
+  if (!options.isLoadingMore) {
+    return true;
+  }
+
+  return options.hasNextCursor && (options.displayTotalCount === null || options.displayTotalCount > 0);
+};
+
 type WorkspaceSegmentSubtitleOverlayProps = {
   clipCurrentTime: number;
   compact?: boolean;
@@ -15749,7 +15772,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     studioView,
   ]);
   const shouldShowMediaLibraryGridLoadingState =
-    isMediaLibraryStudioView && isMediaLibraryLoadingMore && visibleMediaLibraryItems.length > 0;
+    isMediaLibraryStudioView &&
+    shouldShowWorkspaceMediaLibraryLoadingState({
+      displayTotalCount: mediaLibraryDisplayTotalCount,
+      hasError: Boolean(mediaLibraryError),
+      hasNextCursor: Boolean(mediaLibraryNextCursor),
+      hasVisibleItems: visibleMediaLibraryItems.length > 0,
+      isLoading: isMediaLibraryLoading,
+      isLoadingMore: isMediaLibraryLoadingMore,
+    });
   const isMediaLibraryResolvingVisibleItems =
     !mediaLibraryError &&
     visibleMediaLibraryItems.length === 0 &&
@@ -26087,6 +26118,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         );
                       })}
                     </div>
+                  ) : isMediaLibraryLoading ? (
+                    <div className="studio-projects__loading">
+                      <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+                      <p>{workspaceText(locale, "Загрузка..", "Loading..")}</p>
+                    </div>
                   ) : (
                     <div className="studio-projects__empty">
                       <div className="studio-projects__empty-icon" aria-hidden="true">
@@ -26118,13 +26154,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     <div
                       ref={mediaLibraryNextCursor ? mediaLibraryLoadMoreSentinelRef : undefined}
                       className="studio-media-library__load-more-sentinel"
-                      role={isMediaLibraryLoadingMore ? "status" : undefined}
-                      aria-live={isMediaLibraryLoadingMore ? "polite" : undefined}
+                      role={shouldShowMediaLibraryGridLoadingState ? "status" : undefined}
+                      aria-live={shouldShowMediaLibraryGridLoadingState ? "polite" : undefined}
                     >
-                      {isMediaLibraryLoadingMore ? (
+                      {shouldShowMediaLibraryGridLoadingState ? (
                         <>
                           <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                          <span>{workspaceText(locale, "Загрузка...", "Loading...")}</span>
+                          <span>{workspaceText(locale, "Загрузка..", "Loading..")}</span>
                         </>
                       ) : null}
                     </div>
@@ -26146,6 +26182,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   >
                     {workspaceText(locale, "Повторить", "Retry")}
                   </button>
+                </div>
+              ) : isMediaLibraryLoading && resolvedMediaLibraryItems.length === 0 ? (
+                <div className="studio-projects__loading">
+                  <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
+                  <p>{workspaceText(locale, "Загрузка..", "Loading..")}</p>
                 </div>
               ) : mediaLibraryProjects.length === 0 && resolvedMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__empty">
@@ -26175,11 +26216,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     {workspaceText(locale, "Создать Shorts", "Create Shorts")}
                   </button>
                 </div>
-              ) : isMediaLibraryLoading && resolvedMediaLibraryItems.length === 0 ? (
-                <div className="studio-projects__loading">
-                  <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>{workspaceText(locale, "Загружаем медиатеку...", "Loading media library...")}</p>
-                </div>
               ) : mediaLibraryError && resolvedMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__error">
                   <strong>{workspaceText(locale, "Не удалось открыть медиатеку", "Could not open media library")}</strong>
@@ -26195,7 +26231,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               ) : isMediaLibraryResolvingVisibleItems ? (
                 <div className="studio-projects__loading">
                   <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>{workspaceText(locale, "Подбираем доступные медиа...", "Selecting available media...")}</p>
+                  <p>{workspaceText(locale, "Загрузка..", "Loading..")}</p>
                 </div>
               ) : visibleMediaLibraryItems.length === 0 ? (
                 <div className="studio-projects__empty">

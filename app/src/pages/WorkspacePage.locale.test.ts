@@ -32,6 +32,7 @@ import {
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
+  shouldShowWorkspaceMediaLibraryLoadingState,
 } from "./WorkspacePage";
 
 type DraftSegment = Parameters<typeof isWorkspaceSegmentDraftVisualResettable>[0];
@@ -987,6 +988,62 @@ describe("WorkspacePage studio locale defaults", () => {
         allowVideoPlayback: true,
         isPlaybackRequested: true,
         previewKind: "image",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps media library loading visible while media is still resolving", () => {
+    expect(
+      shouldShowWorkspaceMediaLibraryLoadingState({
+        displayTotalCount: null,
+        hasError: false,
+        hasNextCursor: false,
+        hasVisibleItems: false,
+        isLoading: true,
+        isLoadingMore: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceMediaLibraryLoadingState({
+        displayTotalCount: 12,
+        hasError: false,
+        hasNextCursor: true,
+        hasVisibleItems: true,
+        isLoading: true,
+        isLoadingMore: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceMediaLibraryLoadingState({
+        displayTotalCount: 12,
+        hasError: false,
+        hasNextCursor: true,
+        hasVisibleItems: false,
+        isLoading: true,
+        isLoadingMore: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not show media library loading after load completion or errors", () => {
+    expect(
+      shouldShowWorkspaceMediaLibraryLoadingState({
+        displayTotalCount: 0,
+        hasError: false,
+        hasNextCursor: false,
+        hasVisibleItems: false,
+        isLoading: false,
+        isLoadingMore: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowWorkspaceMediaLibraryLoadingState({
+        displayTotalCount: null,
+        hasError: true,
+        hasNextCursor: true,
+        hasVisibleItems: false,
+        isLoading: true,
+        isLoadingMore: true,
       }),
     ).toBe(false);
   });

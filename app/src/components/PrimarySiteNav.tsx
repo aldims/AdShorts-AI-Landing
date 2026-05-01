@@ -10,6 +10,7 @@ type Props = {
   activeStudioSection?: StudioEntryIntentSection | null;
   onOpenStudio: () => void;
   onOpenStudioSection?: (section: StudioEntryIntentSection) => void;
+  preferStudioSections?: boolean;
   projectsCount?: number;
   studioSectionLabels?: Partial<Record<StudioEntryIntentSection, string>>;
   onStudioBack?: (() => void) | null;
@@ -63,12 +64,14 @@ export function PrimarySiteNav({
   activeStudioSection = null,
   onOpenStudio,
   onOpenStudioSection,
+  preferStudioSections = false,
   projectsCount = 0,
   studioSectionLabels,
   onStudioBack = null,
 }: Props) {
   const { localizePath, t } = useLocale();
   const isStudioActive = activeItem === "studio";
+  const shouldRenderStudioSections = Boolean(onOpenStudioSection && (isStudioActive || preferStudioSections));
   const resolvedActiveStudioSection = activeStudioSection === "edit" ? "create" : activeStudioSection;
   const studioMenuId = useId();
   const [isStudioMenuOpen, setIsStudioMenuOpen] = useState(false);
@@ -108,7 +111,7 @@ export function PrimarySiteNav({
     onOpenStudio();
   };
 
-  if (isStudioActive && onOpenStudioSection) {
+  if (shouldRenderStudioSections && onOpenStudioSection) {
     return (
       <nav className="site-nav site-nav--studio-tabs" aria-label={t(navMessages.ariaStudioSections)}>
         {([
@@ -126,7 +129,11 @@ export function PrimarySiteNav({
             {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
           </button>
         ))}
-        <Link className="site-nav__item" to={localizePath("/pricing")}>
+        <Link
+          className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
+          to={localizePath("/pricing")}
+          state={{ fromStudio: true }}
+        >
           {t(navMessages.pricing)}
         </Link>
       </nav>

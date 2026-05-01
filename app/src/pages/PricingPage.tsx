@@ -33,6 +33,10 @@ type WorkspaceProfile = {
   startPlanUsed: boolean;
 } | null;
 
+type PricingRouteState = {
+  fromStudio?: boolean;
+} | null;
+
 type Props = {
   session: Session;
   workspaceProfile?: WorkspaceProfile;
@@ -395,6 +399,8 @@ export function PricingPage({
   const location = useLocation();
   const navigate = useNavigate();
   const { locale, localizePath, t } = useLocale();
+  const routeState = location.state as PricingRouteState;
+  const shouldUseStudioNavigation = Boolean(session && routeState?.fromStudio);
   const pricingPlans = getPricingPlans(locale);
   const pricingPacks = getPricingPacks(locale);
   const pricingFaqs = getPricingFaqs(locale);
@@ -762,14 +768,19 @@ export function PricingPage({
 
   return (
     <div className="route-page pricing-page">
-      <header className="site-header" id="top">
+      <header className={`site-header${shouldUseStudioNavigation ? " site-header--workspace" : ""}`} id="top">
         <div className="container site-header__inner">
           <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
             <img src="/logo.png" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
 
-          <PrimarySiteNav activeItem="pricing" onOpenStudio={openPrimaryFlow} onOpenStudioSection={openStudioSection} />
+          <PrimarySiteNav
+            activeItem="pricing"
+            onOpenStudio={openPrimaryFlow}
+            onOpenStudioSection={openStudioSection}
+            preferStudioSections={shouldUseStudioNavigation}
+          />
 
           <div className="site-header__actions">
             <LanguageSwitcher />
