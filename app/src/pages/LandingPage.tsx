@@ -674,7 +674,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
 
               <article className="step-card" data-reveal="" data-reveal-delay="3">
                 <div className="step-card__num">03</div>
-                <h3>{locale === "en" ? "Publish in one click" : "Опубликуйте в один клик"}</h3>
+                <h3>{locale === "en" ? "Publish in one click" : "Публикуйте в один клик"}</h3>
                 <p>{locale === "en" ? "Send the video to YouTube Shorts directly from the service." : "Отправьте ролик в YouTube Shorts прямо из сервиса."}</p>
               </article>
             </div>
