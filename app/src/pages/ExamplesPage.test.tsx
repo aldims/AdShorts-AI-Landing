@@ -96,4 +96,69 @@ describe("ExamplesPage copy", () => {
       voiceId: "Nec_24000",
     });
   });
+
+  it("stores local example settings for the selected video", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => ({
+          data: {
+            canManage: false,
+            enabled: true,
+            items: [
+              {
+                goal: "growth",
+                id: "local-dragon",
+                isLocal: true,
+                prefillSettings: {
+                  language: "ru",
+                  musicType: "dramatic",
+                  subtitleColorId: "cyan",
+                  subtitleEnabled: true,
+                  subtitleStyleId: "karaoke",
+                  videoMode: "ai_photo",
+                  voiceEnabled: true,
+                  voiceId: "Liam",
+                },
+                promptHint: "Подсказка",
+                seedPrompt: "футуристичный белый дракон",
+                summary: "Описание",
+                tags: ["Локально"],
+                title: "Ледяной дракон",
+                videoSrc: "/api/examples/local-video/local-dragon",
+              },
+            ],
+          },
+        }),
+        ok: true,
+      })),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/examples"]}>
+        <LocaleProvider locale="ru">
+          <ExamplesPage
+            session={{ email: "user@example.com", name: "User", plan: "FREE" }}
+            onOpenSignup={() => undefined}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={() => undefined}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Ледяной дракон")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Использовать" }));
+
+    const storedIntent = JSON.parse(window.sessionStorage.getItem("adshorts.example-prefill-intent") ?? "{}");
+    expect(storedIntent.prompt).toBe("футуристичный белый дракон");
+    expect(storedIntent.settings).toMatchObject({
+      musicType: "dramatic",
+      subtitleColorId: "cyan",
+      subtitleStyleId: "karaoke",
+      videoMode: "ai_photo",
+      voiceId: "Liam",
+    });
+  });
 });

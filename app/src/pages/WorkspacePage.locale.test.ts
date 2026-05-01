@@ -16,6 +16,7 @@ import {
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
   getWorkspaceSegmentDraftVideoUrl,
+  getWorkspaceSegmentEditorProjectOpenOptions,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
@@ -23,6 +24,7 @@ import {
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  resolveWorkspaceExamplePrefillInitialStudioState,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
@@ -297,6 +299,35 @@ describe("WorkspacePage segment subtitle bulk text", () => {
 });
 
 describe("WorkspacePage example prefill settings", () => {
+  it("uses example settings as the initial Studio state", () => {
+    expect(
+      resolveWorkspaceExamplePrefillInitialStudioState({
+        prefillSettings: {
+          brandText: "adshortsai.com",
+          language: "ru",
+          musicType: "dramatic",
+          subtitleColorId: "cyan",
+          subtitleEnabled: true,
+          subtitleStyleId: "karaoke",
+          videoMode: "ai_photo",
+          voiceEnabled: true,
+          voiceId: "Liam",
+        },
+        routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+      }),
+    ).toMatchObject({
+      brandText: "adshortsai.com",
+      language: "ru",
+      musicType: "dramatic",
+      subtitleColorId: "cyan",
+      subtitleEnabled: true,
+      subtitleStyleId: "karaoke",
+      videoMode: "ai_photo",
+      voiceEnabled: true,
+      voiceId: "Liam",
+    });
+  });
+
   it("keeps example subtitle style and color when workspace bootstrap arrives later", () => {
     const styleBase = {
       defaultColorId: "purple",
@@ -334,6 +365,24 @@ describe("WorkspacePage example prefill settings", () => {
     expect(selection).toEqual({
       subtitleColorId: "cyan",
       subtitleStyleId: "story",
+    });
+  });
+});
+
+describe("WorkspacePage segment editor draft persistence", () => {
+  it("preserves local drafts when a project is opened from the projects list", () => {
+    expect(getWorkspaceSegmentEditorProjectOpenOptions()).toEqual({
+      bypassCache: false,
+      discardLocalDraft: false,
+      forceRefresh: false,
+    });
+  });
+
+  it("only discards local drafts for an explicit refresh", () => {
+    expect(getWorkspaceSegmentEditorProjectOpenOptions({ forceRefresh: true })).toEqual({
+      bypassCache: true,
+      discardLocalDraft: true,
+      forceRefresh: true,
     });
   });
 });

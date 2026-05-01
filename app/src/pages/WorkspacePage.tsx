@@ -2709,6 +2709,72 @@ export const getWorkspaceInitialStudioDefaults = (
   };
 };
 
+type WorkspaceExamplePrefillInitialStudioState = {
+  brandText: string;
+  language: StudioLanguage;
+  musicType: StudioMusicType;
+  subtitleColorId: StudioSubtitleColorOption["id"];
+  subtitleEnabled: boolean;
+  subtitleStyleId: StudioSubtitleStyleOption["id"];
+  videoMode: StudioVideoMode;
+  voiceEnabled: boolean;
+  voiceId: StudioVoiceOption["id"];
+};
+
+const normalizeWorkspaceExamplePrefillString = (value: unknown) => String(value ?? "").trim();
+
+const resolveWorkspaceExamplePrefillInitialMusicType = (
+  settings: ExamplePrefillStudioSettings | null | undefined,
+): StudioMusicType => {
+  const requestedMusicType = normalizeWorkspaceExamplePrefillString(settings?.musicType);
+  if (requestedMusicType && requestedMusicType !== "custom") {
+    return studioMusicOptions.find((option) => option.id === requestedMusicType)?.id ?? "ai";
+  }
+
+  return "ai";
+};
+
+const resolveWorkspaceExamplePrefillInitialVideoMode = (
+  settings: ExamplePrefillStudioSettings | null | undefined,
+): StudioVideoMode => {
+  const requestedVideoMode = normalizeWorkspaceExamplePrefillString(settings?.videoMode);
+  if (requestedVideoMode && requestedVideoMode !== "custom") {
+    return studioVideoOptions.find((option) => option.id === requestedVideoMode)?.id ?? "standard";
+  }
+
+  return "standard";
+};
+
+export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {
+  prefillSettings?: ExamplePrefillStudioSettings | null;
+  routeDefaults: { language: StudioLanguage; voiceId: StudioVoiceOption["id"] };
+}): WorkspaceExamplePrefillInitialStudioState => {
+  const settings = options.prefillSettings ?? null;
+  const routeDefaults = options.routeDefaults;
+  const requestedVoiceId = normalizeWorkspaceExamplePrefillString(settings?.voiceId);
+  const requestedVoiceLanguage = getStudioLanguageForVoiceId(requestedVoiceId);
+  const requestedLanguage = normalizeStudioLanguageValue(settings?.language);
+  const language = requestedLanguage ?? requestedVoiceLanguage ?? routeDefaults.language;
+  const voiceId = requestedVoiceId
+    ? resolveStudioVoiceIdForLanguage(language, requestedVoiceId, routeDefaults.voiceId)
+    : resolveStudioVoiceIdForLanguage(language, routeDefaults.voiceId);
+  const subtitleStyleId = normalizeWorkspaceExamplePrefillString(settings?.subtitleStyleId) || "modern";
+  const subtitleColorId = normalizeWorkspaceExamplePrefillString(settings?.subtitleColorId) || "purple";
+  const brandText = normalizeWorkspaceExamplePrefillString(settings?.brandText).slice(0, STUDIO_BRAND_TEXT_MAX_CHARS);
+
+  return {
+    brandText,
+    language,
+    musicType: resolveWorkspaceExamplePrefillInitialMusicType(settings),
+    subtitleColorId,
+    subtitleEnabled: typeof settings?.subtitleEnabled === "boolean" ? settings.subtitleEnabled : true,
+    subtitleStyleId,
+    videoMode: resolveWorkspaceExamplePrefillInitialVideoMode(settings),
+    voiceEnabled: typeof settings?.voiceEnabled === "boolean" ? settings.voiceEnabled : true,
+    voiceId,
+  };
+};
+
 const getWorkspaceSegmentEditorSessionLanguage = (
   session: Pick<WorkspaceSegmentEditorSession, "language" | "voiceType">,
 ): StudioLanguage => normalizeStudioLanguageValue(session.language) ?? getStudioLanguageForVoiceId(session.voiceType) ?? "ru";
@@ -6049,6 +6115,16 @@ const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-edit
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRefresh?: boolean }) => {
+  const forceRefresh = Boolean(options?.forceRefresh);
+
+  return {
+    bypassCache: forceRefresh,
+    discardLocalDraft: forceRefresh,
+    forceRefresh,
+  };
+};
 
 const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${email}:${projectId}`;
@@ -12444,6 +12520,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const activeExamplePrefillSettingsRef = useRef<ExamplePrefillStudioSettings | null>(
     initialExamplePrefillRef.current?.settings ?? null,
   );
+  const examplePrefillInitialStudioState = resolveWorkspaceExamplePrefillInitialStudioState({
+    prefillSettings: initialExamplePrefillRef.current?.settings ?? null,
+    routeDefaults: routeStudioDefaults,
+  });
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(defaultTab);
   const [studioView, setStudioView] = useState<StudioView>(() =>
     defaultTab === "studio" ? getStudioViewFromRouteSection(getStudioRouteSection(location.search)) : "create",
@@ -12453,25 +12533,35 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(routeStudioDefaults.language);
+  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(examplePrefillInitialStudioState.language);
   const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([]);
   const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([]);
-  const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(true);
-  const [isVoiceoverEnabled, setIsVoiceoverEnabled] = useState(true);
-  const [selectedSubtitleStyleId, setSelectedSubtitleStyleId] = useState<StudioSubtitleStyleOption["id"]>("modern");
-  const [selectedSubtitleColorId, setSelectedSubtitleColorId] = useState<StudioSubtitleColorOption["id"]>("purple");
+  const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(examplePrefillInitialStudioState.subtitleEnabled);
+  const [isVoiceoverEnabled, setIsVoiceoverEnabled] = useState(examplePrefillInitialStudioState.voiceEnabled);
+  const [selectedSubtitleStyleId, setSelectedSubtitleStyleId] = useState<StudioSubtitleStyleOption["id"]>(
+    examplePrefillInitialStudioState.subtitleStyleId,
+  );
+  const [selectedSubtitleColorId, setSelectedSubtitleColorId] = useState<StudioSubtitleColorOption["id"]>(
+    examplePrefillInitialStudioState.subtitleColorId,
+  );
   const [selectedSubtitleExampleId, setSelectedSubtitleExampleId] = useState<StudioSubtitleExampleOption["id"]>(studioSubtitleExampleOptions[0]?.id ?? "hook");
   const [segmentSubtitleBulkTextInput, setSegmentSubtitleBulkTextInput] = useState("");
   const [hasEditedSegmentSubtitleBulkTextInput, setHasEditedSegmentSubtitleBulkTextInput] = useState(false);
   const [segmentSubtitleBulkTextError, setSegmentSubtitleBulkTextError] = useState<string | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<StudioVoiceOption["id"]>(
-    routeStudioDefaults.voiceId,
+    examplePrefillInitialStudioState.voiceId,
   );
   const selectedVoiceIdByLanguageRef = useRef<Record<StudioLanguage, StudioVoiceOption["id"]>>({
-    ru: getDefaultStudioVoiceId("ru"),
-    en: getDefaultStudioVoiceId("en"),
+    ru:
+      examplePrefillInitialStudioState.language === "ru"
+        ? examplePrefillInitialStudioState.voiceId
+        : getDefaultStudioVoiceId("ru"),
+    en:
+      examplePrefillInitialStudioState.language === "en"
+        ? examplePrefillInitialStudioState.voiceId
+        : getDefaultStudioVoiceId("en"),
   });
-  const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>("standard");
+  const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(examplePrefillInitialStudioState.videoMode);
   const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentAiVideoQuality, setSelectedSegmentAiVideoQuality] =
@@ -12495,10 +12585,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [selectedBrandLogo, setSelectedBrandLogo] = useState<StudioBrandLogoFile | null>(
     () => initialBrandSettingsRef.current?.brandLogoFile ?? null,
   );
-  const [brandText, setBrandText] = useState(() => initialBrandSettingsRef.current?.brandText ?? "");
+  const [brandText, setBrandText] = useState(
+    () => examplePrefillInitialStudioState.brandText || (initialBrandSettingsRef.current?.brandText ?? ""),
+  );
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
-  const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>("ai");
+  const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>(examplePrefillInitialStudioState.musicType);
   const [selectedCustomMusic, setSelectedCustomMusic] = useState<StudioCustomMusicFile | null>(null);
   const [isPreparingCustomMusic, setIsPreparingCustomMusic] = useState(false);
   const [musicSelectionError, setMusicSelectionError] = useState<string | null>(null);
@@ -13885,18 +13977,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     writeStoredWorkspaceSegmentEditorSession(session.email, segmentEditorLoadedSession);
   }, [segmentEditorLoadedSession, session.email]);
 
-  useLayoutEffect(() => {
-    if (!segmentEditorDraft) {
-      return;
-    }
-
-    const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(segmentEditorDraft);
+  const persistSegmentEditorDraftSnapshot = useCallback((draft: WorkspaceSegmentEditorDraftSession) => {
+    const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(draft);
     writeStoredWorkspaceSegmentEditorDraft(session.email, normalizedDraft);
     setStoredSegmentEditorDrafts((currentDrafts) => {
       const nextDrafts = currentDrafts.filter((draft) => draft.projectId !== normalizedDraft.projectId);
       return [normalizedDraft, ...nextDrafts];
     });
-  }, [segmentEditorDraft, session.email]);
+
+    return normalizedDraft;
+  }, [session.email]);
+
+  useLayoutEffect(() => {
+    if (!segmentEditorDraft) {
+      return;
+    }
+
+    persistSegmentEditorDraftSnapshot(segmentEditorDraft);
+  }, [persistSegmentEditorDraftSnapshot, segmentEditorDraft]);
 
   useEffect(() => {
     persistGeneratedMediaLibraryEntries(session.email, generatedMediaLibraryEntries);
@@ -17034,9 +17132,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    const draftSnapshot = cloneWorkspaceSegmentEditorDraftSession(segmentEditorDraft);
+    persistSegmentEditorDraftSnapshot(draftSnapshot);
     detachedSegmentEditorDraftRef.current = {
       activeSegmentIndex,
-      draft: cloneWorkspaceSegmentEditorDraftSession(segmentEditorDraft),
+      draft: draftSnapshot,
     };
   };
 
@@ -21968,11 +22068,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     setActiveTab("studio");
     setStudioView("create");
-    await ensureSegmentEditorDraftForProject(project.adId, {
-      bypassCache: true,
-      discardLocalDraft: true,
-      forceRefresh: true,
-    });
+    if (segmentEditorDraft?.projectId && segmentEditorDraft.projectId !== project.adId) {
+      stashCurrentSegmentEditorDraft();
+    }
+
+    await ensureSegmentEditorDraftForProject(project.adId, getWorkspaceSegmentEditorProjectOpenOptions());
   };
 
   const handleOpenMediaLibraryItem = (item: WorkspaceMediaLibraryItem) => {
