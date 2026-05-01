@@ -201,6 +201,11 @@ const createExamplePrefillSettings = (
   ...overrides,
 });
 
+const getExampleItemLocale = (example: ExampleItem): Locale => {
+  const language = String(example.prefillSettings?.language ?? "").trim().toLowerCase();
+  return language === "en" ? "en" : "ru";
+};
+
 const exampleItems: ExampleItem[] = [
   {
     goal: "growth",
@@ -618,7 +623,7 @@ export function ExamplesPage({
   const [deletingLocalExampleId, setDeletingLocalExampleId] = useState<string | null>(null);
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
   const knownGoals = new Set<string>(["ads", "growth", "expert"]);
-  const filteredLocalExamples = localExamples.filter((e) => knownGoals.has(e.goal));
+  const filteredLocalExamples = localExamples.filter((e) => knownGoals.has(e.goal) && getExampleItemLocale(e) === locale);
   const sortedLocalExamples = sortExamplesForCatalog(filteredLocalExamples);
   const localeExampleItems = getExampleItemsForLocale(locale);
   const goalCopy = exampleGoalCopy[locale];

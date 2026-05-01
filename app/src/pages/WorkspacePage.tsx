@@ -2543,11 +2543,11 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
   ru: [
     {
       id: "Liam",
-      label: "Liam",
+      label: "Александр",
       description: "Выразительный premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит premium-голос, его темп, интонация и общее восприятие.",
+      previewText: "Послушайте, как звучит голос Александр, его темп, интонация и общее восприятие.",
     },
     {
       id: "English_ManWithDeepVoice",
@@ -2559,19 +2559,11 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
     },
     {
       id: "Russian_BrightHeroine",
-      label: "Арина",
+      label: "Тим",
       description: "Яркий premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит голос Арина, его темп, интонация и общее восприятие.",
-    },
-    {
-      id: "Russian_HandsomeChildhoodFriend",
-      label: "Мила",
-      description: "Молодой premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит голос Мила, его темп, интонация и общее восприятие.",
+      previewText: "Послушайте, как звучит голос Тим, его темп, интонация и общее восприятие.",
     },
     {
       id: "Bys_24000",
@@ -2614,18 +2606,6 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       label: "Алексей",
       description: "Выразительный мужской голос",
       previewSampleUrl: `/voice-previews/aleksey.wav?v=${studioRussianVoicePreviewAssetVersion}`,
-    },
-    {
-      id: "Rma_24000",
-      label: "Рма",
-      description: "Более плотный и выразительный тембр",
-      previewSampleUrl: `/voice-previews/rma.wav?v=${studioRussianVoicePreviewAssetVersion}`,
-    },
-    {
-      id: "Rnu_24000",
-      label: "Рну",
-      description: "Спокойный мужской голос",
-      previewSampleUrl: `/voice-previews/rnu.wav?v=${studioRussianVoicePreviewAssetVersion}`,
     },
   ],
   en: [

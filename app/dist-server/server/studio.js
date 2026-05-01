@@ -120,15 +120,12 @@ const studioRussianVoiceIds = new Set([
     "Liam",
     "English_ManWithDeepVoice",
     "Russian_BrightHeroine",
-    "Russian_HandsomeChildhoodFriend",
     "Nec_24000",
     "Tur_24000",
     "May_24000",
     "Ost_24000",
     "Pon_24000",
     "male-qn-jingying",
-    "Rma_24000",
-    "Rnu_24000",
 ]);
 const studioEnglishVoiceIds = new Set([
     "Aiden",
@@ -240,7 +237,6 @@ const studioPremiumVoiceIds = new Set([
     "Liam",
     "English_ManWithDeepVoice",
     "Russian_BrightHeroine",
-    "Russian_HandsomeChildhoodFriend",
 ]);
 const getCanonicalStudioVoiceId = (voiceId) => {
     const normalizedVoiceId = normalizeGenerationText(voiceId);
@@ -1859,6 +1855,7 @@ const buildStudioGeneration = (payload, options) => {
         description: options?.description ?? payload.description,
         fallbackTitle: "Готовое видео",
         hashtags: options?.hashtags ?? payload.hashtags,
+        language: options?.historyEntry?.prefillSettings?.language,
         prompt: options?.prompt ?? payload.prompt,
         title: options?.title ?? payload.title,
     });
@@ -1912,6 +1909,7 @@ const buildStudioGenerationFromLatest = (payload, historyEntry) => {
         description: historyEntry?.description || payload.description,
         fallbackTitle: "Готовое видео",
         hashtags: historyEntry?.hashtags.length ? historyEntry.hashtags : payload.hashtags,
+        language: historyEntry?.prefillSettings?.language,
         prompt: historyEntry?.prompt || payload.prompt,
         title: historyEntry?.title || payload.title,
     });
@@ -2734,8 +2732,9 @@ export async function createStudioGenerationJob(prompt, user, options) {
         }
         const queuedMetadata = resolveGenerationPresentation({
             description: normalizedPrompt,
-            fallbackTitle: "Готовое видео",
+            fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",
             hashtags: null,
+            language: normalizedLanguage,
             prompt: normalizedPrompt,
             title: normalizeGenerationText(payload.title) || normalizedPrompt,
         });
@@ -3421,8 +3420,9 @@ export async function getStudioGenerationStatus(jobId, user) {
     const existingHistoryEntry = await getWorkspaceGenerationHistoryEntry(user, safeJobId).catch(() => null);
     const resolvedMetadata = resolveGenerationPresentation({
         description: payload.description ?? existingHistoryEntry?.description ?? "",
-        fallbackTitle: "Готовое видео",
+        fallbackTitle: existingHistoryEntry?.prefillSettings?.language === "en" ? "Ready video" : "Готовое видео",
         hashtags: payload.hashtags ?? existingHistoryEntry?.hashtags ?? [],
+        language: existingHistoryEntry?.prefillSettings?.language,
         prompt: existingHistoryEntry?.prompt ?? payload.prompt ?? "",
         title: payload.title ?? existingHistoryEntry?.title ?? "",
     });

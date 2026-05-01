@@ -37,12 +37,10 @@ describe("studio generation language resolution", () => {
   it("keeps explicit MiniMax premium voices for Russian generation", () => {
     expect(normalizeStudioVoiceIdForLanguage("English_ManWithDeepVoice", "ru")).toBe("English_ManWithDeepVoice");
     expect(normalizeStudioVoiceIdForLanguage("Russian_BrightHeroine", "ru")).toBe("Russian_BrightHeroine");
-    expect(normalizeStudioVoiceIdForLanguage("Russian_HandsomeChildhoodFriend", "ru")).toBe(
-      "Russian_HandsomeChildhoodFriend",
-    );
+    expect(normalizeStudioVoiceIdForLanguage("Russian_HandsomeChildhoodFriend", "ru")).toBe("Bys_24000");
     expect(normalizeStudioVoiceIdForLanguage("Russian_BrightHeroine", "en")).toBe("Aiden");
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
-    expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(5);
+    expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
   });
 });

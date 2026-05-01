@@ -31,26 +31,26 @@ const englishVoiceAliases = new Map([
 ]);
 const russianWaveSpeedVoiceAliases = new Map([
     ["liam", "Liam"],
+    ["alexander", "Liam"],
+    ["alexandr", "Liam"],
+    ["aleksandr", "Liam"],
+    ["александр", "Liam"],
     ["english_manwithdeepvoice", "English_ManWithDeepVoice"],
     ["english_man_with_deep_voice", "English_ManWithDeepVoice"],
     ["gleb", "English_ManWithDeepVoice"],
     ["глеб", "English_ManWithDeepVoice"],
     ["russian_brightheroine", "Russian_BrightHeroine"],
     ["russian_bright_heroine", "Russian_BrightHeroine"],
+    ["tim", "Russian_BrightHeroine"],
+    ["тим", "Russian_BrightHeroine"],
     ["arina", "Russian_BrightHeroine"],
     ["арина", "Russian_BrightHeroine"],
-    ["russian_handsomechildhoodfriend", "Russian_HandsomeChildhoodFriend"],
-    ["russian_handsome_childhood_friend", "Russian_HandsomeChildhoodFriend"],
-    ["mila", "Russian_HandsomeChildhoodFriend"],
-    ["мила", "Russian_HandsomeChildhoodFriend"],
     ["bys_24000", "Bys_24000"],
     ["nec_24000", "Nec_24000"],
     ["tur_24000", "Tur_24000"],
     ["may_24000", "May_24000"],
     ["ost_24000", "Ost_24000"],
     ["pon_24000", "Pon_24000"],
-    ["rma_24000", "Rma_24000"],
-    ["rnu_24000", "Rnu_24000"],
     ["male_qn_jingying", "male-qn-jingying"],
     ["aleksey", "male-qn-jingying"],
     ["alexey", "male-qn-jingying"],
@@ -72,7 +72,6 @@ const normalizeRussianWaveSpeedVoiceId = (value) => {
 const minimaxHdRussianVoiceIds = new Set([
     "English_ManWithDeepVoice",
     "Russian_BrightHeroine",
-    "Russian_HandsomeChildhoodFriend",
 ]);
 const getDefaultPreviewText = (language) => (language === "en" ? DEAPI_PREVIEW_TEXT_EN : WAVESPEED_PREVIEW_TEXT_RU);
 const normalizePreviewText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();

@@ -459,6 +459,7 @@ const buildProjectFromAdminVideo = (
     description: historyEntry?.description || item.description,
     fallbackTitle: `Проект #${adId}`,
     hashtags: historyEntry?.hashtags ?? [],
+    language: historyEntry?.prefillSettings?.language,
     prompt: historyEntry?.prompt || item.description,
     title: historyEntry?.title || item.ai_title,
   });
@@ -569,6 +570,7 @@ const buildProjectFromLatestGeneration = (
     description: historyEntry?.description || item.description,
     fallbackTitle: adId ? `Проект #${adId}` : "Проект",
     hashtags: historyEntry?.hashtags.length ? historyEntry.hashtags : item.hashtags,
+    language: historyEntry?.prefillSettings?.language,
     prompt: historyEntry?.prompt || item.prompt,
     title: historyEntry?.title || item.title,
   });
@@ -634,6 +636,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     description: item.description,
     fallbackTitle: adId ? `Проект #${adId}` : "Проект",
     hashtags: item.hashtags,
+    language: item.prefillSettings?.language,
     prompt: item.prompt,
     title: item.title,
   });

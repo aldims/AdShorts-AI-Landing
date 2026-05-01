@@ -19,6 +19,7 @@ const LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS = new Set([
 ]);
 const LOCAL_EXAMPLES_SHARED_OWNER_KEY = `email:${LOCAL_EXAMPLES_ADMIN_EMAIL}`;
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value);
 const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLowerCase();
 const normalizeLocalExampleGoal = (value) => {
     const normalized = normalizeText(value);
@@ -148,12 +149,35 @@ const truncateText = (value, maxLength) => {
 };
 const buildLocalExamplePromptHint = (prompt) => truncateText(prompt || "Локальный пример из Studio.", 96);
 const buildLocalExampleSummary = (prompt) => truncateText(prompt || "Локально сохранённый пример из обычной генерации.", 160);
-const sanitizeLocalExampleTitle = (title, prompt) => {
+const getLocalExampleLanguage = (value) => {
+    const normalized = normalizeText(value?.language).toLowerCase();
+    return normalized === "en" ? "en" : "ru";
+};
+const buildEnglishLocalExampleTitle = (title, prompt) => {
+    const haystack = `${title} ${prompt}`.toLowerCase();
+    if (/дракон|dragon/.test(haystack)) {
+        return "The Last Knight vs. the Ice Dragon";
+    }
+    if (/лава|вулкан|lava|volcano/.test(haystack)) {
+        return "Dawn of a Techno-Volcanic Eruption";
+    }
+    if (/динозавр|rex|dinosaur/.test(haystack)) {
+        return "How Little Rex Conquered the Ocean";
+    }
+    if (/реклам|adshorts|advertis|готовый ролик|one idea/.test(haystack)) {
+        return "A Video from One Idea in a Minute";
+    }
+    return "English Shorts Example";
+};
+const sanitizeLocalExampleTitle = (title, prompt, language = "ru") => {
     const normalizedTitle = normalizeText(title);
+    if (language === "en" && (!normalizedTitle || hasCyrillic(normalizedTitle))) {
+        return truncateText(buildEnglishLocalExampleTitle(normalizedTitle, prompt), 110);
+    }
     if (normalizedTitle) {
         return truncateText(normalizedTitle, 110);
     }
-    return truncateText(prompt || "Локальный пример", 110);
+    return truncateText(prompt || (language === "en" ? "English Shorts Example" : "Локальный пример"), 110);
 };
 const inferLocalExampleVideoContentType = (value) => {
     const normalized = normalizeText(value).toLowerCase();
@@ -340,7 +364,8 @@ export const saveLocalExample = async (user, input) => {
     const goal = normalizeLocalExampleGoal(input.goal);
     const prefillSettings = normalizeExamplePrefillStudioSettings(input.prefillSettings);
     const prompt = normalizeText(input.prompt);
-    const title = sanitizeLocalExampleTitle(input.title, prompt);
+    const language = getLocalExampleLanguage(prefillSettings);
+    const title = sanitizeLocalExampleTitle(input.title, prompt, language);
     const sourceId = normalizeText(input.sourceId) || null;
     if (!goal) {
         throw new Error("Local example section is required.");

@@ -160,6 +160,64 @@ describe("ExamplesPage copy", () => {
     ]);
   });
 
+  it("shows local examples only for their saved language", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => ({
+          data: {
+            canManage: false,
+            enabled: true,
+            items: [
+              {
+                goal: "growth",
+                id: "local-ru",
+                isLocal: true,
+                prefillSettings: { language: "ru" },
+                promptHint: "Русский пример",
+                seedPrompt: "русский пример",
+                summary: "Русский пример",
+                tags: ["RU"],
+                title: "Русский пример",
+                videoSrc: "/api/examples/local-video/local-ru",
+              },
+              {
+                goal: "growth",
+                id: "local-en",
+                isLocal: true,
+                prefillSettings: { language: "en" },
+                promptHint: "English example",
+                seedPrompt: "English example",
+                summary: "English example",
+                tags: ["EN"],
+                title: "English example",
+                videoSrc: "/api/examples/local-video/local-en",
+              },
+            ],
+          },
+        }),
+        ok: true,
+      })),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/en/examples"]}>
+        <LocaleProvider locale="en">
+          <ExamplesPage
+            session={null}
+            onOpenSignup={() => undefined}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={() => undefined}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "English example" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Русский пример" })).toBeNull();
+  });
+
   it("stores the example studio settings together with the prompt", async () => {
     render(
       <MemoryRouter initialEntries={["/examples"]}>

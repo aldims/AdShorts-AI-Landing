@@ -4,6 +4,7 @@ type ResolveGenerationPresentationOptions = {
   description?: string | null;
   fallbackTitle?: string;
   hashtags?: string[] | string | null;
+  language?: GenerationLanguage | null;
   prompt?: string | null;
   title?: string | null;
 };
@@ -114,9 +115,13 @@ export const detectGenerationLanguage = (value: string | null | undefined, fallb
   return fallback;
 };
 
-const buildPromptTitle = (prompt: string, fallback: string) => {
+const buildPromptTitle = (prompt: string, fallback: string, language?: GenerationLanguage) => {
   const normalized = normalizeText(prompt);
   if (!normalized) {
+    return fallback;
+  }
+
+  if (language === "en" && hasCyrillic(normalized)) {
     return fallback;
   }
 
@@ -221,7 +226,11 @@ const shouldFallbackTitle = (title: string, promptLanguage: GenerationLanguage) 
     return true;
   }
 
-  return promptLanguage === "ru" && hasLatin(normalized) && !hasCyrillic(normalized);
+  if (promptLanguage === "en") {
+    return hasCyrillic(normalized) && !hasLatin(normalized);
+  }
+
+  return hasLatin(normalized) && !hasCyrillic(normalized);
 };
 
 const shouldFallbackDescription = (description: string, promptLanguage: GenerationLanguage) => {
@@ -241,11 +250,12 @@ export const resolveGenerationPresentation = (
   options: ResolveGenerationPresentationOptions,
 ) => {
   const prompt = normalizeText(options.prompt);
-  const promptLanguage = detectGenerationLanguage(prompt, "ru");
+  const requestedLanguage = options.language === "en" || options.language === "ru" ? options.language : null;
+  const promptLanguage = requestedLanguage ?? detectGenerationLanguage(prompt, "ru");
   const fallbackTitle = normalizeText(options.fallbackTitle) || (promptLanguage === "ru" ? "Готовое видео" : "Ready video");
   const rawTitle = normalizeText(options.title);
   const rawDescription = normalizeText(options.description);
-  const title = shouldFallbackTitle(rawTitle, promptLanguage) ? buildPromptTitle(prompt, fallbackTitle) : rawTitle;
+  const title = shouldFallbackTitle(rawTitle, promptLanguage) ? buildPromptTitle(prompt, fallbackTitle, promptLanguage) : rawTitle;
   const description = shouldFallbackDescription(rawDescription, promptLanguage)
     ? prompt || rawDescription || title || fallbackTitle
     : rawDescription;
@@ -256,6 +266,6 @@ export const resolveGenerationPresentation = (
     hashtags: hashtags.length ? hashtags : buildHashtagsFromPrompt(prompt, promptLanguage),
     language: promptLanguage,
     prompt,
-    title: title || buildPromptTitle(prompt, fallbackTitle),
+    title: title || buildPromptTitle(prompt, fallbackTitle, promptLanguage),
   };
 };
