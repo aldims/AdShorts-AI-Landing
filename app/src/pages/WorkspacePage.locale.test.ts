@@ -453,6 +453,31 @@ describe("WorkspacePage segment editor draft persistence", () => {
       }),
     ).toBe(false);
   });
+
+  it("marks replacing custom music with another custom file as a change", () => {
+    const segment = createDraftSegment({ index: 0, text: "First" });
+    const baseline = {
+      ...createDraftSession(segment),
+      customMusicAssetId: 441,
+      customMusicFileName: "old-track.mp3",
+      musicType: "custom",
+    };
+    const draft = {
+      ...baseline,
+      customMusicAssetId: null,
+      customMusicFileName: "new-track.mp3",
+      musicType: "custom",
+    };
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, baseline)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "global",
+          resetSettingIds: expect.arrayContaining(["music"]),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("WorkspacePage studio locale defaults", () => {
@@ -554,6 +579,54 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedSegment?.originalAsset?.assetId).toBe(101);
     expect(refreshedSegment?.originalPreviewUrl).toBe("/api/workspace/media-assets/101");
     expect(refreshedSegment && isWorkspaceSegmentDraftVisualResettable(refreshedSegment)).toBe(true);
+  });
+
+  it("repairs stale custom music metadata when the fresh project uses auto music", () => {
+    const segment = createDraftSegment({ index: 0, text: "First" });
+    const staleDraft = {
+      ...createDraftSession(segment),
+      customMusicAssetId: 649,
+      customMusicFileName: "upbeat_10.mp3",
+      musicType: "custom",
+    };
+    const freshSession = {
+      ...createFreshSession(segment),
+      customMusicAssetId: null,
+      customMusicFileName: "",
+      musicType: "upbeat",
+    };
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(staleDraft, freshSession, {
+      baselineSession: staleDraft,
+    });
+
+    expect(refreshedDraft.musicType).toBe("upbeat");
+    expect(refreshedDraft.customMusicAssetId).toBeNull();
+    expect(refreshedDraft.customMusicFileName).toBeNull();
+  });
+
+  it("preserves a newly selected custom music file during a fresh session refresh", () => {
+    const segment = createDraftSegment({ index: 0, text: "First" });
+    const baseline = {
+      ...createDraftSession(segment),
+      musicType: "upbeat",
+    };
+    const liveDraft = {
+      ...baseline,
+      customMusicAssetId: null,
+      customMusicFileName: "new-track.mp3",
+      musicType: "custom",
+    };
+    const freshSession = {
+      ...createFreshSession(segment),
+      musicType: "upbeat",
+    };
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      baselineSession: baseline,
+    });
+
+    expect(refreshedDraft.musicType).toBe("custom");
+    expect(refreshedDraft.customMusicAssetId).toBeNull();
+    expect(refreshedDraft.customMusicFileName).toBe("new-track.mp3");
   });
 
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {

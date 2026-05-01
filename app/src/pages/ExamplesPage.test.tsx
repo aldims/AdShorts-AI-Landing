@@ -66,6 +66,100 @@ describe("ExamplesPage copy", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/examples/local"));
   });
 
+  it("orders example filters as growth, ads, education", async () => {
+    renderExamplesPage();
+
+    const growthFilter = await screen.findByRole("button", { name: "📈 Рост канала" });
+    const adsFilter = screen.getByRole("button", { name: "📣 Реклама" });
+    const educationFilter = screen.getByRole("button", { name: "🎓 Обучение" });
+
+    expect(growthFilter.compareDocumentPosition(adsFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(adsFilter.compareDocumentPosition(educationFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("orders local examples as dragon, lava, dinosaur, ads", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => ({
+          data: {
+            canManage: false,
+            enabled: true,
+            items: [
+              {
+                goal: "ads",
+                id: "local-ad",
+                isLocal: true,
+                promptHint: "Рекламный ролик",
+                seedPrompt: "рекламный Shorts про сервис",
+                summary: "Реклама сервиса",
+                tags: ["Реклама"],
+                title: "Про рекламу",
+                videoSrc: "/api/examples/local-video/local-ad",
+              },
+              {
+                goal: "growth",
+                id: "local-dino",
+                isLocal: true,
+                promptHint: "Динозавр",
+                seedPrompt: "маленький динозавр-пират",
+                summary: "История про динозавра",
+                tags: ["Динозавр"],
+                title: "Про динозавра",
+                videoSrc: "/api/examples/local-video/local-dino",
+              },
+              {
+                goal: "expert",
+                id: "local-lava",
+                isLocal: true,
+                promptHint: "Лава",
+                seedPrompt: "футуристическая лава и вулканические взрывы",
+                summary: "Объяснение про лаву",
+                tags: ["Лава"],
+                title: "Про лаву",
+                videoSrc: "/api/examples/local-video/local-lava",
+              },
+              {
+                goal: "growth",
+                id: "local-dragon",
+                isLocal: true,
+                promptHint: "Дракон",
+                seedPrompt: "футуристичный белый дракон в заснеженных горах",
+                summary: "История про дракона",
+                tags: ["Дракон"],
+                title: "Про дракона",
+                videoSrc: "/api/examples/local-video/local-dragon",
+              },
+            ],
+          },
+        }),
+        ok: true,
+      })),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/examples"]}>
+        <LocaleProvider locale="ru">
+          <ExamplesPage
+            session={null}
+            onOpenSignup={() => undefined}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={() => undefined}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Про дракона" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      "Про дракона",
+      "Про лаву",
+      "Про динозавра",
+      "Про рекламу",
+    ]);
+  });
+
   it("stores the example studio settings together with the prompt", async () => {
     render(
       <MemoryRouter initialEntries={["/examples"]}>

@@ -134,7 +134,57 @@ const exampleGoalCopy: Record<Locale, Record<ExampleGoal, { label: string; short
   },
 };
 
-const exampleGoalOrder: ExampleGoal[] = ["ads", "growth", "expert"];
+const exampleGoalOrder: ExampleGoal[] = ["growth", "ads", "expert"];
+
+const normalizeExampleCatalogSearchText = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const getExampleCatalogVideoPriority = (example: Pick<ExampleItem, "goal" | "id" | "promptHint" | "seedPrompt" | "summary" | "tags" | "title">) => {
+  const haystack = normalizeExampleCatalogSearchText(
+    [
+      example.id,
+      example.title,
+      example.seedPrompt,
+      example.promptHint,
+      example.summary,
+      ...example.tags,
+    ].join(" "),
+  );
+
+  if (/(дракон|dragon)/i.test(haystack)) {
+    return 0;
+  }
+
+  if (/(лава|вулкан|lava|volcano)/i.test(haystack)) {
+    return 1;
+  }
+
+  if (/(динозавр|dinosaur)/i.test(haystack)) {
+    return 2;
+  }
+
+  if (example.goal === "ads" || /(реклам|продающ|advertis|\bads?\b)/i.test(haystack)) {
+    return 3;
+  }
+
+  return Number.POSITIVE_INFINITY;
+};
+
+export const sortExamplesForCatalog = (items: ExampleItem[]) =>
+  [...items].sort((left, right) => {
+    const leftVideoPriority = getExampleCatalogVideoPriority(left);
+    const rightVideoPriority = getExampleCatalogVideoPriority(right);
+
+    if (leftVideoPriority !== rightVideoPriority) {
+      return leftVideoPriority - rightVideoPriority;
+    }
+
+    const leftGoalPriority = exampleGoalOrder.indexOf(left.goal);
+    const rightGoalPriority = exampleGoalOrder.indexOf(right.goal);
+    const safeLeftGoalPriority = leftGoalPriority >= 0 ? leftGoalPriority : exampleGoalOrder.length;
+    const safeRightGoalPriority = rightGoalPriority >= 0 ? rightGoalPriority : exampleGoalOrder.length;
+
+    return safeLeftGoalPriority - safeRightGoalPriority;
+  });
 
 const createExamplePrefillSettings = (
   locale: Locale,
@@ -569,9 +619,10 @@ export function ExamplesPage({
   const [localExampleDeleteError, setLocalExampleDeleteError] = useState<string | null>(null);
   const knownGoals = new Set<string>(["ads", "growth", "expert"]);
   const filteredLocalExamples = localExamples.filter((e) => knownGoals.has(e.goal));
+  const sortedLocalExamples = sortExamplesForCatalog(filteredLocalExamples);
   const localeExampleItems = getExampleItemsForLocale(locale);
   const goalCopy = exampleGoalCopy[locale];
-  const allExamples = filteredLocalExamples.length > 0 ? filteredLocalExamples : localeExampleItems;
+  const allExamples = sortedLocalExamples.length > 0 ? sortedLocalExamples : localeExampleItems;
   const totalThemeCount = new Set(allExamples.map((example) => example.goal)).size;
   const totalSceneCount = allExamples.length;
   const exampleFilterOptions: Array<{ id: ExampleFilter; label: string }> = [

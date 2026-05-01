@@ -84,6 +84,7 @@ type AdsflowProjectGenerationSettingsPayload = {
   custom_music_original_name?: string | null;
   current_rendered_segments?: AdsflowProjectMediaEntryPayload[] | null;
   music_asset_id?: number | string | null;
+  music_type?: string | null;
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
   requested_language?: string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
@@ -96,6 +97,7 @@ type AdsflowProjectDetailsResponse = {
   generation_settings?: AdsflowProjectGenerationSettingsPayload | null;
   music_asset_id?: number | string | null;
   music_name?: string | null;
+  music_type?: string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
 };
@@ -210,18 +212,34 @@ export const resolveWorkspaceSegmentEditorCustomMusicMetadata = (
     projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
       ? projectDetailsPayload.generation_settings
       : null;
+  const generationMusicType = normalizeText(generationSettings?.music_type).toLowerCase();
+  const projectMusicType = normalizeText(projectDetailsPayload?.music_type).toLowerCase();
+  const explicitCustomMusicAssetId = normalizeInteger(
+    generationSettings?.custom_music_asset_id ?? projectDetailsPayload?.custom_music_asset_id,
+  );
+  const explicitCustomMusicFileName = normalizeText(generationSettings?.custom_music_original_name);
+  const projectMusicFileName = normalizeText(projectDetailsPayload?.music_name);
+
+  if (
+    generationMusicType !== "custom" &&
+    projectMusicType !== "custom" &&
+    !explicitCustomMusicAssetId &&
+    !explicitCustomMusicFileName
+  ) {
+    return {
+      customMusicAssetId: null,
+      customMusicFileName: "",
+    };
+  }
 
   return {
     customMusicAssetId:
       normalizeInteger(
-        generationSettings?.custom_music_asset_id ??
+        explicitCustomMusicAssetId ??
           generationSettings?.music_asset_id ??
-          projectDetailsPayload?.custom_music_asset_id ??
           projectDetailsPayload?.music_asset_id,
       ) ?? null,
-    customMusicFileName: normalizeText(
-      generationSettings?.custom_music_original_name ?? projectDetailsPayload?.music_name,
-    ),
+    customMusicFileName: explicitCustomMusicFileName || projectMusicFileName,
   };
 };
 

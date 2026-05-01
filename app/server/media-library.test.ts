@@ -283,6 +283,45 @@ describe("media library photo sources", () => {
     expect(items).toHaveLength(0);
   });
 
+  it("lets explicit stock source metadata override ai-looking video assets", () => {
+    const segment = createPhotoSegment();
+    segment.mediaType = "video";
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      kind: "source_ai_video",
+      role: "source_ai_video",
+      sourceKind: "stock",
+      storageKey: "users/1/assets/204/source_ai_video/204-stock-provider-cache.mp4",
+    };
+    segment.currentSourceKind = "stock";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
+  });
+
+  it("lets explicit stock source metadata override ai-looking original photos", () => {
+    const segment = createPhotoSegment();
+    segment.currentAsset = null;
+    segment.currentExternalPlaybackUrl = null;
+    segment.currentExternalPreviewUrl = null;
+    segment.currentPlaybackUrl = null;
+    segment.currentPreviewUrl = null;
+    segment.currentSourceKind = "unknown";
+    segment.originalAsset = {
+      ...segment.originalAsset!,
+      kind: "source_ai_image",
+      role: "source_ai_image",
+      sourceKind: "stock",
+      storageKey: "users/1/assets/101/source_ai_image/101-stock-provider-cache.jpg",
+    };
+    segment.originalSourceKind = "stock";
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(0);
+  });
+
   it("does not store generic rendered segment cache without ai source markers", () => {
     const segment = createPhotoSegment();
     segment.mediaType = "video";
@@ -492,6 +531,36 @@ describe("media library durable assets", () => {
     });
 
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+
+  it("does not expose stock durable assets even when their kind looks ai-generated", () => {
+    const stockSourceKindAsset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/787/download",
+      id: 787,
+      kind: "source_ai_image",
+      media_type: "photo",
+      project_id: 42,
+      role: "source_ai_image",
+      segment_index: 0,
+      source_kind: "stock",
+      status: "ready",
+      storage_key: "users/1/assets/787/source_ai_image/787-provider-cache.jpg",
+    });
+    const stockProviderUrlAsset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/788/download",
+      id: 788,
+      kind: "source_ai_image",
+      media_type: "photo",
+      original_url: "https://images.pexels.com/photos/4046567/pexels-photo-4046567.jpeg",
+      project_id: 42,
+      role: "source_ai_image",
+      segment_index: 1,
+      status: "ready",
+      storage_key: "users/1/assets/788/source_ai_image/788-provider-cache.jpg",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(stockSourceKindAsset)).toBeNull();
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(stockProviderUrlAsset)).toBeNull();
   });
 
   it("does not expose custom uploaded durable assets as ai media library items", () => {

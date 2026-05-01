@@ -273,12 +273,21 @@ const isWorkspaceNonAiClassifier = (classifier) => WORKSPACE_MEDIA_LIBRARY_NON_A
     classifier.includes("upload") ||
     classifier.includes("uploaded") ||
     classifier.includes("user_upload");
+const isWorkspaceStockProviderUrl = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return (normalized.includes("pexels.com") ||
+        normalized.includes("pixabay.com") ||
+        normalized.includes("unsplash.com"));
+};
 const isWorkspaceDurableAiGeneratedAsset = (asset) => {
     if (!asset) {
         return false;
     }
     const classifiers = getWorkspaceDurableAssetClassifiers(asset).filter(Boolean);
     if (classifiers.some(isWorkspaceNonAiClassifier)) {
+        return false;
+    }
+    if (isWorkspaceStockProviderUrl(asset.originalUrl)) {
         return false;
     }
     if (classifiers.some(isWorkspaceAiGeneratedClassifier)) {
@@ -589,8 +598,17 @@ const isWorkspaceMediaIndexEntryUsable = (entry) => entry.items.every((item) => 
     return Boolean(item.assetId) || !normalizeText(item.previewUrl).includes("/api/workspace/project-segment-video");
 });
 const isWorkspaceAiGeneratedSourceKind = (value) => isWorkspaceAiGeneratedClassifier(normalizeWorkspaceDurableAssetClassifier(value));
+const isWorkspaceNonAiSourceKind = (value) => {
+    const classifier = normalizeWorkspaceDurableAssetClassifier(value);
+    return Boolean(classifier && isWorkspaceNonAiClassifier(classifier));
+};
 const isWorkspaceMediaLibraryAiGeneratedAsset = (asset) => Boolean(asset && isWorkspaceDurableAiGeneratedAsset(asset));
-const isWorkspaceMediaLibraryAiGeneratedSegmentSource = (sourceKind, asset) => isWorkspaceAiGeneratedSourceKind(sourceKind) || isWorkspaceMediaLibraryAiGeneratedAsset(asset);
+const isWorkspaceMediaLibraryAiGeneratedSegmentSource = (sourceKind, asset) => {
+    if (isWorkspaceNonAiSourceKind(sourceKind)) {
+        return false;
+    }
+    return isWorkspaceAiGeneratedSourceKind(sourceKind) || isWorkspaceMediaLibraryAiGeneratedAsset(asset);
+};
 export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
     const projectId = project.adId;
     const projectTitle = getWorkspaceProjectDisplayTitle(project);

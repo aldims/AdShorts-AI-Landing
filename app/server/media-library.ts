@@ -459,6 +459,15 @@ const isWorkspaceNonAiClassifier = (classifier: string) =>
   classifier.includes("uploaded") ||
   classifier.includes("user_upload");
 
+const isWorkspaceStockProviderUrl = (value: unknown) => {
+  const normalized = normalizeText(value).toLowerCase();
+  return (
+    normalized.includes("pexels.com") ||
+    normalized.includes("pixabay.com") ||
+    normalized.includes("unsplash.com")
+  );
+};
+
 const isWorkspaceDurableAiGeneratedAsset = (
   asset: ReturnType<typeof buildWorkspaceMediaAssetRef>,
 ) => {
@@ -468,6 +477,10 @@ const isWorkspaceDurableAiGeneratedAsset = (
 
   const classifiers = getWorkspaceDurableAssetClassifiers(asset).filter(Boolean);
   if (classifiers.some(isWorkspaceNonAiClassifier)) {
+    return false;
+  }
+
+  if (isWorkspaceStockProviderUrl(asset.originalUrl)) {
     return false;
   }
 
@@ -896,6 +909,11 @@ const isWorkspaceMediaIndexEntryUsable = (entry: WorkspaceMediaIndexProjectEntry
 const isWorkspaceAiGeneratedSourceKind = (value: unknown) =>
   isWorkspaceAiGeneratedClassifier(normalizeWorkspaceDurableAssetClassifier(value));
 
+const isWorkspaceNonAiSourceKind = (value: unknown) => {
+  const classifier = normalizeWorkspaceDurableAssetClassifier(value);
+  return Boolean(classifier && isWorkspaceNonAiClassifier(classifier));
+};
+
 const isWorkspaceMediaLibraryAiGeneratedAsset = (
   asset: WorkspaceSegmentEditorSegment["currentAsset"] | WorkspaceSegmentEditorSegment["originalAsset"],
 ) => Boolean(asset && isWorkspaceDurableAiGeneratedAsset(asset));
@@ -903,7 +921,13 @@ const isWorkspaceMediaLibraryAiGeneratedAsset = (
 const isWorkspaceMediaLibraryAiGeneratedSegmentSource = (
   sourceKind: unknown,
   asset: WorkspaceSegmentEditorSegment["currentAsset"] | WorkspaceSegmentEditorSegment["originalAsset"],
-) => isWorkspaceAiGeneratedSourceKind(sourceKind) || isWorkspaceMediaLibraryAiGeneratedAsset(asset);
+) => {
+  if (isWorkspaceNonAiSourceKind(sourceKind)) {
+    return false;
+  }
+
+  return isWorkspaceAiGeneratedSourceKind(sourceKind) || isWorkspaceMediaLibraryAiGeneratedAsset(asset);
+};
 
 export const buildWorkspacePersistedMediaLibraryItems = (
   project: WorkspaceProject & { adId: number },

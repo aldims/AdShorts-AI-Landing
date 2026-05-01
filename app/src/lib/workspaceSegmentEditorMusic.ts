@@ -30,8 +30,8 @@ export const sanitizeWorkspaceSegmentEditorCustomMusicState = <T extends Workspa
   if (normalizedMusicType.toLowerCase() !== "custom") {
     return {
       ...state,
-      customMusicAssetId: normalizedCustomMusicAssetId,
-      customMusicFileName: normalizedCustomMusicFileName,
+      customMusicAssetId: null,
+      customMusicFileName: null,
       musicType: normalizedMusicType || state.musicType,
     };
   }

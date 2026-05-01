@@ -278,8 +278,36 @@ describe("segment editor asset lifecycle mapping", () => {
       generation_settings: {
         custom_music_asset_id: 7788,
         custom_music_original_name: "ambient-loop.mp3",
+        music_type: "custom",
       },
       music_name: "fallback-name.mp3",
+    });
+
+    expect(metadata.customMusicAssetId).toBe(7788);
+    expect(metadata.customMusicFileName).toBe("ambient-loop.mp3");
+  });
+
+  it("does not treat generated auto music assets as custom music", () => {
+    const metadata = resolveWorkspaceSegmentEditorCustomMusicMetadata({
+      generation_settings: {
+        music_asset_id: 649,
+        music_type: "ai",
+      },
+      music_name: "upbeat_10.mp3",
+      music_type: "upbeat",
+    });
+
+    expect(metadata.customMusicAssetId).toBeNull();
+    expect(metadata.customMusicFileName).toBe("");
+  });
+
+  it("keeps legacy explicit custom music metadata even when music type is absent", () => {
+    const metadata = resolveWorkspaceSegmentEditorCustomMusicMetadata({
+      generation_settings: {
+        custom_music_asset_id: 7788,
+        custom_music_original_name: "ambient-loop.mp3",
+      },
+      music_name: "rendered-name.mp3",
     });
 
     expect(metadata.customMusicAssetId).toBe(7788);

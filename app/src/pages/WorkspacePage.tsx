@@ -2211,9 +2211,18 @@ type WorkspaceSegmentEditorChecklistBuildOptions = {
 const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEditorDraftSession | null) => {
   const subtitleEnabled = normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
   const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
+  const musicType = normalizeWorkspaceSegmentEditorSetting(session?.musicType) ?? "ai";
+  const customMusicAssetId =
+    musicType === "custom" && Number.isFinite(Number(session?.customMusicAssetId)) && Number(session?.customMusicAssetId) > 0
+      ? Math.trunc(Number(session?.customMusicAssetId))
+      : null;
+  const customMusicFileName =
+    musicType === "custom" ? String(session?.customMusicFileName ?? "").replace(/\s+/g, " ").trim() || null : null;
 
   return {
-    musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType) ?? "ai",
+    customMusicAssetId,
+    customMusicFileName,
+    musicType,
     subtitleColorId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ?? "purple" : null,
     subtitleEnabled,
     subtitleStyleId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ?? "modern" : null,
@@ -2374,8 +2383,12 @@ const getWorkspaceSegmentEditorChecklistVoiceSettingsLabel = (
 
 const getWorkspaceSegmentEditorChecklistMusicSettingsLabel = (
   draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
-) =>
-  `Музыка: ${getWorkspaceSegmentEditorChecklistMusicLabel(draftSettings.musicType)}`;
+) => {
+  const musicLabel = getWorkspaceSegmentEditorChecklistMusicLabel(draftSettings.musicType);
+  return draftSettings.musicType === "custom" && draftSettings.customMusicFileName
+    ? `Музыка: ${musicLabel} (${formatWorkspaceSegmentEditorChecklistPreview(draftSettings.customMusicFileName, 32)})`
+    : `Музыка: ${musicLabel}`;
+};
 
 const getWorkspaceSegmentEditorChecklistOrderLabel = (
   draft: WorkspaceSegmentEditorDraftSession,
@@ -2479,7 +2492,12 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     resetSettingIds.push("voice");
   }
 
-  if (draftSettings.musicType !== baselineSettings.musicType) {
+  if (
+    draftSettings.musicType !== baselineSettings.musicType ||
+    (draftSettings.musicType === "custom" &&
+      (draftSettings.customMusicAssetId !== baselineSettings.customMusicAssetId ||
+        draftSettings.customMusicFileName !== baselineSettings.customMusicFileName))
+  ) {
     globalChanges.push(
       lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistMusicSettingsLabel(draftSettings)),
     );
@@ -5558,6 +5576,28 @@ const createWorkspaceSegmentEditorDraftSession = (
   };
 };
 
+const getWorkspaceSegmentEditorMusicStateKey = (
+  session: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
+) => {
+  const musicType = normalizeWorkspaceSegmentEditorSetting(session.musicType) ?? "ai";
+  if (musicType !== "custom") {
+    return `${musicType}:`;
+  }
+
+  const customMusicAssetId =
+    Number.isFinite(Number(session.customMusicAssetId)) && Number(session.customMusicAssetId) > 0
+      ? String(Math.trunc(Number(session.customMusicAssetId)))
+      : "";
+  const customMusicFileName = String(session.customMusicFileName ?? "").replace(/\s+/g, " ").trim();
+
+  return `${musicType}:${customMusicAssetId}:${customMusicFileName}`;
+};
+
+const areWorkspaceSegmentEditorMusicStatesEqual = (
+  left: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
+  right: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
+) => getWorkspaceSegmentEditorMusicStateKey(left) === getWorkspaceSegmentEditorMusicStateKey(right);
+
 const shouldPromoteFreshServerVideoToPhotoAnimation = (
   liveSegment: WorkspaceSegmentEditorDraftSegment,
   freshSegment: WorkspaceSegmentEditorSegment,
@@ -5749,6 +5789,10 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     options?.baselineSession && options.baselineSession.projectId === liveDraft.projectId
       ? normalizeWorkspaceSegmentEditorSession(options.baselineSession)
       : null;
+  const shouldPreserveLiveMusicState = normalizedBaselineSession
+    ? !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedBaselineSession)
+    : !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedFreshSession);
+  const nextMusicState = shouldPreserveLiveMusicState ? normalizedLiveMusicState : normalizedFreshSession;
   const shouldPreserveLiveStructure = normalizedBaselineSession
     ? hasWorkspaceSegmentEditorStructureChanged(
         liveDraft.segments.map((segment) => segment.index),
@@ -5788,11 +5832,11 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
 
   return {
     ...normalizedFreshSession,
-    customMusicAssetId: normalizedLiveMusicState.customMusicAssetId ?? null,
-    customMusicFileName: normalizedLiveMusicState.customMusicFileName ?? null,
+    customMusicAssetId: nextMusicState.customMusicAssetId ?? null,
+    customMusicFileName: nextMusicState.customMusicFileName ?? null,
     description: liveDraft.description,
     language: liveDraft.language,
-    musicType: normalizedLiveMusicState.musicType,
+    musicType: nextMusicState.musicType,
     segments: rebuildWorkspaceSegmentEditorDraftTimeline(mergedSegments),
     subtitleColor: liveDraft.subtitleColor,
     subtitleStyle: liveDraft.subtitleStyle,
@@ -17170,8 +17214,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setSelectedVoiceId(nextVoiceId);
     }
 
-    if (nextMusicType && nextMusicType !== "custom") {
+    if (nextMusicType) {
       setSelectedMusicType(nextMusicType as StudioMusicType);
+      if (nextMusicType !== "custom") {
+        setSelectedCustomMusic(null);
+      }
+      setMusicSelectionError(null);
+    } else {
+      setSelectedMusicType("ai");
       setSelectedCustomMusic(null);
       setMusicSelectionError(null);
     }
@@ -17533,7 +17583,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
       if (liveDraft?.projectId === projectId && !shouldDiscardLocalDraft) {
         const refreshedLiveDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, normalizedSession, {
-          baselineSession: segmentEditorLoadedSession?.projectId === projectId ? segmentEditorLoadedSession : null,
+          baselineSession: existingBaselineSession,
         });
         logSegmentEditorDiagnostics(
           "client.segment-editor.load.preserve-live-draft-after-fetch",
@@ -17548,6 +17598,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           },
         );
         segmentEditorDraftRef.current = refreshedLiveDraft;
+        syncStudioSettingsFromSegmentEditorDraft(
+          refreshedLiveDraft,
+          getSegmentEditorProjectPrefillSettings(refreshedLiveDraft.projectId),
+        );
         setSegmentEditorDraft(refreshedLiveDraft);
         return refreshedLiveDraft;
       }

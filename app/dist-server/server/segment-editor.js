@@ -40,12 +40,25 @@ export const resolveWorkspaceSegmentEditorCustomMusicMetadata = (projectDetailsP
     const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
         ? projectDetailsPayload.generation_settings
         : null;
+    const generationMusicType = normalizeText(generationSettings?.music_type).toLowerCase();
+    const projectMusicType = normalizeText(projectDetailsPayload?.music_type).toLowerCase();
+    const explicitCustomMusicAssetId = normalizeInteger(generationSettings?.custom_music_asset_id ?? projectDetailsPayload?.custom_music_asset_id);
+    const explicitCustomMusicFileName = normalizeText(generationSettings?.custom_music_original_name);
+    const projectMusicFileName = normalizeText(projectDetailsPayload?.music_name);
+    if (generationMusicType !== "custom" &&
+        projectMusicType !== "custom" &&
+        !explicitCustomMusicAssetId &&
+        !explicitCustomMusicFileName) {
+        return {
+            customMusicAssetId: null,
+            customMusicFileName: "",
+        };
+    }
     return {
-        customMusicAssetId: normalizeInteger(generationSettings?.custom_music_asset_id ??
+        customMusicAssetId: normalizeInteger(explicitCustomMusicAssetId ??
             generationSettings?.music_asset_id ??
-            projectDetailsPayload?.custom_music_asset_id ??
             projectDetailsPayload?.music_asset_id) ?? null,
-        customMusicFileName: normalizeText(generationSettings?.custom_music_original_name ?? projectDetailsPayload?.music_name),
+        customMusicFileName: explicitCustomMusicFileName || projectMusicFileName,
     };
 };
 const resolveWorkspaceSegmentEditorLanguage = (payload, projectDetailsPayload) => {

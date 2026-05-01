@@ -53,8 +53,8 @@ describe("sanitizeWorkspaceSegmentEditorCustomMusicState", () => {
   it("preserves non-custom music settings", () => {
     expect(
       sanitizeWorkspaceSegmentEditorCustomMusicState({
-        customMusicAssetId: null,
-        customMusicFileName: null,
+        customMusicAssetId: 649,
+        customMusicFileName: "upbeat_10.mp3",
         musicType: "stock",
       }),
     ).toEqual({
