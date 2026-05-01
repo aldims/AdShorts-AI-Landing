@@ -231,6 +231,19 @@ export const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
     }
     throw new Error("Unsupported local example video source.");
 };
+export const resolveLocalExampleVideoTargetCandidates = async (videoUrls, user) => {
+    const uniqueVideoUrls = Array.from(new Set(videoUrls.map(normalizeText).filter(Boolean)));
+    let fallbackError = null;
+    for (const videoUrl of uniqueVideoUrls) {
+        try {
+            return await resolveLocalExampleVideoTarget(videoUrl, user);
+        }
+        catch (error) {
+            fallbackError = error instanceof Error ? error : new Error("Failed to resolve local example video source.");
+        }
+    }
+    throw fallbackError ?? new Error("Video URL is required.");
+};
 const downloadLocalExampleVideo = async (options) => {
     const { ownerKey, source } = options;
     const ownerDir = buildLocalExamplesOwnerDir(ownerKey);
@@ -335,7 +348,7 @@ export const saveLocalExample = async (user, input) => {
     if (!prompt) {
         throw new Error("Video topic is required.");
     }
-    const source = await resolveLocalExampleVideoTarget(input.videoUrl, user);
+    const source = await resolveLocalExampleVideoTargetCandidates([input.videoFallbackUrl, input.videoUrl], user);
     const downloadedVideo = await downloadLocalExampleVideo({
         ownerKey,
         source,

@@ -678,6 +678,7 @@ app.post("/api/examples/local", express.json(), async (req, res) => {
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const videoUrl = typeof req.body?.videoUrl === "string" ? req.body.videoUrl.trim() : "";
+    const videoFallbackUrl = typeof req.body?.videoFallbackUrl === "string" ? req.body.videoFallbackUrl.trim() : "";
     const sourceId = typeof req.body?.sourceId === "string" ? req.body.sourceId.trim() : "";
     const prefillSettings = normalizeExamplePrefillStudioSettings(req.body?.prefillSettings);
     if (!isLocalExampleGoal(goal)) {
@@ -695,6 +696,7 @@ app.post("/api/examples/local", express.json(), async (req, res) => {
             prompt,
             sourceId: sourceId || null,
             title,
+            videoFallbackUrl: videoFallbackUrl || null,
             videoUrl,
         });
         res.status(201).json({ data: { item } });

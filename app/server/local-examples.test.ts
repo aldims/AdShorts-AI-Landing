@@ -20,7 +20,7 @@ vi.mock("./projects.js", () => ({
   getWorkspaceProjectVideoProxyTarget: projectMocks.getWorkspaceProjectVideoProxyTarget,
 }));
 
-import { resolveLocalExampleVideoTarget } from "./local-examples.js";
+import { resolveLocalExampleVideoTarget, resolveLocalExampleVideoTargetCandidates } from "./local-examples.js";
 
 describe("local examples video source resolution", () => {
   beforeEach(() => {
@@ -44,5 +44,30 @@ describe("local examples video source resolution", () => {
       sourceUrl,
     });
     expect(studioMocks.getStudioVideoProxyTarget).toHaveBeenCalledWith("job-123", user);
+  });
+
+  it("prefers the direct fallback url when saving a high-quality local example", async () => {
+    const sourceUrl = new URL("https://cdn.example.com/generated/hq-video.mp4");
+    studioMocks.getStudioVideoProxyTargetByPath.mockReturnValue(sourceUrl);
+
+    const user = {
+      email: "adshortsai@gmail.com",
+      id: "admin-1",
+      name: "Admin",
+    };
+
+    await expect(
+      resolveLocalExampleVideoTargetCandidates(
+        [
+          "/api/studio/video?path=%2Foutputs%2Fhq-video.mp4",
+          "/api/studio/playback/job-123?v=2026-04-21T10%3A00%3A00.000Z",
+        ],
+        user,
+      ),
+    ).resolves.toEqual({
+      sourceUrl,
+    });
+    expect(studioMocks.getStudioVideoProxyTargetByPath).toHaveBeenCalledWith("/outputs/hq-video.mp4");
+    expect(studioMocks.getStudioVideoProxyTarget).not.toHaveBeenCalled();
   });
 });

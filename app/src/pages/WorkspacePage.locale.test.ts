@@ -7,6 +7,7 @@ import {
   buildWorkspaceSegmentEditorChangeChecklist,
   createStudioCustomVideoFileFromMediaLibraryItem,
   distributeWorkspaceSegmentBulkSubtitleText,
+  doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
@@ -29,6 +30,7 @@ import {
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveStudioVoiceIdForLanguage,
+  shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "./WorkspacePage";
 
@@ -385,6 +387,72 @@ describe("WorkspacePage segment editor draft persistence", () => {
       forceRefresh: true,
     });
   });
+
+  it("allows saved draft segment structure changes during Shorts creation", () => {
+    const firstSegment = createDraftSegment({ index: 0, text: "First" });
+    const secondSegment = createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" });
+    const baseline = createDraftSession(firstSegment);
+    const draft = {
+      ...baseline,
+      segments: [secondSegment, firstSegment],
+    };
+
+    expect(shouldAllowWorkspaceSegmentEditorStructureChange(draft, baseline)).toBe(true);
+  });
+
+  it("uses the server baseline for structure changes even when an applied draft already matches", () => {
+    const firstSegment = createDraftSegment({ index: 0, text: "First" });
+    const secondSegment = createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" });
+    const thirdSegment = createDraftSegment({ index: 2, startTime: 8, endTime: 12, duration: 4, text: "Third" });
+    const serverBaseline = {
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment, thirdSegment],
+    };
+    const appliedBaseline = {
+      ...serverBaseline,
+      segments: [firstSegment, thirdSegment, secondSegment],
+    };
+
+    expect(shouldAllowWorkspaceSegmentEditorStructureChange(appliedBaseline, [appliedBaseline, serverBaseline])).toBe(true);
+  });
+
+  it("allows non-canonical restored segment order even when only the applied draft baseline is available", () => {
+    const firstSegment = createDraftSegment({ index: 0, text: "First" });
+    const secondSegment = createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" });
+    const sixthSegment = createDraftSegment({ index: 5, startTime: 20, endTime: 24, duration: 4, text: "Sixth" });
+    const restoredDraft = {
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, sixthSegment, secondSegment],
+    };
+
+    expect(shouldAllowWorkspaceSegmentEditorStructureChange(restoredDraft, restoredDraft)).toBe(true);
+  });
+
+  it("detects accidental payload structure changes before upload", () => {
+    const firstSegment = createDraftSegment({ index: 0, text: "First" });
+    const secondSegment = createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" });
+    const draft = {
+      ...createDraftSession(firstSegment),
+      segments: [secondSegment, firstSegment],
+    };
+
+    expect(
+      doesWorkspaceSegmentEditorPayloadMatchSessionStructure(draft, {
+        segments: [
+          { index: 1, text: "Second", videoAction: "original" },
+          { index: 0, text: "First", videoAction: "original" },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      doesWorkspaceSegmentEditorPayloadMatchSessionStructure(draft, {
+        segments: [
+          { index: 0, text: "First", videoAction: "original" },
+          { index: 1, text: "Second", videoAction: "original" },
+        ],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("WorkspacePage studio locale defaults", () => {
@@ -541,6 +609,34 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(hydratedSegment?.videoAction).toBe("ai_photo");
     expect(hydratedSegment?.aiPhotoAsset?.assetId).toBe(303);
     expect(hydratedSegment && isWorkspaceSegmentDraftVisualResettable(hydratedSegment)).toBe(true);
+  });
+
+  it("keeps the latest AI photo visible while image edit is pending", () => {
+    const segment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 303,
+        fileName: "segment-ai-photo.png",
+        fileSize: 0,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      aiPhotoGeneratedFromPrompt: "icy dragon",
+      aiPhotoPrompt: "icy dragon",
+      aiPhotoPromptInitialized: true,
+      currentPreviewUrl: "/original.jpg",
+      imageEditAsset: null,
+      imageEditPrompt: "add glowing runes",
+      imageEditPromptInitialized: true,
+      originalPreviewUrl: "/original.jpg",
+      videoAction: "image_edit",
+    });
+
+    expect(getWorkspaceSegmentDraftPreviewUrl(segment)).toBe("/api/workspace/media-assets/303");
+    expect(getWorkspaceSegmentDraftPreviewFallbackUrls(segment, "image")[0]).toBe("/api/workspace/media-assets/303");
+    expect(getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card")).toMatchObject({
+      displayUrl: "/api/workspace/media-assets/303",
+      previewKind: "image",
+    });
   });
 
   it("restores AI video playback from a fresh server session when a pending draft lost its local asset", () => {

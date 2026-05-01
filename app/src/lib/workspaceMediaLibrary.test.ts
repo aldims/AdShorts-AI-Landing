@@ -115,6 +115,23 @@ describe("workspace media library display identity", () => {
     ]);
   });
 
+  it("keeps the newest duplicate media item regardless of source merge order", () => {
+    const oldItem = createMediaLibraryItem({
+      createdAt: 1_000,
+      itemKey: "old",
+      previewUrl: "https://cdn.example.com/same-photo.jpg",
+    });
+    const freshItem = createMediaLibraryItem({
+      createdAt: 2_000,
+      itemKey: "fresh",
+      previewUrl: "https://cdn.example.com/same-photo.jpg",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryItems([oldItem, freshItem]).map((item) => item.itemKey)).toEqual([
+      "fresh",
+    ]);
+  });
+
   it("prefers durable asset identity over preview url hashes", () => {
     const firstItem = createMediaLibraryItem({
       assetId: 101,

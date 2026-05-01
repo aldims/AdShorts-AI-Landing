@@ -112,7 +112,7 @@ const shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision = (left, right) 
 export const dedupeWorkspaceMediaLibraryItems = (items) => {
     const itemsByPrimaryKey = new Map();
     const primaryKeysByVideoModeSlot = new Map();
-    for (const item of items) {
+    for (const item of sortWorkspaceMediaLibraryItemsNewestFirst(items)) {
         const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
         const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
         const existingPrimaryKey = videoModeSlotKey ? primaryKeysByVideoModeSlot.get(videoModeSlotKey) ?? null : null;

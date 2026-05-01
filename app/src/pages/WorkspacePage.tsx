@@ -507,6 +507,7 @@ type WorkspaceLocalExampleSource = {
   prompt: string;
   sourceId: string | null;
   title: string;
+  videoFallbackUrl?: string | null;
   videoUrl: string;
 };
 
@@ -3888,6 +3889,28 @@ const getWorkspaceSegmentDisplayAiVideoAssetUrl = (segment: Pick<
 >, mode?: WorkspaceSegmentAiVideoMode) =>
   hasWorkspaceSegmentDisplayAiVideoAsset(segment, mode) ? getStudioCustomAssetPreviewUrl(segment.aiVideoAsset) : null;
 
+const getWorkspaceSegmentPendingImageEditSourceAsset = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): StudioCustomVideoFile | null => {
+  if (segment.imageEditAsset) {
+    return null;
+  }
+
+  if (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image") {
+    return segment.aiPhotoAsset;
+  }
+
+  if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "image") {
+    return segment.customVideo;
+  }
+
+  if (getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image") {
+    return segment.photoAnimationSourceAsset;
+  }
+
+  return null;
+};
+
 const getWorkspaceSegmentDraftVisualAsset = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
@@ -3896,7 +3919,7 @@ const getWorkspaceSegmentDraftVisualAsset = (segment: WorkspaceSegmentEditorDraf
   }
 
   if (latestVisualAction === "image_edit") {
-    return segment.imageEditAsset;
+    return segment.imageEditAsset ?? getWorkspaceSegmentPendingImageEditSourceAsset(segment);
   }
 
   if (latestVisualAction === "custom") {
@@ -6560,6 +6583,55 @@ const areWorkspaceSegmentEditorSegmentOrdersEqual = (
   return left.segments.every((segment, index) => segment.index === right.segments[index]?.index);
 };
 
+type WorkspaceSegmentEditorStructureSnapshot = Pick<WorkspaceSegmentEditorDraftSession, "segments">;
+
+const normalizeWorkspaceSegmentEditorStructureBaselines = (
+  baselineOrBaselines?:
+    | WorkspaceSegmentEditorStructureSnapshot
+    | readonly (WorkspaceSegmentEditorStructureSnapshot | null | undefined)[]
+    | null,
+) => {
+  if (!baselineOrBaselines) {
+    return [];
+  }
+
+  return (Array.isArray(baselineOrBaselines) ? baselineOrBaselines : [baselineOrBaselines]).filter(
+    (baseline): baseline is WorkspaceSegmentEditorStructureSnapshot => Boolean(baseline),
+  );
+};
+
+const hasWorkspaceSegmentEditorNonCanonicalSourceOrder = (draft: WorkspaceSegmentEditorStructureSnapshot) =>
+  draft.segments.some((segment, index) => segment.index !== index);
+
+export const shouldAllowWorkspaceSegmentEditorStructureChange = (
+  draft?: WorkspaceSegmentEditorStructureSnapshot | null,
+  baselineOrBaselines?:
+    | WorkspaceSegmentEditorStructureSnapshot
+    | readonly (WorkspaceSegmentEditorStructureSnapshot | null | undefined)[]
+    | null,
+) => {
+  if (!draft) {
+    return false;
+  }
+
+  return (
+    normalizeWorkspaceSegmentEditorStructureBaselines(baselineOrBaselines).some(
+      (baseline) => !areWorkspaceSegmentEditorSegmentOrdersEqual(draft, baseline),
+    ) || hasWorkspaceSegmentEditorNonCanonicalSourceOrder(draft)
+  );
+};
+
+export const doesWorkspaceSegmentEditorPayloadMatchSessionStructure = (
+  session?: WorkspaceSegmentEditorStructureSnapshot | null,
+  payload?: Pick<WorkspaceSegmentEditorPayload, "segments"> | null,
+) => {
+  if (!session || !payload || session.segments.length !== payload.segments.length) {
+    return false;
+  }
+
+  return session.segments.every((segment, index) => segment.index === payload.segments[index]?.index);
+};
+
 const getWorkspaceSegmentEditorDisplayNumber = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   segmentIndex: number,
@@ -7019,7 +7091,11 @@ export const getWorkspaceSegmentDraftPreviewUrl = (segment: WorkspaceSegmentEdit
   }
 
   if (segment.videoAction === "image_edit") {
-    return getStudioCustomAssetPreviewUrl(segment.imageEditAsset) ?? fallbackPreviewUrl;
+    return (
+      getStudioCustomAssetPreviewUrl(segment.imageEditAsset) ??
+      getStudioCustomAssetPreviewUrl(getWorkspaceSegmentPendingImageEditSourceAsset(segment)) ??
+      fallbackPreviewUrl
+    );
   }
 
   if (segment.videoAction === "ai_photo") {
@@ -7218,6 +7294,7 @@ export const getWorkspaceSegmentDraftPreviewFallbackUrls = (
     if (latestVisualAction === "image_edit") {
       return getUniqueWorkspaceSegmentPreviewUrls([
         getStudioCustomAssetPreviewUrl(segment.imageEditAsset),
+        getStudioCustomAssetPreviewUrl(getWorkspaceSegmentPendingImageEditSourceAsset(segment)),
         ...stillPreviewFallbackUrls,
       ]);
     }
@@ -19568,7 +19645,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       imageEditPrompt: nextPrompt,
       imageEditPromptInitialized: true,
       visualReset: false,
-      videoAction: "image_edit",
     }));
 
     if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST) {
@@ -20567,11 +20643,23 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       };
     })();
     setSegmentEditorAppliedSession(nextAppliedSession);
-    const allowSegmentStructureChange = Boolean(
-      segmentEditorChecklistBaseSession &&
-        !areWorkspaceSegmentEditorSegmentOrdersEqual(effectiveDraft, segmentEditorChecklistBaseSession) &&
-        segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId),
-    );
+    const loadedServerBaseSession =
+      segmentEditorLoadedSession?.projectId === effectiveDraft.projectId
+        ? createWorkspaceSegmentEditorDraftSession(segmentEditorLoadedSession)
+        : null;
+    const storedServerBaseSession = (() => {
+      const storedSession = readStoredWorkspaceSegmentEditorSession(session.email, effectiveDraft.projectId);
+      return storedSession ? createWorkspaceSegmentEditorDraftSession(storedSession) : null;
+    })();
+    const isExplicitStructureChange = segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId);
+    const allowSegmentStructureChange = shouldAllowWorkspaceSegmentEditorStructureChange(
+      effectiveDraft,
+      [
+        loadedServerBaseSession,
+        storedServerBaseSession,
+        segmentEditorChecklistBaseSession,
+      ],
+    ) || isExplicitStructureChange;
 
     const regenerationPrompt = resolveWorkspaceRegenerationPrompt({
       draftDescription: effectiveDraft.description,
@@ -20587,9 +20675,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.apply", {
       allowSegmentStructureChange,
+      hasExplicitStructureChange: isExplicitStructureChange,
       projectId: effectiveDraft.projectId,
       regenerationPromptLength: regenerationPrompt.length,
       segmentCount: effectiveDraft.segments.length,
+      serverBaselineOrder: (loadedServerBaseSession ?? storedServerBaseSession)?.segments.map((segment) => segment.index) ?? null,
     }, { includeOrder: true, draft: effectiveDraft });
     navigateToStudioCreateWaitingRoute({ replace: true });
     await handleGenerate(regenerationPrompt, {
@@ -21758,10 +21848,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             language: effectiveLanguage,
           })
         : null;
+      if (
+        options?.segmentEditorSession &&
+        effectiveSegmentEditorBuild &&
+        !doesWorkspaceSegmentEditorPayloadMatchSessionStructure(
+          options.segmentEditorSession,
+          effectiveSegmentEditorBuild.payload,
+        )
+      ) {
+        console.error("[studio] generate.segment-editor-payload.structure-mismatch", {
+          payloadOrder: effectiveSegmentEditorBuild.payload.segments.map((segment) => segment.index),
+          projectId: options.segmentEditorSession.projectId,
+          sessionOrder: options.segmentEditorSession.segments.map((segment) => segment.index),
+        });
+        throw new Error("Редактор сегментов изменил структуру запроса перед отправкой. Перезагрузите редактор и попробуйте ещё раз.");
+      }
       if (effectiveSegmentEditorBuild) {
         console.info("[studio] generate.segment-editor-payload.success", {
+          allowStructureChange: effectiveSegmentEditorBuild.payload.allowStructureChange,
           projectId: effectiveSegmentEditorBuild.payload.projectId,
           segmentCount: effectiveSegmentEditorBuild.payload.segments.length,
+          segmentOrder: effectiveSegmentEditorBuild.payload.segments.map((segment) => segment.index),
           uploadCount: effectiveSegmentEditorBuild.uploads.length,
         });
       }
@@ -21996,6 +22103,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       prompt: normalizedGeneratedVideoPrompt,
       sourceId: generatedVideo.id,
       title: normalizedGeneratedVideoTitle,
+      videoFallbackUrl: generatedVideo.videoFallbackUrl,
       videoUrl: generatedVideoPlaybackUrl,
     });
   };
@@ -22010,6 +22118,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       prompt: project.prompt.trim(),
       sourceId: project.id,
       title: getWorkspaceProjectDisplayTitle(project),
+      videoFallbackUrl: project.videoFallbackUrl,
       videoUrl: project.videoUrl,
     });
   };
@@ -22041,6 +22150,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           prompt,
           sourceId: localExampleSource.sourceId,
           title: localExampleSource.title,
+          videoFallbackUrl: localExampleSource.videoFallbackUrl,
           videoUrl: localExampleSource.videoUrl,
         }),
       });

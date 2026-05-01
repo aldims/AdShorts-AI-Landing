@@ -210,7 +210,7 @@ export const dedupeWorkspaceMediaLibraryItems = (items: WorkspaceMediaLibraryIte
   const itemsByPrimaryKey = new Map<string, WorkspaceMediaLibraryItem>();
   const primaryKeysByVideoModeSlot = new Map<string, string>();
 
-  for (const item of items) {
+  for (const item of sortWorkspaceMediaLibraryItemsNewestFirst(items)) {
     const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
     const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
     const existingPrimaryKey = videoModeSlotKey ? primaryKeysByVideoModeSlot.get(videoModeSlotKey) ?? null : null;
