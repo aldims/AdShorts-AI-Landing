@@ -18855,6 +18855,33 @@ textarea {
   border-radius: 0 0 28px 28px;
 }
 
+.studio-canvas-preview__player-shell .studio-video-modal__top-actions {
+  left: 10px;
+  right: 10px;
+  max-width: calc(100% - 20px);
+  container-type: inline-size;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.studio-canvas-preview__generated-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.studio-canvas-preview__generated-actions--expanded {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.studio-canvas-preview__generated-actions--compact {
+  flex-wrap: wrap;
+}
+
 /* ── Основной контейнер видео — liquid glass ── */
 .studio-canvas-preview__video-btn {
   position: relative;
@@ -19045,6 +19072,112 @@ textarea {
   opacity: 0.38;
   cursor: not-allowed;
   transform: none;
+}
+
+.studio-canvas-preview__quick-action--expanded {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  gap: 4px;
+  font-size: clamp(0.56rem, 2.8cqw, 0.68rem);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.studio-canvas-preview__quick-action--expanded svg {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+}
+
+.studio-canvas-preview__quick-action--expanded span {
+  min-width: 0;
+}
+
+.studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) svg {
+  width: 13px;
+  height: 13px;
+}
+
+@container (max-width: 340px) {
+  .studio-canvas-preview__generated-actions {
+    gap: 4px;
+  }
+
+  .studio-canvas-preview__quick-action--expanded {
+    height: 28px;
+    padding: 0 6px;
+    gap: 3px;
+    font-size: clamp(0.5rem, 2.6cqw, 0.6rem);
+  }
+
+  .studio-canvas-preview__quick-action--expanded svg {
+    flex-basis: 10px;
+    width: 10px;
+    height: 10px;
+  }
+
+  .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
+    flex-basis: 28px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@keyframes studio-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.studio-toast {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 140;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(12, 16, 24, 0.88);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.25;
+  pointer-events: none;
+  animation: studio-toast-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (max-width: 520px) {
+  .studio-canvas-preview__quick-action--expanded {
+    height: 28px;
+    padding: 0 6px;
+    gap: 3px;
+  }
+
+  .studio-toast {
+    right: 12px;
+    bottom: 12px;
+  }
 }
 
 /* ── Center play/pause ── */

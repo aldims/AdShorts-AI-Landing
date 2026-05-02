@@ -87,6 +87,8 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
 
 export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsContext, locale: Locale = "ru") => {
   const formattedBalance = formatCreditsLabel(context.balance);
+  const formattedBalanceCredits =
+    context.balance === null ? `— ${locale === "en" ? "credits" : "кредитов"}` : formatCreditsCountLabel(context.balance, locale);
   const formattedRequiredCredits = formatCreditsCountLabel(context.requiredCredits, locale);
 
   if (isAddonEligiblePlan(context.plan)) {
@@ -100,9 +102,9 @@ export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsCon
         }
       : {
           ctaLabel: "Купить кредиты",
-          eyebrow: "Недостаточно кредитов",
-          note: "Пакеты пополняют баланс и не меняют ваш тариф.",
-          text: `На балансе ${formattedBalance} кредитов. Нужно ${formattedRequiredCredits}, чтобы продолжить.`,
+          eyebrow: "НЕДОСТАТОЧНО КРЕДИТОВ",
+          note: "",
+          text: `На балансе ${formattedBalanceCredits}. Пополните баланс, чтобы продолжить генерацию.`,
           title: `Нужно ${formattedRequiredCredits}`,
         };
   }
@@ -117,9 +119,9 @@ export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsCon
       }
     : {
         ctaLabel: "Выбрать тариф",
-        eyebrow: "Недостаточно кредитов",
+        eyebrow: "НЕДОСТАТОЧНО КРЕДИТОВ",
         note: "",
-        text: `На балансе ${formattedBalance} кредитов. Нужно ${formattedRequiredCredits}, чтобы продолжить генерацию.`,
+        text: `На балансе ${formattedBalanceCredits}. Пополните баланс, чтобы продолжить генерацию.`,
         title: `Нужно ${formattedRequiredCredits}`,
       };
 };
