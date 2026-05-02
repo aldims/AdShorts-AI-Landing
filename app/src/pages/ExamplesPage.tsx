@@ -94,7 +94,7 @@ const examplesMessages = defineMessages({
   signIn: { ru: "Войти", en: "Sign in" },
   startFast: { ru: "Быстрый старт за несколько секунд", en: "Quick start in seconds" },
   stepChoose: { ru: "Выберите пример", en: "Choose an example" },
-  stepChooseText: { ru: "Реклама, рост канал, экспертиза.", en: "Ads, channel growth, expertise." },
+  stepChooseText: { ru: "Реклама, рост канала, обучение.", en: "Ads, channel growth, education." },
   stepGet: { ru: "Получите похожий Shorts", en: "Get a similar Shorts" },
   stepGetText: { ru: "Добавляйте свои настройки при необходимости.", en: "Adjust settings whenever you need." },
   stepUse: { ru: "Нажмите Использовать", en: "Click Use" },

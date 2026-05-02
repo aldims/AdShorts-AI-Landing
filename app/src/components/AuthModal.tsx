@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import googleLogoUrl from "../assets/google-g-logo.svg";
 import { authClient } from "../lib/auth-client";
 import { useLocale, type Locale } from "../lib/i18n";
 
@@ -356,7 +357,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             onClick={handleGoogleSignIn}
           >
             <span className="signup-social__icon signup-social__icon--google" aria-hidden="true">
-              <img src="/google-g-logo.svg" alt="" />
+              <img src={googleLogoUrl} alt="" />
             </span>
             <span className="signup-social__copy">
               <span>Google</span>

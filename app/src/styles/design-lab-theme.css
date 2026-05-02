@@ -5118,6 +5118,17 @@ textarea {
   color: rgba(190, 200, 225, 0.52);
 }
 
+.icm__note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(160, 150, 255, 0.14);
+  background: rgba(160, 150, 255, 0.07);
+  color: rgba(218, 222, 246, 0.62);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 /* ── actions ── */
 .icm__actions {
   position: relative;
@@ -16367,6 +16378,7 @@ textarea {
   --studio-accent: #8b5cf6;
   --studio-accent-glow: rgba(139, 92, 246, 0.35);
   --studio-prompt-panel-max-width: 968px;
+  --studio-prompt-panel-compact-height: 140px;
   --studio-text: #fafafa;
   --studio-muted: rgba(255, 255, 255, 0.55);
 
@@ -19491,6 +19503,21 @@ textarea {
     border-color 0.3s ease;
   pointer-events: auto;
   z-index: 1;
+}
+
+.studio-canvas-prompt__inner--compact {
+  height: var(--studio-prompt-panel-compact-height);
+  min-height: var(--studio-prompt-panel-compact-height);
+  max-height: var(--studio-prompt-panel-compact-height);
+}
+
+.studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-layout,
+.studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+  height: 100%;
+}
+
+.studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+  justify-content: space-between;
 }
 
 /* Hover: панель чуть "всплывает" */
@@ -23602,9 +23629,32 @@ textarea {
   gap: 12px;
 }
 
+.studio-video-selector__option-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 7px;
+}
+
 .studio-video-selector__option-row span {
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.studio-video-selector__option-row .studio-video-selector__cost {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 216, 104, 0.24);
+  background: rgba(255, 216, 104, 0.12);
+  color: rgba(255, 226, 150, 0.94);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .studio-video-selector__option-row .studio-video-selector__option-duration {
@@ -24960,6 +25010,21 @@ textarea {
     border-radius: 22px;
     backdrop-filter: blur(32px) saturate(160%);
     -webkit-backdrop-filter: blur(32px) saturate(160%);
+  }
+
+  .studio-canvas-prompt__inner--compact {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-layout,
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+    height: auto;
+  }
+
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+    justify-content: flex-start;
   }
 
   .studio-canvas-prompt__editor-layout {

@@ -49,7 +49,25 @@ export const canPurchaseAddonCredits = (plan: string | null) => isAddonEligibleP
 export const getInsufficientCreditsPricingSection = (plan: string | null): PricingEntryIntentSection =>
   isAddonEligiblePlan(plan) ? "addons" : "plans";
 
-export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAction) => {
+export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAction, locale: Locale = "ru") => {
+  if (locale === "en") {
+    switch (action) {
+      case "ai_photo":
+        return "AI photo generation";
+      case "ai_video":
+        return "AI video generation";
+      case "photo_animation":
+        return "AI photo animation";
+      case "image_edit":
+        return "Image edit";
+      case "image_upscale":
+        return "Image upscale";
+      case "video_generation":
+      default:
+        return "Shorts generation";
+    }
+  }
+
   switch (action) {
     case "ai_photo":
       return "Генерация ИИ фото";
@@ -67,22 +85,42 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
   }
 };
 
-export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsContext) => {
+export const getInsufficientCreditsBannerCopy = (context: InsufficientCreditsContext, locale: Locale = "ru") => {
   const formattedBalance = formatCreditsLabel(context.balance);
+  const formattedRequiredCredits = formatCreditsCountLabel(context.requiredCredits, locale);
+  const actionLabel = getInsufficientCreditsContextActionLabel(context.action, locale);
 
   if (isAddonEligiblePlan(context.plan)) {
-    return {
-      ctaLabel: "Купить кредиты",
-      note: "Пакеты пополняют баланс и не меняют ваш тариф.",
-      text: `На балансе ${formattedBalance} кредитов, а для этого действия нужно ${context.requiredCredits}. Пополните пакет и продолжайте без паузы.`,
-      title: "Не хватает кредитов, чтобы продолжить",
-    };
+    return locale === "en"
+      ? {
+          ctaLabel: "Buy credits",
+          eyebrow: "Out of credits",
+          note: "Packs top up your balance without changing your plan.",
+          text: `Your balance is ${formattedBalance} credits. ${actionLabel} requires ${formattedRequiredCredits}. Buy a pack and continue without changing your plan.`,
+          title: `Need ${formattedRequiredCredits}`,
+        }
+      : {
+          ctaLabel: "Купить кредиты",
+          eyebrow: "Недостаточно кредитов",
+          note: "Пакеты пополняют баланс и не меняют ваш тариф.",
+          text: `На балансе ${formattedBalance} кредитов. Для действия «${actionLabel}» нужно ${formattedRequiredCredits}. Пополните пакет и продолжайте без смены тарифа.`,
+          title: `Нужно ${formattedRequiredCredits}`,
+        };
   }
 
-  return {
-    ctaLabel: "Выбрать тариф",
-    note: "После перехода на PRO или ULTRA откроется покупка дополнительных пакетов.",
-    text: `На балансе ${formattedBalance} кредитов, а для этого действия нужно ${context.requiredCredits}. Выберите тариф с кредитами и сразу продолжайте генерацию.`,
-    title: "Не хватает кредитов, чтобы продолжить",
-  };
+  return locale === "en"
+    ? {
+        ctaLabel: "Choose plan",
+        eyebrow: "Out of credits",
+        note: "After upgrading to PRO or ULTRA, add-on credit packs will be available.",
+        text: `Your balance is ${formattedBalance} credits. ${actionLabel} requires ${formattedRequiredCredits}. Choose a plan with credits to continue generation.`,
+        title: `Need ${formattedRequiredCredits}`,
+      }
+    : {
+        ctaLabel: "Выбрать тариф",
+        eyebrow: "Недостаточно кредитов",
+        note: "После перехода на PRO или ULTRA откроется покупка дополнительных пакетов.",
+        text: `На балансе ${formattedBalance} кредитов. Для действия «${actionLabel}» нужно ${formattedRequiredCredits}. Выберите тариф с кредитами, чтобы продолжить генерацию.`,
+        title: `Нужно ${formattedRequiredCredits}`,
+      };
 };

@@ -1,4 +1,4 @@
-import { type InsufficientCreditsContext } from "../lib/insufficient-credits";
+import { getInsufficientCreditsBannerCopy, type InsufficientCreditsContext } from "../lib/insufficient-credits";
 import { useLocale } from "../lib/i18n";
 
 type Props = {
@@ -11,6 +11,7 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
   const { locale } = useLocale();
   const planLabel = (context.plan ?? "FREE").toUpperCase();
   const closeLabel = locale === "en" ? "Close" : "Закрыть";
+  const copy = getInsufficientCreditsBannerCopy(context, locale);
 
   return (
     <div className="icm" role="dialog" aria-modal="true" aria-labelledby="icm-title">
@@ -26,7 +27,7 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
         </button>
 
         <div className="icm__toprow">
-          <p className="icm__eyebrow">{locale === "en" ? "Out of credits" : "Бесплатное видео использовано"}</p>
+          <p className="icm__eyebrow">{copy.eyebrow}</p>
           <div className="icm__badge">
             <span className="icm__badge-dot" aria-hidden="true" />
             {locale === "en" ? "Plan" : "Тариф"} {planLabel}
@@ -34,13 +35,14 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
         </div>
 
         <div className="icm__body">
-          <h2 className="icm__title" id="icm-title">{locale === "en" ? "Top up your balance" : "Продолжайте без ограничений"}</h2>
-          <p className="icm__desc">{locale === "en" ? "Keep publishing Shorts without interruptions." : "Вы создали бесплатный Shorts. Перейдите на платный тариф, чтобы продолжить создавать видео."}</p>
+          <h2 className="icm__title" id="icm-title">{copy.title}</h2>
+          <p className="icm__desc">{copy.text}</p>
+          <p className="icm__note">{copy.note}</p>
         </div>
 
         <div className="icm__actions">
           <button className="icm__btn-primary" type="button" onClick={onAction}>
-            {locale === "en" ? "Choose plan" : "Выбрать тариф"}
+            {copy.ctaLabel}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>

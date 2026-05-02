@@ -1319,7 +1319,6 @@ const STUDIO_BRAND_LOGO_MAX_BYTES = 12 * 1024 * 1024;
 const STUDIO_BRAND_TEXT_MAX_CHARS = 50;
 const STUDIO_PROMPT_PANEL_BASE_WIDTH = 620;
 const STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH = 1220;
-const STUDIO_PROMPT_PANEL_ADAPTIVE_BREAKPOINT = 640;
 const STUDIO_PROMPT_PANEL_INLINE_BUFFER = 8;
 const STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS = [".avif", ".jpeg", ".jpg", ".png", ".webp"] as const;
 const STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS = [
@@ -2967,6 +2966,8 @@ const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: string): St
     ...(studioVideoOptionEnglishCopy[option.id] ?? {}),
   };
 };
+const STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST =
+  STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST - STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 const workspaceLocalExampleGoalOptions: Array<{
   description: string;
   id: WorkspaceLocalExampleGoal;
@@ -12295,6 +12296,7 @@ function StudioVideoSelectorChip({
                   .filter((option) => option.id !== "custom")
                   .map((option) => {
                     const optionCopy = getStudioVideoOptionCopy(option, locale);
+                    const isPremiumVisualOption = option.id === "ai_photo";
                     return (
                       <button
                         key={option.id}
@@ -12308,7 +12310,14 @@ function StudioVideoSelectorChip({
                         }}
                       >
                         <span className="studio-video-selector__option-row">
-                          <span>{optionCopy.label}</span>
+                          <span className="studio-video-selector__option-title">
+                            <span>{isPremiumVisualOption ? "Premium" : optionCopy.label}</span>
+                            {isPremiumVisualOption ? (
+                              <span className="studio-video-selector__cost">
+                                {formatCreditsCountLabel(STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST, locale)}
+                              </span>
+                            ) : null}
+                          </span>
                           {optionCopy.duration ? (
                             <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
                           ) : null}
@@ -12916,7 +12925,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [isContentPlanVisible, setIsContentPlanVisible] = useState<boolean>(() =>
     readStudioContentPlanVisibility(session.email),
   );
-  const [adaptivePromptPanelWidth, setAdaptivePromptPanelWidth] = useState<number | null>(null);
+  const [adaptivePromptPanelWidth, setAdaptivePromptPanelWidth] = useState<number | null>(
+    STUDIO_PROMPT_PANEL_BASE_WIDTH,
+  );
   const [activeContentPlanId, setActiveContentPlanId] = useState<string | null>(null);
   const [expandedContentPlanUsedIdeasPlanId, setExpandedContentPlanUsedIdeasPlanId] = useState<string | null>(null);
   const [selectedContentPlanIdeaId, setSelectedContentPlanIdeaId] = useState<string | null>(null);
@@ -16701,8 +16712,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       (promptShellStyle ? Number.parseFloat(promptShellStyle.paddingRight) || 0 : 0);
     const availableViewportWidth = Math.max(0, window.innerWidth - shellPaddingInline);
 
-    if (availableViewportWidth <= STUDIO_PROMPT_PANEL_ADAPTIVE_BREAKPOINT) {
-      setAdaptivePromptPanelWidth((currentWidth) => (currentWidth === null ? currentWidth : null));
+    if (availableViewportWidth <= 0) {
       return;
     }
 
@@ -16775,10 +16785,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
       : adaptivePromptPanelWidth !== null
         ? {
-            width: `${adaptivePromptPanelWidth}px`,
-            maxWidth: `${adaptivePromptPanelWidth}px`,
+            maxWidth: `min(${adaptivePromptPanelWidth}px, calc(100vw - 48px))`,
+            width: `min(${adaptivePromptPanelWidth}px, calc(100vw - 48px))`,
           }
         : undefined;
+  const hasStudioPromptAuxiliaryContent =
+    composerSourceIdea !== null || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
+  const studioPromptInnerClassName = `studio-canvas-prompt__inner${
+    hasStudioPromptAuxiliaryContent ? "" : " studio-canvas-prompt__inner--compact"
+  }`;
 
   useEffect(() => {
     if (createMode !== "segment-editor" || (isSegmentAiPhotoModalOpen && !segmentAiPhotoModalSegment)) {
@@ -25667,7 +25682,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 	            <div className="studio-canvas-prompt">
 	              <div
                 ref={promptInnerRef}
-	                className="studio-canvas-prompt__inner"
+	                className={studioPromptInnerClassName}
 	                style={promptInnerStyle}
 	              >
 	                <div className="studio-canvas-prompt__editor-layout">

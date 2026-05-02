@@ -547,7 +547,8 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
             <>
               <div className="hero__layered-background" aria-hidden="true">
                 <picture className="hero__layered-background-media">
-                  <img src="/background/bg.png" alt="" decoding="async" fetchPriority="high" />
+                  <source srcSet="/background/bg.webp" type="image/webp" />
+                  <img src="/background/bg.png" alt="" decoding="async" fetchPriority="high" loading="eager" />
                 </picture>
               </div>
               <div className="hero__motion-layer" aria-hidden="true">
