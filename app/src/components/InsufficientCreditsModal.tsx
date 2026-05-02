@@ -37,7 +37,7 @@ export function InsufficientCreditsModal({ context, onAction, onClose }: Props) 
         <div className="icm__body">
           <h2 className="icm__title" id="icm-title">{copy.title}</h2>
           <p className="icm__desc">{copy.text}</p>
-          <p className="icm__note">{copy.note}</p>
+          {copy.note ? <p className="icm__note">{copy.note}</p> : null}
         </div>
 
         <div className="icm__actions">

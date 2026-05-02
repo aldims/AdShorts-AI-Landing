@@ -12314,7 +12314,7 @@ function StudioVideoSelectorChip({
                             <span>{isPremiumVisualOption ? "Premium" : optionCopy.label}</span>
                             {isPremiumVisualOption ? (
                               <span className="studio-video-selector__cost">
-                                {formatCreditsCountLabel(STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST, locale)}
+                                {STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST} ⚡
                               </span>
                             ) : null}
                           </span>
