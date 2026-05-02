@@ -15254,7 +15254,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       section: targetSection,
       source: "insufficient-credits",
     });
-    navigate(localizePath(`/pricing#${targetSection}`));
+    navigate(localizePath("/pricing"));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    }
   };
   const previewModalHashtags = isProjectPreviewModalOpen ? projectPreviewModal?.hashtags ?? [] : generatedVideoHashtags;
   const generatedVideoPlaybackUrl = String(generatedVideo?.videoUrl ?? "").trim() || null;

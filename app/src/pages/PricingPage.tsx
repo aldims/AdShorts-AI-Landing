@@ -609,13 +609,16 @@ export function PricingPage({
     handlePlanCheckout("pro");
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const intent = readPricingEntryIntent();
     if (!intent) {
       return;
     }
 
     clearPricingEntryIntent();
+    if (typeof window !== "undefined") {
+      window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    }
   }, []);
 
   useLayoutEffect(() => {
