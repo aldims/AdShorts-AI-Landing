@@ -14232,9 +14232,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentCarouselDragProgress(0);
     setIsSegmentCarouselDragging(false);
 
-    // Enable transitions synchronously so the editor opens with the carousel already at its final size.
-    setIsSegmentEditorCarouselReady(true);
-    return undefined;
+    setIsSegmentEditorCarouselReady(false);
+    let secondFrameId = 0;
+    const firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(() => {
+        setIsSegmentEditorCarouselReady(true);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrameId);
+      if (secondFrameId) {
+        window.cancelAnimationFrame(secondFrameId);
+      }
+    };
   }, [createMode, segmentEditorDraft?.projectId]);
 
   useEffect(() => {

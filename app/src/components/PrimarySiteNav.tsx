@@ -103,7 +103,6 @@ export function PrimarySiteNav({
 
   const handleStudioPrimaryClick = () => {
     if (onOpenStudioSection) {
-      setIsStudioMenuOpen(true);
       handleStudioSectionSelect("create");
       return;
     }

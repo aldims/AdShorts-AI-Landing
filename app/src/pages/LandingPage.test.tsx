@@ -54,7 +54,11 @@ describe("LandingPage guides section", () => {
     expect(screen.getByText("До 100 Shorts")).toBeTruthy();
     expect(screen.queryByText("Полный доступ к созданию Shorts")).toBeNull();
     expect(screen.queryByText("Можно докупать кредиты")).toBeNull();
-    expect(screen.queryByText("Ранний доступ к новым функциям")).toBeNull();
+    expect(screen.queryByText("Автопубликация в YouTube")).toBeNull();
+    expect(screen.queryByText("Всё из START")).toBeNull();
+    expect(screen.queryByText("Всё из PRO")).toBeNull();
+    expect(screen.getByText("Ранний доступ к новым функциям")).toBeTruthy();
+    expect(screen.getAllByText("Можно докупать пакеты")).toHaveLength(2);
     expect(container.querySelector(".hero__trust")).toBeNull();
     expect(screen.queryByText("ИДЕАЛЬНО ДЛЯ")).toBeNull();
     expect(screen.queryByText("Авторы")).toBeNull();
@@ -71,7 +75,8 @@ describe("LandingPage guides section", () => {
     expect(screen.getByRole("link", { name: "Открыть примеры Shorts: Обучающие Shorts" }).getAttribute("href")).toBe("/examples?filter=expert");
     expect(screen.getByText("Обучающие Shorts")).toBeTruthy();
     expect(screen.queryByText("Экспертные Shorts")).toBeNull();
-    expect(screen.getByRole("link", { name: "Перейти к тарифам" }).getAttribute("href")).toBe("/pricing");
+    expect(screen.getByRole("link", { name: "Смотреть примеры" }).getAttribute("href")).toBe("/examples#top");
+    expect(screen.getByRole("link", { name: "Перейти к тарифам" }).getAttribute("href")).toBe("/pricing#top");
     expect(screen.queryByText("Все тарифы")).toBeNull();
   });
 

@@ -300,6 +300,28 @@ export function App() {
   }, [hasExplicitLocalePrefix, locale, location.hash, location.pathname, location.search, navigate]);
 
   useEffect(() => {
+    if (!location.hash) {
+      return;
+    }
+
+    const targetId = decodeURIComponent(location.hash.slice(1));
+    if (!targetId) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({ block: "start", behavior: "auto" });
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [location.hash, location.key, location.pathname, location.search]);
+
+  useEffect(() => {
     document.body.classList.toggle("modal-open", authState.isOpen);
     return () => {
       document.body.classList.remove("modal-open");

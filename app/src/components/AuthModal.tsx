@@ -64,7 +64,7 @@ const copy: Record<AuthMode, Record<Locale, {
   signin: {
     ru: {
       eyebrow: "Вход",
-      title: "Войдите в личный кабинет AdShorts AI",
+      title: "Войдите в AdShorts AI",
       lead: "",
       submit: "Войти",
       switchLabel: "Новый пользователь?",
@@ -361,19 +361,6 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             <span className="signup-social__copy">
               <span>Google</span>
               {!status.googleEnabled ? <small>{locale === "en" ? "Not configured" : "Не настроено"}</small> : null}
-            </span>
-          </button>
-          <button
-            className="signup-social__button route-button"
-            type="button"
-            disabled
-          >
-            <span className="signup-social__icon signup-social__icon--telegram" aria-hidden="true">
-              <img src="/telegram-2019-logo.svg" alt="" />
-            </span>
-            <span className="signup-social__copy">
-              <span>Telegram</span>
-              <small>{locale === "en" ? "Soon" : "Скоро"}</small>
             </span>
           </button>
         </div>

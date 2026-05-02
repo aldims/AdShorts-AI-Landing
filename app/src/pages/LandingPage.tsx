@@ -793,7 +793,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
               </div>
 
               <div className="landing-examples-cta__actions">
-                <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/examples")}>
+                <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/examples#top")}>
                   <span className="btn--premium-cta__label">{t(landingMessages.seeExamples)}</span>
                   <svg
                     className="btn--premium-cta__arrow"
@@ -842,16 +842,14 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                 <p className="plan-card__tagline">
                   {locale === "en" ? "Ideal for the first launch" : "Разовый пакет для первого запуска"}
                 </p>
+                <div className="plan-card__output">
+                  <span>{locale === "en" ? "Up to 5 Shorts" : "До 5 Shorts"}</span>
+                  <small>{locale === "en" ? "≈ 78 ₽ per Short" : "≈ 78 ₽ за Shorts"}</small>
+                </div>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
-                    {locale === "en" ? "Up to 5 Shorts" : "До 5 Shorts"}
-                  </li>
-                  <li>
                     {t(landingMessages.noWatermark)}
-                  </li>
-                  <li>
-                    {t(landingMessages.autoPublish)}
                   </li>
                 </ul>
                 <button
@@ -879,16 +877,20 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                 <p className="plan-card__tagline">
                   {locale === "en" ? "Ideal for a regular content flow" : "Для регулярного создания Shorts"}
                 </p>
+                <div className="plan-card__output">
+                  <span>{locale === "en" ? "Up to 25 Shorts" : "До 25 Shorts"}</span>
+                  <small>{locale === "en" ? "≈ 60 ₽ per Short" : "≈ 60 ₽ за Shorts"}</small>
+                </div>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
-                    {locale === "en" ? "Up to 25 Shorts" : "До 25 Shorts"}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Everything in START" : "Всё из START"}
+                    {t(landingMessages.noWatermark)}
                   </li>
                   <li>
                     {t(landingMessages.priorityGeneration)}
+                  </li>
+                  <li>
+                    {locale === "en" ? "Credit top-ups available" : "Можно докупать пакеты"}
                   </li>
                 </ul>
                 <button
@@ -911,16 +913,23 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                 <p className="plan-card__tagline">
                   {locale === "en" ? "Ideal for maximum volume" : "Для максимального объёма"}
                 </p>
+                <div className="plan-card__output">
+                  <span>{locale === "en" ? "Up to 100 Shorts" : "До 100 Shorts"}</span>
+                  <small>{locale === "en" ? "≈ 50 ₽ per Short" : "≈ 50 ₽ за Shorts"}</small>
+                </div>
                 <div className="plan-card__divider" aria-hidden="true" />
                 <ul className="plan-card__features">
                   <li>
-                    {locale === "en" ? "Up to 100 Shorts" : "До 100 Shorts"}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Everything in PRO" : "Всё из PRO"}
+                    {t(landingMessages.noWatermark)}
                   </li>
                   <li>
                     {locale === "en" ? "Maximum priority" : "Максимальный приоритет"}
+                  </li>
+                  <li>
+                    {locale === "en" ? "Credit top-ups available" : "Можно докупать пакеты"}
+                  </li>
+                  <li>
+                    {locale === "en" ? "Early access to new features" : "Ранний доступ к новым функциям"}
                   </li>
                 </ul>
                 <button
@@ -935,7 +944,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
             </div>
 
             <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
-              <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing")}>
+              <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing#top")}>
                 <span className="btn--premium-cta__label">{locale === "en" ? "Go to plans" : "Перейти к тарифам"}</span>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M5 12h14M12 5l7 7-7 7" />

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "../lib/i18n";
 import { PrimarySiteNav } from "./PrimarySiteNav";
@@ -33,5 +33,22 @@ describe("PrimarySiteNav", () => {
     expect(screen.getByRole("link", { name: "Тарифы" }).className).toContain("site-nav__item--active");
     expect(screen.queryByRole("link", { name: "Главная" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Примеры" })).toBeNull();
+  });
+
+  it("opens studio directly without expanding the intermediate menu", () => {
+    const handleOpenStudioSection = vi.fn();
+
+    renderPrimarySiteNav(
+      <PrimarySiteNav
+        activeItem="home"
+        onOpenStudio={() => undefined}
+        onOpenStudioSection={handleOpenStudioSection}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Студия" }));
+
+    expect(handleOpenStudioSection).toHaveBeenCalledWith("create");
+    expect(screen.getByRole("button", { name: "Студия" }).getAttribute("aria-expanded")).toBe("false");
   });
 });
