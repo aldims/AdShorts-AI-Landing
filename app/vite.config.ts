@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const devHost = "localhost";
+const devHost = "127.0.0.1";
 
 const apiProxy = {
   "/api": {

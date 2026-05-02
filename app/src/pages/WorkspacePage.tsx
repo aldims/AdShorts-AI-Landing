@@ -25618,7 +25618,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   <span>{workspaceText(locale, "Скачать", "Download")}</span>
                                 </a>
                                 <button
-                                  className="studio-canvas-preview__quick-action"
+                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
                                   type="button"
                                   aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
                                   title={workspaceText(locale, "Закрыть видео", "Close video")}
@@ -25671,7 +25671,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   </svg>
                                 </a>
                                 <button
-                                  className="studio-canvas-preview__quick-action"
+                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
                                   type="button"
                                   aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
                                   title={workspaceText(locale, "Закрыть видео", "Close video")}

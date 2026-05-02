@@ -18860,8 +18860,8 @@ textarea {
   right: 10px;
   max-width: calc(100% - 20px);
   container-type: inline-size;
-  justify-content: flex-start;
-  overflow: hidden;
+  justify-content: flex-end;
+  overflow: visible;
 }
 
 .studio-canvas-preview__generated-actions {
@@ -18871,15 +18871,18 @@ textarea {
   gap: 6px;
   max-width: 100%;
   min-width: 0;
+  overflow: visible;
 }
 
 .studio-canvas-preview__generated-actions--expanded {
   flex-wrap: nowrap;
   overflow: hidden;
+  margin-right: auto;
 }
 
 .studio-canvas-preview__generated-actions--compact {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin-left: auto;
 }
 
 /* ── Основной контейнер видео — liquid glass ── */
@@ -19049,6 +19052,26 @@ textarea {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.14) inset,
     0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.studio-canvas-preview__player-shell .studio-video-modal__top-actions .studio-canvas-preview__quick-action:hover {
+  transform: scale(1.06);
+}
+
+.studio-canvas-preview__quick-action--close,
+.studio-canvas-preview__quick-action--close:hover {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.studio-canvas-preview__quick-action--close {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.studio-canvas-preview__quick-action--close:hover {
+  color: rgba(255, 255, 255, 1);
 }
 
 .studio-canvas-preview__quick-action--accent {

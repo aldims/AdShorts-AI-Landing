@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
@@ -617,6 +617,16 @@ export function PricingPage({
 
     clearPricingEntryIntent();
   }, []);
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (location.hash === "#plans" || location.hash === "#top") {
+      window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    }
+  }, [location.hash, location.pathname]);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") {
