@@ -11376,7 +11376,8 @@ textarea {
 }
 
 .pricing-max-addon-lock__cta {
-  width: min(100%, 220px);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .pricing-max-card__cta:disabled {
@@ -30606,12 +30607,18 @@ html, body {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  max-width: 720px !important;
+  max-width: none !important;
   gap: 20px !important;
   position: relative;
   overflow: hidden;
   margin: 0 !important;
   text-align: left !important;
+}
+
+/* Ровно ширина одной колонки сетки тарифов (как «Оплатить START») */
+.pricing-max-addons .pricing-max-addon-lock {
+  box-sizing: border-box !important;
+  width: min(100%, calc((100% - 40px) / 3)) !important;
 }
 
 .pricing-max-addon-lock::before {
@@ -30644,8 +30651,21 @@ html, body {
 }
 
 .pricing-max-addon-lock__cta {
-  width: auto !important;
-  min-width: 180px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 1180px) {
+  .pricing-max-addons .pricing-max-addon-lock {
+    width: min(100%, calc((100% - 20px) / 2)) !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .pricing-max-addons .pricing-max-addon-lock {
+    width: 100% !important;
+  }
 }
 
 .pricing-max-addons__note {
