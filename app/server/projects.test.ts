@@ -57,4 +57,28 @@ describe("projects latest generation history mapping", () => {
       versionRootProjectAdId: 11,
     });
   });
+
+  it("falls back to backend project lineage when local history is missing it", () => {
+    const lineage = getWorkspaceProjectLineage(null, {
+      lineage_root_id: "42",
+      source_project_id: "57",
+    });
+
+    expect(lineage).toEqual({
+      editedFromProjectAdId: 57,
+      versionRootProjectAdId: 42,
+    });
+  });
+
+  it("uses source project as root when backend edit lineage has no explicit root", () => {
+    const lineage = getWorkspaceProjectLineage(null, {
+      lineage_root_id: null,
+      source_project_id: 57,
+    });
+
+    expect(lineage).toEqual({
+      editedFromProjectAdId: 57,
+      versionRootProjectAdId: 57,
+    });
+  });
 });

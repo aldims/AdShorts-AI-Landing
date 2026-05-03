@@ -21,6 +21,13 @@ const workspaceProjectsCache = new Map();
 const workspaceProjectsInFlight = new Map();
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizePrompt = (value) => normalizeText(value);
+const normalizePositiveInteger = (value) => {
+    const numericValue = Number(value ?? 0);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return null;
+    }
+    return Math.trunc(numericValue);
+};
 const parseJson = (value) => {
     try {
         return JSON.parse(value);
@@ -40,9 +47,14 @@ const cloneWorkspaceProject = (project) => ({
     youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 const cloneWorkspaceProjects = (projects) => projects.map(cloneWorkspaceProject);
-export const getWorkspaceProjectLineage = (historyEntry) => ({
-    editedFromProjectAdId: historyEntry?.editedFromProjectAdId ?? null,
-    versionRootProjectAdId: historyEntry?.versionRootProjectAdId ?? null,
+export const getWorkspaceProjectLineage = (historyEntry, backendLineage) => ({
+    editedFromProjectAdId: historyEntry?.editedFromProjectAdId ??
+        normalizePositiveInteger(backendLineage?.source_project_id) ??
+        null,
+    versionRootProjectAdId: historyEntry?.versionRootProjectAdId ??
+        normalizePositiveInteger(backendLineage?.lineage_root_id) ??
+        normalizePositiveInteger(backendLineage?.source_project_id) ??
+        null,
 });
 const toIsoString = (value) => {
     if (!value)
@@ -301,7 +313,7 @@ const buildProjectFromAdminVideo = (item, historyEntry) => {
     });
     const videoUrl = status === "ready" ? playbackTargets.videoUrl : null;
     const videoFallbackUrl = status === "ready" ? playbackTargets.videoFallbackUrl : null;
-    const lineage = getWorkspaceProjectLineage(historyEntry);
+    const lineage = getWorkspaceProjectLineage(historyEntry, item);
     const youtubePublication = normalizeText(item.youtube_publish_state) ||
         normalizeText(item.youtube_published_link) ||
         normalizeText(item.youtube_video_id) ||

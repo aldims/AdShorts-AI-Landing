@@ -68,9 +68,12 @@ type AdsflowAdminVideoItem = {
   description?: string | null;
   download_path?: string | null;
   id?: number;
+  lineage_root_id?: number | string | null;
   media_asset_id?: number | null;
+  source_project_id?: number | string | null;
   status?: string | null;
   user_id?: number;
+  version_index?: number | string | null;
   youtube_channel_name?: string | null;
   youtube_publish_state?: string | null;
   youtube_published_at?: string | null;
@@ -133,6 +136,14 @@ const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " 
 
 const normalizePrompt = (value: unknown) => normalizeText(value);
 
+const normalizePositiveInteger = (value: unknown) => {
+  const numericValue = Number(value ?? 0);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null;
+  }
+  return Math.trunc(numericValue);
+};
+
 const parseJson = (value: string) => {
   try {
     return JSON.parse(value) as Record<string, unknown>;
@@ -157,9 +168,20 @@ const cloneWorkspaceProjects = (projects: WorkspaceProject[]) => projects.map(cl
 
 export const getWorkspaceProjectLineage = (
   historyEntry?: Pick<WorkspaceGenerationHistoryEntry, "editedFromProjectAdId" | "versionRootProjectAdId"> | null,
+  backendLineage?: {
+    lineage_root_id?: number | string | null;
+    source_project_id?: number | string | null;
+  } | null,
 ) => ({
-  editedFromProjectAdId: historyEntry?.editedFromProjectAdId ?? null,
-  versionRootProjectAdId: historyEntry?.versionRootProjectAdId ?? null,
+  editedFromProjectAdId:
+    historyEntry?.editedFromProjectAdId ??
+    normalizePositiveInteger(backendLineage?.source_project_id) ??
+    null,
+  versionRootProjectAdId:
+    historyEntry?.versionRootProjectAdId ??
+    normalizePositiveInteger(backendLineage?.lineage_root_id) ??
+    normalizePositiveInteger(backendLineage?.source_project_id) ??
+    null,
 });
 
 const toIsoString = (value: unknown) => {
@@ -485,7 +507,7 @@ const buildProjectFromAdminVideo = (
   });
   const videoUrl = status === "ready" ? playbackTargets.videoUrl : null;
   const videoFallbackUrl = status === "ready" ? playbackTargets.videoFallbackUrl : null;
-  const lineage = getWorkspaceProjectLineage(historyEntry);
+  const lineage = getWorkspaceProjectLineage(historyEntry, item);
   const youtubePublication =
     normalizeText(item.youtube_publish_state) ||
     normalizeText(item.youtube_published_link) ||

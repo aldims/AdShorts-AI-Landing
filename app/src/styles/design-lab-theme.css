@@ -18856,9 +18856,10 @@ textarea {
 }
 
 .studio-canvas-preview__player-shell .studio-video-modal__top-actions {
-  left: 10px;
-  right: 10px;
-  max-width: calc(100% - 18px);
+  top: 16px;
+  left: auto;
+  right: 12px;
+  max-width: calc(100% - 24px);
   container-type: inline-size;
   justify-content: flex-end;
   overflow: visible;

@@ -21958,13 +21958,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         ? { ...composerSourceIdea }
         : null
       : null;
-    const shouldUseCompactGeneratedVideoActions =
-      hasDisplayedGeneratedVideoActionsRef.current ||
-      isSegmentEditorGeneration ||
-      Boolean(options?.isRegeneration || options?.projectId || options?.editedFromProjectAdId || options?.versionRootProjectAdId);
-    const nextGeneratedVideoActionMode: StudioGeneratedVideoActionMode = shouldUseCompactGeneratedVideoActions
-      ? "compact"
-      : "expanded";
+    const shouldUseExpandedGeneratedVideoActions =
+      hasLoadedProjects &&
+      !projectsError &&
+      readyProjectsCount === 0 &&
+      !hasDisplayedGeneratedVideoActionsRef.current &&
+      !isSegmentEditorGeneration &&
+      !Boolean(options?.isRegeneration || options?.projectId || options?.editedFromProjectAdId || options?.versionRootProjectAdId);
+    const nextGeneratedVideoActionMode: StudioGeneratedVideoActionMode = shouldUseExpandedGeneratedVideoActions
+      ? "expanded"
+      : "compact";
     pendingGeneratedVideoActionModeRef.current = nextGeneratedVideoActionMode;
 
     flushSync(() => {
