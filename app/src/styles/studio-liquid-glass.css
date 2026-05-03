@@ -24,24 +24,20 @@
   }
 }
 
-@keyframes lg-submit-glow {
+@keyframes lg-submit-purple-pulse {
   0%, 100% {
     box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.18),
-      inset 0 1px 0 rgba(190, 235, 255, 0.10),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.62),
-      0 18px 38px -18px rgba(2, 5, 18, 1),
-      0 0 36px -12px rgba(48, 178, 240, 0.72),
-      0 0 0 0.5px rgba(140, 214, 255, 0.14);
+      inset 0 1px 0 rgba(255, 255, 255, 0.20),
+      0 4px 28px rgba(120, 70, 255, 0.50),
+      0 1px 8px rgba(0, 0, 0, 0.32),
+      0 0 0 0 rgba(139, 92, 246, 0);
   }
   50% {
     box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.22),
-      inset 0 1px 0 rgba(190, 235, 255, 0.13),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.62),
-      0 18px 38px -18px rgba(2, 5, 18, 1),
-      0 0 52px -8px rgba(48, 178, 240, 0.96),
-      0 0 0 0.5px rgba(140, 214, 255, 0.20);
+      inset 0 1px 0 rgba(255, 255, 255, 0.24),
+      0 6px 38px rgba(120, 70, 255, 0.72),
+      0 2px 12px rgba(0, 0, 0, 0.36),
+      0 0 0 8px rgba(139, 92, 246, 0.10);
   }
 }
 
@@ -496,70 +492,100 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SUBMIT BUTTON — dark glass CTA with cyan glow
+   SUBMIT BUTTON — purple CTA matching studio → 10 style
 ─────────────────────────────────────────────────────────────── */
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit {
-  clip-path: inset(0 round 999px);
-  min-height: 56px;
-  border: 1px solid rgba(176, 226, 254, 0.24);
-  border-radius: 999px;
-  color: rgba(240, 250, 255, 0.97);
+  clip-path: inset(0 round 18px);
+  min-height: 58px;
+  border: 1px solid rgba(180, 140, 255, 0.40);
+  border-radius: 18px;
+  color: rgba(255, 255, 255, 0.97);
+  font-size: clamp(1.00rem, 1.35vw, 1.14rem);
   font-weight: 820;
-  background-color: #050e18;
-  background-image:
-    radial-gradient(ellipse 66% 52% at 50% -18%, rgba(255, 255, 255, 0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 120% at 20% 0%, rgba(226, 250, 255, 0.13), transparent 58%),
-    radial-gradient(ellipse 106% 88% at 86% 100%, rgba(12, 158, 226, 0.20), transparent 66%),
-    linear-gradient(180deg, rgba(22, 32, 46, 0.98), rgba(4, 7, 13, 1));
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.60);
 
-  animation: lg-submit-glow 4.5s ease-in-out infinite;
+  background-color: #1a0850;
+  background-image:
+    /* Top specular crown */
+    radial-gradient(ellipse 80% 52% at 50% -8%, rgba(255, 255, 255, 0.22) 0%, transparent 62%),
+    /* Purple body gradient */
+    linear-gradient(
+      145deg,
+      rgba(130, 80, 255, 0.97) 0%,
+      rgba(100, 60, 230, 0.97) 58%,
+      rgba(80, 40, 210, 0.97) 100%
+    );
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 4px 28px rgba(120, 70, 255, 0.52),
+    0 1px 8px rgba(0, 0, 0, 0.32);
+
+  animation: lg-submit-purple-pulse 3s ease-in-out infinite;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit::before {
-  inset: 2px 4px 4px;
-  border-radius: 999px;
+  inset: 2px 5px 5px;
+  border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 28%),
-    radial-gradient(ellipse 56% 78% at 50% 100%, rgba(0, 0, 0, 0.26), transparent 72%);
-  opacity: 0.76;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 30%),
+    radial-gradient(ellipse 52% 72% at 50% 100%, rgba(0, 0, 0, 0.22), transparent 70%);
+  opacity: 0.78;
   mix-blend-mode: screen;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit:hover:not(:disabled) {
-  transform: translateY(-2px) scale(1.005);
-  border-color: rgba(176, 226, 254, 0.36);
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(200, 170, 255, 0.56);
   background-image:
-    radial-gradient(ellipse 66% 52% at 50% -18%, rgba(255, 255, 255, 0.26) 0%, transparent 62%),
-    radial-gradient(ellipse 70% 120% at 20% 0%, rgba(226, 250, 255, 0.18), transparent 60%),
-    radial-gradient(ellipse 106% 88% at 86% 100%, rgba(12, 158, 226, 0.26), transparent 68%),
-    linear-gradient(180deg, rgba(28, 42, 58, 0.99), rgba(5, 9, 16, 1));
+    radial-gradient(ellipse 80% 52% at 50% -8%, rgba(255, 255, 255, 0.28) 0%, transparent 64%),
+    linear-gradient(
+      145deg,
+      rgba(150, 100, 255, 0.99) 0%,
+      rgba(122, 82, 248, 0.99) 58%,
+      rgba(100, 62, 234, 0.99) 100%
+    );
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.22),
-    inset 0 1px 0 rgba(190, 238, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.66),
-    0 20px 44px -18px rgba(2, 5, 18, 1),
-    0 0 56px -8px rgba(48, 178, 240, 1),
-    0 0 0 0.5px rgba(155, 228, 255, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.44),
+    0 8px 36px rgba(130, 80, 255, 0.68),
+    0 2px 12px rgba(0, 0, 0, 0.38);
   animation: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit.is-generating {
   animation: none;
-  color: rgba(210, 228, 250, 0.80);
-  border-color: rgba(140, 186, 228, 0.26);
-  background-color: #050e18;
+  clip-path: inset(0 round 18px);
+  border-radius: 18px;
+  color: rgba(220, 210, 255, 0.78);
+  border-color: rgba(140, 110, 230, 0.26);
+  background-color: #1a0850;
   background-image:
-    linear-gradient(180deg, rgba(14, 22, 36, 0.95), rgba(5, 10, 20, 0.98));
+    linear-gradient(180deg, rgba(40, 20, 100, 0.92), rgba(20, 8, 60, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 -1px 0 rgba(0, 0, 0, 0.48),
-    0 10px 26px -16px rgba(0, 0, 0, 0.88);
+    0 4px 18px rgba(100, 60, 200, 0.28);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit:disabled {
-  filter: saturate(0.55) brightness(0.74);
+  filter: saturate(0.50) brightness(0.68);
   animation: none;
+}
+
+/* Purple bolt icon colour override */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submit .studio-canvas-prompt__btn-bolt {
+  color: rgba(255, 220, 120, 0.96);
+  text-shadow:
+    0 0 8px rgba(255, 200, 80, 0.72),
+    0 0 16px rgba(255, 160, 40, 0.42);
 }
 
 /* ─────────────────────────────────────────────────────────────
