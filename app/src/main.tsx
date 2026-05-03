@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import "./styles/design-lab-theme.css";
 import "./styles/global.css";
+import "./styles/studio-liquid-glass.css";
 
 ReactDOM.createRoot(document.getElementById("app")!).render(
   <React.StrictMode>
