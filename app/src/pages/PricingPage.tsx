@@ -1034,18 +1034,24 @@ export function PricingPage({
                 <p className="pricing-max-addons__note">{addonsEligibilityNote}</p>
               </>
             ) : (
-              <article className="pricing-max-addon-lock">
-                <h3>{t(pricingMessages.addonUpgradeTitle)}</h3>
-                <p>{t(pricingMessages.addonUpgradeDescription)}</p>
-                <button
-                  className="btn pricing-max-card__cta pricing-max-card__cta--primary pricing-max-addon-lock__cta route-button"
-                  type="button"
-                  onClick={handleAddonUpgradeAction}
-                  disabled={activeCheckoutProductId === "pro"}
-                >
-                  {activeCheckoutProductId === "pro" ? t(pricingMessages.checkoutOpening) : t(pricingMessages.addonUpgradeCta)}
-                </button>
-              </article>
+              <>
+                <div className="pricing-max-section-head">
+                  <div>
+                    <h2>{t(pricingMessages.addonUpgradeTitle)}</h2>
+                  </div>
+                </div>
+                <article className="pricing-max-addon-lock">
+                  <p>{t(pricingMessages.addonUpgradeDescription)}</p>
+                  <button
+                    className="btn pricing-max-card__cta pricing-max-card__cta--primary pricing-max-addon-lock__cta route-button"
+                    type="button"
+                    onClick={handleAddonUpgradeAction}
+                    disabled={activeCheckoutProductId === "pro"}
+                  >
+                    {activeCheckoutProductId === "pro" ? t(pricingMessages.checkoutOpening) : t(pricingMessages.addonUpgradeCta)}
+                  </button>
+                </article>
+              </>
             )}
           </div>
         </section>
