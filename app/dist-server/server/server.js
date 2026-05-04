@@ -18,7 +18,7 @@ import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
-import { getStudioVoicePreview } from "./voice-preview.js";
+import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
@@ -1227,7 +1227,6 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
         const preview = await getStudioVoicePreview({
             language: typeof req.query.language === "string" ? req.query.language : null,
             voiceId: typeof req.query.voiceId === "string" ? req.query.voiceId : null,
-            previewText: typeof req.query.text === "string" ? req.query.text : null,
         });
         res.status(200);
         res.setHeader("Cache-Control", "private, max-age=86400");
@@ -1236,9 +1235,10 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
         res.send(preview.audio);
     }
     catch (error) {
-        console.error("[workspace] Failed to generate voice preview", error);
-        res.status(502).json({
-            error: error instanceof Error ? error.message : "Failed to generate voice preview.",
+        const isMissingPreview = error instanceof StudioVoicePreviewNotFoundError;
+        console.error("[workspace] Failed to load voice preview", error);
+        res.status(isMissingPreview ? 404 : 500).json({
+            error: error instanceof Error ? error.message : "Failed to load voice preview.",
         });
     }
 });

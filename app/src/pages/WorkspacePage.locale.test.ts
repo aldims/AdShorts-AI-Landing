@@ -33,6 +33,7 @@ import {
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
   shouldShowWorkspaceMediaLibraryLoadingState,
+  studioVoiceOptionsByLanguage,
 } from "./WorkspacePage";
 
 type DraftSegment = Parameters<typeof isWorkspaceSegmentDraftVisualResettable>[0];
@@ -523,6 +524,16 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru, "invalid")).toBe(
       DEFAULT_STUDIO_VOICE_ID.en,
     );
+  });
+
+  it("uses bundled voice preview files instead of generated API previews", () => {
+    for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
+      for (const voice of voiceOptions) {
+        expect(voice.previewSampleUrl).toMatch(/^\/voice-previews\/[^?]+\.wav\?v=/);
+        expect(voice.previewSampleUrl).not.toContain("/api/workspace/voice-preview");
+        expect(Object.prototype.hasOwnProperty.call(voice, "previewText")).toBe(false);
+      }
+    }
   });
 
   it("carries the segment editor language with the selected voice for regeneration", () => {

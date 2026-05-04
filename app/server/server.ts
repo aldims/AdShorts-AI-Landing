@@ -89,7 +89,7 @@ import {
   translateStudioTexts,
   WorkspaceCreditLimitError,
 } from "./studio.js";
-import { getStudioVoicePreview } from "./voice-preview.js";
+import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import {
   CheckoutConfigError,
   CheckoutProductUnavailableError,
@@ -1577,7 +1577,6 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
     const preview = await getStudioVoicePreview({
       language: typeof req.query.language === "string" ? req.query.language : null,
       voiceId: typeof req.query.voiceId === "string" ? req.query.voiceId : null,
-      previewText: typeof req.query.text === "string" ? req.query.text : null,
     });
 
     res.status(200);
@@ -1586,9 +1585,10 @@ app.get("/api/workspace/voice-preview", async (req, res) => {
     res.setHeader("Content-Type", preview.contentType || "audio/wav");
     res.send(preview.audio);
   } catch (error) {
-    console.error("[workspace] Failed to generate voice preview", error);
-    res.status(502).json({
-      error: error instanceof Error ? error.message : "Failed to generate voice preview.",
+    const isMissingPreview = error instanceof StudioVoicePreviewNotFoundError;
+    console.error("[workspace] Failed to load voice preview", error);
+    res.status(isMissingPreview ? 404 : 500).json({
+      error: error instanceof Error ? error.message : "Failed to load voice preview.",
     });
   }
 });

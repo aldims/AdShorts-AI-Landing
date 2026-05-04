@@ -1152,9 +1152,6 @@ type StudioVoiceOption = {
   id: string;
   label: string;
   description: string;
-  previewPitch?: number;
-  previewRate?: number;
-  previewText?: string;
   previewSampleUrl?: string;
 };
 
@@ -2559,11 +2556,11 @@ const studioLanguageOptions: StudioLanguageOption[] = [
   },
 ];
 
-const studioEnglishVoicePreviewText =
-  "Listen to how the voice sounds — its pace, intonation, and overall quality.";
-const studioRussianVoicePreviewAssetVersion = "20260419-5";
+const studioVoicePreviewAssetVersion = "20260504-1";
+const getStudioVoicePreviewSampleUrl = (fileName: string) =>
+  `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
 
-const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
+export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
   ru: [
     {
       id: "Liam",
@@ -2571,7 +2568,7 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       description: "Выразительный premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит голос Александр, его темп, интонация и общее восприятие.",
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
     },
     {
       id: "English_ManWithDeepVoice",
@@ -2579,7 +2576,7 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       description: "Глубокий premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит голос Глеб, его темп, интонация и общее восприятие.",
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("gleb-premium.wav"),
     },
     {
       id: "Russian_BrightHeroine",
@@ -2587,49 +2584,49 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       description: "Яркий premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewText: "Послушайте, как звучит голос Тим, его темп, интонация и общее восприятие.",
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("tim-premium.wav"),
     },
     {
       id: "Bys_24000",
       label: "Борис",
       description: "Базовый мужской голос",
-      previewSampleUrl: `/voice-previews/boris.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("boris.wav"),
     },
     {
       id: "Nec_24000",
       label: "Наталья",
       description: "Базовый женский голос",
-      previewSampleUrl: `/voice-previews/natalya.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("natalya.wav"),
     },
     {
       id: "Tur_24000",
       label: "Тарас",
       description: "Уверенный мужской голос",
-      previewSampleUrl: `/voice-previews/taras.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("taras.wav"),
     },
     {
       id: "May_24000",
       label: "Марфа",
       description: "Молодой женский голос",
-      previewSampleUrl: `/voice-previews/marfa.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("marfa.wav"),
     },
     {
       id: "Ost_24000",
       label: "Александра",
       description: "Естественный рекламный голос",
-      previewSampleUrl: `/voice-previews/alexandra.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexandra.wav"),
     },
     {
       id: "Pon_24000",
       label: "Сергей",
       description: "Деловой мужской голос",
-      previewSampleUrl: `/voice-previews/sergey.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("sergey.wav"),
     },
     {
       id: "male-qn-jingying",
       label: "Алексей",
       description: "Выразительный мужской голос",
-      previewSampleUrl: `/voice-previews/aleksey.wav?v=${studioRussianVoicePreviewAssetVersion}`,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("aleksey.wav"),
     },
   ],
   en: [
@@ -2637,73 +2634,55 @@ const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> 
       id: "Aiden",
       label: "Aiden",
       description: "Ясный американский мужской голос",
-      previewPitch: 0.96,
-      previewRate: 0.98,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("aiden.wav"),
     },
     {
       id: "Ryan",
       label: "Ryan",
       description: "Энергичный мужской голос с сильным ритмом",
-      previewPitch: 1,
-      previewRate: 1.05,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("ryan.wav"),
     },
     {
       id: "Serena",
       label: "Serena",
       description: "Теплый мягкий женский голос",
-      previewPitch: 1.1,
-      previewRate: 0.98,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("serena.wav"),
     },
     {
       id: "Vivian",
       label: "Vivian",
       description: "Яркий молодой женский голос с характером",
-      previewPitch: 1.18,
-      previewRate: 1.04,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("vivian.wav"),
     },
     {
       id: "Uncle_Fu",
       label: "Uncle Fu",
       description: "Низкий зрелый мужской тембр",
-      previewPitch: 0.82,
-      previewRate: 0.9,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("uncle-fu.wav"),
     },
     {
       id: "Dylan",
       label: "Dylan",
       description: "Молодой мужской голос с пекинским оттенком",
-      previewPitch: 0.93,
-      previewRate: 1.02,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("dylan.wav"),
     },
     {
       id: "Eric",
       label: "Eric",
       description: "Живой мужской голос с легкой хрипотцой",
-      previewPitch: 0.91,
-      previewRate: 1,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("eric.wav"),
     },
     {
       id: "Ono_Anna",
       label: "Ono Anna",
       description: "Легкий японский женский тембр",
-      previewPitch: 1.2,
-      previewRate: 1.08,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("ono-anna.wav"),
     },
     {
       id: "Sohee",
       label: "Sohee",
       description: "Теплый корейский женский голос с эмоцией",
-      previewPitch: 1.13,
-      previewRate: 1,
-      previewText: studioEnglishVoicePreviewText,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("sohee.wav"),
     },
   ],
 };
@@ -10185,7 +10164,6 @@ type StudioVoiceSelectorChipProps = {
   isEnabled: boolean;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
   onToggleEnabled: (enabled: boolean) => void;
-  selectedLanguage: StudioLanguage;
   selectedVoiceId: StudioVoiceOption["id"];
   voiceOptions: StudioVoiceOption[];
   variant?: "chip" | "sidebar";
@@ -10731,7 +10709,6 @@ function StudioVoiceSelectorChip({
   isEnabled,
   onSelect,
   onToggleEnabled,
-  selectedLanguage,
   selectedVoiceId,
   voiceOptions,
   variant = "chip",
@@ -10843,22 +10820,7 @@ function StudioVoiceSelectorChip({
 
     stopVoicePreview();
 
-    const previewUrl = (() => {
-      if (voice.previewSampleUrl) {
-        return voice.previewSampleUrl;
-      }
-
-      if (!voice.previewText) {
-        return null;
-      }
-
-      const params = new URLSearchParams({
-        language: selectedLanguage,
-        text: voice.previewText,
-        voiceId: voice.id,
-      });
-      return `/api/workspace/voice-preview?${params.toString()}`;
-    })();
+    const previewUrl = voice.previewSampleUrl ?? null;
 
     if (!previewUrl || typeof Audio === "undefined") {
       return;
@@ -10959,7 +10921,7 @@ function StudioVoiceSelectorChip({
               </div>
               {voiceOptions.map((voice) => (
                 (() => {
-                  const canPreviewVoice = Boolean(voice.previewSampleUrl || voice.previewText);
+                  const canPreviewVoice = Boolean(voice.previewSampleUrl);
                   const isVoiceSelected = isEnabled && voice.id === selectedVoiceId;
 
                   return (
@@ -24758,7 +24720,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 <StudioVoiceSelectorChip
                   isEnabled={studioSidebarVoiceEnabled}
                   onToggleEnabled={handleSegmentEditorVoiceToggle}
-                  selectedLanguage={selectedLanguage}
                   selectedVoiceId={studioSidebarVoiceId}
                   voiceOptions={selectedVoiceOptions}
                   onSelect={handleSegmentEditorVoiceSelect}
@@ -24864,7 +24825,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           isEnabled={studioSidebarVoiceEnabled}
           variant="sidebar"
           onToggleEnabled={handleSegmentEditorVoiceToggle}
-          selectedLanguage={selectedLanguage}
           selectedVoiceId={studioSidebarVoiceId}
           voiceOptions={selectedVoiceOptions}
           onSelect={handleSegmentEditorVoiceSelect}
@@ -25851,7 +25811,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                   key={chip}
                                   isEnabled={isVoiceoverEnabled}
                                   onToggleEnabled={handleVoiceToggle}
-                                  selectedLanguage={selectedLanguage}
                                   selectedVoiceId={resolvedSelectedVoiceId}
                                   onSelect={handleVoiceSelect}
                                   voiceOptions={selectedVoiceOptions}
