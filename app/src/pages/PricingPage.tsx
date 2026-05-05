@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
@@ -101,6 +102,18 @@ type CheckoutResultState = {
   status: "checking" | "pending" | "success";
 };
 
+type WaitlistFeedback = {
+  kind: "error" | "success";
+  message: string;
+} | null;
+
+type WaitlistResponse = {
+  data?: {
+    ok: boolean;
+  };
+  error?: string;
+};
+
 type PlanCheckoutRestriction = "current" | "unavailable" | "used";
 
 type PricingPack = {
@@ -119,6 +132,7 @@ type PricingFAQ = {
 
 const PACKAGE_RESTRICTION_ERROR_FRAGMENT = "PRO and ULTRA";
 const CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
+const WAITLIST_REQUEST_TIMEOUT_MS = 20_000;
 const PAYMENT_PROFILE_POLL_ATTEMPTS = 6;
 const PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
 
@@ -157,6 +171,66 @@ const pricingMessages = defineMessages({
     ru: "Не удалось открыть страницу оплаты.",
     en: "Could not open checkout.",
   },
+  internationalCheckoutBody: {
+    ru: "",
+    en: "You can try AdShorts AI for free now. Create Shorts, test the studio, voiceover, subtitles and publishing tools while international card payments are being prepared.",
+  },
+  internationalCheckoutCta: {
+    ru: "",
+    en: "Try AdShorts AI for free",
+  },
+  internationalCheckoutEyebrow: {
+    ru: "",
+    en: "International checkout",
+  },
+  internationalCheckoutFactOne: {
+    ru: "",
+    en: "No international card charge today",
+  },
+  internationalCheckoutFactThree: {
+    ru: "",
+    en: "Paid plans will open here",
+  },
+  internationalCheckoutFactTwo: {
+    ru: "",
+    en: "Free studio access is available now",
+  },
+  internationalCheckoutTitle: {
+    ru: "",
+    en: "International payments are coming soon.",
+  },
+  internationalWaitlistEmailLabel: {
+    ru: "",
+    en: "Email for international payments waitlist",
+  },
+  internationalWaitlistError: {
+    ru: "",
+    en: "Could not join the waitlist. Try again in a moment.",
+  },
+  internationalWaitlistInvalidEmail: {
+    ru: "",
+    en: "Enter a valid email.",
+  },
+  internationalWaitlistPlaceholder: {
+    ru: "",
+    en: "you@company.com",
+  },
+  internationalWaitlistSubmit: {
+    ru: "",
+    en: "Join waitlist",
+  },
+  internationalWaitlistSubmitting: {
+    ru: "",
+    en: "Joining...",
+  },
+  internationalWaitlistSuccess: {
+    ru: "",
+    en: "You're on the list. We'll email you when international payments open.",
+  },
+  internationalWaitlistHint: {
+    ru: "",
+    en: "We'll only use this email for international checkout updates.",
+  },
   enterpriseCta: {
     ru: "Оставить заявку",
     en: "Request a plan",
@@ -187,7 +261,7 @@ const pricingMessages = defineMessages({
   },
   heroHeading: {
     ru: "Выберите свой тариф",
-    en: "Choose your plan",
+    en: "Pricing",
   },
   signIn: {
     ru: "Войти",
@@ -215,7 +289,7 @@ const pricingMessages = defineMessages({
   },
 });
 
-type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge" | "billing" | "ctaLabel" | "credits" | "features" | "subnote"> & {
+type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge" | "billing" | "ctaLabel" | "credits" | "features" | "price" | "subnote"> & {
   audience: Record<Locale, string>;
   audienceLines?: Record<Locale, string[]>;
   badge?: Record<Locale, string>;
@@ -223,6 +297,7 @@ type LocalizedPlanCopy = Omit<PricingPlan, "audience" | "audienceLines" | "badge
   ctaLabel: Record<Locale, string>;
   credits: Record<Locale, string>;
   features: Record<Locale, string[]>;
+  price: Record<Locale, string>;
   subnote?: Record<Locale, string>;
 };
 
@@ -232,54 +307,55 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     name: "START",
     audience: { ru: "Разовый пакет для первого запуска", en: "Ideal for the first launch" },
     audienceLines: { ru: ["Разовый пакет для", "первого запуска"], en: ["Ideal for the first", "launch"] },
-    price: "390 ₽",
-    billing: { ru: "/ 50 кредитов", en: "/ 50 credits" },
+    price: { ru: "390 ₽", en: "Coming soon" },
+    billing: { ru: "/ 50 кредитов", en: "/ international checkout" },
     credits: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
-    subnote: { ru: "≈ 78 ₽ за Shorts", en: "≈ 78 ₽ per Short" },
+    subnote: { ru: "≈ 78 ₽ за Shorts", en: "Try the studio for free today" },
     features: {
       ru: ["Без водяного знака"],
-      en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube auto-publishing"],
+      en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube publishing tools"],
     },
-    ctaLabel: { ru: "Оплатить START", en: "Pay for START" },
+    ctaLabel: { ru: "Оплатить START", en: "Try free now" },
   },
   {
     checkoutProductId: "pro",
     name: "PRO",
     audience: { ru: "Для регулярного создания Shorts", en: "Ideal for a regular content flow" },
     audienceLines: { ru: ["Для регулярного", "создания Shorts"], en: ["Ideal for a regular", "content flow"] },
-    price: "1 490 ₽",
-    billing: { ru: "/ 250 кредитов", en: "/ 250 credits" },
+    price: { ru: "1 490 ₽", en: "Coming soon" },
+    billing: { ru: "/ 250 кредитов", en: "/ international checkout" },
     credits: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
-    subnote: { ru: "≈ 60 ₽ за Shorts", en: "≈ 60 ₽ per Short" },
+    subnote: { ru: "≈ 60 ₽ за Shorts", en: "Regular-use tier preview" },
     features: {
       ru: ["Без водяного знака", "Приоритетная генерация", "Можно докупать пакеты"],
-      en: ["Everything in START", "Priority generation", "Credit top-ups available", "Built for regular content"],
+      en: ["Everything in START", "Priority generation", "Credit top-ups when checkout launches", "Built for regular content"],
     },
     badge: { ru: "Самый популярный", en: "Most popular" },
     featured: true,
-    ctaLabel: { ru: "Оплатить PRO", en: "Pay for PRO" },
+    ctaLabel: { ru: "Оплатить PRO", en: "Try free now" },
   },
   {
     checkoutProductId: "ultra",
     name: "ULTRA",
     audience: { ru: "Для максимального объёма", en: "Ideal for maximum volume" },
     audienceLines: { ru: ["Для максимального", "объёма"], en: ["Ideal for maximum", "volume"] },
-    price: "4 990 ₽",
-    billing: { ru: "/ 1000 кредитов", en: "/ 1000 credits" },
+    price: { ru: "4 990 ₽", en: "Coming soon" },
+    billing: { ru: "/ 1000 кредитов", en: "/ international checkout" },
     credits: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
-    subnote: { ru: "≈ 50 ₽ за Shorts", en: "≈ 50 ₽ per Short" },
+    subnote: { ru: "≈ 50 ₽ за Shorts", en: "Highest-limit tier preview" },
     features: {
       ru: ["Без водяного знака", "Максимальный приоритет", "Можно докупать пакеты", "Ранний доступ к новым функциям"],
       en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
     },
     badge: { ru: "Лучшая выгода", en: "Best value" },
-    ctaLabel: { ru: "Оплатить ULTRA", en: "Pay for ULTRA" },
+    ctaLabel: { ru: "Оплатить ULTRA", en: "Try free now" },
   },
 ];
 
-type LocalizedPackCopy = Omit<PricingPack, "badge" | "credits" | "subnote"> & {
+type LocalizedPackCopy = Omit<PricingPack, "badge" | "credits" | "price" | "subnote"> & {
   badge?: Record<Locale, string>;
   credits: Record<Locale, string>;
+  price: Record<Locale, string>;
   subnote: Record<Locale, string>;
 };
 
@@ -288,21 +364,21 @@ const pricingPackCopy: LocalizedPackCopy[] = [
     checkoutProductId: "package_10",
     name: "Pack 100",
     credits: { ru: "100 кредитов", en: "100 credits" },
-    price: "690 ₽",
+    price: { ru: "690 ₽", en: "Coming soon" },
     subnote: { ru: "До 10 Shorts", en: "Up to 10 Shorts" },
   },
   {
     checkoutProductId: "package_50",
     name: "Pack 500",
     credits: { ru: "500 кредитов", en: "500 credits" },
-    price: "2 750 ₽",
+    price: { ru: "2 750 ₽", en: "Coming soon" },
     subnote: { ru: "До 50 Shorts", en: "Up to 50 Shorts" },
   },
   {
     checkoutProductId: "package_100",
     name: "Pack 1000",
     credits: { ru: "1000 кредитов", en: "1000 credits" },
-    price: "4 990 ₽",
+    price: { ru: "4 990 ₽", en: "Coming soon" },
     subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
     badge: { ru: "Выгодно", en: "Good value" },
   },
@@ -313,21 +389,21 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
     question: { ru: "Как списываются кредиты", en: "How credits are charged" },
     answer: {
       ru: "Стандартный Shorts — 10 кредитов, Премиум Shorts — 20 кредитов. В редакторе стоимость каждого AI-улучшения указана на кнопке.",
-      en: "Standard Shorts cost 10 credits, Premium Shorts cost 20 credits. In the editor, each AI improvement shows its cost on the button.",
+      en: "Credits are the usage unit inside AdShorts AI. Standard Shorts use 10 credits, Premium Shorts use 20 credits, and each AI improvement shows its credit cost in the editor.",
     },
   },
   {
     question: { ru: "Срок действия тарифа", en: "Feature access period" },
     answer: {
       ru: "START — разовый пакет без срока действия. PRO и ULTRA активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
-      en: "START is a one-time package with no expiration. PRO and ULTRA are active for 30 days. Unused credits stay on the account and do not expire.",
+      en: "International paid plans are not live yet. The limits above show the upcoming plan structure, and the free studio is available now.",
     },
   },
   {
     question: { ru: "Что включено в оплату", en: "What payment includes" },
     answer: {
       ru: "Все видео идут без водяного знака. Автопродления нет, повторная оплата только вручную.",
-      en: "All videos are generated without a watermark. There is no auto-renewal; repeat payments are manual.",
+      en: "When international payments launch, plan access will be manual without auto-renewal. For now, you can test the creation flow for free.",
     },
   },
 ];
@@ -342,6 +418,7 @@ const getPricingPlans = (locale: Locale): PricingPlan[] =>
     credits: plan.credits[locale],
     ctaLabel: plan.ctaLabel[locale],
     features: plan.features[locale],
+    price: plan.price[locale],
     subnote: plan.subnote?.[locale],
   }));
 
@@ -350,6 +427,7 @@ const getPricingPacks = (locale: Locale): PricingPack[] =>
     ...pack,
     badge: pack.badge?.[locale],
     credits: pack.credits[locale],
+    price: pack.price[locale],
     subnote: pack.subnote[locale],
   }));
 
@@ -399,6 +477,7 @@ export function PricingPage({
   const location = useLocation();
   const navigate = useNavigate();
   const { locale, localizePath, t } = useLocale();
+  const isInternationalPricing = locale === "en";
   const routeState = location.state as PricingRouteState;
   const shouldUseStudioNavigation = Boolean(session && routeState?.fromStudio);
   const pricingPlans = getPricingPlans(locale);
@@ -409,6 +488,9 @@ export function PricingPage({
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState | null>(null);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
+  const [waitlistEmail, setWaitlistEmail] = useState(session?.email ?? "");
+  const [waitlistFeedback, setWaitlistFeedback] = useState<WaitlistFeedback>(null);
+  const [isWaitlistSubmitting, setIsWaitlistSubmitting] = useState(false);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
@@ -473,7 +555,67 @@ export function PricingPage({
     openPrimaryFlow();
   };
 
+  const handleInternationalWaitlistSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const email = waitlistEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(email)) {
+      setWaitlistFeedback({
+        kind: "error",
+        message: t(pricingMessages.internationalWaitlistInvalidEmail),
+      });
+      return;
+    }
+
+    setWaitlistFeedback(null);
+    setIsWaitlistSubmitting(true);
+
+    try {
+      const response = await fetch("/api/contact/international-payments-waitlist", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          source: `${location.pathname}${location.search}`,
+        }),
+        signal: AbortSignal.timeout(WAITLIST_REQUEST_TIMEOUT_MS),
+      });
+      const payload = (await response.json().catch(() => null)) as WaitlistResponse | null;
+
+      if (!response.ok || !payload?.data?.ok) {
+        throw new Error(payload?.error ?? t(pricingMessages.internationalWaitlistError));
+      }
+
+      setWaitlistEmail(email);
+      setWaitlistFeedback({
+        kind: "success",
+        message: t(pricingMessages.internationalWaitlistSuccess),
+      });
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? t(pricingMessages.checkoutTimeout)
+          : error instanceof Error
+            ? error.message
+            : t(pricingMessages.internationalWaitlistError);
+
+      setWaitlistFeedback({
+        kind: "error",
+        message,
+      });
+    } finally {
+      setIsWaitlistSubmitting(false);
+    }
+  };
+
   const requestCheckout = async (productId: CheckoutProductId) => {
+    if (isInternationalPricing) {
+      openPrimaryFlow();
+      return;
+    }
+
     const planRestriction =
       productId === "start" || productId === "pro" || productId === "ultra"
         ? getPlanCheckoutRestriction(productId)
@@ -575,6 +717,11 @@ export function PricingPage({
   };
 
   const handlePlanCheckout = (productId: PlanCheckoutProductId) => {
+    if (isInternationalPricing) {
+      openPrimaryFlow();
+      return;
+    }
+
     if (!session) {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, productId);
@@ -587,6 +734,11 @@ export function PricingPage({
   };
 
   const handleAddonPackAction = (pack: PricingPack) => {
+    if (isInternationalPricing) {
+      openPrimaryFlow();
+      return;
+    }
+
     if (!session) {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, "pro");
@@ -605,6 +757,11 @@ export function PricingPage({
   };
 
   const handleAddonUpgradeAction = () => {
+    if (isInternationalPricing) {
+      openPrimaryFlow();
+      return;
+    }
+
     setActivePlanId("pro");
     handlePlanCheckout("pro");
   };
@@ -632,7 +789,20 @@ export function PricingPage({
   }, [location.hash, location.pathname]);
 
   useEffect(() => {
+    if (!isInternationalPricing || !session?.email || waitlistEmail.trim()) {
+      return;
+    }
+
+    setWaitlistEmail(session.email);
+  }, [isInternationalPricing, session?.email, waitlistEmail]);
+
+  useEffect(() => {
     if (!session || typeof window === "undefined") {
+      return;
+    }
+
+    if (isInternationalPricing) {
+      window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
       return;
     }
 
@@ -659,7 +829,7 @@ export function PricingPage({
     }
 
     void requestCheckout(pendingCheckoutProductId);
-  }, [isStartPlanUsed, session]);
+  }, [isInternationalPricing, isStartPlanUsed, session]);
 
   useEffect(() => {
     if (getPlanCheckoutRestriction(activePlanId)) {
@@ -669,7 +839,7 @@ export function PricingPage({
 
   useEffect(() => {
     const productId = readPaymentReturnProductId(location.search);
-    if (!session || !productId) {
+    if (!session || !productId || isInternationalPricing) {
       return;
     }
 
@@ -735,7 +905,7 @@ export function PricingPage({
     return () => {
       isCancelled = true;
     };
-  }, [location.search, navigate, onWorkspaceProfileChange, session]);
+  }, [isInternationalPricing, location.search, navigate, onWorkspaceProfileChange, session]);
 
   const checkoutResultTitle = checkoutResult
     ? checkoutResult.status === "success"
@@ -780,7 +950,7 @@ export function PricingPage({
     : "";
 
   return (
-    <div className="route-page pricing-page">
+    <div className={`route-page pricing-page${isInternationalPricing ? " pricing-page--international" : ""}`}>
       <header className={`site-header${shouldUseStudioNavigation ? " site-header--workspace" : ""}`} id="top">
         <div className="container site-header__inner">
           <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
@@ -821,12 +991,56 @@ export function PricingPage({
           <div className="container">
             <div className="pricing-max-hero__heading">
               <h1>{t(pricingMessages.heroHeading)}</h1>
-              {checkoutError ? (
+              {isInternationalPricing ? (
+                <div className="pricing-max-international-hero" role="note">
+                  <span className="pricing-max-international-hero__eyebrow">{t(pricingMessages.internationalCheckoutEyebrow)}</span>
+                  <strong>{t(pricingMessages.internationalCheckoutTitle)}</strong>
+                  <p>{t(pricingMessages.internationalCheckoutBody)}</p>
+                  <form className="pricing-max-international-waitlist" onSubmit={handleInternationalWaitlistSubmit}>
+                    <div className="pricing-max-international-waitlist__field">
+                      <input
+                        aria-label={t(pricingMessages.internationalWaitlistEmailLabel)}
+                        autoComplete="email"
+                        inputMode="email"
+                        maxLength={180}
+                        onChange={(event) => {
+                          setWaitlistEmail(event.target.value);
+                          if (waitlistFeedback?.kind === "error") {
+                            setWaitlistFeedback(null);
+                          }
+                        }}
+                        placeholder={t(pricingMessages.internationalWaitlistPlaceholder)}
+                        type="email"
+                        value={waitlistEmail}
+                        required
+                      />
+                      <button
+                        className="btn pricing-max-international-waitlist__submit route-button"
+                        type="submit"
+                        disabled={isWaitlistSubmitting}
+                      >
+                        {isWaitlistSubmitting
+                          ? t(pricingMessages.internationalWaitlistSubmitting)
+                          : t(pricingMessages.internationalWaitlistSubmit)}
+                      </button>
+                    </div>
+                    <p
+                      className={`pricing-max-international-waitlist__status${
+                        waitlistFeedback ? ` pricing-max-international-waitlist__status--${waitlistFeedback.kind}` : ""
+                      }`}
+                      role={waitlistFeedback?.kind === "error" ? "alert" : "status"}
+                    >
+                      {waitlistFeedback?.message ?? t(pricingMessages.internationalWaitlistHint)}
+                    </p>
+                  </form>
+                </div>
+              ) : null}
+              {!isInternationalPricing && checkoutError ? (
                 <p className="pricing-max-hero__status" role="alert">
                   {checkoutError}
                 </p>
               ) : null}
-              {checkoutResult ? (
+              {!isInternationalPricing && checkoutResult ? (
                 <div
                   className={`pricing-payment-result pricing-payment-result--${checkoutResult.status}`}
                   id="payment-result"
@@ -835,7 +1049,7 @@ export function PricingPage({
                   <button
                     className="pricing-payment-result__close"
                     type="button"
-                    aria-label={locale === "en" ? "Close payment result" : "Закрыть результат оплаты"}
+                    aria-label="Закрыть результат оплаты"
                     onClick={handleDismissPaymentResult}
                   >
                     <span aria-hidden="true">×</span>
@@ -849,22 +1063,22 @@ export function PricingPage({
                     <p>{checkoutResultDescription}</p>
                     <dl className="pricing-payment-result__facts">
                       <div>
-                        <dt>{locale === "en" ? "Plan" : "Тариф"}</dt>
+                        <dt>Тариф</dt>
                         <dd>{checkoutResultPlanLabel}</dd>
                       </div>
                       <div>
-                        <dt>{locale === "en" ? "Added" : "Начислено"}</dt>
+                        <dt>Начислено</dt>
                         <dd>{checkoutResultAddedCredits}</dd>
                       </div>
                       <div>
-                        <dt>{locale === "en" ? "Balance" : "Баланс"}</dt>
+                        <dt>Баланс</dt>
                         <dd>{checkoutResultBalance}</dd>
                       </div>
                     </dl>
                   </div>
                   <div className="pricing-payment-result__actions">
                     <button className="btn pricing-payment-result__primary route-button" type="button" onClick={onOpenWorkspace}>
-                      {locale === "en" ? "Open Studio" : "Открыть студию"}
+                      Открыть студию
                     </button>
                   </div>
                 </div>
@@ -873,205 +1087,211 @@ export function PricingPage({
           </div>
         </section>
 
-        <section className="section pricing-max-plans" id="plans">
-          <div className="container">
-            <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(defaultActivePlanId)}>
-              {pricingPlans.map((plan) => {
-                const planRestriction = getPlanCheckoutRestriction(plan.checkoutProductId);
-                const planRestrictionLabel = getPlanRestrictionLabel(planRestriction);
-                const isPlanRestricted = Boolean(planRestriction);
-                const isActivePlan = !isPlanRestricted && plan.checkoutProductId === activePlanId;
-                const cardClassName = [
-                  "pricing-max-card",
-                  isActivePlan ? "pricing-max-card--featured" : "",
-                  isPlanRestricted ? "pricing-max-card--disabled" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
+        {!isInternationalPricing ? (
+          <>
+            <section className="section pricing-max-plans" id="plans">
+              <div className="container">
+                <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(defaultActivePlanId)}>
+                  {pricingPlans.map((plan) => {
+                    const planRestriction = getPlanCheckoutRestriction(plan.checkoutProductId);
+                    const planRestrictionLabel = getPlanRestrictionLabel(planRestriction);
+                    const isPlanRestricted = Boolean(planRestriction);
+                    const isActivePlan = !isPlanRestricted && plan.checkoutProductId === activePlanId;
+                    const isPlanCheckoutPending = activeCheckoutProductId === plan.checkoutProductId;
+                    const cardClassName = [
+                      "pricing-max-card",
+                      isActivePlan ? "pricing-max-card--featured" : "",
+                      isPlanRestricted ? "pricing-max-card--disabled" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
 
-                return (
-                  <article
-                    key={plan.name}
-                    className={cardClassName}
-                    aria-disabled={isPlanRestricted}
-                    onMouseEnter={() => {
-                      if (!isPlanRestricted) {
-                        setActivePlanId(plan.checkoutProductId);
-                      }
-                    }}
-                    onFocusCapture={() => {
-                      if (!isPlanRestricted) {
-                        setActivePlanId(plan.checkoutProductId);
-                      }
-                    }}
-                    onBlurCapture={(event) => {
-                      if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                        return;
-                      }
+                    return (
+                      <article
+                        key={plan.name}
+                        className={cardClassName}
+                        aria-disabled={isPlanRestricted}
+                        onMouseEnter={() => {
+                          if (!isPlanRestricted) {
+                            setActivePlanId(plan.checkoutProductId);
+                          }
+                        }}
+                        onFocusCapture={() => {
+                          if (!isPlanRestricted) {
+                            setActivePlanId(plan.checkoutProductId);
+                          }
+                        }}
+                        onBlurCapture={(event) => {
+                          if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            return;
+                          }
 
-                      setActivePlanId(defaultActivePlanId);
-                    }}
+                          setActivePlanId(defaultActivePlanId);
+                        }}
+                      >
+                        <div className="pricing-max-card__head">
+                          <div>
+                            <span className="pricing-max-card__name">{plan.name}</span>
+                            <h3>
+                              {plan.audienceLines
+                                ? plan.audienceLines.map((line) => (
+                                    <span key={`${plan.name}-${line}`} className="pricing-max-card__title-line">
+                                      {line}
+                                    </span>
+                                  ))
+                                : plan.audience}
+                            </h3>
+                          </div>
+                          {planRestrictionLabel ? (
+                            <span className="pricing-max-card__badge pricing-max-card__badge--used">{planRestrictionLabel}</span>
+                          ) : plan.badge ? (
+                            <span className="pricing-max-card__badge">{plan.badge}</span>
+                          ) : null}
+                        </div>
+
+                        <div className="pricing-max-card__price">
+                          <strong>{plan.price}</strong>
+                          <span>{plan.billing}</span>
+                        </div>
+
+                        <div className="pricing-max-card__output">
+                          <span>{plan.credits}</span>
+                          {plan.subnote ? <small>{plan.subnote}</small> : null}
+                        </div>
+
+                        <ul className="pricing-max-card__features">
+                          {plan.features.map((feature) => (
+                            <li key={feature}>{feature}</li>
+                          ))}
+                        </ul>
+
+                        <button
+                          className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
+                          type="button"
+                          onClick={() => handlePlanCheckout(plan.checkoutProductId)}
+                          disabled={isPlanRestricted || isPlanCheckoutPending}
+                        >
+                          {planRestrictionLabel
+                            ? planRestrictionLabel
+                            : isPlanCheckoutPending
+                              ? t(pricingMessages.checkoutOpening)
+                              : plan.ctaLabel}
+                        </button>
+                      </article>
+                    );
+                  })}
+
+                  <button
+                    className="pricing-max-enterprise"
+                    type="button"
+                    aria-controls="agency-contact-modal"
+                    aria-haspopup="dialog"
+                    onClick={() => setIsAgencyModalOpen(true)}
+                    onMouseEnter={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
+                    onFocus={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
                   >
-                    <div className="pricing-max-card__head">
-                      <div>
-                        <span className="pricing-max-card__name">{plan.name}</span>
-                        <h3>
-                          {plan.audienceLines
-                            ? plan.audienceLines.map((line) => (
-                                <span key={`${plan.name}-${line}`} className="pricing-max-card__title-line">
-                                  {line}
-                                </span>
-                              ))
-                            : plan.audience}
-                        </h3>
-                      </div>
-                      {planRestrictionLabel ? (
-                        <span className="pricing-max-card__badge pricing-max-card__badge--used">{planRestrictionLabel}</span>
-                      ) : plan.badge ? (
-                        <span className="pricing-max-card__badge">{plan.badge}</span>
-                      ) : null}
+                    <div className="pricing-max-enterprise__copy">
+                      <span className="pricing-max-enterprise__eyebrow">Agency / Teams</span>
+                      <h3>{t(pricingMessages.enterpriseHeading)}</h3>
+                      <p>{t(pricingMessages.enterpriseIntro)}</p>
                     </div>
 
-                    <div className="pricing-max-card__price">
-                      <strong>{plan.price}</strong>
-                      <span>{plan.billing}</span>
-                    </div>
-
-                    <div className="pricing-max-card__output">
-                      <span>{plan.credits}</span>
-                      {plan.subnote ? <small>{plan.subnote}</small> : null}
-                    </div>
-
-                    <ul className="pricing-max-card__features">
-                      {plan.features.map((feature) => (
-                        <li key={feature}>{feature}</li>
-                      ))}
+                    <ul className="pricing-max-enterprise__list">
+                      <li>{t(pricingMessages.enterpriseItemMoreShorts)}</li>
+                      <li>{t(pricingMessages.enterpriseItemVolumeCredits)}</li>
+                      <li>{t(pricingMessages.enterpriseItemPriorityGeneration)}</li>
                     </ul>
 
-                    <button
-                      className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
-                      type="button"
-                      onClick={() => handlePlanCheckout(plan.checkoutProductId)}
-                      disabled={isPlanRestricted || activeCheckoutProductId === plan.checkoutProductId}
-                    >
-                      {planRestrictionLabel
-                        ? planRestrictionLabel
-                        : activeCheckoutProductId === plan.checkoutProductId
-                          ? t(pricingMessages.checkoutOpening)
-                          : plan.ctaLabel}
-                    </button>
-                  </article>
-                );
-              })}
-
-              <button
-                className="pricing-max-enterprise"
-                type="button"
-                aria-controls="agency-contact-modal"
-                aria-haspopup="dialog"
-                onClick={() => setIsAgencyModalOpen(true)}
-                onMouseEnter={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
-                onFocus={() => setActivePlanId(DEFAULT_FEATURED_PLAN_ID)}
-              >
-                <div className="pricing-max-enterprise__copy">
-                  <span className="pricing-max-enterprise__eyebrow">Agency / Teams</span>
-                  <h3>{t(pricingMessages.enterpriseHeading)}</h3>
-                  <p>{t(pricingMessages.enterpriseIntro)}</p>
-                </div>
-
-                <ul className="pricing-max-enterprise__list">
-                  <li>{t(pricingMessages.enterpriseItemMoreShorts)}</li>
-                  <li>{t(pricingMessages.enterpriseItemVolumeCredits)}</li>
-                  <li>{t(pricingMessages.enterpriseItemPriorityGeneration)}</li>
-                </ul>
-
-                <span className="btn pricing-max-button pricing-max-button--ghost pricing-max-enterprise__cta">
-                  {t(pricingMessages.enterpriseCta)}
-                </span>
-              </button>
-            </div>
-
-          </div>
-        </section>
-
-        <section className="section pricing-max-addons" id="addons">
-          <div className="container">
-            {canPurchaseAddonCredits ? (
-              <div className="pricing-max-section-head">
-                <div>
-                  <h2>{t(pricingMessages.addonHeading)}</h2>
+                    <span className="btn pricing-max-button pricing-max-button--ghost pricing-max-enterprise__cta">
+                      {t(pricingMessages.enterpriseCta)}
+                    </span>
+                  </button>
                 </div>
               </div>
-            ) : null}
+            </section>
 
-            {checkoutError ? (
-              <p className="pricing-max-addons__status" role="alert">
-                {checkoutError}
-              </p>
-            ) : null}
+            <section className="section pricing-max-addons" id="addons">
+              <div className="container">
+                {canPurchaseAddonCredits ? (
+                  <div className="pricing-max-section-head">
+                    <div>
+                      <h2>{t(pricingMessages.addonHeading)}</h2>
+                    </div>
+                  </div>
+                ) : null}
 
-            {canPurchaseAddonCredits ? (
-              <>
-                <div className="pricing-max-addons__grid">
-                  {pricingPacks.map((pack) => (
-                    <article key={pack.name} className="pricing-max-pack">
-                      {pack.badge ? <span className="pricing-max-pack__badge">{pack.badge}</span> : null}
-                      <span className="pricing-max-pack__name">{pack.name}</span>
-                      <strong>{pack.credits}</strong>
-                      <span className="pricing-max-pack__price">{pack.price}</span>
-                      <small>{pack.subnote}</small>
+                {checkoutError ? (
+                  <p className="pricing-max-addons__status" role="alert">
+                    {checkoutError}
+                  </p>
+                ) : null}
+
+                {canPurchaseAddonCredits ? (
+                  <>
+                    <div className="pricing-max-addons__grid">
+                      {pricingPacks.map((pack) => (
+                        <article key={pack.name} className="pricing-max-pack">
+                          {pack.badge ? <span className="pricing-max-pack__badge">{pack.badge}</span> : null}
+                          <span className="pricing-max-pack__name">{pack.name}</span>
+                          <strong>{pack.credits}</strong>
+                          <span className="pricing-max-pack__price">{pack.price}</span>
+                          <small>{pack.subnote}</small>
+                          <button
+                            className="btn pricing-max-card__cta pricing-max-card__cta--secondary pricing-max-pack__cta route-button"
+                            type="button"
+                            onClick={() => handleAddonPackAction(pack)}
+                            disabled={activeCheckoutProductId === pack.checkoutProductId}
+                          >
+                            {activeCheckoutProductId === pack.checkoutProductId
+                              ? t(pricingMessages.checkoutOpening)
+                              : t(pricingMessages.addonBuy)}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                    <p className="pricing-max-addons__note">{addonsEligibilityNote}</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="pricing-max-section-head">
+                      <div>
+                        <h2>{t(pricingMessages.addonUpgradeTitle)}</h2>
+                      </div>
+                    </div>
+                    <article className="pricing-max-addon-lock">
+                      <p>{t(pricingMessages.addonUpgradeDescription)}</p>
                       <button
-                        className="btn pricing-max-card__cta pricing-max-card__cta--secondary pricing-max-pack__cta route-button"
+                        className="btn pricing-max-card__cta pricing-max-card__cta--primary pricing-max-addon-lock__cta route-button"
                         type="button"
-                        onClick={() => handleAddonPackAction(pack)}
-                        disabled={activeCheckoutProductId === pack.checkoutProductId}
+                        onClick={handleAddonUpgradeAction}
+                        disabled={activeCheckoutProductId === "pro"}
                       >
-                        {activeCheckoutProductId === pack.checkoutProductId ? t(pricingMessages.checkoutOpening) : t(pricingMessages.addonBuy)}
+                        {activeCheckoutProductId === "pro" ? t(pricingMessages.checkoutOpening) : t(pricingMessages.addonUpgradeCta)}
                       </button>
+                    </article>
+                  </>
+                )}
+              </div>
+            </section>
+
+            <section className="section pricing-max-faq">
+              <div className="container pricing-max-faq__frame">
+                <div className="pricing-max-faq__lead">
+                  <h2>{t(pricingMessages.faqHeading)}</h2>
+                </div>
+
+                <div className="pricing-max-faq__grid">
+                  {pricingFaqs.map((faq) => (
+                    <article key={faq.question} className="pricing-max-faq-card">
+                      <h3>{faq.question}</h3>
+                      <p>{faq.answer}</p>
                     </article>
                   ))}
                 </div>
-                <p className="pricing-max-addons__note">{addonsEligibilityNote}</p>
-              </>
-            ) : (
-              <>
-                <div className="pricing-max-section-head">
-                  <div>
-                    <h2>{t(pricingMessages.addonUpgradeTitle)}</h2>
-                  </div>
-                </div>
-                <article className="pricing-max-addon-lock">
-                  <p>{t(pricingMessages.addonUpgradeDescription)}</p>
-                  <button
-                    className="btn pricing-max-card__cta pricing-max-card__cta--primary pricing-max-addon-lock__cta route-button"
-                    type="button"
-                    onClick={handleAddonUpgradeAction}
-                    disabled={activeCheckoutProductId === "pro"}
-                  >
-                    {activeCheckoutProductId === "pro" ? t(pricingMessages.checkoutOpening) : t(pricingMessages.addonUpgradeCta)}
-                  </button>
-                </article>
-              </>
-            )}
-          </div>
-        </section>
-
-        <section className="section pricing-max-faq">
-          <div className="container pricing-max-faq__frame">
-            <div className="pricing-max-faq__lead">
-              <h2>{t(pricingMessages.faqHeading)}</h2>
-            </div>
-
-            <div className="pricing-max-faq__grid">
-              {pricingFaqs.map((faq) => (
-                <article key={faq.question} className="pricing-max-faq-card">
-                  <h3>{faq.question}</h3>
-                  <p>{faq.answer}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
+              </div>
+            </section>
+          </>
+        ) : null}
       </main>
 
       <AgencyContactModal

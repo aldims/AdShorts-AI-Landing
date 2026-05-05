@@ -115,6 +115,12 @@ import {
   parseAgencyContactSubmission,
   sendAgencyContactSubmission,
 } from "./agency-contact.js";
+import {
+  InternationalPaymentsWaitlistValidationError,
+  appendInternationalPaymentsWaitlistSubmission,
+  notifyInternationalPaymentsWaitlistSubmission,
+  parseInternationalPaymentsWaitlistSubmission,
+} from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 
@@ -2067,6 +2073,31 @@ app.post("/api/contact/agency", async (req, res) => {
     console.error("[contact] Failed to process agency contact form", error);
     res.status(500).json({
       error: "Не удалось отправить заявку. Попробуйте ещё раз через пару минут.",
+    });
+  }
+});
+
+app.post("/api/contact/international-payments-waitlist", async (req, res) => {
+  try {
+    const submission = parseInternationalPaymentsWaitlistSubmission(req.body, {
+      userAgent: req.header("user-agent") ?? null,
+    });
+
+    await appendInternationalPaymentsWaitlistSubmission(submission);
+    void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
+      console.error("[contact] Failed to notify international payments waitlist submission", error);
+    });
+
+    res.status(201).json({ data: { ok: true } });
+  } catch (error) {
+    if (error instanceof InternationalPaymentsWaitlistValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    console.error("[contact] Failed to process international payments waitlist form", error);
+    res.status(500).json({
+      error: "Could not join the waitlist. Try again in a moment.",
     });
   }
 });
