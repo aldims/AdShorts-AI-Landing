@@ -32,6 +32,7 @@ import {
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
+  shouldDeferSegmentEditorRouteRestore,
   shouldShowWorkspaceMediaLibraryLoadingState,
   studioVoiceOptionsByLanguage,
 } from "./WorkspacePage";
@@ -479,6 +480,16 @@ describe("WorkspacePage segment editor draft persistence", () => {
         }),
       ]),
     );
+  });
+});
+
+describe("WorkspacePage studio route transitions", () => {
+  it("defers edit-route restoration while navigation to another studio section is pending", () => {
+    expect(shouldDeferSegmentEditorRouteRestore("create")).toBe(true);
+    expect(shouldDeferSegmentEditorRouteRestore("projects")).toBe(true);
+    expect(shouldDeferSegmentEditorRouteRestore("media")).toBe(true);
+    expect(shouldDeferSegmentEditorRouteRestore("edit")).toBe(false);
+    expect(shouldDeferSegmentEditorRouteRestore(null)).toBe(false);
   });
 });
 

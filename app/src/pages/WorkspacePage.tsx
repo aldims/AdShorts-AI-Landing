@@ -10180,6 +10180,9 @@ const getStudioViewFromRouteSection = (section: StudioEntryIntentSection): Studi
   return "create";
 };
 
+export const shouldDeferSegmentEditorRouteRestore = (pendingSection: StudioEntryIntentSection | null) =>
+  pendingSection !== null && pendingSection !== "edit";
+
 const buildStudioRouteUrl = (
   search: string,
   section: StudioEntryIntentSection,
@@ -13510,6 +13513,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     pendingStudioRouteSectionRef.current = section;
   };
 
+  const clearPendingStudioRouteSection = (section?: StudioEntryIntentSection) => {
+    if (section && pendingStudioRouteSectionRef.current !== section) {
+      return;
+    }
+
+    if (pendingStudioRouteSectionResetTimerRef.current) {
+      window.clearTimeout(pendingStudioRouteSectionResetTimerRef.current);
+      pendingStudioRouteSectionResetTimerRef.current = null;
+    }
+    pendingStudioRouteSectionRef.current = null;
+  };
+
   const syncStudioRouteSection = (
     section: StudioEntryIntentSection,
     options?: { projectId?: number | null; replace?: boolean; segmentIndex?: number | null },
@@ -13522,6 +13537,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const currentUrl = `${location.pathname}${location.search}`;
 
     if (currentUrl === nextUrl) {
+      clearPendingStudioRouteSection(section);
       return;
     }
 
@@ -18107,24 +18123,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (section !== "edit") {
-      markPendingStudioRouteSection("create");
-    }
-    setStudioView("create");
-
     if (section === "edit") {
+      setStudioView("create");
       void handleStudioCreateModeSwitch("segment-editor");
       return;
     }
 
-    cancelPendingSegmentEditorLoad();
-    stashCurrentSegmentEditorDraft();
-    segmentEditorRouteRestoreKeyRef.current = null;
-    segmentEditorHandledRouteRestoreKeyRef.current = null;
-    segmentEditorFreshRouteFetchKeyRef.current = null;
-    setSegmentEditorDraft(null);
+    markPendingStudioRouteSection("create");
+    flushSync(() => {
+      cancelPendingSegmentEditorLoad();
+      stashCurrentSegmentEditorDraft();
+      segmentEditorRouteRestoreKeyRef.current = null;
+      segmentEditorHandledRouteRestoreKeyRef.current = null;
+      segmentEditorFreshRouteFetchKeyRef.current = null;
+      closeSegmentAiPhotoModal({ immediate: true });
+      resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+      setSegmentEditorDraft(null);
+      setSegmentEditorVideoError(null);
+      setCreateMode("default");
+      setStudioView("create");
+      setActiveSegmentIndex(0);
+    });
     syncStudioRouteSection("create");
-    void handleStudioCreateModeSwitch("default");
   };
 
   useLayoutEffect(() => {
@@ -18135,11 +18155,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (
-      pendingStudioRouteSectionRef.current &&
-      pendingStudioRouteSectionRef.current !== "edit" &&
-      routeStudioState.section !== "edit"
-    ) {
+    if (shouldDeferSegmentEditorRouteRestore(pendingStudioRouteSectionRef.current)) {
       return;
     }
 
@@ -18151,12 +18167,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    const routeProjectId = routeStudioState.projectId;
     const requestedSegmentIndex = routeStudioState.segmentIndex ?? 0;
-    const restoreKey = `${routeStudioState.projectId}:${requestedSegmentIndex}`;
-    const storedDraftForRoute = readStoredWorkspaceSegmentEditorDraft(session.email, routeStudioState.projectId);
+    const restoreKey = `${routeProjectId}:${requestedSegmentIndex}`;
+    const storedDraftForRoute = readStoredWorkspaceSegmentEditorDraft(session.email, routeProjectId);
 
     logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
-      requestedProjectId: routeStudioState.projectId,
+      requestedProjectId: routeProjectId,
       requestedSegmentIndex,
       restoreKey,
     });
@@ -18173,7 +18190,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       segmentEditorFreshRouteFetchKeyRef.current = restoreKey;
-      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
+      void ensureSegmentEditorDraftForProject(routeProjectId, {
         bypassCache: true,
         initialSegmentIndex: requestedSegmentIndex,
         initialSegmentMode: "route",
@@ -18195,7 +18212,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (shouldRefreshInitialEditRoute) {
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
-      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
+      void ensureSegmentEditorDraftForProject(routeProjectId, {
         bypassCache: true,
         discardLocalDraft: true,
         forceRefresh: true,
@@ -18210,7 +18227,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       activeTab === "studio" &&
       studioView === "create" &&
       createMode === "segment-editor" &&
-      segmentEditorDraft?.projectId === routeStudioState.projectId;
+      segmentEditorDraft?.projectId === routeProjectId;
 
     if (
       segmentEditorRouteRestoreKeyRef.current === restoreKey &&
@@ -18222,7 +18239,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (segmentEditorDraft?.projectId === routeStudioState.projectId) {
+    if (segmentEditorDraft?.projectId === routeProjectId) {
       if (createMode !== "segment-editor") {
         segmentEditorRouteRestoreKeyRef.current = restoreKey;
         segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
@@ -18248,9 +18265,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     const storedDraft = storedDraftForRoute;
     const storedSession =
-      segmentEditorLoadedSession?.projectId === routeStudioState.projectId
+      segmentEditorLoadedSession?.projectId === routeProjectId
         ? segmentEditorLoadedSession
-        : readStoredWorkspaceSegmentEditorSession(session.email, routeStudioState.projectId);
+        : readStoredWorkspaceSegmentEditorSession(session.email, routeProjectId);
 
     if (storedDraft) {
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
@@ -18286,7 +18303,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     segmentEditorRouteRestoreKeyRef.current = restoreKey;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
-    void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
+    void ensureSegmentEditorDraftForProject(routeProjectId, {
       initialSegmentIndex: requestedSegmentIndex,
       initialSegmentMode: "route",
       replaceRoute: true,
