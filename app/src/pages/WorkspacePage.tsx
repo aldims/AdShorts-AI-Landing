@@ -18129,6 +18129,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    const shouldRestoreGeneratedVideoActions = createMode === "segment-editor" || Boolean(segmentEditorDraft);
+
     markPendingStudioRouteSection("create");
     flushSync(() => {
       cancelPendingSegmentEditorLoad();
@@ -18136,6 +18138,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      if (shouldRestoreGeneratedVideoActions && generatedVideo) {
+        setGeneratedVideoActionMode("expanded");
+        updateDismissedStudioPreviewKey(null);
+      }
       closeSegmentAiPhotoModal({ immediate: true });
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
       setSegmentEditorDraft(null);
