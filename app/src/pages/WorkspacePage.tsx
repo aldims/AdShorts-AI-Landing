@@ -4597,11 +4597,89 @@ const getWorkspaceSegmentVideoAssetPosterUrl = (
         ],
   )[0] ?? null;
 
-const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  segment.currentPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.currentAsset);
+const isWorkspaceTimelineFallbackMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  if (!asset) {
+    return false;
+  }
 
-const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  segment.originalPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.originalAsset);
+  const signature = [
+    asset.kind,
+    asset.libraryKind,
+    asset.role,
+    asset.sourceKind,
+    asset.storageKey,
+  ]
+    .map((value) => String(value ?? "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    signature.includes("final_video") ||
+    signature.includes("combined_background") ||
+    signature.includes("project_background")
+  );
+};
+
+const isWorkspaceSegmentScopedPosterUrl = (value: string | null | undefined) =>
+  String(value ?? "").includes("/api/workspace/project-segment-poster");
+
+const buildWorkspaceSegmentScopedPosterUrlFromVideoUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue || !normalizedValue.includes("/api/workspace/project-segment-video")) {
+    return null;
+  }
+
+  try {
+    const videoUrl = new URL(normalizedValue, window.location.origin);
+    if (videoUrl.pathname !== "/api/workspace/project-segment-video") {
+      return null;
+    }
+
+    const projectId = videoUrl.searchParams.get("projectId");
+    const segmentIndex = videoUrl.searchParams.get("segmentIndex");
+    const source = videoUrl.searchParams.get("source");
+    if (!projectId || !segmentIndex || !source) {
+      return null;
+    }
+
+    const posterParams = new URLSearchParams({
+      projectId,
+      segmentIndex,
+      source,
+    });
+    const marker = videoUrl.searchParams.get("v");
+    if (marker) {
+      posterParams.set("v", marker);
+    }
+    return `/api/workspace/project-segment-poster?${posterParams.toString()}`;
+  } catch {
+    return null;
+  }
+};
+
+const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const scopedPosterUrl = isWorkspaceSegmentScopedPosterUrl(segment.currentPosterUrl)
+    ? segment.currentPosterUrl
+    : buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(segment.currentPreviewUrl ?? segment.currentPlaybackUrl);
+
+  if (isWorkspaceTimelineFallbackMediaAsset(segment.currentAsset)) {
+    return scopedPosterUrl;
+  }
+
+  return segment.currentPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.currentAsset);
+};
+
+const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const scopedPosterUrl = isWorkspaceSegmentScopedPosterUrl(segment.originalPosterUrl)
+    ? segment.originalPosterUrl
+    : buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(segment.originalPreviewUrl ?? segment.originalPlaybackUrl);
+
+  if (isWorkspaceTimelineFallbackMediaAsset(segment.originalAsset)) {
+    return scopedPosterUrl;
+  }
+
+  return segment.originalPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.originalAsset);
+};
 
 const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {
   const assetId = Number(asset?.assetId);
@@ -12971,8 +13049,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
+  const segmentEditorFreshRouteFetchKeyRef = useRef<string | null>(null);
   const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
+  const workspaceSessionResetEmailRef = useRef(session.email);
   const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
   const detachedSegmentEditorDraftRef = useRef<{
     activeSegmentIndex: number;
@@ -13412,6 +13492,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const hasExplicitStudioRouteState =
     location.pathname.startsWith("/app/studio") &&
     (routeStudioState.section !== "create" || routeStudioState.projectId !== null || routeStudioState.segmentIndex !== null);
+  const hasExplicitSegmentEditorRoute =
+    location.pathname.startsWith("/app/studio") &&
+    routeStudioState.section === "edit" &&
+    routeStudioState.projectId !== null;
+  const hasExplicitSegmentEditorRouteRef = useRef(hasExplicitSegmentEditorRoute);
+
+  useEffect(() => {
+    hasExplicitSegmentEditorRouteRef.current = hasExplicitSegmentEditorRoute;
+  }, [hasExplicitSegmentEditorRoute]);
 
   const markPendingStudioRouteSection = (section: StudioEntryIntentSection) => {
     if (pendingStudioRouteSectionResetTimerRef.current) {
@@ -13997,6 +14086,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [insufficientCreditsContext, workspaceProfile]);
 
   useEffect(() => {
+    const isSessionEmailChange = workspaceSessionResetEmailRef.current !== session.email;
+    workspaceSessionResetEmailRef.current = session.email;
+    const shouldPreserveSegmentEditorRoute = !isSessionEmailChange && hasExplicitSegmentEditorRouteRef.current;
+
     setProjects([]);
     setProjectsError(null);
     setProjectDeleteError(null);
@@ -14056,22 +14149,24 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setMusicSelectionError(null);
       setIsPreparingCustomMusic(false);
     }
-    setCreateMode("default");
-    setSegmentEditorLoadedSession(null);
-    setSegmentEditorDraft(null);
-    setSegmentEditorAppliedSession(null);
-    clearDetachedSegmentEditorDraft();
-    setSegmentEditorError(null);
-    setSegmentEditorVideoError(null);
-    closeSegmentAiPhotoModal({ immediate: true });
-    clearAllSegmentVisualRuns();
-    setIsSegmentEditorLoading(false);
-    setIsSegmentEditorPreparingCustomVideo(false);
-    setSegmentEditorPreviewTimes({});
-    queuedSegmentEditorPlaybackIndexRef.current = null;
-    setQueuedSegmentEditorPlaybackIndex(null);
-    setSegmentEditorPanelHeightLock(null);
-    setActiveSegmentIndex(0);
+    if (!shouldPreserveSegmentEditorRoute) {
+      setCreateMode("default");
+      setSegmentEditorLoadedSession(null);
+      setSegmentEditorDraft(null);
+      setSegmentEditorAppliedSession(null);
+      clearDetachedSegmentEditorDraft();
+      setSegmentEditorError(null);
+      setSegmentEditorVideoError(null);
+      closeSegmentAiPhotoModal({ immediate: true });
+      clearAllSegmentVisualRuns();
+      setIsSegmentEditorLoading(false);
+      setIsSegmentEditorPreparingCustomVideo(false);
+      setSegmentEditorPreviewTimes({});
+      queuedSegmentEditorPlaybackIndexRef.current = null;
+      setQueuedSegmentEditorPlaybackIndex(null);
+      setSegmentEditorPanelHeightLock(null);
+      setActiveSegmentIndex(0);
+    }
   }, [session.email]);
 
   useEffect(() => {
@@ -14116,6 +14211,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [composerSourceIdea, topicInput]);
 
   useEffect(() => {
+    if (hasExplicitSegmentEditorRoute) {
+      return;
+    }
+
     if (activeTab === "studio" && studioView === "create") {
       return;
     }
@@ -14144,7 +14243,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPanelHeightLock(null);
     setActiveSegmentIndex(0);
-  }, [activeTab, studioView]);
+  }, [activeTab, hasExplicitSegmentEditorRoute, studioView]);
 
   useEffect(() => {
     segmentEditorDraftRef.current = segmentEditorDraft;
@@ -14152,12 +14251,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   useEffect(() => {
     if (!segmentEditorDraft?.segments.length) {
+      if (hasExplicitSegmentEditorRoute || isSegmentEditorLoading) {
+        return;
+      }
+
       setActiveSegmentIndex(0);
       return;
     }
 
     setActiveSegmentIndex((current) => Math.min(current, segmentEditorDraft.segments.length - 1));
-  }, [segmentEditorDraft]);
+  }, [hasExplicitSegmentEditorRoute, isSegmentEditorLoading, segmentEditorDraft]);
 
   useEffect(() => {
     if (segmentEditorAppliedSession) {
@@ -17838,6 +17941,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           getSegmentEditorProjectPrefillSettings(refreshedLiveDraft.projectId),
         );
         setSegmentEditorDraft(refreshedLiveDraft);
+        if (
+          options?.initialSegmentMode === "route" &&
+          typeof options.initialSegmentIndex === "number" &&
+          segmentEditorRouteRestoreKeyRef.current === `${projectId}:${requestedSegmentIndex}`
+        ) {
+          const boundedSegmentIndex = resolveSegmentEditorArrayIndexFromRouteSegment(
+            refreshedLiveDraft,
+            options.initialSegmentIndex,
+          );
+          setActiveSegmentIndex((current) => (current === boundedSegmentIndex ? current : boundedSegmentIndex));
+          segmentEditorHandledRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
+        }
         return refreshedLiveDraft;
       }
 
@@ -17936,6 +18051,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (routeStudioState.section === "edit" && routeStudioState.projectId) {
+      setCreateMode("segment-editor");
+      return;
+    }
+
     if (segmentEditorDraft) {
       lockSegmentEditorPromptHeight();
       const segment = segmentEditorDraft.segments[activeSegmentIndex];
@@ -17962,6 +18082,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         stashCurrentSegmentEditorDraft();
         segmentEditorRouteRestoreKeyRef.current = null;
         segmentEditorHandledRouteRestoreKeyRef.current = null;
+        segmentEditorFreshRouteFetchKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("projects");
@@ -17977,6 +18098,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         stashCurrentSegmentEditorDraft();
         segmentEditorRouteRestoreKeyRef.current = null;
         segmentEditorHandledRouteRestoreKeyRef.current = null;
+        segmentEditorFreshRouteFetchKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("media");
@@ -17999,6 +18121,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     stashCurrentSegmentEditorDraft();
     segmentEditorRouteRestoreKeyRef.current = null;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
+    segmentEditorFreshRouteFetchKeyRef.current = null;
     setSegmentEditorDraft(null);
     syncStudioRouteSection("create");
     void handleStudioCreateModeSwitch("default");
@@ -18008,16 +18131,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (!location.pathname.startsWith("/app/studio")) {
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
+      segmentEditorFreshRouteFetchKeyRef.current = null;
       return;
     }
 
-    if (pendingStudioRouteSectionRef.current && pendingStudioRouteSectionRef.current !== "edit") {
+    if (
+      pendingStudioRouteSectionRef.current &&
+      pendingStudioRouteSectionRef.current !== "edit" &&
+      routeStudioState.section !== "edit"
+    ) {
       return;
     }
 
     if (routeStudioState.section !== "edit" || !routeStudioState.projectId) {
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
+      segmentEditorFreshRouteFetchKeyRef.current = null;
       hasProcessedInitialSegmentEditorEditRouteRef.current = false;
       return;
     }
@@ -18037,6 +18166,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     if (createMode !== "segment-editor") {
       setCreateMode("segment-editor");
     }
+
+    const requestFreshRouteSession = () => {
+      if (segmentEditorFreshRouteFetchKeyRef.current === restoreKey) {
+        return;
+      }
+
+      segmentEditorFreshRouteFetchKeyRef.current = restoreKey;
+      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
+        bypassCache: true,
+        initialSegmentIndex: requestedSegmentIndex,
+        initialSegmentMode: "route",
+        openDraft: false,
+        replaceRoute: true,
+      }).catch(() => {
+        if (segmentEditorFreshRouteFetchKeyRef.current === restoreKey) {
+          segmentEditorFreshRouteFetchKeyRef.current = null;
+        }
+      });
+    };
 
     const shouldRefreshInitialEditRoute =
       !hasProcessedInitialSegmentEditorEditRouteRef.current &&
@@ -18068,6 +18216,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentEditorRouteRestoreKeyRef.current === restoreKey &&
       (isSegmentEditorLoading || isSegmentEditorRouteAlreadyOpen || Boolean(segmentEditorError))
     ) {
+      if (!isSegmentEditorLoading && isSegmentEditorRouteAlreadyOpen && !segmentEditorError) {
+        requestFreshRouteSession();
+      }
       return;
     }
 
@@ -18091,6 +18242,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         setActiveSegmentIndex((current) => (current === boundedSegmentIndex ? current : boundedSegmentIndex));
         segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
       }
+      requestFreshRouteSession();
       return;
     }
 
@@ -18112,12 +18264,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         initialSegmentIndex: requestedSegmentIndex,
         initialSegmentMode: "route",
       });
-      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
-        initialSegmentIndex: requestedSegmentIndex,
-        initialSegmentMode: "route",
-        openDraft: false,
-        replaceRoute: true,
-      });
+      requestFreshRouteSession();
       return;
     }
 
@@ -18133,12 +18280,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         initialSegmentIndex: requestedSegmentIndex,
         initialSegmentMode: "route",
       });
-      void ensureSegmentEditorDraftForProject(routeStudioState.projectId, {
-        initialSegmentIndex: requestedSegmentIndex,
-        initialSegmentMode: "route",
-        openDraft: false,
-        replaceRoute: true,
-      });
+      requestFreshRouteSession();
       return;
     }
 

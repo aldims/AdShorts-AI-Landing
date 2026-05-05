@@ -1844,6 +1844,71 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
   }
 });
 
+app.get("/api/workspace/project-segment-poster", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const projectId = Number(req.query.projectId ?? 0);
+  const segmentIndex = Number(req.query.segmentIndex ?? -1);
+  const source = typeof req.query.source === "string" ? req.query.source.trim() : "";
+  const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+
+  if (!Number.isFinite(projectId) || projectId <= 0) {
+    res.status(400).json({ error: "Project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(segmentIndex) || segmentIndex < 0) {
+    res.status(400).json({ error: "Segment index is required." });
+    return;
+  }
+
+  if (!isWorkspaceSegmentEditorVideoSource(source)) {
+    res.status(400).json({ error: "Segment video source is invalid." });
+    return;
+  }
+
+  const safeProjectId = Math.trunc(projectId);
+  const safeSegmentIndex = Math.trunc(segmentIndex);
+
+  try {
+    const target = await getWorkspaceProjectSegmentVideoProxyTarget(session.user, {
+      delivery: "preview",
+      projectId: safeProjectId,
+      segmentIndex: safeSegmentIndex,
+      source,
+    });
+    const posterPath = await ensureWorkspaceVideoPoster({
+      cacheKey: getWorkspaceVideoPosterCacheKey({
+        posterId: `workspace-project-segment:${safeProjectId}:${safeSegmentIndex}:${source}`,
+        targetUrl: target.url,
+        version: version || `segment:${safeProjectId}:${safeSegmentIndex}:${source}:preview`,
+      }),
+      upstreamHeaders: target.headers,
+      upstreamUrl: target.url,
+    });
+
+    res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+    res.sendFile(posterPath);
+  } catch (error) {
+    if (error instanceof WorkspaceSegmentEditorError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+
+    console.error("[workspace] Failed to build project segment poster", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to build project segment poster.",
+    });
+  }
+});
+
 app.get("/api/workspace/project-segment-video", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),

@@ -168,6 +168,61 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.originalAsset?.lifecycle).toBe("ready");
   });
 
+  it("does not reuse the whole final video poster for timeline fallback segments", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      3311,
+      {
+        current_video: "/api/media/2405/download",
+        duration: 5,
+        index: 4,
+        media_type: "video",
+        original_video: "/api/media/2405/download",
+        start_time: 18,
+        end_time: 23,
+        text: "Timeline fallback segment",
+      },
+      {
+        currentEntries: [
+          {},
+          {},
+          {},
+          {},
+          {
+            download_url: "/api/media/2405/download",
+            media_asset_id: 2405,
+            media_type: "video",
+            role: "final_video",
+            source: "final_video",
+          },
+        ],
+        originalEntries: [
+          {},
+          {},
+          {},
+          {},
+          {
+            download_url: "/api/media/2405/download",
+            media_asset_id: 2405,
+            media_type: "video",
+            role: "final_video",
+            source: "final_video",
+          },
+        ],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: false,
+      },
+    );
+
+    expect(segment?.currentAsset?.assetId).toBe(2405);
+    expect(segment?.currentPreviewUrl).toContain("segmentIndex=4");
+    expect(segment?.currentPosterUrl).toContain("/api/workspace/project-segment-poster");
+    expect(segment?.currentPosterUrl).toContain("segmentIndex=4");
+    expect(segment?.currentPosterUrl).toContain("source=current");
+    expect(segment?.currentPosterUrl).not.toContain("/api/workspace/media-assets/2405/poster");
+    expect(segment?.originalPosterUrl).toContain("/api/workspace/project-segment-poster");
+    expect(segment?.originalPosterUrl).toContain("source=original");
+  });
+
   it("does not treat a current upload as the original visual when an original marker exists", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,
@@ -355,5 +410,83 @@ describe("segment editor asset lifecycle mapping", () => {
       name: "WorkspaceSegmentEditorError",
       statusCode: 409,
     });
+  });
+
+  it("opens from project details when upstream readiness is stale but final media is present", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segment-editor")) {
+        return new Response(JSON.stringify({ detail: "Project components are still being prepared" }), {
+          headers: { "Content-Type": "application/json" },
+          status: 409,
+        });
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3311 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          ai_title: "Ready final video",
+          description: "Project details fallback",
+          generation_settings: {
+            content_language: "en",
+            original_video_segments: [
+              {
+                duration: 3,
+                end_time: 3,
+                segment_index: 0,
+                start_time: 0,
+                text: "First scene.",
+              },
+              {
+                duration: 3,
+                end_time: 6,
+                segment_index: 1,
+                start_time: 3,
+                text: "Second scene.",
+              },
+            ],
+            source_video_urls: [
+              {
+                download_url: "/api/media/2406/download",
+                media_asset_id: 2406,
+                media_type: "video",
+                segment_index: 0,
+                source: "stock",
+              },
+              {
+                download_url: "/api/media/2405/download",
+                media_asset_id: 2405,
+                media_type: "video",
+                source: "final_video",
+              },
+            ],
+          },
+          id: 3311,
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { id: "user-stale-readiness" },
+      3311,
+      { bypassCache: true },
+    );
+
+    expect(session.projectId).toBe(3311);
+    expect(session.title).toBe("Ready final video");
+    expect(session.segments).toHaveLength(2);
+    expect(session.segments[0]?.text).toBe("First scene.");
+    expect(session.segments[1]?.currentPlaybackUrl).toContain("projectId=3311");
   });
 });

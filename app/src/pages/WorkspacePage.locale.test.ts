@@ -903,6 +903,69 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe("/api/workspace/media-assets/101/poster?v=original");
   });
 
+  it("ignores stale full-video posters and derives scoped posters for timeline fallback previews", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(2405, {
+        kind: "final_video",
+        mediaType: "video",
+        role: "final_video",
+      }),
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=current&delivery=playback",
+      currentPosterUrl: "/api/workspace/media-assets/2405/poster?v=stale-first-frame",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=current&delivery=preview",
+      mediaType: "video",
+      originalAsset: createMediaAsset(2405, {
+        kind: "final_video",
+        mediaType: "video",
+        role: "final_video",
+      }),
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=original&delivery=playback",
+      originalPosterUrl: "/api/workspace/media-assets/2405/poster?v=stale-first-frame",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=original&delivery=preview",
+    });
+
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe(
+      "/api/workspace/project-segment-poster?projectId=3311&segmentIndex=4&source=original",
+    );
+
+    const surface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+
+    expect(surface.posterUrl).toBe(
+      "/api/workspace/project-segment-poster?projectId=3311&segmentIndex=4&source=original",
+    );
+    expect(surface.displayUrl).toBe(segment.originalPlaybackUrl);
+    expect(surface.mountVideoWhenIdle).toBe(false);
+  });
+
+  it("uses segment-scoped posters for timeline fallback segment previews", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(2405, {
+        kind: "final_video",
+        mediaType: "video",
+        role: "final_video",
+      }),
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=current&delivery=playback",
+      currentPosterUrl: "/api/workspace/project-segment-poster?projectId=3311&segmentIndex=4&source=current&v=segment",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=current&delivery=preview",
+      mediaType: "video",
+      originalAsset: createMediaAsset(2405, {
+        kind: "final_video",
+        mediaType: "video",
+        role: "final_video",
+      }),
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=original&delivery=playback",
+      originalPosterUrl: "/api/workspace/project-segment-poster?projectId=3311&segmentIndex=4&source=original&v=segment",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=3311&segmentIndex=4&source=original&delivery=preview",
+    });
+
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toContain("/api/workspace/project-segment-poster");
+
+    const surface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+
+    expect(surface.posterUrl).toBe(segment.originalPosterUrl);
+    expect(surface.displayUrl).toBe(segment.originalPlaybackUrl);
+  });
+
   it("does not use a video asset proxy as a still poster for server photo animations", () => {
     const segment = createDraftSegment({
       currentAsset: createMediaAsset(1692, {
