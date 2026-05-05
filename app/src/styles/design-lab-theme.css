@@ -18857,13 +18857,14 @@ textarea {
 }
 
 .studio-canvas-preview__player-shell .studio-video-modal__top-actions {
-  top: 16px;
+  top: 12px;
   left: auto;
   right: 12px;
   max-width: calc(100% - 24px);
   container-type: inline-size;
   justify-content: flex-end;
   overflow: visible;
+  z-index: 80;
 }
 
 .studio-canvas-preview__generated-actions {
@@ -18890,6 +18891,22 @@ textarea {
 .studio-canvas-preview__generated-actions--compact {
   flex-wrap: nowrap;
   margin-left: auto;
+}
+
+.studio-canvas-preview__floating-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  max-width: calc(100% - 24px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.studio-canvas-preview__floating-actions > * {
+  pointer-events: auto;
 }
 
 /* ── Основной контейнер видео — liquid glass ── */

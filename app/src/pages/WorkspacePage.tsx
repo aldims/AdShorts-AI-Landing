@@ -2999,7 +2999,8 @@ const PROJECT_POSTER_CAPTURE_QUALITY = 0.72;
 let activeProjectPosterCaptureCount = 0;
 const PROJECTS_REQUEST_TIMEOUT_MS = 25_000;
 const MEDIA_LIBRARY_REQUEST_TIMEOUT_MS = 25_000;
-const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 20_000;
+const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 90_000;
+const SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS = 1_500;
 const WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
 const getStudioCompactMenuStyle = ({
@@ -11723,6 +11724,15 @@ function WorkspaceModalVideoPlayer({
             setCurrentTime(Number.isFinite(event.currentTarget.currentTime) ? Math.max(0, event.currentTarget.currentTime) : 0);
           }}
           onEnded={() => {
+            const element = localVideoRef.current;
+            if (element) {
+              try {
+                element.currentTime = 0;
+              } catch {
+                // Ignore seek errors if the browser has already detached media data.
+              }
+            }
+            setCurrentTime(0);
             setIsPlaying(false);
           }}
           onVolumeChange={(event) => {
@@ -15227,6 +15237,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const isGeneratedVideoDismissed = Boolean(generatedVideoDismissKey) && dismissedStudioPreviewKey === generatedVideoDismissKey;
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
+  const shouldShowStudioPreviewGenerationOverlay = isGenerating && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
   const selectedLocalExampleGoalOption =
     workspaceLocalExampleGoalOptions.find((option) => option.id === selectedLocalExampleGoal) ??
@@ -15289,6 +15300,122 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       } as CSSProperties)
     : undefined;
   const studioInlinePreviewDownloadName = getVideoDownloadName(generatedVideoModalTitle);
+  const renderStudioInlinePreviewActions = () => {
+    if (!visibleGeneratedVideoPlaybackUrl) {
+      return null;
+    }
+
+    return isGeneratedVideoPrimaryActionExpanded ? (
+      <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--expanded">
+        <button
+          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
+          type="button"
+          aria-label={workspaceText(locale, "Улучшить", "Improve")}
+          title={
+            visibleGeneratedVideo?.adId
+              ? workspaceText(locale, "Улучшить", "Improve")
+              : workspaceText(locale, "Редактирование доступно после сохранения проекта", "Editing is available after the project is saved")
+          }
+          disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
+          onClick={() => void handleOpenSegmentEditor()}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          <span>{workspaceText(locale, "Улучшить", "Improve")}</span>
+        </button>
+        <button
+          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
+          type="button"
+          aria-label={workspaceText(locale, "Опубликовать", "Publish")}
+          title={workspaceText(locale, "Опубликовать", "Publish")}
+          onClick={() => void handlePublishPreview()}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
+          </svg>
+          <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
+        </button>
+        <a
+          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
+          href={visibleGeneratedVideoPlaybackUrl}
+          download={studioInlinePreviewDownloadName}
+          aria-label={workspaceText(locale, "Скачать", "Download")}
+          title={workspaceText(locale, "Скачать", "Download")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>{workspaceText(locale, "Скачать", "Download")}</span>
+        </a>
+        <button
+          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
+          title={workspaceText(locale, "Закрыть видео", "Close video")}
+          onClick={handleDismissStudioPreview}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+    ) : (
+      <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--compact">
+        <button
+          className="studio-canvas-preview__quick-action"
+          type="button"
+          aria-label={workspaceText(locale, "Редактировать сцены", "Edit scenes")}
+          title={
+            visibleGeneratedVideo?.adId
+              ? workspaceText(locale, "Редактировать сцены", "Edit scenes")
+              : workspaceText(locale, "Редактор сцен доступен после сохранения проекта", "Scene editor is available after the project is saved")
+          }
+          disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
+          onClick={() => void handleOpenSegmentEditor()}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          className="studio-canvas-preview__quick-action"
+          type="button"
+          aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
+          title={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
+          onClick={() => void handlePublishPreview()}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
+          </svg>
+        </button>
+        <a
+          className="studio-canvas-preview__quick-action"
+          href={visibleGeneratedVideoPlaybackUrl}
+          download={studioInlinePreviewDownloadName}
+          aria-label={workspaceText(locale, "Скачать", "Download")}
+          title={workspaceText(locale, "Скачать", "Download")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </a>
+        <button
+          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
+          title={workspaceText(locale, "Закрыть видео", "Close video")}
+          onClick={handleDismissStudioPreview}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
   const mediaLibraryPreviewModalSurface = mediaLibraryPreviewModal
     ? getWorkspaceMediaLibraryResolvedMediaSurface(mediaLibraryPreviewModal, "media-viewer")
     : null;
@@ -17615,7 +17742,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const segmentEditorUrl =
         `/api/workspace/projects/${projectId}/segment-editor${options?.bypassCache || options?.forceRefresh ? "?refresh=1" : ""}`;
       let payload: WorkspaceSegmentEditorResponse | null = null;
-      const maxPreparingAttempts = 20;
+      const startedAt = Date.now();
+      const maxPreparingAttempts = Math.max(
+        1,
+        Math.ceil(SEGMENT_EDITOR_REQUEST_TIMEOUT_MS / SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS),
+      );
 
       for (let attempt = 1; attempt <= maxPreparingAttempts; attempt += 1) {
         const response = await fetch(segmentEditorUrl, {
@@ -17628,10 +17759,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
 
         const errorMessage = payload?.error ?? "Не удалось загрузить сегменты проекта.";
+        const elapsedMs = Date.now() - startedAt;
         const canWaitForComponents =
           response.status === 409 &&
           isWorkspaceSegmentEditorPreparingError(errorMessage) &&
-          attempt < maxPreparingAttempts;
+          attempt < maxPreparingAttempts &&
+          elapsedMs < SEGMENT_EDITOR_REQUEST_TIMEOUT_MS;
 
         if (!canWaitForComponents) {
           throw new Error(errorMessage);
@@ -17639,7 +17772,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
         setSegmentEditorError("Готовим данные для редактора...");
         setStatus("Готовим данные для редактора...");
-        await waitWorkspaceDelay(1500);
+        await waitWorkspaceDelay(
+          Math.min(SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS, Math.max(0, SEGMENT_EDITOR_REQUEST_TIMEOUT_MS - elapsedMs)),
+        );
       }
 
       if (!payload?.data) {
@@ -25536,122 +25671,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       poster={studioPreviewPosterUrl ?? undefined}
                       preload="metadata"
                       src={visibleGeneratedVideoPlaybackUrl}
-                      topActions={
-                        !isGenerating ? (
-                          <>
-                            {isGeneratedVideoPrimaryActionExpanded ? (
-                              <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--expanded">
-                                <button
-                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Редактировать", "Edit")}
-                                  title={
-                                    visibleGeneratedVideo?.adId
-                                      ? workspaceText(locale, "Редактировать", "Edit")
-                                      : workspaceText(locale, "Редактирование доступно после сохранения проекта", "Editing is available after the project is saved")
-                                  }
-                                  disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
-                                  onClick={() => void handleOpenSegmentEditor()}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                    <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                  </svg>
-                                  <span>{workspaceText(locale, "Редактировать", "Edit")}</span>
-                                </button>
-                                <button
-                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Опубликовать", "Publish")}
-                                  title={workspaceText(locale, "Опубликовать", "Publish")}
-                                  onClick={() => void handlePublishPreview()}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
-                                  </svg>
-                                  <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
-                                </button>
-                                <a
-                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-                                  href={visibleGeneratedVideoPlaybackUrl}
-                                  download={studioInlinePreviewDownloadName}
-                                  aria-label={workspaceText(locale, "Скачать", "Download")}
-                                  title={workspaceText(locale, "Скачать", "Download")}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                  <span>{workspaceText(locale, "Скачать", "Download")}</span>
-                                </a>
-                                <button
-                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
-                                  title={workspaceText(locale, "Закрыть видео", "Close video")}
-                                  onClick={handleDismissStudioPreview}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--compact">
-                                <button
-                                  className="studio-canvas-preview__quick-action"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Редактировать сцены", "Edit scenes")}
-                                  title={
-                                    visibleGeneratedVideo?.adId
-                                      ? workspaceText(locale, "Редактировать сцены", "Edit scenes")
-                                      : workspaceText(locale, "Редактор сцен доступен после сохранения проекта", "Scene editor is available after the project is saved")
-                                  }
-                                  disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
-                                  onClick={() => void handleOpenSegmentEditor()}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                                    <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                  </svg>
-                                </button>
-                                <button
-                                  className="studio-canvas-preview__quick-action"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
-                                  title={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
-                                  onClick={() => void handlePublishPreview()}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
-                                  </svg>
-                                </button>
-                                <a
-                                  className="studio-canvas-preview__quick-action"
-                                  href={visibleGeneratedVideoPlaybackUrl}
-                                  download={studioInlinePreviewDownloadName}
-                                  aria-label={workspaceText(locale, "Скачать", "Download")}
-                                  title={workspaceText(locale, "Скачать", "Download")}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </a>
-                                <button
-                                  className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
-                                  type="button"
-                                  aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
-                                  title={workspaceText(locale, "Закрыть видео", "Close video")}
-                                  onClick={handleDismissStudioPreview}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                                  </svg>
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        ) : null
-                      }
                       videoKey={visibleGeneratedVideo.id}
                       videoRef={(element) => {
                         previewVideoRef.current = element;
@@ -25659,12 +25678,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       volume={studioPreviewVolume}
                       onVolumeChange={setStudioPreviewVolume}
                     />
+                    <div className="studio-canvas-preview__floating-actions">
+                      {renderStudioInlinePreviewActions()}
+                    </div>
                     {isSegmentEditorLoading ? (
                       <div className="studio-canvas-preview__overlay">
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                         <span>{workspaceText(locale, "Загружаем сегменты...", "Loading segments...")}</span>
                       </div>
-                    ) : isGenerating ? (
+                    ) : shouldShowStudioPreviewGenerationOverlay ? (
                       <div className="studio-canvas-preview__overlay is-generating" role="status" aria-live="polite">
                         {renderStudioShortsGenerationStatus()}
                       </div>
