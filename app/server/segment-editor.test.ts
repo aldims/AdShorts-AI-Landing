@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildWorkspaceSegmentEditorSessionFromPayload,
   buildWorkspaceSegmentEditorSegment,
+  getWorkspaceSegmentEditorSessionForAccessibleProject,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("segment editor asset lifecycle mapping", () => {
   it("downgrades upstream video segments to photo when linked entries only expose photo assets", () => {
@@ -312,5 +317,43 @@ describe("segment editor asset lifecycle mapping", () => {
 
     expect(metadata.customMusicAssetId).toBe(7788);
     expect(metadata.customMusicFileName).toBe("ambient-loop.mp3");
+  });
+
+  it("propagates upstream preparing responses as retryable workspace conflicts", async () => {
+    const preparingMessage = "Project components are still being prepared";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segment-editor")) {
+        return new Response(JSON.stringify({ detail: preparingMessage }), {
+          headers: { "Content-Type": "application/json" },
+          status: 409,
+        });
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 4321 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(JSON.stringify({ generation_settings: {}, project_id: 4321 }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { id: "user-preparing" },
+        4321,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: preparingMessage,
+      name: "WorkspaceSegmentEditorError",
+      statusCode: 409,
+    });
   });
 });

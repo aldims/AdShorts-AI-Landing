@@ -572,6 +572,7 @@ const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 10 * 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
+const SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE = "Project components are still being prepared";
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map<string, number>();
@@ -1052,6 +1053,10 @@ const loadWorkspaceSegmentEditorSession = async (projectId: number): Promise<Wor
 
     if (error instanceof UpstreamHttpError && error.statusCode === 404) {
       throw new WorkspaceSegmentEditorError("Для этого проекта сегменты пока недоступны.", 404);
+    }
+
+    if (error instanceof UpstreamHttpError && error.statusCode === 409) {
+      throw new WorkspaceSegmentEditorError(normalizeText(error.message) || SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE, 409);
     }
 
     const message = error instanceof Error ? error.message.trim().toLowerCase() : "";
