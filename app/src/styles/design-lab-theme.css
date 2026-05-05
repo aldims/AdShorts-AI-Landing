@@ -28754,6 +28754,18 @@ html, body {
   gap: 22px !important;
 }
 
+.lp-pricing-international {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  margin-top: 34px;
+}
+
+.lp-pricing-international .pricing-max-international-hero {
+  margin-top: 0;
+}
+
 .lp-section--pricing .lp-section-head__cta--pricing-under {
   display: flex;
   justify-content: center;

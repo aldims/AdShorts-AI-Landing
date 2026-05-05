@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useState } from "react";
-import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
+import { InternationalPaymentsWaitlist } from "../components/InternationalPaymentsWaitlist";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
@@ -102,18 +102,6 @@ type CheckoutResultState = {
   status: "checking" | "pending" | "success";
 };
 
-type WaitlistFeedback = {
-  kind: "error" | "success";
-  message: string;
-} | null;
-
-type WaitlistResponse = {
-  data?: {
-    ok: boolean;
-  };
-  error?: string;
-};
-
 type PlanCheckoutRestriction = "current" | "unavailable" | "used";
 
 type PricingPack = {
@@ -132,7 +120,6 @@ type PricingFAQ = {
 
 const PACKAGE_RESTRICTION_ERROR_FRAGMENT = "PRO and ULTRA";
 const CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
-const WAITLIST_REQUEST_TIMEOUT_MS = 20_000;
 const PAYMENT_PROFILE_POLL_ATTEMPTS = 6;
 const PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
 
@@ -170,66 +157,6 @@ const pricingMessages = defineMessages({
   checkoutUnavailable: {
     ru: "Не удалось открыть страницу оплаты.",
     en: "Could not open checkout.",
-  },
-  internationalCheckoutBody: {
-    ru: "",
-    en: "You can try AdShorts AI for free now. Create Shorts, test the studio, voiceover, subtitles and publishing tools while international card payments are being prepared.",
-  },
-  internationalCheckoutCta: {
-    ru: "",
-    en: "Try AdShorts AI for free",
-  },
-  internationalCheckoutEyebrow: {
-    ru: "",
-    en: "International checkout",
-  },
-  internationalCheckoutFactOne: {
-    ru: "",
-    en: "No international card charge today",
-  },
-  internationalCheckoutFactThree: {
-    ru: "",
-    en: "Paid plans will open here",
-  },
-  internationalCheckoutFactTwo: {
-    ru: "",
-    en: "Free studio access is available now",
-  },
-  internationalCheckoutTitle: {
-    ru: "",
-    en: "International payments are coming soon.",
-  },
-  internationalWaitlistEmailLabel: {
-    ru: "",
-    en: "Email for international payments waitlist",
-  },
-  internationalWaitlistError: {
-    ru: "",
-    en: "Could not join the waitlist. Try again in a moment.",
-  },
-  internationalWaitlistInvalidEmail: {
-    ru: "",
-    en: "Enter a valid email.",
-  },
-  internationalWaitlistPlaceholder: {
-    ru: "",
-    en: "you@company.com",
-  },
-  internationalWaitlistSubmit: {
-    ru: "",
-    en: "Join waitlist",
-  },
-  internationalWaitlistSubmitting: {
-    ru: "",
-    en: "Joining...",
-  },
-  internationalWaitlistSuccess: {
-    ru: "",
-    en: "You're on the list. We'll email you when international payments open.",
-  },
-  internationalWaitlistHint: {
-    ru: "",
-    en: "We'll only use this email for international checkout updates.",
   },
   enterpriseCta: {
     ru: "Оставить заявку",
@@ -488,9 +415,6 @@ export function PricingPage({
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState | null>(null);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
-  const [waitlistEmail, setWaitlistEmail] = useState(session?.email ?? "");
-  const [waitlistFeedback, setWaitlistFeedback] = useState<WaitlistFeedback>(null);
-  const [isWaitlistSubmitting, setIsWaitlistSubmitting] = useState(false);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
@@ -553,61 +477,6 @@ export function PricingPage({
     }
 
     openPrimaryFlow();
-  };
-
-  const handleInternationalWaitlistSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const email = waitlistEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(email)) {
-      setWaitlistFeedback({
-        kind: "error",
-        message: t(pricingMessages.internationalWaitlistInvalidEmail),
-      });
-      return;
-    }
-
-    setWaitlistFeedback(null);
-    setIsWaitlistSubmitting(true);
-
-    try {
-      const response = await fetch("/api/contact/international-payments-waitlist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          source: `${location.pathname}${location.search}`,
-        }),
-        signal: AbortSignal.timeout(WAITLIST_REQUEST_TIMEOUT_MS),
-      });
-      const payload = (await response.json().catch(() => null)) as WaitlistResponse | null;
-
-      if (!response.ok || !payload?.data?.ok) {
-        throw new Error(payload?.error ?? t(pricingMessages.internationalWaitlistError));
-      }
-
-      setWaitlistEmail(email);
-      setWaitlistFeedback({
-        kind: "success",
-        message: t(pricingMessages.internationalWaitlistSuccess),
-      });
-    } catch (error) {
-      const message =
-        error instanceof DOMException && error.name === "TimeoutError"
-          ? t(pricingMessages.checkoutTimeout)
-          : error instanceof Error
-            ? error.message
-            : t(pricingMessages.internationalWaitlistError);
-
-      setWaitlistFeedback({
-        kind: "error",
-        message,
-      });
-    } finally {
-      setIsWaitlistSubmitting(false);
-    }
   };
 
   const requestCheckout = async (productId: CheckoutProductId) => {
@@ -787,14 +656,6 @@ export function PricingPage({
       window.scrollTo({ left: 0, top: 0, behavior: "auto" });
     }
   }, [location.hash, location.pathname]);
-
-  useEffect(() => {
-    if (!isInternationalPricing || !session?.email || waitlistEmail.trim()) {
-      return;
-    }
-
-    setWaitlistEmail(session.email);
-  }, [isInternationalPricing, session?.email, waitlistEmail]);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") {
@@ -992,48 +853,7 @@ export function PricingPage({
             <div className="pricing-max-hero__heading">
               <h1>{t(pricingMessages.heroHeading)}</h1>
               {isInternationalPricing ? (
-                <div className="pricing-max-international-hero" role="note">
-                  <span className="pricing-max-international-hero__eyebrow">{t(pricingMessages.internationalCheckoutEyebrow)}</span>
-                  <strong>{t(pricingMessages.internationalCheckoutTitle)}</strong>
-                  <p>{t(pricingMessages.internationalCheckoutBody)}</p>
-                  <form className="pricing-max-international-waitlist" onSubmit={handleInternationalWaitlistSubmit}>
-                    <div className="pricing-max-international-waitlist__field">
-                      <input
-                        aria-label={t(pricingMessages.internationalWaitlistEmailLabel)}
-                        autoComplete="email"
-                        inputMode="email"
-                        maxLength={180}
-                        onChange={(event) => {
-                          setWaitlistEmail(event.target.value);
-                          if (waitlistFeedback?.kind === "error") {
-                            setWaitlistFeedback(null);
-                          }
-                        }}
-                        placeholder={t(pricingMessages.internationalWaitlistPlaceholder)}
-                        type="email"
-                        value={waitlistEmail}
-                        required
-                      />
-                      <button
-                        className="btn pricing-max-international-waitlist__submit route-button"
-                        type="submit"
-                        disabled={isWaitlistSubmitting}
-                      >
-                        {isWaitlistSubmitting
-                          ? t(pricingMessages.internationalWaitlistSubmitting)
-                          : t(pricingMessages.internationalWaitlistSubmit)}
-                      </button>
-                    </div>
-                    <p
-                      className={`pricing-max-international-waitlist__status${
-                        waitlistFeedback ? ` pricing-max-international-waitlist__status--${waitlistFeedback.kind}` : ""
-                      }`}
-                      role={waitlistFeedback?.kind === "error" ? "alert" : "status"}
-                    >
-                      {waitlistFeedback?.message ?? t(pricingMessages.internationalWaitlistHint)}
-                    </p>
-                  </form>
-                </div>
+                <InternationalPaymentsWaitlist defaultEmail={session?.email} />
               ) : null}
               {!isInternationalPricing && checkoutError ? (
                 <p className="pricing-max-hero__status" role="alert">

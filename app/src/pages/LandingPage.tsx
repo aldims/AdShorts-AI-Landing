@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { InternationalPaymentsWaitlist } from "../components/InternationalPaymentsWaitlist";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
@@ -824,134 +825,120 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
               <p>{t(landingMessages.planScaleSub)}</p>
             </div>
 
-            <div className="plan-grid" data-reveal-group="">
-              <article
-                className={`plan-card${isStartPlanUsed ? " plan-card--disabled" : ""}`}
-                data-reveal=""
-                data-reveal-delay="1"
-                aria-disabled={isStartPlanUsed}
-              >
-                <div className="plan-card__header">
-                  <span className="plan-card__label">START</span>
-                  {isStartPlanUsed ? (
-                    <span className="plan-card__badge plan-card__badge--used">{t(landingMessages.used)}</span>
-                  ) : null}
-                </div>
-                <div className="plan-card__price">
-                  <strong>390 ₽</strong>
-                </div>
-                <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for the first launch" : "Разовый пакет для первого запуска"}
-                </p>
-                <div className="plan-card__output">
-                  <span>{locale === "en" ? "Up to 5 Shorts" : "До 5 Shorts"}</span>
-                  <small>{locale === "en" ? "≈ 78 ₽ per Short" : "≈ 78 ₽ за Shorts"}</small>
-                </div>
-                <div className="plan-card__divider" aria-hidden="true" />
-                <ul className="plan-card__features">
-                  <li>
-                    {t(landingMessages.noWatermark)}
-                  </li>
-                </ul>
-                <button
-                  className="plan-card__cta route-button"
-                  type="button"
-                  onClick={() => void handlePlanCheckout("start")}
-                  disabled={isStartPlanUsed || activeCheckoutProductId === "start"}
-                >
-                  {isStartPlanUsed
-                    ? t(landingMessages.used)
-                    : activeCheckoutProductId === "start"
-                      ? t(landingMessages.checkoutOpening)
-                      : t(landingMessages.chooseStart)}
-                </button>
-              </article>
+            {locale === "en" ? (
+              <div className="lp-pricing-international" data-reveal="">
+                <InternationalPaymentsWaitlist defaultEmail={session?.email} />
+              </div>
+            ) : (
+              <>
+                <div className="plan-grid" data-reveal-group="">
+                  <article
+                    className={`plan-card${isStartPlanUsed ? " plan-card--disabled" : ""}`}
+                    data-reveal=""
+                    data-reveal-delay="1"
+                    aria-disabled={isStartPlanUsed}
+                  >
+                    <div className="plan-card__header">
+                      <span className="plan-card__label">START</span>
+                      {isStartPlanUsed ? (
+                        <span className="plan-card__badge plan-card__badge--used">{t(landingMessages.used)}</span>
+                      ) : null}
+                    </div>
+                    <div className="plan-card__price">
+                      <strong>390 ₽</strong>
+                    </div>
+                    <p className="plan-card__tagline">Разовый пакет для первого запуска</p>
+                    <div className="plan-card__output">
+                      <span>До 5 Shorts</span>
+                      <small>≈ 78 ₽ за Shorts</small>
+                    </div>
+                    <div className="plan-card__divider" aria-hidden="true" />
+                    <ul className="plan-card__features">
+                      <li>{t(landingMessages.noWatermark)}</li>
+                    </ul>
+                    <button
+                      className="plan-card__cta route-button"
+                      type="button"
+                      onClick={() => void handlePlanCheckout("start")}
+                      disabled={isStartPlanUsed || activeCheckoutProductId === "start"}
+                    >
+                      {isStartPlanUsed
+                        ? t(landingMessages.used)
+                        : activeCheckoutProductId === "start"
+                          ? t(landingMessages.checkoutOpening)
+                          : t(landingMessages.chooseStart)}
+                    </button>
+                  </article>
 
-              <article className="plan-card plan-card--accent" data-reveal="" data-reveal-delay="2">
-                <div className="plan-card__header">
-                  <span className="plan-card__label">PRO</span>
-                  <span className="plan-card__badge">{t(landingMessages.planPopular)}</span>
-                </div>
-                <div className="plan-card__price">
-                  <strong>1 490 ₽</strong>
-                </div>
-                <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for a regular content flow" : "Для регулярного создания Shorts"}
-                </p>
-                <div className="plan-card__output">
-                  <span>{locale === "en" ? "Up to 25 Shorts" : "До 25 Shorts"}</span>
-                  <small>{locale === "en" ? "≈ 60 ₽ per Short" : "≈ 60 ₽ за Shorts"}</small>
-                </div>
-                <div className="plan-card__divider" aria-hidden="true" />
-                <ul className="plan-card__features">
-                  <li>
-                    {t(landingMessages.noWatermark)}
-                  </li>
-                  <li>
-                    {t(landingMessages.priorityGeneration)}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Credit top-ups available" : "Можно докупать пакеты"}
-                  </li>
-                </ul>
-                <button
-                  className="plan-card__cta plan-card__cta--accent route-button"
-                  type="button"
-                  onClick={() => void handlePlanCheckout("pro")}
-                  disabled={activeCheckoutProductId === "pro"}
-                >
-                  {activeCheckoutProductId === "pro" ? t(landingMessages.checkoutOpening) : t(landingMessages.choosePro)}
-                </button>
-              </article>
+                  <article className="plan-card plan-card--accent" data-reveal="" data-reveal-delay="2">
+                    <div className="plan-card__header">
+                      <span className="plan-card__label">PRO</span>
+                      <span className="plan-card__badge">{t(landingMessages.planPopular)}</span>
+                    </div>
+                    <div className="plan-card__price">
+                      <strong>1 490 ₽</strong>
+                    </div>
+                    <p className="plan-card__tagline">Для регулярного создания Shorts</p>
+                    <div className="plan-card__output">
+                      <span>До 25 Shorts</span>
+                      <small>≈ 60 ₽ за Shorts</small>
+                    </div>
+                    <div className="plan-card__divider" aria-hidden="true" />
+                    <ul className="plan-card__features">
+                      <li>{t(landingMessages.noWatermark)}</li>
+                      <li>{t(landingMessages.priorityGeneration)}</li>
+                      <li>Можно докупать пакеты</li>
+                    </ul>
+                    <button
+                      className="plan-card__cta plan-card__cta--accent route-button"
+                      type="button"
+                      onClick={() => void handlePlanCheckout("pro")}
+                      disabled={activeCheckoutProductId === "pro"}
+                    >
+                      {activeCheckoutProductId === "pro" ? t(landingMessages.checkoutOpening) : t(landingMessages.choosePro)}
+                    </button>
+                  </article>
 
-              <article className="plan-card" data-reveal="" data-reveal-delay="3">
-                <div className="plan-card__header">
-                  <span className="plan-card__label">ULTRA</span>
+                  <article className="plan-card" data-reveal="" data-reveal-delay="3">
+                    <div className="plan-card__header">
+                      <span className="plan-card__label">ULTRA</span>
+                    </div>
+                    <div className="plan-card__price">
+                      <strong>4 990 ₽</strong>
+                    </div>
+                    <p className="plan-card__tagline">Для максимального объёма</p>
+                    <div className="plan-card__output">
+                      <span>До 100 Shorts</span>
+                      <small>≈ 50 ₽ за Shorts</small>
+                    </div>
+                    <div className="plan-card__divider" aria-hidden="true" />
+                    <ul className="plan-card__features">
+                      <li>{t(landingMessages.noWatermark)}</li>
+                      <li>Максимальный приоритет</li>
+                      <li>Можно докупать пакеты</li>
+                      <li>Ранний доступ к новым функциям</li>
+                    </ul>
+                    <button
+                      className="plan-card__cta route-button"
+                      type="button"
+                      onClick={() => void handlePlanCheckout("ultra")}
+                      disabled={activeCheckoutProductId === "ultra"}
+                    >
+                      {activeCheckoutProductId === "ultra" ? t(landingMessages.checkoutOpening) : t(landingMessages.chooseUltra)}
+                    </button>
+                  </article>
                 </div>
-                <div className="plan-card__price">
-                  <strong>4 990 ₽</strong>
-                </div>
-                <p className="plan-card__tagline">
-                  {locale === "en" ? "Ideal for maximum volume" : "Для максимального объёма"}
-                </p>
-                <div className="plan-card__output">
-                  <span>{locale === "en" ? "Up to 100 Shorts" : "До 100 Shorts"}</span>
-                  <small>{locale === "en" ? "≈ 50 ₽ per Short" : "≈ 50 ₽ за Shorts"}</small>
-                </div>
-                <div className="plan-card__divider" aria-hidden="true" />
-                <ul className="plan-card__features">
-                  <li>
-                    {t(landingMessages.noWatermark)}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Maximum priority" : "Максимальный приоритет"}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Credit top-ups available" : "Можно докупать пакеты"}
-                  </li>
-                  <li>
-                    {locale === "en" ? "Early access to new features" : "Ранний доступ к новым функциям"}
-                  </li>
-                </ul>
-                <button
-                  className="plan-card__cta route-button"
-                  type="button"
-                  onClick={() => void handlePlanCheckout("ultra")}
-                  disabled={activeCheckoutProductId === "ultra"}
-                >
-                  {activeCheckoutProductId === "ultra" ? t(landingMessages.checkoutOpening) : t(landingMessages.chooseUltra)}
-                </button>
-              </article>
-            </div>
 
-            <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
-              <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing#top")}>
-                <span className="btn--premium-cta__label">{locale === "en" ? "Go to plans" : "Перейти к тарифам"}</span>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
+                <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
+                  <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing#top")}>
+                    <span className="btn--premium-cta__label">Перейти к тарифам</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
         </section>
 

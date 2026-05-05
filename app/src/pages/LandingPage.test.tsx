@@ -92,6 +92,21 @@ describe("LandingPage guides section", () => {
     expect(screen.getByRole("link", { name: "Pricing" }).getAttribute("href")).toBe("/en/pricing");
   });
 
+  it("replaces English landing pricing cards with the international waitlist", () => {
+    const { container } = renderLandingPage("en");
+
+    expect(screen.getByText("International checkout")).toBeTruthy();
+    expect(screen.getByText("International payments are coming soon.")).toBeTruthy();
+    expect(screen.getByText(/You can try AdShorts AI for free now/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Join waitlist" })).toBeTruthy();
+    expect(screen.getByText("We'll only use this email for international checkout updates.")).toBeTruthy();
+    expect(screen.queryByText("START")).toBeNull();
+    expect(screen.queryByText("PRO")).toBeNull();
+    expect(screen.queryByText("ULTRA")).toBeNull();
+    expect(container.textContent).not.toContain("₽");
+    expect(screen.queryByRole("link", { name: "Go to plans" })).toBeNull();
+  });
+
   it("syncs the hero preview position with the current scroll on initial render", () => {
     const scrollYDescriptor = Object.getOwnPropertyDescriptor(window, "scrollY");
 

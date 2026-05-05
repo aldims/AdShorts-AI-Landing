@@ -499,7 +499,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
     normalizePositiveProjectId(payload.id) ??
     requestedProjectId;
   const segments = rawSegments
-    .map((segment, slot) => {
+    .map((segment, slot): AdsflowSegmentEditorSegmentPayload | null => {
       if (!segment || typeof segment !== "object") {
         return null;
       }
@@ -526,9 +526,9 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         index,
         media_type: normalizeMediaType(currentEntry?.media_type ?? originalEntry?.media_type ?? record.media_type),
         original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
-        speech_duration: record.speech_duration,
-        speech_end_time: record.speech_end_time,
-        speech_start_time: record.speech_start_time,
+        speech_duration: normalizeNumber(record.speech_duration),
+        speech_end_time: normalizeNumber(record.speech_end_time),
+        speech_start_time: normalizeNumber(record.speech_start_time),
         speech_words: Array.isArray(record.speech_words) ? record.speech_words as AdsflowSegmentEditorSpeechWordPayload[] : null,
         start_time: startTime,
         text,
