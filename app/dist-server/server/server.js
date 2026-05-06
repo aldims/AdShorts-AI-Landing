@@ -20,10 +20,11 @@ import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
-import { deleteLocalExample, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
+import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
+import { InternationalPaymentsWaitlistValidationError, appendInternationalPaymentsWaitlistSubmission, notifyInternationalPaymentsWaitlistSubmission, parseInternationalPaymentsWaitlistSubmission, } from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 initServerLogging();
@@ -741,12 +742,9 @@ app.delete("/api/examples/local/:exampleId", async (req, res) => {
     }
 });
 app.get("/api/examples/local-video/:exampleId", async (req, res) => {
-    const session = await auth.api.getSession({
-        headers: fromNodeHeaders(req.headers),
-    });
     try {
-        const asset = await getLocalExampleVideoAsset(session?.user ?? null, req.params.exampleId);
-        res.setHeader("Cache-Control", "private, no-store");
+        const asset = await getLocalExampleVideoAsset(null, req.params.exampleId);
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         res.type(asset.contentType);
         await new Promise((resolve, reject) => {
             res.sendFile(asset.absolutePath, (error) => {
@@ -763,6 +761,34 @@ app.get("/api/examples/local-video/:exampleId", async (req, res) => {
         if (!res.headersSent) {
             res.status(404).json({
                 error: error instanceof Error ? error.message : "Failed to stream local example video.",
+            });
+            return;
+        }
+        if (!res.destroyed) {
+            res.destroy();
+        }
+    }
+});
+app.get("/api/examples/local-poster/:exampleId", async (req, res) => {
+    try {
+        const asset = await getLocalExamplePosterAsset(null, req.params.exampleId);
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.type(asset.contentType);
+        await new Promise((resolve, reject) => {
+            res.sendFile(asset.absolutePath, (error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
+    }
+    catch (error) {
+        console.error("[examples] Failed to send local example poster", error);
+        if (!res.headersSent) {
+            res.status(404).json({
+                error: error instanceof Error ? error.message : "Failed to send local example poster.",
             });
             return;
         }
@@ -1462,6 +1488,62 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
         });
     }
 });
+app.get("/api/workspace/project-segment-poster", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = Number(req.query.projectId ?? 0);
+    const segmentIndex = Number(req.query.segmentIndex ?? -1);
+    const source = typeof req.query.source === "string" ? req.query.source.trim() : "";
+    const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+    if (!Number.isFinite(projectId) || projectId <= 0) {
+        res.status(400).json({ error: "Project id is required." });
+        return;
+    }
+    if (!Number.isFinite(segmentIndex) || segmentIndex < 0) {
+        res.status(400).json({ error: "Segment index is required." });
+        return;
+    }
+    if (!isWorkspaceSegmentEditorVideoSource(source)) {
+        res.status(400).json({ error: "Segment video source is invalid." });
+        return;
+    }
+    const safeProjectId = Math.trunc(projectId);
+    const safeSegmentIndex = Math.trunc(segmentIndex);
+    try {
+        const target = await getWorkspaceProjectSegmentVideoProxyTarget(session.user, {
+            delivery: "preview",
+            projectId: safeProjectId,
+            segmentIndex: safeSegmentIndex,
+            source,
+        });
+        const posterPath = await ensureWorkspaceVideoPoster({
+            cacheKey: getWorkspaceVideoPosterCacheKey({
+                posterId: `workspace-project-segment:${safeProjectId}:${safeSegmentIndex}:${source}`,
+                targetUrl: target.url,
+                version: version || `segment:${safeProjectId}:${safeSegmentIndex}:${source}:preview`,
+            }),
+            upstreamHeaders: target.headers,
+            upstreamUrl: target.url,
+        });
+        res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+        res.sendFile(posterPath);
+    }
+    catch (error) {
+        if (error instanceof WorkspaceSegmentEditorError) {
+            res.status(error.statusCode).json({ error: error.message });
+            return;
+        }
+        console.error("[workspace] Failed to build project segment poster", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to build project segment poster.",
+        });
+    }
+});
 app.get("/api/workspace/project-segment-video", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -1599,6 +1681,28 @@ app.post("/api/contact/agency", async (req, res) => {
         console.error("[contact] Failed to process agency contact form", error);
         res.status(500).json({
             error: "Не удалось отправить заявку. Попробуйте ещё раз через пару минут.",
+        });
+    }
+});
+app.post("/api/contact/international-payments-waitlist", async (req, res) => {
+    try {
+        const submission = parseInternationalPaymentsWaitlistSubmission(req.body, {
+            userAgent: req.header("user-agent") ?? null,
+        });
+        await appendInternationalPaymentsWaitlistSubmission(submission);
+        void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
+            console.error("[contact] Failed to notify international payments waitlist submission", error);
+        });
+        res.status(201).json({ data: { ok: true } });
+    }
+    catch (error) {
+        if (error instanceof InternationalPaymentsWaitlistValidationError) {
+            res.status(400).json({ error: error.message });
+            return;
+        }
+        console.error("[contact] Failed to process international payments waitlist form", error);
+        res.status(500).json({
+            error: "Could not join the waitlist. Try again in a moment.",
         });
     }
 });

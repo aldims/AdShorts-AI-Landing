@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { AgencyContactModal } from "../components/AgencyContactModal";
@@ -7,6 +7,7 @@ import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
 import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStatus";
 import { defineMessages, useLocale, type Locale } from "../lib/i18n";
+import { logClientEvent } from "../lib/client-log";
 import { clearPricingEntryIntent, readPricingEntryIntent } from "../lib/pricing-entry-intent";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
@@ -415,6 +416,7 @@ export function PricingPage({
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState | null>(null);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
+  const paymentSuccessEventKeyRef = useRef<string | null>(null);
   const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
   const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
@@ -697,6 +699,33 @@ export function PricingPage({
       setActivePlanId(defaultActivePlanId);
     }
   }, [activePlanId, defaultActivePlanId, isStartPlanUsed, currentPlanLabel]);
+
+  useEffect(() => {
+    if (checkoutResult?.status !== "success") {
+      return;
+    }
+
+    const eventKey = [
+      checkoutResult.productId,
+      checkoutResult.plan ?? "",
+      checkoutResult.balance ?? "",
+      checkoutResult.addedCredits ?? "",
+    ].join(":");
+
+    if (paymentSuccessEventKeyRef.current === eventKey) {
+      return;
+    }
+
+    paymentSuccessEventKeyRef.current = eventKey;
+    void logClientEvent("payment_success", {
+      addedCredits: checkoutResult.addedCredits ?? null,
+      balance: checkoutResult.balance ?? null,
+      lang: locale,
+      path: `${location.pathname}${location.search}${location.hash}`,
+      plan: checkoutResult.plan ?? null,
+      productId: checkoutResult.productId,
+    });
+  }, [checkoutResult, locale, location.hash, location.pathname, location.search]);
 
   useEffect(() => {
     const productId = readPaymentReturnProductId(location.search);

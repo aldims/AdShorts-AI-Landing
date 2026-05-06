@@ -28,8 +28,12 @@ fi
 
 echo "[staging] check static pages"
 cd "$ROOT_DIR"
+node scripts/generate-static-landing.mjs
+node scripts/generate-static-bofu-pages.mjs
+node scripts/export-seo-url-metadata.mjs
 node scripts/generate-static-landing.mjs --check
 node scripts/check-static-i18n.mjs
+node scripts/audit-seo-foundation.mjs
 
 echo "[staging] upload static pages"
 ssh "${SSH_OPTS[@]}" "$STAGING_SSH" "mkdir -p '$STAGING_STATIC_DIR'"
@@ -52,6 +56,7 @@ rsync -az --delete \
   --include='*.ico' \
   --include='*.txt' \
   --include='*.xml' \
+  --include='*.json' \
   --exclude='*' \
   "$ROOT_DIR/" "$STAGING_SSH:$STAGING_STATIC_DIR/"
 

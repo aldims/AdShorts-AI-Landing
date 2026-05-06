@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -5,6 +6,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { env } from "./env.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { getWorkspaceProjectPlaybackAsset, getWorkspaceProjectVideoProxyTarget } from "./projects.js";
@@ -12,12 +14,17 @@ import { getStudioVideoProxyTarget, getStudioVideoProxyTargetByPath } from "./st
 const LOCAL_EXAMPLES_ROOT_DIR = join(env.dataDir, "local-examples");
 const LOCAL_EXAMPLES_INDEX_PATH = join(LOCAL_EXAMPLES_ROOT_DIR, "examples.json");
 const LOCAL_EXAMPLE_FETCH_TIMEOUT_MS = 60_000;
+const LOCAL_EXAMPLE_POSTER_CAPTURE_MAX_DIMENSION = 1280;
+const LOCAL_EXAMPLE_POSTER_FFMPEG_TIMEOUT_MS = 30_000;
+const LOCAL_EXAMPLE_POSTER_FRAME_TIMES_SECONDS = [1.5, 0.75, 0.15, 0];
 const LOCAL_EXAMPLES_ADMIN_EMAIL = "adshortsai@gmail.com";
 const LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS = new Set([
     LOCAL_EXAMPLES_ADMIN_EMAIL,
     "aldima@mail.com",
 ]);
 const LOCAL_EXAMPLES_SHARED_OWNER_KEY = `email:${LOCAL_EXAMPLES_ADMIN_EMAIL}`;
+const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
+const execFileAsync = promisify(execFile);
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value);
 const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLowerCase();
@@ -68,6 +75,47 @@ const moveLocalExampleMediaFile = async (sourcePath, destinationPath) => {
         await copyFile(sourcePath, destinationPath);
         await rm(sourcePath, { force: true }).catch(() => undefined);
     }
+};
+const captureLocalExamplePosterFile = async (videoPath, ownerDir, exampleId) => {
+    const posterFileName = `${exampleId}.jpg`;
+    const absolutePath = join(ownerDir, posterFileName);
+    const tempPath = `${absolutePath}.tmp.jpg`;
+    let lastError = null;
+    for (const frameTimeSeconds of LOCAL_EXAMPLE_POSTER_FRAME_TIMES_SECONDS) {
+        await rm(tempPath, { force: true }).catch(() => undefined);
+        try {
+            await execFileAsync(FFMPEG_BINARY, [
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-ss",
+                String(frameTimeSeconds),
+                "-i",
+                videoPath,
+                "-frames:v",
+                "1",
+                "-vf",
+                `scale=${LOCAL_EXAMPLE_POSTER_CAPTURE_MAX_DIMENSION}:${LOCAL_EXAMPLE_POSTER_CAPTURE_MAX_DIMENSION}:force_original_aspect_ratio=decrease`,
+                "-q:v",
+                "2",
+                tempPath,
+            ], {
+                timeout: LOCAL_EXAMPLE_POSTER_FFMPEG_TIMEOUT_MS,
+            });
+            await rename(tempPath, absolutePath);
+            return posterFileName;
+        }
+        catch (error) {
+            lastError = error;
+        }
+    }
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    console.warn("[examples] Failed to capture local example poster", {
+        error: lastError instanceof Error ? lastError.message : String(lastError ?? "Unknown error"),
+        exampleId,
+    });
+    return null;
 };
 const readLocalExamplesIndex = async () => {
     await ensureLocalExamplesStorage();
@@ -291,6 +339,7 @@ const downloadLocalExampleVideo = async (options) => {
             contentType,
             exampleId,
             mediaFileName,
+            posterFileName: await captureLocalExamplePosterFile(absolutePath, ownerDir, exampleId),
         };
     }
     const response = await fetch(source.sourceUrl, {
@@ -319,10 +368,15 @@ const downloadLocalExampleVideo = async (options) => {
         contentType,
         exampleId,
         mediaFileName,
+        posterFileName: await captureLocalExamplePosterFile(absolutePath, ownerDir, exampleId),
     };
 };
 const buildLocalExampleVideoUrl = (exampleId) => {
     const url = new URL(`/api/examples/local-video/${encodeURIComponent(exampleId)}`, env.appUrl);
+    return `${url.pathname}${url.search}`;
+};
+const buildLocalExamplePosterUrl = (exampleId) => {
+    const url = new URL(`/api/examples/local-poster/${encodeURIComponent(exampleId)}`, env.appUrl);
     return `${url.pathname}${url.search}`;
 };
 const toLocalExampleClientItem = (item) => ({
@@ -331,6 +385,7 @@ const toLocalExampleClientItem = (item) => ({
     isLocal: true,
     prefillSettings: normalizeExamplePrefillStudioSettings(item.prefillSettings),
     promptHint: buildLocalExamplePromptHint(item.prompt),
+    posterSrc: item.posterFileName ? buildLocalExamplePosterUrl(item.id) : undefined,
     seedPrompt: item.prompt,
     summary: buildLocalExampleSummary(item.prompt),
     tags: ["Локально", "Studio"],
@@ -386,6 +441,7 @@ export const saveLocalExample = async (user, input) => {
         mediaContentType: downloadedVideo.contentType,
         mediaFileName: downloadedVideo.mediaFileName,
         ownerKey,
+        posterFileName: downloadedVideo.posterFileName,
         prefillSettings,
         prompt,
         sourceId,
@@ -417,6 +473,27 @@ export const getLocalExampleVideoAsset = async (user, exampleId) => {
         stream: () => createReadStream(absolutePath),
     };
 };
+export const getLocalExamplePosterAsset = async (user, exampleId) => {
+    if (!isLocalExamplesEnabled()) {
+        throw new Error("Local examples are disabled.");
+    }
+    const normalizedExampleId = normalizeText(exampleId);
+    if (!normalizedExampleId) {
+        throw new Error("Local example id is required.");
+    }
+    const index = await migrateAdminExamplesToSharedOwner(await readLocalExamplesIndex(), user);
+    const item = index.items.find((entry) => entry.id === normalizedExampleId && entry.ownerKey === LOCAL_EXAMPLES_SHARED_OWNER_KEY) ?? null;
+    if (!item?.posterFileName) {
+        throw new Error("Local example poster not found.");
+    }
+    const ownerDir = buildLocalExamplesOwnerDir(LOCAL_EXAMPLES_SHARED_OWNER_KEY);
+    const absolutePath = join(ownerDir, item.posterFileName);
+    await stat(absolutePath);
+    return {
+        absolutePath,
+        contentType: "image/jpeg",
+    };
+};
 export const deleteLocalExample = async (user, exampleId) => {
     if (!isLocalExamplesEnabled()) {
         throw new Error("Local examples are disabled.");
@@ -437,6 +514,9 @@ export const deleteLocalExample = async (user, exampleId) => {
     const ownerDir = buildLocalExamplesOwnerDir(ownerKey);
     const absolutePath = join(ownerDir, item.mediaFileName);
     await rm(absolutePath, { force: true }).catch(() => undefined);
+    if (item.posterFileName) {
+        await rm(join(ownerDir, item.posterFileName), { force: true }).catch(() => undefined);
+    }
     return {
         exampleId: normalizedExampleId,
     };

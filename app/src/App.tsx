@@ -2,6 +2,7 @@ import { type ReactNode, Suspense, lazy, useEffect, useMemo, useState } from "re
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { authClient } from "./lib/auth-client";
+import { logClientEvent } from "./lib/client-log";
 import {
   LocaleProvider,
   defineMessages,
@@ -335,6 +336,13 @@ export function App() {
   }, [authState.isOpen, session]);
 
   const openAuth = (mode: AuthMode) => {
+    if (mode === "signup") {
+      void logClientEvent("signup_start", {
+        lang: locale,
+        path: `${location.pathname}${location.search}`,
+      });
+    }
+
     setAuthState({ isOpen: true, mode });
   };
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import googleLogoUrl from "../assets/google-g-logo.svg";
 import { authClient } from "../lib/auth-client";
+import { logClientEvent } from "../lib/client-log";
 import { useLocale, type Locale } from "../lib/i18n";
 
 type AuthMode = "signup" | "signin";
@@ -220,6 +221,12 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
           setBusyAction(null);
           return;
         }
+
+        void logClientEvent("signup_complete", {
+          authProvider: "email",
+          lang: locale,
+          path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        });
 
         setFeedback({
           kind: "success",

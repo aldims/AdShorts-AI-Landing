@@ -58,8 +58,12 @@ fi
 
 echo "[production] check static pages"
 cd "$RELEASE_DIR"
+node scripts/generate-static-landing.mjs
+node scripts/generate-static-bofu-pages.mjs
+node scripts/export-seo-url-metadata.mjs
 node scripts/generate-static-landing.mjs --check
 node scripts/check-static-i18n.mjs
+node scripts/audit-seo-foundation.mjs
 
 echo "[production] prepare remote directories"
 ssh "${SSH_OPTS[@]}" "$PROD_SSH" \
@@ -85,6 +89,7 @@ rsync -az --delete \
   --include='*.ico' \
   --include='*.txt' \
   --include='*.xml' \
+  --include='*.json' \
   --exclude='*' \
   "$RELEASE_DIR/" "$PROD_SSH:$PROD_STATIC_DIR/"
 
@@ -370,6 +375,12 @@ production_blocks = f"""https://adshortsai.com {{
     header @html Pragma "no-cache"
     header @html Expires "0"
 
+    redir /en /en/ 301
+    redir /pricing /pricing/ 301
+    redir /en/pricing /en/pricing/ 301
+    redir /examples /examples/ 301
+    redir /en/examples /en/examples/ 301
+
     handle /api/* {{
         reverse_proxy 127.0.0.1:{prod_api_port}
     }}
@@ -389,7 +400,7 @@ production_blocks = f"""https://adshortsai.com {{
         file_server
     }}
 
-    @app_routes path / /en /en/ /app* /en/app* /pricing* /en/pricing* /examples* /en/examples* /hero-background-test* /en/hero-background-test*
+    @app_routes path /app* /en/app* /hero-background-test* /en/hero-background-test*
     handle @app_routes {{
         root * {prod_app_dir}/dist
         rewrite * /index.html
@@ -398,7 +409,13 @@ production_blocks = f"""https://adshortsai.com {{
 
     handle {{
         root * {prod_static_dir}
-        try_files {{path}} {{path}}/index.html /404.html
+        try_files {{path}} {{path}}/index.html =404
+        file_server
+    }}
+
+    handle_errors {{
+        root * {prod_static_dir}
+        rewrite * /404.html
         file_server
     }}
 }}
@@ -474,10 +491,17 @@ check_status() {
 check_status "$PROD_URL/api/health" "200"
 check_status "$PROD_URL/" "200"
 check_status "$PROD_URL/en/" "200"
-check_status "$PROD_URL/pricing" "200"
-check_status "$PROD_URL/examples" "200"
+check_status "$PROD_URL/pricing/" "200"
+check_status "$PROD_URL/examples/" "200"
 check_status "$PROD_URL/app" "200"
 check_status "$PROD_URL/kak-sdelat-shorts-na-youtube/" "200"
+
+root_title="$(curl -fsS "$PROD_URL/" | grep -o '<title>[^<]*' | head -n 1 || true)"
+pricing_title="$(curl -fsS "$PROD_URL/pricing/" | grep -o '<title>[^<]*' | head -n 1 || true)"
+if echo "$root_title $pricing_title" | grep -q "AdShorts AI App"; then
+  echo "SEO static pages are still serving the SPA shell." >&2
+  smoke_failed=1
+fi
 
 www_status="$(curl -sS -o /dev/null -w "%{http_code}" https://www.adshortsai.com/ || true)"
 www_effective="$(curl -sSL -o /dev/null -w "%{url_effective}" https://www.adshortsai.com/ || true)"

@@ -13039,6 +13039,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorLanguageTranslateRunRef = useRef(0);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
+  const createdVideoAnalyticsJobIdsRef = useRef<Set<string>>(new Set());
   const pendingGeneratedVideoActionModeRef = useRef<StudioGeneratedVideoActionMode>("expanded");
   const hasDisplayedGeneratedVideoActionsRef = useRef(false);
   const studioToastTimerRef = useRef<number | null>(null);
@@ -21703,6 +21704,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         if (statusPayload.data.generation) {
           doneWithoutPreviewAttempts = 0;
           setGeneratedVideo(statusPayload.data.generation);
+          if (!createdVideoAnalyticsJobIdsRef.current.has(safeJobId)) {
+            createdVideoAnalyticsJobIdsRef.current.add(safeJobId);
+            void logClientEvent(readyProjectsCount === 0 ? "first_video_created" : "video_created", {
+              adId: statusPayload.data.generation.adId ?? null,
+              isFirstReadyVideo: readyProjectsCount === 0,
+              jobId: safeJobId,
+              lang: locale,
+              path: `${location.pathname}${location.search}`,
+              projectId: statusPayload.data.generation.id ?? null,
+              status: statusPayload.data.status,
+            });
+          }
           setGeneratedVideoActionMode(pendingGeneratedVideoActionModeRef.current);
           hasDisplayedGeneratedVideoActionsRef.current = true;
           showStudioToast(workspaceText(locale, "✅ Видео готово", "✅ Video ready"));

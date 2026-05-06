@@ -90,6 +90,76 @@ if (yearEl) {
   yearEl.textContent = new Date().getFullYear().toString();
 }
 
+// Organic funnel analytics for static SEO pages.
+(function initOrganicFunnelAnalytics() {
+  const ua = navigator.userAgent || '';
+  if (/bot|crawler|spider|crawling|googlebot|bingbot|yandex|baidu/i.test(ua)) return;
+
+  const path = window.location.pathname;
+  const isAppSurface = /^\/(?:en\/)?app(?:\/|$)/.test(path);
+  if (isAppSurface) return;
+
+  const endpoint = '/api/client-events';
+  const pageLang = document.documentElement.lang || (path.startsWith('/en/') ? 'en' : 'ru');
+  const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || window.location.href;
+
+  const sendEvent = (event, payload) => {
+    const body = JSON.stringify({
+      event,
+      level: 'info',
+      payload: {
+        canonical,
+        lang: pageLang,
+        path,
+        title: document.title,
+        ...payload,
+      },
+      ts: new Date().toISOString(),
+    });
+
+    try {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        if (navigator.sendBeacon(endpoint, blob)) return;
+      }
+    } catch (_) {}
+
+    try {
+      fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => {});
+    } catch (_) {}
+  };
+
+  sendEvent('seo_page_view', {
+    referrer: document.referrer || null,
+    source: 'static_html',
+  });
+
+  document.addEventListener('click', (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+    if (!link) return;
+
+    const href = link.getAttribute('href') || '';
+    const cta = link.getAttribute('data-seo-cta') ||
+      (link.classList.contains('tg-smart') ? 'telegram' : '') ||
+      (/\/(?:en\/)?app\/studio/.test(new URL(href, window.location.href).pathname) ? 'studio' : '');
+
+    if (!cta) return;
+
+    sendEvent('seo_cta_click', {
+      cta,
+      href: new URL(href, window.location.href).toString(),
+      start: link.getAttribute('data-tg-start') || null,
+      text: (link.textContent || '').trim().slice(0, 120),
+    });
+  }, true);
+})();
+
 // Mobile nav toggle
 const navToggle = document.querySelector('.nav__toggle');
 const navMenu = document.getElementById('nav-menu');

@@ -6,7 +6,7 @@ export const staticLandingContent = {
   },
   assets: {
     css: "styles.css?v=53",
-    script: "script.js?v=6",
+    script: "script.js?v=7",
     logo: "logo.png?v=2",
     favicon: {
       png120: "favicon.png",
