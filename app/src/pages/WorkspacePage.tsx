@@ -11679,7 +11679,7 @@ function WorkspaceModalVideoPlayer({
     setDuration(0);
     setIsPlaying(autoPlay);
     setIsActuallyMuted(shouldPreferMutedAutoplay || safeVolume <= 0);
-  }, [autoPlay, safeVolume, shouldPreferMutedAutoplay, videoKey]);
+  }, [autoPlay, shouldPreferMutedAutoplay, videoKey]);
 
   useEffect(() => {
     const element = localVideoRef.current;
