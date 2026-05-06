@@ -1912,6 +1912,21 @@ const restoreAdsflowStartSubscriptionAfterBootstrap = async (details, bootstrapP
         });
     }
 };
+const fetchAdsflowSubscriptionDetailsForWebMutation = async (externalUserId, user) => fetchAdsflowSubscriptionDetailsForBootstrap(externalUserId, user).catch((error) => {
+    console.warn("[studio] Failed to load pre-mutation AdsFlow subscription details", {
+        error: error instanceof Error ? error.message : "Unknown error.",
+    });
+    return null;
+});
+const enrichWorkspaceProfileAfterAdsflowWebMutation = async (payload, rawUserId, subscriptionDetails) => {
+    const rawProfile = buildWorkspaceProfile(payload);
+    const enrichedProfile = await enrichWorkspaceProfile(payload, {
+        rawUserId,
+    });
+    const profile = applyWorkspaceSubscriptionDetailsToProfile(enrichedProfile, subscriptionDetails);
+    await restoreAdsflowStartSubscriptionAfterBootstrap(subscriptionDetails, rawProfile);
+    return profile;
+};
 const enrichWorkspaceProfile = async (payload, options) => {
     const profile = buildWorkspaceProfile(payload);
     if (profile.startPlanUsed && (profile.plan === "FREE" || profile.plan === "START" || profile.expiresAt)) {
@@ -2477,6 +2492,7 @@ const fetchAdsflowSegmentImageUpscaleJobStatus = async (jobId, user) => {
 };
 const consumeWorkspaceGenerationCredit = async (user, amount = 1, language) => {
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payloadText = await postAdsflowText("/api/web/credits/consume", {
         admin_token: env.adsflowAdminToken,
         amount: Math.max(1, Math.trunc(amount || 1)),
@@ -2495,9 +2511,7 @@ const consumeWorkspaceGenerationCredit = async (user, amount = 1, language) => {
             purchased: Math.max(0, Number(payload.consumed.purchased ?? 0)),
             subscription: Math.max(0, Number(payload.consumed.subscription ?? 0)),
         },
-        profile: await enrichWorkspaceProfile(payload.user, {
-            rawUserId: extractAdsflowUserId(payloadText),
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user, extractAdsflowUserId(payloadText), subscriptionDetails),
     };
 };
 const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
@@ -2505,6 +2519,7 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
         return buildWorkspaceProfile();
     }
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payloadText = await postAdsflowText("/api/web/credits/refund", {
         admin_token: env.adsflowAdminToken,
         consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
@@ -2519,9 +2534,7 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
     if (!payload?.user) {
         throw new Error("AdsFlow did not return refunded web profile.");
     }
-    return await enrichWorkspaceProfile(payload.user, {
-        rawUserId: extractAdsflowUserId(payloadText),
-    });
+    return await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user, extractAdsflowUserId(payloadText), subscriptionDetails);
 };
 export async function getWorkspaceBootstrap(user) {
     const externalUserId = await resolveStudioExternalUserId(user);
@@ -2953,6 +2966,7 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
     const normalizedFileName = normalizeStudioGeneratedImageFileName(options?.fileName, normalizedMimeType) ||
         `segment-image-edit-${(normalizedSegmentIndex ?? 0) + 1}${getStudioGeneratedImageExtension(normalizedMimeType)}`;
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const imageAssetId = normalizedImageAssetId
         ? normalizedImageAssetId
         : await uploadStudioMediaAsset(user, {
@@ -3006,9 +3020,7 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
     }
     return {
         jobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
     };
 }
@@ -3035,6 +3047,7 @@ export async function createStudioSegmentImageUpscaleJob(imageDataUrl, user, opt
         segmentIndex: normalizedSegmentIndex,
     });
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const imageAssetId = normalizedImageAssetId
         ? normalizedImageAssetId
         : await uploadStudioMediaAsset(user, {
@@ -3071,9 +3084,7 @@ export async function createStudioSegmentImageUpscaleJob(imageDataUrl, user, opt
     }
     return {
         jobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
     };
 }
@@ -3224,6 +3235,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
         admin_token: env.adsflowAdminToken,
         credit_cost: requiredCredits,
@@ -3242,9 +3254,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     }
     return {
         jobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
     };
 }
@@ -3263,6 +3273,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-video/jobs", {
         admin_token: env.adsflowAdminToken,
         credit_cost: requiredCredits,
@@ -3281,9 +3292,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     }
     return {
         jobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
     };
 }
@@ -3312,6 +3321,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const customVideoAssetId = normalizedCustomVideoAssetId
         ? normalizedCustomVideoAssetId
         : normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
@@ -3355,9 +3365,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     }
     return {
         jobId,
-        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-        }),
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
     };
 }
