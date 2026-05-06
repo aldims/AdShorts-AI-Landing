@@ -87,6 +87,42 @@ const appMessages = defineMessages({
   },
 });
 
+const publicSiteOrigin = "https://adshortsai.com";
+const indexablePublicPathnames = new Set(["/", "/pricing", "/examples"]);
+
+const normalizeAppPathnameForMeta = (pathname: string) => {
+  const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  if (normalizedPathname === "/") return "/";
+  return normalizedPathname.replace(/\/+$/, "") || "/";
+};
+
+const ensureNamedMeta = (name: string) => {
+  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = name;
+    document.head.appendChild(meta);
+  }
+  return meta;
+};
+
+const ensureCanonicalLink = () => {
+  let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "canonical";
+    document.head.appendChild(link);
+  }
+  return link;
+};
+
+const setPropertyMeta = (property: string, content: string) => {
+  const meta = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
+  if (meta) {
+    meta.content = content;
+  }
+};
+
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 const isAbortLikeError = (error: unknown) =>
   error instanceof DOMException
@@ -371,13 +407,24 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    document.title = appMessages.title[locale];
+    const title = appMessages.title[locale];
+    const description = appMessages.metaDescription[locale];
+    const normalizedAppPathname = normalizeAppPathnameForMeta(appPathname);
+    const isIndexablePublicPage = indexablePublicPathnames.has(normalizedAppPathname);
+    const canonicalPath = localizePath(isIndexablePublicPage ? normalizedAppPathname : "/app/studio");
+
+    document.title = title;
 
     const metaDescription = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.content = appMessages.metaDescription[locale];
+      metaDescription.content = description;
     }
-  }, [locale]);
+
+    ensureNamedMeta("robots").content = isIndexablePublicPage ? "index, follow" : "noindex, nofollow";
+    ensureCanonicalLink().href = `${publicSiteOrigin}${canonicalPath}`;
+    setPropertyMeta("og:title", title);
+    setPropertyMeta("og:description", description);
+  }, [appPathname, locale, localizePath]);
 
   return (
     <LocaleProvider locale={locale}>

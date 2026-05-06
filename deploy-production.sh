@@ -377,12 +377,6 @@ production_blocks = f"""https://adshortsai.com {{
     header @html Pragma "no-cache"
     header @html Expires "0"
 
-    redir /en /en/ 301
-    redir /pricing /pricing/ 301
-    redir /en/pricing /en/pricing/ 301
-    redir /examples /examples/ 301
-    redir /en/examples /en/examples/ 301
-
     handle /api/* {{
         reverse_proxy 127.0.0.1:{prod_api_port}
     }}
@@ -402,7 +396,7 @@ production_blocks = f"""https://adshortsai.com {{
         file_server
     }}
 
-    @app_routes path /app* /en/app* /hero-background-test* /en/hero-background-test*
+    @app_routes path / /en /en/ /app* /en/app* /pricing* /en/pricing* /examples* /en/examples* /hero-background-test* /en/hero-background-test*
     handle @app_routes {{
         root * {prod_app_dir}/dist
         rewrite * /index.html

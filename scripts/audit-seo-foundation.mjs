@@ -54,7 +54,8 @@ for (const pagePath of criticalPages) {
 
 const appShell = await readRootFile("app/index.html");
 assert(!/app staging/i.test(appShell), "app/index.html: contains staging description");
-assert(/<meta name="robots" content="noindex, nofollow"/i.test(appShell), "app/index.html: app shell should be noindex");
+assert(/<meta name="robots" content="index, follow"/i.test(appShell), "app/index.html: public app shell should be indexable");
+assert(/<link rel="canonical" href="https:\/\/adshortsai\.com\/"/i.test(appShell), "app/index.html: public app shell should canonicalize to the landing page");
 
 const sitemap = await readRootFile("sitemap.xml");
 const sitemapUrls = [...sitemap.matchAll(/<loc>(https:\/\/adshortsai\.com\/[^<]*)<\/loc>/g)].map((match) => match[1]);
@@ -89,12 +90,8 @@ for (const url of sitemapUrls) {
 
 const deployProduction = await readRootFile("deploy-production.sh");
 assert(
-  /@app_routes path \/app\* \/en\/app\*/.test(deployProduction),
-  "deploy-production.sh: app routes must be limited to app surfaces",
-);
-assert(
-  !/@app_routes path[^\n]*(?: \/ |\/pricing\*|\/examples\*)/.test(deployProduction),
-  "deploy-production.sh: SEO pages are still routed to the SPA app shell",
+  /@app_routes path \/ \/en \/en\/ \/app\* \/en\/app\* \/pricing\* \/en\/pricing\* \/examples\* \/en\/examples\*/.test(deployProduction),
+  "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
 );
 assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html =404/.test(deployProduction), "deploy-production.sh: static fallback should return real 404");
 
