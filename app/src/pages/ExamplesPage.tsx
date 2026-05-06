@@ -473,21 +473,6 @@ function ExampleVideoPreview({
   }, [isInViewport, playbackMode]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !isInViewport || playbackMode === "sound") {
-      return;
-    }
-
-    if (video.preload !== "auto") {
-      video.preload = "auto";
-    }
-
-    if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) {
-      video.load();
-    }
-  }, [example.videoSrc, isInViewport, playbackMode]);
-
-  useEffect(() => {
     setPlaybackMode("paused");
   }, [example.videoSrc]);
 
@@ -511,6 +496,16 @@ function ExampleVideoPreview({
     return () => window.removeEventListener(EXAMPLE_PREVIEW_PLAY_EVENT, handleExternalPreviewPlay as EventListener);
   }, [example.id]);
 
+  const prepareVideoPlayback = (video: HTMLVideoElement) => {
+    if (video.preload !== "auto") {
+      video.preload = "auto";
+    }
+
+    if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+      video.load();
+    }
+  };
+
   const handlePreviewClick = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -522,6 +517,7 @@ function ExampleVideoPreview({
     }
 
     window.dispatchEvent(new CustomEvent(EXAMPLE_PREVIEW_PLAY_EVENT, { detail: { id: example.id } }));
+    prepareVideoPlayback(video);
     if (video.ended || playbackMode !== "sound") {
       video.currentTime = 0;
     }
@@ -543,6 +539,7 @@ function ExampleVideoPreview({
       return;
     }
 
+    prepareVideoPlayback(video);
     video.currentTime = 0;
     video.defaultMuted = true;
     video.muted = true;
@@ -574,7 +571,7 @@ function ExampleVideoPreview({
         muted={playbackMode !== "sound"}
         loop={playbackMode !== "sound"}
         playsInline
-        preload={isInViewport ? "auto" : "none"}
+        preload="none"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onEnded={() => {

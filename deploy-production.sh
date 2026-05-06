@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 RELEASE_DIR="$ROOT_DIR/.codex-tmp/production-release"
 APP_DIR="$RELEASE_DIR/app"
-LOCAL_EXAMPLES_DIR="$APP_DIR/data/local-examples"
+LOCAL_EXAMPLES_DIR="$ROOT_DIR/app/data/local-examples"
 
 PROD_SSH="${PROD_SSH:-aldima@158.160.125.225}"
 PROD_ROOT_DIR="${PROD_ROOT_DIR:-/home/aldima/AdShorts-AI-production}"

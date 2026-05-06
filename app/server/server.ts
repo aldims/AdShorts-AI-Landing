@@ -102,6 +102,7 @@ import {
 } from "./payments.js";
 import {
   deleteLocalExample,
+  getLocalExamplePosterAsset,
   getLocalExampleVideoAsset,
   getLocalExamplesState,
   LocalExamplesPermissionError,
@@ -1026,13 +1027,9 @@ app.delete("/api/examples/local/:exampleId", async (req, res) => {
 });
 
 app.get("/api/examples/local-video/:exampleId", async (req, res) => {
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
-
   try {
-    const asset = await getLocalExampleVideoAsset(session?.user ?? null, req.params.exampleId);
-    res.setHeader("Cache-Control", "private, no-store");
+    const asset = await getLocalExampleVideoAsset(null, req.params.exampleId);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.type(asset.contentType);
     await new Promise<void>((resolve, reject) => {
       res.sendFile(asset.absolutePath, (error) => {
@@ -1049,6 +1046,36 @@ app.get("/api/examples/local-video/:exampleId", async (req, res) => {
     if (!res.headersSent) {
       res.status(404).json({
         error: error instanceof Error ? error.message : "Failed to stream local example video.",
+      });
+      return;
+    }
+
+    if (!res.destroyed) {
+      res.destroy();
+    }
+  }
+});
+
+app.get("/api/examples/local-poster/:exampleId", async (req, res) => {
+  try {
+    const asset = await getLocalExamplePosterAsset(null, req.params.exampleId);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.type(asset.contentType);
+    await new Promise<void>((resolve, reject) => {
+      res.sendFile(asset.absolutePath, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  } catch (error) {
+    console.error("[examples] Failed to send local example poster", error);
+    if (!res.headersSent) {
+      res.status(404).json({
+        error: error instanceof Error ? error.message : "Failed to send local example poster.",
       });
       return;
     }
