@@ -53,7 +53,9 @@ npm run build
 
 if [ "${RUN_TESTS:-0}" = "1" ]; then
   echo "[production] tests"
-  npm test
+  ADSFLOW_API_BASE_URL="${ADSFLOW_API_BASE_URL:-https://api.adshortsai.com}" \
+    ADSFLOW_ADMIN_TOKEN="${ADSFLOW_ADMIN_TOKEN:-test-token}" \
+    npm test
 fi
 
 echo "[production] check static pages"
@@ -365,12 +367,12 @@ production_blocks = f"""https://adshortsai.com {{
     }}
 
     @app_assets path /background/* /google-g-logo.svg /assets/* /voice-previews/* /icons/* /ui/*
-    @static_assets path /styles.css /script.js /favicon.svg /favicon.ico /favicon.png /favicon-*.png /logo.png /hero_image.png /hero_image.webp /background-aurora.svg /icons.svg /google-g-logo.svg /telegram-2019-logo.svg /hybrid.png /hybrid_icon.svg /og-image.svg /flags/* /1ru.mp4 /2ru.mp4 /3ru.mp4 /1en.mp4 /2en.mp4 /3en.mp4 /sample1.mp4 /sample1_original.mp4 /sample2.mp4 /sample2_original.mp4 /sample3.mp4 /sample3_original.mp4 /robots.txt /sitemap.xml /yandex_98ced54b6a337450.html /yandex_b95e4ede4fd42a24.html
+    @static_assets path /styles.css /script.js /favicon.svg /favicon.ico /favicon.png /favicon-*.png /logo.png /hero_image.png /hero_image.webp /background-aurora.svg /icons.svg /google-g-logo.svg /telegram-2019-logo.svg /hybrid.png /hybrid_icon.svg /og-image.svg /flags/* /1ru.mp4 /2ru.mp4 /3ru.mp4 /1en.mp4 /2en.mp4 /3en.mp4 /sample1.mp4 /sample1_original.mp4 /sample2.mp4 /sample2_original.mp4 /sample3.mp4 /sample3_original.mp4
 
     header @app_assets Cache-Control "public, max-age=31536000, immutable"
     header @static_assets Cache-Control "public, max-age=31536000, immutable"
 
-    @html not path /background/* /google-g-logo.svg /assets/* /voice-previews/* /icons/* /ui/* /styles.css /script.js /favicon.svg /favicon.ico /favicon.png /favicon-*.png /logo.png /hero_image.png /hero_image.webp /background-aurora.svg /icons.svg /google-g-logo.svg /telegram-2019-logo.svg /hybrid.png /hybrid_icon.svg /og-image.svg /flags/* /1ru.mp4 /2ru.mp4 /3ru.mp4 /1en.mp4 /2en.mp4 /3en.mp4 /sample1.mp4 /sample1_original.mp4 /sample2.mp4 /sample2_original.mp4 /sample3.mp4 /sample3_original.mp4 /robots.txt /sitemap.xml /yandex_98ced54b6a337450.html /yandex_b95e4ede4fd42a24.html /api/* /.well-known/acme-challenge/*
+    @html not path /background/* /google-g-logo.svg /assets/* /voice-previews/* /icons/* /ui/* /styles.css /script.js /favicon.svg /favicon.ico /favicon.png /favicon-*.png /logo.png /hero_image.png /hero_image.webp /background-aurora.svg /icons.svg /google-g-logo.svg /telegram-2019-logo.svg /hybrid.png /hybrid_icon.svg /og-image.svg /flags/* /1ru.mp4 /2ru.mp4 /3ru.mp4 /1en.mp4 /2en.mp4 /3en.mp4 /sample1.mp4 /sample1_original.mp4 /sample2.mp4 /sample2_original.mp4 /sample3.mp4 /sample3_original.mp4 /api/* /.well-known/acme-challenge/*
     header @html Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     header @html Pragma "no-cache"
     header @html Expires "0"
