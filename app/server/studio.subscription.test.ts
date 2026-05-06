@@ -30,7 +30,9 @@ describe("studio subscription expiry resolution", () => {
 
     expect(details).toEqual({
       expiresAt: "2026-05-02T15:30:00.000Z",
+      plan: "PRO",
       startPlanUsed: true,
+      userId: null,
     });
   });
 
@@ -56,7 +58,9 @@ describe("studio subscription expiry resolution", () => {
 
     expect(details).toEqual({
       expiresAt: "2026-05-10T09:45:00.000Z",
+      plan: "ULTRA",
       startPlanUsed: false,
+      userId: null,
     });
   });
 
@@ -77,7 +81,9 @@ describe("studio subscription expiry resolution", () => {
 
     expect(details).toEqual({
       expiresAt: "2026-06-01T00:00:00.000Z",
+      plan: "ULTRA",
       startPlanUsed: false,
+      userId: null,
     });
   });
 
@@ -98,7 +104,27 @@ describe("studio subscription expiry resolution", () => {
 
     expect(details).toEqual({
       expiresAt: null,
+      plan: "START",
       startPlanUsed: true,
+      userId: null,
+    });
+  });
+
+  it("treats manually assigned START as used even without a payment record", () => {
+    const details = resolveWorkspaceSubscriptionDetailsFromAdminPayload({
+      payments: [],
+      user: {
+        subscription_expires_at: null,
+        subscription_type: "start",
+        user_id: "8005260980905781303",
+      },
+    });
+
+    expect(details).toEqual({
+      expiresAt: null,
+      plan: "START",
+      startPlanUsed: true,
+      userId: "8005260980905781303",
     });
   });
 });

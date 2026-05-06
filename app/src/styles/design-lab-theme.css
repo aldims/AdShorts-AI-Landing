@@ -15398,6 +15398,125 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .site-header:not(.site-header--workspace) .site-header__inner {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    align-items: center;
+    justify-items: stretch;
+    column-gap: 8px;
+    row-gap: 8px;
+    width: calc(100% - 24px);
+    min-height: 0;
+    padding: 8px 0 10px;
+  }
+
+  .site-header:not(.site-header--workspace) .brand {
+    grid-area: brand;
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+    transform: none;
+    gap: 0;
+  }
+
+  .site-header:not(.site-header--workspace) .brand img {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .site-header:not(.site-header--workspace) .brand span {
+    display: none;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav {
+    grid-area: nav;
+    width: 100%;
+    max-width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px;
+    border-radius: 999px;
+    scrollbar-width: none;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__item,
+  .site-header:not(.site-header--workspace) .site-nav__item--submenu {
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 0.76rem;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__menu-shell {
+    flex: 0 0 auto;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__actions {
+    grid-area: actions;
+    display: flex;
+    grid-template-columns: none;
+    align-items: center;
+    justify-content: flex-end;
+    justify-self: stretch;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__actions .btn,
+  .site-header:not(.site-header--workspace) .site-header__actions .language-switcher,
+  .site-header:not(.site-header--workspace) .site-header__actions .language-switcher__trigger {
+    width: auto;
+  }
+
+  .site-header:not(.site-header--workspace) .language-switcher__trigger,
+  .site-header:not(.site-header--workspace) .site-header__plan,
+  .site-header:not(.site-header--workspace) .site-header__credits {
+    min-height: 32px;
+    padding: 0 7px;
+    gap: 5px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+  }
+
+  .site-header:not(.site-header--workspace) .language-switcher__trigger {
+    min-width: 52px;
+  }
+
+  .site-header:not(.site-header--workspace) .language-switcher__trigger svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__plan strong,
+  .site-header:not(.site-header--workspace) .site-header__credits strong {
+    font-size: 0.68rem;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__account {
+    width: 34px;
+    height: 34px;
+    font-size: 0.72rem;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__signin {
+    min-height: 36px;
+    padding: 0 14px;
+    white-space: nowrap;
+  }
+
   .site-header--workspace .site-header__inner {
     grid-template-columns: 44px minmax(0, 1fr) auto;
     gap: 8px;
@@ -15454,6 +15573,47 @@ textarea {
   .site-header--workspace .site-header__account {
     width: 38px;
     height: 38px;
+  }
+
+  .lp-section--workflow .steps-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    margin-top: 30px !important;
+  }
+
+  .lp-section--workflow .step-card {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-areas:
+      "num title"
+      "num text";
+    align-items: center;
+    column-gap: 16px;
+    min-height: 0;
+    padding: 18px !important;
+    border-radius: 22px !important;
+  }
+
+  .lp-section--workflow .step-card__num {
+    grid-area: num;
+    width: 54px !important;
+    height: 54px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .lp-section--workflow .step-card h3 {
+    grid-area: title;
+    margin: 0 !important;
+    font-size: 1.14rem !important;
+    line-height: 1.14 !important;
+    letter-spacing: -0.04em !important;
+  }
+
+  .lp-section--workflow .step-card p {
+    grid-area: text;
+    margin: 6px 0 0 !important;
+    font-size: 0.88rem !important;
+    line-height: 1.42 !important;
   }
 
   .landing-refine-head__line {
@@ -33200,5 +33360,202 @@ html, body {
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-library-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Final mobile landing corrections: keep late landing overrides from reverting cards to narrow columns. */
+@media (max-width: 640px) {
+  .route-page--layered-hero .hero {
+    padding-top: 150px !important;
+  }
+
+  .route-page--layered-hero .lp-section {
+    scroll-margin-top: 148px;
+  }
+
+  .route-page--layered-hero .section--publish-regular.lp-section,
+  .route-page--layered-hero .lp-section--pricing {
+    padding-top: 138px !important;
+  }
+
+  .section--publish-regular .landing-publish-regular__grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    margin-top: 30px !important;
+  }
+
+  .lp-section .landing-publish-regular__card {
+    display: grid !important;
+    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-areas:
+      "icon title"
+      "icon text";
+    align-items: center;
+    column-gap: 16px;
+    min-height: 0;
+    padding: 18px !important;
+    border-radius: 22px !important;
+  }
+
+  .lp-section .landing-publish-regular__card:hover {
+    transform: none !important;
+  }
+
+  .landing-publish-regular__card-icon {
+    grid-area: icon;
+    width: 54px;
+    height: 54px;
+    margin: 0;
+    border-radius: 16px;
+  }
+
+  .lp-section .landing-publish-regular__card h3 {
+    grid-area: title;
+    margin: 0 !important;
+    font-size: 1.14rem !important;
+    line-height: 1.16 !important;
+    letter-spacing: -0.04em !important;
+  }
+
+  .lp-section .landing-publish-regular__card p {
+    grid-area: text;
+    margin: 6px 0 0 !important;
+    font-size: 0.88rem !important;
+    line-height: 1.42 !important;
+  }
+
+  .lp-section--pricing .plan-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    margin-top: 30px !important;
+  }
+
+  .lp-section--pricing .plan-card {
+    display: grid !important;
+    grid-template-columns: minmax(126px, 0.42fr) minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "price tagline"
+      "price output"
+      "divider divider"
+      "features features"
+      "cta cta";
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 10px;
+    padding: 18px !important;
+    border-radius: 22px !important;
+  }
+
+  .lp-section--pricing .plan-card:hover {
+    transform: none !important;
+  }
+
+  .lp-section--pricing .plan-card__header {
+    grid-area: header;
+    justify-content: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+
+  .lp-section--pricing .plan-card__price {
+    grid-area: price;
+    align-items: center;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .lp-section--pricing .plan-card strong {
+    font-size: clamp(1.68rem, 8vw, 2.05rem) !important;
+    line-height: 0.96 !important;
+    white-space: nowrap;
+  }
+
+  .lp-section--pricing .plan-card__tagline {
+    grid-area: tagline;
+    font-size: 0.88rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .lp-section--pricing .plan-card__output {
+    grid-area: output;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .lp-section--pricing .plan-card__output span {
+    font-size: 0.9rem;
+  }
+
+  .lp-section--pricing .plan-card__output small {
+    font-size: 0.76rem;
+    text-align: left;
+  }
+
+  .lp-section--pricing .plan-card__divider {
+    grid-area: divider;
+    margin: 4px 0 !important;
+  }
+
+  .lp-section--pricing .plan-card__features {
+    grid-area: features;
+    flex: none;
+    gap: 8px;
+  }
+
+  .lp-section--pricing .plan-card__features li {
+    align-items: flex-start;
+    font-size: 0.86rem !important;
+    line-height: 1.32 !important;
+  }
+
+  .lp-section--pricing .plan-card__cta {
+    grid-area: cta;
+    margin-top: 4px;
+    padding: 11px 16px;
+    border-radius: 13px;
+  }
+}
+
+@media (max-width: 340px) {
+  .site-header:not(.site-header--workspace) .site-header__actions {
+    gap: 4px;
+  }
+
+  .site-header:not(.site-header--workspace) .language-switcher__trigger {
+    min-width: 48px;
+    padding: 0 6px;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__plan,
+  .site-header:not(.site-header--workspace) .site-header__credits {
+    min-height: 30px;
+    padding: 0 7px;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__plan > span:not(.site-header__plan-tooltip),
+  .site-header:not(.site-header--workspace) .site-header__credits-label {
+    display: none;
+  }
+
+  .site-header:not(.site-header--workspace) .site-header__account {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 380px) {
+  .lp-section--pricing .plan-card {
+    grid-template-columns: minmax(110px, 0.4fr) minmax(0, 1fr);
+    column-gap: 12px;
+  }
+
+  .lp-section--pricing .plan-card strong {
+    font-size: 1.55rem !important;
   }
 }

@@ -126,6 +126,8 @@ type AdsflowWebUserPayload = {
 
 type AdsflowAdminUserDetailsResponse = {
   user?: {
+    user_id?: number | string | null;
+    username?: string | null;
     subscription_type?: string | null;
     subscription_expires_at?: string | null;
   };
@@ -133,6 +135,12 @@ type AdsflowAdminUserDetailsResponse = {
     paid_at?: string | null;
     plan_code?: string | null;
     status?: string | null;
+  }>;
+};
+
+type AdsflowAdminUsersListResponse = {
+  items?: Array<NonNullable<AdsflowAdminUserDetailsResponse["user"]> & {
+    first_name?: string | null;
   }>;
 };
 
@@ -286,19 +294,25 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
   const successfulPayments = Array.isArray(payload.payments)
     ? payload.payments.filter((payment) => String(payment?.status ?? "").trim().toLowerCase() === "succeeded")
     : [];
-  const startPlanUsed = successfulPayments.some(
+  const hasSuccessfulStartPayment = successfulPayments.some(
     (payment) => String(payment?.plan_code ?? "").trim().toLowerCase() === "start",
   );
 
   const currentPlan =
     normalizeWorkspaceSubscriptionPlanCode(payload.user?.subscription_type) ??
     normalizeWorkspaceSubscriptionPlanCode(options?.currentPlanHint);
+  const userId = getWorkspaceSubscriptionExpiryCacheKey(payload.user?.user_id) ?? null;
+  const startPlanUsed = hasSuccessfulStartPayment || currentPlan === "start";
+  const resolvePlanLabel = (planCode: "start" | "pro" | "ultra" | null | undefined) =>
+    planCode ? planCode.toUpperCase() : null;
 
   const directExpiry = currentPlan === "start" ? null : normalizeGenerationText(payload.user?.subscription_expires_at) || null;
   if (directExpiry) {
     return {
       expiresAt: directExpiry,
+      plan: resolvePlanLabel(currentPlan),
       startPlanUsed,
+      userId,
     };
   }
 
@@ -331,7 +345,9 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
   if (!planDurationDays || !latestSuccessfulPayment) {
     return {
       expiresAt: null,
+      plan: resolvePlanLabel(effectivePlanCode),
       startPlanUsed,
+      userId,
     };
   }
 
@@ -340,7 +356,9 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (
 
   return {
     expiresAt: derivedExpiry.toISOString(),
+    plan: resolvePlanLabel(effectivePlanCode),
     startPlanUsed,
+    userId,
   };
 };
 
@@ -457,7 +475,9 @@ type WorkspaceBootstrapCacheEntry = {
 
 type WorkspaceSubscriptionDetails = {
   expiresAt: string | null;
+  plan: string | null;
   startPlanUsed: boolean;
+  userId: string | null;
 };
 
 type WorkspaceSubscriptionExpiryCacheEntry = {
@@ -615,7 +635,9 @@ const WORKSPACE_SUBSCRIPTION_EXPIRY_CACHE_TTL_MS = 10 * 60_000;
 const WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS = 5_000;
 const FALLBACK_WORKSPACE_SUBSCRIPTION_DETAILS: WorkspaceSubscriptionDetails = {
   expiresAt: null,
+  plan: null,
   startPlanUsed: false,
+  userId: null,
 };
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
@@ -1458,6 +1480,22 @@ const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfil
     expiresAt: plan === "START" ? null : normalizeGenerationText(payload?.subscription_expires_at) || null,
     plan,
     startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
+  };
+};
+
+export const applyWorkspaceSubscriptionDetailsToProfile = (
+  profile: WorkspaceProfile,
+  details: WorkspaceSubscriptionDetails | null | undefined,
+): WorkspaceProfile => {
+  const normalizedPlan = String(details?.plan ?? "").trim().toUpperCase();
+  const hasAdminPlan = normalizedPlan === "START" || normalizedPlan === "PRO" || normalizedPlan === "ULTRA";
+  const nextPlan = hasAdminPlan ? normalizedPlan : profile.plan;
+
+  return {
+    ...profile,
+    expiresAt: nextPlan === "START" ? null : profile.expiresAt ?? details?.expiresAt ?? null,
+    plan: nextPlan,
+    startPlanUsed: profile.startPlanUsed || Boolean(details?.startPlanUsed) || nextPlan === "START",
   };
 };
 
@@ -2784,6 +2822,88 @@ const fetchAdsflowSubscriptionDetails = async (
   return request;
 };
 
+const fetchAdsflowSubscriptionDetailsForBootstrap = async (
+  externalUserId: string,
+  user: StudioUser,
+): Promise<WorkspaceSubscriptionDetails | null> => {
+  const externalAdsflowUserId = getWorkspaceSubscriptionExpiryCacheKey(externalUserId);
+  if (externalAdsflowUserId) {
+    return fetchAdsflowSubscriptionDetails(externalAdsflowUserId);
+  }
+
+  const email = normalizeGenerationText(user.email).toLowerCase();
+  if (!email) {
+    return null;
+  }
+
+  const payload = await fetchAdsflowJson<AdsflowAdminUsersListResponse>(
+    buildAdsflowUrl("/api/admin/users", {
+      page_size: "5",
+      q: email,
+    }),
+    {
+      headers: {
+        "X-Admin-Token": env.adsflowAdminToken ?? "",
+      },
+    },
+    {
+      retryDelaysMs: [],
+      silentStatuses: [404],
+      timeoutMs: WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS,
+    },
+  ).catch(() => null);
+
+  const matchingUser = payload?.items?.find((item) => normalizeGenerationText(item.username).toLowerCase() === email);
+
+  if (!matchingUser) {
+    return null;
+  }
+
+  const details = resolveWorkspaceSubscriptionDetailsFromAdminPayload({
+    user: matchingUser,
+  });
+
+  if (details.userId) {
+    setCachedWorkspaceSubscriptionExpiry(details.userId, details);
+  }
+
+  return details;
+};
+
+const restoreAdsflowStartSubscriptionAfterBootstrap = async (
+  details: WorkspaceSubscriptionDetails | null | undefined,
+  bootstrapProfile: WorkspaceProfile,
+) => {
+  if (details?.plan !== "START" || !details.userId || bootstrapProfile.plan === "START") {
+    return;
+  }
+
+  try {
+    await fetchAdsflowJson(
+      buildAdsflowUrl(`/api/admin/users/${encodeURIComponent(details.userId)}/change-subscription`, {
+        days: "30",
+        subscription_type: "start",
+      }),
+      {
+        headers: {
+          "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
+        method: "POST",
+      },
+      {
+        retryDelaysMs: [],
+        timeoutMs: WORKSPACE_SUBSCRIPTION_EXPIRY_TIMEOUT_MS,
+      },
+    );
+    setCachedWorkspaceSubscriptionExpiry(details.userId, details);
+  } catch (error) {
+    console.warn("[studio] Failed to restore manual START subscription after AdsFlow bootstrap", {
+      error: error instanceof Error ? error.message : "Unknown error.",
+      userId: details.userId,
+    });
+  }
+};
+
 const enrichWorkspaceProfile = async (
   payload?: AdsflowWebUserPayload,
   options?: { rawUserId?: string | null },
@@ -2797,11 +2917,7 @@ const enrichWorkspaceProfile = async (
     const details = await fetchAdsflowSubscriptionDetails(options?.rawUserId ?? payload?.user_id, {
       currentPlanHint: profile.plan,
     });
-    return {
-      ...profile,
-      expiresAt: profile.expiresAt ?? details.expiresAt,
-      startPlanUsed: profile.startPlanUsed || details.startPlanUsed,
-    };
+    return applyWorkspaceSubscriptionDetailsToProfile(profile, details);
   } catch {
     return profile;
   }
@@ -3601,6 +3717,14 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
     console.error("[studio] Failed to load deleted workspace projects for bootstrap", error);
     return [] as WorkspaceDeletedProjectEntry[];
   });
+  const preBootstrapSubscriptionDetails = await fetchAdsflowSubscriptionDetailsForBootstrap(externalUserId, user).catch(
+    (error) => {
+      console.warn("[studio] Failed to load pre-bootstrap AdsFlow subscription details", {
+        error: error instanceof Error ? error.message : "Unknown error.",
+      });
+      return null;
+    },
+  );
 
   try {
     const payloadText = await postAdsflowTextWithPolicy(
@@ -3626,9 +3750,12 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
       throw new Error("AdsFlow did not return web user profile.");
     }
 
-    const profile = await enrichWorkspaceProfile(payload.user, {
+    const rawBootstrapProfile = buildWorkspaceProfile(payload.user);
+    const bootstrapProfile = await enrichWorkspaceProfile(payload.user, {
       rawUserId: extractAdsflowUserId(payloadText),
     });
+    const profile = applyWorkspaceSubscriptionDetailsToProfile(bootstrapProfile, preBootstrapSubscriptionDetails);
+    await restoreAdsflowStartSubscriptionAfterBootstrap(preBootstrapSubscriptionDetails, rawBootstrapProfile);
 
     const latestHistoryEntry = payload.latest_generation?.job_id
       ? await getWorkspaceGenerationHistoryEntry(user, String(payload.latest_generation.job_id)).catch(() => null)
