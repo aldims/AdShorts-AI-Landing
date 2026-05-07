@@ -34784,7 +34784,68 @@ html, body {
   }
 }
 
-/* Zoom-stable workspace: do not collapse Studio tabs while there is usable inline space. */
+/* Zoom-stable navigation: do not collapse menus while there is usable inline space. */
+@media (min-width: 761px) {
+  .site-header:not(.site-header--workspace) .site-nav {
+    grid-area: nav !important;
+    width: fit-content !important;
+    max-width: min(100%, 720px) !important;
+    padding: 6px !important;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__compact-toggle {
+    display: none !important;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__content,
+  .site-header:not(.site-header--workspace) .site-nav.is-compact-open .site-nav__content {
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    display: flex !important;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    gap: 6px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    overflow: visible !important;
+    scrollbar-gutter: auto;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__content .site-nav__item,
+  .site-header:not(.site-header--workspace) .site-nav__content .site-nav__item--submenu,
+  .site-header:not(.site-header--workspace) .site-nav__content .site-nav__menu-shell {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 0 1 auto !important;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 980px) {
+  .site-header:not(.site-header--workspace) .brand {
+    max-width: min(132px, 18vw) !important;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__item {
+    min-height: 36px !important;
+    padding: 0 12px !important;
+    font-size: 0.78rem !important;
+  }
+
+  .site-header:not(.site-header--workspace) .site-nav__submenu-toggle {
+    width: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+}
+
 @media (min-width: 521px) {
   .site-header--workspace .site-nav {
     grid-area: nav !important;
