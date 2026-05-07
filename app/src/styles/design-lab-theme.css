@@ -33278,7 +33278,7 @@ html, body {
   }
 }
 
-@media (max-width: 1500px) {
+@media (max-width: 760px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
     --studio-segment-editor-panel-width: min(100%, 560px);
     --studio-segment-editor-carousel-width: min(410px, calc((100dvh - 330px) * 9 / 16));
@@ -34781,5 +34781,127 @@ html, body {
 
   .studio-canvas-prompt__chips {
     grid-template-columns: 1fr !important;
+  }
+}
+
+/* Zoom-stable workspace: do not collapse Studio tabs while there is usable inline space. */
+@media (min-width: 521px) {
+  .site-header--workspace .site-nav {
+    grid-area: nav !important;
+    width: fit-content !important;
+    max-width: min(100%, 720px) !important;
+    padding: 6px !important;
+  }
+
+  .site-header--workspace .site-nav__compact-toggle {
+    display: none !important;
+  }
+
+  .site-header--workspace .site-nav__content,
+  .site-header--workspace .site-nav.is-compact-open .site-nav__content {
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    display: flex !important;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    gap: 6px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+    overflow: visible !important;
+    scrollbar-gutter: auto;
+  }
+
+  .site-header--workspace .site-nav__content .site-nav__item,
+  .site-header--workspace .site-nav__content .site-nav__item--submenu,
+  .site-header--workspace .site-nav__content .site-nav__menu-shell {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 0 1 auto !important;
+  }
+}
+
+@media (min-width: 521px) and (max-width: 760px) {
+  .site-header--workspace .brand span,
+  .site-header--workspace .site-header__plan,
+  .site-header--workspace .site-header__credits {
+    display: none !important;
+  }
+
+  .site-header--workspace .site-nav {
+    max-width: min(100%, 560px) !important;
+  }
+
+  .site-header--workspace .site-nav__item {
+    min-height: 36px !important;
+    padding: 0 10px !important;
+    font-size: 0.72rem !important;
+  }
+}
+
+/* Mobile composer: keep all prompt controls visible instead of clipping a fixed-height card. */
+@media (max-width: 640px) {
+  .studio-canvas-route:not(.is-segment-editor) {
+    --studio-prompt-reserve: clamp(238px, 34vh, 312px);
+    --studio-prompt-reserve: clamp(238px, 34dvh, 312px);
+  }
+
+  .studio-canvas-prompt__inner--compact {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: min(54vh, 340px) !important;
+    max-height: min(54dvh, 340px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-layout,
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .studio-canvas-prompt__inner--compact .studio-canvas-prompt__editor-pane {
+    justify-content: start !important;
+  }
+
+  .studio-canvas-prompt__input-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start !important;
+    gap: 10px !important;
+  }
+
+  .studio-canvas-prompt__textarea {
+    min-height: 44px !important;
+    max-height: 96px !important;
+  }
+
+  .studio-canvas-prompt__footer {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .studio-canvas-prompt__submit {
+    width: 100% !important;
+    margin-left: 0 !important;
+    justify-content: stretch !important;
+  }
+
+  .studio-canvas-prompt__btn {
+    width: 100% !important;
+    min-height: 48px !important;
+    height: 48px !important;
+    border-radius: 14px !important;
   }
 }
