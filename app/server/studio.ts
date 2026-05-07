@@ -1,5 +1,5 @@
 import { env } from "./env.js";
-import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import {
   buildWorkspaceMediaAssetRef,
   mergeWorkspaceMediaAssetRefs,
@@ -1240,9 +1240,17 @@ const resolveStudioExternalUserId = async (user: StudioUser) => {
   }
 };
 
+const resolveStudioAuthScopedCacheKey = async (user: StudioUser, externalUserId?: string) => {
+  const resolvedExternalUserId = externalUserId ?? (await resolveStudioExternalUserId(user));
+  return buildAuthScopedCacheKey(user, resolvedExternalUserId) || resolvedExternalUserId;
+};
+
 export async function invalidateWorkspaceBootstrapCache(user: StudioUser): Promise<void> {
   const externalUserId = await resolveStudioExternalUserId(user);
-  workspaceBootstrapCache.delete(externalUserId);
+  const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+  for (const key of new Set([cacheKey, externalUserId])) {
+    workspaceBootstrapCache.delete(key);
+  }
 }
 
 const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
@@ -3732,7 +3740,8 @@ const refundWorkspaceGenerationCredit = async (
 
 export async function getWorkspaceBootstrap(user: StudioUser): Promise<WorkspaceBootstrap> {
   const externalUserId = await resolveStudioExternalUserId(user);
-  const cachedBootstrap = getCachedWorkspaceBootstrap(externalUserId);
+  const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+  const cachedBootstrap = getCachedWorkspaceBootstrap(cacheKey);
   const deletedProjectsPromise = listWorkspaceDeletedProjects(user).catch((error) => {
     console.error("[studio] Failed to load deleted workspace projects for bootstrap", error);
     return [] as WorkspaceDeletedProjectEntry[];
@@ -3799,7 +3808,7 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
       warmStudioGenerationPlayback(latestGeneration.generation, user);
     }
 
-    setCachedWorkspaceBootstrap(externalUserId, bootstrap);
+    setCachedWorkspaceBootstrap(cacheKey, bootstrap);
     return bootstrap;
   } catch (error) {
     console.error("[studio] Falling back to local workspace bootstrap", error);
@@ -5144,7 +5153,8 @@ export async function getStudioVideoProxyTarget(jobId: string, user: StudioUser)
 
 const getCachedWorkspaceProfileForUser = async (user: StudioUser): Promise<WorkspaceProfile> => {
   const externalUserId = await resolveStudioExternalUserId(user);
-  return getCachedWorkspaceBootstrap(externalUserId)?.profile ?? buildWorkspaceProfile();
+  const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+  return getCachedWorkspaceBootstrap(cacheKey)?.profile ?? buildWorkspaceProfile();
 };
 
 const getWaveSpeedSegmentAiVideoJobProfile = async (jobId: string, user: StudioUser): Promise<WorkspaceProfile> => {

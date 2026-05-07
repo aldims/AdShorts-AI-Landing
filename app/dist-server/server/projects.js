@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { env } from "./env.js";
-import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, peekWorkspaceProjectPlaybackAsset, } from "./project-playback.js";
 import { ensureWorkspaceProjectPoster, getWorkspaceProjectPosterCacheKey, } from "./project-posters.js";
@@ -210,6 +210,13 @@ const resolvePreferredExternalUserId = async (user) => {
     catch {
         return buildExternalUserId(user);
     }
+};
+const resolveWorkspaceProjectsCacheIdentity = async (user) => {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    return {
+        cacheKey: buildAuthScopedCacheKey(user, externalUserId) || externalUserId,
+        externalUserId,
+    };
 };
 const fetchBootstrapPayload = async (user, externalUserId) => {
     const resolvedExternalUserId = externalUserId ?? (await resolvePreferredExternalUserId(user));
@@ -742,12 +749,14 @@ export function getWorkspaceProjectVideoProxyTarget(value) {
     return upstreamUrl;
 }
 export async function invalidateWorkspaceProjectsCache(user) {
-    const cacheKey = await resolvePreferredExternalUserId(user);
-    workspaceProjectsCache.delete(cacheKey);
-    workspaceProjectsInFlight.delete(cacheKey);
+    const { cacheKey, externalUserId } = await resolveWorkspaceProjectsCacheIdentity(user);
+    for (const key of new Set([cacheKey, externalUserId])) {
+        workspaceProjectsCache.delete(key);
+        workspaceProjectsInFlight.delete(key);
+    }
 }
 export async function getWorkspaceProjects(user) {
-    const cacheKey = await resolvePreferredExternalUserId(user);
+    const { cacheKey, externalUserId } = await resolveWorkspaceProjectsCacheIdentity(user);
     const cachedEntry = workspaceProjectsCache.get(cacheKey);
     if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
         return cloneWorkspaceProjects(cachedEntry.projects);
@@ -756,7 +765,7 @@ export async function getWorkspaceProjects(user) {
     if (inFlightRequest) {
         return cloneWorkspaceProjects(await inFlightRequest);
     }
-    const request = loadWorkspaceProjects(user, cacheKey)
+    const request = loadWorkspaceProjects(user, externalUserId)
         .then((projects) => {
         workspaceProjectsCache.set(cacheKey, {
             expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,

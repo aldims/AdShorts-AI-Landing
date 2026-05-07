@@ -1,5 +1,5 @@
 import { env } from "./env.js";
-import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
 import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
@@ -627,9 +627,16 @@ const resolveStudioExternalUserId = async (user) => {
         return buildExternalUserId(user);
     }
 };
+const resolveStudioAuthScopedCacheKey = async (user, externalUserId) => {
+    const resolvedExternalUserId = externalUserId ?? (await resolveStudioExternalUserId(user));
+    return buildAuthScopedCacheKey(user, resolvedExternalUserId) || resolvedExternalUserId;
+};
 export async function invalidateWorkspaceBootstrapCache(user) {
     const externalUserId = await resolveStudioExternalUserId(user);
-    workspaceBootstrapCache.delete(externalUserId);
+    const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+    for (const key of new Set([cacheKey, externalUserId])) {
+        workspaceBootstrapCache.delete(key);
+    }
 }
 const buildAdsflowUrl = (path, params) => {
     const url = new URL(path, env.adsflowApiBaseUrl);
@@ -2538,7 +2545,8 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
 };
 export async function getWorkspaceBootstrap(user) {
     const externalUserId = await resolveStudioExternalUserId(user);
-    const cachedBootstrap = getCachedWorkspaceBootstrap(externalUserId);
+    const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+    const cachedBootstrap = getCachedWorkspaceBootstrap(cacheKey);
     const deletedProjectsPromise = listWorkspaceDeletedProjects(user).catch((error) => {
         console.error("[studio] Failed to load deleted workspace projects for bootstrap", error);
         return [];
@@ -2585,7 +2593,7 @@ export async function getWorkspaceBootstrap(user) {
         if (latestGeneration?.generation) {
             warmStudioGenerationPlayback(latestGeneration.generation, user);
         }
-        setCachedWorkspaceBootstrap(externalUserId, bootstrap);
+        setCachedWorkspaceBootstrap(cacheKey, bootstrap);
         return bootstrap;
     }
     catch (error) {
@@ -3641,7 +3649,8 @@ export async function getStudioVideoProxyTarget(jobId, user) {
 }
 const getCachedWorkspaceProfileForUser = async (user) => {
     const externalUserId = await resolveStudioExternalUserId(user);
-    return getCachedWorkspaceBootstrap(externalUserId)?.profile ?? buildWorkspaceProfile();
+    const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
+    return getCachedWorkspaceBootstrap(cacheKey)?.profile ?? buildWorkspaceProfile();
 };
 const getWaveSpeedSegmentAiVideoJobProfile = async (jobId, user) => {
     const context = studioWaveSpeedSegmentAiVideoJobContexts.get(jobId);

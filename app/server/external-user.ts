@@ -82,6 +82,23 @@ export const buildExternalUserId = (user: WorkspaceUser) => {
   throw new Error("Authenticated user identifier is missing.");
 };
 
+export const buildAuthScopedCacheKey = (user: WorkspaceUser, identity?: string | null) => {
+  const userId = normalizeText(user.id);
+  const email = normalizeText(user.email).toLowerCase();
+  const normalizedIdentity = normalizeText(identity);
+  const principal = userId ? `user:${userId}` : email ? `email:${email}` : "";
+
+  if (principal && normalizedIdentity) {
+    return `${principal}|identity:${normalizedIdentity}`;
+  }
+
+  if (principal) {
+    return principal;
+  }
+
+  return normalizedIdentity ? `identity:${normalizedIdentity}` : "";
+};
+
 export async function resolveExternalUserIdentity(user: WorkspaceUser): Promise<ExternalUserIdentity> {
   const userId = normalizeText(user.id);
   const email = normalizeText(user.email).toLowerCase();
