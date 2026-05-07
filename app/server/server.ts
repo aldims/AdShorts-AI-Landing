@@ -34,6 +34,7 @@ import {
   getWorkspaceProjectPosterPath,
   getWorkspaceProjectVideoProxyTarget,
   getWorkspaceProjects,
+  invalidateWorkspaceProjectsCacheByIdentityFragments,
   invalidateWorkspaceProjectsCache,
   WorkspaceProjectNotFoundError,
 } from "./projects.js";
@@ -84,6 +85,7 @@ import {
   getStudioGenerationStatus,
   getStudioVideoProxyTargetByPath,
   getStudioVideoProxyTarget,
+  invalidateWorkspaceBootstrapCacheByIdentityFragments,
   invalidateWorkspaceBootstrapCache,
   improveStudioSegmentAiPhotoPrompt,
   translateStudioTexts,
@@ -111,6 +113,7 @@ import {
 } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { purgeAdminAccountData } from "./admin-account-purge.js";
 import {
   AgencyContactValidationError,
   parseAgencyContactSubmission,
@@ -159,6 +162,36 @@ const validateServerStartup = () => {
 
 const getServerErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
+
+const resolveAdminRequestToken = (req: express.Request) => {
+  const headerToken = req.header("x-admin-token")?.trim();
+  if (headerToken) {
+    return headerToken;
+  }
+
+  const authorization = req.header("authorization")?.trim() ?? "";
+  const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
+  if (bearerMatch?.[1]?.trim()) {
+    return bearerMatch[1].trim();
+  }
+
+  const body = req.body as { admin_token?: unknown } | undefined;
+  return typeof body?.admin_token === "string" ? body.admin_token.trim() : "";
+};
+
+const requireAdminRequest = (req: express.Request, res: express.Response) => {
+  if (!env.adsflowAdminToken) {
+    res.status(503).json({ error: "Admin API token is not configured." });
+    return false;
+  }
+
+  if (resolveAdminRequestToken(req) !== env.adsflowAdminToken) {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+
+  return true;
+};
 
 const allowedCorsOrigins = Array.from(
   new Set(
@@ -767,6 +800,22 @@ const isLocalExampleGoal = (value: string): value is LocalExampleGoal =>
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.post("/api/admin/account-purge", express.json({ limit: "1mb" }), async (req, res) => {
+  if (!requireAdminRequest(req, res)) {
+    return;
+  }
+
+  try {
+    const result = await purgeAdminAccountData(req.body && typeof req.body === "object" ? req.body : {});
+    invalidateWorkspaceProjectsCacheByIdentityFragments(result.cacheFragments);
+    invalidateWorkspaceBootstrapCacheByIdentityFragments(result.cacheFragments);
+    res.json({ ok: true, result });
+  } catch (error) {
+    console.error("[admin] account purge failed:", error);
+    res.status(500).json({ error: getServerErrorMessage(error, "Account purge failed.") });
+  }
 });
 
 app.get("/api/auth/status", (_req, res) => {

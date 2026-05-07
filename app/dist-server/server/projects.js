@@ -755,6 +755,23 @@ export async function invalidateWorkspaceProjectsCache(user) {
         workspaceProjectsInFlight.delete(key);
     }
 }
+export function invalidateWorkspaceProjectsCacheByIdentityFragments(fragments) {
+    const normalizedFragments = fragments.map(normalizeText).filter(Boolean);
+    if (!normalizedFragments.length) {
+        return;
+    }
+    const shouldDelete = (cacheKey) => normalizedFragments.some((fragment) => cacheKey === fragment || cacheKey.includes(fragment));
+    for (const key of workspaceProjectsCache.keys()) {
+        if (shouldDelete(key)) {
+            workspaceProjectsCache.delete(key);
+        }
+    }
+    for (const key of workspaceProjectsInFlight.keys()) {
+        if (shouldDelete(key)) {
+            workspaceProjectsInFlight.delete(key);
+        }
+    }
+}
 export async function getWorkspaceProjects(user) {
     const { cacheKey, externalUserId } = await resolveWorkspaceProjectsCacheIdentity(user);
     const cachedEntry = workspaceProjectsCache.get(cacheKey);

@@ -1253,6 +1253,19 @@ export async function invalidateWorkspaceBootstrapCache(user: StudioUser): Promi
   }
 }
 
+export function invalidateWorkspaceBootstrapCacheByIdentityFragments(fragments: readonly string[]) {
+  const normalizedFragments = fragments.map(normalizePrompt).filter(Boolean);
+  if (!normalizedFragments.length) {
+    return;
+  }
+
+  for (const key of workspaceBootstrapCache.keys()) {
+    if (normalizedFragments.some((fragment) => key === fragment || key.includes(fragment))) {
+      workspaceBootstrapCache.delete(key);
+    }
+  }
+}
+
 const buildAdsflowUrl = (path: string, params?: Record<string, string>) => {
   const url = new URL(path, env.adsflowApiBaseUrl);
 

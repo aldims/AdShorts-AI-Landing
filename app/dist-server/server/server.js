@@ -10,19 +10,20 @@ import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
 import { appendWorkspaceContentPlanIdeas, createWorkspaceContentPlan, deleteWorkspaceContentPlanIdea, deleteWorkspaceContentPlan, getWorkspaceContentPlan, listWorkspaceContentPlans, updateWorkspaceContentPlanIdeaUsedState, } from "./content-plans.js";
 import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, isWorkspacePublishSuccessStatus, startWorkspaceYoutubePublish, } from "./publish.js";
-import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
+import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCacheByIdentityFragments, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import { purgeAdminAccountData } from "./admin-account-purge.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
 import { InternationalPaymentsWaitlistValidationError, appendInternationalPaymentsWaitlistSubmission, notifyInternationalPaymentsWaitlistSubmission, parseInternationalPaymentsWaitlistSubmission, } from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
@@ -54,6 +55,30 @@ const validateServerStartup = () => {
     }
 };
 const getServerErrorMessage = (error, fallback) => error instanceof Error && error.message.trim() ? error.message : fallback;
+const resolveAdminRequestToken = (req) => {
+    const headerToken = req.header("x-admin-token")?.trim();
+    if (headerToken) {
+        return headerToken;
+    }
+    const authorization = req.header("authorization")?.trim() ?? "";
+    const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
+    if (bearerMatch?.[1]?.trim()) {
+        return bearerMatch[1].trim();
+    }
+    const body = req.body;
+    return typeof body?.admin_token === "string" ? body.admin_token.trim() : "";
+};
+const requireAdminRequest = (req, res) => {
+    if (!env.adsflowAdminToken) {
+        res.status(503).json({ error: "Admin API token is not configured." });
+        return false;
+    }
+    if (resolveAdminRequestToken(req) !== env.adsflowAdminToken) {
+        res.status(403).json({ error: "Forbidden" });
+        return false;
+    }
+    return true;
+};
 const allowedCorsOrigins = Array.from(new Set([
     env.appUrl,
     env.authBaseUrl,
@@ -513,6 +538,21 @@ const isLocalExampleGoal = (value) => value === "ads" ||
     value === "expert";
 app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
+});
+app.post("/api/admin/account-purge", express.json({ limit: "1mb" }), async (req, res) => {
+    if (!requireAdminRequest(req, res)) {
+        return;
+    }
+    try {
+        const result = await purgeAdminAccountData(req.body && typeof req.body === "object" ? req.body : {});
+        invalidateWorkspaceProjectsCacheByIdentityFragments(result.cacheFragments);
+        invalidateWorkspaceBootstrapCacheByIdentityFragments(result.cacheFragments);
+        res.json({ ok: true, result });
+    }
+    catch (error) {
+        console.error("[admin] account purge failed:", error);
+        res.status(500).json({ error: getServerErrorMessage(error, "Account purge failed.") });
+    }
 });
 app.get("/api/auth/status", (_req, res) => {
     res.json({

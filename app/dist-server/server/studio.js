@@ -638,6 +638,17 @@ export async function invalidateWorkspaceBootstrapCache(user) {
         workspaceBootstrapCache.delete(key);
     }
 }
+export function invalidateWorkspaceBootstrapCacheByIdentityFragments(fragments) {
+    const normalizedFragments = fragments.map(normalizePrompt).filter(Boolean);
+    if (!normalizedFragments.length) {
+        return;
+    }
+    for (const key of workspaceBootstrapCache.keys()) {
+        if (normalizedFragments.some((fragment) => key === fragment || key.includes(fragment))) {
+            workspaceBootstrapCache.delete(key);
+        }
+    }
+}
 const buildAdsflowUrl = (path, params) => {
     const url = new URL(path, env.adsflowApiBaseUrl);
     Object.entries(params ?? {}).forEach(([key, value]) => {
