@@ -423,7 +423,7 @@ if (accordion) {
 
 // Yandex.Metrika goals for key interactions
 (function initYandexGoals() {
-  const YM_ID = 104655292;
+  const YM_ID = 109093136;
 
   // Определяем язык страницы
   const isEnglish = window.location.pathname.startsWith('/en/');

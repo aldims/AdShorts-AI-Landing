@@ -9,7 +9,7 @@ const requiredLocales = ["ru", "en"];
 const allowedSingleLocaleFiles = new Set(["offer/index.html"]);
 const latestAssetVersions = {
   css: 53,
-  script: 7,
+  script: 8,
 };
 
 const walkHtmlFiles = async (dir) => {
