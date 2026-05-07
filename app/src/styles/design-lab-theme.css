@@ -34083,6 +34083,8 @@ html, body {
 .pricing-max-enterprise,
 .pricing-max-pack,
 .pricing-max-faq-card,
+.pricing-max-section-head,
+.pricing-max-faq__lead,
 .plan-card,
 .examples-modern__catalog-inner,
 .examples-modern__filters-shell,
@@ -34100,7 +34102,6 @@ html, body {
   min-width: 0;
 }
 
-.pricing-max-grid,
 .pricing-max-addons__grid,
 .pricing-max-faq__grid,
 .plan-grid,
@@ -34111,12 +34112,28 @@ html, body {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 }
 
+.pricing-max-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
 .examples-modern__grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 }
 
 .pricing-max-card,
-.pricing-max-card *,
+.pricing-max-card h3,
+.pricing-max-card__head,
+.pricing-max-card__name,
+.pricing-max-card__title-line,
+.pricing-max-card__output,
+.pricing-max-card__output span,
+.pricing-max-card__output small,
+.pricing-max-card__features,
+.pricing-max-card__features li,
+.pricing-max-section-head,
+.pricing-max-section-head *,
+.pricing-max-faq__lead,
+.pricing-max-faq__lead *,
 .pricing-max-enterprise,
 .pricing-max-enterprise *,
 .pricing-max-pack,
@@ -34169,6 +34186,31 @@ html, body {
   min-width: 0;
 }
 
+.pricing-max-card__price {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+  gap: 4px 10px !important;
+  width: 100%;
+  overflow: visible;
+}
+
+.pricing-max-card__price strong {
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.pricing-max-card__price span {
+  min-width: min-content;
+  flex: 0 1 auto;
+  white-space: normal;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
 .examples-modern__filters-shell {
   width: fit-content;
   max-width: 100%;
@@ -34216,6 +34258,10 @@ html, body {
   }
 
 @media (max-width: 1180px) {
+  .pricing-max-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .pricing-max-card__head {
     display: grid !important;
     gap: 10px !important;
@@ -34240,6 +34286,12 @@ html, body {
     justify-self: start !important;
     max-width: 100% !important;
     transform: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .pricing-max-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

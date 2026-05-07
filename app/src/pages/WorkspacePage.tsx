@@ -15307,7 +15307,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         return;
       }
 
-      if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
+      if (!response.ok || !payload?.data?.widget?.confirmationToken) {
         throw new Error(errorMessage);
       }
 
@@ -15322,10 +15322,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           onError: setWorkspaceCheckoutError,
         });
         return;
-      }
-
-      if (payload.data.url && typeof window !== "undefined") {
-        window.location.assign(payload.data.url);
       }
     } catch (error) {
       const errorMessage =

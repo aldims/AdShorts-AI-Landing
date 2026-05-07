@@ -1618,19 +1618,14 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
         if (mode === "widget") {
             try {
                 const widget = await getCheckoutWidgetSession(productId, session.user);
-                res.json({ data: { widget, url: widget.url } });
+                res.json({ data: { widget } });
                 return;
             }
             catch (widgetError) {
                 if (widgetError instanceof CheckoutProductUnavailableError) {
                     throw widgetError;
                 }
-                const url = await getCheckoutUrl(productId, session.user);
-                res.json({
-                    data: { url },
-                    warning: widgetError instanceof Error ? widgetError.message : "Payment widget unavailable.",
-                });
-                return;
+                throw widgetError;
             }
         }
         const url = await getCheckoutUrl(productId, session.user);

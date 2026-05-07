@@ -472,7 +472,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
         return;
       }
 
-      if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
+      if (!response.ok || !payload?.data?.widget?.confirmationToken) {
         return;
       }
 
@@ -492,14 +492,8 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
             });
             return;
           } catch {
-            if (!payload.data.url) {
-              return;
-            }
+            return;
           }
-        }
-
-        if (payload.data.url) {
-          window.location.assign(payload.data.url);
         }
       }
     } finally {

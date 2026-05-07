@@ -533,7 +533,7 @@ export function PricingPage({
         return;
       }
 
-      if (!response.ok || (!payload?.data?.url && !payload?.data?.widget?.confirmationToken)) {
+      if (!response.ok || !payload?.data?.widget?.confirmationToken) {
         if (productId.startsWith("package_") && errorMessage.includes(PACKAGE_RESTRICTION_ERROR_FRAGMENT)) {
           setActivePlanId("pro");
           await requestCheckout("pro");
@@ -559,14 +559,8 @@ export function PricingPage({
             });
             return;
           } catch (widgetError) {
-            if (!payload.data.url) {
-              throw widgetError;
-            }
+            throw widgetError;
           }
-        }
-
-        if (payload.data.url) {
-          window.location.assign(payload.data.url);
         }
       }
     } catch (error) {
