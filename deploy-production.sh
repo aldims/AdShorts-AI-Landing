@@ -96,11 +96,11 @@ rsync -az --delete \
   "$RELEASE_DIR/" "$PROD_SSH:$PROD_STATIC_DIR/"
 
 echo "[production] upload frontend"
-rsync -az --delete "$APP_DIR/dist/" "$PROD_SSH:$PROD_APP_DIR/dist/"
+(cd "$APP_DIR" && rsync -az --delete dist/ "$PROD_SSH:$PROD_APP_DIR/dist/")
 
 echo "[production] upload server"
-rsync -az --delete "$APP_DIR/dist-server/" "$PROD_SSH:$PROD_APP_DIR/dist-server/"
-rsync -az "$APP_DIR/package.json" "$APP_DIR/package-lock.json" "$PROD_SSH:$PROD_APP_DIR/"
+(cd "$APP_DIR" && rsync -az --delete dist-server/ "$PROD_SSH:$PROD_APP_DIR/dist-server/")
+(cd "$APP_DIR" && rsync -az package.json package-lock.json "$PROD_SSH:$PROD_APP_DIR/")
 
 echo "[production] sync local examples"
 mkdir -p "$LOCAL_EXAMPLES_DIR"
