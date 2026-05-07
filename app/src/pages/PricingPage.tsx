@@ -977,8 +977,9 @@ export function PricingPage({
                             <span className="pricing-max-card__name">{plan.name}</span>
                             <h3>
                               {plan.audienceLines
-                                ? plan.audienceLines.map((line) => (
+                                ? plan.audienceLines.map((line, index) => (
                                     <span key={`${plan.name}-${line}`} className="pricing-max-card__title-line">
+                                      {index > 0 ? " " : ""}
                                       {line}
                                     </span>
                                   ))
