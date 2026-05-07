@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const cssVersion = 53;
+const cssVersion = 54;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
 
@@ -479,11 +479,12 @@ const renderInlineStyles = () => `
       .seo-signin { color: rgba(255,255,255,.82); text-decoration: none; font-weight: 800; }
       .seo-hero { padding: 110px 0 54px; }
       .seo-hero__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 410px); gap: 44px; align-items: end; }
+      .seo-hero__grid > *, .seo-proof, .seo-card, .seo-mini, .seo-final__box { min-width: 0; max-width: 100%; }
       .seo-kicker { margin: 0 0 16px; color: #d8ff72; font-size: .78rem; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; }
-      .seo-hero h1 { max-width: 820px; margin: 0; font-family: Sora, Manrope, sans-serif; font-size: clamp(3rem, 6vw, 5.7rem); line-height: .92; letter-spacing: -.08em; }
-      .seo-lead { max-width: 720px; margin: 22px 0 0; color: rgba(255,255,255,.72); font-size: 1.12rem; line-height: 1.65; }
+      .seo-hero h1 { max-width: 820px; margin: 0; font-family: Sora, Manrope, sans-serif; font-size: clamp(3rem, 6vw, 5.7rem); line-height: .92; letter-spacing: -.08em; overflow-wrap: anywhere; }
+      .seo-lead { max-width: 720px; margin: 22px 0 0; color: rgba(255,255,255,.72); font-size: 1.12rem; line-height: 1.65; overflow-wrap: anywhere; }
       .seo-hero__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
-      .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 54px; padding: 0 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); color: #fff; background: rgba(255,255,255,.05); text-decoration: none; font-weight: 900; }
+      .seo-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 54px; max-width: 100%; padding: 0 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); color: #fff; background: rgba(255,255,255,.05); text-decoration: none; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
       .seo-btn--primary { color: #111407; background: #d8ff72; border-color: rgba(216,255,114,.42); box-shadow: 0 18px 42px rgba(216,255,114,.16); }
       .seo-proof { display: grid; gap: 12px; padding: 24px; border: 1px solid rgba(255,255,255,.1); border-radius: 28px; background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); box-shadow: 0 24px 58px rgba(0,0,0,.2); }
       .seo-proof strong { font-family: Sora, Manrope, sans-serif; font-size: 1.35rem; line-height: 1.08; letter-spacing: -.04em; }
@@ -491,7 +492,7 @@ const renderInlineStyles = () => `
       .seo-proof li { padding-left: 18px; position: relative; }
       .seo-proof li::before { content: ""; position: absolute; left: 0; top: .7em; width: 7px; height: 7px; border-radius: 50%; background: #d8ff72; }
       .seo-section { padding: 58px 0; }
-      .seo-section h2 { margin: 0 0 24px; font-family: Sora, Manrope, sans-serif; font-size: clamp(2.2rem, 4vw, 4rem); line-height: .98; letter-spacing: -.07em; }
+      .seo-section h2 { margin: 0 0 24px; font-family: Sora, Manrope, sans-serif; font-size: clamp(2.2rem, 4vw, 4rem); line-height: .98; letter-spacing: -.07em; overflow-wrap: anywhere; }
       .seo-plan-grid, .seo-example-grid, .seo-pack-grid, .seo-faq-grid, .seo-workflow-grid { display: grid; gap: 18px; }
       .seo-plan-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .seo-card { position: relative; display: grid; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.1); border-radius: 30px; background: radial-gradient(circle at top left, rgba(216,255,114,.08), transparent 35%), rgba(255,255,255,.05); box-shadow: 0 24px 54px rgba(0,0,0,.22); }
@@ -517,7 +518,7 @@ const renderInlineStyles = () => `
       .seo-final h2 { margin: 0; font-family: Sora, Manrope, sans-serif; font-size: clamp(2.3rem, 4.7vw, 4.2rem); line-height: .98; letter-spacing: -.07em; }
       .seo-final p { max-width: 640px; margin: 0; color: rgba(255,255,255,.72); }
       @media (max-width: 980px) { .seo-hero__grid, .seo-plan-grid, .seo-example-grid, .seo-pack-grid, .seo-faq-grid, .seo-workflow-grid { grid-template-columns: 1fr; } .seo-nav { display: none; } .seo-hero { padding-top: 72px; } }
-      @media (max-width: 640px) { .seo-header__inner { min-height: 68px; } .seo-signin { display: none; } .seo-hero h1 { font-size: 3rem; } .seo-hero__actions, .seo-btn { width: 100%; } .seo-card, .seo-final__box { border-radius: 24px; padding: 22px; } }
+      @media (max-width: 640px) { .seo-header__inner { min-height: 68px; } .seo-signin { display: none; } .seo-kicker { letter-spacing: .08em; } .seo-hero h1 { font-size: clamp(1.8rem, 11vw, 2.6rem); line-height: 1; letter-spacing: -.04em; } .seo-section h2 { font-size: clamp(1.75rem, 10vw, 2.4rem); letter-spacing: -.04em; } .seo-hero__actions, .seo-btn { width: 100%; } .seo-card, .seo-final__box, .seo-proof { border-radius: 24px; padding: 22px; } }
 `;
 
 const renderHeader = (page) => {

@@ -39,7 +39,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="../styles.css?v=53" />
+    <link rel="stylesheet" href="../styles.css?v=54" />
     <link rel="preload" as="image" href="../logo.png?v=2" />
     <link rel="icon" type="image/png" sizes="120x120" href="../favicon.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png" />
@@ -82,19 +82,22 @@
         backdrop-filter: blur(16px);
         border-bottom: 1px solid var(--border);
         padding: 16px 0;
-        margin: 0 -20px 40px;
-        padding-left: 20px;
-        padding-right: 20px;
+        margin: 0 0 40px;
+        overflow: hidden;
+        contain: paint;
       }
       .guides-nav__inner {
         display: flex;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         gap: 8px;
         justify-content: center;
+        max-width: 100%;
+        min-width: 0;
       }
       .guides-nav .btn {
         font-size: 0.8rem;
         padding: 6px 12px;
+        max-width: 100%;
         white-space: nowrap;
       }
       .guides-nav .btn.active {

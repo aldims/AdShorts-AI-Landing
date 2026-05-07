@@ -8,7 +8,7 @@ const siteOrigin = "https://adshortsai.com";
 const requiredLocales = ["ru", "en"];
 const allowedSingleLocaleFiles = new Set(["offer/index.html"]);
 const latestAssetVersions = {
-  css: 53,
+  css: 54,
   script: 8,
 };
 

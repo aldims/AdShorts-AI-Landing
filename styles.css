@@ -56,8 +56,8 @@
    Base Styles
    ============================================ */
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; overflow-x: hidden; }
-html, body { height: 100%; }
+html { scroll-behavior: smooth; overflow-x: hidden; max-width: 100%; }
+html, body { height: 100%; max-width: 100%; }
 
 body {
   margin: 0;
@@ -66,6 +66,7 @@ body {
   color: var(--text);
   line-height: 1.6;
   overflow-x: hidden;
+  position: relative;
 }
 
 /* Animated background */
@@ -115,6 +116,9 @@ img, svg { display: block; max-width: 100%; height: auto; }
   pointer-events: none;
   z-index: -1;
   opacity: 0.5;
+  contain: paint;
+  max-width: 46vw;
+  max-height: 46vw;
 }
 
 .orb--cyan {
@@ -122,7 +126,7 @@ img, svg { display: block; max-width: 100%; height: auto; }
   height: 400px;
   background: var(--neon-cyan);
   top: 10%;
-  right: -100px;
+  right: 0;
   animation: float 20s ease-in-out infinite;
 }
 
@@ -131,7 +135,7 @@ img, svg { display: block; max-width: 100%; height: auto; }
   height: 300px;
   background: var(--neon-purple);
   bottom: 20%;
-  left: -50px;
+  left: 0;
   animation: float 25s ease-in-out infinite reverse;
 }
 
@@ -382,6 +386,10 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.42);
 }
 
+.lang-switcher:not([open]) .lang-switcher__menu {
+  display: none;
+}
+
 .lang-switcher__option {
   display: grid !important;
   grid-template-columns: 38px minmax(0, 1fr);
@@ -431,6 +439,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  max-width: 100%;
   padding: 14px 24px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -444,6 +453,9 @@ h1, h2, h3, h4, h5, h6 {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .btn::before {
@@ -1861,6 +1873,7 @@ main a:not(.btn):not(.logo):not(.card--link) {
   color: var(--neon-cyan); 
   text-decoration: none;
   transition: opacity 0.2s ease;
+  overflow-wrap: anywhere;
 }
 
 main a:not(.btn):not(.logo):not(.card--link):hover { 
@@ -2082,21 +2095,31 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
   }
 
   /* Smaller orbs on mobile */
+  .orb {
+    display: none;
+  }
+
+  .hero--centered .container::before,
+  .cta-block__inner::before {
+    display: none;
+  }
+
   .orb--cyan {
-    width: 200px;
-    height: 200px;
-    right: -60px;
+    width: min(180px, 44vw);
+    height: min(180px, 44vw);
+    right: 0;
   }
 
   .orb--purple {
-    width: 160px;
-    height: 160px;
-    left: -40px;
+    width: min(150px, 40vw);
+    height: min(150px, 40vw);
+    left: 0;
   }
 
   .orb--pink {
-    width: 140px;
-    height: 140px;
+    width: min(130px, 36vw);
+    height: min(130px, 36vw);
+    right: 0;
   }
 
   /* Tighter container on mobile */
@@ -2457,6 +2480,18 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
   content: '←';
 }
 
+.article,
+.article p,
+.article li,
+.article h1,
+.article h2,
+.article h3,
+.article ul,
+.article ol {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
   .article {
     padding: 24px 16px 40px;
@@ -2518,12 +2553,21 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 
 .header--app-static .logo {
   justify-self: start;
+  min-width: 0;
+  max-width: 100%;
   transform: translateX(22px);
   color: #fff;
   font-family: "Sora", "Manrope", "Space Grotesk", system-ui, sans-serif;
   font-size: 1.12rem;
   font-weight: 700;
   letter-spacing: -0.04em;
+}
+
+.header--app-static .logo__wordmark {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header--app-static .logo__icon {
@@ -2581,7 +2625,7 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 .header--app-static .header__actions {
   display: flex;
   align-items: center;
-  min-width: max-content;
+  min-width: 0;
   justify-self: end;
   justify-content: flex-end;
   flex-wrap: nowrap;
@@ -2655,8 +2699,12 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 }
 
 @media (max-width: 960px) {
+  .orb {
+    display: none;
+  }
+
   .header--app-static .header__inner {
-    grid-template-columns: auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, max-content);
     width: calc(100% - 28px);
     gap: 12px;
     min-height: 72px;
@@ -2664,10 +2712,43 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 
   .header--app-static .logo {
     transform: none;
+    max-width: min(180px, 28vw);
   }
 
   .header--app-static .nav {
     justify-self: center;
+  }
+
+  .header--app-static .nav__toggle {
+    display: inline-flex;
+  }
+
+  .header--app-static .nav__list {
+    position: fixed;
+    top: 78px;
+    right: 14px;
+    display: none;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    width: min(260px, calc(100vw - 28px));
+    min-width: 0;
+    max-height: calc(100dvh - 92px);
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: rgba(10, 12, 18, 0.96);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .header--app-static .nav__list.open {
+    display: flex;
+  }
+
+  .header--app-static .nav__list > li > a:not(.btn) {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .header--app-static .header__actions {
@@ -2677,14 +2758,41 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 
 @media (max-width: 720px) {
   .header--app-static .header__inner {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(34px, auto) minmax(0, 1fr) minmax(0, max-content);
+    gap: 8px;
+    width: calc(100% - 20px);
+  }
+
+  .header--app-static .logo {
+    max-width: min(150px, 28vw);
+    gap: 8px;
+  }
+
+  .header--app-static .logo__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  .header--app-static .nav {
+    min-width: 0;
+  }
+
+  .header--app-static .nav__toggle {
+    min-height: 38px;
+    max-width: 100%;
+    padding: 0 12px;
+    white-space: nowrap;
   }
 
   .header--app-static .nav__list {
     top: 78px;
-    right: 16px;
+    right: 10px;
     align-items: stretch;
-    min-width: min(260px, calc(100vw - 32px));
+    width: min(260px, calc(100vw - 20px));
+    min-width: 0;
+    max-height: calc(100dvh - 92px);
+    overflow-y: auto;
     padding: 10px;
     border-radius: 18px;
   }
@@ -2701,5 +2809,37 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 
   .header--app-static .lang-switcher__menu {
     right: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .header--app-static .logo__wordmark {
+    display: none;
+  }
+
+  .header--app-static .logo {
+    max-width: 40px;
+  }
+
+  .header--app-static .lang-switcher__trigger {
+    min-width: 48px;
+    padding-inline: 8px !important;
+  }
+}
+
+@media (max-width: 340px) {
+  .header--app-static .header__inner {
+    width: calc(100% - 14px);
+    gap: 5px;
+  }
+
+  .header--app-static .nav__toggle {
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+
+  .header--app-static .lang-switcher__trigger {
+    min-width: 42px;
+    padding-inline: 6px !important;
   }
 }
