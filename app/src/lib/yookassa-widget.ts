@@ -1,5 +1,6 @@
-const YOOKASSA_WIDGET_SCRIPT_URL = "https://yookassa.ru/checkout-widget/v1/checkout-widget.js";
+const YOOKASSA_WIDGET_SCRIPT_URL = "https://static.yoomoney.ru/checkout-client/checkout-widget.js";
 const YOOKASSA_WIDGET_BODY_CLASS = "yookassa-widget-open";
+const YOOKASSA_WIDGET_READY_TIMEOUT_MS = 2_000;
 
 type YooKassaWidgetOptions = {
   confirmation_token: string;
@@ -27,6 +28,7 @@ type YooKassaWidgetConstructor = new (options: YooKassaWidgetOptions) => YooKass
 
 declare global {
   interface Window {
+    YandexCheckout?: YooKassaWidgetConstructor;
     YooMoneyCheckoutWidget?: YooKassaWidgetConstructor;
   }
 }
@@ -96,12 +98,38 @@ const watchYooKassaWidgetBackdrop = () => {
   };
 };
 
+const waitForYooKassaWidgetConstructor = () => {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Payment widget is available only in the browser."));
+  }
+
+  if (window.YooMoneyCheckoutWidget || window.YandexCheckout) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const startedAt = Date.now();
+    const intervalId = window.setInterval(() => {
+      if (window.YooMoneyCheckoutWidget || window.YandexCheckout) {
+        window.clearInterval(intervalId);
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startedAt >= YOOKASSA_WIDGET_READY_TIMEOUT_MS) {
+        window.clearInterval(intervalId);
+        reject(new Error("YooKassa widget is unavailable."));
+      }
+    }, 50);
+  });
+};
+
 const loadYooKassaWidgetScript = () => {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Payment widget is available only in the browser."));
   }
 
-  if (window.YooMoneyCheckoutWidget) {
+  if (window.YooMoneyCheckoutWidget || window.YandexCheckout) {
     return Promise.resolve();
   }
 
@@ -117,15 +145,15 @@ const loadYooKassaWidgetScript = () => {
 
     const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${YOOKASSA_WIDGET_SCRIPT_URL}"]`);
     if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
       existingScript.addEventListener("error", rejectLoad, { once: true });
+      void waitForYooKassaWidgetConstructor().then(resolve, reject);
       return;
     }
 
     const script = document.createElement("script");
     script.src = YOOKASSA_WIDGET_SCRIPT_URL;
     script.async = true;
-    script.onload = () => resolve();
+    script.onload = () => void waitForYooKassaWidgetConstructor().then(resolve, reject);
     script.onerror = rejectLoad;
     document.head.appendChild(script);
   });
@@ -206,7 +234,7 @@ export const openYooKassaPaymentWidget = async ({
 }) => {
   await loadYooKassaWidgetScript();
 
-  const Widget = window.YooMoneyCheckoutWidget;
+  const Widget = window.YooMoneyCheckoutWidget ?? window.YandexCheckout;
   if (!Widget) {
     throw new Error("YooKassa widget is unavailable.");
   }
