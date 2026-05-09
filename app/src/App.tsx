@@ -72,7 +72,14 @@ type AuthState = {
   mode: AuthMode;
 };
 
+type ImpersonationState = {
+  adsflowUserId: string;
+  email: string;
+  expiresAt: string;
+};
+
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
+const IMPERSONATION_COOKIE_NAME = "adshorts.impersonation";
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -218,6 +225,61 @@ const persistWorkspaceProfile = (email: string | null | undefined, profile: Work
   }
 };
 
+const readCookieValue = (name: string) => {
+  if (typeof document === "undefined") {
+    return "";
+  }
+
+  const prefix = `${name}=`;
+  const item = document.cookie
+    .split(";")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(prefix));
+  return item ? item.slice(prefix.length) : "";
+};
+
+const decodeBase64Url = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+  return window.atob(padded);
+};
+
+const readImpersonationState = (): ImpersonationState | null => {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null;
+  }
+
+  const rawCookie = readCookieValue(IMPERSONATION_COOKIE_NAME);
+  if (!rawCookie) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(decodeBase64Url(rawCookie)) as Partial<ImpersonationState>;
+    const expiresAt = String(payload.expiresAt ?? "").trim();
+    if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
+      return null;
+    }
+
+    return {
+      adsflowUserId: String(payload.adsflowUserId ?? "").trim(),
+      email: String(payload.email ?? "").trim(),
+      expiresAt,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const clearImpersonationCookie = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const secureSuffix = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${IMPERSONATION_COOKIE_NAME}=; Max-Age=0; path=/; SameSite=Lax${secureSuffix}`;
+};
+
 function LoadingScreen() {
   const { t } = useLocale();
 
@@ -246,6 +308,7 @@ export function App() {
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
   const [isWorkspaceProfilePending, setIsWorkspaceProfilePending] = useState(false);
+  const [impersonation, setImpersonation] = useState<ImpersonationState | null>(() => readImpersonationState());
 
   const session = useMemo<Session | null>(() => {
     if (!authSession?.user) return null;
@@ -329,6 +392,10 @@ export function App() {
     syncMetrikaUserId(workspaceProfile.userId);
   }, [session?.email, workspaceProfile?.userId]);
 
+  useEffect(() => {
+    setImpersonation(readImpersonationState());
+  }, [location.key, session?.email]);
+
   const shouldBlockWorkspaceRoute = Boolean(session && !workspaceProfile && isWorkspaceProfilePending);
 
   useEffect(() => {
@@ -403,6 +470,8 @@ export function App() {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
+          clearImpersonationCookie();
+          setImpersonation(null);
           setWorkspaceProfile(null);
           setIsWorkspaceProfilePending(false);
           closeAuth();
@@ -441,6 +510,17 @@ export function App() {
 
   return (
     <LocaleProvider locale={locale}>
+      {impersonation ? (
+        <div className="admin-impersonation-banner" role="status">
+          <span>
+            Admin impersonation: <strong>{impersonation.email || session?.email || "user"}</strong>
+            {impersonation.adsflowUserId ? <em>AdsFlow ID {impersonation.adsflowUserId}</em> : null}
+          </span>
+          <button className="button-reset" type="button" onClick={handleLogout}>
+            Выйти
+          </button>
+        </div>
+      ) : null}
       <Routes>
         <Route
           path="/"

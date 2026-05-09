@@ -24,6 +24,7 @@ import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAss
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { purgeAdminAccountData } from "./admin-account-purge.js";
+import { startAdminImpersonationSession, verifyAdminImpersonationToken, } from "./admin-impersonation.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
 import { InternationalPaymentsWaitlistValidationError, appendInternationalPaymentsWaitlistSubmission, notifyInternationalPaymentsWaitlistSubmission, parseInternationalPaymentsWaitlistSubmission, } from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
@@ -558,6 +559,24 @@ app.post("/api/admin/account-purge", express.json({ limit: "1mb" }), async (req,
     catch (error) {
         console.error("[admin] account purge failed:", error);
         res.status(500).json({ error: getServerErrorMessage(error, "Account purge failed.") });
+    }
+});
+app.get("/api/admin/impersonate", async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    try {
+        const payload = verifyAdminImpersonationToken(token);
+        const session = await startAdminImpersonationSession(payload, req, res);
+        logServerEvent("warn", "admin_impersonation_started", {
+            adsflowUserId: payload.adsflowUserId ?? null,
+            authUserId: session.user.id,
+            authUserEmail: session.user.email,
+            source: "admin",
+        });
+        res.redirect("/app/studio?admin_impersonation=1");
+    }
+    catch (error) {
+        console.warn("[admin] impersonation failed", error);
+        res.status(403).send("Admin impersonation link is invalid or expired.");
     }
 });
 app.get("/api/auth/status", (_req, res) => {
