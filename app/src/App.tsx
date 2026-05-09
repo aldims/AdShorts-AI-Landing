@@ -84,6 +84,7 @@ const IMPERSONATION_COOKIE_NAME = "adshorts.impersonation";
 const WEB_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
 const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
 const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
+const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?(rf_[A-Za-z0-9_-]{2,64})\/?$/;
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -235,9 +236,17 @@ const normalizeWebReferralSource = (value: unknown) => {
   return WEB_REFERRAL_SOURCE_PATTERN.test(normalized) ? normalized : "";
 };
 
-const readWebReferralSourceFromLocation = (location: { search: string }) => {
+const readWebReferralSourceFromPathname = (pathname: string) => {
+  const match = WEB_REFERRAL_PATH_PATTERN.exec(pathname);
+  return normalizeWebReferralSource(match?.[1]);
+};
+
+const readWebReferralSourceFromLocation = (location: { pathname?: string; search: string }) => {
   const params = new URLSearchParams(location.search);
-  return normalizeWebReferralSource(params.get("referral_source") ?? params.get("ref") ?? params.get("referral"));
+  return (
+    normalizeWebReferralSource(params.get("referral_source") ?? params.get("ref") ?? params.get("referral")) ||
+    readWebReferralSourceFromPathname(location.pathname ?? "")
+  );
 };
 
 const readStoredWebReferralSource = () => {
@@ -476,6 +485,7 @@ export function App() {
   const appPathname = useMemo(() => stripLocalePrefix(location.pathname), [location.pathname]);
   const localizePath = useMemo(() => (path: string) => localizePathForLocale(locale, path), [locale]);
   const hasExplicitLocalePrefix = useMemo(() => pathnameHasLocalePrefix(location.pathname), [location.pathname]);
+  const referralPathSource = useMemo(() => readWebReferralSourceFromPathname(location.pathname), [location.pathname]);
   const { data: authSession, isPending: isSessionPending } = authClient.useSession();
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
@@ -827,6 +837,26 @@ export function App() {
                 onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
               />
             </RouteSuspense>
+          }
+        />
+        <Route
+          path="/:referralCode"
+          element={
+            referralPathSource ? (
+              <RouteSuspense>
+                <LandingPage
+                  session={session}
+                  workspaceProfile={workspaceProfile}
+                  useLayeredHero
+                  onOpenSignup={() => openAuth("signup")}
+                  onOpenSignin={() => openAuth("signin")}
+                  onLogout={handleLogout}
+                  onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+                />
+              </RouteSuspense>
+            ) : (
+              <Navigate to={localizePath("/")} replace />
+            )
           }
         />
         <Route

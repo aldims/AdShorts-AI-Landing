@@ -407,10 +407,10 @@ production_blocks = f"""https://adshortsai.com {{
     redir /terms.html /terms/ 301
     redir /terms-of-use.html /terms-of-use/ 301
 
-    @app_html path /app* /en/app* /hero-background-test* /en/hero-background-test*
+    @app_html path /app* /en/app* /rf_* /hero-background-test* /en/hero-background-test*
     header @app_html X-Robots-Tag "noindex, nofollow"
 
-    @app_routes path / /en/ /app* /en/app* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
+    @app_routes path / /en/ /app* /en/app* /rf_* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
     handle @app_routes {{
         root * {prod_app_dir}/dist
         try_files {{path}} {{path}}/index.html /index.html
