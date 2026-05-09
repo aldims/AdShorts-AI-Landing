@@ -34726,6 +34726,11 @@ html, body {
 }
 
 @media (max-width: 640px) {
+  .studio-canvas-route:not(.is-segment-editor) {
+    --studio-prompt-reserve: 220px;
+    --studio-prompt-panel-compact-height: 190px;
+  }
+
   .pricing-max-grid,
   .pricing-max-addons__grid,
   .pricing-max-faq__grid,
@@ -34818,26 +34823,80 @@ html, body {
     min-height: min(320px, 58dvh) !important;
   }
 
-  .studio-canvas-prompt__chips {
+  .studio-canvas-prompt__footer {
     display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "chips chips"
+      ". submit" !important;
+    align-items: end !important;
     gap: 6px !important;
+    width: 100% !important;
+  }
+
+  .studio-canvas-prompt__chips {
+    grid-area: chips !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+    width: 100% !important;
     overflow: visible !important;
   }
 
+  .studio-canvas-prompt__submit {
+    grid-area: submit !important;
+    justify-self: end !important;
+    margin-left: 0 !important;
+  }
+
+  .studio-canvas-prompt__btn {
+    height: 34px !important;
+    min-width: 34px !important;
+    padding: 0 12px !important;
+  }
+
   .studio-canvas-prompt__chip,
+  .studio-canvas-prompt__chip.studio-video-selector__trigger,
   .studio-canvas-prompt__chip.studio-subtitle-selector__trigger,
   .studio-canvas-prompt__chip.studio-voice-selector__trigger,
   .studio-canvas-prompt__chip.studio-music-selector__trigger {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
+    min-height: 27px !important;
+    padding: 3px 6px !important;
+    gap: 4px !important;
+    font-size: 0.61rem !important;
+    line-height: 1.05 !important;
     justify-content: center !important;
     white-space: normal !important;
   }
 
+  .studio-video-selector__label,
+  .studio-subtitle-selector__label,
+  .studio-voice-selector__label,
+  .studio-music-selector__label,
+  .studio-video-selector__value,
+  .studio-subtitle-selector__value,
+  .studio-voice-selector__value,
+  .studio-music-selector__value {
+    min-width: 0 !important;
+  }
+
+  .studio-video-selector__value,
+  .studio-subtitle-selector__value,
+  .studio-voice-selector__value,
+  .studio-music-selector__value {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.62rem !important;
+  }
+
   .studio-voice-selector,
   .studio-music-selector,
+  .studio-video-selector,
   .studio-subtitle-selector {
     min-width: 0 !important;
     max-width: 100% !important;
@@ -34971,6 +35030,6 @@ html, body {
   }
 
   .studio-canvas-prompt__chips {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
