@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Pool } from "pg";
+import { setBetterAuthSessionCookie } from "./auth.js";
 import { database } from "./database.js";
 import { env } from "./env.js";
 const IMPERSONATION_PURPOSE = "admin_impersonation";
@@ -181,13 +182,7 @@ export const startAdminImpersonationSession = async (payload, req, res) => {
         userAgent: req.header("user-agent") ?? null,
         userId: user.id,
     });
-    res.cookie("better-auth.session_token", sessionToken, {
-        expires: expiresAt,
-        httpOnly: true,
-        path: "/",
-        sameSite: "lax",
-        secure: env.isProduction,
-    });
+    setBetterAuthSessionCookie(res, sessionToken, expiresAt);
     res.cookie("adshorts.impersonation", encodeBase64Url(JSON.stringify({
         adsflowUserId: normalizeText(payload.adsflowUserId),
         email: user.email,

@@ -1,8 +1,46 @@
+import { createHmac, randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { database } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { sendAppEmail } from "./mail.js";
 const appName = "AdShorts AI";
+const BETTER_AUTH_SESSION_COOKIE_BASE_NAME = "better-auth.session_token";
+const BETTER_AUTH_LEGACY_SESSION_COOKIE_PATHS = ["/", "/api/auth"];
+export const getBetterAuthSessionCookieName = () => {
+    const usesSecureCookies = env.isProduction || env.authBaseUrl.startsWith("https://");
+    return usesSecureCookies
+        ? `__Secure-${BETTER_AUTH_SESSION_COOKIE_BASE_NAME}`
+        : BETTER_AUTH_SESSION_COOKIE_BASE_NAME;
+};
+export const signBetterAuthSessionCookieValue = (sessionToken) => {
+    const signature = createHmac("sha256", env.authSecret).update(sessionToken).digest("base64");
+    return `${sessionToken}.${signature}`;
+};
+export const setBetterAuthSessionCookie = (res, sessionToken, expiresAt) => {
+    const activeCookieName = getBetterAuthSessionCookieName();
+    const baseCookieOptions = {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: activeCookieName.startsWith("__Secure-") || env.isProduction,
+    };
+    for (const cookieName of [BETTER_AUTH_SESSION_COOKIE_BASE_NAME, `__Secure-${BETTER_AUTH_SESSION_COOKIE_BASE_NAME}`]) {
+        for (const path of BETTER_AUTH_LEGACY_SESSION_COOKIE_PATHS) {
+            if (cookieName === activeCookieName && path === "/") {
+                continue;
+            }
+            res.clearCookie(cookieName, {
+                ...baseCookieOptions,
+                path,
+            });
+        }
+    }
+    res.cookie(activeCookieName, signBetterAuthSessionCookieValue(sessionToken), {
+        ...baseCookieOptions,
+        encode: String,
+        expires: expiresAt,
+        path: "/",
+    });
+};
 const normalizeOrigin = (value) => {
     if (!value) {
         return null;
@@ -170,7 +208,7 @@ export async function signInWithTelegram(profile, req, res) {
     if (!user) {
         throw new Error("User not found after Telegram sign-in.");
     }
-    const sessionToken = crypto.randomUUID();
+    const sessionToken = randomUUID();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await adapter.create({
         model: "session",
@@ -184,13 +222,7 @@ export async function signInWithTelegram(profile, req, res) {
             userAgent: req.headers["user-agent"] ?? null,
         },
     });
-    res.cookie("better-auth.session_token", sessionToken, {
-        httpOnly: true,
-        secure: env.isProduction,
-        sameSite: "lax",
-        path: "/api/auth",
-        expires: expiresAt,
-    });
+    setBetterAuthSessionCookie(res, sessionToken, expiresAt);
     console.info(`[telegram] User signed in: ${user.email} (id=${user.id}, telegramId=${profile.telegramId})`);
     return { user };
 }

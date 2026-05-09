@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
 import { Pool } from "pg";
 
+import { setBetterAuthSessionCookie } from "./auth.js";
 import { database, type AuthDatabase } from "./database.js";
 import { env } from "./env.js";
 
@@ -275,13 +276,7 @@ export const startAdminImpersonationSession = async (
     userId: user.id,
   });
 
-  res.cookie("better-auth.session_token", sessionToken, {
-    expires: expiresAt,
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure: env.isProduction,
-  });
+  setBetterAuthSessionCookie(res, sessionToken, expiresAt);
   res.cookie(
     "adshorts.impersonation",
     encodeBase64Url(
