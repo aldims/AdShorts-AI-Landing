@@ -148,7 +148,7 @@ for (const url of sitemapUrls) {
 
 const deployProduction = await readRootFile("deploy-production.sh");
 assert(
-  /@app_routes path \/ \/en\/ \/app\* \/en\/app\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
+  /@app_routes path \/ \/en\/ \/app\* \/en\/app\* \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
   "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
 );
 assert(/header @app_html X-Robots-Tag "noindex, nofollow"/.test(deployProduction), "deploy-production.sh: app shell routes must send X-Robots-Tag noindex");
