@@ -15544,7 +15544,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     ? projectPreviewModal?.description ?? ""
     : generatedVideoDescription;
   const openWorkspaceCreditPacks = () => {
-    navigate(localizePath(workspaceCanPurchaseCreditPacks ? "/pricing#addons" : "/pricing#plans"));
+    navigate(localizePath(workspaceCanPurchaseCreditPacks ? "/pricing/#addons" : "/pricing/#plans"));
   };
   const handleWorkspaceCreditPackCheckout = async (pack: WorkspaceCreditTopupPack) => {
     if (!workspaceCanPurchaseCreditPacks) {
@@ -15567,7 +15567,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       const payload = (await response.json().catch(() => null)) as WorkspaceCheckoutResponse | null;
 
       if (response.status === 401) {
-        navigate(localizePath("/pricing#addons"));
+        navigate(localizePath("/pricing/#addons"));
         return;
       }
 
@@ -15594,7 +15594,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           confirmationToken: payload.data.widget.confirmationToken,
           returnUrl: buildPaymentReturnUrl({
             paymentId: payload.data.widget.paymentId,
-            pricingPath: localizePath("/pricing"),
+            pricingPath: localizePath("/pricing/"),
             productId,
           }),
           onError: setWorkspaceCheckoutError,
@@ -15620,7 +15620,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       section: targetSection,
       source: "insufficient-credits",
     });
-    navigate(localizePath("/pricing"));
+    navigate(localizePath("/pricing/"));
     if (typeof window !== "undefined") {
       window.scrollTo({ left: 0, top: 0, behavior: "auto" });
     }

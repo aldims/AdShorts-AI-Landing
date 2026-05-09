@@ -97,7 +97,7 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
     <>
       <Link
         className={`site-header__plan${isExpiringSoon ? " is-expiring-soon" : ""}`}
-        to={localizePath("/pricing")}
+        to={localizePath("/pricing/")}
         aria-label={t(workspaceStatusMessages.openPlan)}
       >
         <span>{t(workspaceStatusMessages.plan)}</span>
@@ -106,7 +106,7 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
           {tooltipText}
         </span>
       </Link>
-      <Link className="site-header__credits" to={localizePath("/pricing")} aria-label={t(workspaceStatusMessages.refillBalance)}>
+      <Link className="site-header__credits" to={localizePath("/pricing/")} aria-label={t(workspaceStatusMessages.refillBalance)}>
         <span className="site-header__credits-label">{t(workspaceStatusMessages.balance)}</span>
         <span className="site-header__credits-value">
           <strong>{normalizeBalance(profile?.balance)}</strong>

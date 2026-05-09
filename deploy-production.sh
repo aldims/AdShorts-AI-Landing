@@ -396,10 +396,22 @@ production_blocks = f"""https://adshortsai.com {{
         file_server
     }}
 
-    @app_routes path / /en /en/ /app* /en/app* /pricing* /en/pricing* /examples* /en/examples* /hero-background-test* /en/hero-background-test*
+    redir /en /en/ 301
+    redir /pricing /pricing/ 301
+    redir /examples /examples/ 301
+    redir /en/pricing /en/pricing/ 301
+    redir /en/examples /en/examples/ 301
+    redir /privacy.html /privacy/ 301
+    redir /terms.html /terms/ 301
+    redir /terms-of-use.html /terms-of-use/ 301
+
+    @app_html path /app* /en/app* /hero-background-test* /en/hero-background-test*
+    header @app_html X-Robots-Tag "noindex, nofollow"
+
+    @app_routes path / /en/ /app* /en/app* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
     handle @app_routes {{
         root * {prod_app_dir}/dist
-        rewrite * /index.html
+        try_files {{path}} {{path}}/index.html /index.html
         file_server
     }}
 
@@ -496,6 +508,34 @@ root_title="$(curl -fsS "$PROD_URL/" | grep -o '<title>[^<]*' | head -n 1 || tru
 pricing_title="$(curl -fsS "$PROD_URL/pricing/" | grep -o '<title>[^<]*' | head -n 1 || true)"
 if echo "$root_title $pricing_title" | grep -q "AdShorts AI App"; then
   echo "SEO static pages are still serving the SPA shell." >&2
+  smoke_failed=1
+fi
+
+if ! curl -fsS "$PROD_URL/pricing/" | grep -q '<div id="app">'; then
+  echo "Pricing is not serving the SPA shell." >&2
+  smoke_failed=1
+fi
+
+if ! curl -fsS "$PROD_URL/pricing/" | grep -q 'data-seo-fallback="true"'; then
+  echo "Pricing is missing SEO fallback content." >&2
+  smoke_failed=1
+fi
+
+pricing_canonical="$(curl -fsS "$PROD_URL/pricing/" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
+if [ "$pricing_canonical" != 'rel="canonical" href="https://adshortsai.com/pricing/' ]; then
+  echo "Unexpected pricing canonical: $pricing_canonical" >&2
+  smoke_failed=1
+fi
+
+examples_canonical="$(curl -fsS "$PROD_URL/examples/" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
+if [ "$examples_canonical" != 'rel="canonical" href="https://adshortsai.com/examples/' ]; then
+  echo "Unexpected examples canonical: $examples_canonical" >&2
+  smoke_failed=1
+fi
+
+app_robots_header="$(curl -fsSI "$PROD_URL/app" | tr -d '\r' | grep -i '^x-robots-tag:' | head -n 1 || true)"
+if ! echo "$app_robots_header" | grep -qi 'noindex'; then
+  echo "App routes are missing X-Robots-Tag noindex: $app_robots_header" >&2
   smoke_failed=1
 fi
 

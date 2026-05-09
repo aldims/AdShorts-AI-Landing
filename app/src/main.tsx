@@ -6,7 +6,15 @@ import "./styles/design-lab-theme.css";
 import "./styles/global.css";
 import "./styles/studio-liquid-glass.css";
 
-ReactDOM.createRoot(document.getElementById("app")!).render(
+const appElement = document.getElementById("app");
+
+if (!appElement) {
+  throw new Error("App root element was not found.");
+}
+
+appElement.replaceChildren();
+
+ReactDOM.createRoot(appElement).render(
   <React.StrictMode>
     <BrowserRouter>
       <App />

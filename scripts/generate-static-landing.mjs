@@ -273,9 +273,9 @@ const renderHeader = (locale, localeConfig, supportedLocales) => {
           <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">${text(m.navToggle, locale, supportedLocales, "messages.navToggle")}</button>
           <ul id="nav-menu" class="nav__list">
             <li><a class="nav__home-link" href="./">${text(m.navHome, locale, supportedLocales, "messages.navHome")}</a></li>
-            <li><a href="examples">${text(m.navSamples, locale, supportedLocales, "messages.navSamples")}</a></li>
+            <li><a href="examples/">${text(m.navSamples, locale, supportedLocales, "messages.navSamples")}</a></li>
             <li><a href="app/studio">${text(m.navStudio, locale, supportedLocales, "messages.navStudio")}</a></li>
-            <li><a href="pricing">${text(m.navPricing, locale, supportedLocales, "messages.navPricing")}</a></li>
+            <li><a href="pricing/">${text(m.navPricing, locale, supportedLocales, "messages.navPricing")}</a></li>
           </ul>
         </nav>
         <div class="header__actions">

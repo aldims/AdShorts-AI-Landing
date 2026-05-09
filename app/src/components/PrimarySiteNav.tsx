@@ -168,7 +168,7 @@ export function PrimarySiteNav({
           ))}
           <Link
             className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
-            to={localizePath("/pricing")}
+            to={localizePath("/pricing/")}
             state={{ fromStudio: true }}
             onClick={() => setIsCompactMenuOpen(false)}
           >
@@ -192,7 +192,7 @@ export function PrimarySiteNav({
         </Link>
         <Link
           className={`site-nav__item${activeItem === "examples" ? " site-nav__item--active" : ""}`}
-          to={localizePath("/examples")}
+          to={localizePath("/examples/")}
           onClick={() => setIsCompactMenuOpen(false)}
         >
           {t(navMessages.examples)}
@@ -251,7 +251,7 @@ export function PrimarySiteNav({
 
         <Link
           className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
-          to={localizePath("/pricing")}
+          to={localizePath("/pricing/")}
           onClick={() => setIsCompactMenuOpen(false)}
         >
           {t(navMessages.pricing)}

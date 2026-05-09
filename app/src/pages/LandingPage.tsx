@@ -465,7 +465,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
         window.location.assign(
           buildPaymentReturnUrl({
             paymentId: payload.data.simulatedPayment.paymentId,
-            pricingPath: localizePath("/pricing"),
+            pricingPath: localizePath("/pricing/"),
             productId: payload.data.simulatedPayment.productId,
           }),
         );
@@ -481,7 +481,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
         if (payload.data.widget?.confirmationToken) {
           const returnUrl = buildPaymentReturnUrl({
             paymentId: payload.data.widget.paymentId,
-            pricingPath: localizePath("/pricing"),
+            pricingPath: localizePath("/pricing/"),
             productId,
           });
           try {
@@ -757,7 +757,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
 
             <div className="landing-examples-cta">
               <div className="landing-examples-cta__grid" data-reveal-group="">
-                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=ads")} aria-label={locale === "en" ? "Open Shorts examples: ad Shorts" : "Открыть примеры Shorts: Рекламные Shorts"} data-reveal="" data-reveal-delay="1">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples/?filter=ads")} aria-label={locale === "en" ? "Open Shorts examples: ad Shorts" : "Открыть примеры Shorts: Рекламные Shorts"} data-reveal="" data-reveal-delay="1">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -767,7 +767,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                   <p>{locale === "en" ? "Promote a product or service and guide viewers to action." : "Продвигайте продукт или услугу и ведите зрителя к действию."}</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=growth")} aria-label={locale === "en" ? "Open Shorts examples: channel growth Shorts" : "Открыть примеры Shorts: Shorts для роста канала"} data-reveal="" data-reveal-delay="2">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples/?filter=growth")} aria-label={locale === "en" ? "Open Shorts examples: channel growth Shorts" : "Открыть примеры Shorts: Shorts для роста канала"} data-reveal="" data-reveal-delay="2">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
@@ -777,7 +777,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                   <p>{locale === "en" ? "Gain views and attract new subscribers." : "Набирайте просмотры и привлекайте новых подписчиков."}</p>
                 </Link>
 
-                <Link className="landing-examples-cta__card" to={localizePath("/examples?filter=expert")} aria-label={locale === "en" ? "Open Shorts examples: educational Shorts" : "Открыть примеры Shorts: Обучающие Shorts"} data-reveal="" data-reveal-delay="3">
+                <Link className="landing-examples-cta__card" to={localizePath("/examples/?filter=expert")} aria-label={locale === "en" ? "Open Shorts examples: educational Shorts" : "Открыть примеры Shorts: Обучающие Shorts"} data-reveal="" data-reveal-delay="3">
                   <div className="landing-examples-cta__icon" aria-hidden="true">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><line x1="12" y1="12" x2="12" y2="14"/>
@@ -789,7 +789,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
               </div>
 
               <div className="landing-examples-cta__actions">
-                <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/examples#top")}>
+                <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/examples/#top")}>
                   <span className="btn--premium-cta__label">{t(landingMessages.seeExamples)}</span>
                   <svg
                     className="btn--premium-cta__arrow"
@@ -924,7 +924,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
                 </div>
 
                 <div className="lp-section-head__cta lp-section-head__cta--pricing-under">
-                  <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing#top")}>
+                  <Link className="btn btn--primary btn--premium-cta route-button" to={localizePath("/pricing/#top")}>
                     <span className="btn--premium-cta__label">Перейти к тарифам</span>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M5 12h14M12 5l7 7-7 7" />

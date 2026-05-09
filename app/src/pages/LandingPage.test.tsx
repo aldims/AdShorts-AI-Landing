@@ -72,11 +72,11 @@ describe("LandingPage guides section", () => {
     expect(screen.getByText("Создавайте готовые ролики за минуты — от идеи до публикации в одном месте")).toBeTruthy();
     expect(screen.queryByText("Запусти канал, который приносит просмотры каждый день")).toBeNull();
     expect(screen.queryByText("Введите идею — AI создаст сценарий, озвучку и видео. Shorts сразу готов для публикации.")).toBeNull();
-    expect(screen.getByRole("link", { name: "Открыть примеры Shorts: Обучающие Shorts" }).getAttribute("href")).toBe("/examples?filter=expert");
+    expect(screen.getByRole("link", { name: "Открыть примеры Shorts: Обучающие Shorts" }).getAttribute("href")).toBe("/examples/?filter=expert");
     expect(screen.getByText("Обучающие Shorts")).toBeTruthy();
     expect(screen.queryByText("Экспертные Shorts")).toBeNull();
-    expect(screen.getByRole("link", { name: "Смотреть примеры" }).getAttribute("href")).toBe("/examples#top");
-    expect(screen.getByRole("link", { name: "Перейти к тарифам" }).getAttribute("href")).toBe("/pricing#top");
+    expect(screen.getByRole("link", { name: "Смотреть примеры" }).getAttribute("href")).toBe("/examples/#top");
+    expect(screen.getByRole("link", { name: "Перейти к тарифам" }).getAttribute("href")).toBe("/pricing/#top");
     expect(screen.queryByText("Все тарифы")).toBeNull();
   });
 
@@ -88,8 +88,8 @@ describe("LandingPage guides section", () => {
         name: /Shorts \/ Reels \/ TikTok in\s*1\s*minute\. In one click\./,
       }),
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Examples" }).getAttribute("href")).toBe("/en/examples");
-    expect(screen.getByRole("link", { name: "Pricing" }).getAttribute("href")).toBe("/en/pricing");
+    expect(screen.getByRole("link", { name: "Examples" }).getAttribute("href")).toBe("/en/examples/");
+    expect(screen.getByRole("link", { name: "Pricing" }).getAttribute("href")).toBe("/en/pricing/");
   });
 
   it("replaces English landing pricing cards with the international waitlist", () => {

@@ -29,7 +29,8 @@ export const staticLandingContent = {
       canonical: "https://adshortsai.com/",
       assetPrefix: "./",
       title: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
-      description: "AdShorts AI — автоматическое создание вертикальных видео за 1 минуту.",
+      description:
+        "AdShorts AI создаёт YouTube Shorts, Reels и TikTok за минуту: AI-сценарий, озвучка, субтитры, фон и публикация без ручного монтажа.",
       ogUrl: "https://adshortsai.com/",
       ogTitle: "AdShorts AI — видео за 1 минуту",
       ogDescription:
@@ -63,7 +64,8 @@ export const staticLandingContent = {
       canonical: "https://adshortsai.com/en/",
       assetPrefix: "../",
       title: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
-      description: "AdShorts AI — automatic vertical video creation in 1 minute.",
+      description:
+        "AdShorts AI creates YouTube Shorts, Reels and TikTok videos in minutes: AI script, voiceover, subtitles, visuals and publishing without manual editing.",
       ogUrl: "https://adshortsai.com/en/",
       ogTitle: "AdShorts AI — Video in 1 Minute",
       ogDescription:

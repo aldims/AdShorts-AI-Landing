@@ -13,6 +13,7 @@ import {
   resolveLocaleFromPathname,
   stripLocalePrefix,
   useLocale,
+  type Locale,
 } from "./lib/i18n";
 import { syncMetrikaUserId } from "./lib/metrika";
 import { captureReferralFromLocation } from "./lib/referrals";
@@ -87,18 +88,103 @@ const appMessages = defineMessages({
     ru: "Проверяем сессию…",
     en: "Checking session…",
   },
-  metaDescription: {
-    ru: "AdShorts AI: веб-студия для создания Shorts, Reels и TikTok с AI-сценарием, озвучкой, субтитрами и публикацией.",
-    en: "AdShorts AI: a web studio for creating Shorts, Reels and TikTok videos with AI scripts, voiceover, subtitles and publishing.",
+});
+
+const publicSiteOrigin = "https://adshortsai.com";
+type PublicRoutePathname = "/" | "/pricing" | "/examples";
+
+type PublicRouteMeta = {
+  canonicalPath: string;
+  title: Record<Locale, string>;
+  description: Record<Locale, string>;
+  ogTitle: Record<Locale, string>;
+  ogDescription: Record<Locale, string>;
+};
+
+const publicRouteMeta: Record<PublicRoutePathname, PublicRouteMeta> = {
+  "/": {
+    canonicalPath: "/",
+    title: {
+      ru: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
+      en: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
+    },
+    description: {
+      ru: "AdShorts AI создаёт YouTube Shorts, Reels и TikTok за минуту: AI-сценарий, озвучка, субтитры, фон и публикация без ручного монтажа.",
+      en: "AdShorts AI creates YouTube Shorts, Reels and TikTok videos in minutes: AI script, voiceover, subtitles, visuals and publishing without manual editing.",
+    },
+    ogTitle: {
+      ru: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
+      en: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
+    },
+    ogDescription: {
+      ru: "Введите идею — получите готовый Shorts с озвучкой, субтитрами и визуалом.",
+      en: "Enter an idea and get a ready Shorts video with voiceover, subtitles and visuals.",
+    },
   },
+  "/pricing": {
+    canonicalPath: "/pricing/",
+    title: {
+      ru: "Тарифы AdShorts AI: создание Shorts с AI-сценарием и субтитрами",
+      en: "AdShorts AI Pricing: AI Shorts, Reels and TikTok Videos",
+    },
+    description: {
+      ru: "Тарифы AdShorts AI для создания YouTube Shorts, Reels и TikTok: бесплатный старт, Pro для регулярного контента и Ultra для больших объёмов.",
+      en: "AdShorts AI pricing for creating YouTube Shorts, Reels and TikTok videos with AI scripts, voiceover, subtitles, visuals and publishing tools.",
+    },
+    ogTitle: {
+      ru: "Тарифы AdShorts AI",
+      en: "AdShorts AI Pricing",
+    },
+    ogDescription: {
+      ru: "Выберите тариф для регулярного создания вертикальных роликов: AI-сценарий, озвучка, субтитры, визуал и публикация.",
+      en: "Choose a plan for regular short-form video production: AI script, voiceover, subtitles, visuals and publishing tools.",
+    },
+  },
+  "/examples": {
+    canonicalPath: "/examples/",
+    title: {
+      ru: "Примеры Shorts AdShorts AI: шаблоны для рекламы, роста и обучения",
+      en: "AdShorts AI Examples: Templates for Ads, Growth and Education",
+    },
+    description: {
+      ru: "Примеры Shorts, которые можно использовать как стартовый шаблон: реклама услуг, рост канала, обучающий контент и storytelling.",
+      en: "AdShorts AI examples for short-form video creation: ad Shorts, channel growth, educational content and storytelling templates.",
+    },
+    ogTitle: {
+      ru: "Примеры Shorts AdShorts AI",
+      en: "AdShorts AI Examples",
+    },
+    ogDescription: {
+      ru: "Готовые сцены и шаблоны для запуска Shorts: выберите пример и откройте похожую структуру в студии.",
+      en: "Ready scenes and templates for Shorts: choose an example and open a similar structure in the studio.",
+    },
+  },
+};
+
+const workspaceRouteMeta = {
+  canonicalPath: "/app/studio",
   title: {
     ru: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
     en: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
   },
-});
+  description: {
+    ru: "AdShorts AI: веб-студия для создания Shorts, Reels и TikTok с AI-сценарием, озвучкой, субтитрами и публикацией.",
+    en: "AdShorts AI: a web studio for creating Shorts, Reels and TikTok videos with AI scripts, voiceover, subtitles and publishing.",
+  },
+  ogTitle: {
+    ru: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
+    en: "AdShorts AI — Shorts/Reels/TikTok in 1 Minute",
+  },
+  ogDescription: {
+    ru: "Введите идею — получите готовый Shorts с озвучкой, субтитрами и визуалом.",
+    en: "Enter an idea and get a ready Shorts video with voiceover, subtitles and visuals.",
+  },
+} satisfies PublicRouteMeta;
 
-const publicSiteOrigin = "https://adshortsai.com";
-const indexablePublicPathnames = new Set(["/", "/pricing", "/examples"]);
+const indexablePublicPathnames = new Set<PublicRoutePathname>(["/", "/pricing", "/examples"]);
+
+const getIndexablePublicPathname = (pathname: string): PublicRoutePathname | null =>
+  indexablePublicPathnames.has(pathname as PublicRoutePathname) ? (pathname as PublicRoutePathname) : null;
 
 const normalizeAppPathnameForMeta = (pathname: string) => {
   const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
@@ -126,11 +212,14 @@ const ensureCanonicalLink = () => {
   return link;
 };
 
-const setPropertyMeta = (property: string, content: string) => {
-  const meta = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
-  if (meta) {
-    meta.content = content;
+const ensurePropertyMeta = (property: string) => {
+  let meta = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute("property", property);
+    document.head.appendChild(meta);
   }
+  return meta;
 };
 
 const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
@@ -494,23 +583,23 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    const title = appMessages.title[locale];
-    const description = appMessages.metaDescription[locale];
     const normalizedAppPathname = normalizeAppPathnameForMeta(appPathname);
-    const isIndexablePublicPage = indexablePublicPathnames.has(normalizedAppPathname);
-    const canonicalPath = localizePath(isIndexablePublicPage ? normalizedAppPathname : "/app/studio");
+    const publicPathname = getIndexablePublicPathname(normalizedAppPathname);
+    const isIndexablePublicPage = Boolean(publicPathname);
+    const routeMeta = publicPathname ? publicRouteMeta[publicPathname] : workspaceRouteMeta;
+    const title = routeMeta.title[locale];
+    const description = routeMeta.description[locale];
+    const canonicalPath = localizePath(routeMeta.canonicalPath);
 
     document.title = title;
 
-    const metaDescription = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.content = description;
-    }
-
+    ensureNamedMeta("description").content = description;
     ensureNamedMeta("robots").content = isIndexablePublicPage ? "index, follow" : "noindex, nofollow";
     ensureCanonicalLink().href = `${publicSiteOrigin}${canonicalPath}`;
-    setPropertyMeta("og:title", title);
-    setPropertyMeta("og:description", description);
+    ensurePropertyMeta("og:type").content = "website";
+    ensurePropertyMeta("og:url").content = `${publicSiteOrigin}${canonicalPath}`;
+    ensurePropertyMeta("og:title").content = routeMeta.ogTitle[locale];
+    ensurePropertyMeta("og:description").content = routeMeta.ogDescription[locale];
   }, [appPathname, locale, localizePath]);
 
   return (

@@ -532,7 +532,7 @@ export function PricingPage({
           productId: simulatedPayment.productId,
           status: "success",
         });
-        navigate(`${localizePath("/pricing")}#payment-result`, { replace: true });
+        navigate(`${localizePath("/pricing/")}#payment-result`, { replace: true });
         return;
       }
 
@@ -551,7 +551,7 @@ export function PricingPage({
         if (payload.data.widget?.confirmationToken) {
           const returnUrl = buildPaymentReturnUrl({
             paymentId: payload.data.widget.paymentId,
-            pricingPath: localizePath("/pricing"),
+            pricingPath: localizePath("/pricing/"),
             productId,
           });
           try {
@@ -581,7 +581,7 @@ export function PricingPage({
 
   const handleDismissPaymentResult = () => {
     setCheckoutResult(null);
-    navigate(localizePath("/pricing"), { replace: true });
+    navigate(localizePath("/pricing/"), { replace: true });
   };
 
   const handlePlanCheckout = (productId: PlanCheckoutProductId) => {
