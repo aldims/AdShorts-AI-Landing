@@ -1040,6 +1040,11 @@ textarea {
   padding: 0;
 }
 
+.site-header--workspace .site-header__inner.container {
+  width: calc(100% - 32px);
+  max-width: none;
+}
+
 .site-header--workspace .brand {
   transform: none;
   justify-self: start;
