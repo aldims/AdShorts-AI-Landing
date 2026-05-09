@@ -9,7 +9,6 @@ import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStat
 import { defineMessages, useLocale, type Locale } from "../lib/i18n";
 import { logClientEvent } from "../lib/client-log";
 import { clearPricingEntryIntent, readPricingEntryIntent } from "../lib/pricing-entry-intent";
-import { recordReferralPurchase } from "../lib/referrals";
 import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 import {
@@ -99,7 +98,6 @@ type WorkspaceBootstrapResponse = {
 type CheckoutResultState = {
   addedCredits: number | null;
   balance: number | null;
-  paymentId: string | null;
   plan: string | null;
   productId: CheckoutProductId;
   status: "checking" | "pending" | "success";
@@ -527,7 +525,6 @@ export function PricingPage({
         setCheckoutResult({
           addedCredits: simulatedPayment.addedCredits,
           balance: simulatedPayment.profile.balance,
-          paymentId: simulatedPayment.paymentId,
           plan: simulatedPayment.profile.plan,
           productId: simulatedPayment.productId,
           status: "success",
@@ -704,7 +701,6 @@ export function PricingPage({
 
     const eventKey = [
       checkoutResult.productId,
-      checkoutResult.paymentId ?? "",
       checkoutResult.plan ?? "",
       checkoutResult.balance ?? "",
       checkoutResult.addedCredits ?? "",
@@ -719,15 +715,8 @@ export function PricingPage({
       addedCredits: checkoutResult.addedCredits ?? null,
       balance: checkoutResult.balance ?? null,
       lang: locale,
-      paymentId: checkoutResult.paymentId,
       path: `${location.pathname}${location.search}${location.hash}`,
       plan: checkoutResult.plan ?? null,
-      productId: checkoutResult.productId,
-    });
-    recordReferralPurchase({
-      balance: checkoutResult.balance,
-      paymentId: checkoutResult.paymentId,
-      plan: checkoutResult.plan,
       productId: checkoutResult.productId,
     });
   }, [checkoutResult, locale, location.hash, location.pathname, location.search]);
@@ -759,7 +748,6 @@ export function PricingPage({
       setCheckoutResult({
         addedCredits,
         balance: nextBalance,
-        paymentId: new URLSearchParams(location.search).get("payment_id"),
         plan: nextPlan,
         productId,
         status: success ? "success" : "pending",
@@ -776,7 +764,6 @@ export function PricingPage({
       setCheckoutResult({
         addedCredits: null,
         balance: null,
-        paymentId: new URLSearchParams(location.search).get("payment_id"),
         plan: null,
         productId,
         status: "checking",

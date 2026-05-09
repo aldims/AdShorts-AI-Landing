@@ -21,7 +21,6 @@ import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, cr
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
-import { createReferralLink, isReferralAdminUser, listReferralLinks, normalizeReferralCode, readReferralCodeFromCookieHeader, recordReferralClick, recordReferralPurchase, REFERRAL_COOKIE_MAX_AGE_MS, REFERRAL_COOKIE_NAME, updateReferralLink, } from "./referrals.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { purgeAdminAccountData } from "./admin-account-purge.js";
@@ -82,28 +81,10 @@ const requireAdminRequest = (req, res) => {
     }
     return true;
 };
-const requireReferralAdminSession = async (req, res) => {
-    const session = await auth.api.getSession({
-        headers: fromNodeHeaders(req.headers),
-    });
-    if (!session?.user) {
-        res.status(401).json({ error: "Unauthorized" });
-        return null;
-    }
-    if (!isReferralAdminUser(session.user)) {
-        res.status(403).json({ error: "Forbidden" });
-        return null;
-    }
-    return session;
-};
-const setReferralCookie = (res, code) => {
-    res.cookie(REFERRAL_COOKIE_NAME, code, {
-        httpOnly: true,
-        maxAge: REFERRAL_COOKIE_MAX_AGE_MS,
-        path: "/",
-        sameSite: "lax",
-        secure: env.isProduction,
-    });
+const normalizeWebReferralSource = (value) => {
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    const normalized = String(rawValue ?? "").trim();
+    return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
 };
 const allowedCorsOrigins = Array.from(new Set([
     env.appUrl,
@@ -895,7 +876,9 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
         return;
     }
     try {
-        const workspace = await getWorkspaceBootstrap(session.user);
+        const workspace = await getWorkspaceBootstrap(session.user, {
+            referralSource: normalizeWebReferralSource(req.query.referral_source ?? req.query.ref ?? req.query.referral),
+        });
         if (workspace.latestGeneration?.generation) {
             await invalidateWorkspaceProjectsCache(session.user);
         }
@@ -1729,96 +1712,30 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 });
 app.all(/^\/api\/auth(\/.*)?$/, toNodeHandler(auth));
 app.use(express.json({ limit: "90mb" }));
-app.get("/api/admin/referrals", async (req, res) => {
-    const session = await requireReferralAdminSession(req, res);
-    if (!session) {
-        return;
-    }
-    try {
-        const links = await listReferralLinks();
-        res.json({ data: { canManage: true, links } });
-    }
-    catch (error) {
-        console.error("[referrals] Failed to list referral links", error);
-        res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to load referral links.",
-        });
-    }
-});
-app.post("/api/admin/referrals", async (req, res) => {
-    const session = await requireReferralAdminSession(req, res);
-    if (!session) {
-        return;
-    }
-    try {
-        const link = await createReferralLink(req.body && typeof req.body === "object" ? req.body : {}, session.user);
-        res.status(201).json({ data: { link } });
-    }
-    catch (error) {
-        res.status(400).json({
-            error: error instanceof Error ? error.message : "Failed to create referral link.",
-        });
-    }
-});
-app.patch("/api/admin/referrals/:linkId", async (req, res) => {
-    const session = await requireReferralAdminSession(req, res);
-    if (!session) {
-        return;
-    }
-    try {
-        const link = await updateReferralLink(typeof req.params.linkId === "string" ? req.params.linkId : "", req.body && typeof req.body === "object" ? req.body : {});
-        res.json({ data: { link } });
-    }
-    catch (error) {
-        res.status(400).json({
-            error: error instanceof Error ? error.message : "Failed to update referral link.",
-        });
-    }
-});
 app.post("/api/referrals/click", async (req, res) => {
-    const session = await auth.api.getSession({
-        headers: fromNodeHeaders(req.headers),
-    });
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const code = normalizeReferralCode(body.code);
-    try {
-        const link = await recordReferralClick(body, session?.user ?? null);
-        if (!link) {
-            res.json({ data: { code: code || null, ok: false } });
-            return;
-        }
-        setReferralCookie(res, link.code);
-        res.json({ data: { code: link.code, ok: true } });
-    }
-    catch (error) {
-        console.error("[referrals] Failed to record referral click", error);
-        res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to record referral click.",
-        });
-    }
-});
-app.post("/api/referrals/purchase", async (req, res) => {
-    const session = await auth.api.getSession({
-        headers: fromNodeHeaders(req.headers),
-    });
-    if (!session?.user) {
-        res.status(401).json({ error: "Unauthorized" });
+    const code = normalizeWebReferralSource(body.code);
+    if (!code) {
+        res.json({ data: { code: null, ok: false } });
         return;
     }
-    const cookieCode = readReferralCodeFromCookieHeader(req.headers.cookie);
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    const bodyCode = normalizeReferralCode(body.code);
     try {
-        const link = await recordReferralPurchase({
-            ...body,
-            code: bodyCode || cookieCode,
-        }, session.user);
-        res.json({ data: { code: link?.code ?? (bodyCode || cookieCode || null), ok: Boolean(link) } });
+        const payload = await postAdsflowJson("/api/web/referral-click", {
+            admin_token: env.adsflowAdminToken,
+            code,
+            landing_url: typeof body.landing_url === "string" ? body.landing_url : undefined,
+            referrer: typeof body.referrer === "string" ? body.referrer : undefined,
+            source_path: typeof body.source_path === "string" ? body.source_path : undefined,
+        }, upstreamPolicies.adsflowMetadata, {
+            endpoint: "referral.click",
+            projectId: code,
+        });
+        res.json({ data: { code, ok: Boolean(payload?.success), tracked: Boolean(payload?.tracked) } });
     }
     catch (error) {
-        console.error("[referrals] Failed to record referral purchase", error);
-        res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to record referral purchase.",
+        console.error("[referrals] Failed to forward referral click", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to record referral click.",
         });
     }
 });

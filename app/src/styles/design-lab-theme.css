@@ -14734,207 +14734,6 @@ textarea {
   gap: 18px;
 }
 
-.referral-admin {
-  display: grid;
-  gap: 18px;
-}
-
-.referral-admin__composer {
-  border-color: rgba(216, 255, 114, 0.14);
-  background:
-    radial-gradient(circle at top right, rgba(216, 255, 114, 0.1), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025)),
-    rgba(255, 255, 255, 0.02);
-}
-
-.referral-admin__form,
-.referral-link-card__editor {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.referral-admin__field {
-  display: grid;
-  gap: 8px;
-}
-
-.referral-admin__field span {
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.referral-admin__field input,
-.referral-admin__field select {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 0 13px;
-  background: rgba(255, 255, 255, 0.055);
-  color: white;
-  font: inherit;
-  outline: 0;
-  transition:
-    background 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.referral-admin__field select {
-  color-scheme: dark;
-}
-
-.referral-admin__field input::placeholder {
-  color: rgba(255, 255, 255, 0.36);
-}
-
-.referral-admin__field input:focus,
-.referral-admin__field select:focus {
-  border-color: rgba(216, 255, 114, 0.36);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 4px rgba(216, 255, 114, 0.08);
-}
-
-.referral-admin__create {
-  max-width: 260px;
-}
-
-.referral-admin__summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.referral-products__grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.referral-products__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.referral-products__item span {
-  color: rgba(255, 255, 255, 0.72);
-  font-weight: 700;
-}
-
-.referral-products__item strong {
-  color: #d8ff72;
-}
-
-.referral-link-list {
-  display: grid;
-  gap: 16px;
-}
-
-.referral-link-card {
-  display: grid;
-  gap: 16px;
-}
-
-.referral-link-card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.referral-link-card__head h3 {
-  margin: 10px 0 0;
-  color: white;
-  font-size: 1.15rem;
-}
-
-.referral-link-card__head p {
-  margin: 6px 0 0;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 0.9rem;
-}
-
-.referral-link-card__url {
-  display: flex;
-  align-items: center;
-  min-height: 42px;
-  padding: 0 14px;
-  border: 1px solid rgba(216, 255, 114, 0.16);
-  border-radius: 14px;
-  background: rgba(216, 255, 114, 0.06);
-  color: rgba(255, 255, 255, 0.86);
-  overflow: hidden;
-}
-
-.referral-link-card__url span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.referral-link-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.referral-link-card__metrics div,
-.referral-link-card__purchases div {
-  display: grid;
-  gap: 5px;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.referral-link-card__metrics span,
-.referral-link-card__purchases span {
-  color: rgba(255, 255, 255, 0.54);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.referral-link-card__metrics strong,
-.referral-link-card__purchases strong {
-  min-width: 0;
-  color: white;
-}
-
-.referral-link-card__metrics small,
-.referral-link-card__purchases small {
-  min-width: 0;
-  color: rgba(255, 255, 255, 0.58);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.referral-link-card__purchases {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.referral-link-card__save {
-  justify-self: end;
-  width: auto;
-  min-width: 220px;
-  padding: 0 20px;
-}
-
 @media (max-width: 1180px) {
   .account-shell__frame {
     grid-template-columns: 1fr;
@@ -14953,15 +14752,7 @@ textarea {
 
   .account-stats,
   .account-formgrid,
-  .account-library,
-  .referral-admin__summary,
-  .referral-link-card__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .referral-admin__form,
-  .referral-link-card__editor,
-  .referral-link-card__purchases {
+  .account-library {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -15002,12 +14793,7 @@ textarea {
   .account-nav,
   .account-stats,
   .account-formgrid,
-  .account-library,
-  .referral-admin__form,
-  .referral-admin__summary,
-  .referral-link-card__editor,
-  .referral-link-card__metrics,
-  .referral-link-card__purchases {
+  .account-library {
     grid-template-columns: 1fr;
   }
 
@@ -15031,17 +14817,6 @@ textarea {
 
   .account-topups__grid {
     grid-template-columns: 1fr;
-  }
-
-  .referral-link-card__head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .referral-link-card__save,
-  .referral-admin__create {
-    width: 100%;
-    max-width: none;
   }
 }
 

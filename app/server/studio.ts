@@ -70,6 +70,10 @@ type StudioUser = {
   name?: string | null;
 };
 
+type WorkspaceBootstrapOptions = {
+  referralSource?: string | null;
+};
+
 type AdsflowCreateJobResponse = {
   enqueue_error?: string | null;
   job_id?: string;
@@ -715,6 +719,11 @@ const sanitizeStudioContentPlanIdeaPrompt = (value: unknown) => {
 };
 
 const normalizeGenerationText = (value: string | null | undefined) => String(value ?? "").replace(/\s+/g, " ").trim();
+
+const normalizeWebReferralSource = (value: string | null | undefined) => {
+  const normalized = normalizeGenerationText(value);
+  return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
+};
 
 const normalizeStudioMusicType = (value: string | null | undefined) => {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -3761,8 +3770,9 @@ const refundWorkspaceGenerationCredit = async (
   return await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user, extractAdsflowUserId(payloadText), subscriptionDetails);
 };
 
-export async function getWorkspaceBootstrap(user: StudioUser): Promise<WorkspaceBootstrap> {
+export async function getWorkspaceBootstrap(user: StudioUser, options: WorkspaceBootstrapOptions = {}): Promise<WorkspaceBootstrap> {
   const externalUserId = await resolveStudioExternalUserId(user);
+  const referralSource = normalizeWebReferralSource(options.referralSource) || "landing_site";
   const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
   const cachedBootstrap = getCachedWorkspaceBootstrap(cacheKey);
   const deletedProjectsPromise = listWorkspaceDeletedProjects(user).catch((error) => {
@@ -3785,7 +3795,7 @@ export async function getWorkspaceBootstrap(user: StudioUser): Promise<Workspace
         admin_token: env.adsflowAdminToken,
         external_user_id: externalUserId,
         language: "ru",
-        referral_source: "landing_site",
+        referral_source: referralSource,
         user_email: user.email ?? undefined,
         user_email_verified: user.emailVerified === true,
         user_name: user.name ?? undefined,

@@ -16,7 +16,6 @@ import {
   type Locale,
 } from "./lib/i18n";
 import { syncMetrikaUserId } from "./lib/metrika";
-import { captureReferralFromLocation } from "./lib/referrals";
 
 const AuthModal = lazy(() =>
   import("./components/AuthModal").then((module) => ({
@@ -82,6 +81,9 @@ type ImpersonationState = {
 
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
 const IMPERSONATION_COOKIE_NAME = "adshorts.impersonation";
+const WEB_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
+const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
+const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -227,6 +229,86 @@ const isAbortLikeError = (error: unknown) =>
   error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError";
+
+const normalizeWebReferralSource = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  return WEB_REFERRAL_SOURCE_PATTERN.test(normalized) ? normalized : "";
+};
+
+const readWebReferralSourceFromLocation = (location: { search: string }) => {
+  const params = new URLSearchParams(location.search);
+  return normalizeWebReferralSource(params.get("referral_source") ?? params.get("ref") ?? params.get("referral"));
+};
+
+const readStoredWebReferralSource = () => {
+  if (typeof window === "undefined") return "";
+
+  try {
+    return normalizeWebReferralSource(window.localStorage.getItem(WEB_REFERRAL_SOURCE_STORAGE_KEY));
+  } catch {
+    return "";
+  }
+};
+
+const persistWebReferralSource = (source: string) => {
+  if (typeof window === "undefined" || !source) return;
+
+  try {
+    window.localStorage.setItem(WEB_REFERRAL_SOURCE_STORAGE_KEY, source);
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
+const buildWorkspaceBootstrapUrl = (referralSource: string) => {
+  if (!referralSource) return "/api/workspace/bootstrap";
+  return `/api/workspace/bootstrap?${new URLSearchParams({ referral_source: referralSource }).toString()}`;
+};
+
+const shouldRecordWebReferralClick = (referralSource: string) => {
+  if (typeof window === "undefined" || !referralSource) return false;
+
+  try {
+    const storageKey = `${WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX}${referralSource}`;
+    if (window.sessionStorage.getItem(storageKey) === "1") {
+      return false;
+    }
+    window.sessionStorage.setItem(storageKey, "1");
+    return true;
+  } catch {
+    return true;
+  }
+};
+
+const recordWebReferralClick = (
+  referralSource: string,
+  location: {
+    hash?: string;
+    pathname: string;
+    search: string;
+  },
+) => {
+  if (typeof window === "undefined" || !referralSource) return;
+  if (!shouldRecordWebReferralClick(referralSource)) return;
+
+  fetch("/api/referrals/click", {
+    method: "POST",
+    credentials: "include",
+    keepalive: true,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      code: referralSource,
+      landing_url: window.location.href,
+      referrer: document.referrer || null,
+      source_path: `${location.pathname}${location.search}${location.hash ?? ""}`,
+    }),
+  }).catch(() => {
+    // Referral analytics must not block routing or auth.
+  });
+};
+
 const normalizeWorkspaceBooleanFlag = (value: unknown) => {
   if (typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
@@ -412,7 +494,11 @@ export function App() {
   }, [authSession]);
 
   useEffect(() => {
-    captureReferralFromLocation(location);
+    const referralSource = readWebReferralSourceFromLocation(location);
+    if (referralSource) {
+      persistWebReferralSource(referralSource);
+      recordWebReferralClick(referralSource, location);
+    }
   }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
@@ -431,7 +517,8 @@ export function App() {
 
     const loadWorkspaceProfile = async () => {
       try {
-        const response = await fetch("/api/workspace/bootstrap", {
+        const referralSource = readWebReferralSourceFromLocation(location) || readStoredWebReferralSource();
+        const response = await fetch(buildWorkspaceBootstrapUrl(referralSource), {
           signal: controller.signal,
         });
         const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
@@ -468,7 +555,7 @@ export function App() {
       isCancelled = true;
       controller.abort();
     };
-  }, [session?.email]);
+  }, [location.search, session?.email]);
 
   useEffect(() => {
     if (!session?.email || !workspaceProfile) {

@@ -215,6 +215,10 @@ const sanitizeStudioContentPlanIdeaPrompt = (value) => {
     return normalized || fallbackPrompt;
 };
 const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeWebReferralSource = (value) => {
+    const normalized = normalizeGenerationText(value);
+    return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
+};
 const normalizeStudioMusicType = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedMusicTypes.has(normalized) ? normalized : "ai";
@@ -2560,8 +2564,9 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language) => {
     }
     return await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user, extractAdsflowUserId(payloadText), subscriptionDetails);
 };
-export async function getWorkspaceBootstrap(user) {
+export async function getWorkspaceBootstrap(user, options = {}) {
     const externalUserId = await resolveStudioExternalUserId(user);
+    const referralSource = normalizeWebReferralSource(options.referralSource) || "landing_site";
     const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
     const cachedBootstrap = getCachedWorkspaceBootstrap(cacheKey);
     const deletedProjectsPromise = listWorkspaceDeletedProjects(user).catch((error) => {
@@ -2579,7 +2584,7 @@ export async function getWorkspaceBootstrap(user) {
             admin_token: env.adsflowAdminToken,
             external_user_id: externalUserId,
             language: "ru",
-            referral_source: "landing_site",
+            referral_source: referralSource,
             user_email: user.email ?? undefined,
             user_email_verified: user.emailVerified === true,
             user_name: user.name ?? undefined,
