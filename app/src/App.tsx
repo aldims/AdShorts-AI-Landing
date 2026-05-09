@@ -15,6 +15,7 @@ import {
   useLocale,
 } from "./lib/i18n";
 import { syncMetrikaUserId } from "./lib/metrika";
+import { captureReferralFromLocation } from "./lib/referrals";
 
 const AuthModal = lazy(() =>
   import("./components/AuthModal").then((module) => ({
@@ -320,6 +321,10 @@ export function App() {
       plan: "FREE",
     };
   }, [authSession]);
+
+  useEffect(() => {
+    captureReferralFromLocation(location);
+  }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
     if (!session?.email) {

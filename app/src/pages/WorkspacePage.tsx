@@ -28,6 +28,7 @@ import {
   type CheckoutProductId,
 } from "../lib/payment-return";
 import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
+import { recordReferralPurchase } from "../lib/referrals";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 import {
@@ -91,7 +92,7 @@ import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill"
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 
-type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
+type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "referrals" | "settings";
 type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
@@ -241,6 +242,7 @@ type WorkspaceProfile = {
   expiresAt: string | null;
   plan: string;
   startPlanUsed: boolean;
+  userId?: string | null;
 };
 
 type WorkspacePackageCheckoutProductId = Extract<CheckoutProductId, "package_10" | "package_50" | "package_100">;
@@ -414,6 +416,62 @@ type WorkspaceMediaLibraryPayload = {
 type WorkspaceMediaLibraryResponse = {
   data?: WorkspaceMediaLibraryPayload;
   error?: string;
+};
+
+type WorkspaceReferralProductStats = {
+  count: number;
+  label: string;
+  productId: string;
+};
+
+type WorkspaceReferralPurchaseSummary = {
+  authUserEmail: string | null;
+  createdAt: string;
+  paymentId: string | null;
+  plan: string | null;
+  productId: string;
+  productLabel: string;
+};
+
+type WorkspaceReferralAdminLink = {
+  assignedUserEmail: string | null;
+  assignedUserId: string | null;
+  code: string;
+  createdAt: string;
+  id: string;
+  label: string;
+  status: "active" | "archived";
+  stats: {
+    clicks: number;
+    products: WorkspaceReferralProductStats[];
+    purchases: number;
+    recentPurchases: WorkspaceReferralPurchaseSummary[];
+    uniqueBuyers: number;
+    uniqueVisitors: number;
+  };
+  updatedAt: string;
+};
+
+type WorkspaceReferralAdminResponse = {
+  data?: {
+    canManage?: boolean;
+    links?: WorkspaceReferralAdminLink[];
+  };
+  error?: string;
+};
+
+type WorkspaceReferralMutationResponse = {
+  data?: {
+    link?: WorkspaceReferralAdminLink;
+  };
+  error?: string;
+};
+
+type WorkspaceReferralDraft = {
+  assignedUserEmail: string;
+  assignedUserId: string;
+  label: string;
+  status: "active" | "archived";
 };
 
 const mergeWorkspaceMediaLibraryPageItems = (
@@ -10088,6 +10146,18 @@ const tabCopy: Record<
       subtitle: "Current plan, credit balance and add-on pack flow for PRO and ULTRA.",
     },
   },
+  referrals: {
+    ru: {
+      eyebrow: "Админ-панель",
+      heading: "Реферальные ссылки",
+      subtitle: "Генерация уникальных ссылок, закрепление за пользователями и аналитика переходов с оплатами.",
+    },
+    en: {
+      eyebrow: "Admin panel",
+      heading: "Referral links",
+      subtitle: "Generate unique links, assign owners, and track visits, buyers and purchased products.",
+    },
+  },
   settings: {
     ru: {
       eyebrow: "Настройки",
@@ -10154,6 +10224,27 @@ const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>>
     },
   },
 ];
+
+const buildWorkspaceReferralUrl = (code: string) => {
+  const safeCode = encodeURIComponent(code);
+  if (typeof window === "undefined") {
+    return `/?ref=${safeCode}`;
+  }
+
+  const url = new URL("/", window.location.origin);
+  url.searchParams.set("ref", code);
+  return url.toString();
+};
+
+const buildWorkspaceReferralDraft = (link: WorkspaceReferralAdminLink): WorkspaceReferralDraft => ({
+  assignedUserEmail: link.assignedUserEmail ?? "",
+  assignedUserId: link.assignedUserId ?? "",
+  label: link.label,
+  status: link.status,
+});
+
+const buildWorkspaceReferralDrafts = (links: WorkspaceReferralAdminLink[]) =>
+  Object.fromEntries(links.map((link) => [link.id, buildWorkspaceReferralDraft(link)]));
 
 type StudioView = "create" | "projects" | "media";
 type StudioCreateMode = "default" | "segment-editor";
@@ -12918,6 +13009,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     useState<StudioGeneratedVideoActionMode>("expanded");
   const [studioToastMessage, setStudioToastMessage] = useState<string | null>(null);
   const [canManageLocalExamples, setCanManageLocalExamples] = useState(false);
+  const [canManageReferralLinks, setCanManageReferralLinks] = useState(false);
+  const [referralLinks, setReferralLinks] = useState<WorkspaceReferralAdminLink[]>([]);
+  const [referralDrafts, setReferralDrafts] = useState<Record<string, WorkspaceReferralDraft>>({});
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [isReferralLoading, setIsReferralLoading] = useState(false);
+  const [isReferralCreating, setIsReferralCreating] = useState(false);
+  const [referralSavingLinkId, setReferralSavingLinkId] = useState<string | null>(null);
+  const [newReferralLabel, setNewReferralLabel] = useState("");
+  const [newReferralCode, setNewReferralCode] = useState("");
+  const [newReferralUserEmail, setNewReferralUserEmail] = useState("");
+  const [newReferralUserId, setNewReferralUserId] = useState("");
   const [isLocalExampleModalOpen, setIsLocalExampleModalOpen] = useState(false);
   const [localExampleSource, setLocalExampleSource] = useState<WorkspaceLocalExampleSource | null>(null);
   const [selectedLocalExampleGoal, setSelectedLocalExampleGoal] = useState<WorkspaceLocalExampleGoal>("ads");
@@ -14661,6 +14763,148 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setHasLoadedProjects(false);
   }, [generatedVideo?.id]);
 
+  const applyReferralLinkList = (links: WorkspaceReferralAdminLink[]) => {
+    setReferralLinks(links);
+    setReferralDrafts(buildWorkspaceReferralDrafts(links));
+  };
+
+  const loadReferralLinks = useCallback(async () => {
+    setIsReferralLoading(true);
+    setReferralError(null);
+
+    try {
+      const response = await fetch("/api/admin/referrals");
+      const payload = (await response.json().catch(() => null)) as WorkspaceReferralAdminResponse | null;
+
+      if (response.status === 401 || response.status === 403) {
+        setCanManageReferralLinks(false);
+        applyReferralLinkList([]);
+        return;
+      }
+
+      if (!response.ok || !payload?.data?.canManage) {
+        throw new Error(payload?.error ?? workspaceText(locale, "Не удалось загрузить реферальные ссылки.", "Could not load referral links."));
+      }
+
+      setCanManageReferralLinks(true);
+      applyReferralLinkList(Array.isArray(payload.data.links) ? payload.data.links : []);
+    } catch (error) {
+      setCanManageReferralLinks(false);
+      applyReferralLinkList([]);
+      setReferralError(
+        error instanceof Error
+          ? error.message
+          : workspaceText(locale, "Не удалось загрузить реферальные ссылки.", "Could not load referral links."),
+      );
+    } finally {
+      setIsReferralLoading(false);
+    }
+  }, [locale]);
+
+  useEffect(() => {
+    void loadReferralLinks();
+  }, [loadReferralLinks, session.email]);
+
+  useEffect(() => {
+    if (activeTab === "referrals" && !canManageReferralLinks) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, canManageReferralLinks]);
+
+  const updateReferralDraft = (linkId: string, patch: Partial<WorkspaceReferralDraft>) => {
+    setReferralDrafts((current) => ({
+      ...current,
+      [linkId]: {
+        ...(current[linkId] ?? {
+          assignedUserEmail: "",
+          assignedUserId: "",
+          label: "",
+          status: "active",
+        }),
+        ...patch,
+      },
+    }));
+  };
+
+  const handleCreateReferralLink = async () => {
+    setReferralError(null);
+    setIsReferralCreating(true);
+
+    try {
+      const response = await fetch("/api/admin/referrals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignedUserEmail: newReferralUserEmail,
+          assignedUserId: newReferralUserId,
+          code: newReferralCode,
+          label: newReferralLabel,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceReferralMutationResponse | null;
+      if (!response.ok || !payload?.data?.link) {
+        throw new Error(payload?.error ?? workspaceText(locale, "Не удалось создать ссылку.", "Could not create the link."));
+      }
+
+      setNewReferralLabel("");
+      setNewReferralCode("");
+      setNewReferralUserEmail("");
+      setNewReferralUserId("");
+      await loadReferralLinks();
+    } catch (error) {
+      setReferralError(
+        error instanceof Error
+          ? error.message
+          : workspaceText(locale, "Не удалось создать ссылку.", "Could not create the link."),
+      );
+    } finally {
+      setIsReferralCreating(false);
+    }
+  };
+
+  const handleSaveReferralLink = async (link: WorkspaceReferralAdminLink) => {
+    const draft = referralDrafts[link.id] ?? buildWorkspaceReferralDraft(link);
+    setReferralError(null);
+    setReferralSavingLinkId(link.id);
+
+    try {
+      const response = await fetch(`/api/admin/referrals/${encodeURIComponent(link.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(draft),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceReferralMutationResponse | null;
+      if (!response.ok || !payload?.data?.link) {
+        throw new Error(payload?.error ?? workspaceText(locale, "Не удалось сохранить ссылку.", "Could not save the link."));
+      }
+
+      await loadReferralLinks();
+    } catch (error) {
+      setReferralError(
+        error instanceof Error
+          ? error.message
+          : workspaceText(locale, "Не удалось сохранить ссылку.", "Could not save the link."),
+      );
+    } finally {
+      setReferralSavingLinkId(null);
+    }
+  };
+
+  const handleCopyReferralLink = async (link: WorkspaceReferralAdminLink) => {
+    const url = buildWorkspaceReferralUrl(link.code);
+
+    try {
+      await navigator.clipboard?.writeText(url);
+      setStudioToastMessage(workspaceText(locale, "Ссылка скопирована", "Link copied"));
+    } catch {
+      setStudioToastMessage(url);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -15331,6 +15575,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         payload?.error ?? workspaceText(locale, "Не удалось открыть оплату.", "Could not open checkout.");
       if (payload?.data?.simulatedPayment) {
         applyWorkspaceProfile(payload.data.simulatedPayment.profile);
+        recordReferralPurchase({
+          balance: payload.data.simulatedPayment.profile.balance,
+          paymentId: payload.data.simulatedPayment.paymentId,
+          plan: payload.data.simulatedPayment.profile.plan,
+          productId: payload.data.simulatedPayment.productId,
+        });
         clearPreCheckoutProfile();
         return;
       }
@@ -15387,6 +15637,37 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     workspaceLocalExampleGoalOptions.find((option) => option.id === selectedLocalExampleGoal) ??
     workspaceLocalExampleGoalOptions[0];
   const selectedLocalExampleGoalOptionCopy = getWorkspaceLocalExampleGoalCopy(selectedLocalExampleGoalOption, locale);
+  const referralTotals = referralLinks.reduce(
+    (totals, link) => ({
+      clicks: totals.clicks + link.stats.clicks,
+      links: totals.links + 1,
+      purchases: totals.purchases + link.stats.purchases,
+      uniqueBuyers: totals.uniqueBuyers + link.stats.uniqueBuyers,
+      uniqueVisitors: totals.uniqueVisitors + link.stats.uniqueVisitors,
+    }),
+    {
+      clicks: 0,
+      links: 0,
+      purchases: 0,
+      uniqueBuyers: 0,
+      uniqueVisitors: 0,
+    },
+  );
+  const referralProductTotals = Array.from(
+    referralLinks
+      .flatMap((link) => link.stats.products)
+      .reduce((products, product) => {
+        const current = products.get(product.productId) ?? {
+          count: 0,
+          label: product.label,
+          productId: product.productId,
+        };
+        current.count += product.count;
+        products.set(product.productId, current);
+        return products;
+      }, new Map<string, WorkspaceReferralProductStats>())
+      .values(),
+  ).sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
   const isGeneratedVideoPlaybackBroken = isStudioVideoMarkedFailed(generatedVideo?.videoUrl);
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
@@ -28337,6 +28618,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
               <strong>Billing</strong>
               <span>{workspaceText(locale, "Тариф, кредиты и пополнение", "Plan, credits and top-ups")}</span>
             </button>
+            {canManageReferralLinks ? (
+              <button
+                className={`account-nav__item${activeTab === "referrals" ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setActiveTab("referrals")}
+              >
+                <strong>{workspaceText(locale, "Реферальные ссылки", "Referral links")}</strong>
+                <span>{workspaceText(locale, "Переходы, покупки и закрепления", "Visits, purchases and ownership")}</span>
+              </button>
+            ) : null}
             <button
               className={`account-nav__item${activeTab === "settings" ? " is-active" : ""}`}
               type="button"
@@ -28657,6 +28948,241 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       </div>
                     </article>
                   </div>
+                </div>
+              </section>
+            )}
+
+            {activeTab === "referrals" && canManageReferralLinks && (
+              <section className="account-panel is-active" data-account-panel="referrals">
+                <div className="referral-admin">
+                  <article className="account-card referral-admin__composer">
+                    <div className="account-card__head">
+                      <div>
+                        <h3>{workspaceText(locale, "Новая ссылка", "New link")}</h3>
+                        <p>{workspaceText(locale, "Код можно оставить пустым: система сгенерирует уникальный URL автоматически.", "Leave the code empty and the system will generate a unique URL.")}</p>
+                      </div>
+                    </div>
+
+                    <div className="referral-admin__form">
+                      <label className="referral-admin__field">
+                        <span>{workspaceText(locale, "Название", "Label")}</span>
+                        <input
+                          type="text"
+                          value={newReferralLabel}
+                          onChange={(event) => setNewReferralLabel(event.target.value)}
+                          placeholder={workspaceText(locale, "Например: YouTube апрель", "Example: YouTube April")}
+                        />
+                      </label>
+                      <label className="referral-admin__field">
+                        <span>{workspaceText(locale, "Код ссылки", "Link code")}</span>
+                        <input
+                          type="text"
+                          value={newReferralCode}
+                          onChange={(event) => setNewReferralCode(event.target.value)}
+                          placeholder="auto"
+                        />
+                      </label>
+                      <label className="referral-admin__field">
+                        <span>{workspaceText(locale, "Email пользователя", "User email")}</span>
+                        <input
+                          type="email"
+                          value={newReferralUserEmail}
+                          onChange={(event) => setNewReferralUserEmail(event.target.value)}
+                          placeholder="user@example.com"
+                        />
+                      </label>
+                      <label className="referral-admin__field">
+                        <span>{workspaceText(locale, "ID пользователя", "User ID")}</span>
+                        <input
+                          type="text"
+                          value={newReferralUserId}
+                          onChange={(event) => setNewReferralUserId(event.target.value)}
+                          placeholder={workspaceText(locale, "Опционально", "Optional")}
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      className="account-topup__primary referral-admin__create"
+                      type="button"
+                      onClick={() => void handleCreateReferralLink()}
+                      disabled={isReferralCreating}
+                    >
+                      {isReferralCreating
+                        ? workspaceText(locale, "Генерируем...", "Generating...")
+                        : workspaceText(locale, "Сгенерировать ссылку", "Generate link")}
+                    </button>
+                  </article>
+
+                  <div className="referral-admin__summary">
+                    <article className="account-stat">
+                      <span>{workspaceText(locale, "Ссылок", "Links")}</span>
+                      <strong>{referralTotals.links}</strong>
+                    </article>
+                    <article className="account-stat">
+                      <span>{workspaceText(locale, "Пользователей перешло", "Visitors")}</span>
+                      <strong>{referralTotals.uniqueVisitors}</strong>
+                      <p>{workspaceText(locale, `${referralTotals.clicks} переходов всего`, `${referralTotals.clicks} total visits`)}</p>
+                    </article>
+                    <article className="account-stat">
+                      <span>{workspaceText(locale, "Покупателей", "Buyers")}</span>
+                      <strong>{referralTotals.uniqueBuyers}</strong>
+                      <p>{workspaceText(locale, `${referralTotals.purchases} оплат всего`, `${referralTotals.purchases} purchases total`)}</p>
+                    </article>
+                  </div>
+
+                  {referralError ? (
+                    <p className="account-billing__error" role="alert">{referralError}</p>
+                  ) : null}
+
+                  {referralProductTotals.length ? (
+                    <article className="account-card referral-products">
+                      <div className="account-card__head">
+                        <div>
+                          <h3>{workspaceText(locale, "Что купили", "Purchased products")}</h3>
+                          <p>{workspaceText(locale, "Сводка по всем активным и архивным реферальным ссылкам.", "Summary across active and archived referral links.")}</p>
+                        </div>
+                      </div>
+                      <div className="referral-products__grid">
+                        {referralProductTotals.map((product) => (
+                          <div className="referral-products__item" key={product.productId}>
+                            <span>{product.label}</span>
+                            <strong>{product.count}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ) : null}
+
+                  {isReferralLoading ? (
+                    <article className="account-empty-state">
+                      <strong>{workspaceText(locale, "Загружаем ссылки...", "Loading links...")}</strong>
+                      <p>{workspaceText(locale, "Собираем переходы, покупателей и покупки.", "Collecting visits, buyers and purchases.")}</p>
+                    </article>
+                  ) : null}
+
+                  {!isReferralLoading && !referralLinks.length ? (
+                    <article className="account-empty-state">
+                      <strong>{workspaceText(locale, "Ссылок пока нет", "No links yet")}</strong>
+                      <p>{workspaceText(locale, "Создайте первую уникальную ссылку и закрепите её за пользователем.", "Create the first unique link and assign it to a user.")}</p>
+                    </article>
+                  ) : null}
+
+                  {!isReferralLoading && referralLinks.length ? (
+                    <div className="referral-link-list">
+                      {referralLinks.map((link) => {
+                        const draft = referralDrafts[link.id] ?? buildWorkspaceReferralDraft(link);
+                        const url = buildWorkspaceReferralUrl(link.code);
+                        return (
+                          <article className="account-card referral-link-card" key={link.id}>
+                            <div className="referral-link-card__head">
+                              <div>
+                                <span className={`account-status account-status--${link.status === "active" ? "ready" : "draft"}`}>
+                                  {link.status === "active" ? workspaceText(locale, "Активна", "Active") : workspaceText(locale, "Архив", "Archived")}
+                                </span>
+                                <h3>{link.label || link.code}</h3>
+                                <p>{workspaceText(locale, "Создана", "Created")}: {formatProjectDate(link.createdAt, locale)}</p>
+                              </div>
+                              <button className="account-linkbtn route-button" type="button" onClick={() => void handleCopyReferralLink(link)}>
+                                {workspaceText(locale, "Копировать", "Copy")}
+                              </button>
+                            </div>
+
+                            <div className="referral-link-card__url">
+                              <span>{url}</span>
+                            </div>
+
+                            <div className="referral-link-card__metrics">
+                              <div>
+                                <span>{workspaceText(locale, "Пользователей", "Visitors")}</span>
+                                <strong>{link.stats.uniqueVisitors}</strong>
+                                <small>{workspaceText(locale, `${link.stats.clicks} всего`, `${link.stats.clicks} total`)}</small>
+                              </div>
+                              <div>
+                                <span>{workspaceText(locale, "Купило", "Bought")}</span>
+                                <strong>{link.stats.uniqueBuyers}</strong>
+                                <small>{workspaceText(locale, `${link.stats.purchases} всего`, `${link.stats.purchases} total`)}</small>
+                              </div>
+                              <div>
+                                <span>{workspaceText(locale, "Товары", "Products")}</span>
+                                <strong>{link.stats.products.length}</strong>
+                                <small>
+                                  {link.stats.products.length
+                                    ? link.stats.products.map((product) => `${product.label}: ${product.count}`).join(" · ")
+                                    : workspaceText(locale, "Покупок нет", "No purchases")}
+                                </small>
+                              </div>
+                            </div>
+
+                            <div className="referral-link-card__editor">
+                              <label className="referral-admin__field">
+                                <span>{workspaceText(locale, "Название", "Label")}</span>
+                                <input
+                                  type="text"
+                                  value={draft.label}
+                                  onChange={(event) => updateReferralDraft(link.id, { label: event.target.value })}
+                                />
+                              </label>
+                              <label className="referral-admin__field">
+                                <span>{workspaceText(locale, "Email пользователя", "User email")}</span>
+                                <input
+                                  type="email"
+                                  value={draft.assignedUserEmail}
+                                  onChange={(event) => updateReferralDraft(link.id, { assignedUserEmail: event.target.value })}
+                                  placeholder="user@example.com"
+                                />
+                              </label>
+                              <label className="referral-admin__field">
+                                <span>{workspaceText(locale, "ID пользователя", "User ID")}</span>
+                                <input
+                                  type="text"
+                                  value={draft.assignedUserId}
+                                  onChange={(event) => updateReferralDraft(link.id, { assignedUserId: event.target.value })}
+                                />
+                              </label>
+                              <label className="referral-admin__field">
+                                <span>Status</span>
+                                <select
+                                  value={draft.status}
+                                  onChange={(event) =>
+                                    updateReferralDraft(link.id, {
+                                      status: event.target.value === "archived" ? "archived" : "active",
+                                    })
+                                  }
+                                >
+                                  <option value="active">{workspaceText(locale, "Активна", "Active")}</option>
+                                  <option value="archived">{workspaceText(locale, "Архив", "Archived")}</option>
+                                </select>
+                              </label>
+                            </div>
+
+                            {link.stats.recentPurchases.length ? (
+                              <div className="referral-link-card__purchases">
+                                {link.stats.recentPurchases.map((purchase) => (
+                                  <div key={`${purchase.paymentId ?? purchase.createdAt}:${purchase.productId}`}>
+                                    <span>{purchase.productLabel}</span>
+                                    <strong>{purchase.authUserEmail ?? workspaceText(locale, "Покупатель без email", "Buyer without email")}</strong>
+                                    <small>{formatProjectDate(purchase.createdAt, locale)}</small>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            <button
+                              className="account-topup__primary referral-link-card__save"
+                              type="button"
+                              onClick={() => void handleSaveReferralLink(link)}
+                              disabled={referralSavingLinkId === link.id}
+                            >
+                              {referralSavingLinkId === link.id
+                                ? workspaceText(locale, "Сохраняем...", "Saving...")
+                                : workspaceText(locale, "Сохранить закрепление", "Save assignment")}
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </section>
             )}
