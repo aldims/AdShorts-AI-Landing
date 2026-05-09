@@ -184,6 +184,11 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
   voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
 });
 
+const createFreshSessionFromDraftSegments = (segments: DraftSegment[]): FreshSession => ({
+  ...createFreshSession(segments[0] ?? createDraftSegment()),
+  segments: segments.map((segment) => createFreshSession(segment).segments[0]!),
+});
+
 const createGeneratedMediaLibraryEntry = (
   assetId: number,
   kind: GeneratedMediaLibraryEntry["item"]["kind"] = "ai_photo",
@@ -429,6 +434,93 @@ describe("WorkspacePage segment editor draft persistence", () => {
     };
 
     expect(shouldAllowWorkspaceSegmentEditorStructureChange(restoredDraft, restoredDraft)).toBe(true);
+  });
+
+  it("adds fresh tail segments to a stale stored draft when no baseline session exists", () => {
+    const staleSegments = [0, 1, 2, 3].map((index) =>
+      createDraftSegment({
+        duration: 4,
+        endTime: (index + 1) * 4,
+        index,
+        startTime: index * 4,
+        text: `Stored ${index + 1}`,
+      }),
+    );
+    const freshSegments = [0, 1, 2, 3, 4, 5].map((index) =>
+      createDraftSegment({
+        duration: 4,
+        endTime: (index + 1) * 4,
+        index,
+        startTime: index * 4,
+        text: `Fresh ${index + 1}`,
+      }),
+    );
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(staleSegments[0]!),
+        segments: staleSegments,
+      },
+      createFreshSessionFromDraftSegments(freshSegments),
+    );
+
+    expect(refreshedDraft.segments.map((segment) => segment.index)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(refreshedDraft.segments[0]?.text).toBe("Stored 1");
+    expect(refreshedDraft.segments[4]?.text).toBe("Fresh 5");
+  });
+
+  it("preserves a short-prefix draft when the current session explicitly changed structure", () => {
+    const liveSegments = [0, 1, 2, 3].map((index) =>
+      createDraftSegment({
+        duration: 4,
+        endTime: (index + 1) * 4,
+        index,
+        startTime: index * 4,
+        text: `Live ${index + 1}`,
+      }),
+    );
+    const freshSegments = [0, 1, 2, 3, 4, 5].map((index) =>
+      createDraftSegment({
+        duration: 4,
+        endTime: (index + 1) * 4,
+        index,
+        startTime: index * 4,
+        text: `Fresh ${index + 1}`,
+      }),
+    );
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(liveSegments[0]!),
+        segments: liveSegments,
+      },
+      createFreshSessionFromDraftSegments(freshSegments),
+      { preserveLiveStructure: true },
+    );
+
+    expect(refreshedDraft.segments.map((segment) => segment.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("keeps non-prefix local structure during a fresh refresh without a baseline session", () => {
+    const liveSegments = [
+      createDraftSegment({ index: 0, text: "First" }),
+      createDraftSegment({ index: 2, startTime: 8, endTime: 12, duration: 4, text: "Third" }),
+    ];
+    const freshSegments = [
+      createDraftSegment({ index: 0, text: "First" }),
+      createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" }),
+      createDraftSegment({ index: 2, startTime: 8, endTime: 12, duration: 4, text: "Third" }),
+    ];
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(liveSegments[0]!),
+        segments: liveSegments,
+      },
+      createFreshSessionFromDraftSegments(freshSegments),
+    );
+
+    expect(refreshedDraft.segments.map((segment) => segment.index)).toEqual([0, 2]);
   });
 
   it("detects accidental payload structure changes before upload", () => {

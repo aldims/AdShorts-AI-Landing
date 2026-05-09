@@ -5812,6 +5812,35 @@ const shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh = (segment: Work
   hasWorkspaceSegmentExplicitDraftVisual(segment) ||
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment);
 
+const isWorkspaceSegmentEditorShortPrefixStructure = (
+  candidateSegmentIndexes: number[],
+  sourceSegmentIndexes: number[],
+) =>
+  candidateSegmentIndexes.length < sourceSegmentIndexes.length &&
+  candidateSegmentIndexes.every((segmentIndex, index) => segmentIndex === sourceSegmentIndexes[index]);
+
+const shouldPreserveWorkspaceSegmentEditorLiveStructureOnRefresh = (
+  liveDraft: WorkspaceSegmentEditorDraftSession,
+  freshSession: WorkspaceSegmentEditorSession,
+  baselineSession?: WorkspaceSegmentEditorSession | null,
+) => {
+  const liveSegmentIndexes = liveDraft.segments.map((segment) => segment.index);
+
+  if (baselineSession) {
+    return hasWorkspaceSegmentEditorStructureChanged(
+      liveSegmentIndexes,
+      baselineSession.segments.map((segment) => segment.index),
+    );
+  }
+
+  const freshSegmentIndexes = freshSession.segments.map((segment) => segment.index);
+  if (isWorkspaceSegmentEditorShortPrefixStructure(liveSegmentIndexes, freshSegmentIndexes)) {
+    return false;
+  }
+
+  return hasWorkspaceSegmentEditorStructureChanged(liveSegmentIndexes, freshSegmentIndexes);
+};
+
 const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   liveSegment: WorkspaceSegmentEditorDraftSegment,
   freshSegment: WorkspaceSegmentEditorSegment,
@@ -5888,6 +5917,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   freshSession: WorkspaceSegmentEditorSession,
   options?: {
     baselineSession?: WorkspaceSegmentEditorSession | null;
+    preserveLiveStructure?: boolean;
   },
 ): WorkspaceSegmentEditorDraftSession => {
   const normalizedFreshSession = normalizeWorkspaceSegmentEditorSession(freshSession);
@@ -5907,15 +5937,13 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     ? !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedBaselineSession)
     : !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedFreshSession);
   const nextMusicState = shouldPreserveLiveMusicState ? normalizedLiveMusicState : normalizedFreshSession;
-  const shouldPreserveLiveStructure = normalizedBaselineSession
-    ? hasWorkspaceSegmentEditorStructureChanged(
-        liveDraft.segments.map((segment) => segment.index),
-        normalizedBaselineSession.segments.map((segment) => segment.index),
-      )
-    : hasWorkspaceSegmentEditorStructureChanged(
-        liveDraft.segments.map((segment) => segment.index),
-        normalizedFreshSession.segments.map((segment) => segment.index),
-      );
+  const shouldPreserveLiveStructure =
+    Boolean(options?.preserveLiveStructure) ||
+    shouldPreserveWorkspaceSegmentEditorLiveStructureOnRefresh(
+      liveDraft,
+      normalizedFreshSession,
+      normalizedBaselineSession,
+    );
   const freshSegmentsByIndex = new Map(normalizedFreshSession.segments.map((segment) => [segment.index, segment] as const));
   const mergedSegments: WorkspaceSegmentEditorDraftSegment[] = [];
   const handledSegmentIndexes = new Set<number>();
@@ -17855,8 +17883,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setIsSegmentEditorLoading(true);
 
     try {
+      const shouldRefreshSegmentEditorFromServer = Boolean(
+        options?.bypassCache ||
+          options?.forceRefresh ||
+          restoredDetachedDraft ||
+          restoredStoredDraft,
+      );
       const segmentEditorUrl =
-        `/api/workspace/projects/${projectId}/segment-editor${options?.bypassCache || options?.forceRefresh ? "?refresh=1" : ""}`;
+        `/api/workspace/projects/${projectId}/segment-editor${shouldRefreshSegmentEditorFromServer ? "?refresh=1" : ""}`;
       let payload: WorkspaceSegmentEditorResponse | null = null;
       const startedAt = Date.now();
       const maxPreparingAttempts = Math.max(
@@ -17935,6 +17969,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       if (liveDraft?.projectId === projectId && !shouldDiscardLocalDraft) {
         const refreshedLiveDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, normalizedSession, {
           baselineSession: existingBaselineSession,
+          preserveLiveStructure: segmentEditorExplicitStructureChangeProjectIdsRef.current.has(projectId),
         });
         logSegmentEditorDiagnostics(
           "client.segment-editor.load.preserve-live-draft-after-fetch",
