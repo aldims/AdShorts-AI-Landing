@@ -42,6 +42,18 @@ const criticalPages = [
   "shorts-ne-nabirayut-prosmotry/index.html",
 ];
 
+const legalPages = [
+  "privacy/index.html",
+  "terms/index.html",
+  "terms-of-use/index.html",
+  "data-deletion.html",
+  "en/privacy/index.html",
+  "en/terms/index.html",
+  "en/terms-of-use/index.html",
+  "en/data-deletion/index.html",
+  "offer/index.html",
+];
+
 for (const pagePath of criticalPages) {
   const html = await readRootFile(pagePath);
   assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing useful title`);
@@ -50,6 +62,13 @@ for (const pagePath of criticalPages) {
   assert(/<h1[\s>]/i.test(html), `${pagePath}: missing H1 in static HTML`);
   assert(!/<div id="app"><\/div>/i.test(html), `${pagePath}: serves only SPA shell`);
   assert(!/AdShorts AI App|app staging/i.test(html), `${pagePath}: contains staging app copy`);
+}
+
+for (const pagePath of legalPages) {
+  const html = await readRootFile(pagePath);
+  assert(/<meta\s+name="robots"\s+content="index, follow"/i.test(html), `${pagePath}: legal trust page should be indexable`);
+  assert(!/history\.replaceState\(null,\s*null,\s*window\.location\.pathname\.slice\(0,\s*-1\)/.test(html), `${pagePath}: must not rewrite canonical trailing slash in the browser`);
+  assert(!/href="\.\/(?:examples|pricing)"/.test(html), `${pagePath}: internal pricing/examples links should use trailing slash`);
 }
 
 const appShell = await readRootFile("app/index.html");
@@ -124,8 +143,12 @@ assert(
   "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
 );
 assert(/header @app_html X-Robots-Tag "noindex, nofollow"/.test(deployProduction), "deploy-production.sh: app shell routes must send X-Robots-Tag noindex");
+assert(/redir \/index\.html \/ 301/.test(deployProduction), "deploy-production.sh: missing /index.html canonical redirect");
+assert(/redir \/en\/index\.html \/en\/ 301/.test(deployProduction), "deploy-production.sh: missing /en/index.html canonical redirect");
 assert(/redir \/pricing \/pricing\/ 301/.test(deployProduction), "deploy-production.sh: missing /pricing trailing-slash redirect");
 assert(/redir \/examples \/examples\/ 301/.test(deployProduction), "deploy-production.sh: missing /examples trailing-slash redirect");
+assert(/redir \/index\.html https:\/\/adshortsai\.com\/ 301/.test(deployProduction), "deploy-production.sh: missing direct www /index.html redirect");
+assert(/redir \/terms\.html https:\/\/adshortsai\.com\/terms\/ 301/.test(deployProduction), "deploy-production.sh: missing direct www /terms.html redirect");
 assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html \/index\.html/.test(deployProduction), "deploy-production.sh: app routes must prefer generated route shells");
 assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html =404/.test(deployProduction), "deploy-production.sh: static fallback should return real 404");
 

@@ -397,6 +397,8 @@ production_blocks = f"""https://adshortsai.com {{
     }}
 
     redir /en /en/ 301
+    redir /index.html / 301
+    redir /en/index.html /en/ 301
     redir /pricing /pricing/ 301
     redir /examples /examples/ 301
     redir /en/pricing /en/pricing/ 301
@@ -429,8 +431,13 @@ production_blocks = f"""https://adshortsai.com {{
 }}
 
 https://www.adshortsai.com {{
+    redir /index.html https://adshortsai.com/ 301
+    redir /en/index.html https://adshortsai.com/en/ 301
     redir /privacy https://adshortsai.com/privacy/ 301
+    redir /privacy.html https://adshortsai.com/privacy/ 301
     redir /terms https://adshortsai.com/terms/ 301
+    redir /terms.html https://adshortsai.com/terms/ 301
+    redir /terms-of-use.html https://adshortsai.com/terms-of-use/ 301
     redir https://adshortsai.com{{uri}} 301
 }}
 """
@@ -503,6 +510,8 @@ check_status "$PROD_URL/pricing/" "200"
 check_status "$PROD_URL/examples/" "200"
 check_status "$PROD_URL/app" "200"
 check_status "$PROD_URL/kak-sdelat-shorts-na-youtube/" "200"
+check_status "$PROD_URL/index.html" "301"
+check_status "$PROD_URL/en/index.html" "301"
 
 root_title="$(curl -fsS "$PROD_URL/" | grep -o '<title>[^<]*' | head -n 1 || true)"
 pricing_title="$(curl -fsS "$PROD_URL/pricing/" | grep -o '<title>[^<]*' | head -n 1 || true)"
@@ -543,6 +552,20 @@ www_status="$(curl -sS -o /dev/null -w "%{http_code}" https://www.adshortsai.com
 www_effective="$(curl -sSL -o /dev/null -w "%{url_effective}" https://www.adshortsai.com/ || true)"
 if [ "$www_status" != "301" ] || [ "$www_effective" != "$PROD_URL/" ]; then
   echo "Unexpected www redirect: status=$www_status effective=$www_effective" >&2
+  smoke_failed=1
+fi
+
+www_index_location="$(curl -fsSI https://www.adshortsai.com/index.html | tr -d '\r' | grep -i '^location:' | head -n 1 || true)"
+www_terms_location="$(curl -fsSI https://www.adshortsai.com/terms.html | tr -d '\r' | grep -i '^location:' | head -n 1 || true)"
+if [ "$www_index_location" != "location: https://adshortsai.com/" ] || [ "$www_terms_location" != "location: https://adshortsai.com/terms/" ]; then
+  echo "Unexpected direct www legacy redirect: index=$www_index_location terms=$www_terms_location" >&2
+  smoke_failed=1
+fi
+
+index_effective="$(curl -sSL -o /dev/null -w "%{url_effective}" "$PROD_URL/index.html" || true)"
+en_index_effective="$(curl -sSL -o /dev/null -w "%{url_effective}" "$PROD_URL/en/index.html" || true)"
+if [ "$index_effective" != "$PROD_URL/" ] || [ "$en_index_effective" != "$PROD_URL/en/" ]; then
+  echo "Unexpected index.html redirect: root=$index_effective en=$en_index_effective" >&2
   smoke_failed=1
 fi
 
