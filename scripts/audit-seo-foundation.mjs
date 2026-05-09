@@ -116,6 +116,15 @@ for (const requiredUrl of [
   `${siteOrigin}/examples/`,
   `${siteOrigin}/en/examples/`,
   `${siteOrigin}/shorts-guides/`,
+  `${siteOrigin}/privacy/`,
+  `${siteOrigin}/en/privacy/`,
+  `${siteOrigin}/terms/`,
+  `${siteOrigin}/en/terms/`,
+  `${siteOrigin}/terms-of-use/`,
+  `${siteOrigin}/en/terms-of-use/`,
+  `${siteOrigin}/data-deletion.html`,
+  `${siteOrigin}/en/data-deletion/`,
+  `${siteOrigin}/offer/`,
 ]) {
   assert(sitemapUrls.includes(requiredUrl), `sitemap.xml: missing ${requiredUrl}`);
 }

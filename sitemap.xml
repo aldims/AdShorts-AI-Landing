@@ -56,6 +56,86 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://adshortsai.com/privacy/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/privacy/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/privacy/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/privacy/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/en/privacy/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/privacy/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/privacy/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/privacy/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/terms/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/terms/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/en/terms/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/terms/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/terms-of-use/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms-of-use/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms-of-use/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/terms-of-use/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/en/terms-of-use/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/terms-of-use/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/terms-of-use/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/terms-of-use/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/data-deletion.html</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/data-deletion.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/data-deletion/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/data-deletion.html" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/en/data-deletion/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/data-deletion.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/data-deletion/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/data-deletion.html" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/offer/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/offer/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/offer/" />
+    <lastmod>2026-05-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://adshortsai.com/shorts-ne-nabirayut-prosmotry/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/shorts-ne-nabirayut-prosmotry/" />
     <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/youtube-shorts-not-getting-views/" />
