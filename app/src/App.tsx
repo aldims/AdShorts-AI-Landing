@@ -14,6 +14,7 @@ import {
   stripLocalePrefix,
   useLocale,
 } from "./lib/i18n";
+import { syncMetrikaUserId } from "./lib/metrika";
 
 const AuthModal = lazy(() =>
   import("./components/AuthModal").then((module) => ({
@@ -56,6 +57,7 @@ type WorkspaceProfile = {
   expiresAt: string | null;
   plan: string;
   startPlanUsed: boolean;
+  userId?: string | null;
 };
 
 type WorkspaceBootstrapResponse = {
@@ -143,11 +145,12 @@ const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
     return null;
   }
 
-  const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown; startPlanUsed?: unknown };
+  const profile = value as { balance?: unknown; expiresAt?: unknown; plan?: unknown; startPlanUsed?: unknown; userId?: unknown };
   const parsedBalance = Number(profile.balance);
   const normalizedPlan = String(profile.plan ?? "").trim().toUpperCase();
   const normalizedExpiresAt = normalizedPlan === "START" ? null : String(profile.expiresAt ?? "").trim() || null;
   const normalizedStartPlanUsed = normalizeWorkspaceBooleanFlag(profile.startPlanUsed) ?? normalizedPlan === "START";
+  const normalizedUserId = String(profile.userId ?? "").trim() || null;
 
   if (!Number.isFinite(parsedBalance) || !normalizedPlan) {
     return null;
@@ -158,6 +161,7 @@ const normalizeWorkspaceProfile = (value: unknown): WorkspaceProfile | null => {
     expiresAt: normalizedExpiresAt,
     plan: normalizedPlan,
     startPlanUsed: normalizedStartPlanUsed,
+    userId: normalizedUserId,
   };
 };
 
@@ -173,7 +177,8 @@ const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, ri
     normalizedLeft.plan === normalizedRight.plan &&
     normalizedLeft.balance === normalizedRight.balance &&
     normalizedLeft.expiresAt === normalizedRight.expiresAt &&
-    normalizedLeft.startPlanUsed === normalizedRight.startPlanUsed
+    normalizedLeft.startPlanUsed === normalizedRight.startPlanUsed &&
+    normalizedLeft.userId === normalizedRight.userId
   );
 };
 
@@ -315,6 +320,14 @@ export function App() {
 
     persistWorkspaceProfile(session.email, workspaceProfile);
   }, [session?.email, workspaceProfile]);
+
+  useEffect(() => {
+    if (!session?.email || !workspaceProfile?.userId) {
+      return;
+    }
+
+    syncMetrikaUserId(workspaceProfile.userId);
+  }, [session?.email, workspaceProfile?.userId]);
 
   const shouldBlockWorkspaceRoute = Boolean(session && !workspaceProfile && isWorkspaceProfilePending);
 

@@ -828,11 +828,13 @@ const extractAdsflowStartPlanUsed = (payload, plan) => {
 };
 const buildWorkspaceProfile = (payload) => {
     const plan = String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE";
+    const rawUserId = String(payload?.user_id ?? "").trim();
     return {
         balance: Math.max(0, Number(payload?.balance ?? 0)),
         expiresAt: plan === "START" ? null : normalizeGenerationText(payload?.subscription_expires_at) || null,
         plan,
         startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
+        userId: rawUserId || null,
     };
 };
 export const applyWorkspaceSubscriptionDetailsToProfile = (profile, details) => {
@@ -844,6 +846,7 @@ export const applyWorkspaceSubscriptionDetailsToProfile = (profile, details) => 
         expiresAt: nextPlan === "START" ? null : profile.expiresAt ?? details?.expiresAt ?? null,
         plan: nextPlan,
         startPlanUsed: profile.startPlanUsed || Boolean(details?.startPlanUsed) || nextPlan === "START",
+        userId: profile.userId ?? details?.userId ?? null,
     };
 };
 const normalizeStudioGeneratedImageMimeType = (value, fallback = "image/png") => {

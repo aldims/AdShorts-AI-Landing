@@ -279,6 +279,7 @@ export type WorkspaceProfile = {
   expiresAt: string | null;
   plan: string;
   startPlanUsed: boolean;
+  userId?: string | null;
 };
 
 const normalizeWorkspaceSubscriptionPlanCode = (value: unknown) => {
@@ -1499,12 +1500,14 @@ const extractAdsflowStartPlanUsed = (payload: AdsflowWebUserPayload | undefined,
 
 const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfile => {
   const plan = String(payload?.plan ?? "FREE").trim().toUpperCase() || "FREE";
+  const rawUserId = String(payload?.user_id ?? "").trim();
 
   return {
     balance: Math.max(0, Number(payload?.balance ?? 0)),
     expiresAt: plan === "START" ? null : normalizeGenerationText(payload?.subscription_expires_at) || null,
     plan,
     startPlanUsed: extractAdsflowStartPlanUsed(payload, plan),
+    userId: rawUserId || null,
   };
 };
 
@@ -1521,6 +1524,7 @@ export const applyWorkspaceSubscriptionDetailsToProfile = (
     expiresAt: nextPlan === "START" ? null : profile.expiresAt ?? details?.expiresAt ?? null,
     plan: nextPlan,
     startPlanUsed: profile.startPlanUsed || Boolean(details?.startPlanUsed) || nextPlan === "START",
+    userId: profile.userId ?? details?.userId ?? null,
   };
 };
 
