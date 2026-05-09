@@ -2,6 +2,10 @@ import { createHmac } from "node:crypto";
 
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import {
+  addCurrentAdsflowWebDeviceToBody,
+  getCurrentAdsflowWebSignalHeaders,
+} from "./web-device.js";
 
 export const checkoutProductIds = ["start", "pro", "ultra", "package_10", "package_50", "package_100"] as const;
 
@@ -200,8 +204,9 @@ const postAdsflowText = async (path: string, body: Record<string, unknown>) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...getCurrentAdsflowWebSignalHeaders(),
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
         signal: AbortSignal.timeout(ADSFLOW_POST_TIMEOUT_MS),
       });
 

@@ -28,6 +28,7 @@ import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyC
 import { InternationalPaymentsWaitlistValidationError, appendInternationalPaymentsWaitlistSubmission, notifyInternationalPaymentsWaitlistSubmission, parseInternationalPaymentsWaitlistSubmission, } from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
+import { resolveAdsflowWebSignalContext, runWithAdsflowWebSignal, setAdsflowWebDeviceCookie, } from "./web-device.js";
 initServerLogging();
 const app = express();
 const resolvePreferredExternalUserId = async (user) => {
@@ -96,6 +97,11 @@ app.use(cors({
         callback(new Error(`CORS origin is not allowed: ${origin}`));
     },
 }));
+app.use((req, res, next) => {
+    const webSignalContext = resolveAdsflowWebSignalContext(req);
+    setAdsflowWebDeviceCookie(res, webSignalContext, { secure: env.isProduction });
+    runWithAdsflowWebSignal(webSignalContext, next);
+});
 const buildVideoProxyRequestHeaders = (req) => {
     const headers = {};
     const range = req.header("range");

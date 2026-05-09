@@ -1,5 +1,9 @@
 import { env } from "./env.js";
 import { logServerEvent } from "./logger.js";
+import {
+  addCurrentAdsflowWebDeviceToBody,
+  getCurrentAdsflowWebSignalHeaders,
+} from "./web-device.js";
 
 export type UpstreamFetchPolicy = {
   name: string;
@@ -57,6 +61,10 @@ type AdsflowRequestOptions = {
   path?: string;
   policy: UpstreamFetchPolicy;
   url?: URL;
+};
+
+type AdsflowPostOptions = {
+  headers?: Record<string, string>;
 };
 
 const DEFAULT_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -400,13 +408,16 @@ export const postAdsflowText = async (
   body: Record<string, unknown>,
   policy: UpstreamFetchPolicy,
   context: UpstreamFetchContext,
+  options?: AdsflowPostOptions,
 ) => {
   return fetchUpstreamText(
     buildAdsflowUrl(path),
     {
-      body: JSON.stringify(body),
+      body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
       headers: {
         "Content-Type": "application/json",
+        ...getCurrentAdsflowWebSignalHeaders(),
+        ...(options?.headers ?? {}),
       },
       method: "POST",
     },
@@ -420,13 +431,16 @@ export const postAdsflowJson = async <T>(
   body: Record<string, unknown>,
   policy: UpstreamFetchPolicy,
   context: UpstreamFetchContext,
+  options?: AdsflowPostOptions,
 ) => {
   return fetchAdsflowJson<T>({
     context,
     init: {
-      body: JSON.stringify(body),
+      body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
       headers: {
         "Content-Type": "application/json",
+        ...getCurrentAdsflowWebSignalHeaders(),
+        ...(options?.headers ?? {}),
       },
       method: "POST",
     },

@@ -18995,6 +18995,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex);
   };
 
+  const isSegmentEditorSegmentPersistedForVisualJob = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const baselineSession = segmentEditorChecklistBaseSession;
+
+    if (!currentDraft || !baselineSession || baselineSession.projectId !== currentDraft.projectId) {
+      return false;
+    }
+
+    return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
+  };
+
+  const ensureSegmentEditorSegmentPersistedForVisualJob = (targetSegmentIndex: number) => {
+    if (isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+      return true;
+    }
+
+    setSegmentEditorVideoError(
+      "Сначала сохраните изменения структуры сегментов, затем запускайте генерацию для нового сегмента.",
+    );
+    return false;
+  };
+
   const handleSegmentEditorCustomVideoSelect = async (
     file: File,
     options?: {
@@ -19071,7 +19093,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       const projectId = segmentEditorDraft?.projectId;
-      if (projectId) {
+      if (projectId && isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
         void (async () => {
           try {
             const uploadSession = await initializeStudioMediaFileUpload(file, {
@@ -19961,6 +19983,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+      return;
+    }
+
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -20068,6 +20094,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
       return;
     }
 
@@ -20266,6 +20296,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+      return;
+    }
+
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -20389,6 +20423,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         targetSegmentIndex,
       });
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+      logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.unsaved-segment", {
+        targetSegmentIndex,
+      });
       return;
     }
 
@@ -20719,6 +20760,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+      return;
+    }
+
+    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
       return;
     }
 

@@ -1,5 +1,9 @@
 import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+import {
+  addCurrentAdsflowWebDeviceToBody,
+  getCurrentAdsflowWebSignalHeaders,
+} from "./web-device.js";
 
 type WorkspaceUser = {
   email?: string | null;
@@ -200,8 +204,9 @@ const postAdsflowJson = async <T>(path: string, body: Record<string, unknown>): 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...getCurrentAdsflowWebSignalHeaders(),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
   });
 };
 

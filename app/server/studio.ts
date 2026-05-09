@@ -54,6 +54,10 @@ import {
 import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
 import {
+  addCurrentAdsflowWebDeviceToBody,
+  getCurrentAdsflowWebSignalHeaders,
+} from "./web-device.js";
+import {
   getWaveSpeedPredictionOutputUrl,
   getWaveSpeedPredictionStatus,
 } from "./wavespeed-worker.js";
@@ -3451,8 +3455,9 @@ const postAdsflowText = async (path: string, body: Record<string, unknown>, opti
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...getCurrentAdsflowWebSignalHeaders(),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
   }, options);
 
   const payload = await response.text();
@@ -3480,8 +3485,9 @@ const postAdsflowJson = async <T>(path: string, body: Record<string, unknown>, o
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...getCurrentAdsflowWebSignalHeaders(),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
   }, options);
 };
 
@@ -4077,8 +4083,9 @@ export async function createStudioGenerationJob(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...getCurrentAdsflowWebSignalHeaders(),
       },
-      body: JSON.stringify({
+      body: JSON.stringify(addCurrentAdsflowWebDeviceToBody({
         admin_token: env.adsflowAdminToken,
         external_user_id: externalUserId,
         // Preserve the user's original topic language in AdsFlow.
@@ -4108,7 +4115,7 @@ export async function createStudioGenerationJob(
         video_mode: normalizedVideoMode,
         voice_type: isVoiceEnabled ? undefined : "none",
         voice_code: normalizedVoiceId,
-      }),
+      })),
     }, {
       // This endpoint is not idempotent: a timeout after upstream accepted the request
       // can create duplicate jobs and double-spend credits on retry.

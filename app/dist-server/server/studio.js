@@ -9,6 +9,7 @@ import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, warmWorksp
 import { getWorkspaceGenerationHistoryEntry, listWorkspaceDeletedProjects, listWorkspaceGenerationHistory, saveWorkspaceGenerationHistory, } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
+import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
 import { getWaveSpeedPredictionOutputUrl, getWaveSpeedPredictionStatus, } from "./wavespeed-worker.js";
 const normalizeWorkspaceSubscriptionPlanCode = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
@@ -2335,8 +2336,9 @@ const postAdsflowText = async (path, body, options) => {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
+            ...getCurrentAdsflowWebSignalHeaders(),
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
     }, options);
     const payload = await response.text();
     if (!response.ok) {
@@ -2357,8 +2359,9 @@ const postAdsflowJson = async (path, body, options) => {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
+            ...getCurrentAdsflowWebSignalHeaders(),
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
     }, options);
 };
 const uploadStudioMediaAsset = async (user, options) => {
@@ -2802,8 +2805,9 @@ export async function createStudioGenerationJob(prompt, user, options) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                ...getCurrentAdsflowWebSignalHeaders(),
             },
-            body: JSON.stringify({
+            body: JSON.stringify(addCurrentAdsflowWebDeviceToBody({
                 admin_token: env.adsflowAdminToken,
                 external_user_id: externalUserId,
                 // Preserve the user's original topic language in AdsFlow.
@@ -2833,7 +2837,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 video_mode: normalizedVideoMode,
                 voice_type: isVoiceEnabled ? undefined : "none",
                 voice_code: normalizedVoiceId,
-            }),
+            })),
         }, {
             // This endpoint is not idempotent: a timeout after upstream accepted the request
             // can create duplicate jobs and double-spend credits on retry.

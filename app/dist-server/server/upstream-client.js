@@ -1,5 +1,6 @@
 import { env } from "./env.js";
 import { logServerEvent } from "./logger.js";
+import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
 export class UpstreamHttpError extends Error {
     responseText;
     statusCode;
@@ -282,22 +283,26 @@ export const fetchAdsflowJson = async (options) => {
     const url = options.url ?? buildAdsflowUrl(options.path ?? "", options.params);
     return fetchUpstreamJson(url, options.init, options.policy, options.context);
 };
-export const postAdsflowText = async (path, body, policy, context) => {
+export const postAdsflowText = async (path, body, policy, context, options) => {
     return fetchUpstreamText(buildAdsflowUrl(path), {
-        body: JSON.stringify(body),
+        body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
         headers: {
             "Content-Type": "application/json",
+            ...getCurrentAdsflowWebSignalHeaders(),
+            ...(options?.headers ?? {}),
         },
         method: "POST",
     }, policy, context);
 };
-export const postAdsflowJson = async (path, body, policy, context) => {
+export const postAdsflowJson = async (path, body, policy, context, options) => {
     return fetchAdsflowJson({
         context,
         init: {
-            body: JSON.stringify(body),
+            body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
             headers: {
                 "Content-Type": "application/json",
+                ...getCurrentAdsflowWebSignalHeaders(),
+                ...(options?.headers ?? {}),
             },
             method: "POST",
         },

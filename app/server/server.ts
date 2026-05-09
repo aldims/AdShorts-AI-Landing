@@ -127,6 +127,11 @@ import {
 } from "./international-payments-waitlist.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
+import {
+  resolveAdsflowWebSignalContext,
+  runWithAdsflowWebSignal,
+  setAdsflowWebDeviceCookie,
+} from "./web-device.js";
 
 initServerLogging();
 
@@ -218,6 +223,11 @@ app.use(
     },
   }),
 );
+app.use((req, res, next) => {
+  const webSignalContext = resolveAdsflowWebSignalContext(req);
+  setAdsflowWebDeviceCookie(res, webSignalContext, { secure: env.isProduction });
+  runWithAdsflowWebSignal(webSignalContext, next);
+});
 
 const buildVideoProxyRequestHeaders = (req: express.Request) => {
   const headers: Record<string, string> = {};
