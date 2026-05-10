@@ -19101,15 +19101,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
   };
 
-  const ensureSegmentEditorSegmentPersistedForVisualJob = (targetSegmentIndex: number) => {
-    if (isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      return true;
+  const getSegmentEditorVisualJobBinding = (
+    targetSegmentIndex: number,
+  ): { isPersisted: boolean; projectId?: number; segmentIndex?: number } => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft || !isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+      return { isPersisted: false };
     }
 
-    setSegmentEditorVideoError(
-      "Сначала сохраните изменения структуры сегментов, затем запускайте генерацию для нового сегмента.",
-    );
-    return false;
+    return {
+      isPersisted: true,
+      projectId: currentDraft.projectId,
+      segmentIndex: targetSegmentIndex,
+    };
   };
 
   const handleSegmentEditorCustomVideoSelect = async (
@@ -19765,7 +19769,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     jobId: string,
     initialStatus = "queued",
     options: {
-      projectId: number;
+      projectId?: number;
       prompt: string;
       runId: number;
       segmentIndex: number;
@@ -19848,18 +19852,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
-        upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
-          createdAt: startedAt,
-          jobId: safeJobId,
-          projectId: options.projectId,
-          prompt: options.prompt,
-          segmentIndex: options.segmentIndex,
-          sourceAsset:
-            cloneStudioCustomVideoFile(options.sourceAsset ?? null) ??
-            segmentEditorDraftRef.current?.segments.find((segment) => segment.index === options.segmentIndex)
-              ?.photoAnimationSourceAsset ?? null,
-          status: latestStatus,
-        });
+        if (options.projectId) {
+          upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            prompt: options.prompt,
+            segmentIndex: options.segmentIndex,
+            sourceAsset:
+              cloneStudioCustomVideoFile(options.sourceAsset ?? null) ??
+              segmentEditorDraftRef.current?.segments.find((segment) => segment.index === options.segmentIndex)
+                ?.photoAnimationSourceAsset ?? null,
+            status: latestStatus,
+          });
+        }
 
         if (payload.data.asset) {
           const currentDraft = segmentEditorDraftRef.current;
@@ -19914,14 +19920,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           upsertGeneratedMediaLibraryEntry({
             asset: nextPhotoAnimationAsset,
             kind: "photo_animation",
-            projectId: currentDraft?.projectId ?? options.projectId,
+            projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
           });
           removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
-          const projectId = segmentEditorDraftRef.current?.projectId ?? options.projectId;
-          if (projectId > 0) {
-            void ensureSegmentEditorDraftForProject(projectId, {
+          if (options.projectId && options.projectId > 0) {
+            void ensureSegmentEditorDraftForProject(options.projectId, {
               bypassCache: true,
               initialSegmentIndex: options.segmentIndex,
               initialSegmentMode: "route",
@@ -19963,17 +19968,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
-          const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
-            bypassCache: true,
-            initialSegmentIndex: options.segmentIndex,
-            initialSegmentMode: "route",
-            openDraft: false,
-            syncRoute: false,
-          });
-          const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
-          if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "photo_animation") {
-            removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
-            return;
+          if (options.projectId && options.projectId > 0) {
+            const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
+              bypassCache: true,
+              initialSegmentIndex: options.segmentIndex,
+              initialSegmentMode: "route",
+              openDraft: false,
+              syncRoute: false,
+            });
+            const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+            if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "photo_animation") {
+              removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
+              return;
+            }
           }
 
           removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
@@ -20085,7 +20092,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const normalizedPrompt = normalizeWorkspaceSegmentAiPhotoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentAiPhotoQuality;
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
-    const shouldBindAiPhotoJobToSavedSegment = isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex);
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -20125,10 +20132,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         },
         body: JSON.stringify({
           language: selectedLanguage,
-          projectId: shouldBindAiPhotoJobToSavedSegment ? segmentEditorDraft.projectId : undefined,
+          projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          segmentIndex: shouldBindAiPhotoJobToSavedSegment ? targetSegmentIndex : undefined,
+          segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
@@ -20189,9 +20196,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      return;
-    }
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
 
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
@@ -20271,9 +20276,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           imageDataUrl: inlineImageDataUrl,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
+          projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
-          segmentIndex: targetSegmentIndex,
+          segmentIndex: visualJobBinding.segmentIndex,
         };
       } else {
         // Force re-upload when possible so the asset is registered with the correct kind/role for image-edit.
@@ -20288,26 +20293,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           ? { ...imageEditSource.asset, assetId: undefined }
           : imageEditSource.asset;
         const imageAssetId = await ensureStudioUploadedAssetId(imageEditUploadAsset, {
-        fallbackFileName: imageEditSource.fileName,
-        fallbackMimeType: imageEditSource.asset.mimeType,
-        kind: "segment_image",
-        language: selectedLanguage,
-        mediaType: "photo",
-        projectId: segmentEditorDraft.projectId,
-        role: "segment_source",
-        segmentIndex: targetSegmentIndex,
-      });
-      if (!imageAssetId) {
-        throw new Error("Не удалось подготовить исходное фото для дорисовки.");
+          fallbackFileName: imageEditSource.fileName,
+          fallbackMimeType: imageEditSource.asset.mimeType,
+          kind: "segment_image",
+          language: selectedLanguage,
+          mediaType: "photo",
+          projectId: visualJobBinding.projectId,
+          role: "segment_source",
+          segmentIndex: visualJobBinding.segmentIndex,
+        });
+        if (!imageAssetId) {
+          throw new Error("Не удалось подготовить исходное фото для дорисовки.");
         }
 
         primaryRequest = {
           imageAssetId,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
+          projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
-          segmentIndex: targetSegmentIndex,
+          segmentIndex: visualJobBinding.segmentIndex,
         };
       }
 
@@ -20322,11 +20327,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         if (imageDataUrl) {
           ({ response, payload } = await requestImageEditJob({
             imageDataUrl,
-          imageFileName: imageEditSource.fileName,
-          language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
-          prompt: normalizedPrompt,
-          segmentIndex: targetSegmentIndex,
+            imageFileName: imageEditSource.fileName,
+            language: selectedLanguage,
+            projectId: visualJobBinding.projectId,
+            prompt: normalizedPrompt,
+            segmentIndex: visualJobBinding.segmentIndex,
           }));
         }
       }
@@ -20388,9 +20393,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      return;
-    }
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
 
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
@@ -20437,10 +20440,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         },
         body: JSON.stringify({
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
+          projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          segmentIndex: targetSegmentIndex,
+          segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobCreateResponse | null;
@@ -20518,12 +20521,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.unsaved-segment", {
-        targetSegmentIndex,
-      });
-      return;
-    }
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
 
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
@@ -20553,6 +20551,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       promptLength: normalizedPrompt.length,
       quality: generationQuality,
       targetSegmentIndex,
+      visualJobSegmentPersisted: visualJobBinding.isPersisted,
       targetVideoAction: targetSegment?.videoAction ?? null,
     });
     if (!normalizedPrompt) {
@@ -20620,9 +20619,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             kind: "segment_source",
             language: selectedLanguage,
             mediaType: "photo",
-            projectId: segmentEditorDraft.projectId,
+            projectId: visualJobBinding.projectId,
             role: "segment_source",
-            segmentIndex: targetSegmentIndex,
+            segmentIndex: visualJobBinding.segmentIndex,
           })
         : null;
       const customVideoFileMimeType = photoAnimationUploadSourceAsset?.mimeType;
@@ -20648,6 +20647,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         sourceFileName: customVideoFileName ?? null,
         sourceMimeType: customVideoFileMimeType ?? null,
         targetSegmentIndex,
+        visualJobSegmentPersisted: visualJobBinding.isPersisted,
       });
       const response = await fetch("/api/studio/segment-photo-animation/jobs", {
         method: "POST",
@@ -20660,10 +20660,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           customVideoFileMimeType,
           customVideoFileName,
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
+          projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          segmentIndex: targetSegmentIndex,
+          segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentPhotoAnimationJobCreateRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobCreateResponse | null;
@@ -20697,18 +20697,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       applyWorkspaceProfile(payload.data.profile);
-      upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
-        createdAt: Date.now(),
-        jobId: payload.data.jobId,
-        projectId: segmentEditorDraft.projectId,
-        prompt: normalizedPrompt,
-        segmentIndex: targetSegmentIndex,
-        sourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
-        status: payload.data.status,
-      });
+      if (visualJobBinding.projectId) {
+        upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
+          createdAt: Date.now(),
+          jobId: payload.data.jobId,
+          projectId: visualJobBinding.projectId,
+          prompt: normalizedPrompt,
+          segmentIndex: targetSegmentIndex,
+          sourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorPhotoAnimationJob(payload.data.jobId, payload.data.status, {
-        projectId: segmentEditorDraft.projectId,
+        projectId: visualJobBinding.projectId,
         prompt: normalizedPrompt,
         runId,
         segmentIndex: targetSegmentIndex,
@@ -20855,9 +20857,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      return;
-    }
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
 
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
@@ -20892,9 +20892,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         kind: "segment_image",
         language: selectedLanguage,
         mediaType: "photo",
-        projectId: segmentEditorDraft.projectId,
+        projectId: visualJobBinding.projectId,
         role: "segment_source",
-        segmentIndex: targetSegmentIndex,
+        segmentIndex: visualJobBinding.segmentIndex,
       });
       if (!imageAssetId) {
         throw new Error("Не удалось подготовить изображение для улучшения качества.");
@@ -20909,8 +20909,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           imageAssetId,
           imageFileName: upscaleSource.fileName,
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
-          segmentIndex: targetSegmentIndex,
+          projectId: visualJobBinding.projectId,
+          segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentImageUpscaleRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentImageUpscaleJobCreateResponse | null;
@@ -24585,7 +24585,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   ? "/icons/segment-image-edit-icon-generated.png"
                   : kind === "image_upscale"
                     ? "/icons/segment-image-upscale-icon-generated.png"
-                    : null;
+                    : kind === "brand"
+                      ? "/icons/segment-brand-icon-generated.png"
+                      : null;
     const renderIconSvg = (children: ReactNode) => (
       <span className={iconClassName} aria-hidden="true">
         {aiBadge}
@@ -24682,18 +24684,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           <rect x="19" y="29" width="10" height="10" rx="3" fill={`url(#${violetGradientId})`} opacity="0.92" />
           <rect x="34" y="29" width="11" height="10" rx="3" fill={`url(#${cyanGradientId})`} opacity="0.9" />
           <path d="M20 43h25" stroke="white" strokeOpacity="0.46" strokeWidth="2.2" strokeLinecap="round" />
-        </>,
-      );
-    }
-
-    if (kind === "brand") {
-      return renderIconSvg(
-        <>
-          <rect x="16" y="16" width="32" height="32" rx="9" fill={`url(#${glassGradientId})`} opacity="0.3" />
-          <rect x="16" y="16" width="32" height="32" rx="9" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
-          <path d="M24 42V22h9.5c4.1 0 6.5 2.1 6.5 5.2 0 2.1-1.1 3.6-3.1 4.4 2.5.6 4 2.4 4 4.8 0 3.5-2.7 5.6-7.2 5.6H24Z" fill={`url(#${violetGradientId})`} opacity="0.9" />
-          <path d="M29 29h4.1c1.2 0 2-.7 2-1.8s-.8-1.7-2-1.7H29v3.5Zm0 8.5h4.7c1.4 0 2.2-.8 2.2-2s-.8-1.9-2.2-1.9H29v3.9Z" fill="#07111f" fillOpacity="0.9" />
-          <path d="m47.5 12.5 1.8 4 4.2 1.6-4.2 1.6-1.8 4-1.8-4-4.2-1.6 4.2-1.6 1.8-4Z" fill="white" opacity="0.92" />
         </>,
       );
     }
