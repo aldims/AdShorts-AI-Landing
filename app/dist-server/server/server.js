@@ -86,6 +86,10 @@ const normalizeWebReferralSource = (value) => {
     const normalized = String(rawValue ?? "").trim();
     return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
 };
+const normalizeWebDeviceId = (value) => {
+    const normalized = String(value ?? "").trim();
+    return /^[A-Za-z0-9._:-]{16,160}$/.test(normalized) ? normalized : "";
+};
 const allowedCorsOrigins = Array.from(new Set([
     env.appUrl,
     env.authBaseUrl,
@@ -1723,6 +1727,7 @@ app.post("/api/referrals/click", async (req, res) => {
         const payload = await postAdsflowJson("/api/web/referral-click", {
             admin_token: env.adsflowAdminToken,
             code,
+            web_device_id: normalizeWebDeviceId(body.web_device_id) || undefined,
             landing_url: typeof body.landing_url === "string" ? body.landing_url : undefined,
             referrer: typeof body.referrer === "string" ? body.referrer : undefined,
             source_path: typeof body.source_path === "string" ? body.source_path : undefined,

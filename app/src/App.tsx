@@ -81,10 +81,12 @@ type ImpersonationState = {
 
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
 const IMPERSONATION_COOKIE_NAME = "adshorts.impersonation";
+const WEB_DEVICE_STORAGE_KEY = "adshorts.web-device-id";
 const WEB_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
 const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
 const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
 const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?(rf_[A-Za-z0-9_-]{2,64})\/?$/;
+const WEB_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{16,160}$/;
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -236,6 +238,34 @@ const normalizeWebReferralSource = (value: unknown) => {
   return WEB_REFERRAL_SOURCE_PATTERN.test(normalized) ? normalized : "";
 };
 
+const normalizeWebDeviceId = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  return WEB_DEVICE_ID_PATTERN.test(normalized) ? normalized : "";
+};
+
+const createWebDeviceId = () => {
+  const randomId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  return `site:${randomId}`;
+};
+
+const readOrCreateWebDeviceId = () => {
+  if (typeof window === "undefined") return "";
+
+  try {
+    const existing = normalizeWebDeviceId(window.localStorage.getItem(WEB_DEVICE_STORAGE_KEY));
+    if (existing) return existing;
+
+    const next = createWebDeviceId();
+    window.localStorage.setItem(WEB_DEVICE_STORAGE_KEY, next);
+    return next;
+  } catch {
+    return "";
+  }
+};
+
 const readWebReferralSourceFromPathname = (pathname: string) => {
   const match = WEB_REFERRAL_PATH_PATTERN.exec(pathname);
   return normalizeWebReferralSource(match?.[1]);
@@ -309,6 +339,7 @@ const recordWebReferralClick = (
     },
     body: JSON.stringify({
       code: referralSource,
+      web_device_id: readOrCreateWebDeviceId(),
       landing_url: window.location.href,
       referrer: document.referrer || null,
       source_path: `${location.pathname}${location.search}${location.hash ?? ""}`,
