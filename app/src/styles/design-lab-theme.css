@@ -32165,14 +32165,16 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--library,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--upload,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--image-edit,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--image-upscale {
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--image-upscale,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon--brand {
   color: rgba(148, 163, 184, 0.66);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--library,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--upload,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--image-edit,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--image-upscale {
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--image-upscale,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon.is-active .studio-segment-editor__prompt-tool-icon--brand {
   color: rgba(241, 245, 249, 0.94);
 }
 
@@ -32378,6 +32380,184 @@ html, body {
   flex: 0 0 auto;
   min-height: 92px;
   align-content: start;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.54), rgba(6, 10, 17, 0.72)),
+    rgba(8, 10, 14, 0.76);
+  scrollbar-color: rgba(226, 232, 240, 0.24) transparent;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-panel.is-selected {
+  border-color: rgba(74, 222, 128, 0.34);
+  background:
+    linear-gradient(180deg, rgba(22, 163, 74, 0.12), rgba(6, 10, 17, 0.76)),
+    rgba(8, 10, 14, 0.78);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.13);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
+    rgba(3, 6, 10, 0.46);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-preview span {
+  color: rgba(226, 232, 240, 0.38);
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-copy strong {
+  overflow: hidden;
+  color: rgba(241, 245, 249, 0.92);
+  font-size: 0.84rem;
+  font-weight: 820;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-copy span {
+  overflow: hidden;
+  color: rgba(203, 213, 225, 0.56);
+  font-size: 0.72rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-action {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+    rgba(8, 8, 18, 0.42);
+  color: rgba(226, 232, 240, 0.82);
+  cursor: pointer;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-action:hover:not(:disabled) {
+  border-color: rgba(226, 232, 240, 0.24);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-action:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-action--danger {
+  color: rgba(252, 165, 165, 0.9);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-field {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-field span {
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.66rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 11px;
+  background: rgba(3, 6, 10, 0.42);
+  color: rgba(241, 245, 249, 0.9);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-input::placeholder {
+  color: rgba(203, 213, 225, 0.34);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-input:focus {
+  outline: none;
+  border-color: rgba(226, 232, 240, 0.3);
+  box-shadow: 0 0 0 3px rgba(226, 232, 240, 0.08);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(203, 213, 225, 0.46);
+  font-size: 0.68rem;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-meta button {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(125, 211, 252, 0.86);
+  font: inherit;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-meta button:hover {
+  color: rgba(240, 249, 255, 0.96);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row {

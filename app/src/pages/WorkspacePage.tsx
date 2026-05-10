@@ -606,6 +606,7 @@ type WorkspaceSegmentMediaType = "photo" | "video";
 type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
 type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "image_upscale" | "upload" | "library";
+type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab | "brand";
 
 type WorkspaceSegmentEditorSpeechWord = {
   confidence: number;
@@ -2251,6 +2252,11 @@ type WorkspaceSegmentEditorChecklistItem =
       label: string;
       resetOrder: boolean;
       resetSettingIds: WorkspaceSegmentEditorChecklistSettingId[];
+    }
+  | {
+      key: string;
+      kind: "brand";
+      label: string;
     };
 
 type WorkspaceSegmentEditorChecklistBuildOptions = {
@@ -4349,11 +4355,12 @@ const resolveWorkspaceSegmentVisualModalTab = (
 ): WorkspaceSegmentVisualModalTab =>
   isWorkspaceSegmentVisualModalTabAllowed(segment, tab) ? tab : getWorkspaceSegmentVisualModalDefaultTab(segment);
 
-const getWorkspaceSegmentPromptSceneModeForTab = (tab: WorkspaceSegmentVisualModalTab): "create" | "edit" => {
+const getWorkspaceSegmentPromptSceneModeForTab = (tab: WorkspaceSegmentEditorPromptToolTab): "create" | "edit" => {
   switch (tab) {
     case "photo_animation":
     case "image_edit":
     case "image_upscale":
+    case "brand":
       return "edit";
     default:
       return "create";
@@ -12977,8 +12984,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentImageEditModalPrompt, setSegmentImageEditModalPrompt] = useState("");
   const [segmentAiVideoModalPrompt, setSegmentAiVideoModalPrompt] = useState("");
   const [segmentAiPhotoModalTab, setSegmentAiPhotoModalTab] = useState<WorkspaceSegmentVisualModalTab>("ai_photo");
+  const [segmentEditorPromptToolTab, setSegmentEditorPromptToolTab] =
+    useState<WorkspaceSegmentEditorPromptToolTab>("ai_photo");
   const [releasedSegmentEditorPromptTool, setReleasedSegmentEditorPromptTool] =
-    useState<WorkspaceSegmentVisualModalTab | null>(null);
+    useState<WorkspaceSegmentEditorPromptToolTab | null>(null);
   const [segmentEditorPromptSceneMode, setSegmentEditorPromptSceneMode] = useState<"create" | "edit">("create");
   const [segmentAiPhotoModalLibraryFilter, setSegmentAiPhotoModalLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
@@ -13089,6 +13098,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
+  const segmentEditorBrandLogoInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
@@ -16135,12 +16145,26 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
-  const segmentEditorChangeChecklist = segmentEditorDraft
+  const hasSegmentEditorBranding = hasStudioBranding({ brandLogoFile: selectedBrandLogo, brandText });
+  const segmentEditorBaseChangeChecklist = segmentEditorDraft
     ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChecklistBaseSession, {
         subtitleColorOptions,
         subtitleStyleOptions,
       })
     : [];
+  const segmentEditorChangeChecklist: WorkspaceSegmentEditorChecklistItem[] = hasSegmentEditorBranding
+    ? [
+        ...segmentEditorBaseChangeChecklist,
+        {
+          key: "segment-brand:global",
+          kind: "brand",
+          label: `${workspaceText(locale, "Бренд", "Brand")}: ${getStudioBrandSummary({
+            brandLogoFile: selectedBrandLogo,
+            brandText,
+          })}`,
+        },
+      ]
+    : segmentEditorBaseChangeChecklist;
   const hasSegmentEditorChanges = segmentEditorChangeChecklist.length > 0;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
@@ -18980,6 +19004,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setSegmentAiPhotoModalTab((current) =>
         options?.preserveTab ? resolveWorkspaceSegmentVisualModalTab(segment, current) : nextTab,
       );
+      setSegmentEditorPromptToolTab((current) =>
+        options?.preserveTab && current === "brand"
+          ? current
+          : options?.preserveTab && current !== "brand"
+            ? resolveWorkspaceSegmentVisualModalTab(segment, current)
+            : nextTab,
+      );
       setIsSegmentAiPhotoPromptImproving(false);
       setIsSegmentAiPhotoPromptImproved(false);
       setIsSegmentAiPhotoPromptHighlighted(false);
@@ -19015,9 +19046,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [activeSegment?.index, createMode, isSegmentAiPhotoModalOpen, syncSegmentAiPhotoModalForSegment]);
 
   useEffect(() => {
-    const nextMode = getWorkspaceSegmentPromptSceneModeForTab(segmentAiPhotoModalTab);
+    const nextMode = getWorkspaceSegmentPromptSceneModeForTab(segmentEditorPromptToolTab);
     setSegmentEditorPromptSceneMode((current) => (current === nextMode ? current : nextMode));
-  }, [segmentAiPhotoModalTab]);
+  }, [segmentEditorPromptToolTab]);
 
   const cancelPendingSegmentAiPhotoRun = (targetSegmentIndex: number) => {
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex)) {
@@ -20047,10 +20078,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
-    if (!ensureSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
-      return;
-    }
-
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
@@ -20058,6 +20085,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const normalizedPrompt = normalizeWorkspaceSegmentAiPhotoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentAiPhotoQuality;
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
+    const shouldBindAiPhotoJobToSavedSegment = isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex);
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -20097,10 +20125,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         },
         body: JSON.stringify({
           language: selectedLanguage,
-          projectId: segmentEditorDraft.projectId,
+          projectId: shouldBindAiPhotoJobToSavedSegment ? segmentEditorDraft.projectId : undefined,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          segmentIndex: targetSegmentIndex,
+          segmentIndex: shouldBindAiPhotoJobToSavedSegment ? targetSegmentIndex : undefined,
         } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
@@ -24225,6 +24253,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   return;
                 }
 
+                if (item.kind === "brand") {
+                  handleRemoveBrandLogo();
+                  handleClearBrandText();
+                  return;
+                }
+
                 item.resetSettingIds.forEach((settingId) => {
                   resetSegmentEditorSettingChange(settingId);
                 });
@@ -24272,7 +24306,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setSegmentAiPhotoModalLibraryFilter("all");
     }
     syncSegmentAiPhotoModalForSegment(activeSegment, { preserveTab: true, resetLibraryFilter: tab === "library" });
+    setSegmentEditorPromptToolTab(tab);
     setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(activeSegment, tab));
+  };
+  const handleSegmentEditorPromptBrandToolSelect = () => {
+    if (!activeSegment) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    setSegmentEditorPromptSceneMode("edit");
+    setSegmentEditorPromptToolTab("brand");
   };
   const handleSegmentEditorPromptVisualToolButtonClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
@@ -24282,12 +24326,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setReleasedSegmentEditorPromptTool(tab);
     handleSegmentEditorPromptVisualToolSelect(tab);
   };
-  const clearSegmentEditorPromptToolHoverRelease = (tab: WorkspaceSegmentVisualModalTab) => {
+  const handleSegmentEditorPromptBrandToolButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    setReleasedSegmentEditorPromptTool("brand");
+    handleSegmentEditorPromptBrandToolSelect();
+  };
+  const clearSegmentEditorPromptToolHoverRelease = (tab: WorkspaceSegmentEditorPromptToolTab) => {
     setReleasedSegmentEditorPromptTool((current) => (current === tab ? null : current));
   };
-  const getSegmentEditorPromptVisualToolButtonClass = (tab: WorkspaceSegmentVisualModalTab) =>
+  const getSegmentEditorPromptVisualToolButtonClass = (tab: WorkspaceSegmentEditorPromptToolTab) =>
     `studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${
-      segmentAiPhotoModalTab === tab ? " is-active" : ""
+      segmentEditorPromptToolTab === tab ? " is-active" : ""
     }${releasedSegmentEditorPromptTool === tab ? " is-hover-released" : ""}`;
   const handleSegmentEditorPromptSceneModeSelect = (mode: "create" | "edit") => {
     if (!activeSegment) {
@@ -24297,9 +24346,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorVideoError(null);
     setSegmentEditorPromptSceneMode(mode);
     syncSegmentAiPhotoModalForSegment(activeSegment, { preserveTab: true });
-    setSegmentAiPhotoModalTab(
-      getWorkspaceSegmentVisualTabForPromptSceneMode(activeSegment, mode, segmentAiPhotoModalTab),
-    );
+    const nextTab = getWorkspaceSegmentVisualTabForPromptSceneMode(activeSegment, mode, segmentAiPhotoModalTab);
+    setSegmentEditorPromptToolTab(nextTab);
+    setSegmentAiPhotoModalTab(nextTab);
   };
   const canSelectSegmentEditorPromptVisualTool = (tab: WorkspaceSegmentVisualModalTab) =>
     Boolean(activeSegment && isWorkspaceSegmentVisualModalTabAllowed(activeSegment, tab));
@@ -24307,13 +24356,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentEditorDraft && activeSegment
       ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, activeSegment.index)
       : activeSegmentIndex + 1;
-  const isPromptAiPhotoMode = segmentAiPhotoModalTab === "ai_photo";
-  const isPromptAiVideoMode = segmentAiPhotoModalTab === "ai_video";
-  const isPromptPhotoAnimationMode = segmentAiPhotoModalTab === "photo_animation";
-  const isPromptImageEditMode = segmentAiPhotoModalTab === "image_edit";
-  const isPromptUpscaleMode = segmentAiPhotoModalTab === "image_upscale";
-  const isPromptLibraryMode = segmentAiPhotoModalTab === "library";
-  const isPromptUploadMode = segmentAiPhotoModalTab === "upload";
+  const isPromptBrandMode = segmentEditorPromptToolTab === "brand";
+  const isPromptAiPhotoMode = segmentEditorPromptToolTab === "ai_photo";
+  const isPromptAiVideoMode = segmentEditorPromptToolTab === "ai_video";
+  const isPromptPhotoAnimationMode = segmentEditorPromptToolTab === "photo_animation";
+  const isPromptImageEditMode = segmentEditorPromptToolTab === "image_edit";
+  const isPromptUpscaleMode = segmentEditorPromptToolTab === "image_upscale";
+  const isPromptLibraryMode = segmentEditorPromptToolTab === "library";
+  const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
   const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(selectedSegmentAiVideoQuality);
   const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(selectedSegmentPhotoAnimationQuality);
@@ -24407,6 +24457,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentAiPhotoModalFileInputRef.current?.click();
     }
   };
+  const handleSegmentEditorBrandLogoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    await handleBrandLogoSelect(file);
+  };
   const promptVisualActionLabel = isPromptAiPhotoMode
     ? workspaceText(locale, "Создать ИИ фото", "Create AI photo")
     : isPromptAiVideoMode
@@ -24432,6 +24492,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const activeSegmentSourceDisplayLabel = activeSegment
     ? getWorkspaceSegmentDraftSourceDisplayLabel(activeSegmentSourceLabel, locale)
     : "";
+  const segmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(selectedBrandLogo);
+  const segmentEditorBrandTextLength = brandText.length;
   const isActiveSegmentTextEdited = activeSegment ? isWorkspaceSegmentDraftTextEdited(activeSegment) : false;
   const isActiveSegmentVisualEdited = activeSegment ? isWorkspaceSegmentDraftVisualResettable(activeSegment) : false;
   const promptVisualPanelTitle = isPromptAiPhotoMode
@@ -24444,18 +24506,22 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           ? workspaceText(locale, "Точная правка кадра", "Precise shot edit")
           : isPromptUpscaleMode
             ? workspaceText(locale, "Повысить качество кадра", "Improve shot quality")
-            : isPromptLibraryMode
-              ? workspaceText(locale, "Выбор из медиатеки", "Select from library")
-              : workspaceText(locale, "Свой визуал", "Custom visual");
+            : isPromptBrandMode
+              ? workspaceText(locale, "Бренд для Shorts", "Brand for Shorts")
+              : isPromptLibraryMode
+                ? workspaceText(locale, "Выбор из медиатеки", "Select from library")
+                : workspaceText(locale, "Свой визуал", "Custom visual");
   const promptVisualPanelCaption = isPromptLibraryMode
     ? workspaceText(locale, "Выберите готовый визуал для активной сцены.", "Choose a saved visual for the active scene.")
     : isPromptUploadMode
       ? workspaceText(locale, "Загрузите фото или видео только для этой сцены.", "Upload a photo or video only for this scene.")
-      : isPromptUpscaleMode
-        ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
-        : isPromptImageEditMode
-          ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
-          : workspaceText(locale, "Опишите кадр коротко: объект, действие, окружение, свет.", "Describe the shot briefly: subject, action, setting, light.");
+      : isPromptBrandMode
+        ? workspaceText(locale, "Добавьте логотип и текст, они применятся при создании Shorts.", "Add a logo and text; they will apply when creating Shorts.")
+        : isPromptUpscaleMode
+          ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
+          : isPromptImageEditMode
+            ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
+            : workspaceText(locale, "Опишите кадр коротко: объект, действие, окружение, свет.", "Describe the shot briefly: subject, action, setting, light.");
   const promptVisualPlaceholder = isPromptImageEditMode
     ? workspaceText(locale, "Например: убрать лишний предмет справа и сохранить тот же свет", "Example: remove the extra object on the right and keep the same light")
     : isPromptPhotoAnimationMode
@@ -24490,12 +24556,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       | "upload"
       | "photo_animation"
       | "image_edit"
-      | "image_upscale",
+      | "image_upscale"
+      | "brand",
   ) => {
     const iconClassName = `studio-segment-editor__prompt-tool-icon studio-segment-editor__prompt-tool-icon--${kind.replace("_", "-")}`;
     const aiBadge =
       kind === "ai_photo" || kind === "ai_video" || kind === "photo_animation" || kind === "image_edit" || kind === "image_upscale" ? (
-      <span className="studio-segment-editor__prompt-tool-icon__badge">AI</span>
+        <span className="studio-segment-editor__prompt-tool-icon__badge">AI</span>
       ) : null;
     const iconId = `segment-editor-tool-${kind.replace("_", "-")}`;
     const glassGradientId = `${iconId}-glass`;
@@ -24512,13 +24579,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             ? "/icons/segment-library-glyph-icon-generated.png"
             : kind === "upload"
               ? "/icons/segment-upload-glyph-icon-generated.png"
-            : kind === "photo_animation"
-              ? "/icons/segment-photo-animation-icon-generated.png"
-              : kind === "image_edit"
-                ? "/icons/segment-image-edit-icon-generated.png"
-                : kind === "image_upscale"
-                  ? "/icons/segment-image-upscale-icon-generated.png"
-                  : null;
+              : kind === "photo_animation"
+                ? "/icons/segment-photo-animation-icon-generated.png"
+                : kind === "image_edit"
+                  ? "/icons/segment-image-edit-icon-generated.png"
+                  : kind === "image_upscale"
+                    ? "/icons/segment-image-upscale-icon-generated.png"
+                    : null;
     const renderIconSvg = (children: ReactNode) => (
       <span className={iconClassName} aria-hidden="true">
         {aiBadge}
@@ -24619,6 +24686,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       );
     }
 
+    if (kind === "brand") {
+      return renderIconSvg(
+        <>
+          <rect x="16" y="16" width="32" height="32" rx="9" fill={`url(#${glassGradientId})`} opacity="0.3" />
+          <rect x="16" y="16" width="32" height="32" rx="9" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
+          <path d="M24 42V22h9.5c4.1 0 6.5 2.1 6.5 5.2 0 2.1-1.1 3.6-3.1 4.4 2.5.6 4 2.4 4 4.8 0 3.5-2.7 5.6-7.2 5.6H24Z" fill={`url(#${violetGradientId})`} opacity="0.9" />
+          <path d="M29 29h4.1c1.2 0 2-.7 2-1.8s-.8-1.7-2-1.7H29v3.5Zm0 8.5h4.7c1.4 0 2.2-.8 2.2-2s-.8-1.9-2.2-1.9H29v3.9Z" fill="#07111f" fillOpacity="0.9" />
+          <path d="m47.5 12.5 1.8 4 4.2 1.6-4.2 1.6-1.8 4-1.8-4-4.2-1.6 4.2-1.6 1.8-4Z" fill="white" opacity="0.92" />
+        </>,
+      );
+    }
+
     if (kind === "upload" || kind === "image_edit") {
       return renderIconSvg(
         <>
@@ -24658,7 +24737,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       | "upload"
       | "photo_animation"
       | "image_edit"
-      | "image_upscale",
+      | "image_upscale"
+      | "brand",
     label: string,
   ) => (
     <span className="studio-segment-editor__prompt-tool-button-content">
@@ -24674,9 +24754,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             <div className="studio-segment-editor__prompt-topbar" aria-label={workspaceText(locale, "Режим панели", "Panel mode")}>
               <div className="studio-segment-editor__scene-card">
                 <div className="studio-segment-editor__scene-card-main">
-	                  <div className="studio-segment-editor__scene-title">
-	                    <strong>{workspaceText(locale, `Сцена ${activeSegmentDisplayNumber}`, `Scene ${activeSegmentDisplayNumber}`)}</strong>
-	                  </div>
+                  <div className="studio-segment-editor__scene-title">
+                    <strong>{workspaceText(locale, `Сцена ${activeSegmentDisplayNumber}`, `Scene ${activeSegmentDisplayNumber}`)}</strong>
+                  </div>
                   <div className="studio-segment-editor__scene-nav" aria-label={workspaceText(locale, "Навигация по сценам", "Scene navigation")}>
                     <button
                       className="studio-segment-editor__scene-nav-button"
@@ -24711,7 +24791,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 </div>
               </div>
               <div className="studio-segment-editor__prompt-mode-block">
-	                <span className="studio-segment-editor__prompt-section-label">{workspaceText(locale, "Сценарий", "Scenario")}</span>
+                <span className="studio-segment-editor__prompt-section-label">{workspaceText(locale, "Сценарий", "Scenario")}</span>
                 <div className="studio-segment-editor__prompt-mode-switch">
                   <button
                     className={`studio-segment-editor__prompt-mode-button${segmentEditorPromptSceneMode === "create" ? " is-active" : ""}`}
@@ -24741,111 +24821,123 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     ? workspaceText(locale, "Источник визуала", "Visual source")
                     : workspaceText(locale, "Дорисовать", "Image edit")}
                 </span>
-              {segmentEditorPromptSceneMode === "create" ? (
-                <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("ai_photo")}
-                    type="button"
-                    aria-label={workspaceText(locale, "ИИ фото", "AI photo")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("ai_photo")}
-                    title={workspaceText(locale, "ИИ фото", "AI photo")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "ai_photo");
-                    }}
-                  >
-	                    {renderSegmentEditorPromptToolButtonContent("ai_photo", workspaceText(locale, "ИИ фото", "AI photo"))}
-                  </button>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("ai_video")}
-                    type="button"
-                    aria-label={workspaceText(locale, "ИИ видео", "AI video")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("ai_video")}
-                    title={workspaceText(locale, "ИИ видео", "AI video")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "ai_video");
-                    }}
-                  >
-	                    {renderSegmentEditorPromptToolButtonContent("ai_video", workspaceText(locale, "ИИ видео", "AI video"))}
-                  </button>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("library")}
-                    type="button"
-                    aria-label={workspaceText(locale, "Медиатека", "Media library")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("library")}
-                    title={workspaceText(locale, "Медиатека", "Media library")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("library")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("library")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "library");
-                    }}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent("library", workspaceText(locale, "Медиатека", "Media library"))}
-                  </button>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("upload")}
-                    type="button"
-                    aria-label={workspaceText(locale, "Свой визуал", "Custom visual")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("upload")}
-                    title={workspaceText(locale, "Свой визуал", "Custom visual")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("upload")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("upload")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "upload");
-                    }}
-                  >
-	                    {renderSegmentEditorPromptToolButtonContent("upload", workspaceText(locale, "Свой визуал", "Custom visual"))}
-                  </button>
-                </div>
-              ) : (
-                <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("photo_animation")}
-                    type="button"
-                    aria-label={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("photo_animation")}
-                    title={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "photo_animation");
-                    }}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent("photo_animation", workspaceText(locale, "ИИ анимация", "AI animation"))}
-                  </button>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("image_edit")}
-                    type="button"
-                    aria-label={workspaceText(locale, "Дорисовать", "Image edit")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("image_edit")}
-                    title={workspaceText(locale, "Дорисовать", "Image edit")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "image_edit");
-                    }}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent("image_edit", workspaceText(locale, "Дорисовать", "Image edit"))}
-                  </button>
-                  <button
-                    className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
-                    type="button"
-                    aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
-                    disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
-                    title={workspaceText(locale, "Улучшить качество", "Upscale image")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "image_upscale");
-                    }}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить качество", "Upscale image"))}
-                  </button>
-                </div>
-              )}
+                {segmentEditorPromptSceneMode === "create" ? (
+                  <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("ai_photo")}
+                      type="button"
+                      aria-label={workspaceText(locale, "ИИ фото", "AI photo")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("ai_photo")}
+                      title={workspaceText(locale, "ИИ фото", "AI photo")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_photo")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "ai_photo");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("ai_photo", workspaceText(locale, "ИИ фото", "AI photo"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("ai_video")}
+                      type="button"
+                      aria-label={workspaceText(locale, "ИИ видео", "AI video")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("ai_video")}
+                      title={workspaceText(locale, "ИИ видео", "AI video")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("ai_video")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "ai_video");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("ai_video", workspaceText(locale, "ИИ видео", "AI video"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("library")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Медиатека", "Media library")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("library")}
+                      title={workspaceText(locale, "Медиатека", "Media library")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("library")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("library")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "library");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("library", workspaceText(locale, "Медиатека", "Media library"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("upload")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Свой визуал", "Custom visual")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("upload")}
+                      title={workspaceText(locale, "Свой визуал", "Custom visual")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("upload")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("upload")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "upload");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("upload", workspaceText(locale, "Свой визуал", "Custom visual"))}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("photo_animation")}
+                      type="button"
+                      aria-label={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("photo_animation")}
+                      title={workspaceText(locale, "ИИ анимация фото", "AI photo animation")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("photo_animation")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "photo_animation");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("photo_animation", workspaceText(locale, "ИИ анимация", "AI animation"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("image_edit")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Дорисовать", "Image edit")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("image_edit")}
+                      title={workspaceText(locale, "Дорисовать", "Image edit")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_edit")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "image_edit");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("image_edit", workspaceText(locale, "Дорисовать", "Image edit"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
+                      title={workspaceText(locale, "Улучшить качество", "Upscale image")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "image_upscale");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить качество", "Upscale image"))}
+                    </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("brand")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Добавить бренд", "Add brand")}
+                      disabled={!activeSegment}
+                      title={workspaceText(locale, "Добавить бренд", "Add brand")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("brand")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("brand")}
+                      onClick={handleSegmentEditorPromptBrandToolButtonClick}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("brand", workspaceText(locale, "Добавить бренд", "Add brand"))}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="studio-canvas-prompt__input-row">
@@ -24856,10 +24948,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     className="studio-segment-editor__prompt-file-input"
                     type="file"
                     accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.mov,.webm,.m4v,image/*,video/*"
-	                    onChange={(event) => {
-	                      void handleSegmentAiPhotoModalCustomVideoChange(event);
-	                    }}
-	                  />
+                    onChange={(event) => {
+                      void handleSegmentAiPhotoModalCustomVideoChange(event);
+                    }}
+                  />
+                  <input
+                    ref={segmentEditorBrandLogoInputRef}
+                    className="studio-segment-editor__prompt-file-input"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.avif,image/*"
+                    onChange={(event) => {
+                      void handleSegmentEditorBrandLogoChange(event);
+                    }}
+                  />
                   <div className="studio-segment-editor__prompt-workspace-head">
                     <div>
                       <span>{workspaceText(locale, "Действие", "Action")}</span>
@@ -24867,8 +24968,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     </div>
                     <p>{promptVisualPanelCaption}</p>
                   </div>
-	                  {isPromptLibraryMode ? (
-	                    <div className="studio-segment-editor__prompt-library">
+                  {isPromptLibraryMode ? (
+                    <div className="studio-segment-editor__prompt-library">
                       {segmentAiPhotoModalLibraryItems.length > 0 ? (
                         <div className="studio-segment-editor__prompt-library-filters" aria-label={workspaceText(locale, "Фильтр медиатеки", "Media library filter")}>
                           <button
@@ -25009,17 +25110,94 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         )}
                       </div>
                     </div>
+                  ) : isPromptBrandMode ? (
+                    <div className={`studio-segment-editor__brand-panel${hasSegmentEditorBranding ? " is-selected" : ""}`}>
+                      <div className="studio-segment-editor__brand-card">
+                        <div className="studio-segment-editor__brand-preview" aria-hidden="true">
+                          {segmentEditorBrandLogoPreviewUrl ? (
+                            <img src={segmentEditorBrandLogoPreviewUrl} alt="" />
+                          ) : (
+                            <span>Logo</span>
+                          )}
+                        </div>
+                        <div className="studio-segment-editor__brand-copy">
+                          <strong>
+                            {hasSegmentEditorBranding
+                              ? workspaceText(locale, "Бренд добавлен", "Brand added")
+                              : workspaceText(locale, "Добавьте логотип или текст", "Add a logo or text")}
+                          </strong>
+                          <span title={selectedBrandLogo?.fileName ?? brandText}>
+                            {getStudioBrandSummary({ brandLogoFile: selectedBrandLogo, brandText })}
+                          </span>
+                        </div>
+                        <div className="studio-segment-editor__brand-actions">
+                          <button
+                            className="studio-segment-editor__brand-action"
+                            type="button"
+                            disabled={isPreparingBrandLogo}
+                            aria-label={selectedBrandLogo ? workspaceText(locale, "Заменить логотип", "Replace logo") : workspaceText(locale, "Добавить логотип", "Add logo")}
+                            title={selectedBrandLogo ? workspaceText(locale, "Заменить логотип", "Replace logo") : workspaceText(locale, "Добавить логотип", "Add logo")}
+                            onClick={() => segmentEditorBrandLogoInputRef.current?.click()}
+                          >
+                            {isPreparingBrandLogo ? (
+                              <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </button>
+                          {selectedBrandLogo ? (
+                            <button
+                              className="studio-segment-editor__brand-action studio-segment-editor__brand-action--danger"
+                              type="button"
+                              aria-label={workspaceText(locale, "Убрать логотип", "Remove logo")}
+                              title={workspaceText(locale, "Убрать логотип", "Remove logo")}
+                              onClick={handleRemoveBrandLogo}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <label className="studio-segment-editor__brand-field">
+                        <span>{workspaceText(locale, "Текст бренда", "Brand text")}</span>
+                        <input
+                          className="studio-segment-editor__brand-input"
+                          type="text"
+                          value={brandText}
+                          maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
+                          placeholder={workspaceText(locale, "Например, adshortsai.com", "Example: adshortsai.com")}
+                          onChange={(event) => handleBrandTextChange(event.target.value)}
+                        />
+                      </label>
+                      <div className="studio-segment-editor__brand-meta">
+                        <span>{segmentEditorBrandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
+                        {brandText ? (
+                          <button type="button" onClick={handleClearBrandText}>
+                            {workspaceText(locale, "Очистить текст", "Clear text")}
+                          </button>
+                        ) : (
+                          <span>{workspaceText(locale, "Лого: .jpg, .png, .webp, .avif", "Logo: .jpg, .png, .webp, .avif")}</span>
+                        )}
+                      </div>
+                      {brandSelectionError ? (
+                        <p className="studio-segment-editor__prompt-note is-error" role="alert">{brandSelectionError}</p>
+                      ) : null}
+                    </div>
                   ) : isPromptUploadMode || isPromptUpscaleMode ? (
                     <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
                       <strong>
                         {isPromptUploadMode
-                            ? segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")
-                            : workspaceText(locale, "Улучшить качество", "Upscale image")}
+                          ? segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")
+                          : workspaceText(locale, "Улучшить качество", "Upscale image")}
                       </strong>
                       <span>
                         {isPromptUploadMode
-                            ? workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")
-                            : workspaceText(locale, "Улучшение качества изображения.", "Image quality upscaling.")}
+                          ? workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")
+                          : workspaceText(locale, "Улучшение качества изображения.", "Image quality upscaling.")}
                       </span>
                     </div>
                   ) : (
@@ -25028,11 +25206,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         <textarea
                           ref={segmentAiPhotoModalTextareaRef}
                           className="studio-segment-editor__prompt-textarea"
-	                          value={promptVisualTextareaValue}
-	                          onChange={handlePromptVisualTextareaChange}
-	                          rows={6}
-	                          placeholder={promptVisualPlaceholder}
-	                        />
+                          value={promptVisualTextareaValue}
+                          onChange={handlePromptVisualTextareaChange}
+                          rows={6}
+                          placeholder={promptVisualPlaceholder}
+                        />
                         <button
                           className="studio-segment-editor__prompt-improve"
                           type="button"
@@ -25058,14 +25236,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             </svg>
                           )}
                         </button>
-	                      </div>
-	                    </>
-	                  )}
-	                  {segmentEditorVideoError ? (
-	                    <p className="studio-segment-editor__prompt-note is-error">{segmentEditorVideoError}</p>
-	                  ) : null}
-	                  {!isPromptLibraryMode ? (
-	                    <div className="studio-segment-editor__prompt-action-row">
+                      </div>
+                    </>
+                  )}
+                  {segmentEditorVideoError ? (
+                    <p className="studio-segment-editor__prompt-note is-error">{segmentEditorVideoError}</p>
+                  ) : null}
+                  {!isPromptLibraryMode && !isPromptBrandMode ? (
+                    <div className="studio-segment-editor__prompt-action-row">
                       {isPromptAiPhotoMode
                         ? renderSegmentVisualQualitySwitch({
                             ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
@@ -25094,23 +25272,23 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 value: selectedSegmentPhotoAnimationQuality,
                               })
                             : null}
-                        <button
-                          className="studio-segment-editor__prompt-action"
-                          type="button"
-                          disabled={isPromptVisualActionDisabled}
-                          onClick={handlePromptVisualAction}
-                        >
-                          {isPromptVisualBusy ? (
-                            <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                          ) : (
-                            <>
-                              <span>{promptVisualActionLabel}</span>
-                              {promptVisualActionCost !== null ? (
-                                <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
-                              ) : null}
-                            </>
-                          )}
-                        </button>
+                      <button
+                        className="studio-segment-editor__prompt-action"
+                        type="button"
+                        disabled={isPromptVisualActionDisabled}
+                        onClick={handlePromptVisualAction}
+                      >
+                        {isPromptVisualBusy ? (
+                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                        ) : (
+                          <>
+                            <span>{promptVisualActionLabel}</span>
+                            {promptVisualActionCost !== null ? (
+                              <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
+                            ) : null}
+                          </>
+                        )}
+                      </button>
                     </div>
                   ) : null}
                 </div>
