@@ -13391,6 +13391,45 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentEditorUpscalingImageRunIds,
     ],
   );
+  const getSegmentVisualGenerationStatusLabel = useCallback(
+    (segmentIndex: number, variant: "full" | "compact" = "full") => {
+      if (hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex)) {
+        return variant === "compact"
+          ? workspaceText(locale, "Улучшение", "Upscale")
+          : workspaceText(locale, "Улучшаем качество фото", "Upscaling photo");
+      }
+      if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentIndex)) {
+        return variant === "compact"
+          ? workspaceText(locale, "Анимация", "Animating")
+          : workspaceText(locale, "Анимируем фото", "Animating photo");
+      }
+      if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex)) {
+        return variant === "compact"
+          ? workspaceText(locale, "ИИ видео", "AI video")
+          : workspaceText(locale, "Генерируем ИИ видео", "Generating AI video");
+      }
+      if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentIndex)) {
+        return variant === "compact"
+          ? workspaceText(locale, "Дорисовка", "Editing")
+          : workspaceText(locale, "Дорисовываем", "Editing image");
+      }
+      if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex)) {
+        return variant === "compact"
+          ? workspaceText(locale, "ИИ фото", "AI photo")
+          : workspaceText(locale, "Генерируем фото", "Generating photo");
+      }
+
+      return "";
+    },
+    [
+      locale,
+      segmentEditorGeneratingAiPhotoRunIds,
+      segmentEditorGeneratingAiVideoRunIds,
+      segmentEditorGeneratingImageEditRunIds,
+      segmentEditorGeneratingPhotoAnimationRunIds,
+      segmentEditorUpscalingImageRunIds,
+    ],
+  );
   const getSegmentVisualPlaceholderLabel = useCallback(
     (segmentIndex: number) =>
       isSegmentVisualGenerationPending(segmentIndex)
@@ -20103,7 +20142,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       aiPhotoPrompt: nextPrompt,
       aiPhotoPromptInitialized: true,
       visualReset: false,
-      videoAction: "ai_photo",
     }));
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
@@ -20578,7 +20616,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       aiVideoPromptInitialized: true,
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
       visualReset: false,
-      videoAction: "photo_animation",
     }));
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
@@ -20771,7 +20808,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       aiVideoPromptInitialized: Boolean(job.prompt || segment.aiVideoPrompt),
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(job.sourceAsset) ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
       visualReset: false,
-      videoAction: "photo_animation",
     }));
     logSegmentEditorDiagnostics("client.segment-editor.photo-animation.resume", {
       jobId: job.jobId,
@@ -25800,15 +25836,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         <div className="studio-segment-editor__card-loader" role="status" aria-live="polite">
                                           <span className="studio-segment-editor__card-loader-spinner" aria-hidden="true"></span>
                                           <strong>
-                                            {isImageUpscalePending
-                                              ? workspaceText(locale, "Улучшаем качество фото", "Upscaling photo")
-                                              : isPhotoAnimationGenerationPending
-                                              ? workspaceText(locale, "Анимируем фото", "Animating photo")
-                                              : isAiVideoGenerationPending
-                                                ? workspaceText(locale, "Генерируем ИИ видео", "Generating AI video")
-                                                : isImageEditGenerationPending
-                                                  ? workspaceText(locale, "Дорисовываем", "Editing image")
-                                                  : workspaceText(locale, "Генерируем фото", "Generating photo")}
+                                            {getSegmentVisualGenerationStatusLabel(segment.index) ||
+                                              workspaceText(locale, "Генерация...", "Generating...")}
                                           </strong>
                                           <span>
                                             {workspaceText(
@@ -25948,6 +25977,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 const isActiveThumb = index === activeSegmentIndex;
                                 const isThumbVisualEdited = isWorkspaceSegmentDraftVisualResettable(segment);
                                 const isDraggedThumb = index === draggedSegmentThumbIndex;
+                                const thumbGenerationLabel = getSegmentVisualGenerationStatusLabel(segment.index, "compact");
+                                const isThumbVisualGenerationPending = Boolean(thumbGenerationLabel);
 
                                 return (
                                   <Fragment key={`segment-thumb:${segment.index}`}>
@@ -25956,11 +25987,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         ref={setSegmentThumbButtonRef(segment.index)}
                                         className={`studio-segment-editor__thumb${isActiveThumb ? " is-active" : ""}${
                                           isThumbVisualEdited ? " is-visual-edited" : ""
-                                        }`}
+                                        }${isThumbVisualGenerationPending ? " is-pending" : ""}`}
                                         type="button"
+                                        aria-busy={isThumbVisualGenerationPending ? true : undefined}
                                         aria-pressed={isActiveThumb}
                                         aria-grabbed={isDraggedThumb ? true : undefined}
-                                        aria-label={workspaceText(locale, `Открыть сцену ${index + 1}`, `Open scene ${index + 1}`)}
+                                        aria-label={
+                                          isThumbVisualGenerationPending
+                                            ? workspaceText(
+                                                locale,
+                                                `Открыть сцену ${index + 1}. ${thumbGenerationLabel}`,
+                                                `Open scene ${index + 1}. ${thumbGenerationLabel}`,
+                                              )
+                                            : workspaceText(locale, `Открыть сцену ${index + 1}`, `Open scene ${index + 1}`)
+                                        }
                                         onPointerCancel={(event) => finishSegmentThumbPointerDrag(index)(event, { cancelled: true })}
                                         onPointerDown={handleSegmentThumbPointerDown(index)}
                                         onPointerMove={handleSegmentThumbPointerMove(index)}
@@ -26011,6 +26051,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                               })}
                                             </small>
                                           </span>
+                                          {isThumbVisualGenerationPending ? (
+                                            <span className="studio-segment-editor__thumb-status" role="status" aria-live="polite">
+                                              <span className="studio-segment-editor__thumb-status-spinner" aria-hidden="true"></span>
+                                              <span>{thumbGenerationLabel}</span>
+                                            </span>
+                                          ) : null}
                                         </span>
                                       </button>
                                       <button
