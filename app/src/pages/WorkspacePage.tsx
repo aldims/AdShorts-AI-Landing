@@ -8151,6 +8151,31 @@ const persistStudioBrandSettings = (
   }
 };
 
+const normalizeStudioBrandSettingsText = (value: string | null | undefined) =>
+  String(value ?? "").trim().slice(0, STUDIO_BRAND_TEXT_MAX_CHARS);
+
+const getStudioBrandLogoComparableKey = (brandLogoFile: StudioBrandLogoFile | null | undefined) => {
+  if (!brandLogoFile) {
+    return "";
+  }
+
+  return [
+    brandLogoFile.assetId ?? "",
+    brandLogoFile.fileName,
+    brandLogoFile.fileSize,
+    brandLogoFile.mimeType,
+    brandLogoFile.dataUrl ?? "",
+    brandLogoFile.objectUrl ?? "",
+  ].join("|");
+};
+
+const areStudioBrandSettingsEqual = (
+  left: StudioBrandSettingsSnapshot,
+  right: StudioBrandSettingsSnapshot,
+) =>
+  normalizeStudioBrandSettingsText(left.brandText) === normalizeStudioBrandSettingsText(right.brandText) &&
+  getStudioBrandLogoComparableKey(left.brandLogoFile) === getStudioBrandLogoComparableKey(right.brandLogoFile);
+
 const getWorkspaceMediaLibraryItemStorageKey = (item: WorkspaceMediaLibraryItem) => item.itemKey;
 
 const getWorkspaceMediaLibraryItemKindLabel = (
@@ -12907,6 +12932,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [brandText, setBrandText] = useState(
     () => examplePrefillInitialStudioState.brandText || (initialBrandSettingsRef.current?.brandText ?? ""),
   );
+  const [appliedSegmentEditorBrandSettings, setAppliedSegmentEditorBrandSettings] =
+    useState<StudioBrandSettingsSnapshot>(() => ({
+      brandLogoFile: initialBrandSettingsRef.current?.brandLogoFile ?? null,
+      brandText: normalizeStudioBrandSettingsText(
+        examplePrefillInitialStudioState.brandText || initialBrandSettingsRef.current?.brandText,
+      ),
+    }));
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
   const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>(examplePrefillInitialStudioState.musicType);
@@ -16184,22 +16216,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
-  const hasSegmentEditorBranding = hasStudioBranding({ brandLogoFile: selectedBrandLogo, brandText });
+  const currentSegmentEditorBrandSettings: StudioBrandSettingsSnapshot = {
+    brandLogoFile: selectedBrandLogo,
+    brandText,
+  };
+  const hasSegmentEditorBranding = hasStudioBranding(currentSegmentEditorBrandSettings);
+  const hasAppliedSegmentEditorBranding = hasStudioBranding(appliedSegmentEditorBrandSettings);
+  const isSegmentEditorBrandDirty = !areStudioBrandSettingsEqual(
+    currentSegmentEditorBrandSettings,
+    appliedSegmentEditorBrandSettings,
+  );
   const segmentEditorBaseChangeChecklist = segmentEditorDraft
     ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChecklistBaseSession, {
         subtitleColorOptions,
         subtitleStyleOptions,
       })
     : [];
-  const segmentEditorChangeChecklist: WorkspaceSegmentEditorChecklistItem[] = hasSegmentEditorBranding
+  const segmentEditorChangeChecklist: WorkspaceSegmentEditorChecklistItem[] = hasAppliedSegmentEditorBranding
     ? [
         ...segmentEditorBaseChangeChecklist,
         {
           key: "segment-brand:global",
           kind: "brand",
           label: `${workspaceText(locale, "Бренд", "Brand")}: ${getStudioBrandSummary({
-            brandLogoFile: selectedBrandLogo,
-            brandText,
+            brandLogoFile: appliedSegmentEditorBrandSettings.brandLogoFile,
+            brandText: appliedSegmentEditorBrandSettings.brandText,
           })}`,
         },
       ]
@@ -21221,6 +21262,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (isSegmentEditorBrandDirty) {
+      setSegmentEditorPromptToolTab("brand");
+      setSegmentEditorPromptSceneMode("edit");
+      setSegmentEditorVideoError(workspaceText(locale, "Нажмите «Применить» в бренде перед созданием Shorts.", "Press Apply in Brand before creating Shorts."));
+      return;
+    }
+
     if (!hasSegmentEditorChanges) {
       setSegmentEditorVideoError(null);
       return;
@@ -21286,6 +21334,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     navigateToStudioCreateWaitingRoute({ replace: true });
     await handleGenerate(regenerationPrompt, {
       ...buildCurrentRegenerationOptions(nextAppliedSession),
+      brandLogoFile: appliedSegmentEditorBrandSettings.brandLogoFile,
+      brandText: appliedSegmentEditorBrandSettings.brandText,
       segmentEditorAllowStructureChange: allowSegmentStructureChange,
     });
   };
@@ -22241,6 +22291,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     nextTopic: string,
     options?: {
       clearAppliedSegmentEditorOnSuccess?: boolean;
+      brandLogoFile?: StudioBrandLogoFile | null;
+      brandText?: string | null;
       editedFromProjectAdId?: number;
       isRegeneration?: boolean;
       language?: StudioLanguage | string;
@@ -22258,6 +22310,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     },
   ) => {
     const isSegmentEditorGeneration = Boolean(options?.segmentEditorSession);
+    const hasBrandLogoOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "brandLogoFile");
+    const hasBrandTextOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "brandText");
+    const effectiveBrandLogoFile = hasBrandLogoOverride ? options?.brandLogoFile ?? null : selectedBrandLogo;
+    const effectiveBrandText = normalizeStudioBrandSettingsText(
+      hasBrandTextOverride ? options?.brandText ?? "" : brandText,
+    );
     const effectiveVideoMode =
       isSegmentEditorGeneration && selectedVideoMode === "custom" && !selectedCustomVideo
         ? "standard"
@@ -22280,9 +22338,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     };
     console.info("[studio] generate.start", {
       createMode,
-      brandLogoSelected: Boolean(selectedBrandLogo),
-      brandLogoHasDataUrl: Boolean(String(selectedBrandLogo?.dataUrl ?? "").trim()),
-      brandTextLength: brandText.trim().length,
+      brandLogoSelected: Boolean(effectiveBrandLogoFile),
+      brandLogoHasDataUrl: Boolean(String(effectiveBrandLogoFile?.dataUrl ?? "").trim()),
+      brandTextLength: effectiveBrandText.length,
       effectiveVideoMode,
       isRegeneration: Boolean(options?.isRegeneration),
       projectId: options?.projectId ?? null,
@@ -22515,17 +22573,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       appendStudioFormValue(formData, "videoMode", effectiveVideoMode);
       appendStudioFormValue(formData, "voiceEnabled", effectiveVoiceEnabled);
       appendStudioFormValue(formData, "voiceId", effectiveVoiceId);
-      appendStudioFormValue(formData, "brandText", brandText.trim() || undefined);
+      appendStudioFormValue(formData, "brandText", effectiveBrandText || undefined);
 
-      let brandLogoAssetId = selectedBrandLogo?.assetId;
+      let brandLogoAssetId = effectiveBrandLogoFile?.assetId;
       let customMusicAssetId = effectiveMusicRequest.customMusicAssetId;
       let customVideoAssetId = selectedCustomVideo?.assetId;
 
-      if (selectedBrandLogo && !brandLogoAssetId) {
+      if (effectiveBrandLogoFile && !brandLogoAssetId) {
         setStatus("Загружаем бренд...");
-        brandLogoAssetId = (await ensureStudioUploadedAssetId(selectedBrandLogo, {
-          fallbackFileName: selectedBrandLogo.fileName || "brand-logo.png",
-          fallbackMimeType: selectedBrandLogo.mimeType,
+        brandLogoAssetId = (await ensureStudioUploadedAssetId(effectiveBrandLogoFile, {
+          fallbackFileName: effectiveBrandLogoFile.fileName || "brand-logo.png",
+          fallbackMimeType: effectiveBrandLogoFile.mimeType,
           kind: "brand_logo",
           language: effectiveLanguage,
           mediaType: "photo",
@@ -22560,19 +22618,19 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         })) ?? undefined;
       }
 
-      if (selectedBrandLogo) {
-        appendStudioFormValue(formData, "brandLogoFileName", selectedBrandLogo.fileName);
-        appendStudioFormValue(formData, "brandLogoFileMimeType", selectedBrandLogo.mimeType);
+      if (effectiveBrandLogoFile) {
+        appendStudioFormValue(formData, "brandLogoFileName", effectiveBrandLogoFile.fileName);
+        appendStudioFormValue(formData, "brandLogoFileMimeType", effectiveBrandLogoFile.mimeType);
 
         if (brandLogoAssetId) {
           appendStudioFormValue(formData, "brandLogoAssetId", brandLogoAssetId);
-        } else if (selectedBrandLogo.file) {
-          formData.append("brandLogoFile", selectedBrandLogo.file, selectedBrandLogo.fileName);
+        } else if (effectiveBrandLogoFile.file) {
+          formData.append("brandLogoFile", effectiveBrandLogoFile.file, effectiveBrandLogoFile.fileName);
         } else {
           appendStudioFormValue(
             formData,
             "brandLogoFileDataUrl",
-            await resolveStudioCustomAssetDataUrl(selectedBrandLogo),
+            await resolveStudioCustomAssetDataUrl(effectiveBrandLogoFile),
           );
         }
       }
@@ -24292,6 +24350,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                 if (item.kind === "brand") {
                   handleRemoveBrandLogo();
                   handleClearBrandText();
+                  setAppliedSegmentEditorBrandSettings({ brandLogoFile: null, brandText: "" });
                   return;
                 }
 
@@ -24328,6 +24387,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   ) : null;
   const isSegmentEditorCreateShortsDisabled =
     !hasSegmentEditorChanges ||
+    isSegmentEditorBrandDirty ||
     isGenerating ||
     isSegmentEditorPreparingCustomVideo ||
     isAnySegmentEditorVisualJobBusy;
@@ -24530,6 +24590,61 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : "";
   const segmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(selectedBrandLogo);
   const segmentEditorBrandTextLength = brandText.length;
+  const appliedSegmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(
+    appliedSegmentEditorBrandSettings.brandLogoFile,
+  );
+  const appliedSegmentEditorBrandText = normalizeStudioBrandSettingsText(appliedSegmentEditorBrandSettings.brandText);
+  const appliedSegmentEditorBrandSummary = getStudioBrandSummary(appliedSegmentEditorBrandSettings);
+  const segmentEditorBrandPanelTitle = isSegmentEditorBrandDirty
+    ? workspaceText(locale, "Нажмите «Применить»", "Press Apply")
+    : hasAppliedSegmentEditorBranding
+      ? workspaceText(locale, "Бренд применён", "Brand applied")
+      : hasSegmentEditorBranding
+        ? workspaceText(locale, "Бренд добавлен", "Brand added")
+        : workspaceText(locale, "Добавьте логотип или текст", "Add a logo or text");
+  const handleApplySegmentEditorBrand = () => {
+    if (isPreparingBrandLogo) {
+      setBrandSelectionError(workspaceText(locale, "Подождите, пока логотип подготовится.", "Wait until the logo is ready."));
+      return;
+    }
+
+    const nextBrandText = normalizeStudioBrandSettingsText(brandText);
+    const nextSettings: StudioBrandSettingsSnapshot = {
+      brandLogoFile: selectedBrandLogo,
+      brandText: nextBrandText,
+    };
+    setBrandText(nextBrandText);
+    setAppliedSegmentEditorBrandSettings(nextSettings);
+    setBrandSelectionError(null);
+    setSegmentEditorVideoError(null);
+    showStudioToast(
+      hasStudioBranding(nextSettings)
+        ? workspaceText(locale, "Бренд применён к сегментам.", "Brand applied to segments.")
+        : workspaceText(locale, "Бренд убран с сегментов.", "Brand removed from segments."),
+    );
+  };
+  const renderSegmentEditorBrandOverlay = (variant: "card" | "thumb") => {
+    if (!hasAppliedSegmentEditorBranding) {
+      return null;
+    }
+
+    return (
+      <span
+        className={`studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}`}
+        title={appliedSegmentEditorBrandSummary}
+        aria-hidden="true"
+      >
+        {appliedSegmentEditorBrandLogoPreviewUrl ? (
+          <img src={appliedSegmentEditorBrandLogoPreviewUrl} alt="" />
+        ) : !appliedSegmentEditorBrandText ? (
+          <span className="studio-segment-editor__brand-overlay-logo">LOGO</span>
+        ) : null}
+        {appliedSegmentEditorBrandText ? (
+          <span className="studio-segment-editor__brand-overlay-text">{appliedSegmentEditorBrandText}</span>
+        ) : null}
+      </span>
+    );
+  };
   const isActiveSegmentTextEdited = activeSegment ? isWorkspaceSegmentDraftTextEdited(activeSegment) : false;
   const isActiveSegmentVisualEdited = activeSegment ? isWorkspaceSegmentDraftVisualResettable(activeSegment) : false;
   const promptVisualPanelTitle = isPromptAiPhotoMode
@@ -24552,7 +24667,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     : isPromptUploadMode
       ? workspaceText(locale, "Загрузите фото или видео только для этой сцены.", "Upload a photo or video only for this scene.")
       : isPromptBrandMode
-        ? workspaceText(locale, "Добавьте логотип и текст, они применятся при создании Shorts.", "Add a logo and text; they will apply when creating Shorts.")
+        ? workspaceText(locale, "Добавьте логотип и текст, затем нажмите «Применить».", "Add a logo and text, then press Apply.")
         : isPromptUpscaleMode
           ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
           : isPromptImageEditMode
@@ -25137,7 +25252,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       </div>
                     </div>
                   ) : isPromptBrandMode ? (
-                    <div className={`studio-segment-editor__brand-panel${hasSegmentEditorBranding ? " is-selected" : ""}`}>
+                    <div className={`studio-segment-editor__brand-panel${hasSegmentEditorBranding ? " is-selected" : ""}${
+                      isSegmentEditorBrandDirty ? " is-dirty" : ""
+                    }`}>
                       <div className="studio-segment-editor__brand-card">
                         <div className="studio-segment-editor__brand-preview" aria-hidden="true">
                           {segmentEditorBrandLogoPreviewUrl ? (
@@ -25147,11 +25264,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           )}
                         </div>
                         <div className="studio-segment-editor__brand-copy">
-                          <strong>
-                            {hasSegmentEditorBranding
-                              ? workspaceText(locale, "Бренд добавлен", "Brand added")
-                              : workspaceText(locale, "Добавьте логотип или текст", "Add a logo or text")}
-                          </strong>
+                          <strong>{segmentEditorBrandPanelTitle}</strong>
                           <span title={selectedBrandLogo?.fileName ?? brandText}>
                             {getStudioBrandSummary({ brandLogoFile: selectedBrandLogo, brandText })}
                           </span>
@@ -25209,6 +25322,23 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           <span>{workspaceText(locale, "Лого: .jpg, .png, .webp, .avif", "Logo: .jpg, .png, .webp, .avif")}</span>
                         )}
                       </div>
+                      <button
+                        className="studio-segment-editor__brand-apply"
+                        type="button"
+                        disabled={isPreparingBrandLogo || !isSegmentEditorBrandDirty}
+                        onClick={handleApplySegmentEditorBrand}
+                      >
+                        {isPreparingBrandLogo ? (
+                          <>
+                            <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                            <span>{workspaceText(locale, "Готовим логотип", "Preparing logo")}</span>
+                          </>
+                        ) : isSegmentEditorBrandDirty ? (
+                          workspaceText(locale, "Применить к сегментам", "Apply to segments")
+                        ) : (
+                          workspaceText(locale, "Применено", "Applied")
+                        )}
+                      </button>
                       {brandSelectionError ? (
                         <p className="studio-segment-editor__prompt-note is-error" role="alert">{brandSelectionError}</p>
                       ) : null}
@@ -25370,19 +25500,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           aria-busy={isGenerating ? true : undefined}
           aria-label={workspaceText(
             locale,
-            hasSegmentEditorChanges
+            isSegmentEditorBrandDirty
+              ? "Сначала примените бренд к сегментам"
+              : hasSegmentEditorChanges
               ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
-            hasSegmentEditorChanges
+            isSegmentEditorBrandDirty
+              ? "Apply the brand to segments first"
+              : hasSegmentEditorChanges
               ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
           )}
           title={workspaceText(
             locale,
-            hasSegmentEditorChanges
+            isSegmentEditorBrandDirty
+              ? "Сначала примените бренд к сегментам"
+              : hasSegmentEditorChanges
               ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
-            hasSegmentEditorChanges
+            isSegmentEditorBrandDirty
+              ? "Apply the brand to segments first"
+              : hasSegmentEditorChanges
               ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
           )}
@@ -25398,7 +25536,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             </>
           ) : (
             <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
-              {hasSegmentEditorChanges ? (
+              {isSegmentEditorBrandDirty ? (
+                <span>{workspaceText(locale, "Примените бренд", "Apply brand")}</span>
+              ) : hasSegmentEditorChanges ? (
                 <>
                   <span>{workspaceText(locale, "Создать Shorts", "Create Shorts")}</span>
                   <span className="studio-canvas-prompt__btn-cost">{segmentEditorCreateShortsRequiredCredits}</span>
@@ -25775,6 +25915,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           {getSegmentVisualPlaceholderLabel(segment.index)}
                                         </div>
                                       )}
+                                      {renderSegmentEditorBrandOverlay("card")}
                                       {!isActiveCard ? (
                                         <button
                                           className="studio-segment-editor__card-hitbox studio-segment-editor__card-hitbox--side"
@@ -26042,6 +26183,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                               {getSegmentVisualPlaceholderLabel(segment.index)}
                                             </span>
                                           )}
+                                          {renderSegmentEditorBrandOverlay("thumb")}
                                           <span className="studio-segment-editor__thumb-copy">
                                             <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
                                             <small>
