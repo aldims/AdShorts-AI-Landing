@@ -1723,10 +1723,18 @@ app.post("/api/referrals/click", async (req, res) => {
         res.json({ data: { code: null, ok: false } });
         return;
     }
+    if (body.human_interaction !== true) {
+        res.json({ data: { code, ok: false, tracked: false, reason: "no_human_interaction" } });
+        return;
+    }
     try {
         const payload = await postAdsflowJson("/api/web/referral-click", {
             admin_token: env.adsflowAdminToken,
             code,
+            human_interaction: true,
+            interaction_type: typeof body.interaction_type === "string"
+                ? body.interaction_type
+                : undefined,
             web_device_id: normalizeWebDeviceId(body.web_device_id) || undefined,
             landing_url: typeof body.landing_url === "string" ? body.landing_url : undefined,
             referrer: typeof body.referrer === "string" ? body.referrer : undefined,

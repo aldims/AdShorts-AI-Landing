@@ -87,6 +87,7 @@ const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
 const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
 const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?(rf_[A-Za-z0-9_-]{2,64})\/?$/;
 const WEB_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{16,160}$/;
+const WEB_REFERRAL_INTERACTION_EVENTS = ["pointerdown", "keydown", "touchstart", "wheel"] as const;
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -304,11 +305,24 @@ const buildWorkspaceBootstrapUrl = (referralSource: string) => {
   return `/api/workspace/bootstrap?${new URLSearchParams({ referral_source: referralSource }).toString()}`;
 };
 
+const getWebReferralClickStorageKey = (referralSource: string) =>
+  `${WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX}${referralSource}`;
+
+const hasRecordedWebReferralClick = (referralSource: string) => {
+  if (typeof window === "undefined" || !referralSource) return true;
+
+  try {
+    return window.sessionStorage.getItem(getWebReferralClickStorageKey(referralSource)) === "1";
+  } catch {
+    return false;
+  }
+};
+
 const shouldRecordWebReferralClick = (referralSource: string) => {
   if (typeof window === "undefined" || !referralSource) return false;
 
   try {
-    const storageKey = `${WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX}${referralSource}`;
+    const storageKey = getWebReferralClickStorageKey(referralSource);
     if (window.sessionStorage.getItem(storageKey) === "1") {
       return false;
     }
@@ -326,6 +340,7 @@ const recordWebReferralClick = (
     pathname: string;
     search: string;
   },
+  interactionType: string,
 ) => {
   if (typeof window === "undefined" || !referralSource) return;
   if (!shouldRecordWebReferralClick(referralSource)) return;
@@ -339,6 +354,8 @@ const recordWebReferralClick = (
     },
     body: JSON.stringify({
       code: referralSource,
+      human_interaction: true,
+      interaction_type: interactionType,
       web_device_id: readOrCreateWebDeviceId(),
       landing_url: window.location.href,
       referrer: document.referrer || null,
@@ -347,6 +364,41 @@ const recordWebReferralClick = (
   }).catch(() => {
     // Referral analytics must not block routing or auth.
   });
+};
+
+const scheduleWebReferralClickAfterInteraction = (
+  referralSource: string,
+  location: {
+    hash?: string;
+    pathname: string;
+    search: string;
+  },
+) => {
+  if (typeof window === "undefined" || !referralSource || hasRecordedWebReferralClick(referralSource)) {
+    return () => {};
+  }
+
+  let didRecord = false;
+  const listenerOptions: AddEventListenerOptions = { capture: true, passive: true };
+
+  const cleanup = () => {
+    WEB_REFERRAL_INTERACTION_EVENTS.forEach((eventName) => {
+      window.removeEventListener(eventName, handleInteraction, listenerOptions);
+    });
+  };
+
+  const handleInteraction = (event: Event) => {
+    if (didRecord || event.isTrusted === false) return;
+    didRecord = true;
+    cleanup();
+    recordWebReferralClick(referralSource, location, event.type || "interaction");
+  };
+
+  WEB_REFERRAL_INTERACTION_EVENTS.forEach((eventName) => {
+    window.addEventListener(eventName, handleInteraction, listenerOptions);
+  });
+
+  return cleanup;
 };
 
 const normalizeWorkspaceBooleanFlag = (value: unknown) => {
@@ -538,8 +590,9 @@ export function App() {
     const referralSource = readWebReferralSourceFromLocation(location);
     if (referralSource) {
       persistWebReferralSource(referralSource);
-      recordWebReferralClick(referralSource, location);
+      return scheduleWebReferralClickAfterInteraction(referralSource, location);
     }
+    return undefined;
   }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
