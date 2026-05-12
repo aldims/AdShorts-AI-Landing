@@ -9599,9 +9599,8 @@ function WorkspaceProjectCard({
             onClick={() => onPublish(project)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M14 5h5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M10 14 19 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M12 19V5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+              <path d="m6.5 10.5 5.5-5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
           {canUseLocalExamples ? (
@@ -15920,7 +15919,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           onClick={() => void handlePublishPreview()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
+            <path d="M12 19V5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            <path d="m6.5 10.5 5.5-5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
         </button>
@@ -15975,7 +15975,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           onClick={() => void handlePublishPreview()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor" />
+            <path d="M12 19V5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            <path d="m6.5 10.5 5.5-5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         <a
