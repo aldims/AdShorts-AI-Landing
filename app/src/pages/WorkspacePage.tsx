@@ -13296,6 +13296,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentEditorError, setSegmentEditorError] = useState<string | null>(null);
   const [segmentEditorVideoError, setSegmentEditorVideoError] = useState<string | null>(null);
   const [segmentEditorPreviewTimes, setSegmentEditorPreviewTimes] = useState<Record<number, number>>({});
+  const [segmentEditorPendingDeleteIndex, setSegmentEditorPendingDeleteIndex] = useState<number | null>(null);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
   const [queuedSegmentEditorPlaybackIndex, setQueuedSegmentEditorPlaybackIndex] = useState<number | null>(null);
@@ -14284,6 +14285,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isAnyPreviewModalOpen ||
     isSegmentAiPhotoModalOpen ||
     isLocalExampleModalOpen ||
+    segmentEditorPendingDeleteIndex !== null ||
     Boolean(projectPendingDelete) ||
     Boolean(insufficientCreditsContext);
 
@@ -14406,6 +14408,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setProjectPendingDeleteProjects([]);
   };
 
+  const closeSegmentEditorDeleteModal = () => {
+    setSegmentEditorPendingDeleteIndex(null);
+  };
+
   const closeInsufficientCreditsModal = () => {
     setInsufficientCreditsContext(null);
   };
@@ -14445,6 +14451,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           closeProjectDeleteModal();
           return;
         }
+        if (segmentEditorPendingDeleteIndex !== null) {
+          closeSegmentEditorDeleteModal();
+          return;
+        }
         if (isLocalExampleModalOpen) {
           closeLocalExampleModal();
           return;
@@ -14470,6 +14480,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isPublishModalOpen,
     isSegmentAiPhotoModalOpen,
     projectPendingDelete,
+    segmentEditorPendingDeleteIndex,
     isProjectDeleteSubmitting,
   ]);
 
@@ -14478,6 +14489,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       closeInsufficientCreditsModal();
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
+      setSegmentEditorPendingDeleteIndex(null);
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
       closePublishModal();
@@ -14557,6 +14569,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setProjectDeleteError(null);
     setProjectPendingDelete(null);
     setProjectPendingDeleteProjects([]);
+    setSegmentEditorPendingDeleteIndex(null);
     setIsProjectDeleteSubmitting(false);
     pendingProjectDeleteIdsRef.current.clear();
     setHasLoadedProjects(false);
@@ -16509,6 +16522,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [mediaLibraryFilter, visibleMediaLibraryItems]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
+  const segmentEditorPendingDeleteSegment =
+    typeof segmentEditorPendingDeleteIndex === "number"
+      ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentEditorPendingDeleteIndex) ?? null
+      : null;
+  const segmentEditorPendingDeleteDisplayNumber =
+    segmentEditorDraft && segmentEditorPendingDeleteSegment
+      ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segmentEditorPendingDeleteSegment.index)
+      : null;
   const segmentSubtitleBulkTextDefault = segmentEditorDraft
     ? buildWorkspaceSegmentBulkSubtitleText(segmentEditorDraft.segments)
     : "";
@@ -16523,6 +16544,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
+  useEffect(() => {
+    if (segmentEditorPendingDeleteIndex !== null && !segmentEditorPendingDeleteSegment) {
+      setSegmentEditorPendingDeleteIndex(null);
+    }
+  }, [segmentEditorPendingDeleteIndex, segmentEditorPendingDeleteSegment]);
   const currentSegmentEditorBrandSettings: StudioBrandSettingsSnapshot = {
     brandLogoFile: selectedBrandLogo,
     brandText: normalizeStudioBrandSettingsText(brandText),
@@ -18949,6 +18975,28 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setActiveSegmentIndex(insertAt);
   };
 
+  const requestDeleteSegmentEditorSegment = (targetSegmentIndex: number) => {
+    if (!segmentEditorDraft) {
+      return;
+    }
+
+    if (isSegmentEditorStructureActionBusy) {
+      return;
+    }
+
+    if (segmentEditorDraft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+      setSegmentEditorVideoError(`В редакторе должен остаться минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент.`);
+      return;
+    }
+
+    if (!segmentEditorDraft.segments.some((segment) => segment.index === targetSegmentIndex)) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    setSegmentEditorPendingDeleteIndex(targetSegmentIndex);
+  };
+
   const handleDeleteSegmentEditorSegment = (targetSegmentIndex: number) => {
     if (!segmentEditorDraft) {
       return;
@@ -19018,6 +19066,16 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       nextActiveSegmentArrayIndex,
     );
     setActiveSegmentIndex(nextActiveSegmentArrayIndex);
+  };
+
+  const confirmDeleteSegmentEditorSegment = () => {
+    if (segmentEditorPendingDeleteIndex === null || isSegmentEditorStructureActionBusy) {
+      return;
+    }
+
+    const targetSegmentIndex = segmentEditorPendingDeleteIndex;
+    setSegmentEditorPendingDeleteIndex(null);
+    handleDeleteSegmentEditorSegment(targetSegmentIndex);
   };
 
   const handleSegmentEditorSubtitleColorSelect = (colorId: StudioSubtitleColorOption["id"]) => {
@@ -26489,7 +26547,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                         onClick={(event) => {
                                           event.preventDefault();
                                           event.stopPropagation();
-                                          handleDeleteSegmentEditorSegment(segment.index);
+                                          requestDeleteSegmentEditorSegment(segment.index);
                                         }}
                                       >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -27409,6 +27467,84 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : (
                         workspaceText(locale, "Добавить в примеры", "Add to examples")
                       )}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {segmentEditorPendingDeleteSegment && typeof document !== "undefined"
+          ? createPortal(
+              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Удаление сцены", "Scene deletion")}>
+                <button
+                  className="workspace-confirm-modal__backdrop route-close"
+                  type="button"
+                  aria-label={workspaceText(locale, "Закрыть подтверждение удаления сцены", "Close scene deletion confirmation")}
+                  onClick={closeSegmentEditorDeleteModal}
+                />
+                <div className="workspace-confirm-modal__panel" role="document">
+                  <button
+                    className="workspace-confirm-modal__close route-close"
+                    type="button"
+                    aria-label={workspaceText(locale, "Закрыть подтверждение удаления сцены", "Close scene deletion confirmation")}
+                    onClick={closeSegmentEditorDeleteModal}
+                  >
+                    ×
+                  </button>
+
+                  <div className="workspace-confirm-modal__header">
+                    <div className="workspace-confirm-modal__icon" aria-hidden="true">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                        <path d="M4 7h16" strokeLinecap="round" />
+                        <path d="M9 3h6" strokeLinecap="round" />
+                        <path d="M10 11v6" strokeLinecap="round" />
+                        <path d="M14 11v6" strokeLinecap="round" />
+                        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div className="workspace-confirm-modal__copy">
+                      <h2 className="workspace-confirm-modal__title">
+                        {workspaceText(locale, "Удалить сцену?", "Delete scene?")}
+                      </h2>
+                      <p className="workspace-confirm-modal__message">
+                        {workspaceText(
+                          locale,
+                          "Сцена исчезнет из текущего монтажа, а тайминг следующих сцен пересчитается.",
+                          "The scene will be removed from the current edit and following scene timing will be recalculated.",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="workspace-confirm-modal__project">
+                    {workspaceText(
+                      locale,
+                      `Сцена ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
+                      `Scene ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
+                    )}{" "}
+                    · {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segmentEditorPendingDeleteSegment))} -{" "}
+                    {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segmentEditorPendingDeleteSegment), {
+                      roundUp: true,
+                    })}
+                  </p>
+
+                  <div className="workspace-confirm-modal__actions">
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+                      type="button"
+                      onClick={closeSegmentEditorDeleteModal}
+                    >
+                      {workspaceText(locale, "Отмена", "Cancel")}
+                    </button>
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
+                      type="button"
+                      onClick={confirmDeleteSegmentEditorSegment}
+                      disabled={isSegmentEditorStructureActionBusy || !canDeleteSegmentEditorSegment}
+                    >
+                      {workspaceText(locale, "Удалить", "Delete")}
                     </button>
                   </div>
                 </div>
