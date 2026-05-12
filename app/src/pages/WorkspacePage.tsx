@@ -26532,43 +26532,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         </div>
 
                         <div className="studio-segment-editor__thumbbar" style={segmentThumbBarStyle}>
-                          {hasSegmentEditorResettableChanges ? (
-                            <button
-                              className="studio-segment-editor__thumbbar-reset"
-                              type="button"
-                              aria-label={workspaceText(locale, "Сбросить все изменения", "Reset all changes")}
-                              title={
-                                isSegmentEditorStructureActionBusy
-                                  ? workspaceText(locale, "Сейчас нельзя сбросить изменения", "Changes cannot be reset right now")
-                                  : workspaceText(locale, "Сбросить все изменения", "Reset all changes")
-                              }
-                              disabled={isSegmentEditorStructureActionBusy}
-                              onClick={requestResetSegmentEditorChanges}
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path
-                                  d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
-                                  stroke="currentColor"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                />
-                                <path
-                                  d="M20 4v4h-4"
-                                  stroke="currentColor"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                />
-                              </svg>
-                            </button>
-                          ) : null}
-                            <div
-                              ref={segmentThumbStripRef}
-                              className="studio-segment-editor__thumbstrip"
-                              role="list"
-                              aria-label={workspaceText(locale, "Все сцены", "All scenes")}
-                            >
+                          <div
+                            ref={segmentThumbStripRef}
+                            className="studio-segment-editor__thumbstrip"
+                            role="list"
+                            aria-label={workspaceText(locale, "Все сцены", "All scenes")}
+                          >
                               {visibleSegmentThumbInsertIndex === 0 ? (
                                 <div className="studio-segment-editor__thumb-gap" aria-hidden="true">
                                   <div className="studio-segment-editor__thumb-gap-line"></div>
@@ -26736,6 +26705,37 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                 </div>
                               ) : null}
                             </div>
+                            {hasSegmentEditorResettableChanges ? (
+                              <button
+                                className="studio-segment-editor__thumbbar-reset"
+                                type="button"
+                                aria-label={workspaceText(locale, "Сбросить все изменения", "Reset all changes")}
+                                title={
+                                  isSegmentEditorStructureActionBusy
+                                    ? workspaceText(locale, "Сейчас нельзя сбросить изменения", "Changes cannot be reset right now")
+                                    : workspaceText(locale, "Сбросить все изменения", "Reset all changes")
+                                }
+                                disabled={isSegmentEditorStructureActionBusy}
+                                onClick={requestResetSegmentEditorChanges}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                  <path
+                                    d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                  />
+                                  <path
+                                    d="M20 4v4h-4"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                  />
+                                </svg>
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       </div>

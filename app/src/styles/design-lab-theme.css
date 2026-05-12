@@ -23020,7 +23020,7 @@ textarea {
   );
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: stretch;
   justify-self: end;
   align-items: center;
@@ -23032,15 +23032,14 @@ textarea {
 }
 
 .studio-segment-editor__thumbbar-reset {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 6;
+  align-self: start;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
+  margin-top: var(--studio-segment-editor-thumbstrip-padding-top);
   padding: 0;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 999px;
@@ -33629,10 +33628,9 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__thumbbar-reset {
-  top: 0;
-  right: 0;
   width: 28px;
   height: 28px;
+  margin-top: var(--studio-segment-editor-thumbstrip-padding-top);
   border-color: transparent;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.028) 100%),
