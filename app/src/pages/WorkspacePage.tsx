@@ -13297,6 +13297,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentEditorVideoError, setSegmentEditorVideoError] = useState<string | null>(null);
   const [segmentEditorPreviewTimes, setSegmentEditorPreviewTimes] = useState<Record<number, number>>({});
   const [segmentEditorPendingDeleteIndex, setSegmentEditorPendingDeleteIndex] = useState<number | null>(null);
+  const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
   const [queuedSegmentEditorPlaybackIndex, setQueuedSegmentEditorPlaybackIndex] = useState<number | null>(null);
@@ -14285,6 +14286,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isAnyPreviewModalOpen ||
     isSegmentAiPhotoModalOpen ||
     isLocalExampleModalOpen ||
+    isSegmentEditorResetConfirmOpen ||
     segmentEditorPendingDeleteIndex !== null ||
     Boolean(projectPendingDelete) ||
     Boolean(insufficientCreditsContext);
@@ -14412,6 +14414,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorPendingDeleteIndex(null);
   };
 
+  const closeSegmentEditorResetModal = () => {
+    setIsSegmentEditorResetConfirmOpen(false);
+  };
+
   const closeInsufficientCreditsModal = () => {
     setInsufficientCreditsContext(null);
   };
@@ -14455,6 +14461,10 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           closeSegmentEditorDeleteModal();
           return;
         }
+        if (isSegmentEditorResetConfirmOpen) {
+          closeSegmentEditorResetModal();
+          return;
+        }
         if (isLocalExampleModalOpen) {
           closeLocalExampleModal();
           return;
@@ -14478,6 +14488,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     isAnyWorkspaceModalOpen,
     isLocalExampleModalOpen,
     isPublishModalOpen,
+    isSegmentEditorResetConfirmOpen,
     isSegmentAiPhotoModalOpen,
     projectPendingDelete,
     segmentEditorPendingDeleteIndex,
@@ -14490,6 +14501,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
       setSegmentEditorPendingDeleteIndex(null);
+      setIsSegmentEditorResetConfirmOpen(false);
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
       closePublishModal();
@@ -14570,6 +14582,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setProjectPendingDelete(null);
     setProjectPendingDeleteProjects([]);
     setSegmentEditorPendingDeleteIndex(null);
+    setIsSegmentEditorResetConfirmOpen(false);
     setIsProjectDeleteSubmitting(false);
     pendingProjectDeleteIdsRef.current.clear();
     setHasLoadedProjects(false);
@@ -16583,6 +16596,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ]
     : segmentEditorBaseChangeChecklist;
   const hasSegmentEditorChanges = segmentEditorChangeChecklist.length > 0;
+  const segmentEditorResetChangesCount = segmentEditorChangeChecklist.length;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
   const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS;
@@ -19076,6 +19090,76 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     const targetSegmentIndex = segmentEditorPendingDeleteIndex;
     setSegmentEditorPendingDeleteIndex(null);
     handleDeleteSegmentEditorSegment(targetSegmentIndex);
+  };
+
+  const requestResetSegmentEditorChanges = () => {
+    if (!segmentEditorDraft || !segmentEditorChecklistBaseSession || !hasSegmentEditorChanges) {
+      return;
+    }
+
+    if (isSegmentEditorStructureActionBusy) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    setIsSegmentEditorResetConfirmOpen(true);
+  };
+
+  const confirmResetSegmentEditorChanges = () => {
+    const baselineSession = segmentEditorChecklistBaseSession;
+    if (!segmentEditorDraft || !baselineSession || isSegmentEditorStructureActionBusy) {
+      setIsSegmentEditorResetConfirmOpen(false);
+      return;
+    }
+
+    const nextDraft = {
+      ...cloneWorkspaceSegmentEditorDraftSession(baselineSession),
+      segments: rebuildWorkspaceSegmentEditorDraftTimeline(
+        cloneWorkspaceSegmentEditorDraftSession(baselineSession).segments,
+      ),
+    };
+    const activeSegmentStableIndex = segmentEditorDraft.segments[activeSegmentIndex]?.index ?? null;
+    const nextActiveSegmentIndex =
+      activeSegmentStableIndex === null
+        ? 0
+        : nextDraft.segments.findIndex((segment) => segment.index === activeSegmentStableIndex);
+    const safeNextActiveSegmentIndex = Math.max(0, nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0);
+    const baselineMusicType = normalizeWorkspaceSegmentEditorSetting(nextDraft.musicType) ?? "ai";
+    const baselineSubtitleType = normalizeWorkspaceSegmentEditorSetting(nextDraft.subtitleType);
+    const baselineSubtitleStyleId = normalizeWorkspaceSegmentEditorSetting(nextDraft.subtitleStyle);
+    const baselineSubtitleColorId = normalizeWorkspaceSegmentEditorSetting(nextDraft.subtitleColor);
+    const baselineVoiceType = normalizeWorkspaceSegmentEditorSetting(nextDraft.voiceType);
+
+    clearSegmentEditorExplicitStructureChange(nextDraft.projectId);
+    resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+    setSegmentEditorVideoError(null);
+    setSegmentEditorPendingDeleteIndex(null);
+    setIsSegmentEditorResetConfirmOpen(false);
+    closeSegmentAiPhotoModal({ immediate: true });
+    updateSegmentEditorDraft(() => nextDraft);
+    syncSegmentEditorRouteForArrayIndex(nextDraft, safeNextActiveSegmentIndex);
+    setActiveSegmentIndex(safeNextActiveSegmentIndex);
+    setSelectedMusicType(baselineMusicType as StudioMusicType);
+    setSelectedCustomMusic(null);
+    setMusicSelectionError(null);
+    setAreSubtitlesEnabled(baselineSubtitleType !== "none");
+
+    if (baselineSubtitleStyleId) {
+      setSelectedSubtitleStyleId(baselineSubtitleStyleId);
+    }
+
+    if (baselineSubtitleColorId) {
+      setSelectedSubtitleColorId(baselineSubtitleColorId);
+    }
+
+    setIsVoiceoverEnabled(baselineVoiceType !== "none");
+    if (baselineVoiceType && baselineVoiceType !== "none") {
+      setSelectedVoiceId(baselineVoiceType);
+    }
+
+    handleRemoveBrandLogo();
+    handleClearBrandText();
+    setAppliedSegmentEditorBrandSettings({ brandLogoFile: null, brandText: "" });
   };
 
   const handleSegmentEditorSubtitleColorSelect = (colorId: StudioSubtitleColorOption["id"]) => {
@@ -26429,6 +26513,37 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         </div>
 
                         <div className="studio-segment-editor__thumbbar" style={segmentThumbBarStyle}>
+                          {hasSegmentEditorChanges ? (
+                            <button
+                              className="studio-segment-editor__thumbbar-reset"
+                              type="button"
+                              aria-label={workspaceText(locale, "Сбросить все изменения", "Reset all changes")}
+                              title={
+                                isSegmentEditorStructureActionBusy
+                                  ? workspaceText(locale, "Сейчас нельзя сбросить изменения", "Changes cannot be reset right now")
+                                  : workspaceText(locale, "Сбросить все изменения", "Reset all changes")
+                              }
+                              disabled={isSegmentEditorStructureActionBusy}
+                              onClick={requestResetSegmentEditorChanges}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path
+                                  d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                />
+                                <path
+                                  d="M20 4v4h-4"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                />
+                              </svg>
+                            </button>
+                          ) : null}
                             <div
                               ref={segmentThumbStripRef}
                               className="studio-segment-editor__thumbstrip"
@@ -27467,6 +27582,77 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       ) : (
                         workspaceText(locale, "Добавить в примеры", "Add to examples")
                       )}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {isSegmentEditorResetConfirmOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Сброс изменений", "Reset changes")}>
+                <button
+                  className="workspace-confirm-modal__backdrop route-close"
+                  type="button"
+                  aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
+                  onClick={closeSegmentEditorResetModal}
+                />
+                <div className="workspace-confirm-modal__panel" role="document">
+                  <button
+                    className="workspace-confirm-modal__close route-close"
+                    type="button"
+                    aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
+                    onClick={closeSegmentEditorResetModal}
+                  >
+                    ×
+                  </button>
+
+                  <div className="workspace-confirm-modal__header">
+                    <div className="workspace-confirm-modal__icon" aria-hidden="true">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                        <path d="M20 11a8 8 0 1 1-2.34-5.66L20 8" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div className="workspace-confirm-modal__copy">
+                      <h2 className="workspace-confirm-modal__title">
+                        {workspaceText(locale, "Сбросить все изменения?", "Reset all changes?")}
+                      </h2>
+                      <p className="workspace-confirm-modal__message">
+                        {workspaceText(
+                          locale,
+                          "Черновик вернётся к состоянию до правок. Текст, визуалы, порядок сцен, настройки и бренд будут восстановлены.",
+                          "The draft will return to its pre-edit state. Text, visuals, scene order, settings, and branding will be restored.",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="workspace-confirm-modal__project">
+                    {workspaceText(
+                      locale,
+                      `Будет отменено изменений: ${segmentEditorResetChangesCount}`,
+                      `${segmentEditorResetChangesCount} changes will be reset`,
+                    )}
+                  </p>
+
+                  <div className="workspace-confirm-modal__actions">
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+                      type="button"
+                      onClick={closeSegmentEditorResetModal}
+                    >
+                      {workspaceText(locale, "Отмена", "Cancel")}
+                    </button>
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
+                      type="button"
+                      onClick={confirmResetSegmentEditorChanges}
+                      disabled={isSegmentEditorStructureActionBusy || !hasSegmentEditorChanges}
+                    >
+                      {workspaceText(locale, "Сбросить", "Reset")}
                     </button>
                   </div>
                 </div>
