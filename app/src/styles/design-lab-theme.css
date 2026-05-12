@@ -33376,12 +33376,14 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: auto;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 4;
   display: inline-flex;
   align-items: center;
-  max-width: calc(100% - 28px);
+  max-width: calc(100% - 40px);
   min-height: 26px;
   gap: 6px;
   padding: 3px 9px;
@@ -33423,9 +33425,10 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--thumb,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--ghost {
-  top: 6px;
-  left: 6px;
-  max-width: calc(100% - 12px);
+  top: auto;
+  bottom: 24px;
+  left: 50%;
+  max-width: calc(100% - 14px);
   min-height: 17px;
   gap: 3px;
   padding: 1px 5px;
