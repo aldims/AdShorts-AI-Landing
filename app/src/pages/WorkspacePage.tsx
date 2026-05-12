@@ -3922,7 +3922,6 @@ const isWorkspaceSegmentAiPhotoReady = (segment: Pick<
     normalizeWorkspaceSegmentAiPhotoPrompt(segment.aiPhotoPrompt);
 
 const normalizeWorkspaceSegmentImageEditPrompt = normalizeWorkspaceSegmentAiPhotoPrompt;
-const getWorkspaceSegmentImageEditPromptPrefill = getWorkspaceSegmentAiPhotoPromptPrefill;
 
 const isWorkspaceSegmentImageEditReady = (segment: Pick<
   WorkspaceSegmentEditorDraftSegment,
@@ -3933,8 +3932,6 @@ const isWorkspaceSegmentImageEditReady = (segment: Pick<
     normalizeWorkspaceSegmentImageEditPrompt(segment.imageEditPrompt);
 
 const normalizeWorkspaceSegmentAiVideoPrompt = normalizeWorkspaceSegmentAiPhotoPrompt;
-
-const getWorkspaceSegmentAiVideoPromptPrefill = getWorkspaceSegmentAiPhotoPromptPrefill;
 
 const isWorkspaceSegmentAiVideoReady = (segment: Pick<
   WorkspaceSegmentEditorDraftSegment,
@@ -19560,15 +19557,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         resetLibraryFilter?: boolean;
       },
     ) => {
-      const nextAiPhotoPrompt = segment.aiPhotoPromptInitialized
-        ? segment.aiPhotoPrompt
-        : getWorkspaceSegmentAiPhotoPromptPrefill(segment);
-      const nextImageEditPrompt = segment.imageEditPromptInitialized
-        ? segment.imageEditPrompt
-        : getWorkspaceSegmentImageEditPromptPrefill(segment);
-      const nextAiVideoPrompt = segment.aiVideoPromptInitialized
-        ? segment.aiVideoPrompt
-        : getWorkspaceSegmentAiVideoPromptPrefill(segment);
+      const nextAiPhotoPrompt = segment.aiPhotoPromptInitialized ? segment.aiPhotoPrompt : "";
+      const nextImageEditPrompt = segment.imageEditPromptInitialized ? segment.imageEditPrompt : "";
+      const nextAiVideoPrompt = segment.aiVideoPromptInitialized ? segment.aiVideoPrompt : "";
       const nextTab = getWorkspaceSegmentVisualModalDefaultTab(segment);
 
       setSegmentEditorVideoError(null);
@@ -25179,13 +25170,33 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         : isPromptImageEditMode
           ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
             : workspaceText(locale, "Опишите кадр коротко: объект, действие, окружение, свет.", "Describe the shot briefly: subject, action, setting, light.");
+  const promptAiPhotoPlaceholder = workspaceText(
+    locale,
+    "Опишите, что хотите видеть в визуале сцены: объект, фон, стиль, свет и ракурс.",
+    "Describe what you want to see in this scene visual: subject, background, style, light, and angle.",
+  );
+  const promptAiVideoPlaceholder = workspaceText(
+    locale,
+    "Опишите видео для сцены: что происходит, движение камеры, свет и настроение.",
+    "Describe the scene video: action, camera movement, light, and mood.",
+  );
+  const promptPhotoAnimationPlaceholder = workspaceText(
+    locale,
+    "Опишите, как оживить текущий кадр: движение объекта, камеры и атмосферы.",
+    "Describe how to animate this shot: subject motion, camera movement, and atmosphere.",
+  );
+  const promptImageEditPlaceholder = workspaceText(
+    locale,
+    "Опишите, что нужно дорисовать или изменить в текущем визуале.",
+    "Describe what to extend or change in the current visual.",
+  );
   const promptVisualPlaceholder = isPromptImageEditMode
-    ? workspaceText(locale, "Например: убрать лишний предмет справа и сохранить тот же свет", "Example: remove the extra object on the right and keep the same light")
+    ? promptImageEditPlaceholder
     : isPromptPhotoAnimationMode
-      ? workspaceText(locale, "Например: медленный push-in камеры, мягкое движение света", "Example: slow camera push-in, subtle light movement")
+      ? promptPhotoAnimationPlaceholder
       : isPromptAiVideoMode
-        ? workspaceText(locale, "Например: продукт поворачивается на столе, камера держит крупный план", "Example: the product turns on the table, camera holds a close-up")
-        : workspaceText(locale, "Например: крупный план продукта на темном столе, мягкий боковой свет", "Example: close-up product shot on a dark table with soft side light");
+        ? promptAiVideoPlaceholder
+        : promptAiPhotoPlaceholder;
   const activeSegmentStatusItems = [
     {
       key: "time",
@@ -28073,11 +28084,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                               aria-label={workspaceText(locale, "Промт для генерации ИИ видео", "AI video generation prompt")}
                               rows={6}
-                              placeholder={workspaceText(
-                                locale,
-                                "Кинематографичный крупный план астронавта в пыльной буре на Марсе, драматичный свет, плавное движение камеры",
-                                "Cinematic close-up of an astronaut in a dust storm on Mars, dramatic light, smooth camera movement",
-                              )}
+                              placeholder={promptAiVideoPlaceholder}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -28170,11 +28177,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                               aria-label={workspaceText(locale, "Промт для ИИ анимации фото", "AI photo animation prompt")}
                               rows={6}
-                              placeholder={workspaceText(
-                                locale,
-                                "Плавный наезд камеры, легкое движение волос и ткани, атмосферный свет, кинематографичный параллакс",
-                                "Smooth camera push-in, light hair and fabric movement, atmospheric light, cinematic parallax",
-                              )}
+                              placeholder={promptPhotoAnimationPlaceholder}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -28257,11 +28260,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                               aria-label={workspaceText(locale, "Промт для дорисовки фото", "Image edit prompt")}
                               rows={6}
-                              placeholder={workspaceText(
-                                locale,
-                                "Сохрани композицию, замени фон на неоновый ночной Токио, добавь дождь, кинематографичный свет, фотореализм",
-                                "Keep the composition, replace the background with neon night Tokyo, add rain, cinematic light, photorealism",
-                              )}
+                              placeholder={promptImageEditPlaceholder}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button
@@ -28395,11 +28394,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                               }}
                               aria-label={workspaceText(locale, "Описание сцены для генерации", "Scene generation description")}
                               rows={6}
-                              placeholder={workspaceText(
-                                locale,
-                                "Скелет в пустыне находит блестящий смартфон, закат, песок, драматичный свет",
-                                "A skeleton in the desert finds a shiny smartphone, sunset, sand, dramatic light",
-                              )}
+                              placeholder={promptAiPhotoPlaceholder}
                             />
                             <div className="studio-ai-photo-modal__field-toolbar">
                               <button

@@ -20615,10 +20615,10 @@ textarea {
 }
 
 .studio-segment-editor__layout {
-  --studio-segment-editor-layout-height: calc(100vh - 158px);
-  --studio-segment-editor-layout-height: calc(100dvh - 158px);
+  --studio-segment-editor-viewport-height: 100vh;
+  --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 158px);
   --studio-segment-editor-panel-vertical-gap: 18px;
-  --studio-segment-editor-carousel-width: min(430px, calc((100dvh - 280px) * 9 / 16));
+  --studio-segment-editor-carousel-width: min(430px, calc((var(--studio-segment-editor-viewport-height) - 280px) * 9 / 16));
   --studio-segment-editor-preview-safe-left: clamp(82px, 7vw, 112px);
   --studio-segment-editor-preview-safe-right: clamp(128px, 10vw, 176px);
   --studio-segment-editor-panel-max-width: calc(
@@ -20655,6 +20655,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   justify-items: stretch;
+}
+
+@supports (height: 100lvh) {
+  .studio-segment-editor__layout {
+    --studio-segment-editor-viewport-height: 100lvh;
+  }
 }
 
 .studio-segment-editor__prompt-column {
@@ -25968,7 +25974,7 @@ textarea {
   }
 
   .studio-segment-editor__preview-column {
-    --studio-segment-editor-carousel-width: min(400px, calc((100dvh - 360px) * 9 / 16));
+    --studio-segment-editor-carousel-width: min(400px, calc((var(--studio-segment-editor-viewport-height) - 360px) * 9 / 16));
     grid-column: auto;
     order: 1;
     gap: 6px;
@@ -31874,9 +31880,9 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-  --studio-segment-editor-layout-height: calc(100dvh - 146px);
+  --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 146px);
   --studio-segment-editor-panel-width: clamp(460px, 34vw, 600px);
-  --studio-segment-editor-carousel-width: min(430px, calc((100dvh - 324px) * 9 / 16));
+  --studio-segment-editor-carousel-width: min(430px, calc((var(--studio-segment-editor-viewport-height) - 324px) * 9 / 16));
   --studio-segment-editor-side-card-width: 56%;
   --studio-segment-editor-side-card-offset: -28%;
   display: grid;
@@ -33814,7 +33820,7 @@ html, body {
 @media (max-width: 1180px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
     --studio-segment-editor-panel-width: clamp(460px, 42vw, 560px);
-    --studio-segment-editor-carousel-width: min(410px, calc((100dvh - 300px) * 9 / 16));
+    --studio-segment-editor-carousel-width: min(410px, calc((var(--studio-segment-editor-viewport-height) - 300px) * 9 / 16));
     gap: 18px;
   }
 
@@ -33826,7 +33832,7 @@ html, body {
 @media (max-width: 980px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
     --studio-segment-editor-panel-width: min(100%, 560px);
-    --studio-segment-editor-carousel-width: min(410px, calc((100dvh - 330px) * 9 / 16));
+    --studio-segment-editor-carousel-width: min(410px, calc((var(--studio-segment-editor-viewport-height) - 330px) * 9 / 16));
     grid-template-columns: 1fr;
     min-height: 0;
     height: auto;
@@ -33895,7 +33901,7 @@ html, body {
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-layout-height: max(560px, calc(100dvh - 108px));
+    --studio-segment-editor-layout-height: max(560px, calc(var(--studio-segment-editor-viewport-height) - 108px));
     min-height: var(--studio-segment-editor-layout-height);
     height: var(--studio-segment-editor-layout-height);
     align-items: stretch;
@@ -33933,7 +33939,7 @@ html, body {
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-carousel-width: clamp(150px, calc((100dvh - 520px) * 9 / 16), 260px);
+    --studio-segment-editor-carousel-width: clamp(150px, calc((var(--studio-segment-editor-viewport-height) - 520px) * 9 / 16), 260px);
     grid-template-rows: max-content max-content;
     align-content: start;
     gap: 12px;
@@ -34030,7 +34036,7 @@ html, body {
 
 @media (max-width: 640px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-carousel-width: min(372px, calc((100dvh - 336px) * 9 / 16));
+    --studio-segment-editor-carousel-width: min(372px, calc((var(--studio-segment-editor-viewport-height) - 336px) * 9 / 16));
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-mode-block {
