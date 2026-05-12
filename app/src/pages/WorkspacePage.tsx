@@ -606,7 +606,7 @@ type WorkspaceSegmentMediaType = "photo" | "video";
 type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
 type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "image_upscale" | "upload" | "library";
-type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab | "brand";
+type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab;
 
 type WorkspaceSegmentEditorSpeechWord = {
   confidence: number;
@@ -3867,6 +3867,7 @@ const getWorkspaceSegmentCustomPreviewKind = (customVideo: StudioCustomVideoFile
 
 const getReferencedStudioObjectUrls = (options: {
   brandLogoFile?: StudioBrandLogoFile | null;
+  brandLogoFiles?: Array<StudioBrandLogoFile | null | undefined>;
   customMusicFile?: StudioCustomMusicFile | null;
   customVideoFile?: StudioCustomVideoFile | null;
   segmentEditorAppliedSession?: WorkspaceSegmentEditorDraftSession | null;
@@ -3882,6 +3883,9 @@ const getReferencedStudioObjectUrls = (options: {
   };
 
   register(options.brandLogoFile?.objectUrl);
+  options.brandLogoFiles?.forEach((brandLogoFile) => {
+    register(brandLogoFile?.objectUrl);
+  });
   register(options.customMusicFile?.objectUrl);
   register(options.customVideoFile?.objectUrl);
 
@@ -4360,7 +4364,6 @@ const getWorkspaceSegmentPromptSceneModeForTab = (tab: WorkspaceSegmentEditorPro
     case "photo_animation":
     case "image_edit":
     case "image_upscale":
-    case "brand":
       return "edit";
     default:
       return "create";
@@ -8160,12 +8163,12 @@ const getStudioBrandLogoComparableKey = (brandLogoFile: StudioBrandLogoFile | nu
   }
 
   return [
-    brandLogoFile.assetId ?? "",
-    brandLogoFile.fileName,
-    brandLogoFile.fileSize,
-    brandLogoFile.mimeType,
-    brandLogoFile.dataUrl ?? "",
-    brandLogoFile.objectUrl ?? "",
+    String(brandLogoFile.assetId ?? ""),
+    String(brandLogoFile.dataUrl ?? ""),
+    String(brandLogoFile.objectUrl ?? ""),
+    String(brandLogoFile.fileName ?? ""),
+    String(brandLogoFile.mimeType ?? ""),
+    String(brandLogoFile.fileSize ?? ""),
   ].join("|");
 };
 
@@ -10365,6 +10368,21 @@ type StudioVideoSelectorChipProps = {
   onSelectVideoMode: (videoMode: StudioVideoMode) => void;
   selectedVideoMode: StudioVideoMode;
   uploadError: string | null;
+};
+
+type StudioBrandSelectorChipProps = {
+  appliedBrandLogoFile: StudioBrandLogoFile | null;
+  appliedBrandText: string;
+  brandLogoFile: StudioBrandLogoFile | null;
+  brandText: string;
+  brandUploadError: string | null;
+  isDirty: boolean;
+  isPreparingBrandLogo: boolean;
+  onApplyBrand: () => void;
+  onBrandLogoSelect: (file: File) => Promise<void>;
+  onBrandTextChange: (value: string) => void;
+  onClearBrandText: () => void;
+  onRemoveBrandLogo: () => void;
 };
 
 function StudioSubtitleSelectorChip({
@@ -12598,6 +12616,280 @@ function StudioVideoSelectorChip({
   );
 }
 
+function StudioBrandSelectorChip({
+  appliedBrandLogoFile,
+  appliedBrandText,
+  brandLogoFile,
+  brandText,
+  brandUploadError,
+  isDirty,
+  isPreparingBrandLogo,
+  onApplyBrand,
+  onBrandLogoSelect,
+  onBrandTextChange,
+  onClearBrandText,
+  onRemoveBrandLogo,
+}: StudioBrandSelectorChipProps) {
+  const { locale } = useLocale();
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const menuId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const brandLogoInputRef = useRef<HTMLInputElement | null>(null);
+  const draftBrandSettings = { brandLogoFile, brandText };
+  const appliedBrandSettings = {
+    brandLogoFile: appliedBrandLogoFile,
+    brandText: appliedBrandText,
+  };
+  const hasDraftBranding = hasStudioBranding(draftBrandSettings);
+  const hasAppliedBranding = hasStudioBranding(appliedBrandSettings);
+  const brandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(brandLogoFile);
+  const brandTextLength = brandText.length;
+  const triggerValue = isDirty
+    ? locale === "en"
+      ? "Apply"
+      : "Применить"
+    : hasAppliedBranding
+      ? getStudioBrandSummary(appliedBrandSettings)
+      : locale === "en"
+        ? "Add"
+        : "Добавить";
+  const triggerTitle = [
+    isDirty ? (locale === "en" ? "Unapplied brand changes" : "Есть неприменённые изменения бренда") : "",
+    hasDraftBranding ? getStudioBrandSummary(draftBrandSettings) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setMenuStyle(null);
+      return undefined;
+    }
+
+    const updateMenuPosition = () => {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+
+      setMenuStyle(
+        getStudioCompactMenuStyle({
+          estimatedMenuHeight: Math.min(window.innerHeight - 32, 360),
+          minWidth: 310,
+          preferredWidth: 366,
+          triggerRect,
+        }),
+      );
+    };
+
+    updateMenuPosition();
+
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [isOpen]);
+
+  const openBrandLogoPicker = () => {
+    brandLogoInputRef.current?.click();
+  };
+
+  const handleBrandLogoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file) return;
+
+    await onBrandLogoSelect(file);
+  };
+
+  return (
+    <div className="studio-video-selector studio-brand-selector" ref={rootRef}>
+      <input
+        ref={brandLogoInputRef}
+        className="studio-video-selector__file-input"
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,.avif,image/*"
+        onChange={(event) => {
+          void handleBrandLogoChange(event);
+        }}
+      />
+
+      <button
+        ref={triggerRef}
+        className={`studio-canvas-prompt__chip studio-video-selector__trigger studio-brand-selector__trigger${
+          isOpen ? " is-open" : ""
+        }${isDirty ? " is-dirty" : ""}`}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span className="studio-video-selector__label">{locale === "en" ? "Brand" : "Бренд"}</span>
+        <strong className="studio-video-selector__value" title={triggerTitle || triggerValue}>
+          {triggerValue}
+        </strong>
+        <svg className="studio-video-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {isOpen && menuStyle && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="studio-video-selector__menu studio-brand-selector__menu"
+              id={menuId}
+              role="menu"
+              aria-label={locale === "en" ? "Brand settings" : "Настройки бренда"}
+              style={menuStyle}
+            >
+              <div className="studio-video-selector__section">
+                <span className="studio-video-selector__menu-title">{locale === "en" ? "Brand on video" : "Бренд на видео"}</span>
+                <div
+                  className={`studio-video-selector__brand studio-brand-selector__brand${
+                    hasDraftBranding ? " is-selected" : ""
+                  }${isDirty ? " is-dirty" : ""}`}
+                >
+                  <div className="studio-video-selector__brand-head">
+                    <div className="studio-video-selector__brand-preview" aria-hidden="true">
+                      {brandLogoPreviewUrl ? (
+                        <img src={brandLogoPreviewUrl} alt="" />
+                      ) : (
+                        <span className="studio-video-selector__brand-preview-placeholder">Logo</span>
+                      )}
+                    </div>
+                    <div className="studio-video-selector__brand-copy">
+                      <span>
+                        {isDirty
+                          ? locale === "en"
+                            ? "Changes pending"
+                            : "Есть изменения"
+                          : hasAppliedBranding
+                            ? locale === "en"
+                              ? "Brand applied"
+                              : "Бренд применён"
+                            : hasDraftBranding
+                              ? locale === "en"
+                                ? "Brand added"
+                                : "Бренд добавлен"
+                              : locale === "en"
+                                ? "Add brand"
+                                : "Добавить бренд"}
+                      </span>
+                      <small title={brandLogoFile?.fileName ?? brandText}>{getStudioBrandSummary(draftBrandSettings)}</small>
+                    </div>
+                    <div className="studio-video-selector__brand-actions">
+                      <button
+                        className="studio-video-selector__custom-action"
+                        type="button"
+                        aria-label={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
+                        title={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
+                        onClick={openBrandLogoPicker}
+                      >
+                        {isPreparingBrandLogo ? (
+                          <span className="studio-video-selector__spinner" aria-hidden="true"></span>
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </button>
+                      {brandLogoFile ? (
+                        <button
+                          className="studio-video-selector__custom-action studio-video-selector__custom-action--danger"
+                          type="button"
+                          aria-label={locale === "en" ? "Remove logo" : "Убрать логотип"}
+                          title={locale === "en" ? "Remove logo" : "Убрать логотип"}
+                          onClick={onRemoveBrandLogo}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <label className="studio-video-selector__brand-field">
+                    <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                    <input
+                      className="studio-video-selector__brand-input"
+                      type="text"
+                      value={brandText}
+                      maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
+                      placeholder={locale === "en" ? "Example: adshortsai.com" : "Например, adshortsai.com"}
+                      onChange={(event) => onBrandTextChange(event.target.value)}
+                    />
+                  </label>
+                  <div className="studio-video-selector__brand-meta">
+                    <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
+                    {brandText ? (
+                      <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
+                        {locale === "en" ? "Clear text" : "Очистить текст"}
+                      </button>
+                    ) : (
+                      <span>{locale === "en" ? "Logo: .jpg, .png, .webp, .avif" : "Лого: .jpg, .png, .webp, .avif"}</span>
+                    )}
+                  </div>
+                  <button
+                    className="studio-video-selector__brand-apply studio-brand-selector__apply"
+                    type="button"
+                    disabled={isPreparingBrandLogo || !isDirty}
+                    onClick={() => {
+                      onApplyBrand();
+                      setIsOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                  >
+                    {isDirty
+                      ? locale === "en"
+                        ? "Apply to video"
+                        : "Применить ко всему видео"
+                      : locale === "en"
+                        ? "Applied"
+                        : "Применено"}
+                  </button>
+                </div>
+                {brandUploadError ? <p className="studio-video-selector__error">{brandUploadError}</p> : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
 function StudioMusicSelectorChip({
   customMusicFile,
   isPreparingCustomMusic,
@@ -12935,9 +13227,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [appliedSegmentEditorBrandSettings, setAppliedSegmentEditorBrandSettings] =
     useState<StudioBrandSettingsSnapshot>(() => ({
       brandLogoFile: initialBrandSettingsRef.current?.brandLogoFile ?? null,
-      brandText: normalizeStudioBrandSettingsText(
-        examplePrefillInitialStudioState.brandText || initialBrandSettingsRef.current?.brandText,
-      ),
+      brandText: examplePrefillInitialStudioState.brandText || (initialBrandSettingsRef.current?.brandText ?? ""),
     }));
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
@@ -13130,7 +13420,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
-  const segmentEditorBrandLogoInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
@@ -13518,6 +13807,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     const nextReferencedUrls = getReferencedStudioObjectUrls({
       brandLogoFile: selectedBrandLogo,
+      brandLogoFiles: [appliedSegmentEditorBrandSettings.brandLogoFile],
       customMusicFile: selectedCustomMusic,
       customVideoFile: selectedCustomVideo,
       segmentEditorAppliedSession,
@@ -13531,7 +13821,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     });
 
     referencedStudioObjectUrlsRef.current = nextReferencedUrls;
-  }, [segmentEditorAppliedSession, segmentEditorDraft, selectedBrandLogo, selectedCustomMusic, selectedCustomVideo]);
+  }, [
+    appliedSegmentEditorBrandSettings.brandLogoFile,
+    segmentEditorAppliedSession,
+    segmentEditorDraft,
+    selectedBrandLogo,
+    selectedCustomMusic,
+    selectedCustomVideo,
+  ]);
 
   useEffect(() => {
     persistStudioBrandSettings(session.email, {
@@ -16218,13 +16515,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   }, [activeSegment, activeSegmentIndex]);
   const currentSegmentEditorBrandSettings: StudioBrandSettingsSnapshot = {
     brandLogoFile: selectedBrandLogo,
-    brandText,
+    brandText: normalizeStudioBrandSettingsText(brandText),
   };
-  const hasSegmentEditorBranding = hasStudioBranding(currentSegmentEditorBrandSettings);
-  const hasAppliedSegmentEditorBranding = hasStudioBranding(appliedSegmentEditorBrandSettings);
+  const appliedSegmentEditorBrandText = normalizeStudioBrandSettingsText(appliedSegmentEditorBrandSettings.brandText);
+  const appliedSegmentEditorBrandSnapshot: StudioBrandSettingsSnapshot = {
+    brandLogoFile: appliedSegmentEditorBrandSettings.brandLogoFile,
+    brandText: appliedSegmentEditorBrandText,
+  };
+  const hasAppliedSegmentEditorBranding = hasStudioBranding(appliedSegmentEditorBrandSnapshot);
   const isSegmentEditorBrandDirty = !areStudioBrandSettingsEqual(
     currentSegmentEditorBrandSettings,
-    appliedSegmentEditorBrandSettings,
+    appliedSegmentEditorBrandSnapshot,
   );
   const segmentEditorBaseChangeChecklist = segmentEditorDraft
     ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChecklistBaseSession, {
@@ -16239,8 +16540,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           key: "segment-brand:global",
           kind: "brand",
           label: `${workspaceText(locale, "Бренд", "Brand")}: ${getStudioBrandSummary({
-            brandLogoFile: appliedSegmentEditorBrandSettings.brandLogoFile,
-            brandText: appliedSegmentEditorBrandSettings.brandText,
+            brandLogoFile: appliedSegmentEditorBrandSnapshot.brandLogoFile,
+            brandText: appliedSegmentEditorBrandSnapshot.brandText,
           })}`,
         },
       ]
@@ -17621,6 +17922,31 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const handleClearBrandText = () => {
     setBrandText("");
     setBrandSelectionError(null);
+  };
+
+  const handleApplySegmentEditorBrand = () => {
+    if (isPreparingBrandLogo) {
+      setBrandSelectionError(workspaceText(locale, "Подождите, пока логотип подготовится.", "Wait until the logo is ready."));
+      return;
+    }
+
+    const nextBrandText = normalizeStudioBrandSettingsText(brandText);
+    const nextSettings: StudioBrandSettingsSnapshot = {
+      brandLogoFile: selectedBrandLogo,
+      brandText: nextBrandText,
+    };
+    setBrandText(nextBrandText);
+    setAppliedSegmentEditorBrandSettings({
+      brandLogoFile: nextSettings.brandLogoFile,
+      brandText: nextSettings.brandText,
+    });
+    setBrandSelectionError(null);
+    setSegmentEditorVideoError(null);
+    showStudioToast(
+      hasStudioBranding(nextSettings)
+        ? workspaceText(locale, "Бренд применён ко всему видео.", "Brand applied to the whole video.")
+        : workspaceText(locale, "Бренд убран со всего видео.", "Brand removed from the whole video."),
+    );
   };
 
   const handleMusicTypeSelect = (musicType: StudioMusicType) => {
@@ -19085,11 +19411,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         options?.preserveTab ? resolveWorkspaceSegmentVisualModalTab(segment, current) : nextTab,
       );
       setSegmentEditorPromptToolTab((current) =>
-        options?.preserveTab && current === "brand"
-          ? current
-          : options?.preserveTab && current !== "brand"
-            ? resolveWorkspaceSegmentVisualModalTab(segment, current)
-            : nextTab,
+        options?.preserveTab ? resolveWorkspaceSegmentVisualModalTab(segment, current) : nextTab,
       );
       setIsSegmentAiPhotoPromptImproving(false);
       setIsSegmentAiPhotoPromptImproved(false);
@@ -21263,9 +21585,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     if (isSegmentEditorBrandDirty) {
-      setSegmentEditorPromptToolTab("brand");
-      setSegmentEditorPromptSceneMode("edit");
-      setSegmentEditorVideoError(workspaceText(locale, "Нажмите «Применить» в бренде перед созданием Shorts.", "Press Apply in Brand before creating Shorts."));
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Нажмите «Применить ко всему видео» в настройках бренда перед созданием Shorts.",
+          "Click “Apply to video” in brand settings before creating Shorts.",
+        ),
+      );
       return;
     }
 
@@ -21334,8 +21660,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     navigateToStudioCreateWaitingRoute({ replace: true });
     await handleGenerate(regenerationPrompt, {
       ...buildCurrentRegenerationOptions(nextAppliedSession),
-      brandLogoFile: appliedSegmentEditorBrandSettings.brandLogoFile,
-      brandText: appliedSegmentEditorBrandSettings.brandText,
+      brandLogoFile: appliedSegmentEditorBrandSnapshot.brandLogoFile,
+      brandText: appliedSegmentEditorBrandSnapshot.brandText,
       segmentEditorAllowStructureChange: allowSegmentStructureChange,
     });
   };
@@ -22290,9 +22616,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const handleGenerate = async (
     nextTopic: string,
     options?: {
-      clearAppliedSegmentEditorOnSuccess?: boolean;
       brandLogoFile?: StudioBrandLogoFile | null;
       brandText?: string | null;
+      clearAppliedSegmentEditorOnSuccess?: boolean;
       editedFromProjectAdId?: number;
       isRegeneration?: boolean;
       language?: StudioLanguage | string;
@@ -22310,8 +22636,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     },
   ) => {
     const isSegmentEditorGeneration = Boolean(options?.segmentEditorSession);
-    const hasBrandLogoOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "brandLogoFile");
-    const hasBrandTextOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "brandText");
+    const hasBrandLogoOverride = Boolean(options && "brandLogoFile" in options);
+    const hasBrandTextOverride = Boolean(options && "brandText" in options);
     const effectiveBrandLogoFile = hasBrandLogoOverride ? options?.brandLogoFile ?? null : selectedBrandLogo;
     const effectiveBrandText = normalizeStudioBrandSettingsText(
       hasBrandTextOverride ? options?.brandText ?? "" : brandText,
@@ -24405,15 +24731,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorPromptToolTab(tab);
     setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(activeSegment, tab));
   };
-  const handleSegmentEditorPromptBrandToolSelect = () => {
-    if (!activeSegment) {
-      return;
-    }
-
-    setSegmentEditorVideoError(null);
-    setSegmentEditorPromptSceneMode("edit");
-    setSegmentEditorPromptToolTab("brand");
-  };
   const handleSegmentEditorPromptVisualToolButtonClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
     tab: WorkspaceSegmentVisualModalTab,
@@ -24421,11 +24738,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     event.currentTarget.blur();
     setReleasedSegmentEditorPromptTool(tab);
     handleSegmentEditorPromptVisualToolSelect(tab);
-  };
-  const handleSegmentEditorPromptBrandToolButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.currentTarget.blur();
-    setReleasedSegmentEditorPromptTool("brand");
-    handleSegmentEditorPromptBrandToolSelect();
   };
   const clearSegmentEditorPromptToolHoverRelease = (tab: WorkspaceSegmentEditorPromptToolTab) => {
     setReleasedSegmentEditorPromptTool((current) => (current === tab ? null : current));
@@ -24452,7 +24764,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     segmentEditorDraft && activeSegment
       ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, activeSegment.index)
       : activeSegmentIndex + 1;
-  const isPromptBrandMode = segmentEditorPromptToolTab === "brand";
   const isPromptAiPhotoMode = segmentEditorPromptToolTab === "ai_photo";
   const isPromptAiVideoMode = segmentEditorPromptToolTab === "ai_video";
   const isPromptPhotoAnimationMode = segmentEditorPromptToolTab === "photo_animation";
@@ -24553,16 +24864,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       segmentAiPhotoModalFileInputRef.current?.click();
     }
   };
-  const handleSegmentEditorBrandLogoChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    event.target.value = "";
-
-    if (!file) {
-      return;
-    }
-
-    await handleBrandLogoSelect(file);
-  };
   const promptVisualActionLabel = isPromptAiPhotoMode
     ? workspaceText(locale, "Создать ИИ фото", "Create AI photo")
     : isPromptAiVideoMode
@@ -24588,60 +24889,27 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const activeSegmentSourceDisplayLabel = activeSegment
     ? getWorkspaceSegmentDraftSourceDisplayLabel(activeSegmentSourceLabel, locale)
     : "";
-  const segmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(selectedBrandLogo);
-  const segmentEditorBrandTextLength = brandText.length;
   const appliedSegmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(
-    appliedSegmentEditorBrandSettings.brandLogoFile,
+    appliedSegmentEditorBrandSnapshot.brandLogoFile,
   );
-  const appliedSegmentEditorBrandText = normalizeStudioBrandSettingsText(appliedSegmentEditorBrandSettings.brandText);
-  const appliedSegmentEditorBrandSummary = getStudioBrandSummary(appliedSegmentEditorBrandSettings);
-  const segmentEditorBrandPanelTitle = isSegmentEditorBrandDirty
-    ? workspaceText(locale, "Нажмите «Применить»", "Press Apply")
-    : hasAppliedSegmentEditorBranding
-      ? workspaceText(locale, "Бренд применён", "Brand applied")
-      : hasSegmentEditorBranding
-        ? workspaceText(locale, "Бренд добавлен", "Brand added")
-        : workspaceText(locale, "Добавьте логотип или текст", "Add a logo or text");
-  const handleApplySegmentEditorBrand = () => {
-    if (isPreparingBrandLogo) {
-      setBrandSelectionError(workspaceText(locale, "Подождите, пока логотип подготовится.", "Wait until the logo is ready."));
-      return;
-    }
-
-    const nextBrandText = normalizeStudioBrandSettingsText(brandText);
-    const nextSettings: StudioBrandSettingsSnapshot = {
-      brandLogoFile: selectedBrandLogo,
-      brandText: nextBrandText,
-    };
-    setBrandText(nextBrandText);
-    setAppliedSegmentEditorBrandSettings(nextSettings);
-    setBrandSelectionError(null);
-    setSegmentEditorVideoError(null);
-    showStudioToast(
-      hasStudioBranding(nextSettings)
-        ? workspaceText(locale, "Бренд применён к сегментам.", "Brand applied to segments.")
-        : workspaceText(locale, "Бренд убран с сегментов.", "Brand removed from segments."),
-    );
-  };
-  const renderSegmentEditorBrandOverlay = (variant: "card" | "thumb") => {
+  const renderSegmentEditorBrandOverlay = (variant: "card" | "thumb" | "ghost" = "card") => {
     if (!hasAppliedSegmentEditorBranding) {
       return null;
     }
 
+    const normalizedBrandText = appliedSegmentEditorBrandSnapshot.brandText.trim();
+    const brandTitle = getStudioBrandSummary(appliedSegmentEditorBrandSnapshot);
+
     return (
       <span
-        className={`studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}`}
-        title={appliedSegmentEditorBrandSummary}
+        className={`studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}${
+          appliedSegmentEditorBrandLogoPreviewUrl ? " has-logo" : ""
+        }${normalizedBrandText ? " has-text" : ""}`}
+        title={brandTitle}
         aria-hidden="true"
       >
-        {appliedSegmentEditorBrandLogoPreviewUrl ? (
-          <img src={appliedSegmentEditorBrandLogoPreviewUrl} alt="" />
-        ) : !appliedSegmentEditorBrandText ? (
-          <span className="studio-segment-editor__brand-overlay-logo">LOGO</span>
-        ) : null}
-        {appliedSegmentEditorBrandText ? (
-          <span className="studio-segment-editor__brand-overlay-text">{appliedSegmentEditorBrandText}</span>
-        ) : null}
+        {appliedSegmentEditorBrandLogoPreviewUrl ? <img src={appliedSegmentEditorBrandLogoPreviewUrl} alt="" /> : null}
+        {normalizedBrandText ? <span>{normalizedBrandText}</span> : null}
       </span>
     );
   };
@@ -24657,21 +24925,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           ? workspaceText(locale, "Точная правка кадра", "Precise shot edit")
           : isPromptUpscaleMode
             ? workspaceText(locale, "Повысить качество кадра", "Improve shot quality")
-            : isPromptBrandMode
-              ? workspaceText(locale, "Бренд для Shorts", "Brand for Shorts")
-              : isPromptLibraryMode
-                ? workspaceText(locale, "Выбор из медиатеки", "Select from library")
-                : workspaceText(locale, "Свой визуал", "Custom visual");
+            : isPromptLibraryMode
+              ? workspaceText(locale, "Выбор из медиатеки", "Select from library")
+              : workspaceText(locale, "Свой визуал", "Custom visual");
   const promptVisualPanelCaption = isPromptLibraryMode
     ? workspaceText(locale, "Выберите готовый визуал для активной сцены.", "Choose a saved visual for the active scene.")
     : isPromptUploadMode
       ? workspaceText(locale, "Загрузите фото или видео только для этой сцены.", "Upload a photo or video only for this scene.")
-      : isPromptBrandMode
-        ? workspaceText(locale, "Добавьте логотип и текст, затем нажмите «Применить».", "Add a logo and text, then press Apply.")
-        : isPromptUpscaleMode
-          ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
-          : isPromptImageEditMode
-            ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
+      : isPromptUpscaleMode
+        ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
+        : isPromptImageEditMode
+          ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
             : workspaceText(locale, "Опишите кадр коротко: объект, действие, окружение, свет.", "Describe the shot briefly: subject, action, setting, light.");
   const promptVisualPlaceholder = isPromptImageEditMode
     ? workspaceText(locale, "Например: убрать лишний предмет справа и сохранить тот же свет", "Example: remove the extra object on the right and keep the same light")
@@ -25065,18 +25329,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     >
                       {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить качество", "Upscale image"))}
                     </button>
-                    <button
-                      className={getSegmentEditorPromptVisualToolButtonClass("brand")}
-                      type="button"
-                      aria-label={workspaceText(locale, "Добавить бренд", "Add brand")}
-                      disabled={!activeSegment}
-                      title={workspaceText(locale, "Добавить бренд", "Add brand")}
-                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("brand")}
-                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("brand")}
-                      onClick={handleSegmentEditorPromptBrandToolButtonClick}
-                    >
-                      {renderSegmentEditorPromptToolButtonContent("brand", workspaceText(locale, "Добавить бренд", "Add brand"))}
-                    </button>
                   </div>
                 )}
               </div>
@@ -25091,15 +25343,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                     accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.mov,.webm,.m4v,image/*,video/*"
                     onChange={(event) => {
                       void handleSegmentAiPhotoModalCustomVideoChange(event);
-                    }}
-                  />
-                  <input
-                    ref={segmentEditorBrandLogoInputRef}
-                    className="studio-segment-editor__prompt-file-input"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,.avif,image/*"
-                    onChange={(event) => {
-                      void handleSegmentEditorBrandLogoChange(event);
                     }}
                   />
                   <div className="studio-segment-editor__prompt-workspace-head">
@@ -25251,98 +25494,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         )}
                       </div>
                     </div>
-                  ) : isPromptBrandMode ? (
-                    <div className={`studio-segment-editor__brand-panel${hasSegmentEditorBranding ? " is-selected" : ""}${
-                      isSegmentEditorBrandDirty ? " is-dirty" : ""
-                    }`}>
-                      <div className="studio-segment-editor__brand-card">
-                        <div className="studio-segment-editor__brand-preview" aria-hidden="true">
-                          {segmentEditorBrandLogoPreviewUrl ? (
-                            <img src={segmentEditorBrandLogoPreviewUrl} alt="" />
-                          ) : (
-                            <span>Logo</span>
-                          )}
-                        </div>
-                        <div className="studio-segment-editor__brand-copy">
-                          <strong>{segmentEditorBrandPanelTitle}</strong>
-                          <span title={selectedBrandLogo?.fileName ?? brandText}>
-                            {getStudioBrandSummary({ brandLogoFile: selectedBrandLogo, brandText })}
-                          </span>
-                        </div>
-                        <div className="studio-segment-editor__brand-actions">
-                          <button
-                            className="studio-segment-editor__brand-action"
-                            type="button"
-                            disabled={isPreparingBrandLogo}
-                            aria-label={selectedBrandLogo ? workspaceText(locale, "Заменить логотип", "Replace logo") : workspaceText(locale, "Добавить логотип", "Add logo")}
-                            title={selectedBrandLogo ? workspaceText(locale, "Заменить логотип", "Replace logo") : workspaceText(locale, "Добавить логотип", "Add logo")}
-                            onClick={() => segmentEditorBrandLogoInputRef.current?.click()}
-                          >
-                            {isPreparingBrandLogo ? (
-                              <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                            ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            )}
-                          </button>
-                          {selectedBrandLogo ? (
-                            <button
-                              className="studio-segment-editor__brand-action studio-segment-editor__brand-action--danger"
-                              type="button"
-                              aria-label={workspaceText(locale, "Убрать логотип", "Remove logo")}
-                              title={workspaceText(locale, "Убрать логотип", "Remove logo")}
-                              onClick={handleRemoveBrandLogo}
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                              </svg>
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                      <label className="studio-segment-editor__brand-field">
-                        <span>{workspaceText(locale, "Текст бренда", "Brand text")}</span>
-                        <input
-                          className="studio-segment-editor__brand-input"
-                          type="text"
-                          value={brandText}
-                          maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
-                          placeholder={workspaceText(locale, "Например, adshortsai.com", "Example: adshortsai.com")}
-                          onChange={(event) => handleBrandTextChange(event.target.value)}
-                        />
-                      </label>
-                      <div className="studio-segment-editor__brand-meta">
-                        <span>{segmentEditorBrandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
-                        {brandText ? (
-                          <button type="button" onClick={handleClearBrandText}>
-                            {workspaceText(locale, "Очистить текст", "Clear text")}
-                          </button>
-                        ) : (
-                          <span>{workspaceText(locale, "Лого: .jpg, .png, .webp, .avif", "Logo: .jpg, .png, .webp, .avif")}</span>
-                        )}
-                      </div>
-                      <button
-                        className="studio-segment-editor__brand-apply"
-                        type="button"
-                        disabled={isPreparingBrandLogo || !isSegmentEditorBrandDirty}
-                        onClick={handleApplySegmentEditorBrand}
-                      >
-                        {isPreparingBrandLogo ? (
-                          <>
-                            <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                            <span>{workspaceText(locale, "Готовим логотип", "Preparing logo")}</span>
-                          </>
-                        ) : isSegmentEditorBrandDirty ? (
-                          workspaceText(locale, "Применить к сегментам", "Apply to segments")
-                        ) : (
-                          workspaceText(locale, "Применено", "Applied")
-                        )}
-                      </button>
-                      {brandSelectionError ? (
-                        <p className="studio-segment-editor__prompt-note is-error" role="alert">{brandSelectionError}</p>
-                      ) : null}
-                    </div>
                   ) : isPromptUploadMode || isPromptUpscaleMode ? (
                     <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
                       <strong>
@@ -25398,7 +25549,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   {segmentEditorVideoError ? (
                     <p className="studio-segment-editor__prompt-note is-error">{segmentEditorVideoError}</p>
                   ) : null}
-                  {!isPromptLibraryMode && !isPromptBrandMode ? (
+                  {!isPromptLibraryMode ? (
                     <div className="studio-segment-editor__prompt-action-row">
                       {isPromptAiPhotoMode
                         ? renderSegmentVisualQualitySwitch({
@@ -25484,6 +25635,20 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   selectedMusicType={studioSidebarMusicType}
                   uploadError={musicSelectionError}
                 />
+                <StudioBrandSelectorChip
+                  appliedBrandLogoFile={appliedSegmentEditorBrandSnapshot.brandLogoFile}
+                  appliedBrandText={appliedSegmentEditorBrandSnapshot.brandText}
+                  brandLogoFile={selectedBrandLogo}
+                  brandText={brandText}
+                  brandUploadError={brandSelectionError}
+                  isDirty={isSegmentEditorBrandDirty}
+                  isPreparingBrandLogo={isPreparingBrandLogo}
+                  onApplyBrand={handleApplySegmentEditorBrand}
+                  onBrandLogoSelect={handleBrandLogoSelect}
+                  onBrandTextChange={handleBrandTextChange}
+                  onClearBrandText={handleClearBrandText}
+                  onRemoveBrandLogo={handleRemoveBrandLogo}
+                />
                 <StudioLanguageSelectorChip
                   selectedLanguage={selectedLanguage}
                   onSelect={handleSegmentEditorLanguageSelect}
@@ -25501,12 +25666,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           aria-label={workspaceText(
             locale,
             isSegmentEditorBrandDirty
-              ? "Сначала примените бренд к сегментам"
+              ? "Примените бренд ко всему видео"
               : hasSegmentEditorChanges
               ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
             isSegmentEditorBrandDirty
-              ? "Apply the brand to segments first"
+              ? "Apply brand to video"
               : hasSegmentEditorChanges
               ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
@@ -25514,12 +25679,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           title={workspaceText(
             locale,
             isSegmentEditorBrandDirty
-              ? "Сначала примените бренд к сегментам"
+              ? "Примените бренд ко всему видео"
               : hasSegmentEditorChanges
               ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "Нет изменений для обновления",
             isSegmentEditorBrandDirty
-              ? "Apply the brand to segments first"
+              ? "Apply brand to video"
               : hasSegmentEditorChanges
               ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
               : "No changes to update",
@@ -25915,7 +26080,6 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           {getSegmentVisualPlaceholderLabel(segment.index)}
                                         </div>
                                       )}
-                                      {renderSegmentEditorBrandOverlay("card")}
                                       {!isActiveCard ? (
                                         <button
                                           className="studio-segment-editor__card-hitbox studio-segment-editor__card-hitbox--side"
@@ -25973,6 +26137,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                                           subtitleStyleOptions={subtitleStyleOptions}
                                         />
                                       ) : null}
+                                      {renderSegmentEditorBrandOverlay("card")}
                                       {isVisualGenerationPending ? (
                                         <div className="studio-segment-editor__card-loader" role="status" aria-live="polite">
                                           <span className="studio-segment-editor__card-loader-spinner" aria-hidden="true"></span>
@@ -27002,6 +27167,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                           {getSegmentVisualPlaceholderLabel(segmentThumbDragSegment.index)}
                         </span>
                       )}
+                      {renderSegmentEditorBrandOverlay("ghost")}
                     </span>
                   );
                 })()}
