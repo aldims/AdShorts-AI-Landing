@@ -911,6 +911,12 @@ type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleRequest & {
 
 type WorkspaceSegmentAiPhotoPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 
+type WorkspaceSegmentPromptImprovementSnapshot = {
+  mode: WorkspaceSegmentAiPhotoPromptImproveMode;
+  prompt: string;
+  segmentIndex: number | null;
+};
+
 type WorkspaceSegmentAiPhotoPromptImproveRequest = {
   language: StudioLanguage;
   mode: WorkspaceSegmentAiPhotoPromptImproveMode;
@@ -11750,6 +11756,7 @@ function WorkspaceModalVideoPlayer({
   const [isActuallyMuted, setIsActuallyMuted] = useState(shouldPreferMutedAutoplay || clampWorkspaceModalPlayerVolume(volume) <= 0);
   const safeVolume = clampWorkspaceModalPlayerVolume(volume);
   const progressValue = duration > 0 ? Math.min(1000, Math.max(0, Math.round((currentTime / duration) * 1000))) : 0;
+  const shouldRevealUiOnHover = uiRevealMode === "hover" || isPlaying;
 
   const assignVideoRef = useCallback(
     (element: HTMLVideoElement | null) => {
@@ -11860,8 +11867,8 @@ function WorkspaceModalVideoPlayer({
   return (
     <div
       className={`studio-video-modal__player is-video${fitMode === "cover" ? " is-cover-media" : ""}${
-        uiRevealMode === "hover" ? " is-hover-ui" : ""
-      }`}
+        shouldRevealUiOnHover ? " is-hover-ui" : ""
+      }${isPlaying ? " is-playing" : ""}`}
     >
       <div className="studio-video-modal__player-stage" onClick={handleTogglePlayback}>
         <video
@@ -11911,8 +11918,8 @@ function WorkspaceModalVideoPlayer({
           onTimeUpdate={(event) => {
             setCurrentTime(Number.isFinite(event.currentTarget.currentTime) ? Math.max(0, event.currentTarget.currentTime) : 0);
           }}
-          onEnded={() => {
-            const element = localVideoRef.current;
+          onEnded={(event) => {
+            const element = event.currentTarget;
             if (element) {
               try {
                 element.currentTime = 0;
@@ -13314,6 +13321,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [segmentAiPhotoModalLibraryFilter, setSegmentAiPhotoModalLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [isSegmentAiPhotoPromptImproving, setIsSegmentAiPhotoPromptImproving] = useState(false);
   const [isSegmentAiPhotoPromptImproved, setIsSegmentAiPhotoPromptImproved] = useState(false);
+  const [segmentAiPhotoPromptImprovementSnapshot, setSegmentAiPhotoPromptImprovementSnapshot] =
+    useState<WorkspaceSegmentPromptImprovementSnapshot | null>(null);
   const [isSegmentAiPhotoPromptHighlighted, setIsSegmentAiPhotoPromptHighlighted] = useState(false);
   const [segmentEditorGeneratingAiPhotoRunIds, setSegmentEditorGeneratingAiPhotoRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
@@ -14341,6 +14350,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentAiPhotoModalTab("ai_photo");
     setIsSegmentAiPhotoPromptImproving(false);
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
   }, []);
 
@@ -19415,6 +19425,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       );
       setIsSegmentAiPhotoPromptImproving(false);
       setIsSegmentAiPhotoPromptImproved(false);
+      setSegmentAiPhotoPromptImprovementSnapshot(null);
       setIsSegmentAiPhotoPromptHighlighted(false);
     },
     [],
@@ -19777,6 +19788,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("ai_photo");
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
     if (segmentAiPhotoPromptHighlightTimerRef.current) {
       window.clearTimeout(segmentAiPhotoPromptHighlightTimerRef.current);
@@ -19797,6 +19809,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("ai_video");
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
     if (segmentAiPhotoPromptHighlightTimerRef.current) {
       window.clearTimeout(segmentAiPhotoPromptHighlightTimerRef.current);
@@ -19817,6 +19830,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("image_edit");
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
     if (segmentAiPhotoPromptHighlightTimerRef.current) {
       window.clearTimeout(segmentAiPhotoPromptHighlightTimerRef.current);
@@ -19837,6 +19851,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("photo_animation");
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
     if (segmentAiPhotoPromptHighlightTimerRef.current) {
       window.clearTimeout(segmentAiPhotoPromptHighlightTimerRef.current);
@@ -21446,6 +21461,66 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     });
   };
 
+  const applySegmentPromptValueForImproveMode = (
+    mode: WorkspaceSegmentAiPhotoPromptImproveMode,
+    prompt: string,
+    segmentIndex: number | null,
+  ) => {
+    if (mode === "ai_photo") {
+      setSegmentAiPhotoModalPrompt(prompt);
+      if (typeof segmentIndex === "number") {
+        updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+          ...segment,
+          aiPhotoPrompt: prompt,
+          aiPhotoPromptInitialized: true,
+        }));
+      }
+      return;
+    }
+
+    if (mode === "image_edit") {
+      setSegmentImageEditModalPrompt(prompt);
+      if (typeof segmentIndex === "number") {
+        updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+          ...segment,
+          imageEditPrompt: prompt,
+          imageEditPromptInitialized: true,
+        }));
+      }
+      return;
+    }
+
+    setSegmentAiVideoModalPrompt(prompt);
+    if (typeof segmentIndex === "number") {
+      updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+        ...segment,
+        aiVideoPrompt: prompt,
+        aiVideoPromptInitialized: true,
+      }));
+    }
+  };
+
+  const handleSegmentAiPhotoModalResetImprovedPrompt = () => {
+    const snapshot = segmentAiPhotoPromptImprovementSnapshot;
+    const currentSegmentIndex = segmentAiPhotoModalSegment?.index ?? activeSegment?.index ?? null;
+    if (!snapshot || isSegmentAiPhotoPromptImproving || snapshot.segmentIndex !== currentSegmentIndex) {
+      return;
+    }
+
+    if (segmentAiPhotoPromptHighlightTimerRef.current) {
+      window.clearTimeout(segmentAiPhotoPromptHighlightTimerRef.current);
+      segmentAiPhotoPromptHighlightTimerRef.current = null;
+    }
+
+    setSegmentEditorVideoError(null);
+    setSegmentAiPhotoModalTab(snapshot.mode);
+    setSegmentEditorPromptToolTab(snapshot.mode);
+    applySegmentPromptValueForImproveMode(snapshot.mode, snapshot.prompt, snapshot.segmentIndex);
+    setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
+    setIsSegmentAiPhotoPromptHighlighted(false);
+  };
+
   const handleSegmentAiPhotoModalImprovePrompt = async () => {
     if (isSegmentAiPhotoPromptImproving) {
       return;
@@ -21466,6 +21541,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       : isImageEditPromptTab
         ? normalizedSegmentImageEditModalPrompt || normalizeWorkspaceSegmentImageEditPrompt(segmentAiPhotoModalScenarioPrompt)
         : normalizedSegmentAiPhotoModalPrompt || normalizeWorkspaceSegmentAiPhotoPrompt(segmentAiPhotoModalScenarioPrompt);
+    const promptBeforeImprove = isAiVideoPromptTab
+      ? segmentAiVideoModalPrompt
+      : isImageEditPromptTab
+        ? segmentImageEditModalPrompt
+        : segmentAiPhotoModalPrompt;
+    const resetPrompt = promptBeforeImprove.trim() ? promptBeforeImprove : sourcePrompt;
+    const targetSegmentIndex = segmentAiPhotoModalSegment?.index ?? activeSegment?.index ?? null;
     if (!sourcePrompt) {
       setSegmentEditorVideoError("Введите описание сцены или используйте текст сегмента.");
       return;
@@ -21481,6 +21563,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     );
     setIsSegmentAiPhotoPromptImproving(true);
     setIsSegmentAiPhotoPromptImproved(false);
+    setSegmentAiPhotoPromptImprovementSnapshot(null);
     setIsSegmentAiPhotoPromptHighlighted(false);
     const runId = segmentAiPhotoPromptImproveRunRef.current + 1;
     segmentAiPhotoPromptImproveRunRef.current = runId;
@@ -21513,35 +21596,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
 
       const improvedPrompt = payload.data.prompt;
-      if (isAiVideoPromptTab) {
-        setSegmentAiVideoModalPrompt(improvedPrompt);
-        if (segmentAiPhotoModalSegment) {
-          updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
-            ...segment,
-            aiVideoPrompt: improvedPrompt,
-            aiVideoPromptInitialized: true,
-          }));
-        }
-      } else if (isImageEditPromptTab) {
-        setSegmentImageEditModalPrompt(improvedPrompt);
-        if (segmentAiPhotoModalSegment) {
-          updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
-            ...segment,
-            imageEditPrompt: improvedPrompt,
-            imageEditPromptInitialized: true,
-          }));
-        }
-      } else {
-        setSegmentAiPhotoModalPrompt(improvedPrompt);
-        if (segmentAiPhotoModalSegment) {
-          updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
-            ...segment,
-            aiPhotoPrompt: improvedPrompt,
-            aiPhotoPromptInitialized: true,
-          }));
-        }
-      }
+      applySegmentPromptValueForImproveMode(improveMode, improvedPrompt, targetSegmentIndex);
       setIsSegmentAiPhotoPromptImproved(true);
+      setSegmentAiPhotoPromptImprovementSnapshot({
+        mode: improveMode,
+        prompt: resetPrompt,
+        segmentIndex: targetSegmentIndex,
+      });
       setIsSegmentAiPhotoPromptHighlighted(true);
       segmentAiPhotoPromptHighlightTimerRef.current = window.setTimeout(() => {
         if (segmentAiPhotoPromptImproveRunRef.current === runId) {
@@ -24827,6 +24888,25 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           ? canImproveSegmentAiVideoPrompt
           : false;
   const isPromptImproveDisabled = !canImprovePromptVisual || isPromptVisualBaseDisabled;
+  const promptVisualImproveMode: WorkspaceSegmentAiPhotoPromptImproveMode | null = isPromptImageEditMode
+    ? "image_edit"
+    : isPromptAiPhotoMode
+      ? "ai_photo"
+      : isPromptPhotoAnimationMode
+        ? "photo_animation"
+        : isPromptAiVideoMode
+          ? "ai_video"
+          : null;
+  const promptImprovementSegmentIndex = activeSegment?.index ?? segmentAiPhotoModalSegment?.index ?? null;
+  const isPromptImprovementResetVisible = Boolean(
+    isSegmentAiPhotoPromptImproved &&
+      !isSegmentAiPhotoPromptImproving &&
+      promptVisualImproveMode &&
+      typeof promptImprovementSegmentIndex === "number" &&
+      segmentAiPhotoPromptImprovementSnapshot &&
+      segmentAiPhotoPromptImprovementSnapshot.mode === promptVisualImproveMode &&
+      segmentAiPhotoPromptImprovementSnapshot.segmentIndex === promptImprovementSegmentIndex,
+  );
   const handlePromptVisualTextareaChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     if (isPromptImageEditMode) {
       handleSegmentEditorImageEditPromptChange(event);
@@ -25543,6 +25623,32 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                             </svg>
                           )}
                         </button>
+                        {isPromptImprovementResetVisible ? (
+                          <button
+                            className="studio-segment-editor__prompt-reset"
+                            type="button"
+                            aria-label={workspaceText(locale, "Сбросить улучшенное описание", "Reset improved prompt")}
+                            title={workspaceText(locale, "Сбросить улучшенное описание", "Reset improved prompt")}
+                            onClick={handleSegmentAiPhotoModalResetImprovedPrompt}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path
+                                d="M9 7H4V2"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2.2"
+                              />
+                              <path
+                                d="M4.9 7.7A8 8 0 1 1 4 12"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2.2"
+                              />
+                            </svg>
+                          </button>
+                        ) : null}
                       </div>
                     </>
                   )}
