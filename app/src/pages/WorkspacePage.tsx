@@ -16596,7 +16596,15 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       ]
     : segmentEditorBaseChangeChecklist;
   const hasSegmentEditorChanges = segmentEditorChangeChecklist.length > 0;
-  const segmentEditorResetChangesCount = segmentEditorChangeChecklist.length;
+  const segmentEditorPendingInsertedSegmentCount = segmentEditorDraft
+    ? getWorkspaceSegmentEditorPendingInsertedSegmentIndices(
+        segmentEditorDraft,
+        segmentEditorChecklistBaseSession,
+      ).size
+    : 0;
+  const hasSegmentEditorResettableChanges = hasSegmentEditorChanges || segmentEditorPendingInsertedSegmentCount > 0;
+  const segmentEditorResetChangesCount =
+    segmentEditorChangeChecklist.length + segmentEditorPendingInsertedSegmentCount;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
   const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS;
@@ -19008,6 +19016,17 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     }
 
     setSegmentEditorVideoError(null);
+    if (
+      getWorkspaceSegmentEditorPendingInsertedSegmentIndices(
+        segmentEditorDraft,
+        segmentEditorChecklistBaseSession,
+      ).has(targetSegmentIndex)
+    ) {
+      setSegmentEditorPendingDeleteIndex(null);
+      handleDeleteSegmentEditorSegment(targetSegmentIndex);
+      return;
+    }
+
     setSegmentEditorPendingDeleteIndex(targetSegmentIndex);
   };
 
@@ -19093,7 +19112,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const requestResetSegmentEditorChanges = () => {
-    if (!segmentEditorDraft || !segmentEditorChecklistBaseSession || !hasSegmentEditorChanges) {
+    if (!segmentEditorDraft || !segmentEditorChecklistBaseSession || !hasSegmentEditorResettableChanges) {
       return;
     }
 
@@ -26513,7 +26532,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                         </div>
 
                         <div className="studio-segment-editor__thumbbar" style={segmentThumbBarStyle}>
-                          {hasSegmentEditorChanges ? (
+                          {hasSegmentEditorResettableChanges ? (
                             <button
                               className="studio-segment-editor__thumbbar-reset"
                               type="button"
@@ -27650,7 +27669,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                       className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
                       type="button"
                       onClick={confirmResetSegmentEditorChanges}
-                      disabled={isSegmentEditorStructureActionBusy || !hasSegmentEditorChanges}
+                      disabled={isSegmentEditorStructureActionBusy || !hasSegmentEditorResettableChanges}
                     >
                       {workspaceText(locale, "Сбросить", "Reset")}
                     </button>
