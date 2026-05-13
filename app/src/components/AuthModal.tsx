@@ -24,16 +24,20 @@ type DevEmailPreview = {
 };
 
 type TelegramAuthConfig = {
+  authorizationUrl?: string;
   botId: string;
   botUsername: string;
   clientId: string;
-  nonce: string;
+  flow?: "code" | "post_message";
+  nonce?: string;
   requestAccess?: string[];
 };
 
 type TelegramLoginResult = {
   error?: string;
   id_token?: string;
+  redirectTo?: string;
+  signedIn?: boolean;
   user?: unknown;
 };
 
@@ -135,6 +139,7 @@ const resolveAuthActionErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const TELEGRAM_OIDC_ORIGIN = "https://oauth.telegram.org";
+const TELEGRAM_AUTH_MESSAGE_TYPE = "adshorts.telegramAuth";
 const TELEGRAM_POPUP_CLOSE_GRACE_MS = 5_000;
 
 const readResponseErrorMessage = async (response: Response, fallback: string) => {
@@ -172,6 +177,20 @@ const buildTelegramLoginUrl = (config: TelegramAuthConfig, locale: Locale) => {
   return `${TELEGRAM_OIDC_ORIGIN}/auth?${params.toString()}`;
 };
 
+const readTelegramSignedInResult = async (): Promise<TelegramLoginResult | null> => {
+  try {
+    const response = await fetch("/api/me", { credentials: "include" });
+    if (!response.ok) return null;
+
+    return {
+      redirectTo: "/app/studio",
+      signedIn: true,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
   new Promise<TelegramLoginResult>((resolve, reject) => {
     const width = 550;
@@ -180,7 +199,7 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
     const left = Math.max(0, (window.screen.width - width) / 2) + (screenOffset.availLeft || 0);
     const top = Math.max(0, (window.screen.height - height) / 2) + (screenOffset.availTop || 0);
     const popup = window.open(
-      buildTelegramLoginUrl(config, locale),
+      config.authorizationUrl || buildTelegramLoginUrl(config, locale),
       "telegram_oidc_login",
       `width=${width},height=${height},left=${left},top=${top},status=0,location=0,menubar=0,toolbar=0`,
     );
@@ -193,6 +212,7 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
     let isFinished = false;
     let closeTimer: number | null = null;
     let closedAt: number | null = null;
+    let closeCheckPending = false;
 
     const cleanup = () => {
       isFinished = true;
@@ -215,8 +235,6 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
     };
 
     function onMessage(event: MessageEvent) {
-      if (event.origin !== TELEGRAM_OIDC_ORIGIN) return;
-
       let data: { event?: unknown; error?: unknown; result?: unknown };
       try {
         data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
@@ -224,6 +242,19 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
         return;
       }
 
+      if (event.origin === window.location.origin && data && (data as { type?: unknown }).type === TELEGRAM_AUTH_MESSAGE_TYPE) {
+        const redirectTo = typeof (data as { redirectTo?: unknown }).redirectTo === "string" ? (data as { redirectTo: string }).redirectTo : "/app/studio";
+        const message = typeof data.error === "string" ? data.error : "";
+        if (message) {
+          finish({ error: message });
+          return;
+        }
+
+        finish({ redirectTo, signedIn: true });
+        return;
+      }
+
+      if (event.origin !== TELEGRAM_OIDC_ORIGIN) return;
       if (!data || data.event !== "auth_result") return;
       if (typeof data.error === "string" && data.error) {
         finish({ error: data.error });
@@ -251,6 +282,20 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
 
       closedAt ??= Date.now();
       if (Date.now() - closedAt >= TELEGRAM_POPUP_CLOSE_GRACE_MS) {
+        if (config.flow === "code" && !closeCheckPending) {
+          closeCheckPending = true;
+          void readTelegramSignedInResult().then((result) => {
+            closeCheckPending = false;
+            if (result) {
+              finish(result);
+              return;
+            }
+
+            fail(new Error(locale === "en" ? "Telegram authorization was cancelled." : "Авторизация Telegram отменена."));
+          });
+          return;
+        }
+
         fail(new Error(locale === "en" ? "Telegram authorization was cancelled." : "Авторизация Telegram отменена."));
       }
     }, 250);
@@ -335,7 +380,9 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       setIsTelegramReady(false);
 
       try {
-        const configResponse = await fetch("/api/auth/telegram/config", { credentials: "include" });
+        const origin = typeof window === "undefined" ? "" : window.location.origin;
+        const configUrl = origin ? `/api/auth/telegram/config?origin=${encodeURIComponent(origin)}` : "/api/auth/telegram/config";
+        const configResponse = await fetch(configUrl, { credentials: "include" });
         if (!configResponse.ok) return;
 
         const config = (await configResponse.json()) as TelegramAuthConfig;
@@ -539,6 +586,19 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       const loginPayload = await openTelegramLoginPopup(telegramConfig, locale);
       if (loginPayload.error) {
         throw new Error(loginPayload.error);
+      }
+
+      if (loginPayload.signedIn) {
+        void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
+          authProvider: "telegram",
+          lang: locale,
+          path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        });
+
+        onClose();
+        onSignedIn();
+        window.location.assign(loginPayload.redirectTo || "/app/studio");
+        return;
       }
 
       if (!loginPayload.id_token) {

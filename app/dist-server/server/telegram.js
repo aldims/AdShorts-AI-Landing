@@ -4,24 +4,74 @@ import { env } from "./env.js";
 const MAX_AUTH_AGE_SECONDS = 86400;
 const MAX_AUTH_FUTURE_SKEW_SECONDS = 300;
 export const TELEGRAM_LOGIN_NONCE_COOKIE_NAME = "adshorts.telegram_login_nonce";
+export const TELEGRAM_OIDC_SESSION_COOKIE_NAME = "adshorts.telegram_oidc_session";
 export const TELEGRAM_LOGIN_NONCE_MAX_AGE_MS = 10 * 60 * 1000;
 const TELEGRAM_OIDC_ISSUER = "https://oauth.telegram.org";
 const TELEGRAM_OIDC_JWKS = createRemoteJWKSet(new URL("https://oauth.telegram.org/.well-known/jwks.json"));
 const toBase64Url = (value) => value.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
+const fromBase64Url = (value) => {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+    return Buffer.from(`${normalized}${padding}`, "base64");
+};
 const signNonce = (nonce) => toBase64Url(createHmac("sha256", env.authSecret).update(nonce).digest());
-export const createTelegramLoginNonce = () => toBase64Url(randomBytes(24));
-export const serializeTelegramLoginNonce = (nonce) => `${nonce}.${signNonce(nonce)}`;
-export const parseTelegramLoginNonce = (value) => {
-    const [nonce, signature, ...rest] = String(value ?? "").split(".");
-    if (!nonce || !signature || rest.length > 0)
+const serializeSignedValue = (value) => `${value}.${signNonce(value)}`;
+const parseSignedValue = (value) => {
+    const [payload, signature, ...rest] = String(value ?? "").split(".");
+    if (!payload || !signature || rest.length > 0)
         return null;
-    const expectedSignature = signNonce(nonce);
+    const expectedSignature = signNonce(payload);
     const received = Buffer.from(signature);
     const expected = Buffer.from(expectedSignature);
     if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
         return null;
     }
-    return nonce;
+    return payload;
+};
+export const createTelegramLoginNonce = () => toBase64Url(randomBytes(24));
+export const serializeTelegramLoginNonce = (nonce) => serializeSignedValue(nonce);
+export const parseTelegramLoginNonce = (value) => {
+    return parseSignedValue(value);
+};
+export const createTelegramOidcSession = (redirectUri) => {
+    const codeVerifier = toBase64Url(randomBytes(32));
+    const session = {
+        codeVerifier,
+        nonce: createTelegramLoginNonce(),
+        redirectUri,
+        state: createTelegramLoginNonce(),
+    };
+    const codeChallenge = toBase64Url(createHash("sha256").update(codeVerifier).digest());
+    return { codeChallenge, session };
+};
+export const serializeTelegramOidcSession = (session) => serializeSignedValue(toBase64Url(Buffer.from(JSON.stringify(session), "utf8")));
+export const parseTelegramOidcSession = (value) => {
+    const payload = parseSignedValue(value);
+    if (!payload) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(fromBase64Url(payload).toString("utf8"));
+        if (typeof parsed.codeVerifier !== "string" ||
+            typeof parsed.nonce !== "string" ||
+            typeof parsed.redirectUri !== "string" ||
+            typeof parsed.state !== "string" ||
+            !parsed.codeVerifier ||
+            !parsed.nonce ||
+            !parsed.redirectUri ||
+            !parsed.state) {
+            return null;
+        }
+        return {
+            codeVerifier: parsed.codeVerifier,
+            nonce: parsed.nonce,
+            redirectUri: parsed.redirectUri,
+            state: parsed.state,
+        };
+    }
+    catch {
+        return null;
+    }
 };
 const buildTelegramCheckString = (data) => {
     return Object.entries(data)

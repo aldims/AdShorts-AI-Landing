@@ -17,9 +17,17 @@ export type TelegramLoginData = {
 const MAX_AUTH_AGE_SECONDS = 86400;
 const MAX_AUTH_FUTURE_SKEW_SECONDS = 300;
 export const TELEGRAM_LOGIN_NONCE_COOKIE_NAME = "adshorts.telegram_login_nonce";
+export const TELEGRAM_OIDC_SESSION_COOKIE_NAME = "adshorts.telegram_oidc_session";
 export const TELEGRAM_LOGIN_NONCE_MAX_AGE_MS = 10 * 60 * 1000;
 const TELEGRAM_OIDC_ISSUER = "https://oauth.telegram.org";
 const TELEGRAM_OIDC_JWKS = createRemoteJWKSet(new URL("https://oauth.telegram.org/.well-known/jwks.json"));
+
+export type TelegramOidcSession = {
+  codeVerifier: string;
+  nonce: string;
+  redirectUri: string;
+  state: string;
+};
 
 type TelegramIdTokenPayload = JWTPayload & {
   id?: number;
@@ -32,17 +40,21 @@ type TelegramIdTokenPayload = JWTPayload & {
 const toBase64Url = (value: Buffer) =>
   value.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
 
+const fromBase64Url = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(`${normalized}${padding}`, "base64");
+};
+
 const signNonce = (nonce: string) => toBase64Url(createHmac("sha256", env.authSecret).update(nonce).digest());
 
-export const createTelegramLoginNonce = () => toBase64Url(randomBytes(24));
+const serializeSignedValue = (value: string) => `${value}.${signNonce(value)}`;
 
-export const serializeTelegramLoginNonce = (nonce: string) => `${nonce}.${signNonce(nonce)}`;
+const parseSignedValue = (value: string | null | undefined) => {
+  const [payload, signature, ...rest] = String(value ?? "").split(".");
+  if (!payload || !signature || rest.length > 0) return null;
 
-export const parseTelegramLoginNonce = (value: string | null | undefined) => {
-  const [nonce, signature, ...rest] = String(value ?? "").split(".");
-  if (!nonce || !signature || rest.length > 0) return null;
-
-  const expectedSignature = signNonce(nonce);
+  const expectedSignature = signNonce(payload);
   const received = Buffer.from(signature);
   const expected = Buffer.from(expectedSignature);
 
@@ -50,7 +62,64 @@ export const parseTelegramLoginNonce = (value: string | null | undefined) => {
     return null;
   }
 
-  return nonce;
+  return payload;
+};
+
+export const createTelegramLoginNonce = () => toBase64Url(randomBytes(24));
+
+export const serializeTelegramLoginNonce = (nonce: string) => serializeSignedValue(nonce);
+
+export const parseTelegramLoginNonce = (value: string | null | undefined) => {
+  return parseSignedValue(value);
+};
+
+export const createTelegramOidcSession = (redirectUri: string) => {
+  const codeVerifier = toBase64Url(randomBytes(32));
+  const session: TelegramOidcSession = {
+    codeVerifier,
+    nonce: createTelegramLoginNonce(),
+    redirectUri,
+    state: createTelegramLoginNonce(),
+  };
+
+  const codeChallenge = toBase64Url(createHash("sha256").update(codeVerifier).digest());
+
+  return { codeChallenge, session };
+};
+
+export const serializeTelegramOidcSession = (session: TelegramOidcSession) =>
+  serializeSignedValue(toBase64Url(Buffer.from(JSON.stringify(session), "utf8")));
+
+export const parseTelegramOidcSession = (value: string | null | undefined): TelegramOidcSession | null => {
+  const payload = parseSignedValue(value);
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(fromBase64Url(payload).toString("utf8")) as Partial<TelegramOidcSession>;
+    if (
+      typeof parsed.codeVerifier !== "string" ||
+      typeof parsed.nonce !== "string" ||
+      typeof parsed.redirectUri !== "string" ||
+      typeof parsed.state !== "string" ||
+      !parsed.codeVerifier ||
+      !parsed.nonce ||
+      !parsed.redirectUri ||
+      !parsed.state
+    ) {
+      return null;
+    }
+
+    return {
+      codeVerifier: parsed.codeVerifier,
+      nonce: parsed.nonce,
+      redirectUri: parsed.redirectUri,
+      state: parsed.state,
+    };
+  } catch {
+    return null;
+  }
 };
 
 const buildTelegramCheckString = (data: TelegramLoginData) => {

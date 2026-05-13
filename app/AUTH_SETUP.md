@@ -93,17 +93,18 @@ npm run dev
 1. Создайте бота через `@BotFather`: `/newbot`
 2. Откройте настройки Web Login и скопируйте Client ID
 3. В BotFather откройте `Bot Settings` → `Web Login` и добавьте:
-   - Redirect URI для dev: `http://127.0.0.1:4174/`
+   - Redirect URI для dev: `http://127.0.0.1:4174/api/auth/telegram/oidc/callback`
    - Trusted Origin для dev: `http://127.0.0.1:4174`
    - Для production: production origin и callback/redirect URL
 4. Добавьте в `app/.env`:
 
 ```env
 TELEGRAM_BOT_ID=123456789
+TELEGRAM_CLIENT_SECRET=client-secret-from-botfather
 TELEGRAM_BOT_USERNAME=YourBotName
 ```
 
-Client Secret для текущего JS popup flow не используется. Он нужен только если переводить интеграцию на стандартный OIDC Authorization Code Flow с обменом `code` на токены через `/token`.
+Client Secret хранится только на backend и нужен для стандартного OIDC Authorization Code Flow с обменом `code` на токены через `/token`. В браузер он не отправляется.
 
 5. Перезапустите сервер:
 

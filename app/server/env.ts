@@ -170,6 +170,7 @@ export const env = {
   googleClientSecret: trim(process.env.GOOGLE_CLIENT_SECRET),
   telegramBotId: trim(process.env.TELEGRAM_BOT_ID),
   telegramBotUsername: trim(process.env.TELEGRAM_BOT_USERNAME),
+  telegramClientSecret: trim(process.env.TELEGRAM_CLIENT_SECRET),
   telegramBotToken: trim(process.env.TELEGRAM_BOT_TOKEN),
   adsflowApiBaseUrl: trim(process.env.ADSFLOW_API_BASE_URL),
   adsflowAdminToken: trim(process.env.ADSFLOW_ADMIN_TOKEN),
