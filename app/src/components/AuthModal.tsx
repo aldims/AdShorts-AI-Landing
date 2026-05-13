@@ -666,7 +666,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         <h2 id="signup-modal-title">{content.title}</h2>
         {content.lead ? <p className="signup-modal__lead">{content.lead}</p> : null}
 
-        <div className="signup-modal__social">
+        <div className={`signup-modal__social${status.telegramEnabled ? " signup-modal__social--paired" : ""}`}>
           <button
             className="signup-social__button route-button"
             type="button"

@@ -13181,6 +13181,11 @@ textarea {
   margin-top: 26px;
 }
 
+.signup-modal__social--paired {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .signup-social__button {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -13199,6 +13204,12 @@ textarea {
     background-color 0.2s ease;
 }
 
+.signup-modal__social--paired .signup-social__button {
+  min-height: 58px;
+  padding: 12px 14px;
+  gap: 10px;
+}
+
 .signup-social__button span {
   font-size: 0.98rem;
   font-weight: 800;
@@ -13208,6 +13219,15 @@ textarea {
   display: grid;
   gap: 4px;
   text-align: left;
+  min-width: 0;
+}
+
+.signup-modal__social--paired .signup-social__copy {
+  gap: 2px;
+}
+
+.signup-modal__social--paired .signup-social__button span {
+  font-size: 0.94rem;
 }
 
 .signup-social__button small {
@@ -13251,6 +13271,12 @@ textarea {
 .signup-social__button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+@media (max-width: 380px) {
+  .signup-modal__social--paired {
+    grid-template-columns: 1fr;
+  }
 }
 
 .signup-modal__divider {
