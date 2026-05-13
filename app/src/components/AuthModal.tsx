@@ -682,7 +682,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@company.com"
+              placeholder={locale === "en" ? "Enter email" : "Введите email"}
               required
             />
           </label>
