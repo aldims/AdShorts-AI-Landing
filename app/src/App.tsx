@@ -1078,7 +1078,6 @@ export function App() {
             isOpen={authState.isOpen}
             mode={authState.mode}
             onClose={closeAuth}
-            onModeChange={(mode) => setAuthState({ isOpen: true, mode })}
             onSignedIn={closeAuth}
           />
         </Suspense>

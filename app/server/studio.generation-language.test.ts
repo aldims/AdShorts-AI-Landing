@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getStudioVoiceCreditCost, normalizeStudioVoiceIdForLanguage, resolveStudioGenerationLanguage } from "./studio.js";
+import {
+  canExposeStudioFinalVideoFromStatus,
+  getStudioVoiceCreditCost,
+  normalizeStudioVoiceIdForLanguage,
+  resolveStudioGenerationLanguage,
+} from "./studio.js";
 
 describe("studio generation language resolution", () => {
   it("keeps the requested English language even for Cyrillic prompts", () => {
@@ -20,6 +25,27 @@ describe("studio generation language resolution", () => {
 
   it("keeps Russian when the user selected Russian for a Latin prompt", () => {
     expect(resolveStudioGenerationLanguage("cat reflexes and reaction speed", "ru")).toBe("ru");
+  });
+
+  it("allows a finished final MP4 even when the edit snapshot rejects mixed language text", () => {
+    expect(
+      canExposeStudioFinalVideoFromStatus({
+        downloadPath: "/api/media/3154/download",
+        error: "Project components saved but edit snapshot is not ready: reason=language_text_mismatch",
+        projectStatus: "rendering",
+        readyReason: "project_not_ready",
+        status: "failed",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not expose failed generations without a final video file", () => {
+    expect(
+      canExposeStudioFinalVideoFromStatus({
+        error: "Generation failed.",
+        status: "failed",
+      }),
+    ).toBe(false);
   });
 
   it("replaces a mismatched voice with the default voice for the requested language", () => {

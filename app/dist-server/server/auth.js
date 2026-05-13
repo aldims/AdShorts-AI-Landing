@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { database } from "./database.js";
+import { normalizeEmailLoginAddress } from "./email-code.js";
 import { authProviderStatus, env } from "./env.js";
 import { sendAppEmail } from "./mail.js";
 const appName = "AdShorts AI";
@@ -63,7 +64,7 @@ export const auth = betterAuth({
     database,
     emailAndPassword: {
         autoSignIn: false,
-        enabled: true,
+        enabled: false,
         minPasswordLength: 8,
         onExistingUserSignUp: async ({ user }) => {
             void sendAppEmail({
@@ -164,6 +165,10 @@ const readTelegramUsernameFromAccountScope = (scope) => {
     const usernamePart = scopeParts.find((part) => part.startsWith(TELEGRAM_USERNAME_SCOPE_PREFIX));
     return normalizeTelegramUsername(usernamePart?.slice(TELEGRAM_USERNAME_SCOPE_PREFIX.length));
 };
+const buildEmailLoginDisplayName = (email) => {
+    const localPart = email.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+    return (localPart || email).slice(0, 80);
+};
 const getAuthAdapter = async () => {
     const ctx = await auth.$context;
     return ctx.adapter;
@@ -186,6 +191,64 @@ export async function getTelegramAccountDisplay(userId) {
         label: username ? `@${username}` : `Telegram ID ${account.accountId}`,
         username,
     };
+}
+export async function signInWithEmailCode(rawEmail, req, res) {
+    const email = normalizeEmailLoginAddress(rawEmail);
+    if (!email) {
+        throw new Error("Invalid email address.");
+    }
+    const adapter = await getAuthAdapter();
+    let user = await adapter.findOne({
+        model: "user",
+        where: [{ field: "email", value: email }],
+    });
+    if (!user) {
+        user = await adapter.create({
+            model: "user",
+            data: {
+                email,
+                emailVerified: true,
+                name: buildEmailLoginDisplayName(email),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+        });
+    }
+    else {
+        await adapter.update({
+            model: "user",
+            where: [{ field: "id", value: user.id }],
+            update: {
+                emailVerified: true,
+                updatedAt: new Date(),
+            },
+        });
+        const updatedUser = await adapter.findOne({
+            model: "user",
+            where: [{ field: "id", value: user.id }],
+        });
+        if (!updatedUser) {
+            throw new Error("User not found after email code sign-in.");
+        }
+        user = updatedUser;
+    }
+    const sessionToken = randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await adapter.create({
+        model: "session",
+        data: {
+            token: sessionToken,
+            userId: user.id,
+            expiresAt,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ipAddress: req.ip ?? null,
+            userAgent: req.headers["user-agent"] ?? null,
+        },
+    });
+    setBetterAuthSessionCookie(res, sessionToken, expiresAt);
+    console.info(`[email-code] User signed in: ${user.email} (id=${user.id})`);
+    return { user };
 }
 export async function signInWithTelegram(profile, req, res) {
     const adapter = await getAuthAdapter();

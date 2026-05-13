@@ -6,10 +6,16 @@ import express from "express";
 import cors from "cors";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 
-import { auth, ensureAuthSchema, getTelegramAccountDisplay, signInWithTelegram } from "./auth.js";
+import { auth, ensureAuthSchema, getTelegramAccountDisplay, signInWithEmailCode, signInWithTelegram } from "./auth.js";
 import { authDatabaseConfig } from "./database.js";
+import {
+  createEmailLoginCode,
+  EMAIL_LOGIN_CODE_TTL_MINUTES,
+  normalizeEmailLoginAddress,
+  verifyEmailLoginCode,
+} from "./email-code.js";
 import { authProviderStatus, env } from "./env.js";
-import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
+import { getLastDevEmailPreview, getMailStatus, sendAppEmail } from "./mail.js";
 import {
   appendWorkspaceContentPlanIdeas,
   createWorkspaceContentPlan,
@@ -891,6 +897,80 @@ app.get("/api/auth/dev/last-email", (_req, res) => {
   }
 
   res.json({ data: getLastDevEmailPreview() });
+});
+
+app.post("/api/auth/email-code/request", express.json(), async (req, res) => {
+  const email = normalizeEmailLoginAddress(req.body?.email);
+  if (!email) {
+    res.status(400).json({ error: "Введите корректный email." });
+    return;
+  }
+
+  try {
+    const loginCode = await createEmailLoginCode(email);
+    await sendAppEmail({
+      html: `
+        <p>Ваш код входа в AdShorts AI:</p>
+        <p style="font-size: 28px; font-weight: 700; letter-spacing: 0.18em;">${loginCode.code}</p>
+        <p>Код действует ${EMAIL_LOGIN_CODE_TTL_MINUTES} минут. Если вы не запрашивали вход, просто проигнорируйте это письмо.</p>
+      `,
+      subject: `Код входа AdShorts AI: ${loginCode.code}`,
+      text:
+        `Ваш код входа в AdShorts AI: ${loginCode.code}. ` +
+        `Код действует ${EMAIL_LOGIN_CODE_TTL_MINUTES} минут. ` +
+        "Если вы не запрашивали вход, просто проигнорируйте это письмо.",
+      to: email,
+    });
+
+    res.json({
+      expiresAt: loginCode.expiresAt,
+      success: true,
+    });
+  } catch (error) {
+    console.error("[email-code] Failed to send login code", error);
+    res.status(500).json({
+      error: "Не удалось отправить код. Проверьте email и попробуйте ещё раз.",
+    });
+  }
+});
+
+app.post("/api/auth/email-code/verify", express.json(), async (req, res) => {
+  const email = normalizeEmailLoginAddress(req.body?.email);
+  if (!email) {
+    res.status(400).json({ error: "Введите корректный email." });
+    return;
+  }
+
+  const result = await verifyEmailLoginCode(email, req.body?.code);
+  if (!result.ok) {
+    if (result.reason === "expired") {
+      res.status(401).json({ error: "Код истёк. Запросите новый код." });
+      return;
+    }
+
+    if (result.reason === "too_many_attempts") {
+      res.status(429).json({ error: "Слишком много попыток. Запросите новый код." });
+      return;
+    }
+
+    res.status(401).json({ error: "Неверный код. Проверьте письмо и попробуйте ещё раз." });
+    return;
+  }
+
+  try {
+    const signInResult = await signInWithEmailCode(email, req, res);
+
+    res.json({
+      redirectTo: "/app/studio",
+      success: true,
+      user: signInResult.user,
+    });
+  } catch (error) {
+    console.error("[email-code] Failed to complete login", error);
+    res.status(500).json({
+      error: "Код подтверждён, но не удалось войти. Попробуйте ещё раз.",
+    });
+  }
 });
 
 const readTelegramLoginField = (value: unknown) => {

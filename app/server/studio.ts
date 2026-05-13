@@ -1434,6 +1434,48 @@ const buildStudioGenerationVideoUrls = (options: {
   };
 };
 
+const STUDIO_FINAL_VIDEO_READY_STATUSES = new Set(["completed", "done", "ready"]);
+const STUDIO_FINAL_VIDEO_FAILED_STATUSES = new Set(["error", "failed"]);
+
+const hasStudioFinalVideoDownload = (value: string | null | undefined) =>
+  Boolean(normalizeGenerationText(value));
+
+export const canExposeStudioFinalVideoFromStatus = (options: {
+  downloadPath?: string | null;
+  error?: string | null;
+  projectStatus?: string | null;
+  readyReason?: string | null;
+  status?: string | null;
+}) => {
+  const normalizedStatus = normalizeGenerationText(options.status).toLowerCase();
+  if (STUDIO_FINAL_VIDEO_READY_STATUSES.has(normalizedStatus)) {
+    return true;
+  }
+
+  if (!hasStudioFinalVideoDownload(options.downloadPath) || !STUDIO_FINAL_VIDEO_FAILED_STATUSES.has(normalizedStatus)) {
+    return false;
+  }
+
+  const normalizedError = normalizeGenerationText(options.error).toLowerCase();
+  const normalizedProjectStatus = normalizeGenerationText(options.projectStatus).toLowerCase();
+  const normalizedReadyReason = normalizeGenerationText(options.readyReason).toLowerCase();
+
+  return (
+    normalizedReadyReason === "project_not_ready" ||
+    normalizedProjectStatus === "rendering" ||
+    normalizedError.includes("edit snapshot is not ready") ||
+    normalizedError.includes("has_final_video")
+  );
+};
+
+const getStudioGenerationPublicStatus = (options: {
+  downloadPath?: string | null;
+  error?: string | null;
+  projectStatus?: string | null;
+  readyReason?: string | null;
+  status?: string | null;
+}) => (canExposeStudioFinalVideoFromStatus(options) ? "done" : String(options.status ?? "queued"));
+
 const buildStudioFinalAsset = (options: {
   adId?: number | null;
   downloadPath?: string | null;
@@ -3111,7 +3153,11 @@ const buildStudioGenerationFromHistoryEntry = (entry: WorkspaceGenerationHistory
   }
 
   const normalizedStatus = normalizeGenerationText(entry.status).toLowerCase();
-  if (!["completed", "done", "ready"].includes(normalizedStatus)) {
+  if (!canExposeStudioFinalVideoFromStatus({
+    downloadPath: entry.downloadPath,
+    error: entry.error,
+    status: normalizedStatus,
+  })) {
     return null;
   }
 
@@ -3175,16 +3221,23 @@ const buildLatestGenerationStatus = (
   }
 
   const status = String(payload.status ?? "queued");
-  const generation = status === "done" ? buildStudioGenerationFromLatest(payload, historyEntry) : null;
+  const publicStatus = getStudioGenerationPublicStatus({
+    downloadPath: payload.download_path,
+    error: payload.error,
+    projectStatus: payload.project_status,
+    readyReason: payload.ready_reason,
+    status,
+  });
+  const generation = publicStatus === "done" ? buildStudioGenerationFromLatest(payload, historyEntry) : null;
 
   return {
-    error: payload.error ?? undefined,
+    error: generation ? undefined : payload.error ?? undefined,
     generation: generation ?? undefined,
     isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
     jobId: String(payload.job_id),
     projectStatus: normalizeGenerationText(payload.project_status) || undefined,
     readyReason: normalizeGenerationText(payload.ready_reason) || undefined,
-    status,
+    status: generation ? "done" : status,
   };
 };
 
@@ -5070,7 +5123,15 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
     console.error("[studio] Failed to sync generation history", error);
   }
 
-  if (status === "done") {
+  const publicStatus = getStudioGenerationPublicStatus({
+    downloadPath: payload.download_path,
+    error: payload.error,
+    projectStatus: payload.project_status,
+    readyReason: payload.ready_reason,
+    status,
+  });
+
+  if (publicStatus === "done") {
     if (!payload.download_path) {
       throw new Error("AdsFlow finished the job without a video path.");
     }
@@ -5088,7 +5149,7 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
       });
       return {
         jobId: safeJobId,
-        status,
+        status: publicStatus,
         error: "Готовое видео недоступно как прямой media-файл.",
         isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
         projectStatus: normalizeGenerationText(payload.project_status) || undefined,
@@ -5100,7 +5161,7 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
 
     return {
       jobId: safeJobId,
-      status,
+      status: publicStatus,
       generation,
       isReadyForEditor: typeof payload.ready === "boolean" ? payload.ready : undefined,
       projectStatus: normalizeGenerationText(payload.project_status) || undefined,

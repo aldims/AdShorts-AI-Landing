@@ -7,6 +7,7 @@ import { logClientEvent } from "../lib/client-log";
 import { useLocale, type Locale } from "../lib/i18n";
 
 type AuthMode = "signup" | "signin";
+type EmailCodeStep = "email" | "code";
 
 type AuthStatus = {
   googleEnabled: boolean;
@@ -52,53 +53,23 @@ type Props = {
   isOpen: boolean;
   mode: AuthMode;
   onClose: () => void;
-  onModeChange: (mode: AuthMode) => void;
   onSignedIn: () => void;
 };
 
-const copy: Record<AuthMode, Record<Locale, {
-  eyebrow: string;
+const copy: Record<Locale, {
   title: string;
   lead: string;
   submit: string;
-  switchLabel: string;
-  switchMode: string;
-}>> = {
-  signup: {
-    ru: {
-    eyebrow: "Регистрация",
-    title: "Создайте аккаунт",
-    lead: "",
-    submit: "Создать аккаунт",
-    switchLabel: "Уже есть аккаунт?",
-    switchMode: "Войти",
-    },
-    en: {
-      eyebrow: "Sign up",
-      title: "Create an account",
-      lead: "",
-      submit: "Create account",
-      switchLabel: "Already have an account?",
-      switchMode: "Sign in",
-    },
+}> = {
+  ru: {
+    title: "Войдите в AdShorts AI",
+    lead: "Если аккаунта ещё нет, мы создадим его автоматически.",
+    submit: "Войти",
   },
-  signin: {
-    ru: {
-      eyebrow: "Вход",
-      title: "Войдите в AdShorts AI",
-      lead: "",
-      submit: "Войти",
-      switchLabel: "Новый пользователь?",
-      switchMode: "Создать аккаунт",
-    },
-    en: {
-      eyebrow: "Sign in",
-      title: "Sign in to AdShorts AI",
-      lead: "",
-      submit: "Sign in",
-      switchLabel: "New user?",
-      switchMode: "Create account",
-    },
+  en: {
+    title: "Sign in to AdShorts AI",
+    lead: "If you do not have an account yet, we will create it automatically.",
+    submit: "Sign in",
   },
 };
 
@@ -301,11 +272,11 @@ const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
     }, 250);
   });
 
-export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: Props) {
+export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
   const { locale } = useLocale();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeStep, setEmailCodeStep] = useState<EmailCodeStep>("email");
   const [status, setStatus] = useState<AuthStatus>(emptyStatus);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -314,7 +285,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
   const [telegramConfig, setTelegramConfig] = useState<TelegramAuthConfig | null>(null);
   const [isTelegramReady, setIsTelegramReady] = useState(false);
 
-  const content = copy[mode][locale];
+  const content = copy[locale];
   const closeLabel = locale === "en" ? "Close" : "Закрыть";
   const isBusy = busyAction !== null;
   const callbackURL = useMemo(() => {
@@ -364,6 +335,8 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
 
     setFeedback(null);
     setDevEmailPreview(null);
+    setEmailCode("");
+    setEmailCodeStep("email");
   }, [isOpen, mode]);
 
   useEffect(() => {
@@ -427,41 +400,40 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       return;
     }
 
-    if (mode === "signup") {
-      setBusyAction("signup");
+    if (emailCodeStep === "email") {
+      setBusyAction("email-code-request");
       try {
-        const { error } = await authClient.signUp.email({
-          callbackURL,
-          email,
-          name,
-          password,
+        const response = await fetch("/api/auth/email-code/request", {
+          body: JSON.stringify({ email }),
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
         });
 
-        if (error) {
+        if (!response.ok) {
           setFeedback({
             kind: "error",
-            message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not create the account." : "Не удалось создать аккаунт."),
+            message: await readResponseErrorMessage(
+              response,
+              locale === "en" ? "Could not send the sign-in code." : "Не удалось отправить код для входа.",
+            ),
           });
           setBusyAction(null);
           return;
         }
 
-        void logClientEvent("signup_complete", {
-          authProvider: "email",
-          lang: locale,
-          path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
-        });
-
+        setEmailCode("");
+        setEmailCodeStep("code");
         setFeedback({
           kind: "success",
           message:
             status.mailMode === "smtp"
               ? locale === "en"
-                ? "Confirmation email sent. Check Inbox and Spam. The account will activate after confirmation."
-                : "Письмо с подтверждением отправлено — проверьте «Входящие» и папку «Спам». После подтверждения аккаунт будет активирован."
+                ? "Code sent. Check Inbox and Spam."
+                : "Код отправлен. Проверьте «Входящие» и папку «Спам»."
               : locale === "en"
-                ? "Account created. For local testing, open the email preview below and confirm the email."
-                : "Аккаунт создан. Для локальной проверки откройте превью письма ниже и подтвердите почту.",
+                ? "Code sent. For local testing, open the email preview below."
+                : "Код отправлен. Для локальной проверки откройте preview письма ниже.",
         });
 
         if (status.mailMode === "ethereal") {
@@ -470,7 +442,7 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       } catch (error) {
         setFeedback({
           kind: "error",
-          message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not create the account." : "Не удалось создать аккаунт."),
+          message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not send the sign-in code." : "Не удалось отправить код для входа."),
         });
         setBusyAction(null);
         return;
@@ -480,44 +452,42 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
       return;
     }
 
-    setBusyAction("signin");
+    setBusyAction("email-code-verify");
     try {
-      const { error } = await authClient.signIn.email(
-        {
-          callbackURL,
-          email,
-          password,
-          rememberMe: true,
-        },
-        {
-          onSuccess: () => {
-            onClose();
-            onSignedIn();
-          },
-        },
-      );
+      const response = await fetch("/api/auth/email-code/verify", {
+        body: JSON.stringify({ code: emailCode, email }),
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
 
-      if (error) {
-        if (error.status === 403) {
-          setFeedback({
-            kind: "info",
-            message: locale === "en" ? "Email is not confirmed yet. Send the email again and finish verification." : "Почта еще не подтверждена. Отправьте письмо повторно и завершите верификацию.",
-          });
-
-          if (status.mailMode === "ethereal") {
-            await loadDevEmailPreview();
-          }
-        } else {
-          setFeedback({
-            kind: "error",
-            message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in." : "Не удалось войти в аккаунт."),
-          });
-        }
+      if (!response.ok) {
+        setFeedback({
+          kind: "error",
+          message: await readResponseErrorMessage(
+            response,
+            locale === "en" ? "Could not verify the sign-in code." : "Не удалось проверить код.",
+          ),
+        });
+        setBusyAction(null);
+        return;
       }
+
+      const result = (await response.json()) as { redirectTo?: unknown };
+      void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
+        authProvider: "email-code",
+        lang: locale,
+        path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+      });
+
+      onClose();
+      onSignedIn();
+      const redirectTo = typeof result.redirectTo === "string" && result.redirectTo ? result.redirectTo : "/app/studio";
+      window.location.assign(redirectTo);
     } catch (error) {
       setFeedback({
         kind: "error",
-        message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in." : "Не удалось войти в аккаунт."),
+        message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not verify the sign-in code." : "Не удалось проверить код."),
       });
     }
 
@@ -662,7 +632,6 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         <button className="signup-modal__close route-close" type="button" aria-label={closeLabel} onClick={onClose}>
           ×
         </button>
-        <p className="signup-modal__eyebrow">{content.eyebrow}</p>
         <h2 id="signup-modal-title">{content.title}</h2>
         {content.lead ? <p className="signup-modal__lead">{content.lead}</p> : null}
 
@@ -700,29 +669,16 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
         </div>
 
         <div className="signup-modal__divider">
-          <span>{locale === "en" ? "or use email" : "или через email"}</span>
+          <span>{locale === "en" ? "or by email" : "или по email"}</span>
         </div>
 
         <form className="signup-form" onSubmit={handleSubmit}>
-          {mode === "signup" && (
-            <label className="signup-field">
-              <span>{locale === "en" ? "Name" : "Имя"}</span>
-              <input
-                autoComplete="name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={locale === "en" ? "Your name" : "Ваше имя"}
-                required
-              />
-            </label>
-          )}
-
           <label className="signup-field">
             <span>Email</span>
             <input
               id="signup-email"
               autoComplete="email"
+              disabled={isBusy || emailCodeStep === "code"}
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -731,25 +687,57 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             />
           </label>
 
-          <label className="signup-field">
-            <span>{locale === "en" ? "Password" : "Пароль"}</span>
-            <input
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={locale === "en" ? "At least 8 characters" : "Минимум 8 символов"}
-              minLength={8}
-              required
-            />
-          </label>
+          {emailCodeStep === "code" ? (
+            <>
+              <label className="signup-field">
+                <span>{locale === "en" ? "Email code" : "Код из письма"}</span>
+                <input
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  pattern="\\d{6}"
+                  type="text"
+                  value={emailCode}
+                  onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="482913"
+                  required
+                />
+              </label>
+
+              <button
+                className="signup-email-code__change route-button"
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  setEmailCode("");
+                  setEmailCodeStep("email");
+                  setFeedback(null);
+                  setDevEmailPreview(null);
+                }}
+              >
+                {locale === "en" ? "Change email" : "Изменить email"}
+              </button>
+            </>
+          ) : null}
 
           <button
-            className={`btn ${mode === "signin" ? "signup-form__submit--dark" : "btn--primary"} signup-form__submit route-button`}
+            className="btn btn--primary signup-form__submit route-button"
             type="submit"
             disabled={isBusy || Boolean(authBackendIssue)}
           >
-            {busyAction === "signup" || busyAction === "signin" ? (locale === "en" ? "Please wait..." : "Подождите...") : content.submit}
+            {busyAction === "email-code-request"
+              ? locale === "en"
+                ? "Sending..."
+                : "Отправляем..."
+              : busyAction === "email-code-verify"
+                ? locale === "en"
+                  ? "Checking..."
+                  : "Проверяем..."
+                : emailCodeStep === "email"
+                  ? locale === "en"
+                    ? "Get code"
+                    : "Получить код"
+                  : content.submit}
           </button>
         </form>
 
@@ -772,20 +760,6 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
             {locale === "en" ? "Open email preview" : "Открыть preview письма"}
           </a>
         )}
-
-        <div className="signup-modal__footer">
-          <p className="signup-modal__switch">
-            <span>{content.switchLabel}</span>
-            <button
-              className="signup-modal__switchbtn route-button"
-              type="button"
-              disabled={isBusy}
-              onClick={() => onModeChange(mode === "signup" ? "signin" : "signup")}
-            >
-              {content.switchMode}
-            </button>
-          </p>
-        </div>
       </div>
     </div>
   );

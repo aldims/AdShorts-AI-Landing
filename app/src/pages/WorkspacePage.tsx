@@ -9404,10 +9404,11 @@ function WorkspaceProjectCard({
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
   const projectDownloadUrl = appendUrlToken(project.videoUrl, "download", project.updatedAt || project.generatedAt || project.id);
   const projectDownloadName = getVideoDownloadName(projectTitle);
-  const canEditProject = Boolean(project.adId);
+  const canUseReadyProjectActions = project.status === "ready" && Boolean(project.videoUrl);
+  const canEditProject = Boolean(project.adId) && canUseReadyProjectActions;
   const canDownloadProject = Boolean(projectDownloadUrl);
   const canAddProjectToExamples = canUseLocalExamples && Boolean(project.videoUrl);
-  const canPublishProject = Boolean(project.adId);
+  const canPublishProject = Boolean(project.adId) && canUseReadyProjectActions;
   const [shouldLoadPreview, setShouldLoadPreview] = useState(false);
   const [hasPreviewFrame, setHasPreviewFrame] = useState(false);
   const [isPreviewVideoReady, setIsPreviewVideoReady] = useState(false);
@@ -9574,7 +9575,7 @@ function WorkspaceProjectCard({
             title={
               canEditProject
                 ? workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")
-                : workspaceText(locale, "Shorts по сегментам доступны после сохранения проекта", "Segment editor is available after the project is saved")
+                : workspaceText(locale, "Shorts по сегментам доступны после готовности проекта", "Segment editor is available after the project is ready")
             }
             disabled={!canEditProject || isProjectActionBusy}
             onClick={() => onEdit(project)}
@@ -9591,7 +9592,7 @@ function WorkspaceProjectCard({
             title={
               canPublishProject
                 ? workspaceText(locale, "Опубликовать", "Publish")
-                : workspaceText(locale, "Публикация доступна после сохранения проекта", "Publishing is available after the project is saved")
+                : workspaceText(locale, "Публикация доступна после готовности проекта", "Publishing is available after the project is ready")
             }
             disabled={!canPublishProject || isProjectActionBusy}
             onClick={() => onPublish(project)}
@@ -15878,6 +15879,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   );
   const shouldPreferMutedModalFallback = true;
   const previewModalDownloadName = getVideoDownloadName(previewModalTitle);
+  const isGeneratedVideoProjectReadyForActions =
+    Boolean(visibleGeneratedVideo?.adId) &&
+    visibleGeneratedVideo?.isReadyForEditor !== false &&
+    String(visibleGeneratedVideo?.readyReason ?? "").trim().toLowerCase() !== "project_not_ready" &&
+    !["processing", "rendering", "queued", "draft", "failed"].includes(
+      String(visibleGeneratedVideo?.projectStatus ?? "").trim().toLowerCase(),
+    );
+  const canPublishPreviewModalVideo = isProjectPreviewModalOpen
+    ? Boolean(projectPreviewModal?.adId && projectPreviewModal.status === "ready" && projectPreviewModal.videoUrl)
+    : isGeneratedVideoProjectReadyForActions;
+  const generatedVideoProjectPreparingTitle = workspaceText(
+    locale,
+    "Проект ещё готовится. Скачать видео уже можно.",
+    "The project is still preparing. The video can already be downloaded.",
+  );
   const projectPreviewModalPanelStyle = isProjectPreviewModalOpen
     ? ({
         "--studio-video-modal-aspect-ratio": String(projectPreviewModalAspectRatio ?? 9 / 16),
@@ -15896,11 +15912,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           type="button"
           aria-label={workspaceText(locale, "Улучшить", "Improve")}
           title={
-            visibleGeneratedVideo?.adId
+            isGeneratedVideoProjectReadyForActions
               ? workspaceText(locale, "Улучшить", "Improve")
-              : workspaceText(locale, "Редактирование доступно после сохранения проекта", "Editing is available after the project is saved")
+              : generatedVideoProjectPreparingTitle
           }
-          disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
+          disabled={!isGeneratedVideoProjectReadyForActions || isSegmentEditorLoading}
           onClick={() => void handleOpenSegmentEditor()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -15913,7 +15929,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
           type="button"
           aria-label={workspaceText(locale, "Опубликовать", "Publish")}
-          title={workspaceText(locale, "Опубликовать", "Publish")}
+          title={isGeneratedVideoProjectReadyForActions ? workspaceText(locale, "Опубликовать", "Publish") : generatedVideoProjectPreparingTitle}
+          disabled={!isGeneratedVideoProjectReadyForActions}
           onClick={() => void handlePublishPreview()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -15953,11 +15970,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           type="button"
           aria-label={workspaceText(locale, "Редактировать сцены", "Edit scenes")}
           title={
-            visibleGeneratedVideo?.adId
+            isGeneratedVideoProjectReadyForActions
               ? workspaceText(locale, "Редактировать сцены", "Edit scenes")
-              : workspaceText(locale, "Редактор сцен доступен после сохранения проекта", "Scene editor is available after the project is saved")
+              : generatedVideoProjectPreparingTitle
           }
-          disabled={!visibleGeneratedVideo?.adId || isSegmentEditorLoading}
+          disabled={!isGeneratedVideoProjectReadyForActions || isSegmentEditorLoading}
           onClick={() => void handleOpenSegmentEditor()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -15969,7 +15986,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
           className="studio-canvas-preview__quick-action"
           type="button"
           aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
-          title={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
+          title={isGeneratedVideoProjectReadyForActions ? workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube") : generatedVideoProjectPreparingTitle}
+          disabled={!isGeneratedVideoProjectReadyForActions}
           onClick={() => void handlePublishPreview()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -18597,6 +18615,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (!projectId) {
       setSegmentEditorError("Редактор Shorts доступен только для сохранённого проекта.");
+      return;
+    }
+
+    if (!isGeneratedVideoProjectReadyForActions) {
+      setSegmentEditorError(generatedVideoProjectPreparingTitle);
       return;
     }
 
@@ -23302,7 +23325,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const handlePublishPreview = async () => {
-    if (!previewModalPublishTargetAdId) {
+    if (!previewModalPublishTargetAdId || !canPublishPreviewModalVideo) {
       setGenerateError("Видео ещё не готово к публикации в YouTube.");
       return;
     }
@@ -23388,6 +23411,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (project.status !== "ready" || !project.videoUrl) {
+      setSegmentEditorError(generatedVideoProjectPreparingTitle);
+      return;
+    }
+
     setActiveTab("studio");
     setStudioView("create");
     if (segmentEditorDraft?.projectId && segmentEditorDraft.projectId !== project.adId) {
@@ -23404,7 +23432,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const handleOpenProjectPublish = async (project: WorkspaceProject) => {
-    if (!project.adId) {
+    if (!project.adId || project.status !== "ready" || !project.videoUrl) {
       setGenerateError("Видео ещё не готово к публикации в YouTube.");
       return;
     }
@@ -28874,7 +28902,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
                   </div>
 
                   <div className="studio-video-modal__actions" aria-label={workspaceText(locale, "Действия с видео", "Video actions")}>
-                        <button className="studio-video-modal__action studio-video-modal__action--primary route-button" type="button" onClick={() => void handlePublishPreview()}>
+                        <button
+                          className="studio-video-modal__action studio-video-modal__action--primary route-button"
+                          type="button"
+                          disabled={!canPublishPreviewModalVideo}
+                          title={canPublishPreviewModalVideo ? workspaceText(locale, "Опубликовать", "Publish") : generatedVideoProjectPreparingTitle}
+                          onClick={() => void handlePublishPreview()}
+                        >
                           {workspaceText(locale, "Опубликовать", "Publish")}
                         </button>
                         <button className="studio-video-modal__action route-button" type="button" onClick={() => void handleRegeneratePreview()}>

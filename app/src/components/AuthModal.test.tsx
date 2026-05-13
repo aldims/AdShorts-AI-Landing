@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,6 @@ const renderAuthModal = (mode: "signup" | "signin") =>
           isOpen
           mode={mode}
           onClose={() => undefined}
-          onModeChange={() => undefined}
           onSignedIn={() => undefined}
         />
       </LocaleProvider>
@@ -54,7 +53,10 @@ describe("AuthModal", () => {
     renderAuthModal("signin");
 
     expect(screen.getByRole("heading", { name: "Войдите в AdShorts AI" })).toBeTruthy();
+    expect(screen.getByText("Если аккаунта ещё нет, мы создадим его автоматически.")).toBeTruthy();
     expect(screen.queryByText("Войдите в личный кабинет AdShorts AI")).toBeNull();
+    expect(screen.queryByText("Новый пользователь?")).toBeNull();
+    expect(screen.queryByText("Создать аккаунт")).toBeNull();
     await waitFor(() => expect(screen.getByText("Google")).toBeTruthy());
     expect(screen.queryByText("Telegram")).toBeNull();
     expect(screen.queryByText("Скоро")).toBeNull();
@@ -74,5 +76,28 @@ describe("AuthModal", () => {
     renderAuthModal("signup");
 
     await waitFor(() => expect(screen.getByText("Telegram")).toBeTruthy());
+  });
+
+  it("uses an email code instead of a password", async () => {
+    renderAuthModal("signin");
+
+    await waitFor(() => expect(screen.getByText("Google")).toBeTruthy());
+    expect(screen.queryByLabelText("Пароль")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Получить код" }));
+
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        "/api/auth/email-code/request",
+        expect.objectContaining({
+          method: "POST",
+        }),
+      ),
+    );
+    expect(await screen.findByLabelText("Код из письма")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Войти" })).toBeTruthy();
   });
 });
