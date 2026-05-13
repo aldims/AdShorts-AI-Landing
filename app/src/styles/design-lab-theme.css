@@ -22317,6 +22317,7 @@ textarea {
   overflow: hidden;
   border-radius: 24px;
   background: rgba(5, 9, 18, 0.85);
+  container: studio-segment-editor-card / inline-size;
   box-shadow:
     0 0 0 1px var(--studio-border),
     0 25px 50px -12px rgba(0, 0, 0, 0.4);
@@ -22498,7 +22499,7 @@ textarea {
   display: grid;
   justify-items: center;
   gap: 10px;
-  width: min(100%, 92%);
+  width: min(100%, 96%);
 }
 
 .studio-segment-editor__subtitle-meta {
@@ -22626,8 +22627,26 @@ textarea {
 .studio-segment-editor__subtitle .studio-subtitle-selector__example-caption {
   min-height: var(--studio-segment-editor-subtitle-shell-min-height);
   align-content: start;
+  width: min(100%, calc(var(--subtitle-preview-caption-width) + 18%));
   margin-top: 0;
   padding-bottom: 0;
+}
+
+.studio-segment-editor__subtitle .studio-subtitle-selector__example-line {
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+
+@supports (font-size: 1cqw) {
+  .studio-segment-editor__subtitle .studio-subtitle-selector__example-caption {
+    gap: clamp(3px, 1.2cqw, var(--subtitle-preview-line-gap));
+    font-size: clamp(10px, 5cqw, var(--subtitle-preview-font-size));
+  }
+
+  .studio-segment-editor__subtitle.is-compact .studio-subtitle-selector__example-caption {
+    gap: clamp(2px, 1cqw, var(--subtitle-preview-line-gap));
+    font-size: clamp(9px, 4.5cqw, var(--subtitle-preview-font-size));
+  }
 }
 
 .studio-segment-editor__subtitle-caption-trigger {
@@ -25612,6 +25631,17 @@ textarea {
   justify-content: flex-start;
 }
 
+.studio-segment-editor__subtitle .studio-subtitle-selector__example-caption[data-style="cinema"] {
+  width: min(100%, calc(var(--subtitle-preview-caption-width) + 18%));
+  padding: 8px 10px;
+}
+
+@supports (font-size: 1cqw) {
+  .studio-segment-editor__subtitle .studio-subtitle-selector__example-caption[data-style="cinema"] {
+    font-size: clamp(10px, 4.75cqw, var(--subtitle-preview-font-size));
+  }
+}
+
 .studio-subtitle-selector__example-line {
   display: flex;
   flex-wrap: wrap;
@@ -25621,6 +25651,10 @@ textarea {
 
 .studio-subtitle-selector__example-word {
   color: rgba(255, 255, 255, 0.96);
+  hyphens: none;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: keep-all;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.85),
     0 3px 12px rgba(0, 0, 0, 0.4);
