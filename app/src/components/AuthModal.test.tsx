@@ -97,7 +97,48 @@ describe("AuthModal", () => {
         }),
       ),
     );
-    expect(await screen.findByLabelText("Код из письма")).toBeTruthy();
+    expect((await screen.findByLabelText("Код из письма")).getAttribute("placeholder")).toBe("Введите код");
     expect(screen.getByRole("button", { name: "Войти" })).toBeTruthy();
+  });
+
+  it("does not rely on native pattern validation for the email code", async () => {
+    renderAuthModal("signin");
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Получить код" }));
+
+    const codeInput = await screen.findByLabelText<HTMLInputElement>("Код из письма");
+    fireEvent.change(codeInput, {
+      target: { value: "973829" },
+    });
+
+    expect(codeInput.getAttribute("pattern")).toBeNull();
+    expect(codeInput.closest("form")?.noValidate).toBe(true);
+    expect(codeInput.checkValidity()).toBe(true);
+  });
+
+  it("shows an app error for an incomplete email code", async () => {
+    renderAuthModal("signin");
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Получить код" }));
+
+    const codeInput = await screen.findByLabelText<HTMLInputElement>("Код из письма");
+    vi.mocked(fetch).mockClear();
+
+    fireEvent.change(codeInput, {
+      target: { value: "23485" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Войти" }));
+
+    expect(await screen.findByText("Введите 6-значный код из письма.")).toBeTruthy();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalledWith(
+      "/api/auth/email-code/verify",
+      expect.anything(),
+    );
   });
 });

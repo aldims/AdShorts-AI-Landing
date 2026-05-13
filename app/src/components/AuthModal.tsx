@@ -123,6 +123,8 @@ const readResponseErrorMessage = async (response: Response, fallback: string) =>
   }
 };
 
+const normalizeEmailCode = (value: string) => value.replace(/\D/g, "").slice(0, 6);
+
 const buildTelegramLoginUrl = (config: TelegramAuthConfig, locale: Locale) => {
   const scopes = ["openid", "profile"];
   for (const access of config.requestAccess ?? []) {
@@ -452,10 +454,23 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       return;
     }
 
+    const normalizedEmailCode = normalizeEmailCode(emailCode);
+    if (normalizedEmailCode !== emailCode) {
+      setEmailCode(normalizedEmailCode);
+    }
+
+    if (normalizedEmailCode.length !== 6) {
+      setFeedback({
+        kind: "error",
+        message: locale === "en" ? "Enter the 6-digit code from the email." : "Введите 6-значный код из письма.",
+      });
+      return;
+    }
+
     setBusyAction("email-code-verify");
     try {
       const response = await fetch("/api/auth/email-code/verify", {
-        body: JSON.stringify({ code: emailCode, email }),
+        body: JSON.stringify({ code: normalizedEmailCode, email }),
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -672,7 +687,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
           <span>{locale === "en" ? "or by email" : "или по email"}</span>
         </div>
 
-        <form className="signup-form" onSubmit={handleSubmit}>
+        <form className="signup-form" onSubmit={handleSubmit} noValidate>
           <label className="signup-field">
             <span>Email</span>
             <input
@@ -695,11 +710,10 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
                   autoComplete="one-time-code"
                   inputMode="numeric"
                   maxLength={6}
-                  pattern="\\d{6}"
                   type="text"
                   value={emailCode}
-                  onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="482913"
+                  onChange={(event) => setEmailCode(normalizeEmailCode(event.target.value))}
+                  placeholder={locale === "en" ? "Enter code" : "Введите код"}
                   required
                 />
               </label>
