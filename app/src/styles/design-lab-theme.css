@@ -16197,7 +16197,7 @@ textarea {
     border-radius: 24px;
   }
 
-  .signup-modal__social {
+  .signup-modal__social:not(.signup-modal__social--paired) {
     grid-template-columns: 1fr;
   }
 

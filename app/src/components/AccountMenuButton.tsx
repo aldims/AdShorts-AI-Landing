@@ -2,17 +2,19 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useLocale } from "../lib/i18n";
 
 type Props = {
+  displayEmail?: string;
   email: string;
   name: string;
   onLogout: () => void | Promise<void>;
   plan: string;
 };
 
-export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
+export function AccountMenuButton({ displayEmail, email, name, onLogout, plan }: Props) {
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const accountDisplayEmail = displayEmail?.trim() || email;
   const accountInitials =
     name
       .split(/\s+/)
@@ -72,7 +74,7 @@ export function AccountMenuButton({ email, name, onLogout, plan }: Props) {
             <div className="account-menu__badge">{plan.toUpperCase()}</div>
             <div className="account-menu__identity">
               <strong>{name}</strong>
-              <span>{email}</span>
+              <span>{accountDisplayEmail}</span>
             </div>
             <button className="account-menu__action route-button" type="button" onClick={handleLogout}>
               {locale === "en" ? "Log out" : "Выход"}

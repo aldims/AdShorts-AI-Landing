@@ -47,6 +47,7 @@ type AuthMode = "signup" | "signin";
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 
 type Session = {
+  displayEmail?: string;
   email: string;
   emailVerified: boolean;
   name: string;
@@ -77,6 +78,11 @@ type ImpersonationState = {
   adsflowUserId: string;
   email: string;
   expiresAt: string;
+};
+
+type AccountDisplayState = {
+  displayEmail?: string;
+  telegramUsername?: string | null;
 };
 
 const WORKSPACE_PROFILE_STORAGE_KEY_PREFIX = "adshorts.workspace-profile:";
@@ -528,17 +534,52 @@ export function App() {
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
   const [isWorkspaceProfilePending, setIsWorkspaceProfilePending] = useState(false);
   const [impersonation, setImpersonation] = useState<ImpersonationState | null>(() => readImpersonationState());
+  const [accountDisplay, setAccountDisplay] = useState<AccountDisplayState | null>(null);
 
   const session = useMemo<Session | null>(() => {
     if (!authSession?.user) return null;
 
     return {
+      displayEmail: accountDisplay?.displayEmail,
       email: authSession.user.email,
       emailVerified: authSession.user.emailVerified,
       name: authSession.user.name,
       plan: "FREE",
     };
-  }, [authSession]);
+  }, [accountDisplay?.displayEmail, authSession]);
+
+  useEffect(() => {
+    if (!authSession?.user) {
+      setAccountDisplay(null);
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadAccountDisplay = async () => {
+      try {
+        const response = await fetch("/api/me", { credentials: "include" });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as { user?: { displayEmail?: unknown; telegramUsername?: unknown } } | null;
+        if (isCancelled) return;
+
+        const displayEmail = typeof payload?.user?.displayEmail === "string" ? payload.user.displayEmail.trim() : "";
+        const telegramUsername = typeof payload?.user?.telegramUsername === "string" ? payload.user.telegramUsername.trim() : null;
+        setAccountDisplay(displayEmail || telegramUsername ? { displayEmail: displayEmail || undefined, telegramUsername } : null);
+      } catch {
+        if (!isCancelled) {
+          setAccountDisplay(null);
+        }
+      }
+    };
+
+    void loadAccountDisplay();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authSession?.user?.email, authSession?.user?.id]);
 
   useEffect(() => {
     const referralSource = readWebReferralSourceFromLocation(location);

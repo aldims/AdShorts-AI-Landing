@@ -11,6 +11,7 @@ import { writeStudioEntryIntent, type StudioEntryIntentSection } from "../lib/st
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 
 type Session = {
+  displayEmail?: string;
   name: string;
   email: string;
   plan: string;
@@ -769,7 +770,7 @@ export function ExamplesPage({
             {session ? (
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
-                <AccountMenuButton email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
+                <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
               </>
             ) : (
               <button className="site-header__signin route-button" type="button" onClick={onOpenSignin}>

@@ -23,6 +23,7 @@ import {
 } from "../lib/payment-return";
 
 type Session = {
+  displayEmail?: string;
   name: string;
   email: string;
   plan: string;
@@ -855,6 +856,7 @@ export function PricingPage({
               <>
                 <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
                 <AccountMenuButton
+                  displayEmail={session.displayEmail}
                   email={session.email}
                   name={session.name}
                   onLogout={onLogout}

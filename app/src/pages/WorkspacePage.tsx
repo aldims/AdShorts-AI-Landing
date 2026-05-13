@@ -97,6 +97,7 @@ type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 
 type Session = {
+  displayEmail?: string;
   name: string;
   email: string;
   plan: string;
@@ -26091,7 +26092,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             <div className="site-header__actions">
               <LanguageSwitcher />
               <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
-              <AccountMenuButton email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+              <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
             </div>
           </div>
         </header>
@@ -29269,7 +29270,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             >
               Telegram
             </a>
-            <AccountMenuButton email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+            <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
           </div>
         </div>
       </header>

@@ -187,17 +187,62 @@ type TelegramProfile = {
   username?: string;
 };
 
+const TELEGRAM_USERNAME_SCOPE_PREFIX = "telegram_username:";
+
+const normalizeTelegramUsername = (value: string | null | undefined) => {
+  const normalized = String(value ?? "").trim().replace(/^@/, "");
+  return /^[A-Za-z0-9_]{5,32}$/.test(normalized) ? normalized : null;
+};
+
+const buildTelegramAccountScope = (username: string | null | undefined) => {
+  const normalizedUsername = normalizeTelegramUsername(username);
+  return ["openid", "profile", normalizedUsername ? `${TELEGRAM_USERNAME_SCOPE_PREFIX}${normalizedUsername}` : null]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const readTelegramUsernameFromAccountScope = (scope: unknown) => {
+  const scopeParts = String(scope ?? "").split(/\s+/).filter(Boolean);
+  const usernamePart = scopeParts.find((part) => part.startsWith(TELEGRAM_USERNAME_SCOPE_PREFIX));
+  return normalizeTelegramUsername(usernamePart?.slice(TELEGRAM_USERNAME_SCOPE_PREFIX.length));
+};
+
+const getAuthAdapter = async () => {
+  const ctx = await (auth as unknown as { $context: Promise<{ adapter: unknown }> }).$context;
+  return ctx.adapter as {
+    findOne: <T>(options: { model: string; where: { field: string; value: string }[] }) => Promise<T | null>;
+    create: <T>(options: { model: string; data: Record<string, unknown> }) => Promise<T>;
+    update: <T>(options: { model: string; where: { field: string; value: string }[]; update: Record<string, unknown> }) => Promise<T>;
+  };
+};
+
+export async function getTelegramAccountDisplay(userId: string) {
+  if (!userId) return null;
+
+  const adapter = await getAuthAdapter();
+  const account = await adapter.findOne<{ accountId: string; scope?: string | null }>({
+    model: "account",
+    where: [
+      { field: "userId", value: userId },
+      { field: "providerId", value: "telegram" },
+    ],
+  });
+
+  if (!account) return null;
+
+  const username = readTelegramUsernameFromAccountScope(account.scope);
+  return {
+    label: username ? `@${username}` : `Telegram ID ${account.accountId}`,
+    username,
+  };
+}
+
 export async function signInWithTelegram(
   profile: TelegramProfile,
   req: Request,
   res: Response,
 ): Promise<{ user: { id: string; email: string; name: string } }> {
-  const ctx = await (auth as unknown as { $context: Promise<{ adapter: unknown }> }).$context;
-  const adapter = ctx.adapter as {
-    findOne: <T>(options: { model: string; where: { field: string; value: string }[] }) => Promise<T | null>;
-    create: <T>(options: { model: string; data: Record<string, unknown> }) => Promise<T>;
-    update: <T>(options: { model: string; where: { field: string; value: string }[]; update: Record<string, unknown> }) => Promise<T>;
-  };
+  const adapter = await getAuthAdapter();
 
   let account = await adapter.findOne<{ userId: string }>({
     model: "account",
@@ -211,6 +256,18 @@ export async function signInWithTelegram(
 
   if (account) {
     userId = account.userId;
+
+    await adapter.update({
+      model: "account",
+      where: [
+        { field: "providerId", value: "telegram" },
+        { field: "accountId", value: profile.telegramId },
+      ],
+      update: {
+        scope: buildTelegramAccountScope(profile.username),
+        updatedAt: new Date(),
+      },
+    });
 
     await adapter.update({
       model: "user",
@@ -249,6 +306,7 @@ export async function signInWithTelegram(
         userId,
         providerId: "telegram",
         accountId: profile.telegramId,
+        scope: buildTelegramAccountScope(profile.username),
         createdAt: new Date(),
         updatedAt: new Date(),
       },

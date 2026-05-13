@@ -6,7 +6,7 @@ import express from "express";
 import cors from "cors";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 
-import { auth, ensureAuthSchema, signInWithTelegram } from "./auth.js";
+import { auth, ensureAuthSchema, getTelegramAccountDisplay, signInWithTelegram } from "./auth.js";
 import { authDatabaseConfig } from "./database.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus } from "./mail.js";
@@ -1379,7 +1379,29 @@ app.get("/api/me", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
-  res.json(session);
+
+  if (!session?.user?.id) {
+    res.json(session);
+    return;
+  }
+
+  const telegramDisplay = await getTelegramAccountDisplay(session.user.id).catch((error: unknown) => {
+    console.warn("[telegram] Failed to load Telegram account display", error);
+    return null;
+  });
+
+  res.json(
+    telegramDisplay
+      ? {
+          ...session,
+          user: {
+            ...session.user,
+            displayEmail: telegramDisplay.label,
+            telegramUsername: telegramDisplay.username ? `@${telegramDisplay.username}` : null,
+          },
+        }
+      : session,
+  );
 });
 
 app.get("/api/examples/local", async (req, res) => {
