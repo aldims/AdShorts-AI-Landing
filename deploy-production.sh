@@ -16,6 +16,7 @@ PROD_API_HOST="${PROD_API_HOST:-127.0.0.1}"
 PROD_API_PORT="${PROD_API_PORT:-4175}"
 PROD_DB_NAME="${PROD_DB_NAME:-adshorts_prod}"
 PROD_DB_USER="${PROD_DB_USER:-adshorts_prod}"
+PROD_SHARED_ENV_FILE="${PROD_SHARED_ENV_FILE:-}"
 STAGING_APP_DIR="${STAGING_APP_DIR:-/home/aldima/AdShorts-AI-staging/app}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
@@ -108,7 +109,7 @@ rsync -az --delete "$LOCAL_EXAMPLES_DIR/" "$PROD_SSH:$PROD_APP_DIR/data/local-ex
 
 echo "[production] configure runtime, caddy and service"
 ssh "${SSH_OPTS[@]}" "$PROD_SSH" \
-  "PROD_APP_DIR='$PROD_APP_DIR' PROD_STATIC_DIR='$PROD_STATIC_DIR' PROD_SERVICE='$PROD_SERVICE' PROD_URL='$PROD_URL' PROD_API_HOST='$PROD_API_HOST' PROD_API_PORT='$PROD_API_PORT' PROD_DB_NAME='$PROD_DB_NAME' PROD_DB_USER='$PROD_DB_USER' STAGING_APP_DIR='$STAGING_APP_DIR' bash -s" <<'REMOTE'
+  "PROD_APP_DIR='$PROD_APP_DIR' PROD_STATIC_DIR='$PROD_STATIC_DIR' PROD_SERVICE='$PROD_SERVICE' PROD_URL='$PROD_URL' PROD_API_HOST='$PROD_API_HOST' PROD_API_PORT='$PROD_API_PORT' PROD_DB_NAME='$PROD_DB_NAME' PROD_DB_USER='$PROD_DB_USER' PROD_SHARED_ENV_FILE='$PROD_SHARED_ENV_FILE' STAGING_APP_DIR='$STAGING_APP_DIR' bash -s" <<'REMOTE'
 set -euo pipefail
 
 validate_identifier() {
@@ -170,12 +171,13 @@ SQL
   AUTH_DATABASE_URL="postgresql://$PROD_DB_USER:$DB_PASS@127.0.0.1:5432/$PROD_DB_NAME"
 fi
 
-node --input-type=module - "$STAGING_ENV_FILE" "$PROD_ENV_FILE" "$AUTH_DATABASE_URL" "$PROD_URL" "$PROD_API_HOST" "$PROD_API_PORT" <<'NODE'
+node --input-type=module - "$STAGING_ENV_FILE" "$PROD_ENV_FILE" "$AUTH_DATABASE_URL" "$PROD_URL" "$PROD_API_HOST" "$PROD_API_PORT" "$PROD_SHARED_ENV_FILE" <<'NODE'
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { dirname, isAbsolute, resolve } from "node:path";
 import dotenv from "dotenv";
 
-const [stagingEnvFile, prodEnvFile, authDatabaseUrl, prodUrl, prodApiHost, prodApiPort] = process.argv.slice(2);
+const [stagingEnvFile, prodEnvFile, authDatabaseUrl, prodUrl, prodApiHost, prodApiPort, prodSharedEnvFile] = process.argv.slice(2);
 const readEnv = (filePath) => (existsSync(filePath) ? dotenv.parse(readFileSync(filePath)) : {});
 const staging = readEnv(stagingEnvFile);
 const existing = readEnv(prodEnvFile);
@@ -230,6 +232,29 @@ Object.assign(merged, {
   AUTH_SERVER_PORT: prodApiPort,
   AUTH_DATABASE_URL: existing.AUTH_DATABASE_URL?.trim() || authDatabaseUrl,
 });
+
+const resolveSharedEnvFile = (value) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return isAbsolute(text) ? text : resolve(dirname(prodEnvFile), text);
+};
+const sharedEnvCandidates = [
+  prodSharedEnvFile,
+  existing.ADSHORTS_SHARED_ENV_FILE,
+  staging.ADSHORTS_SHARED_ENV_FILE,
+  "/home/aldima/AdsFlow-AI/services/worker/.env",
+  "/home/aldima/AdsFlow-AI/services/bot/.env",
+  "/home/aldima/AdsFlow-AI/bot/.env",
+  "/home/aldima/AdsFlow-AI/.env",
+]
+  .map(resolveSharedEnvFile)
+  .filter(Boolean);
+const resolvedSharedEnvFile = sharedEnvCandidates.find((filePath) => existsSync(filePath));
+if (resolvedSharedEnvFile) {
+  merged.ADSHORTS_SHARED_ENV_FILE = resolvedSharedEnvFile;
+} else {
+  delete merged.ADSHORTS_SHARED_ENV_FILE;
+}
 
 if (!merged.BETTER_AUTH_SECRET?.trim()) {
   merged.BETTER_AUTH_SECRET = randomBytes(32).toString("hex");
@@ -294,11 +319,30 @@ if (merged.APP_URL !== "https://adshortsai.com" || merged.BETTER_AUTH_URL !== "h
 }
 
 const sharedEnv = String(merged.ADSHORTS_SHARED_ENV_FILE ?? "").trim();
+const effectiveEnv = { ...merged };
 if (sharedEnv) {
   const resolvedSharedEnv = isAbsolute(sharedEnv) ? sharedEnv : resolve(process.cwd(), sharedEnv);
   if (!existsSync(resolvedSharedEnv)) {
     throw new Error(`ADSHORTS_SHARED_ENV_FILE points to a missing file: ${resolvedSharedEnv}`);
   }
+  Object.assign(effectiveEnv, dotenv.parse(readFileSync(resolvedSharedEnv)), merged);
+}
+const normalizedOpenRouterApiKey = String(effectiveEnv.OPENROUTER_API_KEY ?? "").trim().toLowerCase();
+if (
+  !normalizedOpenRouterApiKey ||
+  normalizedOpenRouterApiKey === "your_api_key" ||
+  normalizedOpenRouterApiKey === "your-openrouter-api-key" ||
+  normalizedOpenRouterApiKey === "openrouter_api_key" ||
+  normalizedOpenRouterApiKey === "changeme" ||
+  normalizedOpenRouterApiKey === "change-me" ||
+  normalizedOpenRouterApiKey === "replace_me" ||
+  normalizedOpenRouterApiKey === "replace-me" ||
+  normalizedOpenRouterApiKey.includes("your_api") ||
+  normalizedOpenRouterApiKey.includes("placeholder")
+) {
+  throw new Error(
+    `Missing OPENROUTER_API_KEY for production backend. Set it in ${prodEnvFile}, set PROD_SHARED_ENV_FILE, or create a valid ADSHORTS_SHARED_ENV_FILE.`,
+  );
 }
 NODE
 

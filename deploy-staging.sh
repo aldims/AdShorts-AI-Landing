@@ -10,6 +10,7 @@ STAGING_APP_DIR="${STAGING_APP_DIR:-/home/aldima/AdShorts-AI-staging/app}"
 STAGING_STATIC_DIR="${STAGING_STATIC_DIR:-/home/aldima/AdShorts-AI-staging-static}"
 STAGING_SERVICE="${STAGING_SERVICE:-adshorts-staging-api}"
 STAGING_URL="${STAGING_URL:-https://staging.adshortsai.com}"
+STAGING_SHARED_ENV_FILE="${STAGING_SHARED_ENV_FILE:-}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
 
 if [ ! -d "$APP_DIR" ]; then
@@ -73,13 +74,13 @@ rsync -az --delete "$LOCAL_EXAMPLES_DIR/" "$STAGING_SSH:$STAGING_APP_DIR/data/lo
 
 echo "[staging] validate OpenRouter config, restart and verify"
 ssh "${SSH_OPTS[@]}" "$STAGING_SSH" \
-  "STAGING_APP_DIR='$STAGING_APP_DIR' STAGING_SERVICE='$STAGING_SERVICE' STAGING_URL='$STAGING_URL' bash -s" <<'REMOTE'
+  "STAGING_APP_DIR='$STAGING_APP_DIR' STAGING_SERVICE='$STAGING_SERVICE' STAGING_URL='$STAGING_URL' STAGING_SHARED_ENV_FILE='$STAGING_SHARED_ENV_FILE' bash -s" <<'REMOTE'
 set -euo pipefail
 
 cd "$STAGING_APP_DIR"
 
 node --input-type=module <<'NODE'
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
 import dotenv from "dotenv";
@@ -99,14 +100,39 @@ if (existsSync(appEnvFile)) {
   mergeEnvFile(appEnvFile);
 }
 
-const sharedEnvFile = String(mergedEnv.ADSHORTS_SHARED_ENV_FILE ?? "").trim();
-if (sharedEnvFile) {
-  const resolvedSharedEnvFile = isAbsolute(sharedEnvFile) ? sharedEnvFile : resolve(appDir, sharedEnvFile);
-  if (!existsSync(resolvedSharedEnvFile)) {
-    throw new Error(`ADSHORTS_SHARED_ENV_FILE points to a missing file: ${resolvedSharedEnvFile}`);
+const resolveSharedEnvFile = (value) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return isAbsolute(text) ? text : resolve(appDir, text);
+};
+const sharedEnvCandidates = [
+  process.env.STAGING_SHARED_ENV_FILE,
+  mergedEnv.ADSHORTS_SHARED_ENV_FILE,
+  "/home/aldima/AdsFlow-AI/services/worker/.env",
+  "/home/aldima/AdsFlow-AI/services/bot/.env",
+  "/home/aldima/AdsFlow-AI/bot/.env",
+  "/home/aldima/AdsFlow-AI/.env",
+]
+  .map(resolveSharedEnvFile)
+  .filter(Boolean);
+const resolvedSharedEnvFile = sharedEnvCandidates.find((filePath) => existsSync(filePath));
+if (resolvedSharedEnvFile) {
+  const currentSharedEnvFile = resolveSharedEnvFile(mergedEnv.ADSHORTS_SHARED_ENV_FILE);
+  if (currentSharedEnvFile !== resolvedSharedEnvFile) {
+    const currentEnvText = existsSync(appEnvFile) ? readFileSync(appEnvFile, "utf8") : "";
+    const nextLine = `ADSHORTS_SHARED_ENV_FILE=${resolvedSharedEnvFile}`;
+    const nextEnvText = /^ADSHORTS_SHARED_ENV_FILE=.*$/m.test(currentEnvText)
+      ? currentEnvText.replace(/^ADSHORTS_SHARED_ENV_FILE=.*$/m, nextLine)
+      : `${currentEnvText.replace(/\s*$/, "")}\n${nextLine}\n`;
+    writeFileSync(appEnvFile, nextEnvText, { mode: 0o600 });
+    mergedEnv.ADSHORTS_SHARED_ENV_FILE = resolvedSharedEnvFile;
   }
 
   mergeEnvFile(resolvedSharedEnvFile);
+} else if (String(mergedEnv.ADSHORTS_SHARED_ENV_FILE ?? "").trim()) {
+  throw new Error(
+    `ADSHORTS_SHARED_ENV_FILE points to a missing file and no fallback shared env was found. Set STAGING_SHARED_ENV_FILE or fix ${appEnvFile}.`,
+  );
 }
 
 if (!String(mergedEnv.OPENROUTER_API_KEY ?? "").trim()) {
