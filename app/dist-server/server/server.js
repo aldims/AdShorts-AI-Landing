@@ -16,7 +16,7 @@ import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, inv
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
-import { verifyTelegramLogin, getTelegramUserProfile } from "./telegram.js";
+import { createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramLoginNonce, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, verifyTelegramLogin, } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
@@ -602,23 +602,82 @@ app.get("/api/auth/dev/last-email", (_req, res) => {
     }
     res.json({ data: getLastDevEmailPreview() });
 });
+const readTelegramLoginField = (value) => {
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    if (typeof rawValue !== "string" && typeof rawValue !== "number") {
+        return "";
+    }
+    return String(rawValue);
+};
+const parseTelegramLoginData = (source) => {
+    const id = Number(readTelegramLoginField(source.id));
+    const authDate = Number(readTelegramLoginField(source.auth_date));
+    const firstName = readTelegramLoginField(source.first_name);
+    const hash = readTelegramLoginField(source.hash).trim();
+    if (!Number.isFinite(id) || !Number.isFinite(authDate) || !firstName || !hash) {
+        return null;
+    }
+    const loginData = {
+        auth_date: authDate,
+        first_name: firstName,
+        hash,
+        id,
+    };
+    const lastName = readTelegramLoginField(source.last_name);
+    const username = readTelegramLoginField(source.username);
+    const photoUrl = readTelegramLoginField(source.photo_url);
+    if (lastName)
+        loginData.last_name = lastName;
+    if (username)
+        loginData.username = username;
+    if (photoUrl)
+        loginData.photo_url = photoUrl;
+    return loginData;
+};
+const getRequestCookie = (req, name) => {
+    const cookieHeader = req.header("cookie");
+    if (!cookieHeader)
+        return null;
+    for (const cookie of cookieHeader.split(";")) {
+        const [rawKey, ...rawValueParts] = cookie.trim().split("=");
+        if (rawKey === name) {
+            return decodeURIComponent(rawValueParts.join("="));
+        }
+    }
+    return null;
+};
+const getTelegramNonceCookieBaseOptions = () => ({
+    httpOnly: true,
+    path: "/api/auth/telegram",
+    sameSite: "lax",
+    secure: env.isProduction || env.authBaseUrl.startsWith("https://"),
+});
+const getTelegramNonceCookieOptions = () => ({
+    ...getTelegramNonceCookieBaseOptions(),
+    maxAge: TELEGRAM_LOGIN_NONCE_MAX_AGE_MS,
+});
 app.get("/api/auth/telegram/config", (_req, res) => {
-    if (!authProviderStatus.telegramEnabled || !env.telegramBotId || !env.telegramBotUsername) {
+    if (!authProviderStatus.telegramEnabled || !env.telegramBotId) {
         res.status(404).json({ error: "Telegram login not configured." });
         return;
     }
+    const nonce = createTelegramLoginNonce();
+    res.cookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, serializeTelegramLoginNonce(nonce), getTelegramNonceCookieOptions());
     res.json({
         botId: env.telegramBotId,
-        botUsername: env.telegramBotUsername,
-        requestAccess: "write",
+        botUsername: env.telegramBotUsername ?? "",
+        clientId: env.telegramBotId,
+        nonce,
+        requestAccess: ["write"],
     });
 });
 app.get("/api/auth/telegram/login", (_req, res) => {
-    if (!authProviderStatus.telegramEnabled || !env.telegramBotUsername) {
+    if (!authProviderStatus.telegramEnabled || !env.telegramBotId) {
         res.status(400).send("Telegram login not configured.");
         return;
     }
-    const authUrl = `${env.appUrl}/api/auth/telegram/redirect`;
+    const nonce = createTelegramLoginNonce();
+    res.cookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, serializeTelegramLoginNonce(nonce), getTelegramNonceCookieOptions());
     res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -645,17 +704,89 @@ app.get("/api/auth/telegram/login", (_req, res) => {
 </head>
 <body>
   <h1>Войти через Telegram</h1>
-  
   <div id="tg-widget">
-    <script async src="https://telegram.org/js/telegram-widget.js?22"
-            data-telegram-login="${env.telegramBotUsername}"
-            data-size="large"
-            data-radius="8"
-            data-auth-url="${authUrl}"
-            data-request-access="write"></script>
+    <button id="tg-auth-button" type="button">Log in with Telegram</button>
   </div>
-  
   <a class="back" href="/">← Вернуться на сайт</a>
+  <script>
+    const TELEGRAM_OIDC_ORIGIN = "https://oauth.telegram.org";
+    const telegramButton = document.getElementById("tg-auth-button");
+
+    function buildTelegramLoginUrl() {
+      const params = new URLSearchParams({
+        client_id: "${env.telegramBotId}",
+        redirect_uri: window.location.origin + "/",
+        response_type: "post_message",
+        scope: "openid profile telegram:bot_access",
+        nonce: "${nonce}",
+        code_challenge: "${nonce}",
+        code_challenge_method: "plain",
+        lang: "ru"
+      });
+
+      return TELEGRAM_OIDC_ORIGIN + "/auth?" + params.toString();
+    }
+
+    async function onTelegramAuth(data) {
+      if (!data || data.error || !data.id_token) {
+        alert("Не удалось войти через Telegram.");
+        return;
+      }
+
+      const response = await fetch("/api/auth/telegram/callback", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: data.id_token })
+      });
+
+      if (!response.ok) {
+        alert("Не удалось войти через Telegram.");
+        return;
+      }
+
+      const result = await response.json();
+      window.location.assign(result.redirectTo || "/app/studio");
+    }
+
+    telegramButton.addEventListener("click", () => {
+      const popup = window.open(
+        buildTelegramLoginUrl(),
+        "telegram_oidc_login",
+        "width=550,height=650,status=0,location=0,menubar=0,toolbar=0"
+      );
+
+      if (!popup) {
+        alert("Окно Telegram было заблокировано браузером.");
+      }
+
+      function onMessage(event) {
+        if (event.origin !== TELEGRAM_OIDC_ORIGIN) return;
+
+        let payload;
+        try {
+          payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        } catch {
+          return;
+        }
+
+        if (!payload || payload.event !== "auth_result") return;
+        window.removeEventListener("message", onMessage);
+        popup?.close();
+
+        if (payload.error) {
+          alert("Не удалось войти через Telegram.");
+          return;
+        }
+
+        const idToken = typeof payload.result === "string" ? payload.result : payload.result?.id_token;
+        void onTelegramAuth({ id_token: idToken });
+      }
+
+      window.addEventListener("message", onMessage);
+      popup?.focus();
+    });
+  </script>
 </body>
 </html>`);
 });
@@ -664,20 +795,11 @@ app.get("/api/auth/telegram/redirect", async (req, res) => {
         res.redirect("/?error=telegram_not_configured");
         return;
     }
-    const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.query;
-    if (!id || !hash || !auth_date) {
+    const loginData = parseTelegramLoginData(req.query);
+    if (!loginData) {
         res.redirect("/?error=invalid_telegram_data");
         return;
     }
-    const loginData = {
-        id: Number(id),
-        first_name: String(first_name || ""),
-        last_name: last_name ? String(last_name) : undefined,
-        username: username ? String(username) : undefined,
-        photo_url: photo_url ? String(photo_url) : undefined,
-        auth_date: Number(auth_date),
-        hash: String(hash),
-    };
     if (!verifyTelegramLogin(loginData)) {
         console.warn("[telegram] Invalid login data or hash verification failed");
         res.redirect("/?error=invalid_telegram_hash");
@@ -698,7 +820,38 @@ app.post("/api/auth/telegram/callback", express.json(), async (req, res) => {
         res.status(400).json({ error: "Telegram login not configured." });
         return;
     }
-    const loginData = req.body;
+    const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+    const idToken = typeof requestBody.id_token === "string" ? requestBody.id_token.trim() : "";
+    if (idToken) {
+        const nonce = parseTelegramLoginNonce(getRequestCookie(req, TELEGRAM_LOGIN_NONCE_COOKIE_NAME));
+        res.clearCookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, getTelegramNonceCookieBaseOptions());
+        if (!nonce) {
+            res.status(401).json({ error: "Invalid Telegram login session." });
+            return;
+        }
+        try {
+            const profile = await getTelegramUserProfileFromIdToken(idToken, {
+                clientId: env.telegramBotId,
+                nonce,
+            });
+            const result = await signInWithTelegram(profile, req, res);
+            res.json({
+                success: true,
+                user: result.user,
+                redirectTo: "/app/studio",
+            });
+        }
+        catch (error) {
+            console.error("[telegram] Failed to verify Telegram id token", error);
+            res.status(401).json({ error: "Invalid Telegram login data." });
+        }
+        return;
+    }
+    const loginData = parseTelegramLoginData(requestBody);
+    if (!loginData) {
+        res.status(400).json({ error: "Invalid Telegram login data." });
+        return;
+    }
     if (!verifyTelegramLogin(loginData)) {
         console.warn("[telegram] Invalid login data or hash verification failed");
         res.status(401).json({ error: "Invalid Telegram login data." });

@@ -59,4 +59,20 @@ describe("AuthModal", () => {
     expect(screen.queryByText("Telegram")).toBeNull();
     expect(screen.queryByText("Скоро")).toBeNull();
   });
+
+  it("shows Telegram sign-in when the provider is configured", async () => {
+    vi.mocked(fetch).mockImplementationOnce(async () => ({
+      json: async () => ({
+        googleEnabled: true,
+        mailMode: "smtp",
+        smtpConfigured: true,
+        telegramEnabled: true,
+      }),
+      ok: true,
+    }) as Response);
+
+    renderAuthModal("signup");
+
+    await waitFor(() => expect(screen.getByText("Telegram")).toBeTruthy());
+  });
 });

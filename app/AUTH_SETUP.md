@@ -80,27 +80,30 @@ npm run dev
 - `GET http://127.0.0.1:4174/api/auth/status`
 - там `googleEnabled` должен стать `true`
 
-## 3. Telegram sign-in (Telegram Login Widget)
+## 3. Telegram sign-in (OIDC)
 
-Telegram не поддерживает стандартный OAuth — вместо него используется **Telegram Login Widget**, который:
+Текущий код открывает Telegram OIDC popup и получает `id_token`, который:
 
-- Встраивается как iframe на странице авторизации
-- Возвращает подписанные данные: `id`, `first_name`, `last_name`, `username`, `photo_url`, `auth_date`, `hash`
-- Сервер проверяет `hash` через HMAC-SHA256 (секрет = SHA256 от bot token)
+- Запускается из кнопки в модальном окне авторизации
+- Возвращает `id_token` с данными пользователя
+- Сервер проверяет JWT через Telegram JWKS, `iss`, `aud`, `exp`, `iat` и `nonce`
 
 ### Настройка:
 
 1. Создайте бота через `@BotFather`: `/newbot`
-2. Скопируйте токен бота (формат: `123456789:ABCdefGHI...`)
-3. В BotFather откройте `Bot Settings` → `Domain` → добавьте домен:
-   - Для dev: `127.0.0.1` (без http://)
-   - Для production: `adshortsai.com`
+2. Откройте настройки Web Login и скопируйте Client ID
+3. В BotFather откройте `Bot Settings` → `Web Login` и добавьте:
+   - Redirect URI для dev: `http://127.0.0.1:4174/`
+   - Trusted Origin для dev: `http://127.0.0.1:4174`
+   - Для production: production origin и callback/redirect URL
 4. Добавьте в `app/.env`:
 
 ```env
+TELEGRAM_BOT_ID=123456789
 TELEGRAM_BOT_USERNAME=YourBotName
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHI...
 ```
+
+Client Secret для текущего JS popup flow не используется. Он нужен только если переводить интеграцию на стандартный OIDC Authorization Code Flow с обменом `code` на токены через `/token`.
 
 5. Перезапустите сервер:
 
@@ -112,20 +115,20 @@ npm run dev
 ### Проверка:
 
 - `GET http://127.0.0.1:4174/api/auth/status` — `telegramEnabled: true`
-- `GET http://127.0.0.1:4174/api/auth/telegram/config` — `botUsername: "YourBotName"`
+- `GET http://127.0.0.1:4174/api/auth/telegram/config` — `botId: "123456789"`, `botUsername: "YourBotName"`
 
 ### Как это работает:
 
-1. На странице авторизации появляется Telegram Login Widget
+1. В модальном окне авторизации появляется кнопка Telegram
 2. Пользователь нажимает кнопку и авторизуется в Telegram
-3. Telegram возвращает подписанные данные в JavaScript callback
-4. Frontend отправляет данные на `/api/auth/telegram/callback`
-5. Сервер верифицирует `hash` и создаёт/связывает пользователя
+3. Telegram возвращает `id_token` в JavaScript callback или через fallback-страницу `/api/auth/telegram/login`
+4. Frontend отправляет `id_token` на `/api/auth/telegram/callback`
+5. Сервер верифицирует JWT и создаёт/связывает пользователя
 6. Сервер устанавливает session cookie и возвращает успех
 
 ### Важно:
 
-- Для localhost (`127.0.0.1`) Telegram widget работает, но домен должен быть добавлен в BotFather
+- Для localhost (`127.0.0.1`) Telegram OIDC работает, но домен должен быть добавлен в BotFather
 - `id` из Telegram — это уникальный числовой идентификатор пользователя
 - Email генерируется как `telegram-{id}@users.adshorts.local` (фейковый, для внутреннего использования)
 

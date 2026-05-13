@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import googleLogoUrl from "../assets/google-g-logo.svg";
+import telegramLogoUrl from "../assets/telegram-logo.svg";
 import { authClient } from "../lib/auth-client";
 import { logClientEvent } from "../lib/client-log";
 import { useLocale, type Locale } from "../lib/i18n";
@@ -20,6 +21,20 @@ type DevEmailPreview = {
   previewUrl: string | null;
   subject: string;
   to: string;
+};
+
+type TelegramAuthConfig = {
+  botId: string;
+  botUsername: string;
+  clientId: string;
+  nonce: string;
+  requestAccess?: string[];
+};
+
+type TelegramLoginResult = {
+  error?: string;
+  id_token?: string;
+  user?: unknown;
 };
 
 type Feedback =
@@ -119,6 +134,128 @@ const resolveAuthActionErrorMessage = (error: unknown, fallback: string) => {
   return message;
 };
 
+const TELEGRAM_OIDC_ORIGIN = "https://oauth.telegram.org";
+const TELEGRAM_POPUP_CLOSE_GRACE_MS = 5_000;
+
+const readResponseErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const payload = (await response.json()) as { error?: unknown };
+    const message = typeof payload.error === "string" ? payload.error.trim() : "";
+    return message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const buildTelegramLoginUrl = (config: TelegramAuthConfig, locale: Locale) => {
+  const scopes = ["openid", "profile"];
+  for (const access of config.requestAccess ?? []) {
+    if (access === "write") scopes.push("telegram:bot_access");
+    if (access === "phone") scopes.push("phone");
+  }
+
+  const redirectUri = `${window.location.origin}/`;
+  const params = new URLSearchParams({
+    client_id: config.clientId || config.botId,
+    redirect_uri: redirectUri,
+    response_type: "post_message",
+    scope: scopes.join(" "),
+  });
+
+  if (config.nonce) params.set("nonce", config.nonce);
+  if (config.nonce) {
+    params.set("code_challenge", config.nonce);
+    params.set("code_challenge_method", "plain");
+  }
+  if (locale) params.set("lang", locale);
+
+  return `${TELEGRAM_OIDC_ORIGIN}/auth?${params.toString()}`;
+};
+
+const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
+  new Promise<TelegramLoginResult>((resolve, reject) => {
+    const width = 550;
+    const height = 650;
+    const screenOffset = window.screen as Screen & { availLeft?: number; availTop?: number };
+    const left = Math.max(0, (window.screen.width - width) / 2) + (screenOffset.availLeft || 0);
+    const top = Math.max(0, (window.screen.height - height) / 2) + (screenOffset.availTop || 0);
+    const popup = window.open(
+      buildTelegramLoginUrl(config, locale),
+      "telegram_oidc_login",
+      `width=${width},height=${height},left=${left},top=${top},status=0,location=0,menubar=0,toolbar=0`,
+    );
+
+    if (!popup) {
+      reject(new Error(locale === "en" ? "Telegram popup was blocked." : "Окно Telegram было заблокировано браузером."));
+      return;
+    }
+
+    let isFinished = false;
+    let closeTimer: number | null = null;
+    let closedAt: number | null = null;
+
+    const cleanup = () => {
+      isFinished = true;
+      window.removeEventListener("message", onMessage);
+      if (closeTimer !== null) {
+        window.clearInterval(closeTimer);
+      }
+    };
+
+    const finish = (result: TelegramLoginResult) => {
+      if (isFinished) return;
+      cleanup();
+      resolve(result);
+    };
+
+    const fail = (error: Error) => {
+      if (isFinished) return;
+      cleanup();
+      reject(error);
+    };
+
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== TELEGRAM_OIDC_ORIGIN) return;
+
+      let data: { event?: unknown; error?: unknown; result?: unknown };
+      try {
+        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      } catch {
+        return;
+      }
+
+      if (!data || data.event !== "auth_result") return;
+      if (typeof data.error === "string" && data.error) {
+        finish({ error: data.error });
+        return;
+      }
+      if (typeof data.result === "string" && data.result) {
+        finish({ id_token: data.result });
+        return;
+      }
+      if (data.result && typeof data.result === "object" && "id_token" in data.result && typeof data.result.id_token === "string") {
+        finish({ id_token: data.result.id_token });
+        return;
+      }
+
+      finish({ error: "missing id_token" });
+    }
+
+    window.addEventListener("message", onMessage);
+    popup.focus();
+    closeTimer = window.setInterval(() => {
+      if (!popup.closed) {
+        closedAt = null;
+        return;
+      }
+
+      closedAt ??= Date.now();
+      if (Date.now() - closedAt >= TELEGRAM_POPUP_CLOSE_GRACE_MS) {
+        fail(new Error(locale === "en" ? "Telegram authorization was cancelled." : "Авторизация Telegram отменена."));
+      }
+    }, 250);
+  });
+
 export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: Props) {
   const { locale } = useLocale();
   const [name, setName] = useState("");
@@ -129,6 +266,8 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [devEmailPreview, setDevEmailPreview] = useState<DevEmailPreview | null>(null);
   const [authBackendIssue, setAuthBackendIssue] = useState<string | null>(null);
+  const [telegramConfig, setTelegramConfig] = useState<TelegramAuthConfig | null>(null);
+  const [isTelegramReady, setIsTelegramReady] = useState(false);
 
   const content = copy[mode][locale];
   const closeLabel = locale === "en" ? "Close" : "Закрыть";
@@ -181,6 +320,44 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     setFeedback(null);
     setDevEmailPreview(null);
   }, [isOpen, mode]);
+
+  useEffect(() => {
+    if (!isOpen || !status.telegramEnabled || authBackendIssue) {
+      setTelegramConfig(null);
+      setIsTelegramReady(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const prepareTelegramLogin = async () => {
+      setTelegramConfig(null);
+      setIsTelegramReady(false);
+
+      try {
+        const configResponse = await fetch("/api/auth/telegram/config", { credentials: "include" });
+        if (!configResponse.ok) return;
+
+        const config = (await configResponse.json()) as TelegramAuthConfig;
+
+        if (!isCancelled) {
+          setTelegramConfig(config);
+          setIsTelegramReady(Boolean(config.clientId || config.botId));
+        }
+      } catch {
+        if (!isCancelled) {
+          setTelegramConfig(null);
+          setIsTelegramReady(false);
+        }
+      }
+    };
+
+    void prepareTelegramLogin();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authBackendIssue, isOpen, status.telegramEnabled]);
 
   const loadDevEmailPreview = async () => {
     const response = await fetch("/api/auth/dev/last-email");
@@ -331,6 +508,79 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
     }
   };
 
+  const handleTelegramSignIn = async () => {
+    setBusyAction("telegram");
+    setFeedback(null);
+
+    if (authBackendIssue) {
+      setFeedback({ kind: "error", message: authBackendIssue });
+      setBusyAction(null);
+      return;
+    }
+
+    if (!status.telegramEnabled) {
+      setFeedback({
+        kind: "error",
+        message: locale === "en" ? "Telegram sign-in is not configured." : "Вход через Telegram не настроен.",
+      });
+      setBusyAction(null);
+      return;
+    }
+
+    try {
+      if (!telegramConfig || !isTelegramReady) {
+        throw new Error(
+          locale === "en"
+            ? "Telegram sign-in is still loading. Try again in a second."
+            : "Вход через Telegram ещё загружается. Попробуйте через секунду.",
+        );
+      }
+
+      const loginPayload = await openTelegramLoginPopup(telegramConfig, locale);
+      if (loginPayload.error) {
+        throw new Error(loginPayload.error);
+      }
+
+      if (!loginPayload.id_token) {
+        throw new Error(locale === "en" ? "Telegram did not return an ID token." : "Telegram не вернул ID token.");
+      }
+
+      const callbackResponse = await fetch("/api/auth/telegram/callback", {
+        body: JSON.stringify({ id_token: loginPayload.id_token }),
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      if (!callbackResponse.ok) {
+        throw new Error(
+          await readResponseErrorMessage(
+            callbackResponse,
+            locale === "en" ? "Could not sign in with Telegram." : "Не удалось войти через Telegram.",
+          ),
+        );
+      }
+
+      const result = (await callbackResponse.json()) as { redirectTo?: unknown };
+      void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
+        authProvider: "telegram",
+        lang: locale,
+        path: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+      });
+
+      onClose();
+      onSignedIn();
+      const redirectTo = typeof result.redirectTo === "string" && result.redirectTo ? result.redirectTo : "/app/studio";
+      window.location.assign(redirectTo);
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in with Telegram." : "Не удалось войти через Telegram."),
+      });
+      setBusyAction(null);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -371,6 +621,22 @@ export function AuthModal({ isOpen, mode, onClose, onModeChange, onSignedIn }: P
               {!status.googleEnabled ? <small>{locale === "en" ? "Not configured" : "Не настроено"}</small> : null}
             </span>
           </button>
+          {status.telegramEnabled ? (
+            <button
+              className="signup-social__button route-button"
+              type="button"
+              disabled={!isTelegramReady || isBusy || Boolean(authBackendIssue)}
+              onClick={handleTelegramSignIn}
+            >
+              <span className="signup-social__icon signup-social__icon--telegram" aria-hidden="true">
+                <img src={telegramLogoUrl} alt="" />
+              </span>
+              <span className="signup-social__copy">
+                <span>Telegram</span>
+                {!isTelegramReady ? <small>{locale === "en" ? "Loading" : "Загрузка"}</small> : null}
+              </span>
+            </button>
+          ) : null}
         </div>
 
         <div className="signup-modal__divider">
