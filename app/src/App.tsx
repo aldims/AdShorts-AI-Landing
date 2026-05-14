@@ -91,8 +91,27 @@ const WEB_DEVICE_STORAGE_KEY = "adshorts.web-device-id";
 const WEB_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
 const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
 const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
-const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?(rf_[A-Za-z0-9_-]{2,64})\/?$/;
+const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?([A-Za-z0-9_]{2,64})\/?$/;
 const WEB_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{16,160}$/;
+const WEB_REFERRAL_RESERVED_PATH_SEGMENTS = new Set([
+  "admin",
+  "api",
+  "app",
+  "docs",
+  "en",
+  "examples",
+  "health",
+  "offer",
+  "openapi",
+  "payment",
+  "pricing",
+  "privacy",
+  "ref",
+  "terms",
+  "terms-of-use",
+  "vpn",
+  "youtube",
+]);
 
 const appMessages = defineMessages({
   loadingSession: {
@@ -272,9 +291,10 @@ const readOrCreateWebDeviceId = () => {
   }
 };
 
-const readWebReferralSourceFromPathname = (pathname: string) => {
+export const readWebReferralSourceFromPathname = (pathname: string) => {
   const match = WEB_REFERRAL_PATH_PATTERN.exec(pathname);
-  return normalizeWebReferralSource(match?.[1]);
+  const source = normalizeWebReferralSource(match?.[1]);
+  return source && !WEB_REFERRAL_RESERVED_PATH_SEGMENTS.has(source.toLowerCase()) ? source : "";
 };
 
 const readWebReferralSourceFromLocation = (location: { pathname?: string; search: string }) => {
@@ -930,6 +950,26 @@ export function App() {
         />
         <Route
           path="/:referralCode"
+          element={
+            referralPathSource ? (
+              <RouteSuspense>
+                <LandingPage
+                  session={session}
+                  workspaceProfile={workspaceProfile}
+                  useLayeredHero
+                  onOpenSignup={() => openAuth("signup")}
+                  onOpenSignin={() => openAuth("signin")}
+                  onLogout={handleLogout}
+                  onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
+                />
+              </RouteSuspense>
+            ) : (
+              <Navigate to={localizePath("/")} replace />
+            )
+          }
+        />
+        <Route
+          path="/en/:referralCode"
           element={
             referralPathSource ? (
               <RouteSuspense>

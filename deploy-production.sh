@@ -401,6 +401,57 @@ prod_app_dir = os.environ["PROD_APP_DIR"]
 prod_static_dir = os.environ["PROD_STATIC_DIR"]
 prod_api_port = os.environ["PROD_API_PORT"]
 
+def iter_chunks(values, size):
+    for index in range(0, len(values), size):
+        yield values[index:index + size]
+
+def collect_reserved_referral_paths(static_dir):
+    root = Path(static_dir)
+    paths = {
+        "/",
+        "/en",
+        "/en/",
+        "/admin",
+        "/api",
+        "/api/",
+        "/app",
+        "/app/",
+        "/docs",
+        "/docs/",
+        "/health",
+        "/openapi.json",
+        "/payment",
+        "/payment/",
+        "/ref",
+        "/ref/",
+        "/vpn",
+        "/vpn/",
+        "/youtube",
+        "/youtube/",
+    }
+    if not root.exists():
+        return sorted(paths)
+
+    for index_file in root.rglob("index.html"):
+        try:
+            relative_parent = index_file.parent.relative_to(root)
+        except ValueError:
+            continue
+        if str(relative_parent) == ".":
+            paths.add("/")
+            continue
+        route = "/" + "/".join(relative_parent.parts)
+        paths.add(route)
+        paths.add(f"{route}/")
+
+    return sorted(paths)
+
+reserved_referral_paths = collect_reserved_referral_paths(prod_static_dir)
+reserved_referral_path_matchers = "\n        ".join(
+    f"not path {' '.join(chunk)}"
+    for chunk in iter_chunks(reserved_referral_paths, 24)
+)
+
 production_blocks = f"""https://adshortsai.com {{
     encode gzip zstd
 
@@ -451,11 +502,23 @@ production_blocks = f"""https://adshortsai.com {{
     redir /terms.html /terms/ 301
     redir /terms-of-use.html /terms-of-use/ 301
 
+    @referral_routes {{
+        path_regexp referral ^/(?:en/)?[A-Za-z0-9_]{{2,64}}/?$
+        {reserved_referral_path_matchers}
+    }}
+
     @app_html path /app* /en/app* /rf_* /hero-background-test* /en/hero-background-test*
     header @app_html X-Robots-Tag "noindex, nofollow"
+    header @referral_routes X-Robots-Tag "noindex, nofollow"
 
     @app_routes path / /en/ /app* /en/app* /rf_* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
     handle @app_routes {{
+        root * {prod_app_dir}/dist
+        try_files {{path}} {{path}}/index.html /index.html
+        file_server
+    }}
+
+    handle @referral_routes {{
         root * {prod_app_dir}/dist
         try_files {{path}} {{path}}/index.html /index.html
         file_server
@@ -553,6 +616,7 @@ check_status "$PROD_URL/en/" "200"
 check_status "$PROD_URL/pricing/" "200"
 check_status "$PROD_URL/examples/" "200"
 check_status "$PROD_URL/app" "200"
+check_status "$PROD_URL/slr" "200"
 check_status "$PROD_URL/kak-sdelat-shorts-na-youtube/" "200"
 check_status "$PROD_URL/index.html" "301"
 check_status "$PROD_URL/en/index.html" "301"
@@ -589,6 +653,12 @@ fi
 app_robots_header="$(curl -fsSI "$PROD_URL/app" | tr -d '\r' | grep -i '^x-robots-tag:' | head -n 1 || true)"
 if ! echo "$app_robots_header" | grep -qi 'noindex'; then
   echo "App routes are missing X-Robots-Tag noindex: $app_robots_header" >&2
+  smoke_failed=1
+fi
+
+referral_robots_header="$(curl -fsSI "$PROD_URL/slr" | tr -d '\r' | grep -i '^x-robots-tag:' | head -n 1 || true)"
+if ! echo "$referral_robots_header" | grep -qi 'noindex'; then
+  echo "Referral routes are missing X-Robots-Tag noindex: $referral_robots_header" >&2
   smoke_failed=1
 fi
 

@@ -1371,7 +1371,8 @@ const STUDIO_SUBTITLE_PREVIEW_MAX_WORDS_PER_LINE = 4;
 const STUDIO_CUSTOM_ASSET_NAME_MAX_CHARS = 16;
 const STUDIO_CUSTOM_MUSIC_MAX_BYTES = 18 * 1024 * 1024;
 const STUDIO_ALLOWED_CUSTOM_MUSIC_EXTENSIONS = [".m4a", ".mp3", ".wav"] as const;
-const STUDIO_CUSTOM_VIDEO_MAX_BYTES = 48 * 1024 * 1024;
+const STUDIO_CUSTOM_IMAGE_MAX_BYTES = 48 * 1024 * 1024;
+const STUDIO_CUSTOM_VIDEO_MAX_BYTES = 256 * 1024 * 1024;
 const STUDIO_ALLOWED_CUSTOM_VIDEO_EXTENSIONS = [".m4v", ".mov", ".mp4", ".webm"] as const;
 const STUDIO_BRAND_LOGO_MAX_BYTES = 12 * 1024 * 1024;
 const STUDIO_BRAND_TEXT_MAX_CHARS = 50;
@@ -3502,7 +3503,7 @@ type StudioDirectMediaUploadSession = {
 };
 
 const STUDIO_DIRECT_MEDIA_UPLOAD_MIN_TIMEOUT_MS = 180_000;
-const STUDIO_DIRECT_MEDIA_UPLOAD_MAX_TIMEOUT_MS = 10 * 60_000;
+const STUDIO_DIRECT_MEDIA_UPLOAD_MAX_TIMEOUT_MS = 20 * 60_000;
 const STUDIO_DIRECT_MEDIA_UPLOAD_MIN_BYTES_PER_SECOND = 96 * 1024;
 
 const getStudioDirectUploadAssetId = (payload: StudioDirectMediaUploadPayload | null | undefined) => {
@@ -3883,6 +3884,12 @@ const isWorkspaceSegmentImageFile = (fileName: string) => {
   const normalized = fileName.trim().toLowerCase();
   return STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
 };
+
+const getStudioCustomVisualMaxBytes = (fileName: string) =>
+  isWorkspaceSegmentImageFile(fileName) ? STUDIO_CUSTOM_IMAGE_MAX_BYTES : STUDIO_CUSTOM_VIDEO_MAX_BYTES;
+
+const getStudioCustomVisualTooLargeMessage = (fileName: string) =>
+  `Файл слишком большой. Максимум ${Math.floor(getStudioCustomVisualMaxBytes(fileName) / (1024 * 1024))} МБ.`;
 
 const getWorkspaceSegmentCustomVisualMimeType = (file: File) => {
   if (file.type) {
@@ -17990,8 +17997,8 @@ export function WorkspacePage({
       return;
     }
 
-    if (file.size > STUDIO_CUSTOM_VIDEO_MAX_BYTES) {
-      setVideoSelectionError("Файл слишком большой. Максимум 48 МБ.");
+    if (file.size > getStudioCustomVisualMaxBytes(file.name)) {
+      setVideoSelectionError(getStudioCustomVisualTooLargeMessage(file.name));
       return;
     }
 
@@ -19793,8 +19800,8 @@ export function WorkspacePage({
       return false;
     }
 
-    if (file.size > STUDIO_CUSTOM_VIDEO_MAX_BYTES) {
-      setSegmentEditorVideoError("Файл слишком большой. Максимум 48 МБ.");
+    if (file.size > getStudioCustomVisualMaxBytes(file.name)) {
+      setSegmentEditorVideoError(getStudioCustomVisualTooLargeMessage(file.name));
       return false;
     }
 
