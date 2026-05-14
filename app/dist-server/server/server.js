@@ -21,6 +21,7 @@ import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserPro
 import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
+import { normalizeWebReferralSource } from "./referral.js";
 import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
@@ -81,11 +82,6 @@ const requireAdminRequest = (req, res) => {
         return false;
     }
     return true;
-};
-const normalizeWebReferralSource = (value) => {
-    const rawValue = Array.isArray(value) ? value[0] : value;
-    const normalized = String(rawValue ?? "").trim();
-    return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
 };
 const normalizeWebDeviceId = (value) => {
     const normalized = String(value ?? "").trim();

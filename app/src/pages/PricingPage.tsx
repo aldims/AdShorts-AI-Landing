@@ -466,15 +466,15 @@ export function PricingPage({
           ? "Extra credits can be purchased only on PRO and ULTRA plans."
           : "Дополнительные кредиты можно покупать только на тарифах PRO и ULTRA.";
   const openPrimaryFlow = () => {
-    if (session) {
-      onOpenWorkspace();
-      return;
-    }
-
-    onOpenSignup();
+    onOpenWorkspace();
   };
 
   const openStudioSection = (section: StudioEntryIntentSection) => {
+    if (!session && (section === "projects" || section === "media")) {
+      onOpenSignup();
+      return;
+    }
+
     if (session) {
       writeStudioEntryIntent({ section });
     }

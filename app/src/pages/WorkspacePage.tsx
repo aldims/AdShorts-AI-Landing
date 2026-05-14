@@ -388,7 +388,7 @@ type WorkspaceBootstrapResponse = {
 };
 
 const WORKSPACE_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
-const WORKSPACE_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
+const WORKSPACE_REFERRAL_SOURCE_PATTERN = /^(?:[A-Za-z0-9_]{2,64}|en\/[A-Za-z0-9_]{2,61})$/;
 
 const normalizeWorkspaceReferralSource = (value: unknown) => {
   const normalized = String(value ?? "").trim();

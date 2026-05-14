@@ -61,6 +61,7 @@ import {
   getWaveSpeedPredictionOutputUrl,
   getWaveSpeedPredictionStatus,
 } from "./wavespeed-worker.js";
+import { normalizeWebReferralSource } from "./referral.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type StudioUser = {
@@ -719,11 +720,6 @@ const sanitizeStudioContentPlanIdeaPrompt = (value: unknown) => {
 };
 
 const normalizeGenerationText = (value: string | null | undefined) => String(value ?? "").replace(/\s+/g, " ").trim();
-
-const normalizeWebReferralSource = (value: string | null | undefined) => {
-  const normalized = normalizeGenerationText(value);
-  return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
-};
 
 const normalizeStudioMusicType = (value: string | null | undefined) => {
   const normalized = String(value ?? "").trim().toLowerCase();

@@ -122,6 +122,7 @@ import {
   shouldSimulateCheckoutPayment,
   simulateCheckoutPayment,
 } from "./payments.js";
+import { normalizeWebReferralSource } from "./referral.js";
 import {
   deleteLocalExample,
   getLocalExamplePosterAsset,
@@ -220,12 +221,6 @@ const requireAdminRequest = (req: express.Request, res: express.Response) => {
   }
 
   return true;
-};
-
-const normalizeWebReferralSource = (value: unknown) => {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const normalized = String(rawValue ?? "").trim();
-  return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
 };
 
 const normalizeWebDeviceId = (value: unknown) => {

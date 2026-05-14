@@ -11,6 +11,7 @@ import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
 import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
 import { getWaveSpeedPredictionOutputUrl, getWaveSpeedPredictionStatus, } from "./wavespeed-worker.js";
+import { normalizeWebReferralSource } from "./referral.js";
 const normalizeWorkspaceSubscriptionPlanCode = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return normalized === "start" || normalized === "pro" || normalized === "ultra" ? normalized : null;
@@ -215,10 +216,6 @@ const sanitizeStudioContentPlanIdeaPrompt = (value) => {
     return normalized || fallbackPrompt;
 };
 const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
-const normalizeWebReferralSource = (value) => {
-    const normalized = normalizeGenerationText(value);
-    return /^[A-Za-z0-9_-]{2,64}$/.test(normalized) ? normalized : "";
-};
 const normalizeStudioMusicType = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedMusicTypes.has(normalized) ? normalized : "ai";

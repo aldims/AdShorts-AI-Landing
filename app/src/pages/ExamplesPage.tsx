@@ -695,15 +695,15 @@ export function ExamplesPage({
   }, [activeFilter, exampleFilterOptions]);
 
   const openPrimaryFlow = () => {
-    if (session) {
-      onOpenWorkspace();
-      return;
-    }
-
-    onOpenSignup();
+    onOpenWorkspace();
   };
 
   const openStudioSection = (section: StudioEntryIntentSection) => {
+    if (!session && (section === "projects" || section === "media")) {
+      onOpenSignup();
+      return;
+    }
+
     if (session) {
       writeStudioEntryIntent({ section });
     }
@@ -720,12 +720,7 @@ export function ExamplesPage({
 
     writeExamplePrefillIntent(intent);
 
-    if (session) {
-      navigate(localizePath("/app/studio"));
-      return;
-    }
-
-    onOpenSignup();
+    navigate(localizePath("/app/studio"));
   };
 
   const handleDeleteLocalExample = async (exampleId: string) => {

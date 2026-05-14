@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider, type Locale } from "../lib/i18n";
 import { LandingPage } from "./LandingPage";
@@ -23,6 +23,30 @@ const renderLandingPage = (locale: Locale = "ru") =>
   );
 
 describe("LandingPage guides section", () => {
+  it("opens the studio tab for guests without showing signup first", () => {
+    const onOpenSignup = vi.fn();
+    const onOpenWorkspace = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <LocaleProvider locale="ru">
+          <LandingPage
+            session={null}
+            onOpenSignup={onOpenSignup}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={onOpenWorkspace}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Студия" }));
+
+    expect(onOpenWorkspace).toHaveBeenCalledTimes(1);
+    expect(onOpenSignup).not.toHaveBeenCalled();
+  });
+
   it("keeps the language switcher in the landing header", () => {
     renderLandingPage();
 

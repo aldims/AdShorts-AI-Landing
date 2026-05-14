@@ -406,12 +406,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
   }, [animateCounter]);
 
   const openPrimaryFlow = () => {
-    if (session) {
-      onOpenWorkspace();
-      return;
-    }
-
-    onOpenSignup();
+    onOpenWorkspace();
   };
 
   const handlePlanCheckout = async (productId: "start" | "pro" | "ultra") => {
@@ -503,6 +498,11 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
   };
 
   const openStudioSection = (section: StudioEntryIntentSection) => {
+    if (!session && (section === "projects" || section === "media")) {
+      onOpenSignup();
+      return;
+    }
+
     if (session) {
       writeStudioEntryIntent({ section });
     }
