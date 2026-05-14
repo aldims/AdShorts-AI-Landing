@@ -15405,11 +15405,14 @@ export function WorkspacePage({
     };
   }, [shouldLoadProjects]);
 
-  const shouldLoadContentPlans = activeTab === "studio" && studioView === "create" && createMode !== "segment-editor";
+  const shouldLoadContentPlans = !isGuest && activeTab === "studio" && studioView === "create" && createMode !== "segment-editor";
 
   useEffect(() => {
     if (!shouldLoadContentPlans) {
       setIsContentPlansLoading(false);
+      if (isGuest) {
+        setContentPlansError(null);
+      }
       return;
     }
 
@@ -15460,7 +15463,7 @@ export function WorkspacePage({
     return () => {
       cancelled = true;
     };
-  }, [hasLoadedContentPlans, shouldLoadContentPlans]);
+  }, [hasLoadedContentPlans, isGuest, shouldLoadContentPlans]);
 
   const isMediaLibraryStudioView = shouldLoadWorkspaceMediaLibraryView(activeTab, studioView);
   const shouldLoadSegmentModalMediaLibrary =
@@ -22670,6 +22673,13 @@ export function WorkspacePage({
   };
 
   const handleToggleContentPlanVisibility = () => {
+    if (isGuest) {
+      setContentPlansError(null);
+      setIsContentPlanVisible(false);
+      onAuthRequired?.();
+      return;
+    }
+
     updateContentPlanVisibility(!isContentPlanVisible);
   };
 
@@ -22885,13 +22895,7 @@ export function WorkspacePage({
     }
 
     if (isGuest) {
-      setContentPlansError(
-        workspaceText(
-          locale,
-          "Войдите, чтобы создать контент-план и сохранить идеи.",
-          "Sign in to create a content plan and save ideas.",
-        ),
-      );
+      setContentPlansError(null);
       onAuthRequired?.();
       return;
     }
@@ -23022,23 +23026,9 @@ export function WorkspacePage({
 
     if (isGuest) {
       pendingGuestGenerationRef.current = { topic: nextTopic, options };
-      setGenerateError(
-        workspaceText(
-          locale,
-          "Войдите, чтобы запустить генерацию и сохранить проект.",
-          "Sign in to start generation and save the project.",
-        ),
-      );
-      setStatus("Auth required");
-      if (isSegmentEditorGeneration) {
-        setSegmentEditorVideoError(
-          workspaceText(
-            locale,
-            "Войдите, чтобы запустить генерацию и сохранить проект.",
-            "Sign in to start generation and save the project.",
-          ),
-        );
-      }
+      setGenerateError(null);
+      setSegmentEditorVideoError(null);
+      setStatus("");
       onAuthRequired?.();
       return;
     }
@@ -24707,7 +24697,7 @@ export function WorkspacePage({
         : workspaceText(locale, "Выберите день и время публикации", "Choose publication date and time")
       : workspaceText(locale, "Видео отправится в YouTube сразу после подтверждения.", "The video will be sent to YouTube after confirmation.");
   const shouldRenderStudioContentPlanRail = createMode !== "segment-editor";
-  const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible;
+  const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible && !isGuest;
   const renderContentPlanIdeaCard = (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
     const isSelectedIdea = selectedContentPlanIdeaId === idea.id;
     const isDeletingIdea = contentPlanDeletingIdeaId === idea.id;
@@ -27016,7 +27006,7 @@ export function WorkspacePage({
                               </div>
                               <div className="studio-canvas-prompt__topbar">
                                 <button
-                                  className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isContentPlanVisible ? " is-active" : ""}`}
+                                  className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isStudioContentPlanRailVisible ? " is-active" : ""}`}
                                   type="button"
                                   data-studio-content-plan-toggle="true"
                                   onClick={handleToggleContentPlanVisibility}
@@ -27049,7 +27039,7 @@ export function WorkspacePage({
                           {!composerSourceIdea ? (
                             <div className="studio-canvas-prompt__topbar">
                               <button
-                                className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isContentPlanVisible ? " is-active" : ""}`}
+                                className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isStudioContentPlanRailVisible ? " is-active" : ""}`}
                                 type="button"
                                 data-studio-content-plan-toggle="true"
                                 onClick={handleToggleContentPlanVisibility}
