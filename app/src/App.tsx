@@ -548,6 +548,16 @@ export function App() {
     };
   }, [accountDisplay?.displayEmail, authSession]);
 
+  const guestWorkspaceSession = useMemo<Session>(
+    () => ({
+      email: "guest@adshorts.local",
+      emailVerified: false,
+      name: locale === "en" ? "Guest" : "Гость",
+      plan: "FREE",
+    }),
+    [locale],
+  );
+
   useEffect(() => {
     if (!authSession?.user) {
       setAccountDisplay(null);
@@ -989,18 +999,18 @@ export function App() {
               <LoadingScreen />
             ) : shouldBlockWorkspaceRoute ? (
               <LoadingScreen />
-            ) : session ? (
+            ) : (
               <RouteSuspense>
                 <WorkspacePage
                   defaultTab="studio"
-                  initialProfile={workspaceProfile}
+                  initialProfile={session ? workspaceProfile : null}
+                  isGuest={!session}
+                  onAuthRequired={() => openAuth("signup")}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
-                  session={session}
+                  onProfileChange={session ? setWorkspaceProfile : undefined}
+                  session={session ?? guestWorkspaceSession}
                 />
               </RouteSuspense>
-            ) : (
-              <Navigate to={localizePath("/")} replace />
             )
           }
         />
@@ -1011,18 +1021,18 @@ export function App() {
               <LoadingScreen />
             ) : shouldBlockWorkspaceRoute ? (
               <LoadingScreen />
-            ) : session ? (
+            ) : (
               <RouteSuspense>
                 <WorkspacePage
                   defaultTab="studio"
-                  initialProfile={workspaceProfile}
+                  initialProfile={session ? workspaceProfile : null}
+                  isGuest={!session}
+                  onAuthRequired={() => openAuth("signup")}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
-                  session={session}
+                  onProfileChange={session ? setWorkspaceProfile : undefined}
+                  session={session ?? guestWorkspaceSession}
                 />
               </RouteSuspense>
-            ) : (
-              <Navigate to={localizePath("/")} replace />
             )
           }
         />

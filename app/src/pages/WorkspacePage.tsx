@@ -269,9 +269,31 @@ type WorkspaceCheckoutResponse = {
 type Props = {
   defaultTab: WorkspaceTab;
   initialProfile?: WorkspaceProfile | null;
+  isGuest?: boolean;
   session: Session;
   onLogout: () => void | Promise<void>;
+  onAuthRequired?: () => void;
   onProfileChange?: (profile: WorkspaceProfile | null) => void;
+};
+
+type WorkspaceGenerateOptions = {
+  brandLogoFile?: StudioBrandLogoFile | null;
+  brandText?: string | null;
+  clearAppliedSegmentEditorOnSuccess?: boolean;
+  editedFromProjectAdId?: number;
+  isRegeneration?: boolean;
+  language?: StudioLanguage | string;
+  musicType?: StudioMusicType | string;
+  projectId?: number;
+  segmentEditor?: WorkspaceSegmentEditorPayload;
+  segmentEditorAllowStructureChange?: boolean;
+  segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null;
+  subtitleEnabled?: boolean;
+  subtitleColorId?: string;
+  subtitleStyleId?: string;
+  versionRootProjectAdId?: number;
+  voiceEnabled?: boolean;
+  voiceId?: string;
 };
 
 type WorkspaceCreditTopupPack = {
@@ -1443,7 +1465,17 @@ const fallbackStudioSubtitleStyleOption: StudioSubtitleStyleOption = {
   wordEffect: "none",
 };
 
-const fallbackStudioSubtitleColorOption = createStudioSubtitleColorOption("purple", "Фиолетовый", "#8B5CF6");
+const fallbackStudioSubtitleColorCatalogOption: StudioSubtitleColorCatalogOption = {
+  hex: "8B5CF6",
+  id: "purple",
+  label: "Фиолетовый",
+};
+
+const fallbackStudioSubtitleColorOption = createStudioSubtitleColorOption(
+  fallbackStudioSubtitleColorCatalogOption.id,
+  fallbackStudioSubtitleColorCatalogOption.label,
+  `#${fallbackStudioSubtitleColorCatalogOption.hex}`,
+);
 
 const buildStudioSubtitleColorOptions = (
   colorCatalog: StudioSubtitleColorCatalogOption[],
@@ -13147,7 +13179,15 @@ function StudioMusicSelectorChip({
   );
 }
 
-export function WorkspacePage({ defaultTab, initialProfile = null, session, onLogout, onProfileChange }: Props) {
+export function WorkspacePage({
+  defaultTab,
+  initialProfile = null,
+  isGuest = false,
+  session,
+  onLogout,
+  onAuthRequired,
+  onProfileChange,
+}: Props) {
   const { locale, localizePath } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
@@ -13175,8 +13215,12 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(examplePrefillInitialStudioState.language);
-  const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([]);
-  const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([]);
+  const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([
+    fallbackStudioSubtitleStyleOption,
+  ]);
+  const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([
+    fallbackStudioSubtitleColorCatalogOption,
+  ]);
   const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(examplePrefillInitialStudioState.subtitleEnabled);
   const [isVoiceoverEnabled, setIsVoiceoverEnabled] = useState(examplePrefillInitialStudioState.voiceEnabled);
   const [selectedSubtitleStyleId, setSelectedSubtitleStyleId] = useState<StudioSubtitleStyleOption["id"]>(
@@ -13454,6 +13498,8 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
   const workspaceSessionResetEmailRef = useRef(session.email);
+  const previousWorkspaceSessionWasGuestRef = useRef(isGuest);
+  const pendingGuestGenerationRef = useRef<{ options?: WorkspaceGenerateOptions; topic: string } | null>(null);
   const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
   const detachedSegmentEditorDraftRef = useRef<{
     activeSegmentIndex: number;
@@ -14386,6 +14432,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       tab: WorkspaceSegmentVisualModalTab;
     }) => Promise<void>,
   ) => {
+    if (isGuest) {
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Войдите, чтобы создавать визуалы для сегментов.",
+          "Sign in to create segment visuals.",
+        ),
+      );
+      onAuthRequired?.();
+      return;
+    }
+
     const snapshot = {
       aiPhotoPrompt: segmentAiPhotoModalPrompt,
       aiVideoPrompt: segmentAiVideoModalPrompt,
@@ -14572,6 +14630,9 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   useEffect(() => {
     const isSessionEmailChange = workspaceSessionResetEmailRef.current !== session.email;
     workspaceSessionResetEmailRef.current = session.email;
+    const wasGuestSession = previousWorkspaceSessionWasGuestRef.current;
+    previousWorkspaceSessionWasGuestRef.current = isGuest;
+    const isGuestAuthHandoff = wasGuestSession && !isGuest;
     const shouldPreserveSegmentEditorRoute = !isSessionEmailChange && hasExplicitSegmentEditorRouteRef.current;
 
     setProjects([]);
@@ -14622,7 +14683,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     setPublishError(null);
     setPublishTargetVideoProjectId(null);
     setPublishTargetTitle("");
-    if (!preserveExamplePrefillRef.current) {
+    if (!preserveExamplePrefillRef.current && !isGuestAuthHandoff) {
       setSelectedVideoMode("standard");
       setSelectedSegmentAiPhotoQuality("standard");
       setSelectedSegmentAiVideoQuality("standard");
@@ -14653,7 +14714,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       setSegmentEditorPanelHeightLock(null);
       setActiveSegmentIndex(0);
     }
-  }, [session.email]);
+  }, [isGuest, session.email]);
 
   useEffect(() => {
     if (activeTab !== "studio" || studioView !== "create" || createMode === "segment-editor") {
@@ -18660,6 +18721,11 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
   };
 
   const handleStudioTopMenuSelect = (section: StudioEntryIntentSection) => {
+    if (isGuest && (section === "projects" || section === "media")) {
+      onAuthRequired?.();
+      return;
+    }
+
     setActiveTab("studio");
 
     if (section === "projects") {
@@ -19250,7 +19316,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
     sourceLanguage: StudioLanguage,
     targetLanguage: StudioLanguage,
   ) => {
-    if (sourceLanguage === targetLanguage || texts.length === 0) {
+    if (isGuest || sourceLanguage === targetLanguage || texts.length === 0) {
       return texts;
     }
 
@@ -21703,6 +21769,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (isGuest) {
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Войдите, чтобы улучшать промты для сегментов.",
+          "Sign in to improve segment prompts.",
+        ),
+      );
+      onAuthRequired?.();
+      return;
+    }
+
     const isAiVideoPromptTab = segmentAiPhotoModalTab === "ai_video" || segmentAiPhotoModalTab === "photo_animation";
     const isImageEditPromptTab = segmentAiPhotoModalTab === "image_edit";
     const improveMode: WorkspaceSegmentAiPhotoPromptImproveMode =
@@ -22799,6 +22877,18 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       return;
     }
 
+    if (isGuest) {
+      setContentPlansError(
+        workspaceText(
+          locale,
+          "Войдите, чтобы создать контент-план и сохранить идеи.",
+          "Sign in to create a content plan and save ideas.",
+        ),
+      );
+      onAuthRequired?.();
+      return;
+    }
+
     setHasEditedContentPlanQueryInput(true);
     setContentPlanQueryInput(nextQuery);
     setContentPlansError(null);
@@ -22853,25 +22943,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
   const handleGenerate = async (
     nextTopic: string,
-    options?: {
-      brandLogoFile?: StudioBrandLogoFile | null;
-      brandText?: string | null;
-      clearAppliedSegmentEditorOnSuccess?: boolean;
-      editedFromProjectAdId?: number;
-      isRegeneration?: boolean;
-      language?: StudioLanguage | string;
-      musicType?: StudioMusicType | string;
-      projectId?: number;
-      segmentEditor?: WorkspaceSegmentEditorPayload;
-      segmentEditorAllowStructureChange?: boolean;
-      segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null;
-      subtitleEnabled?: boolean;
-      subtitleColorId?: string;
-      subtitleStyleId?: string;
-      versionRootProjectAdId?: number;
-      voiceEnabled?: boolean;
-      voiceId?: string;
-    },
+    options?: WorkspaceGenerateOptions,
   ) => {
     const isSegmentEditorGeneration = Boolean(options?.segmentEditorSession);
     const hasBrandLogoOverride = Boolean(options && "brandLogoFile" in options);
@@ -22938,6 +23010,29 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
     if (!safeTopic.trim()) {
       reportGeneratePreflightFailure("Введите prompt для генерации.", "Prompt required");
+      return;
+    }
+
+    if (isGuest) {
+      pendingGuestGenerationRef.current = { topic: nextTopic, options };
+      setGenerateError(
+        workspaceText(
+          locale,
+          "Войдите, чтобы запустить генерацию и сохранить проект.",
+          "Sign in to start generation and save the project.",
+        ),
+      );
+      setStatus("Auth required");
+      if (isSegmentEditorGeneration) {
+        setSegmentEditorVideoError(
+          workspaceText(
+            locale,
+            "Войдите, чтобы запустить генерацию и сохранить проект.",
+            "Sign in to start generation and save the project.",
+          ),
+        );
+      }
+      onAuthRequired?.();
       return;
     }
 
@@ -23291,6 +23386,21 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
       }
     }
   };
+
+  useEffect(() => {
+    if (isGuest || !pendingGuestGenerationRef.current) {
+      return;
+    }
+
+    const pendingGeneration = pendingGuestGenerationRef.current;
+    pendingGuestGenerationRef.current = null;
+    setGenerateError(null);
+    setSegmentEditorVideoError(null);
+
+    window.setTimeout(() => {
+      void handleGenerate(pendingGeneration.topic, pendingGeneration.options);
+    }, 0);
+  }, [isGuest, session.email]);
 
   const buildCurrentRegenerationOptions = (segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null) => {
     const effectiveSegmentEditorSession = segmentEditorSession ?? currentAppliedSegmentEditorSession;
@@ -24450,7 +24560,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
         const nextSubtitleColorCatalog =
           payload.data.studioOptions.subtitleColors.length > 0
             ? payload.data.studioOptions.subtitleColors
-            : [{ hex: fallbackStudioSubtitleColorOption.accent.replace("#", ""), id: "purple", label: "Фиолетовый" }];
+            : [fallbackStudioSubtitleColorCatalogOption];
         const nextSubtitleColorOptions = buildStudioSubtitleColorOptions(nextSubtitleColorCatalog);
         const subtitleSelection = resolveWorkspaceExamplePrefillSubtitleSelection({
           prefillSettings: preserveExamplePrefillRef.current ? activeExamplePrefillSettingsRef.current : null,
@@ -26119,8 +26229,14 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
             <div className="site-header__actions">
               <LanguageSwitcher />
-              <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
-              <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+              {isGuest ? null : <SiteHeaderWorkspaceStatus profile={workspaceProfile} />}
+              {isGuest ? (
+                <button className="site-header__signin route-button" type="button" onClick={() => onAuthRequired?.()}>
+                  {workspaceText(locale, "Войти", "Sign in")}
+                </button>
+              ) : (
+                <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+              )}
             </div>
           </div>
         </header>
@@ -29295,7 +29411,7 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
 
           <div className="site-header__actions">
             <LanguageSwitcher />
-            <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+            {isGuest ? null : <SiteHeaderWorkspaceStatus profile={workspaceProfile} />}
             <a
               className="site-header__link"
               href="https://t.me/AdShortsAIBot"
@@ -29304,7 +29420,13 @@ export function WorkspacePage({ defaultTab, initialProfile = null, session, onLo
             >
               Telegram
             </a>
-            <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+            {isGuest ? (
+              <button className="site-header__signin route-button" type="button" onClick={() => onAuthRequired?.()}>
+                {workspaceText(locale, "Войти", "Sign in")}
+              </button>
+            ) : (
+              <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={handleAccountLogout} plan={workspacePlanLabel} />
+            )}
           </div>
         </div>
       </header>
