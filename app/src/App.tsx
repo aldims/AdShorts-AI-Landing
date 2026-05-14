@@ -90,8 +90,8 @@ const IMPERSONATION_COOKIE_NAME = "adshorts.impersonation";
 const WEB_DEVICE_STORAGE_KEY = "adshorts.web-device-id";
 const WEB_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
 const WEB_REFERRAL_CLICK_SESSION_KEY_PREFIX = "adshorts.web-referral-click:";
-const WEB_REFERRAL_SOURCE_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
-const WEB_REFERRAL_PATH_PATTERN = /^\/(?:en\/)?([A-Za-z0-9_]{2,64})\/?$/;
+const WEB_REFERRAL_SOURCE_PATTERN = /^(?:[A-Za-z0-9_]{2,64}|en\/[A-Za-z0-9_]{2,61})$/;
+const WEB_REFERRAL_PATH_PATTERN = /^\/(?:(en)\/)?([A-Za-z0-9_]{2,64})\/?$/;
 const WEB_DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{16,160}$/;
 const WEB_REFERRAL_RESERVED_PATH_SEGMENTS = new Set([
   "admin",
@@ -293,8 +293,12 @@ const readOrCreateWebDeviceId = () => {
 
 export const readWebReferralSourceFromPathname = (pathname: string) => {
   const match = WEB_REFERRAL_PATH_PATTERN.exec(pathname);
-  const source = normalizeWebReferralSource(match?.[1]);
-  return source && !WEB_REFERRAL_RESERVED_PATH_SEGMENTS.has(source.toLowerCase()) ? source : "";
+  const locale = match?.[1]?.toLowerCase();
+  const slug = String(match?.[2] ?? "");
+  if (!slug || WEB_REFERRAL_RESERVED_PATH_SEGMENTS.has(slug.toLowerCase())) {
+    return "";
+  }
+  return normalizeWebReferralSource(locale ? `${locale}/${slug}` : slug);
 };
 
 const readWebReferralSourceFromLocation = (location: { pathname?: string; search: string }) => {
