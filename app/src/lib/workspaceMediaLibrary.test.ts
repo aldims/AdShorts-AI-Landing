@@ -85,6 +85,31 @@ describe("workspace media library display identity", () => {
     );
   });
 
+  it("deduplicates talking photo videos by their source poster", () => {
+    const firstItem = createMediaLibraryItem({
+      assetId: 303,
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/talking-source.jpg",
+      previewUrl: "/api/studio/segment-talking-photo/jobs/job-a/video",
+    });
+    const secondItem = createMediaLibraryItem({
+      assetId: 404,
+      itemKey: "item-2",
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "https://cdn.example.com/talking-source.jpg",
+      previewUrl: "/api/studio/segment-talking-photo/jobs/job-b/video",
+    });
+
+    expect(getWorkspaceMediaLibraryDisplayAssetIdentityKey(firstItem)).toBe(
+      getWorkspaceMediaLibraryDisplayAssetIdentityKey(secondItem),
+    );
+    expect(getWorkspaceMediaLibraryResolvedDedupeKey(firstItem)).toBe(
+      getWorkspaceMediaLibraryResolvedDedupeKey(secondItem),
+    );
+  });
+
   it("keeps photo identity based on the photo preview itself", () => {
     const item = createMediaLibraryItem({
       kind: "ai_photo",

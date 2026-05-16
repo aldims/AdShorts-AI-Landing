@@ -427,6 +427,24 @@ describe("media library durable assets", () => {
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("photo_animation");
   });
 
+  it("uses durable library_kind to classify talking photos", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/787/download",
+      id: 787,
+      kind: "rendered_segment",
+      library_kind: "talking_photo",
+      media_type: "video",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 0,
+      source_kind: "ai_generated",
+      status: "ready",
+      storage_key: "users/1/assets/787/rendered_segment/787-rendered_segment_talking_photo.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("talking_photo");
+  });
+
   it("uses stable media asset playback urls for durable video previews", () => {
     const item = buildWorkspaceDurableMediaLibraryItem({
       created_at: "2026-04-09T00:00:00.000Z",

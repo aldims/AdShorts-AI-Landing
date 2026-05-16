@@ -87,7 +87,7 @@ const getWorkspaceMediaLibraryAssetIdentity = (value) => {
     return `url:${hashWorkspaceMediaLibraryValue(normalizedValue)}`;
 };
 export const getWorkspaceMediaLibraryAssetIdentityKey = (value) => getWorkspaceMediaLibraryAssetIdentity(value);
-export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => item.kind === "photo_animation" && item.previewPosterUrl
+export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => (item.kind === "photo_animation" || item.kind === "talking_photo") && item.previewPosterUrl
     ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
     : typeof item.assetId === "number" && item.assetId > 0
         ? `asset:${item.assetId}`
@@ -102,12 +102,12 @@ export const getWorkspaceMediaLibraryHiddenIdentityKeys = (item) => Array.from(n
     .map((value) => String(value ?? "").trim())
     .filter(Boolean)));
 export const isWorkspaceMediaLibraryItemHidden = (item, hiddenKeys) => getWorkspaceMediaLibraryHiddenIdentityKeys(item).some((key) => hiddenKeys.has(key));
-const getWorkspaceMediaLibraryVideoModeSlotKey = (item) => item.kind === "ai_video" || item.kind === "photo_animation"
+const getWorkspaceMediaLibraryVideoModeSlotKey = (item) => item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo"
     ? `project:${item.projectId}:segment:${item.segmentIndex}:generated-video`
     : null;
 const shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision = (left, right) => left.kind !== right.kind &&
-    (left.kind === "ai_video" || left.kind === "photo_animation") &&
-    (right.kind === "ai_video" || right.kind === "photo_animation") &&
+    (left.kind === "ai_video" || left.kind === "photo_animation" || left.kind === "talking_photo") &&
+    (right.kind === "ai_video" || right.kind === "photo_animation" || right.kind === "talking_photo") &&
     (left.source !== "persisted" || right.source !== "persisted");
 export const dedupeWorkspaceMediaLibraryItems = (items) => {
     const itemsByPrimaryKey = new Map();

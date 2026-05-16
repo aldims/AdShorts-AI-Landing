@@ -122,7 +122,11 @@ const isWorkspaceRenderableMediaPreviewUrl = (value: string | null | undefined) 
 };
 
 const isWorkspaceMediaLibraryItemKind = (value: string): value is WorkspaceMediaLibraryItemKind =>
-  value === "ai_photo" || value === "ai_video" || value === "photo_animation" || value === "image_edit";
+  value === "ai_photo" ||
+  value === "ai_video" ||
+  value === "photo_animation" ||
+  value === "talking_photo" ||
+  value === "image_edit";
 
 const isWorkspaceSegmentEditorVideoSource = (value: string): value is WorkspaceSegmentEditorVideoSource =>
   value === "current" || value === "original";
@@ -288,6 +292,10 @@ const buildWorkspaceMediaLibraryDownloadName = (
     return getWorkspaceVideoDownloadName(`${segmentLabel}-animation`);
   }
 
+  if (kind === "talking_photo") {
+    return getWorkspaceVideoDownloadName(`${segmentLabel}-talking-photo`);
+  }
+
   if (kind === "image_edit") {
     return getWorkspaceImageDownloadName(`${segmentLabel}-edit`);
   }
@@ -357,11 +365,14 @@ const WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS = new Set([
   "generated",
   "image_edit",
   "photo_animation",
+  "talking_photo",
   "segment_ai_image",
   "segment_ai_photo",
   "segment_ai_video",
+  "segment_talking_photo",
   "source_ai_image",
   "source_ai_photo",
+  "source_talking_photo",
 ]);
 
 const WORKSPACE_MEDIA_LIBRARY_NON_AI_CLASSIFIERS = new Set([
@@ -513,6 +524,10 @@ export const getWorkspaceMediaLibraryKindFromDurableAsset = (
   const classifier = `${normalizeText(asset.kind)} ${normalizeText(asset.role)} ${normalizeText(asset.sourceKind)} ${normalizeText(asset.libraryKind)}`.toLowerCase();
 
   if (mediaType === "video") {
+    if (classifier.includes("talking_photo") || classifier.includes("talking-photo") || classifier.includes("talking_avatar")) {
+      return "talking_photo";
+    }
+
     if (classifier.includes("photo_animation") || classifier.includes("animation")) {
       return "photo_animation";
     }
@@ -592,7 +607,7 @@ const buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem = (
 };
 
 const getWorkspaceMediaLibraryItemSpecificityRank = (item: WorkspaceMediaLibraryItem) => {
-  if (item.kind === "photo_animation" || item.kind === "image_edit") {
+  if (item.kind === "photo_animation" || item.kind === "talking_photo" || item.kind === "image_edit") {
     return 3;
   }
 
@@ -992,12 +1007,17 @@ export const buildWorkspacePersistedMediaLibraryItems = (
         if (aiVideoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
           const originalAssetMediaType = normalizeText(segment.originalAsset?.mediaType).toLowerCase();
           const originalAssetMimeType = normalizeText(segment.originalAsset?.mimeType).toLowerCase();
+          const currentClassifier = `${normalizeText(segment.currentAsset?.kind)} ${normalizeText(segment.currentAsset?.role)} ${normalizeText(segment.currentAsset?.sourceKind)} ${normalizeText(segment.currentAsset?.libraryKind)}`.toLowerCase();
+          const isTalkingPhotoVariant =
+            currentClassifier.includes("talking_photo") ||
+            currentClassifier.includes("talking-photo") ||
+            currentClassifier.includes("talking_avatar");
           const isPhotoAnimationVariant =
             originalAssetMediaType === "photo" ||
             originalAssetMediaType === "image" ||
             originalAssetMimeType.startsWith("image/");
-          const videoKind = isPhotoAnimationVariant ? "photo_animation" : "ai_video";
-          const videoSuffix = isPhotoAnimationVariant ? "animation" : "ai-video";
+          const videoKind = isTalkingPhotoVariant ? "talking_photo" : isPhotoAnimationVariant ? "photo_animation" : "ai_video";
+          const videoSuffix = isTalkingPhotoVariant ? "talking-photo" : isPhotoAnimationVariant ? "animation" : "ai-video";
           const assetPosterUrl = segment.currentAsset?.assetId
             ? buildWorkspaceDurableMediaAssetPosterUrl(segment.currentAsset)
             : segment.currentPosterUrl;

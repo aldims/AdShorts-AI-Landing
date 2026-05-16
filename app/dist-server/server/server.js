@@ -18,7 +18,7 @@ import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -3056,6 +3056,125 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/poster", async (req, re
         });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment photo animation poster.",
+        });
+    }
+});
+app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const script = typeof req.body?.script === "string" ? req.body.script.trim() : "";
+    const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const voiceType = typeof req.body?.voiceType === "string" ? req.body.voiceType.trim() : "";
+    const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
+    const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
+    const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
+    const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+    const projectId = Number(req.body?.projectId ?? 0);
+    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    if (!script) {
+        res.status(400).json({ error: "Script is required." });
+        return;
+    }
+    if (!customVideoAssetId && !customVideoFileDataUrl) {
+        res.status(400).json({ error: "Photo source asset id or image data URL is required." });
+        return;
+    }
+    try {
+        const job = await createStudioSegmentTalkingPhotoJob(script, session.user, {
+            customVideoAssetId,
+            customVideoFileDataUrl: customVideoFileDataUrl || undefined,
+            customVideoFileMimeType: customVideoFileMimeType || undefined,
+            customVideoFileName: customVideoFileName || undefined,
+            language,
+            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+            prompt: prompt || undefined,
+            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            voiceType: voiceType || undefined,
+        });
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create segment talking photo job", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to create segment talking photo job.",
+        });
+    }
+});
+app.get("/api/studio/segment-talking-photo/jobs/:jobId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const status = await getStudioSegmentTalkingPhotoJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
+        res.json({ data: status });
+    }
+    catch (error) {
+        console.error("[studio] Failed to fetch segment talking photo job status", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to fetch segment talking photo job status.",
+        });
+    }
+});
+app.get("/api/studio/segment-talking-photo/jobs/:jobId/video", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const asset = await getStudioSegmentTalkingPhotoPlaybackAsset(req.params.jobId, session.user);
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+        res.type(asset.contentType || "video/mp4");
+        res.sendFile(asset.absolutePath);
+    }
+    catch (error) {
+        console.error("[studio] Failed to load segment talking photo playback", {
+            error: getServerErrorMessage(error, "Failed to load generated segment talking photo."),
+            jobId: req.params.jobId,
+        });
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to load generated segment talking photo.",
+        });
+    }
+});
+app.get("/api/studio/segment-talking-photo/jobs/:jobId/poster", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const posterPath = await getStudioSegmentTalkingPhotoJobPosterPath(req.params.jobId, session.user);
+        res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+        res.type("jpg");
+        res.sendFile(posterPath);
+    }
+    catch (error) {
+        console.error("[studio] Failed to load generated segment talking photo poster", {
+            error: getServerErrorMessage(error, "Failed to load generated segment talking photo poster."),
+            jobId: req.params.jobId,
+        });
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to load generated segment talking photo poster.",
         });
     }
 });

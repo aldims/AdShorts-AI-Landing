@@ -2,7 +2,7 @@ import type { WorkspaceMediaAssetLifecycle } from "../../shared/workspace-media-
 
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
 
-export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
+export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation" | "talking_photo" | "image_edit";
 export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
 
@@ -153,7 +153,7 @@ export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
   WorkspaceMediaLibraryItem,
   "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
 >) =>
-  item.kind === "photo_animation" && item.previewPosterUrl
+  (item.kind === "photo_animation" || item.kind === "talking_photo") && item.previewPosterUrl
     ? getWorkspaceMediaLibraryAssetIdentity(item.previewPosterUrl)
     : typeof item.assetId === "number" && item.assetId > 0
       ? `asset:${item.assetId}`
@@ -193,7 +193,7 @@ const getWorkspaceMediaLibraryVideoModeSlotKey = (item: Pick<
   WorkspaceMediaLibraryItem,
   "kind" | "projectId" | "segmentIndex"
 >) =>
-  item.kind === "ai_video" || item.kind === "photo_animation"
+  item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo"
     ? `project:${item.projectId}:segment:${item.segmentIndex}:generated-video`
     : null;
 
@@ -202,8 +202,8 @@ const shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision = (
   right: Pick<WorkspaceMediaLibraryItem, "kind" | "source">,
 ) =>
   left.kind !== right.kind &&
-  (left.kind === "ai_video" || left.kind === "photo_animation") &&
-  (right.kind === "ai_video" || right.kind === "photo_animation") &&
+  (left.kind === "ai_video" || left.kind === "photo_animation" || left.kind === "talking_photo") &&
+  (right.kind === "ai_video" || right.kind === "photo_animation" || right.kind === "talking_photo") &&
   (left.source !== "persisted" || right.source !== "persisted");
 
 export const dedupeWorkspaceMediaLibraryItems = (items: WorkspaceMediaLibraryItem[]) => {

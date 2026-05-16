@@ -15,6 +15,7 @@ import {
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
+  STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
@@ -850,6 +851,9 @@ const normalizeWaveSpeedSegmentAiVideoFileName = (jobId: string) =>
 const normalizeWaveSpeedSegmentPhotoAnimationFileName = (jobId: string) =>
   `segment-photo-animation-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
 
+const normalizeWaveSpeedSegmentTalkingPhotoFileName = (jobId: string) =>
+  `segment-talking-photo-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
+
 const getStudioGenerationCreditCost = (
   videoMode: string,
   options?: { isSegmentEditorGeneration?: boolean; voiceEnabled?: boolean; voiceId?: string | null },
@@ -1430,6 +1434,27 @@ const buildStudioSegmentPhotoAnimationJobPosterProxyUrl = (jobId: string | null 
   }
 
   const proxyUrl = new URL(`/api/studio/segment-photo-animation/jobs/${encodeURIComponent(normalizedJobId)}/poster`, env.appUrl);
+  proxyUrl.searchParams.set("v", normalizedJobId);
+  return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+
+const buildStudioSegmentTalkingPhotoJobVideoProxyUrl = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId) {
+    return null;
+  }
+
+  const proxyUrl = new URL(`/api/studio/segment-talking-photo/jobs/${encodeURIComponent(normalizedJobId)}/video`, env.appUrl);
+  return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+
+const buildStudioSegmentTalkingPhotoJobPosterProxyUrl = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId) {
+    return null;
+  }
+
+  const proxyUrl = new URL(`/api/studio/segment-talking-photo/jobs/${encodeURIComponent(normalizedJobId)}/poster`, env.appUrl);
   proxyUrl.searchParams.set("v", normalizedJobId);
   return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
@@ -2820,6 +2845,22 @@ const normalizeWaveSpeedSegmentPhotoAnimationAsset = (jobId: string): StudioGene
   };
 };
 
+const normalizeWaveSpeedSegmentTalkingPhotoAsset = (jobId: string): StudioGeneratedVideoAsset => {
+  const remoteUrl = buildStudioSegmentTalkingPhotoJobVideoProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated talking photo is unavailable.");
+  }
+
+  return {
+    assetId: null,
+    fileName: normalizeWaveSpeedSegmentTalkingPhotoFileName(jobId),
+    fileSize: 0,
+    mimeType: "video/mp4",
+    posterUrl: buildStudioSegmentTalkingPhotoJobPosterProxyUrl(jobId),
+    remoteUrl,
+  };
+};
+
 const normalizeAdsflowSegmentPhotoAnimationAsset = (
   jobId: string,
   payload?: AdsflowSegmentAiVideoAssetPayload | null,
@@ -2832,6 +2873,25 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
   return {
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
+    fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+    mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
+    posterUrl: null,
+    remoteUrl,
+  };
+};
+
+const normalizeAdsflowSegmentTalkingPhotoAsset = (
+  jobId: string,
+  payload?: AdsflowSegmentAiVideoAssetPayload | null,
+): StudioGeneratedVideoAsset => {
+  const remoteUrl = buildStudioSegmentTalkingPhotoJobVideoProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated talking photo is unavailable.");
+  }
+
+  return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    fileName: normalizeGenerationText(payload?.file_name) || `segment-talking-photo-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
     posterUrl: null,
@@ -3487,7 +3547,7 @@ class AdsflowHttpError extends Error {
   }
 }
 
-type StudioGeneratedVideoPosterKind = "segment-ai-video" | "segment-photo-animation";
+type StudioGeneratedVideoPosterKind = "segment-ai-video" | "segment-photo-animation" | "segment-talking-photo";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -3784,6 +3844,24 @@ const fetchAdsflowSegmentPhotoAnimationJobStatus = async (jobId: string, user: S
 
   return fetchAdsflowJson<AdsflowSegmentAiVideoJobStatusResponse>(
     buildAdsflowUrl(`/api/web/segment-photo-animation/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
+const fetchAdsflowSegmentTalkingPhotoJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return fetchAdsflowJson<AdsflowSegmentAiVideoJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-talking-photo/jobs/${encodeURIComponent(safeJobId)}`, {
       admin_token: env.adsflowAdminToken ?? "",
       external_user_id: externalUserId,
     }),
@@ -5008,6 +5086,104 @@ export async function createStudioSegmentPhotoAnimationJob(
   };
 }
 
+export async function createStudioSegmentTalkingPhotoJob(
+  script: string,
+  user: StudioUser,
+  options?: {
+    customVideoAssetId?: number;
+    customVideoFileDataUrl?: string;
+    customVideoFileMimeType?: string;
+    customVideoFileName?: string;
+    language?: string;
+    projectId?: number;
+    prompt?: string;
+    segmentIndex?: number;
+    voiceType?: string | null;
+  },
+): Promise<StudioSegmentAiVideoJob> {
+  assertAdsflowConfigured();
+
+  const normalizedScript = normalizeGenerationText(script);
+  if (!normalizedScript) {
+    throw new Error("Script is required.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedPrompt =
+    normalizePrompt(String(options?.prompt ?? "")) || "natural talking avatar, stable camera, realistic lip sync";
+  const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+    sourceLanguage: normalizedLanguage,
+  });
+  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
+  const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+  const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+  if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
+    throw new Error("Photo source asset id or image data URL is required.");
+  }
+
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+  const customVideoAssetId =
+    normalizedCustomVideoAssetId
+      ? normalizedCustomVideoAssetId
+      : normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
+      ? await uploadStudioMediaAsset(user, {
+          dataUrl: normalizedCustomVideoFileDataUrl,
+          externalUserId,
+          fileName: normalizedCustomVideoFileName,
+          kind: "segment_source",
+          language: normalizedLanguage,
+          mediaType: inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+          mimeType: normalizedCustomVideoFileMimeType,
+          projectId: normalizedProjectId,
+          role: "segment_source",
+          segmentIndex: normalizedSegmentIndex,
+        })
+      : undefined;
+
+  const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-talking-photo/jobs", {
+    admin_token: env.adsflowAdminToken,
+    credit_cost: STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
+    custom_video_asset_id: customVideoAssetId,
+    custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+    custom_video_mime_type: normalizedCustomVideoFileMimeType,
+    custom_video_original_name: normalizedCustomVideoFileName,
+    external_user_id: externalUserId,
+    language: normalizedLanguage,
+    project_id: normalizedProjectId,
+    prompt: upstreamPrompt,
+    resolution: "720p",
+    script: normalizedScript,
+    seed: -1,
+    segment_index: normalizedSegmentIndex,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+    voice_type: normalizedVoiceType,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment talking photo job id.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
+      payload.user ?? undefined,
+      payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      subscriptionDetails,
+    ),
+    status: String(payload.status ?? "queued"),
+  };
+}
+
 export async function createStudioSegmentSceneSoundJob(
   prompt: string,
   user: StudioUser,
@@ -5202,6 +5378,67 @@ export async function getStudioSegmentPhotoAnimationJobStatus(
 
       return recoverStudioSegmentGeneratedVideoJobStatus("segment-photo-animation", safeJobId, user, {
         fallbackError: "Анимация фото завершилась с ошибкой в AdsFlow. Попробуйте ещё раз.",
+      });
+    }
+
+    throw error;
+  }
+}
+
+export async function getStudioSegmentTalkingPhotoJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiVideoJobStatus> {
+  const safeJobId = String(jobId ?? "").trim();
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+
+  if (waveSpeedPredictionId) {
+    const profile = await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const prediction = await getWaveSpeedPredictionStatus(waveSpeedPredictionId);
+    const status = prediction.status || "processing";
+    const asset = prediction.outputUrl ? normalizeWaveSpeedSegmentTalkingPhotoAsset(safeJobId) : undefined;
+    if (asset) {
+      warmStudioGeneratedVideoPlayback("segment-talking-photo", safeJobId, user);
+      warmStudioGeneratedVideoPoster("segment-talking-photo", safeJobId, user);
+    }
+
+    return {
+      asset,
+      error: prediction.error || undefined,
+      jobId: safeJobId,
+      profile,
+      status,
+    };
+  }
+
+  try {
+    const payload = await fetchAdsflowSegmentTalkingPhotoJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const resolvedJobId = String(payload.job_id ?? jobId).trim() || safeJobId;
+    const asset = payload.asset ? normalizeAdsflowSegmentTalkingPhotoAsset(resolvedJobId, payload.asset) : undefined;
+    if (asset) {
+      warmStudioGeneratedVideoPlayback("segment-talking-photo", resolvedJobId, user);
+      warmStudioGeneratedVideoPoster("segment-talking-photo", resolvedJobId, user);
+    }
+
+    return {
+      asset,
+      error: normalizeGenerationText(payload.error) || undefined,
+      jobId: resolvedJobId,
+      profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+        rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      }),
+      status,
+    };
+  } catch (error) {
+    if (isAdsflowHttpStatusError(error, 500)) {
+      console.warn("[studio] Segment talking photo status returned 500, probing file endpoint", {
+        error: error instanceof Error ? error.message : "Unknown AdsFlow status error.",
+        jobId: safeJobId,
+      });
+
+      return recoverStudioSegmentGeneratedVideoJobStatus("segment-talking-photo", safeJobId, user, {
+        fallbackError: "Говорящее фото завершилось с ошибкой в AdsFlow. Попробуйте ещё раз.",
       });
     }
 
@@ -5436,10 +5673,7 @@ const probeStudioGeneratedVideoFileAvailability = async (
   user: StudioUser,
 ): Promise<boolean> => {
   try {
-    const upstreamUrl =
-      kind === "segment-ai-video"
-        ? await getStudioSegmentAiVideoJobFileProxyTarget(jobId, user)
-        : await getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId, user);
+    const upstreamUrl = await getStudioGeneratedVideoFileProxyTarget(kind, jobId, user);
     const response = await fetchAdsflowResponse(
       upstreamUrl,
       {
@@ -5477,10 +5711,7 @@ const recoverStudioSegmentGeneratedVideoJobStatus = async (
   const isFileAvailable = await probeStudioGeneratedVideoFileAvailability(kind, safeJobId, user);
 
   if (isFileAvailable) {
-    const asset =
-      kind === "segment-ai-video"
-        ? normalizeAdsflowSegmentAiVideoAsset(safeJobId)
-        : normalizeAdsflowSegmentPhotoAnimationAsset(safeJobId);
+    const asset = normalizeAdsflowSegmentGeneratedVideoAsset(kind, safeJobId);
 
     warmStudioGeneratedVideoPlayback(kind, safeJobId, user);
     warmStudioGeneratedVideoPoster(kind, safeJobId, user);
@@ -5554,6 +5785,33 @@ export async function getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId: st
   });
 }
 
+export async function getStudioSegmentTalkingPhotoJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiVideoPredictionId(safeJobId);
+  if (waveSpeedPredictionId) {
+    await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
+    const outputUrl = await getWaveSpeedPredictionOutputUrl(waveSpeedPredictionId);
+    if (!outputUrl) {
+      throw new Error("WaveSpeed generated talking photo is not ready yet.");
+    }
+
+    return new URL(outputUrl);
+  }
+
+  assertAdsflowConfigured();
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return buildAdsflowUrl(`/api/web/segment-talking-photo/jobs/${encodeURIComponent(safeJobId)}/file`, {
+    admin_token: env.adsflowAdminToken ?? "",
+    external_user_id: externalUserId,
+  });
+}
+
 export async function getStudioSegmentSceneSoundJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
   const safeJobId = String(jobId ?? "").trim();
   if (!safeJobId) {
@@ -5570,6 +5828,35 @@ export async function getStudioSegmentSceneSoundJobFileProxyTarget(jobId: string
   });
 }
 
+const getStudioGeneratedVideoFileProxyTarget = (
+  kind: StudioGeneratedVideoPosterKind,
+  jobId: string,
+  user: StudioUser,
+): Promise<URL> => {
+  switch (kind) {
+    case "segment-ai-video":
+      return getStudioSegmentAiVideoJobFileProxyTarget(jobId, user);
+    case "segment-photo-animation":
+      return getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId, user);
+    case "segment-talking-photo":
+      return getStudioSegmentTalkingPhotoJobFileProxyTarget(jobId, user);
+  }
+};
+
+const normalizeAdsflowSegmentGeneratedVideoAsset = (
+  kind: StudioGeneratedVideoPosterKind,
+  jobId: string,
+): StudioGeneratedVideoAsset => {
+  switch (kind) {
+    case "segment-ai-video":
+      return normalizeAdsflowSegmentAiVideoAsset(jobId);
+    case "segment-photo-animation":
+      return normalizeAdsflowSegmentPhotoAnimationAsset(jobId);
+    case "segment-talking-photo":
+      return normalizeAdsflowSegmentTalkingPhotoAsset(jobId);
+  }
+};
+
 const getStudioGeneratedVideoPlaybackSource = async (
   kind: StudioGeneratedVideoPosterKind,
   jobId: string,
@@ -5580,10 +5867,7 @@ const getStudioGeneratedVideoPlaybackSource = async (
     throw new Error("Job id is required.");
   }
 
-  const upstreamUrl =
-    kind === "segment-ai-video"
-      ? await getStudioSegmentAiVideoJobFileProxyTarget(safeJobId, user)
-      : await getStudioSegmentPhotoAnimationJobFileProxyTarget(safeJobId, user);
+  const upstreamUrl = await getStudioGeneratedVideoFileProxyTarget(kind, safeJobId, user);
 
   return {
     cacheKey: getWorkspaceProjectPlaybackCacheKey({
@@ -5635,10 +5919,7 @@ const getStudioGeneratedVideoPosterSource = async (
     throw new Error("Job id is required.");
   }
 
-  const upstreamUrl =
-    kind === "segment-ai-video"
-      ? await getStudioSegmentAiVideoJobFileProxyTarget(safeJobId, user)
-      : await getStudioSegmentPhotoAnimationJobFileProxyTarget(safeJobId, user);
+  const upstreamUrl = await getStudioGeneratedVideoFileProxyTarget(kind, safeJobId, user);
 
   return {
     cacheKey: getWorkspaceVideoPosterCacheKey({
@@ -5680,6 +5961,10 @@ export async function getStudioSegmentPhotoAnimationJobPosterPath(jobId: string,
   return ensureWorkspaceVideoPoster(await getStudioGeneratedVideoPosterSource("segment-photo-animation", jobId, user));
 }
 
+export async function getStudioSegmentTalkingPhotoJobPosterPath(jobId: string, user: StudioUser): Promise<string> {
+  return ensureWorkspaceVideoPoster(await getStudioGeneratedVideoPosterSource("segment-talking-photo", jobId, user));
+}
+
 export async function getStudioSegmentAiVideoPlaybackAsset(
   jobId: string,
   user: StudioUser,
@@ -5692,6 +5977,13 @@ export async function getStudioSegmentPhotoAnimationPlaybackAsset(
   user: StudioUser,
 ): Promise<WorkspaceProjectPlaybackAsset> {
   return getStudioGeneratedVideoPlaybackAsset("segment-photo-animation", jobId, user);
+}
+
+export async function getStudioSegmentTalkingPhotoPlaybackAsset(
+  jobId: string,
+  user: StudioUser,
+): Promise<WorkspaceProjectPlaybackAsset> {
+  return getStudioGeneratedVideoPlaybackAsset("segment-talking-photo", jobId, user);
 }
 
 const getStudioPlaybackSource = async (
