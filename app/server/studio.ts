@@ -577,6 +577,7 @@ export type StudioSegmentEditorSegment = {
   startTime?: number;
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
+  voiceType?: string | null;
 };
 
 export type StudioSegmentEditorPayload = {
@@ -940,6 +941,7 @@ const normalizeStudioSegmentVideoAction = (value: unknown): StudioSegmentEditorV
 
 const normalizeStudioSegmentEditorPayload = (
   value: unknown,
+  language: Locale,
   fallbackProjectId?: number,
 ): StudioSegmentEditorPayload | undefined => {
   if (!value || typeof value !== "object") {
@@ -978,6 +980,8 @@ const normalizeStudioSegmentEditorPayload = (
       startTime?: unknown;
       text?: unknown;
       videoAction?: unknown;
+      voiceType?: unknown;
+      voice_type?: unknown;
     };
     const index = normalizeNonNegativeInteger(segmentRecord.index);
     if (index === null) {
@@ -992,6 +996,11 @@ const normalizeStudioSegmentEditorPayload = (
     const startTime = normalizeNumber(segmentRecord.startTime) ?? undefined;
     const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
     const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
+    const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
+    const segmentVoiceType =
+      segmentVoiceTypeRaw === null
+        ? null
+        : normalizeStudioVoiceIdForLanguage(String(segmentVoiceTypeRaw ?? "").trim(), language) ?? null;
 
     if (videoAction === "custom" && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
       throw new Error(`Upload a custom video for segment ${index + 1} or choose a different source.`);
@@ -1010,6 +1019,7 @@ const normalizeStudioSegmentEditorPayload = (
       startTime,
       text: normalizeGenerationText(String(segmentRecord.text ?? "")),
       videoAction,
+      voiceType: segmentVoiceType,
     });
   });
 
@@ -4071,12 +4081,17 @@ export async function createStudioGenerationJob(
   const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
   const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-  const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedProjectId ?? undefined);
-  const requiredCredits = getStudioGenerationCreditCost(normalizedVideoMode, {
-    isSegmentEditorGeneration: Boolean(normalizedSegmentEditor),
-    voiceEnabled: isVoiceEnabled,
-    voiceId: normalizedVoiceId,
-  });
+  const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined);
+  const requiredCredits = normalizedSegmentEditor
+    ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
+      Math.max(
+        isVoiceEnabled ? getStudioVoiceCreditCost(normalizedVoiceId) : 0,
+        ...normalizedSegmentEditor.segments.map((segment) => getStudioVoiceCreditCost(segment.voiceType)),
+      )
+    : getStudioGenerationCreditCost(normalizedVideoMode, {
+        voiceEnabled: isVoiceEnabled,
+        voiceId: normalizedVoiceId,
+      });
   const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
   const externalUserId = await resolveStudioExternalUserId(user);
   const shouldAddWatermark =
@@ -4209,6 +4224,7 @@ export async function createStudioGenerationJob(
                 start_time: segment.startTime,
                 text: segment.text,
                 video_action: segment.videoAction,
+                voice_type: segment.voiceType ?? null,
               };
             }),
           ),

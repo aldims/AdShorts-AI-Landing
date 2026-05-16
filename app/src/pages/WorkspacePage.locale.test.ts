@@ -437,6 +437,25 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist.map((item) => item.label)).toContain("Сегмент 1: добавлен звук сцены");
   });
 
+  it("treats a scene voice override as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({ index: 0, voiceType: null });
+    const draftSegment = createDraftSegment({ index: 0, voiceType: "Liam" });
+
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(draftSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(checklist).toEqual([
+      expect.objectContaining({
+        kind: "segment",
+        label: "Сегмент 1: озвучка: голос Александр",
+        resetVoice: true,
+        segmentIndex: 0,
+      }),
+    ]);
+  });
+
   it("uses the server baseline for structure changes even when an applied draft already matches", () => {
     const firstSegment = createDraftSegment({ index: 0, text: "First" });
     const secondSegment = createDraftSegment({ index: 1, startTime: 4, endTime: 8, duration: 4, text: "Second" });

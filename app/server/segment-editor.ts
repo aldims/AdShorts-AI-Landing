@@ -42,6 +42,7 @@ type AdsflowSegmentEditorSegmentPayload = {
   speech_words?: AdsflowSegmentEditorSpeechWordPayload[] | null;
   start_time?: number | string | null;
   text?: string | null;
+  voice_type?: string | null;
 };
 
 export type AdsflowSegmentEditorResponse = {
@@ -165,6 +166,7 @@ export type WorkspaceSegmentEditorSegment = {
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
   text: string;
+  voiceType: string | null;
 };
 
 export type WorkspaceSegmentEditorSession = {
@@ -532,6 +534,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         speech_words: Array.isArray(record.speech_words) ? record.speech_words as AdsflowSegmentEditorSpeechWordPayload[] : null,
         start_time: startTime,
         text,
+        voice_type: normalizeText(record.voice_type),
       } satisfies AdsflowSegmentEditorSegmentPayload;
     })
     .filter((segment): segment is AdsflowSegmentEditorSegmentPayload => Boolean(segment));
@@ -1171,6 +1174,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     speechWords,
     startTime,
     text: normalizeText(payload.text),
+    voiceType: normalizeText(payload.voice_type) || null,
   };
 };
 

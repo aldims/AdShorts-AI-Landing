@@ -491,6 +491,144 @@
     0 9px 24px -12px rgba(0, 0, 0, 0.84);
 }
 
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-panel {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-summary {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid rgba(160, 200, 255, 0.13);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse 80% 70% at 16% 0%, rgba(130, 190, 255, 0.12), transparent 70%),
+    rgba(10, 13, 22, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-summary span,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-summary small {
+  color: rgba(166, 181, 210, 0.68);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-summary strong {
+  color: rgba(236, 244, 255, 0.96);
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 270px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(160, 190, 230, 0.22);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012)),
+    rgba(8, 10, 18, 0.70);
+  color: rgba(230, 238, 252, 0.92);
+  text-align: left;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.14s ease;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option:hover {
+  border-color: rgba(155, 205, 255, 0.18);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.018)),
+    rgba(10, 13, 24, 0.78);
+  transform: translateY(-1px);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option.is-selected {
+  border-color: rgba(140, 190, 255, 0.42);
+  background:
+    radial-gradient(ellipse 92% 70% at 20% -12%, rgba(125, 190, 255, 0.20), transparent 72%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.024)),
+    rgba(9, 14, 28, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 0.5px rgba(150, 205, 255, 0.18);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option strong {
+  overflow: hidden;
+  color: rgba(236, 244, 255, 0.96);
+  font-size: 0.86rem;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option small {
+  overflow: hidden;
+  color: rgba(161, 178, 207, 0.68);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option em,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option b {
+  justify-self: end;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(120, 82, 255, 0.16);
+  color: rgba(224, 214, 255, 0.94);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 780;
+  line-height: 1;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-option b {
+  background: rgba(245, 185, 70, 0.16);
+  color: rgba(255, 220, 145, 0.96);
+}
+
+@media (max-width: 760px) {
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__scene-voice-list {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: 320px;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    SUBMIT BUTTON — purple CTA matching studio → 10 style
 ─────────────────────────────────────────────────────────────── */

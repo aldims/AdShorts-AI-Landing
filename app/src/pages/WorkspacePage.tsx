@@ -629,7 +629,7 @@ type WorkspaceSegmentAiVideoMode = "ai_video" | "photo_animation";
 type WorkspaceSegmentMediaType = "photo" | "video";
 type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
-type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "image_upscale" | "scene_sound" | "upload" | "library";
+type WorkspaceSegmentVisualModalTab = "ai_video" | "photo_animation" | "ai_photo" | "image_edit" | "image_upscale" | "scene_sound" | "voiceover" | "upload" | "library";
 type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab;
 
 type WorkspaceSegmentEditorSpeechWord = {
@@ -678,6 +678,8 @@ type WorkspaceSegmentEditorSegment = {
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
   text: string;
+  voiceType?: string | null;
+  voice_type?: string | null;
 };
 
 type WorkspaceSegmentEditorSession = {
@@ -710,6 +712,7 @@ type WorkspaceSegmentEditorPayloadSegment = {
   startTime?: number;
   text: string;
   videoAction: WorkspaceSegmentEditorPayloadVideoAction;
+  voiceType?: string | null;
 };
 
 type WorkspaceSegmentEditorPayload = {
@@ -2312,6 +2315,7 @@ type WorkspaceSegmentEditorChecklistItem =
       label: string;
       resetText: boolean;
       resetSceneSound: boolean;
+      resetVoice: boolean;
       resetVisual: boolean;
       restoreVisual: boolean;
       segmentIndex: number;
@@ -2491,6 +2495,35 @@ const isWorkspaceSegmentDraftSceneSoundEdited = (
   return currentIdentity !== baselineIdentity;
 };
 
+const getWorkspaceSegmentVoiceOverrideId = (
+  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
+) => normalizeWorkspaceSegmentEditorSetting(segment?.voiceType ?? segment?.voice_type) ?? null;
+
+const normalizeWorkspaceSegmentVoiceOverrideForLanguage = (
+  voiceId: string | null | undefined,
+  language: StudioLanguage,
+) => {
+  const normalizedVoiceId = normalizeWorkspaceSegmentEditorSetting(voiceId);
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  return (
+    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === normalizedVoiceKey)?.id ?? null
+  );
+};
+
+const getWorkspaceSegmentVoiceOverrideForLanguage = (
+  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
+  language: StudioLanguage,
+) => normalizeWorkspaceSegmentVoiceOverrideForLanguage(getWorkspaceSegmentVoiceOverrideId(segment), language);
+
+const isWorkspaceSegmentDraftVoiceEdited = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => getWorkspaceSegmentVoiceOverrideId(segment) !== getWorkspaceSegmentVoiceOverrideId(baselineSegment);
+
 const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
@@ -2507,6 +2540,15 @@ const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   }
 
   return "обновлен звук сцены";
+};
+
+const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const voiceId = getWorkspaceSegmentVoiceOverrideId(segment);
+  if (!voiceId) {
+    return "озвучка как в видео";
+  }
+
+  return `озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId)}`;
 };
 
 const lowerCaseWorkspaceChecklistLabelPrefix = (value: string) => {
@@ -2619,6 +2661,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     let resetVisual = false;
     let restoreVisual = false;
     let resetSceneSound = false;
+    let resetVoice = false;
     const baselineSegment = baselineSegmentsByIndex.get(segment.index);
 
     if (isWorkspaceSegmentDraftTextEdited(segment)) {
@@ -2639,6 +2682,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
       resetSceneSound = true;
     }
 
+    if (isWorkspaceSegmentDraftVoiceEdited(segment, baselineSegment)) {
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneVoiceLabel(segment));
+      resetVoice = true;
+    }
+
     if (segmentChanges.length > 0) {
       items.push({
         key: `segment-change:${segment.index}`,
@@ -2646,6 +2694,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
         label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
         resetSceneSound,
         resetText,
+        resetVoice,
         resetVisual,
         restoreVisual,
         segmentIndex: segment.index,
@@ -4567,6 +4616,7 @@ const getWorkspaceSegmentPromptSceneModeForTab = (tab: WorkspaceSegmentEditorPro
     case "image_edit":
     case "image_upscale":
     case "scene_sound":
+    case "voiceover":
       return "edit";
     default:
       return "create";
@@ -4581,7 +4631,7 @@ const getWorkspaceSegmentVisualTabForPromptSceneMode = (
   const candidateTabs =
     mode === "create"
       ? (["ai_photo", "ai_video", "library", "upload"] as const)
-      : (["photo_animation", "image_edit", "image_upscale", "scene_sound"] as const);
+      : (["photo_animation", "image_edit", "image_upscale", "scene_sound", "voiceover"] as const);
 
   if (candidateTabs.some((tab) => tab === currentTab)) {
     return resolveWorkspaceSegmentVisualModalTab(segment, currentTab);
@@ -5218,6 +5268,39 @@ const getStudioEditVideoGenerationRequiredCredits = (
     voiceId: options?.voiceId,
   });
 
+const getWorkspaceSegmentEditorVoiceCreditCost = (
+  session: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null | undefined,
+) => {
+  if (!session) {
+    return 0;
+  }
+
+  const voiceCreditCosts: number[] = [];
+  const language = getWorkspaceSegmentEditorSessionLanguage(session);
+  if (normalizeWorkspaceSegmentEditorSetting(session.voiceType) !== "none") {
+    voiceCreditCosts.push(getStudioVoiceCreditCost(session.voiceType));
+  }
+
+  for (const segment of session.segments) {
+    const segmentVoiceId = getWorkspaceSegmentVoiceOverrideForLanguage(segment, language);
+    if (segmentVoiceId && segmentVoiceId !== "none") {
+      voiceCreditCosts.push(getStudioVoiceCreditCost(segmentVoiceId));
+    }
+  }
+
+  return Math.max(0, ...voiceCreditCosts);
+};
+
+const getWorkspaceSegmentEditorGenerationRequiredCredits = (
+  session: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null | undefined,
+) => {
+  if (!session) {
+    return getStudioEditVideoGenerationRequiredCredits();
+  }
+
+  return STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getWorkspaceSegmentEditorVoiceCreditCost(session);
+};
+
 const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 
@@ -5350,6 +5433,7 @@ const cloneWorkspaceSegmentEditorDraftSegment = (
   sceneSoundPrompt: typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "",
   sceneSoundPromptInitialized: Boolean(segment.sceneSoundPromptInitialized),
   textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text, fallbackLanguage),
+  voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, fallbackLanguage),
   visualReset: Boolean(segment.visualReset),
 });
 
@@ -5801,6 +5885,7 @@ const restoreWorkspaceSegmentDraftVisualFromBaseline = (
   sceneSoundPrompt: baselineSegment.sceneSoundPrompt,
   sceneSoundPromptInitialized: baselineSegment.sceneSoundPromptInitialized,
   videoAction: baselineSegment.videoAction,
+  voiceType: getWorkspaceSegmentVoiceOverrideId(baselineSegment),
   visualReset: Boolean(baselineSegment.visualReset),
 });
 
@@ -5944,6 +6029,7 @@ const createWorkspaceSegmentEditorDraftSession = (
             [sourceLanguage]: segment.text,
           },
           videoAction: "original",
+          voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
           visualReset: false,
         };
       }),
@@ -6174,6 +6260,7 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       : shouldUseFreshServerAiVideo
         ? "ai"
         : liveSegment.videoAction,
+    voiceType: getWorkspaceSegmentVoiceOverrideId(liveSegment) ?? getWorkspaceSegmentVoiceOverrideId(normalizedFreshSegment),
     visualReset: liveSegment.visualReset,
   };
 };
@@ -6346,12 +6433,14 @@ const normalizeWorkspaceSegmentEditorSession = (
   session: WorkspaceSegmentEditorSession,
 ): WorkspaceSegmentEditorSession => {
   const sanitizedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(session);
+  const language = getWorkspaceSegmentEditorSessionLanguage(sanitizedSession);
   return {
     ...sanitizedSession,
-    language: normalizeStudioLanguageValue(sanitizedSession.language) ?? "",
+    language,
     segments: sanitizedSession.segments.map((segment) => ({
       ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
       mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
+      voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, language),
     })),
   };
 };
@@ -7159,6 +7248,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       Boolean(normalizedSceneSoundPrompt) ||
       Boolean(normalizedSceneSoundGeneratedFromPrompt) ||
       Boolean(normalizedSceneSoundAsset);
+    const normalizedVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
     const normalizedMediaType = normalizeWorkspaceSegmentMediaType(segment.mediaType);
     const normalizedTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
       segment.textByLanguage,
@@ -7202,6 +7292,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedSceneSoundPrompt !== segment.sceneSoundPrompt ||
       normalizedSceneSoundGeneratedFromPrompt !== segment.sceneSoundGeneratedFromPrompt ||
       normalizedSceneSoundPromptInitialized !== segment.sceneSoundPromptInitialized ||
+      normalizedVoiceType !== getWorkspaceSegmentVoiceOverrideId(segment) ||
       normalizedVideoAction !== segment.videoAction ||
       normalizedMediaType !== segment.mediaType;
 
@@ -7251,6 +7342,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
         textByLanguage: normalizedTextByLanguage,
         videoAction: normalizedVideoAction,
+        voiceType: normalizedVoiceType,
         visualReset: Boolean(segment.visualReset),
       };
     }
@@ -7281,6 +7373,7 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
       textByLanguage: normalizedTextByLanguage,
       videoAction: "original" as const,
+      voiceType: normalizedVoiceType,
       visualReset: Boolean(segment.visualReset),
     };
   });
@@ -7416,6 +7509,7 @@ const buildWorkspaceSegmentEditorPayload = async (
       startTime: segment.startTime,
       text: segment.text,
       videoAction: payloadVideoAction,
+      voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
     });
   }
 
@@ -16554,10 +16648,7 @@ export function WorkspacePage({
   };
   const isCurrentDraftSubtitleDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none";
   const isCurrentDraftVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType) === "none";
-  const segmentEditorCreateShortsRequiredCredits = getStudioEditVideoGenerationRequiredCredits({
-    voiceEnabled: !isCurrentDraftVoiceDisabled,
-    voiceId: segmentEditorDraft?.voiceType,
-  });
+  const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
@@ -16572,10 +16663,7 @@ export function WorkspacePage({
     currentProjectId && segmentEditorAppliedSession?.projectId === currentProjectId ? segmentEditorAppliedSession : null;
   const hasAppliedSegmentEditorSession = Boolean(currentAppliedSegmentEditorSession);
   const studioPrimaryActionRequiredCredits = hasAppliedSegmentEditorSession
-    ? getStudioEditVideoGenerationRequiredCredits({
-        voiceEnabled: normalizeWorkspaceSegmentEditorSetting(currentAppliedSegmentEditorSession?.voiceType) !== "none",
-        voiceId: currentAppliedSegmentEditorSession?.voiceType,
-      })
+    ? getWorkspaceSegmentEditorGenerationRequiredCredits(currentAppliedSegmentEditorSession)
     : studioCreateRequiredCredits;
   const studioPrimaryActionCostLabel = `${studioPrimaryActionRequiredCredits} ⚡`;
   const studioPrimaryActionLabel = hasAppliedSegmentEditorSession
@@ -17229,6 +17317,13 @@ export function WorkspacePage({
     selectedVoiceOptions.find((voice) => voice.id === normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType))?.id ??
     resolvedSelectedVoiceId;
   const studioSidebarVoiceEnabled = segmentEditorDraft ? !isCurrentDraftVoiceDisabled : isVoiceoverEnabled;
+  const activeSegmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(activeSegment, selectedLanguage);
+  const activeSegmentEffectiveVoiceId = activeSegmentVoiceOverrideId
+    ? resolveStudioVoiceIdForLanguage(selectedLanguage, activeSegmentVoiceOverrideId, studioSidebarVoiceId)
+    : studioSidebarVoiceId;
+  const activeSegmentVoiceOption =
+    selectedVoiceOptions.find((voice) => voice.id === activeSegmentEffectiveVoiceId) ?? selectedVoiceOptions[0] ?? null;
+  const activeSegmentUsesGlobalVoice = !activeSegmentVoiceOverrideId || activeSegmentVoiceOverrideId === studioSidebarVoiceId;
   const studioSidebarMusicTypeRaw = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.musicType);
   const studioSidebarMusicType = studioMusicOptions.some((option) => option.id === studioSidebarMusicTypeRaw)
     ? (studioSidebarMusicTypeRaw as StudioMusicType)
@@ -19682,6 +19777,7 @@ export function WorkspacePage({
             segment.originalTextByLanguage?.[previousLanguage] ??
             segment.originalText,
           text: cachedLocalizedSegments[index]?.text ?? segment.text,
+          voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, language),
         })),
       }));
       return;
@@ -19728,6 +19824,7 @@ export function WorkspacePage({
               [previousLanguage]: currentLanguageText,
               [language]: nextText,
             },
+            voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, language),
           };
         }),
       }));
@@ -19764,6 +19861,31 @@ export function WorkspacePage({
     updateSegmentEditorDraft((currentDraft) => ({
       ...currentDraft,
       voiceType: voiceId,
+    }));
+  };
+
+  const handleSegmentEditorSceneVoiceUseGlobal = () => {
+    if (!activeSegment) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+      ...segment,
+      voiceType: null,
+    }));
+  };
+
+  const handleSegmentEditorSceneVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
+    if (!activeSegment) {
+      return;
+    }
+
+    const nextVoiceId = resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+      ...segment,
+      voiceType: nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
     }));
   };
 
@@ -20494,6 +20616,18 @@ export function WorkspacePage({
     if (activeSegment?.index === targetSegmentIndex || segmentAiPhotoModalSegmentIndex === targetSegmentIndex) {
       setSegmentSceneSoundModalPrompt(nextSceneSoundPromptInitialized ? nextSceneSoundPrompt : "");
     }
+  };
+
+  const resetSegmentEditorVoiceByIndex = (targetSegmentIndex: number) => {
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (segment) => segment.index === targetSegmentIndex,
+    );
+
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
+      ...segment,
+      voiceType: getWorkspaceSegmentVoiceOverrideId(baselineSegment),
+    }));
   };
 
   const pollSegmentEditorAiPhotoJob = async (
@@ -22429,10 +22563,7 @@ export function WorkspacePage({
       return;
     }
 
-    const requiredCredits = getStudioEditVideoGenerationRequiredCredits({
-      voiceEnabled: normalizeWorkspaceSegmentEditorSetting(effectiveDraft.voiceType) !== "none",
-      voiceId: effectiveDraft.voiceType,
-    });
+    const requiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(effectiveDraft);
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setSegmentEditorVideoError(null);
@@ -25527,6 +25658,10 @@ export function WorkspacePage({
                     resetSegmentEditorSceneSoundByIndex(item.segmentIndex);
                   }
 
+                  if (item.resetVoice) {
+                    resetSegmentEditorVoiceByIndex(item.segmentIndex);
+                  }
+
                   return;
                 }
 
@@ -25627,6 +25762,7 @@ export function WorkspacePage({
   const isPromptImageEditMode = segmentEditorPromptToolTab === "image_edit";
   const isPromptUpscaleMode = segmentEditorPromptToolTab === "image_upscale";
   const isPromptSceneSoundMode = segmentEditorPromptToolTab === "scene_sound";
+  const isPromptVoiceoverMode = segmentEditorPromptToolTab === "voiceover";
   const isPromptLibraryMode = segmentEditorPromptToolTab === "library";
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
@@ -25636,6 +25772,8 @@ export function WorkspacePage({
     ? segmentImageEditModalPrompt
     : isPromptSceneSoundMode
       ? segmentSceneSoundModalPrompt
+    : isPromptVoiceoverMode
+      ? ""
     : isPromptAiPhotoMode
       ? segmentAiPhotoModalPrompt
       : segmentAiVideoModalPrompt;
@@ -25744,6 +25882,8 @@ export function WorkspacePage({
       void handleSegmentAiPhotoModalUpscaleImage({ segmentIndex: activeSegment.index });
     } else if (isPromptSceneSoundMode) {
       void handleSegmentSceneSoundGenerate({ prompt: segmentSceneSoundModalPrompt, segmentIndex: activeSegment.index });
+    } else if (isPromptVoiceoverMode) {
+      return;
     } else if (isPromptLibraryMode) {
       setSegmentAiPhotoModalTab("library");
     } else {
@@ -25764,6 +25904,8 @@ export function WorkspacePage({
             ? workspaceText(locale, "Улучшить качество", "Upscale image")
             : isPromptSceneSoundMode
               ? workspaceText(locale, "Добавить звук", "Add sound")
+            : isPromptVoiceoverMode
+              ? workspaceText(locale, "Выберите голос", "Choose voice")
             : isPromptLibraryMode
               ? workspaceText(locale, "Выбрать визуал", "Select visual")
               : segmentAiPhotoModalCustomFileName
@@ -25818,6 +25960,8 @@ export function WorkspacePage({
             ? workspaceText(locale, "Повысить качество кадра", "Improve shot quality")
             : isPromptSceneSoundMode
               ? workspaceText(locale, "Звук для этой сцены", "Sound for this scene")
+            : isPromptVoiceoverMode
+              ? workspaceText(locale, "Озвучка этой сцены", "Voiceover for this scene")
             : isPromptLibraryMode
               ? workspaceText(locale, "Выбор из медиатеки", "Select from library")
               : workspaceText(locale, "Свой визуал", "Custom visual");
@@ -25829,6 +25973,8 @@ export function WorkspacePage({
         ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
         : isPromptSceneSoundMode
           ? workspaceText(locale, "Опишите атмосферу, шумы и музыкальные акценты для текущей сцены.", "Describe ambience, effects, and musical accents for the current scene.")
+        : isPromptVoiceoverMode
+          ? workspaceText(locale, "Выберите голос только для активной сцены или оставьте голос всего видео.", "Choose a voice only for the active scene or keep the whole-video voice.")
         : isPromptImageEditMode
           ? workspaceText(locale, "Опишите одну конкретную правку без смены всей сцены.", "Describe one specific edit without replacing the whole scene.")
             : workspaceText(locale, "Опишите кадр коротко: объект, действие, окружение, свет.", "Describe the shot briefly: subject, action, setting, light.");
@@ -25891,6 +26037,15 @@ export function WorkspacePage({
         : workspaceText(locale, "Без звука сцены", "No scene sound"),
       tone: activeSegment?.sceneSoundAsset ? "edited" : "neutral",
     },
+    {
+      key: "voice",
+      label: activeSegmentUsesGlobalVoice
+        ? workspaceText(locale, "Голос как в видео", "Video voice")
+        : activeSegmentVoiceOption?.label
+          ? workspaceText(locale, `Голос ${activeSegmentVoiceOption.label}`, `Voice ${activeSegmentVoiceOption.label}`)
+          : workspaceText(locale, "Голос изменен", "Voice changed"),
+      tone: activeSegmentUsesGlobalVoice ? "neutral" : "edited",
+    },
   ];
   const renderSegmentEditorPromptToolIcon = (
     kind:
@@ -25902,6 +26057,7 @@ export function WorkspacePage({
       | "image_edit"
       | "image_upscale"
       | "scene_sound"
+      | "voiceover"
       | "brand",
   ) => {
     const iconClassName = `studio-segment-editor__prompt-tool-icon studio-segment-editor__prompt-tool-icon--${kind.replace("_", "-")}`;
@@ -25935,6 +26091,10 @@ export function WorkspacePage({
                   ? "/icons/segment-image-edit-icon-generated.png"
                   : kind === "image_upscale"
                     ? "/icons/segment-image-upscale-icon-generated.png"
+                    : kind === "scene_sound"
+                      ? "/icons/segment-scene-sound-icon-generated.png"
+                    : kind === "voiceover"
+                      ? null
                     : kind === "brand"
                       ? "/icons/segment-brand-icon-generated.png"
                       : null;
@@ -26080,6 +26240,19 @@ export function WorkspacePage({
       );
     }
 
+    if (kind === "voiceover") {
+      return renderIconSvg(
+        <>
+          <rect x="15" y="14" width="34" height="36" rx="11" fill={`url(#${glassGradientId})`} opacity="0.32" />
+          <rect x="15" y="14" width="34" height="36" rx="11" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" filter={`url(#${glowFilterId})`} />
+          <rect x="26" y="18" width="12" height="22" rx="6" fill={`url(#${cyanGradientId})`} filter={`url(#${glowFilterId})`} />
+          <path d="M21.5 31.5a10.5 10.5 0 0 0 21 0M32 42v6M26.5 48h11" stroke={`url(#${violetGradientId})`} strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M41 20.5c2.8 2.2 4.4 5.5 4.4 9.1M23 20.5c-2.8 2.2-4.4 5.5-4.4 9.1" stroke="white" strokeOpacity="0.48" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="m48.5 11.5 1.8 4 4.2 1.6-4.2 1.6-1.8 4-1.8-4-4.2-1.6 4.2-1.6 1.8-4Z" fill="white" opacity="0.92" />
+        </>,
+      );
+    }
+
     return renderIconSvg(
       <>
         <rect x="15" y="15" width="34" height="34" rx="9" fill={`url(#${glassGradientId})`} opacity="0.3" />
@@ -26099,6 +26272,7 @@ export function WorkspacePage({
       | "image_edit"
       | "image_upscale"
       | "scene_sound"
+      | "voiceover"
       | "brand",
     label: string,
   ) => (
@@ -26299,6 +26473,20 @@ export function WorkspacePage({
                     >
                       {renderSegmentEditorPromptToolButtonContent("scene_sound", workspaceText(locale, "Звук сцены", "Scene sound"))}
                     </button>
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("voiceover")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Озвучка", "Voiceover")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("voiceover")}
+                      title={workspaceText(locale, "Озвучка", "Voiceover")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("voiceover")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("voiceover")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "voiceover");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent("voiceover", workspaceText(locale, "Озвучка", "Voiceover"))}
+                    </button>
                   </div>
                 )}
               </div>
@@ -26464,6 +26652,60 @@ export function WorkspacePage({
                         )}
                       </div>
                     </div>
+                  ) : isPromptVoiceoverMode ? (
+                    <div className="studio-segment-editor__scene-voice-panel">
+                      <div className="studio-segment-editor__scene-voice-summary">
+                        <span>{workspaceText(locale, "Сейчас", "Current")}</span>
+                        <strong>
+                          {activeSegmentUsesGlobalVoice
+                            ? workspaceText(locale, "Голос всего видео", "Whole-video voice")
+                            : activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбранный голос", "Selected voice")}
+                        </strong>
+                        <small>
+                          {activeSegmentUsesGlobalVoice
+                            ? studioSidebarVoiceEnabled
+                              ? activeSegmentVoiceOption?.label ?? workspaceText(locale, "Голос выбран в общих настройках", "Voice selected in global settings")
+                              : workspaceText(locale, "В общем видео озвучка выключена", "Voiceover is off for the whole video")
+                            : workspaceText(locale, "Этот голос будет применен только к сцене", "This voice will be applied only to this scene")}
+                        </small>
+                      </div>
+                      <div className="studio-segment-editor__scene-voice-list" aria-label={workspaceText(locale, "Голоса сцены", "Scene voices")}>
+                        <button
+                          className={`studio-segment-editor__scene-voice-option${activeSegmentUsesGlobalVoice ? " is-selected" : ""}`}
+                          type="button"
+                          aria-pressed={activeSegmentUsesGlobalVoice}
+                          onClick={handleSegmentEditorSceneVoiceUseGlobal}
+                        >
+                          <span>
+                            <strong>{workspaceText(locale, "Голос всего видео", "Whole-video voice")}</strong>
+                            <small>
+                              {studioSidebarVoiceEnabled
+                                ? activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбран в общих настройках", "Selected globally")
+                                : workspaceText(locale, "Без озвучки", "No voiceover")}
+                            </small>
+                          </span>
+                        </button>
+                        {selectedVoiceOptions.map((voice) => {
+                          const isSelectedSceneVoice = !activeSegmentUsesGlobalVoice && activeSegmentEffectiveVoiceId === voice.id;
+                          return (
+                            <button
+                              className={`studio-segment-editor__scene-voice-option${isSelectedSceneVoice ? " is-selected" : ""}`}
+                              type="button"
+                              key={`scene-voice:${voice.id}`}
+                              aria-pressed={isSelectedSceneVoice}
+                              onClick={() => handleSegmentEditorSceneVoiceSelect(voice.id)}
+                            >
+                              <span>
+                                <strong>{voice.label}</strong>
+                                <small>{voice.description}</small>
+                              </span>
+                              {voice.badgeLabel ? <em>{voice.badgeLabel}</em> : null}
+                              {voice.creditCost ? <b>{voice.creditCost} ⚡</b> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   ) : isPromptUploadMode || isPromptUpscaleMode ? (
                     <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
                       <strong>
@@ -26551,7 +26793,7 @@ export function WorkspacePage({
                   {segmentEditorVideoError ? (
                     <p className="studio-segment-editor__prompt-note is-error">{segmentEditorVideoError}</p>
                   ) : null}
-                  {!isPromptLibraryMode ? (
+                  {!isPromptLibraryMode && !isPromptVoiceoverMode ? (
                     <div className="studio-segment-editor__prompt-action-row">
                       {isPromptAiPhotoMode
                         ? renderSegmentVisualQualitySwitch({

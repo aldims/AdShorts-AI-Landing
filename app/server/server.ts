@@ -554,6 +554,7 @@ type StudioGenerateMultipartSegment = {
   startTime?: unknown;
   text?: unknown;
   videoAction?: unknown;
+  voiceType?: unknown;
 };
 
 type StudioGenerateMultipartSegmentEditor = {
@@ -800,6 +801,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                 startTime: segmentRecord.startTime,
                 text: segmentRecord.text,
                 videoAction: segmentRecord.videoAction,
+                voiceType: segmentRecord.voiceType ?? null,
               };
             }),
           ),

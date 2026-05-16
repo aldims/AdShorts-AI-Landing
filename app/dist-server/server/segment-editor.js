@@ -241,6 +241,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             speech_words: Array.isArray(record.speech_words) ? record.speech_words : null,
             start_time: startTime,
             text,
+            voice_type: normalizeText(record.voice_type),
         };
     })
         .filter((segment) => Boolean(segment));
@@ -727,6 +728,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         speechWords,
         startTime,
         text: normalizeText(payload.text),
+        voiceType: normalizeText(payload.voice_type) || null,
     };
 };
 const loadWorkspaceSegmentEditorSession = async (projectId) => {
