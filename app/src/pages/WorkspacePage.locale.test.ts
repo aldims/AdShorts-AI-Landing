@@ -115,6 +115,10 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   originalText: "Segment",
   originalTextByLanguage: { ru: "Segment" },
   photoAnimationSourceAsset: null,
+  sceneSoundAsset: null,
+  sceneSoundGeneratedFromPrompt: null,
+  sceneSoundPrompt: "",
+  sceneSoundPromptInitialized: false,
   speechDuration: null,
   speechEndTime: null,
   speechStartTime: null,
@@ -406,6 +410,31 @@ describe("WorkspacePage segment editor draft persistence", () => {
     };
 
     expect(shouldAllowWorkspaceSegmentEditorStructureChange(draft, baseline)).toBe(true);
+  });
+
+  it("treats an added scene sound as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({ index: 0 });
+    const draftSegment = createDraftSegment({
+      index: 0,
+      sceneSoundAsset: {
+        assetId: 101,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/101",
+        source: "media-library",
+      },
+      sceneSoundGeneratedFromPrompt: "busy cafe ambience",
+      sceneSoundPrompt: "busy cafe ambience",
+      sceneSoundPromptInitialized: true,
+    });
+
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(draftSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(checklist.map((item) => item.label)).toContain("Сегмент 1: добавлен звук сцены");
   });
 
   it("uses the server baseline for structure changes even when an applied draft already matches", () => {

@@ -14,6 +14,7 @@ import {
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
+  STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
@@ -390,6 +391,14 @@ export type StudioGeneratedVideoAsset = {
   remoteUrl: string;
 };
 
+export type StudioGeneratedAudioAsset = {
+  assetId?: number | null;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  remoteUrl: string;
+};
+
 export type StudioSegmentAiPhotoGenerationResult = {
   asset: StudioGeneratedImageAsset;
   profile: WorkspaceProfile;
@@ -417,6 +426,20 @@ export type StudioSegmentAiVideoJob = {
 
 export type StudioSegmentAiVideoJobStatus = {
   asset?: StudioGeneratedVideoAsset;
+  error?: string;
+  jobId: string;
+  profile: WorkspaceProfile;
+  status: string;
+};
+
+export type StudioSegmentSceneSoundJob = {
+  jobId: string;
+  profile: WorkspaceProfile;
+  status: string;
+};
+
+export type StudioSegmentSceneSoundJobStatus = {
+  asset?: StudioGeneratedAudioAsset;
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
@@ -550,6 +573,7 @@ export type StudioSegmentEditorSegment = {
   endTime?: number;
   index: number;
   resetVisual?: boolean;
+  sceneSoundAssetId?: number;
   startTime?: number;
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
@@ -950,6 +974,7 @@ const normalizeStudioSegmentEditorPayload = (
       endTime?: unknown;
       index?: unknown;
       resetVisual?: unknown;
+      sceneSoundAssetId?: unknown;
       startTime?: unknown;
       text?: unknown;
       videoAction?: unknown;
@@ -981,6 +1006,7 @@ const normalizeStudioSegmentEditorPayload = (
       endTime,
       index,
       resetVisual: Boolean(segmentRecord.resetVisual),
+      sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
       startTime,
       text: normalizeGenerationText(String(segmentRecord.text ?? "")),
       videoAction,
@@ -1395,6 +1421,16 @@ const buildStudioSegmentPhotoAnimationJobPosterProxyUrl = (jobId: string | null 
 
   const proxyUrl = new URL(`/api/studio/segment-photo-animation/jobs/${encodeURIComponent(normalizedJobId)}/poster`, env.appUrl);
   proxyUrl.searchParams.set("v", normalizedJobId);
+  return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+
+const buildStudioSegmentSceneSoundJobAudioProxyUrl = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId) {
+    return null;
+  }
+
+  const proxyUrl = new URL(`/api/studio/segment-scene-sound/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
   return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 
@@ -2793,6 +2829,24 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
   };
 };
 
+const normalizeAdsflowSegmentSceneSoundAsset = (
+  jobId: string,
+  payload?: AdsflowSegmentAiVideoAssetPayload | null,
+): StudioGeneratedAudioAsset => {
+  const remoteUrl = buildStudioSegmentSceneSoundJobAudioProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated scene sound is unavailable.");
+  }
+
+  return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    fileName: normalizeGenerationText(payload?.file_name) || `segment-scene-sound-${jobId}.wav`,
+    fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+    mimeType: normalizeGenerationText(payload?.mime_type) || "audio/wav",
+    remoteUrl,
+  };
+};
+
 const buildWorkspaceStudioOptions = (payload?: AdsflowStudioOptionsPayload | null): WorkspaceStudioOptions => {
   const subtitleStyles = Array.isArray(payload?.subtitle_styles)
     ? payload.subtitle_styles
@@ -3762,6 +3816,24 @@ const fetchAdsflowSegmentImageUpscaleJobStatus = async (jobId: string, user: Stu
   );
 };
 
+const fetchAdsflowSegmentSceneSoundJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return fetchAdsflowJson<AdsflowSegmentAiVideoJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-scene-sound/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
 const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1, language?: string) => {
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -4133,6 +4205,7 @@ export async function createStudioGenerationJob(
                 end_time: segment.endTime,
                 index: segment.index,
                 reset_visual: Boolean(segment.resetVisual),
+                scene_sound_asset_id: segment.sceneSoundAssetId,
                 start_time: segment.startTime,
                 text: segment.text,
                 video_action: segment.videoAction,
@@ -4919,6 +4992,65 @@ export async function createStudioSegmentPhotoAnimationJob(
   };
 }
 
+export async function createStudioSegmentSceneSoundJob(
+  prompt: string,
+  user: StudioUser,
+  options?: {
+    language?: string;
+    projectId?: number;
+    segmentIndex?: number;
+    source?: string;
+  },
+): Promise<StudioSegmentSceneSoundJob> {
+  assertAdsflowConfigured();
+
+  const normalizedPrompt = normalizePrompt(prompt);
+  if (!normalizedPrompt) {
+    throw new Error("Prompt is required.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+    sourceLanguage: normalizedLanguage,
+  });
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedSource = String(options?.source ?? "current").trim().toLowerCase() === "original" ? "original" : "current";
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+
+  const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-scene-sound/jobs", {
+    admin_token: env.adsflowAdminToken,
+    credit_cost: STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
+    external_user_id: externalUserId,
+    language: normalizedLanguage,
+    project_id: normalizedProjectId,
+    prompt: upstreamPrompt,
+    segment_index: normalizedSegmentIndex,
+    source: normalizedSource,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment scene sound job id.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
+      payload.user ?? undefined,
+      payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      subscriptionDetails,
+    ),
+    status: String(payload.status ?? "queued"),
+  };
+}
+
 export async function getStudioSegmentAiPhotoJobStatus(
   jobId: string,
   user: StudioUser,
@@ -5059,6 +5191,26 @@ export async function getStudioSegmentPhotoAnimationJobStatus(
 
     throw error;
   }
+}
+
+export async function getStudioSegmentSceneSoundJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentSceneSoundJobStatus> {
+  const payload = await fetchAdsflowSegmentSceneSoundJobStatus(jobId, user);
+  const status = String(payload.status ?? "queued").trim() || "queued";
+  const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const asset = payload.asset ? normalizeAdsflowSegmentSceneSoundAsset(resolvedJobId, payload.asset) : undefined;
+
+  return {
+    asset,
+    error: normalizeGenerationText(payload.error) || undefined,
+    jobId: resolvedJobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    status,
+  };
 }
 
 export async function getStudioGenerationStatus(jobId: string, user: StudioUser): Promise<StudioGenerationStatus> {
@@ -5381,6 +5533,22 @@ export async function getStudioSegmentPhotoAnimationJobFileProxyTarget(jobId: st
   const externalUserId = await resolveStudioExternalUserId(user);
 
   return buildAdsflowUrl(`/api/web/segment-photo-animation/jobs/${encodeURIComponent(safeJobId)}/file`, {
+    admin_token: env.adsflowAdminToken ?? "",
+    external_user_id: externalUserId,
+  });
+}
+
+export async function getStudioSegmentSceneSoundJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  assertAdsflowConfigured();
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return buildAdsflowUrl(`/api/web/segment-scene-sound/jobs/${encodeURIComponent(safeJobId)}/file`, {
     admin_token: env.adsflowAdminToken ?? "",
     external_user_id: externalUserId,
   });

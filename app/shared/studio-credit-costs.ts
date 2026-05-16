@@ -4,7 +4,8 @@ export type StudioCreditAction =
   | "ai_video"
   | "photo_animation"
   | "image_edit"
-  | "image_upscale";
+  | "image_upscale"
+  | "scene_sound";
 
 export type StudioSegmentVisualQuality = "standard" | "premium";
 
@@ -24,6 +25,7 @@ export const STUDIO_SEGMENT_AI_PHOTO_STANDARD_CREDIT_COST = 2;
 export const STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST = 4;
 export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = STUDIO_SEGMENT_AI_PHOTO_STANDARD_CREDIT_COST;
 export const STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST = 1;
+export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST = 1;
 
 export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY: Record<StudioSegmentVisualQuality, number> = {
   premium: STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST,
@@ -47,4 +49,5 @@ export const STUDIO_CREDIT_COST_BY_ACTION: Record<StudioCreditAction, number> = 
   photo_animation: STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
   image_edit: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   image_upscale: STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+  scene_sound: STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
 };
