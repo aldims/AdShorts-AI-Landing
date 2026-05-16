@@ -26094,7 +26094,7 @@ export function WorkspacePage({
                     : kind === "scene_sound"
                       ? "/icons/segment-scene-sound-icon-generated.png"
                     : kind === "voiceover"
-                      ? null
+                      ? "/icons/segment-voiceover-icon-generated.png"
                     : kind === "brand"
                       ? "/icons/segment-brand-icon-generated.png"
                       : null;
