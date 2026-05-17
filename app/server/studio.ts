@@ -925,6 +925,26 @@ const normalizePositiveInteger = (value: unknown) => {
   return rounded > 0 ? rounded : null;
 };
 
+const normalizePositiveIntegerList = (value: unknown) => {
+  const source = Array.isArray(value) ? value : [];
+  const result: number[] = [];
+  for (const item of source) {
+    const normalized = normalizePositiveInteger(item);
+    if (normalized && !result.includes(normalized)) {
+      result.push(normalized);
+    }
+  }
+  return result;
+};
+
+const normalizeCharacterContinuityMode = (value: unknown, preserveCharacters: boolean) => {
+  if (!preserveCharacters) {
+    return "off";
+  }
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "auto" || normalized === "force" ? normalized : "force";
+};
+
 const normalizeNonNegativeInteger = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
@@ -4496,8 +4516,11 @@ export async function createStudioSegmentImageEditJob(
     fileName?: string;
     imageAssetId?: number;
     language?: string;
+    characterContinuityMode?: string;
+    characterIds?: number[];
     preserveCharacters?: boolean;
     projectId?: number;
+    referenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiPhotoJob> {
@@ -4520,6 +4543,10 @@ export async function createStudioSegmentImageEditJob(
   });
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const preserveCharacters = Boolean(options?.preserveCharacters);
+  const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+  const characterIds = normalizePositiveIntegerList(options?.characterIds);
+  const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
   const normalizedMimeType = normalizedImageDataUrl
     ? (() => {
         const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
@@ -4566,11 +4593,13 @@ export async function createStudioSegmentImageEditJob(
       image_mime_type: normalizedMimeType,
       image_original_name: normalizedFileName,
       language: normalizedLanguage,
+      character_ids: characterIds,
       character_prompt: normalizedPrompt,
-      preserve_characters: Boolean(options?.preserveCharacters),
-      character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+      preserve_characters: preserveCharacters,
+      character_reference_mode: characterReferenceMode,
       project_id: normalizedProjectId,
       prompt: upstreamPrompt,
+      reference_asset_ids: referenceAssetIds,
       segment_index: normalizedSegmentIndex,
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,
@@ -4884,8 +4913,11 @@ export async function createStudioSegmentAiPhotoJob(
   options?: {
     quality?: string;
     language?: string;
+    characterContinuityMode?: string;
+    characterIds?: number[];
     preserveCharacters?: boolean;
     projectId?: number;
+    referenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiPhotoJob> {
@@ -4904,6 +4936,10 @@ export async function createStudioSegmentAiPhotoJob(
   });
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const preserveCharacters = Boolean(options?.preserveCharacters);
+  const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+  const characterIds = normalizePositiveIntegerList(options?.characterIds);
+  const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-ai-photo/jobs", {
@@ -4911,12 +4947,14 @@ export async function createStudioSegmentAiPhotoJob(
     credit_cost: requiredCredits,
     external_user_id: externalUserId,
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-    character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+    character_ids: characterIds,
+    character_reference_mode: characterReferenceMode,
     character_prompt: normalizedPrompt,
     language: normalizedLanguage,
-    preserve_characters: Boolean(options?.preserveCharacters),
+    preserve_characters: preserveCharacters,
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
+    reference_asset_ids: referenceAssetIds,
     segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
@@ -4948,8 +4986,11 @@ export async function createStudioSegmentAiVideoJob(
     imageMimeType?: string;
     quality?: string;
     language?: string;
+    characterContinuityMode?: string;
+    characterIds?: number[];
     preserveCharacters?: boolean;
     projectId?: number;
+    referenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiVideoJob> {
@@ -4968,6 +5009,10 @@ export async function createStudioSegmentAiVideoJob(
   });
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const preserveCharacters = Boolean(options?.preserveCharacters);
+  const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+  const characterIds = normalizePositiveIntegerList(options?.characterIds);
+  const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
@@ -4975,12 +5020,14 @@ export async function createStudioSegmentAiVideoJob(
     credit_cost: requiredCredits,
     external_user_id: externalUserId,
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-    character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+    character_ids: characterIds,
+    character_reference_mode: characterReferenceMode,
     character_prompt: normalizedPrompt,
     language: normalizedLanguage,
-    preserve_characters: Boolean(options?.preserveCharacters),
+    preserve_characters: preserveCharacters,
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
+    reference_asset_ids: referenceAssetIds,
     segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,

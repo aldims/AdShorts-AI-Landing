@@ -625,6 +625,18 @@ const normalizeRequestPositiveInteger = (value: unknown) => {
   return rounded > 0 ? rounded : undefined;
 };
 
+const normalizeRequestPositiveIntegerList = (value: unknown) => {
+  const source = Array.isArray(value) ? value : [];
+  const result: number[] = [];
+  for (const item of source) {
+    const normalized = normalizeRequestPositiveInteger(item);
+    if (normalized && !result.includes(normalized)) {
+      result.push(normalized);
+    }
+  }
+  return result;
+};
+
 const normalizeRequestNonNegativeInteger = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -3263,6 +3275,9 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const preserveCharacters = req.body?.preserveCharacters === true;
+  const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
+  const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
+  const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3282,8 +3297,11 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
       fileName: imageFileName || undefined,
       imageAssetId,
       language,
+      characterContinuityMode,
+      characterIds,
       preserveCharacters,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+      referenceAssetIds,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
     res.json({ data: job });
@@ -3397,6 +3415,9 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const preserveCharacters = req.body?.preserveCharacters === true;
+  const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
+  const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
+  const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3408,9 +3429,12 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   try {
     const job = await createStudioSegmentAiPhotoJob(prompt, session.user, {
       language,
+      characterContinuityMode,
+      characterIds,
       preserveCharacters,
       quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+      referenceAssetIds,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
     res.json({ data: job });
@@ -3466,6 +3490,9 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
   const imageMimeType = typeof req.body?.imageMimeType === "string" ? req.body.imageMimeType.trim() : "";
   const imageAssetId = Number(req.body?.imageAssetId ?? 0);
   const preserveCharacters = req.body?.preserveCharacters === true;
+  const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
+  const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
+  const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3481,9 +3508,12 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
       imageFileName: imageFileName || undefined,
       imageMimeType: imageMimeType || undefined,
       language,
+      characterContinuityMode,
+      characterIds,
       preserveCharacters,
       quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+      referenceAssetIds,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
     res.json({ data: job });

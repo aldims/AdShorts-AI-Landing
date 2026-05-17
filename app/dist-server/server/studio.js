@@ -336,6 +336,24 @@ const normalizePositiveInteger = (value) => {
     const rounded = Math.trunc(numeric);
     return rounded > 0 ? rounded : null;
 };
+const normalizePositiveIntegerList = (value) => {
+    const source = Array.isArray(value) ? value : [];
+    const result = [];
+    for (const item of source) {
+        const normalized = normalizePositiveInteger(item);
+        if (normalized && !result.includes(normalized)) {
+            result.push(normalized);
+        }
+    }
+    return result;
+};
+const normalizeCharacterContinuityMode = (value, preserveCharacters) => {
+    if (!preserveCharacters) {
+        return "off";
+    }
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return normalized === "auto" || normalized === "force" ? normalized : "force";
+};
 const normalizeNonNegativeInteger = (value) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric))
@@ -3114,6 +3132,10 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
     });
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const preserveCharacters = Boolean(options?.preserveCharacters);
+    const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+    const characterIds = normalizePositiveIntegerList(options?.characterIds);
+    const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
     const normalizedMimeType = normalizedImageDataUrl
         ? (() => {
             const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
@@ -3159,11 +3181,13 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
             image_mime_type: normalizedMimeType,
             image_original_name: normalizedFileName,
             language: normalizedLanguage,
+            character_ids: characterIds,
             character_prompt: normalizedPrompt,
-            preserve_characters: Boolean(options?.preserveCharacters),
-            character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+            preserve_characters: preserveCharacters,
+            character_reference_mode: characterReferenceMode,
             project_id: normalizedProjectId,
             prompt: upstreamPrompt,
+            reference_asset_ids: referenceAssetIds,
             segment_index: normalizedSegmentIndex,
             user_email: user.email ?? undefined,
             user_name: user.name ?? undefined,
@@ -3397,6 +3421,10 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const preserveCharacters = Boolean(options?.preserveCharacters);
+    const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+    const characterIds = normalizePositiveIntegerList(options?.characterIds);
+    const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
@@ -3404,12 +3432,14 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         credit_cost: requiredCredits,
         external_user_id: externalUserId,
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-        character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+        character_ids: characterIds,
+        character_reference_mode: characterReferenceMode,
         character_prompt: normalizedPrompt,
         language: normalizedLanguage,
-        preserve_characters: Boolean(options?.preserveCharacters),
+        preserve_characters: preserveCharacters,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
+        reference_asset_ids: referenceAssetIds,
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
@@ -3438,6 +3468,10 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const preserveCharacters = Boolean(options?.preserveCharacters);
+    const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
+    const characterIds = normalizePositiveIntegerList(options?.characterIds);
+    const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-video/jobs", {
@@ -3445,12 +3479,14 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         credit_cost: requiredCredits,
         external_user_id: externalUserId,
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-        character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+        character_ids: characterIds,
+        character_reference_mode: characterReferenceMode,
         character_prompt: normalizedPrompt,
         language: normalizedLanguage,
-        preserve_characters: Boolean(options?.preserveCharacters),
+        preserve_characters: preserveCharacters,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
+        reference_asset_ids: referenceAssetIds,
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,

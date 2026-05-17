@@ -4462,6 +4462,31 @@ const getWorkspaceSegmentPhotoAnimationSourceAsset = (segment: WorkspaceSegmentE
   return getWorkspaceSegmentLatestEditablePhotoAsset(segment);
 };
 
+const getWorkspaceSegmentCharacterReferenceAssetIds = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!segment) {
+    return [];
+  }
+
+  const result: number[] = [];
+  const append = (value: unknown) => {
+    const assetId = getPositiveWorkspaceMediaAssetId(value);
+    if (assetId && !result.includes(assetId)) {
+      result.push(assetId);
+    }
+  };
+
+  append(getWorkspaceSegmentLatestEditablePhotoAsset(segment)?.assetId);
+  append(segment.currentAsset?.assetId);
+  append(segment.originalAsset?.assetId);
+  append(segment.aiPhotoAsset?.assetId);
+  append(segment.imageEditAsset?.assetId);
+  append(segment.customVideo?.assetId);
+  append(segment.photoAnimationSourceAsset?.assetId);
+  return result;
+};
+
 const shouldForceFreshPhotoAnimationSourceUpload = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
   sourceAsset: StudioCustomVideoFile | null | undefined,
@@ -20398,12 +20423,13 @@ export function WorkspacePage({
     targetSegmentIndex: number,
   ): { isPersisted: boolean; projectId?: number; segmentIndex?: number } => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    if (!currentDraft || !isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex)) {
+    if (!currentDraft) {
       return { isPersisted: false };
     }
 
+    const isPersisted = isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex);
     return {
-      isPersisted: true,
+      isPersisted,
       projectId: currentDraft.projectId,
       segmentIndex: targetSegmentIndex,
     };
@@ -21680,6 +21706,9 @@ export function WorkspacePage({
     const generationQuality = options?.quality ?? selectedSegmentAiPhotoQuality;
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
+    const characterReferenceAssetIds = preserveSegmentCharacters
+      ? getWorkspaceSegmentCharacterReferenceAssetIds(targetSegment)
+      : [];
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -21717,12 +21746,13 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
+          characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
           language: selectedLanguage,
           preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
+          referenceAssetIds: characterReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
       });
@@ -21805,6 +21835,9 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Выберите фото для дорисовки.");
       return;
     }
+    const characterReferenceAssetIds = preserveSegmentCharacters
+      ? getWorkspaceSegmentCharacterReferenceAssetIds(targetSegment)
+      : [];
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -21862,13 +21895,14 @@ export function WorkspacePage({
       let primaryRequest: WorkspaceSegmentImageEditRequest;
       if (inlineImageDataUrl) {
         primaryRequest = {
-          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
+          characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
           imageDataUrl: inlineImageDataUrl,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
           preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
+          referenceAssetIds: characterReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         };
       } else {
@@ -21898,13 +21932,14 @@ export function WorkspacePage({
         }
 
         primaryRequest = {
-          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
+          characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
           imageAssetId,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
           preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
+          referenceAssetIds: characterReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         };
       }
@@ -21919,13 +21954,14 @@ export function WorkspacePage({
         const imageDataUrl = inlineImageDataUrl || await resolveStudioCustomAssetDataUrl(imageEditSource.asset);
         if (imageDataUrl) {
           ({ response, payload } = await requestImageEditJob({
-            characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
+            characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
             imageDataUrl,
             imageFileName: imageEditSource.fileName,
             language: selectedLanguage,
             preserveCharacters: preserveSegmentCharacters,
             projectId: visualJobBinding.projectId,
             prompt: normalizedPrompt,
+            referenceAssetIds: characterReferenceAssetIds,
             segmentIndex: visualJobBinding.segmentIndex,
           }));
         }
@@ -21997,6 +22033,9 @@ export function WorkspacePage({
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentAiVideoQuality;
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
+    const characterReferenceAssetIds = preserveSegmentCharacters
+      ? getWorkspaceSegmentCharacterReferenceAssetIds(targetSegment)
+      : [];
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
       return;
@@ -22035,12 +22074,13 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
+          characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
           language: selectedLanguage,
           preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
+          referenceAssetIds: characterReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
       });
