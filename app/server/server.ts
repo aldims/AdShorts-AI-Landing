@@ -3262,6 +3262,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
   const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const preserveCharacters = req.body?.preserveCharacters === true;
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3281,6 +3282,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
       fileName: imageFileName || undefined,
       imageAssetId,
       language,
+      preserveCharacters,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
     });
@@ -3394,6 +3396,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
+  const preserveCharacters = req.body?.preserveCharacters === true;
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3405,6 +3408,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   try {
     const job = await createStudioSegmentAiPhotoJob(prompt, session.user, {
       language,
+      preserveCharacters,
       quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
@@ -3461,6 +3465,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const imageMimeType = typeof req.body?.imageMimeType === "string" ? req.body.imageMimeType.trim() : "";
   const imageAssetId = Number(req.body?.imageAssetId ?? 0);
+  const preserveCharacters = req.body?.preserveCharacters === true;
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -3476,6 +3481,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
       imageFileName: imageFileName || undefined,
       imageMimeType: imageMimeType || undefined,
       language,
+      preserveCharacters,
       quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,

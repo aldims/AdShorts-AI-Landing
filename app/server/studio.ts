@@ -4496,6 +4496,7 @@ export async function createStudioSegmentImageEditJob(
     fileName?: string;
     imageAssetId?: number;
     language?: string;
+    preserveCharacters?: boolean;
     projectId?: number;
     segmentIndex?: number;
   },
@@ -4565,6 +4566,9 @@ export async function createStudioSegmentImageEditJob(
       image_mime_type: normalizedMimeType,
       image_original_name: normalizedFileName,
       language: normalizedLanguage,
+      character_prompt: normalizedPrompt,
+      preserve_characters: Boolean(options?.preserveCharacters),
+      character_reference_mode: options?.preserveCharacters ? "auto" : "off",
       project_id: normalizedProjectId,
       prompt: upstreamPrompt,
       segment_index: normalizedSegmentIndex,
@@ -4880,6 +4884,7 @@ export async function createStudioSegmentAiPhotoJob(
   options?: {
     quality?: string;
     language?: string;
+    preserveCharacters?: boolean;
     projectId?: number;
     segmentIndex?: number;
   },
@@ -4906,7 +4911,10 @@ export async function createStudioSegmentAiPhotoJob(
     credit_cost: requiredCredits,
     external_user_id: externalUserId,
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
+    character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+    character_prompt: normalizedPrompt,
     language: normalizedLanguage,
+    preserve_characters: Boolean(options?.preserveCharacters),
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
     segment_index: normalizedSegmentIndex,
@@ -4940,6 +4948,7 @@ export async function createStudioSegmentAiVideoJob(
     imageMimeType?: string;
     quality?: string;
     language?: string;
+    preserveCharacters?: boolean;
     projectId?: number;
     segmentIndex?: number;
   },
@@ -4966,7 +4975,10 @@ export async function createStudioSegmentAiVideoJob(
     credit_cost: requiredCredits,
     external_user_id: externalUserId,
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
+    character_reference_mode: options?.preserveCharacters ? "auto" : "off",
+    character_prompt: normalizedPrompt,
     language: normalizedLanguage,
+    preserve_characters: Boolean(options?.preserveCharacters),
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
     segment_index: normalizedSegmentIndex,

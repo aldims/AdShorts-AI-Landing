@@ -953,10 +953,14 @@ type WorkspaceSegmentEditorResponse = {
 };
 
 type WorkspaceSegmentAiPhotoJobCreateRequest = {
+  characterContinuityMode?: "auto" | "off" | "force";
+  characterIds?: number[];
   language: StudioLanguage;
+  preserveCharacters?: boolean;
   prompt: string;
   projectId?: number;
   quality?: StudioSegmentVisualQuality;
+  referenceAssetIds?: number[];
   segmentIndex?: number;
 };
 
@@ -970,7 +974,11 @@ type WorkspaceSegmentImageUpscaleRequest = {
 };
 
 type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleRequest & {
+  characterContinuityMode?: "auto" | "off" | "force";
+  characterIds?: number[];
+  preserveCharacters?: boolean;
   prompt: string;
+  referenceAssetIds?: number[];
 };
 
 type WorkspaceSegmentAiPhotoPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
@@ -1060,14 +1068,18 @@ type WorkspaceSegmentImageUpscaleJobStatusResponse = {
 };
 
 type WorkspaceSegmentAiVideoJobCreateRequest = {
+  characterContinuityMode?: "auto" | "off" | "force";
+  characterIds?: number[];
   imageAssetId?: number;
   imageDataUrl?: string;
   imageFileName?: string;
   imageMimeType?: string;
   language: StudioLanguage;
+  preserveCharacters?: boolean;
   prompt: string;
   projectId?: number;
   quality?: StudioSegmentVisualQuality;
+  referenceAssetIds?: number[];
   segmentIndex?: number;
 };
 
@@ -13760,6 +13772,7 @@ export function WorkspacePage({
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
     useState<StudioSegmentVisualQuality>("standard");
+  const [preserveSegmentCharacters, setPreserveSegmentCharacters] = useState(true);
   const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
     id: string;
     left: number;
@@ -15227,6 +15240,7 @@ export function WorkspacePage({
       setSelectedSegmentAiPhotoQuality("standard");
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
+      setPreserveSegmentCharacters(true);
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
       setIsPreparingCustomVideo(false);
@@ -21703,7 +21717,9 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
           language: selectedLanguage,
+          preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
@@ -21846,9 +21862,11 @@ export function WorkspacePage({
       let primaryRequest: WorkspaceSegmentImageEditRequest;
       if (inlineImageDataUrl) {
         primaryRequest = {
+          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
           imageDataUrl: inlineImageDataUrl,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
+          preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           segmentIndex: visualJobBinding.segmentIndex,
@@ -21880,9 +21898,11 @@ export function WorkspacePage({
         }
 
         primaryRequest = {
+          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
           imageAssetId,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
+          preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           segmentIndex: visualJobBinding.segmentIndex,
@@ -21899,9 +21919,11 @@ export function WorkspacePage({
         const imageDataUrl = inlineImageDataUrl || await resolveStudioCustomAssetDataUrl(imageEditSource.asset);
         if (imageDataUrl) {
           ({ response, payload } = await requestImageEditJob({
+            characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
             imageDataUrl,
             imageFileName: imageEditSource.fileName,
             language: selectedLanguage,
+            preserveCharacters: preserveSegmentCharacters,
             projectId: visualJobBinding.projectId,
             prompt: normalizedPrompt,
             segmentIndex: visualJobBinding.segmentIndex,
@@ -22013,7 +22035,9 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          characterContinuityMode: preserveSegmentCharacters ? "auto" : "off",
           language: selectedLanguage,
+          preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
@@ -26362,6 +26386,23 @@ export function WorkspacePage({
   const isPromptVoiceoverMode = segmentEditorPromptToolTab === "voiceover";
   const isPromptLibraryMode = segmentEditorPromptToolTab === "library";
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
+  const canPromptPreserveCharacters = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
+  const renderCharacterContinuityToggle = (variant: "editor" | "modal" = "editor") => (
+    <label className={`studio-character-continuity studio-character-continuity--${variant}`}>
+      <input
+        type="checkbox"
+        checked={preserveSegmentCharacters}
+        onChange={(event) => setPreserveSegmentCharacters(event.currentTarget.checked)}
+      />
+      <span className="studio-character-continuity__control" aria-hidden="true">
+        <span></span>
+      </span>
+      <span className="studio-character-continuity__copy">
+        <strong>{workspaceText(locale, "Те же персонажи", "Same characters")}</strong>
+        <small>{workspaceText(locale, "Референсы проекта", "Project references")}</small>
+      </span>
+    </label>
+  );
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
   const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(selectedSegmentAiVideoQuality);
   const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(selectedSegmentPhotoAnimationQuality);
@@ -27437,6 +27478,7 @@ export function WorkspacePage({
                           <audio controls src={activeSegmentSceneSoundUrl} preload="metadata" />
                         </div>
                       ) : null}
+                      {canPromptPreserveCharacters ? renderCharacterContinuityToggle("editor") : null}
                     </>
                   )}
                   {segmentEditorVideoError ? (
@@ -29774,6 +29816,8 @@ export function WorkspacePage({
                             </div>
                           </div>
 
+                          {renderCharacterContinuityToggle("modal")}
+
                           {isSegmentAiPhotoPromptImproved ? (
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
@@ -30020,6 +30064,8 @@ export function WorkspacePage({
                             </div>
                           </div>
 
+                          {renderCharacterContinuityToggle("modal")}
+
                           {isSegmentAiPhotoPromptImproved ? (
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
@@ -30213,6 +30259,8 @@ export function WorkspacePage({
                               </button>
                             </div>
                           </div>
+
+                          {renderCharacterContinuityToggle("modal")}
 
                           {isSegmentAiPhotoPromptImproved ? (
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
