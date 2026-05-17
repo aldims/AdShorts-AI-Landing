@@ -48,6 +48,8 @@ type AdsflowSegmentEditorSegmentPayload = {
 export type AdsflowSegmentEditorResponse = {
   description?: string | null;
   language?: string | null;
+  music_asset_id?: number | string | null;
+  music_name?: string | null;
   music_type?: string | null;
   project_id?: number | string | null;
   segments?: AdsflowSegmentEditorSegmentPayload[] | null;
@@ -55,6 +57,7 @@ export type AdsflowSegmentEditorResponse = {
   subtitle_style?: string | null;
   subtitle_type?: string | null;
   title?: string | null;
+  tts_asset_id?: number | string | null;
   voice_type?: string | null;
 };
 
@@ -98,6 +101,7 @@ type AdsflowProjectGenerationSettingsPayload = {
   subtitle_color?: string | null;
   subtitle_style?: string | null;
   subtitle_type?: string | null;
+  tts_asset_id?: number | string | null;
   video_segments?: AdsflowSegmentEditorSegmentPayload[] | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   voice_type?: string | null;
@@ -119,6 +123,7 @@ type AdsflowProjectDetailsResponse = {
   subtitle_color?: string | null;
   subtitle_style?: string | null;
   subtitle_type?: string | null;
+  tts_asset_id?: number | string | null;
   video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   voice_type?: string | null;
 };
@@ -174,6 +179,8 @@ export type WorkspaceSegmentEditorSession = {
   customMusicFileName: string;
   description: string;
   language: string;
+  musicAssetId: number | null;
+  musicName: string;
   musicType: string;
   projectId: number;
   segments: WorkspaceSegmentEditorSegment[];
@@ -181,6 +188,7 @@ export type WorkspaceSegmentEditorSession = {
   subtitleStyle: string;
   subtitleType: string;
   title: string;
+  ttsAssetId: number | null;
   voiceType: string;
 };
 
@@ -548,6 +556,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (
     language: normalizeWorkspaceSegmentEditorLanguage(settings.content_language) ||
       normalizeWorkspaceSegmentEditorLanguage(settings.requested_language) ||
       normalizeWorkspaceSegmentEditorLanguage(payload.content_language),
+    music_asset_id:
+      normalizePositiveProjectId(settings.music_asset_id) ??
+      normalizePositiveProjectId(settings.custom_music_asset_id) ??
+      normalizePositiveProjectId(payload.music_asset_id),
+    music_name: normalizeText(payload.music_name),
     music_type: normalizeText(payload.music_type) || normalizeText(settings.music_type),
     project_id: projectId,
     segments,
@@ -560,6 +573,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
       normalizeText(payload.ai_title) ||
       normalizeText(payload.description) ||
       `Проект #${projectId}`,
+    tts_asset_id: normalizePositiveProjectId(settings.tts_asset_id) ?? normalizePositiveProjectId(payload.tts_asset_id),
     voice_type: normalizeText(payload.voice_type) || normalizeText(settings.voice_type),
   };
 };
@@ -1068,12 +1082,22 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   }
 
   const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+  const musicAssetId =
+    normalizePositiveProjectId(payload.music_asset_id) ??
+    normalizePositiveProjectId(projectDetailsPayload?.music_asset_id) ??
+    null;
+  const ttsAssetId =
+    normalizePositiveProjectId(payload.tts_asset_id) ??
+    normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
+    null;
 
   return {
     customMusicAssetId: customMusicMetadata.customMusicAssetId,
     customMusicFileName: customMusicMetadata.customMusicFileName,
     description: normalizeText(payload.description),
     language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
+    musicAssetId,
+    musicName: normalizeText(payload.music_name) || normalizeText(projectDetailsPayload?.music_name),
     musicType: normalizeText(payload.music_type),
     projectId: sessionProjectId,
     segments,
@@ -1081,6 +1105,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     subtitleStyle: normalizeText(payload.subtitle_style),
     subtitleType: normalizeText(payload.subtitle_type),
     title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
+    ttsAssetId,
     voiceType: normalizeText(payload.voice_type),
   };
 };
@@ -1363,6 +1388,41 @@ export async function getWorkspaceProjectSegmentVideoProxyTarget(
       delivery: options.delivery,
       source: options.source,
     }),
+  };
+}
+
+export async function getWorkspaceProjectMusicAudioProxyTarget(
+  user: SegmentEditorUser,
+  options: {
+    projectId: number;
+  },
+) {
+  assertAdsflowConfigured();
+  await assertWorkspaceProjectAccess(user, options.projectId);
+
+  return {
+    headers: {
+      "X-Admin-Token": env.adsflowAdminToken ?? "",
+    },
+    url: buildAdsflowUrl(`/api/projects/${options.projectId}/audio/music`),
+  };
+}
+
+export async function getWorkspaceProjectSegmentVoiceoverProxyTarget(
+  user: SegmentEditorUser,
+  options: {
+    projectId: number;
+    segmentIndex: number;
+  },
+) {
+  assertAdsflowConfigured();
+  await assertWorkspaceProjectAccess(user, options.projectId);
+
+  return {
+    headers: {
+      "X-Admin-Token": env.adsflowAdminToken ?? "",
+    },
+    url: buildAdsflowUrl(`/api/projects/${options.projectId}/segments/${options.segmentIndex}/voiceover`),
   };
 }
 

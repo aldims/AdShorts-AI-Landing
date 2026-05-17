@@ -253,6 +253,10 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
         language: normalizeWorkspaceSegmentEditorLanguage(settings.content_language) ||
             normalizeWorkspaceSegmentEditorLanguage(settings.requested_language) ||
             normalizeWorkspaceSegmentEditorLanguage(payload.content_language),
+        music_asset_id: normalizePositiveProjectId(settings.music_asset_id) ??
+            normalizePositiveProjectId(settings.custom_music_asset_id) ??
+            normalizePositiveProjectId(payload.music_asset_id),
+        music_name: normalizeText(payload.music_name),
         music_type: normalizeText(payload.music_type) || normalizeText(settings.music_type),
         project_id: projectId,
         segments,
@@ -264,6 +268,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             normalizeText(payload.ai_title) ||
             normalizeText(payload.description) ||
             `Проект #${projectId}`,
+        tts_asset_id: normalizePositiveProjectId(settings.tts_asset_id) ?? normalizePositiveProjectId(payload.tts_asset_id),
         voice_type: normalizeText(payload.voice_type) || normalizeText(settings.voice_type),
     };
 };
@@ -638,11 +643,19 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         throw new WorkspaceSegmentEditorError(`Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`, 409);
     }
     const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+    const musicAssetId = normalizePositiveProjectId(payload.music_asset_id) ??
+        normalizePositiveProjectId(projectDetailsPayload?.music_asset_id) ??
+        null;
+    const ttsAssetId = normalizePositiveProjectId(payload.tts_asset_id) ??
+        normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
+        null;
     return {
         customMusicAssetId: customMusicMetadata.customMusicAssetId,
         customMusicFileName: customMusicMetadata.customMusicFileName,
         description: normalizeText(payload.description),
         language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
+        musicAssetId,
+        musicName: normalizeText(payload.music_name) || normalizeText(projectDetailsPayload?.music_name),
         musicType: normalizeText(payload.music_type),
         projectId: sessionProjectId,
         segments,
@@ -650,6 +663,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         subtitleStyle: normalizeText(payload.subtitle_style),
         subtitleType: normalizeText(payload.subtitle_type),
         title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
+        ttsAssetId,
         voiceType: normalizeText(payload.voice_type),
     };
 };
@@ -872,6 +886,26 @@ export async function getWorkspaceProjectSegmentVideoProxyTarget(user, options) 
             delivery: options.delivery,
             source: options.source,
         }),
+    };
+}
+export async function getWorkspaceProjectMusicAudioProxyTarget(user, options) {
+    assertAdsflowConfigured();
+    await assertWorkspaceProjectAccess(user, options.projectId);
+    return {
+        headers: {
+            "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
+        url: buildAdsflowUrl(`/api/projects/${options.projectId}/audio/music`),
+    };
+}
+export async function getWorkspaceProjectSegmentVoiceoverProxyTarget(user, options) {
+    assertAdsflowConfigured();
+    await assertWorkspaceProjectAccess(user, options.projectId);
+    return {
+        headers: {
+            "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
+        url: buildAdsflowUrl(`/api/projects/${options.projectId}/segments/${options.segmentIndex}/voiceover`),
     };
 }
 export async function getWorkspaceProjectSegmentVideoAsset(user, options) {

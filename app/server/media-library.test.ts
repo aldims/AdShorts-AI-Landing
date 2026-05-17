@@ -104,6 +104,8 @@ const project: WorkspaceProject & { adId: number } = {
 
 const session = (segment: WorkspaceSegmentEditorSegment): WorkspaceSegmentEditorSession => ({
   description: "",
+  musicAssetId: null,
+  musicName: "",
   musicType: "",
   projectId: 42,
   segments: [segment],
@@ -111,6 +113,7 @@ const session = (segment: WorkspaceSegmentEditorSegment): WorkspaceSegmentEditor
   subtitleStyle: "",
   subtitleType: "",
   title: "Session",
+  ttsAssetId: null,
   voiceType: "",
 });
 

@@ -45,6 +45,8 @@ import {
   WorkspaceProjectNotFoundError,
 } from "./projects.js";
 import {
+  getWorkspaceProjectMusicAudioProxyTarget,
+  getWorkspaceProjectSegmentVoiceoverProxyTarget,
   getWorkspaceProjectSegmentVideoProxyTarget,
   WorkspaceSegmentEditorError,
   getWorkspaceSegmentEditorSession,
@@ -2575,6 +2577,87 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
     console.error("[workspace] Failed to proxy segment video", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to proxy segment video.",
+    });
+  }
+});
+
+app.get("/api/workspace/project-music-audio", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const projectId = Number(req.query.projectId ?? 0);
+  if (!Number.isFinite(projectId) || projectId <= 0) {
+    res.status(400).json({ error: "Project id is required." });
+    return;
+  }
+
+  try {
+    const target = await getWorkspaceProjectMusicAudioProxyTarget(session.user, {
+      projectId,
+    });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    await proxyVideoResponse(req, res, target.url, "Failed to load project music audio.", target.headers);
+  } catch (error) {
+    if (error instanceof WorkspaceSegmentEditorError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+
+    console.error("[workspace] Failed to proxy project music audio", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to proxy project music audio.",
+    });
+  }
+});
+
+app.get("/api/workspace/project-segment-voiceover", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const projectId = Number(req.query.projectId ?? 0);
+  const segmentIndex = Number(req.query.segmentIndex ?? -1);
+  if (!Number.isFinite(projectId) || projectId <= 0) {
+    res.status(400).json({ error: "Project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(segmentIndex) || segmentIndex < 0) {
+    res.status(400).json({ error: "Segment index is required." });
+    return;
+  }
+
+  try {
+    const target = await getWorkspaceProjectSegmentVoiceoverProxyTarget(session.user, {
+      projectId,
+      segmentIndex,
+    });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    await proxyVideoResponse(req, res, target.url, "Failed to load segment voiceover audio.", target.headers);
+  } catch (error) {
+    if (error instanceof WorkspaceSegmentEditorError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+
+    console.error("[workspace] Failed to proxy segment voiceover audio", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to proxy segment voiceover audio.",
     });
   }
 });

@@ -58,6 +58,7 @@ import {
   type WorkspaceResolvedMediaSurface,
 } from "../lib/workspaceResolvedMedia";
 import { sanitizeWorkspaceSegmentEditorCustomMusicState } from "../lib/workspaceSegmentEditorMusic";
+import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   getWorkspaceSegmentEditorDisplayEndTime,
   getWorkspaceSegmentEditorDisplayStartTime,
@@ -705,6 +706,8 @@ type WorkspaceSegmentEditorSession = {
   customMusicFileName?: string | null;
   description: string;
   language?: StudioLanguage | "";
+  musicAssetId?: number | null;
+  musicName?: string | null;
   musicType: string;
   projectId: number;
   segments: WorkspaceSegmentEditorSegment[];
@@ -712,6 +715,7 @@ type WorkspaceSegmentEditorSession = {
   subtitleStyle: string;
   subtitleType: string;
   title: string;
+  ttsAssetId?: number | null;
   voiceType: string;
 };
 
@@ -771,6 +775,24 @@ type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment & {
 type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "segments"> & {
   segments: WorkspaceSegmentEditorDraftSegment[];
 };
+
+type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text";
+
+type WorkspaceSegmentTimelineRedoSnapshot =
+  | {
+      kind: "music";
+      customMusicAssetId?: number | null;
+      customMusicFileName?: string | null;
+      musicAssetId?: number | null;
+      musicName?: string | null;
+      musicType: string;
+      selectedCustomMusic: StudioCustomMusicFile | null;
+    }
+  | {
+      kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "music">;
+      segment: WorkspaceSegmentEditorDraftSegment;
+      segmentIndex: number;
+    };
 
 type WorkspaceSegmentBulkSubtitleTextResult = {
   error: string | null;
@@ -1207,6 +1229,7 @@ export const shouldShowWorkspaceMediaLibraryLoadingState = (options: {
 type WorkspaceSegmentSubtitleOverlayProps = {
   clipCurrentTime: number;
   compact?: boolean;
+  editRequestId?: number;
   isEditable?: boolean;
   isPlaying: boolean;
   onResetText?: () => void;
@@ -5423,7 +5446,72 @@ const getSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQuality)
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
 
 const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
+const cloneStudioCustomMusicFile = (value: StudioCustomMusicFile | null) => (value ? { ...value } : null);
 const cloneWorkspaceMediaAssetRef = (value: WorkspaceMediaAssetRef | null) => (value ? { ...value } : null);
+const getWorkspaceSegmentTimelineHistoryKey = (
+  kind: WorkspaceSegmentTimelineHistoryKind,
+  segmentIndex?: number | null,
+) => `${kind}:${kind === "music" ? "global" : Number(segmentIndex ?? -1)}`;
+
+const restoreWorkspaceSegmentTimelineSnapshot = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  snapshot: WorkspaceSegmentEditorDraftSegment,
+  kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "music">,
+): WorkspaceSegmentEditorDraftSegment => {
+  if (kind === "text") {
+    return {
+      ...segment,
+      text: snapshot.text,
+      textByLanguage: { ...snapshot.textByLanguage },
+    };
+  }
+
+  if (kind === "voice") {
+    return {
+      ...segment,
+      voiceType: getWorkspaceSegmentVoiceOverrideId(snapshot),
+    };
+  }
+
+  if (kind === "sound") {
+    return {
+      ...segment,
+      sceneSoundAsset: cloneStudioCustomVideoFile(snapshot.sceneSoundAsset),
+      sceneSoundGeneratedFromPrompt: snapshot.sceneSoundGeneratedFromPrompt,
+      sceneSoundPrompt: snapshot.sceneSoundPrompt,
+      sceneSoundPromptInitialized: snapshot.sceneSoundPromptInitialized,
+    };
+  }
+
+  return {
+    ...segment,
+    aiPhotoAsset: cloneStudioCustomVideoFile(snapshot.aiPhotoAsset),
+    aiPhotoGeneratedFromPrompt: snapshot.aiPhotoGeneratedFromPrompt,
+    aiPhotoPrompt: snapshot.aiPhotoPrompt,
+    aiPhotoPromptInitialized: snapshot.aiPhotoPromptInitialized,
+    aiVideoAsset: cloneStudioCustomVideoFile(snapshot.aiVideoAsset),
+    aiVideoGeneratedMode: snapshot.aiVideoGeneratedMode,
+    aiVideoGeneratedFromPrompt: snapshot.aiVideoGeneratedFromPrompt,
+    aiVideoPrompt: snapshot.aiVideoPrompt,
+    aiVideoPromptInitialized: snapshot.aiVideoPromptInitialized,
+    currentAsset: cloneWorkspaceMediaAssetRef(snapshot.currentAsset),
+    currentExternalPlaybackUrl: snapshot.currentExternalPlaybackUrl,
+    currentExternalPreviewUrl: snapshot.currentExternalPreviewUrl,
+    currentPlaybackUrl: snapshot.currentPlaybackUrl,
+    currentPosterUrl: snapshot.currentPosterUrl,
+    currentPreviewUrl: snapshot.currentPreviewUrl,
+    currentSourceKind: snapshot.currentSourceKind,
+    customVideo: cloneStudioCustomVideoFile(snapshot.customVideo),
+    imageEditAsset: cloneStudioCustomVideoFile(snapshot.imageEditAsset),
+    imageEditGeneratedFromPrompt: snapshot.imageEditGeneratedFromPrompt,
+    imageEditPrompt: snapshot.imageEditPrompt,
+    imageEditPromptInitialized: snapshot.imageEditPromptInitialized,
+    mediaType: snapshot.mediaType,
+    photoAnimationSourceAsset: cloneStudioCustomVideoFile(snapshot.photoAnimationSourceAsset),
+    videoAction: snapshot.videoAction,
+    visualReset: snapshot.visualReset,
+  };
+};
 const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => ({
   ...project,
   finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
@@ -5832,6 +5920,54 @@ const buildWorkspaceSegmentOriginalProxyUrl = (
     source: "original",
   });
   return `/api/workspace/project-segment-video?${params.toString()}`;
+};
+
+const buildWorkspaceProjectMusicAudioProxyUrl = (
+  projectId: number | null | undefined,
+  version?: string | number | null,
+) => {
+  const normalizedProjectId = Number(projectId);
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    projectId: String(normalizedProjectId),
+  });
+  const normalizedVersion = String(version ?? "").trim();
+  if (normalizedVersion) {
+    params.set("v", normalizedVersion);
+  }
+
+  return `/api/workspace/project-music-audio?${params.toString()}`;
+};
+
+const buildWorkspaceSegmentVoiceoverAudioProxyUrl = (
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+  version?: string | number | null,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId <= 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    projectId: String(normalizedProjectId),
+    segmentIndex: String(normalizedSegmentIndex),
+  });
+  const normalizedVersion = String(version ?? "").trim();
+  if (normalizedVersion) {
+    params.set("v", normalizedVersion);
+  }
+
+  return `/api/workspace/project-segment-voiceover?${params.toString()}`;
 };
 
 const rewriteWorkspaceSegmentProjectProxyUrl = (value: string | null | undefined, projectId: number) => {
@@ -10926,6 +11062,7 @@ type StudioVoiceSelectorChipProps = {
 type StudioMusicSelectorChipProps = {
   customMusicFile: StudioCustomMusicFile | null;
   isPreparingCustomMusic: boolean;
+  openRequestId?: number;
   onSelectCustomFile: (file: File) => Promise<boolean | void>;
   onSelectMusicType: (musicType: StudioMusicType) => void;
   selectedMusicType: StudioMusicType;
@@ -12578,6 +12715,7 @@ function WorkspaceModalVideoPlayer({
 function WorkspaceSegmentSubtitleOverlay({
   clipCurrentTime,
   compact = false,
+  editRequestId = 0,
   isEditable = false,
   isPlaying,
   onResetText,
@@ -12619,6 +12757,15 @@ function WorkspaceSegmentSubtitleOverlay({
     pendingCaretPointRef.current = null;
     setIsEditingText(false);
   }, [segment.index]);
+
+  useEffect(() => {
+    if (!isInlineEditorVisible || editRequestId <= 0) {
+      return;
+    }
+
+    pendingCaretPointRef.current = null;
+    setIsEditingText(true);
+  }, [editRequestId, isInlineEditorVisible]);
 
   useEffect(() => {
     if (!shouldShowInlineEditor) {
@@ -13474,6 +13621,7 @@ function StudioBrandSelectorChip({
 function StudioMusicSelectorChip({
   customMusicFile,
   isPreparingCustomMusic,
+  openRequestId = 0,
   onSelectCustomFile,
   onSelectMusicType,
   selectedMusicType,
@@ -13492,6 +13640,15 @@ function StudioMusicSelectorChip({
   const selectedMusicTitle = customMusicFile?.fileName ?? selectedMusicLabel;
   const customMusicFileLabel = customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : null;
   const isSidebarVariant = variant === "sidebar";
+
+  useEffect(() => {
+    if (openRequestId <= 0) {
+      return;
+    }
+
+    setIsOpen(true);
+    triggerRef.current?.focus({ preventScroll: true });
+  }, [openRequestId]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -13887,6 +14044,28 @@ export function WorkspacePage({
   const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
+  const [segmentTimelineMusicOpenRequestId, setSegmentTimelineMusicOpenRequestId] = useState(0);
+  const [segmentTimelineVoiceMenuSegmentIndex, setSegmentTimelineVoiceMenuSegmentIndex] = useState<number | null>(null);
+  const [segmentTimelineVoiceMenuStyle, setSegmentTimelineVoiceMenuStyle] = useState<CSSProperties | null>(null);
+  const [segmentTimelineTextEditRequest, setSegmentTimelineTextEditRequest] = useState<{
+    requestId: number;
+    segmentIndex: number;
+  } | null>(null);
+  const [segmentTimelinePromptFocusRequest, setSegmentTimelinePromptFocusRequest] = useState<{
+    requestId: number;
+    segmentIndex: number;
+    tab: WorkspaceSegmentVisualModalTab;
+  } | null>(null);
+  const [segmentTimelineAudioPlayback, setSegmentTimelineAudioPlayback] = useState<{
+    key: string;
+    status: "loading" | "playing";
+  } | null>(null);
+  const [segmentTimelineRedoSnapshots, setSegmentTimelineRedoSnapshots] = useState<
+    Record<string, WorkspaceSegmentTimelineRedoSnapshot>
+  >({});
+  useEffect(() => {
+    setSegmentTimelineRedoSnapshots({});
+  }, [segmentEditorLoadedSession?.projectId]);
   const [queuedSegmentEditorPlaybackIndex, setQueuedSegmentEditorPlaybackIndex] = useState<number | null>(null);
   const [segmentCarouselDragProgress, setSegmentCarouselDragProgress] = useState(0);
   const [isSegmentCarouselDragging, setIsSegmentCarouselDragging] = useState(false);
@@ -14098,8 +14277,11 @@ export function WorkspacePage({
     startY: number;
   } | null>(null);
   const segmentCarouselSuppressClickUntilRef = useRef(0);
+  const segmentTimelineAudioRef = useRef<HTMLMediaElement | null>(null);
   const segmentThumbStripRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const segmentTimelineVoiceButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const segmentTimelineVoiceMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
   const segmentThumbPendingDragRef = useRef<{
     index: number;
@@ -17393,10 +17575,16 @@ export function WorkspacePage({
   );
   const createSegmentAiPhotoModalStatus = ({
     isBusy = false,
+    isReady = false,
   }: {
     isBusy?: boolean;
     isReady?: boolean;
-  }) => (isBusy ? { label: "Идет", tone: "processing" as const } : null);
+  }) =>
+    isBusy
+      ? { label: workspaceText(locale, "Идет", "In progress"), tone: "processing" as const }
+      : isReady
+        ? { label: workspaceText(locale, "Готово", "Ready"), tone: "ready" as const }
+        : null;
   const canAnimateSegmentPhoto = canWorkspaceSegmentAnimatePhoto(segmentAiPhotoModalSegment);
   const canCreateSegmentTalkingPhoto = canWorkspaceSegmentCreateTalkingPhoto(segmentAiPhotoModalSegment);
   const isSegmentAiPhotoModalGeneratingCurrentSegment = Boolean(
@@ -17426,6 +17614,9 @@ export function WorkspacePage({
   const isSegmentSceneSoundCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentAiPhotoModalSegment.index),
+  );
+  const isActiveSegmentSceneSoundCurrent = Boolean(
+    activeSegment && hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, activeSegment.index),
   );
   const isSegmentAiPhotoModalSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
   const canEditSegmentImage = canWorkspaceSegmentEditPhoto(segmentAiPhotoModalSegment);
@@ -17530,9 +17721,6 @@ export function WorkspacePage({
     1,
     segmentEditorSegmentCount + (canAddSegmentEditorSegment ? 1 : 0) + (visibleSegmentThumbInsertIndex === null ? 0 : 1),
   );
-  const segmentThumbBarStyle = {
-    "--studio-segment-editor-thumb-count": segmentThumbVisibleSlotCount,
-  } as CSSProperties;
   const segmentThumbDragGhostStyle: CSSProperties | null = segmentThumbDragState
     ? {
         left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
@@ -17579,6 +17767,12 @@ export function WorkspacePage({
     selectedVoiceOptions.find((voice) => voice.id === normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType))?.id ??
     resolvedSelectedVoiceId;
   const studioSidebarVoiceEnabled = segmentEditorDraft ? !isCurrentDraftVoiceDisabled : isVoiceoverEnabled;
+  const isSegmentTimelineGlobalVoiceEdited = Boolean(
+    segmentEditorDraft &&
+      segmentEditorChecklistBaseSession &&
+      normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.voiceType) !==
+        normalizeWorkspaceSegmentEditorSetting(segmentEditorChecklistBaseSession.voiceType),
+  );
   const activeSegmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(activeSegment, selectedLanguage);
   const activeSegmentEffectiveVoiceId = activeSegmentVoiceOverrideId
     ? resolveStudioVoiceIdForLanguage(selectedLanguage, activeSegmentVoiceOverrideId, studioSidebarVoiceId)
@@ -17590,6 +17784,78 @@ export function WorkspacePage({
   const studioSidebarMusicType = studioMusicOptions.some((option) => option.id === studioSidebarMusicTypeRaw)
     ? (studioSidebarMusicTypeRaw as StudioMusicType)
     : selectedMusicType;
+  const segmentEditorTracks = segmentEditorDraft
+    ? buildWorkspaceSegmentEditorTracks(
+        segmentEditorDraft.segments,
+        segmentEditorChecklistBaseSession?.segments ?? [],
+        segmentEditorDraft,
+        segmentEditorChecklistBaseSession,
+        {
+          activeArrayIndex: activeSegmentIndex,
+          isSoundEdited: isWorkspaceSegmentDraftSceneSoundEdited,
+          isTextEdited: (segment) => isWorkspaceSegmentDraftTextEdited(segment),
+          isVisualEdited: (segment, baselineSegment) =>
+            isWorkspaceSegmentDraftVisualResettable(segment) ||
+            isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment),
+          isVoiceEdited: isWorkspaceSegmentDraftVoiceEdited,
+        },
+      )
+    : null;
+  const segmentEditorTimelineRowsByKind = new Map(
+    (segmentEditorTracks?.rows ?? []).map((row) => [row.kind, row] as const),
+  );
+  const segmentEditorTimelineVisualRow = segmentEditorTimelineRowsByKind.get("visual") ?? null;
+  const segmentEditorTimelineMusicRow = segmentEditorTimelineRowsByKind.get("music") ?? null;
+  const segmentEditorTimelineVoiceRow = segmentEditorTimelineRowsByKind.get("voice") ?? null;
+  const segmentEditorTimelineSoundRow = segmentEditorTimelineRowsByKind.get("sound") ?? null;
+  const segmentEditorTimelineTextRow = segmentEditorTimelineRowsByKind.get("text") ?? null;
+  const segmentTimelineMusicLabel =
+    studioSidebarMusicType === "custom"
+      ? segmentEditorDraft?.customMusicFileName ||
+        selectedCustomMusic?.fileName ||
+        workspaceText(locale, "Своя музыка", "Custom music")
+      : getStudioMusicOptionCopy(
+          studioMusicOptions.find((option) => option.id === studioSidebarMusicType) ?? studioMusicOptions[0],
+          locale,
+        ).label;
+  const segmentTimelineCustomMusicPreviewAsset =
+    selectedCustomMusic ??
+    (studioSidebarMusicType === "custom" &&
+    (segmentEditorDraft?.customMusicAssetId || segmentEditorDraft?.customMusicFileName)
+      ? ({
+          assetId: segmentEditorDraft.customMusicAssetId ?? undefined,
+          fileName: segmentEditorDraft.customMusicFileName ?? segmentTimelineMusicLabel,
+          fileSize: 0,
+        } satisfies StudioCustomMusicFile)
+      : null);
+  const segmentTimelineProjectMusicPreviewUrl = buildWorkspaceProjectMusicAudioProxyUrl(
+    segmentEditorDraft?.projectId,
+    segmentEditorDraft?.musicAssetId ?? segmentEditorDraft?.musicName ?? studioSidebarMusicType,
+  );
+  const segmentTimelineMusicPreviewUrl =
+    studioSidebarMusicType === "custom"
+      ? getStudioCustomAssetPreviewUrl(segmentTimelineCustomMusicPreviewAsset) ?? segmentTimelineProjectMusicPreviewUrl
+      : studioSidebarMusicType === "none"
+        ? null
+        : segmentTimelineProjectMusicPreviewUrl;
+  const segmentTimelineMusicAudioKey = `timeline:music:${
+    segmentTimelineMusicPreviewUrl ??
+    segmentEditorDraft?.musicAssetId ??
+    segmentEditorDraft?.musicName ??
+    segmentEditorDraft?.customMusicAssetId ??
+    segmentEditorDraft?.customMusicFileName ??
+    studioSidebarMusicType
+  }`;
+  const segmentTimelineMusicPreviewDisabledReason =
+    studioSidebarMusicType === "none"
+      ? workspaceText(locale, "Музыка выключена", "Music is off")
+      : studioSidebarMusicType === "custom"
+        ? workspaceText(locale, "Загрузите аудиофайл или примените музыку проекта", "Upload an audio file or apply project music")
+        : workspaceText(
+            locale,
+            "Музыка проекта пока недоступна как отдельный аудиофайл",
+            "Project music is not available as an isolated audio file yet",
+          );
   const studioSidebarProjectTitle = (() => {
     if (!segmentEditorDraft) {
       return "";
@@ -17635,6 +17901,195 @@ export function WorkspacePage({
 
       delete segmentThumbButtonRefs.current[segmentIndex];
     };
+  const setSegmentTimelineVoiceButtonRef =
+    (segmentIndex: number) =>
+    (element: HTMLButtonElement | null) => {
+      if (element) {
+        segmentTimelineVoiceButtonRefs.current[segmentIndex] = element;
+        return;
+      }
+
+      delete segmentTimelineVoiceButtonRefs.current[segmentIndex];
+    };
+  const stopSegmentTimelineAudioPlayback = useCallback((targetKey?: string) => {
+    const previewAudio = segmentTimelineAudioRef.current;
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio.currentTime = 0;
+      previewAudio.onended = null;
+      previewAudio.onerror = null;
+      segmentTimelineAudioRef.current = null;
+    }
+
+    setSegmentTimelineAudioPlayback((current) => (targetKey && current?.key !== targetKey ? current : null));
+  }, []);
+  const handleSegmentTimelineAudioPreview = useCallback(
+    async (
+      event: ReactMouseEvent<HTMLButtonElement>,
+      options: {
+        key: string;
+        mediaKind?: "audio" | "video";
+        url: string | null;
+      },
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!options.url || typeof window === "undefined" || typeof document === "undefined") {
+        return;
+      }
+
+      if (segmentTimelineAudioPlayback?.key === options.key) {
+        stopSegmentTimelineAudioPlayback(options.key);
+        return;
+      }
+
+      stopSegmentTimelineAudioPlayback();
+
+      const previewAudio =
+        options.mediaKind === "video"
+          ? document.createElement("video")
+          : document.createElement("audio");
+      previewAudio.src = options.url;
+      previewAudio.preload = "auto";
+      if (options.mediaKind === "video") {
+        const previewVideo = previewAudio as HTMLVideoElement;
+        previewVideo.playsInline = true;
+        previewVideo.muted = false;
+      }
+      previewAudio.onplaying = () => {
+        if (segmentTimelineAudioRef.current === previewAudio) {
+          setSegmentTimelineAudioPlayback({ key: options.key, status: "playing" });
+        }
+      };
+      previewAudio.onended = () => {
+        if (segmentTimelineAudioRef.current === previewAudio) {
+          segmentTimelineAudioRef.current = null;
+          setSegmentTimelineAudioPlayback((current) => (current?.key === options.key ? null : current));
+        }
+      };
+      previewAudio.onerror = () => {
+        if (segmentTimelineAudioRef.current === previewAudio) {
+          segmentTimelineAudioRef.current = null;
+          setSegmentTimelineAudioPlayback((current) => (current?.key === options.key ? null : current));
+        }
+      };
+
+      segmentTimelineAudioRef.current = previewAudio;
+      setSegmentTimelineAudioPlayback({ key: options.key, status: "loading" });
+
+      try {
+        await previewAudio.play();
+      } catch {
+        if (segmentTimelineAudioRef.current === previewAudio) {
+          segmentTimelineAudioRef.current = null;
+        }
+        setSegmentTimelineAudioPlayback((current) => (current?.key === options.key ? null : current));
+      }
+    },
+    [segmentTimelineAudioPlayback?.key, stopSegmentTimelineAudioPlayback],
+  );
+  useEffect(() => () => stopSegmentTimelineAudioPlayback(), [stopSegmentTimelineAudioPlayback]);
+  useEffect(() => {
+    if (segmentTimelineVoiceMenuSegmentIndex === null) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      const trigger = segmentTimelineVoiceButtonRefs.current[segmentTimelineVoiceMenuSegmentIndex] ?? null;
+      if (trigger?.contains(target) || segmentTimelineVoiceMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setSegmentTimelineVoiceMenuSegmentIndex(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSegmentTimelineVoiceMenuSegmentIndex(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [segmentTimelineVoiceMenuSegmentIndex]);
+  useLayoutEffect(() => {
+    if (segmentTimelineVoiceMenuSegmentIndex === null) {
+      setSegmentTimelineVoiceMenuStyle(null);
+      return undefined;
+    }
+
+    const updateMenuPosition = () => {
+      const triggerRect = segmentTimelineVoiceButtonRefs.current[segmentTimelineVoiceMenuSegmentIndex]?.getBoundingClientRect();
+      if (!triggerRect) {
+        setSegmentTimelineVoiceMenuStyle(null);
+        return;
+      }
+
+      setSegmentTimelineVoiceMenuStyle(
+        getStudioCompactMenuStyle({
+          estimatedMenuHeight: Math.min(window.innerHeight - 32, 52 + selectedVoiceOptions.length * 58),
+          minWidth: 268,
+          preferredWidth: 320,
+          triggerRect,
+        }),
+      );
+    };
+
+    updateMenuPosition();
+
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [segmentTimelineVoiceMenuSegmentIndex, selectedVoiceOptions.length]);
+  useEffect(() => {
+    if (
+      segmentTimelineVoiceMenuSegmentIndex !== null &&
+      !segmentEditorDraft?.segments.some((segment) => segment.index === segmentTimelineVoiceMenuSegmentIndex)
+    ) {
+      setSegmentTimelineVoiceMenuSegmentIndex(null);
+    }
+  }, [segmentEditorDraft?.segments, segmentTimelineVoiceMenuSegmentIndex]);
+  useLayoutEffect(() => {
+    if (
+      !segmentTimelinePromptFocusRequest ||
+      !activeSegment ||
+      activeSegment.index !== segmentTimelinePromptFocusRequest.segmentIndex ||
+      segmentEditorPromptToolTab !== segmentTimelinePromptFocusRequest.tab
+    ) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const textarea = segmentAiPhotoModalTextareaRef.current;
+        if (!textarea) {
+          return;
+        }
+
+        textarea.scrollIntoView({ block: "nearest", inline: "nearest" });
+        textarea.focus();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    activeSegment,
+    segmentEditorPromptToolTab,
+    segmentTimelinePromptFocusRequest,
+  ]);
   const scrollSegmentThumbStripForPointer = (clientX: number) => {
     const stripElement = segmentThumbStripRef.current;
     if (!stripElement) {
@@ -17837,7 +18292,7 @@ export function WorkspacePage({
     const pauseUnexpectedVideos = () => {
       document
         .querySelectorAll<HTMLVideoElement>(
-          ".studio-segment-editor__carousel video, .studio-segment-editor__thumbbar video",
+          ".studio-segment-editor__carousel video, .studio-segment-editor__thumbbar video, .studio-segment-editor__timeline video",
         )
         .forEach((element) => {
           pauseUnexpectedSegmentEditorCarouselVideo(element);
@@ -17847,7 +18302,7 @@ export function WorkspacePage({
     const handleVideoPlay = (event: Event) => {
       if (
         event.target instanceof HTMLVideoElement &&
-        event.target.closest(".studio-segment-editor__carousel, .studio-segment-editor__thumbbar")
+        event.target.closest(".studio-segment-editor__carousel, .studio-segment-editor__thumbbar, .studio-segment-editor__timeline")
       ) {
         pauseUnexpectedSegmentEditorCarouselVideo(event.target);
       }
@@ -18305,7 +18760,7 @@ export function WorkspacePage({
         return;
       }
 
-      if (target.closest(".studio-segment-editor__carousel, .studio-segment-editor__thumbbar")) {
+      if (target.closest(".studio-segment-editor__carousel, .studio-segment-editor__thumbbar, .studio-segment-editor__timeline")) {
         return;
       }
 
@@ -20188,6 +20643,8 @@ export function WorkspacePage({
         ...currentDraft,
         customMusicAssetId: baselineSession.customMusicAssetId ?? null,
         customMusicFileName: baselineSession.customMusicFileName ?? null,
+        musicAssetId: baselineSession.musicAssetId ?? null,
+        musicName: baselineSession.musicName ?? null,
         musicType: nextMusicType,
       }));
       return;
@@ -20902,6 +21359,233 @@ export function WorkspacePage({
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       voiceType: getWorkspaceSegmentVoiceOverrideId(baselineSegment),
+    }));
+  };
+
+  const createSegmentTimelineMusicRedoSnapshot = (
+    draft: WorkspaceSegmentEditorDraftSession,
+  ): Extract<WorkspaceSegmentTimelineRedoSnapshot, { kind: "music" }> => ({
+    customMusicAssetId: draft.customMusicAssetId ?? null,
+    customMusicFileName: draft.customMusicFileName ?? null,
+    kind: "music",
+    musicAssetId: draft.musicAssetId ?? null,
+    musicName: draft.musicName ?? null,
+    musicType: normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "ai",
+    selectedCustomMusic: cloneStudioCustomMusicFile(selectedCustomMusic),
+  });
+
+  const applySegmentTimelineMusicSnapshot = (
+    snapshot: Extract<WorkspaceSegmentTimelineRedoSnapshot, { kind: "music" }>,
+  ) => {
+    const nextMusicType = normalizeWorkspaceSegmentEditorSetting(snapshot.musicType) ?? "ai";
+    setSelectedMusicType(nextMusicType as StudioMusicType);
+    setSelectedCustomMusic(cloneStudioCustomMusicFile(snapshot.selectedCustomMusic));
+    updateSegmentEditorDraft((currentDraft) => ({
+      ...currentDraft,
+      customMusicAssetId: snapshot.customMusicAssetId ?? null,
+      customMusicFileName: snapshot.customMusicFileName ?? null,
+      musicAssetId: snapshot.musicAssetId ?? null,
+      musicName: snapshot.musicName ?? null,
+      musicType: nextMusicType,
+    }));
+  };
+
+  const handleSegmentTimelineHistoryBack = (
+    kind: WorkspaceSegmentTimelineHistoryKind,
+    segmentIndex?: number | null,
+  ) => {
+    if (isSegmentEditorStructureActionBusy || !segmentEditorDraft) {
+      return;
+    }
+
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
+    setSegmentEditorVideoError(null);
+
+    if (kind === "music") {
+      const baselineSession = segmentEditorChecklistBaseSession;
+      if (!baselineSession) {
+        return;
+      }
+
+      setSegmentTimelineRedoSnapshots((current) => ({
+        ...current,
+        [historyKey]: createSegmentTimelineMusicRedoSnapshot(segmentEditorDraft),
+      }));
+      applySegmentTimelineMusicSnapshot({
+        customMusicAssetId: baselineSession.customMusicAssetId ?? null,
+        customMusicFileName: baselineSession.customMusicFileName ?? null,
+        kind: "music",
+        musicAssetId: baselineSession.musicAssetId ?? null,
+        musicName: baselineSession.musicName ?? null,
+        musicType: normalizeWorkspaceSegmentEditorSetting(baselineSession.musicType) ?? "ai",
+        selectedCustomMusic: null,
+      });
+      return;
+    }
+
+    const safeSegmentIndex = Number(segmentIndex);
+    if (!Number.isInteger(safeSegmentIndex)) {
+      return;
+    }
+
+    const currentSegment = segmentEditorDraft.segments.find((segment) => segment.index === safeSegmentIndex);
+    if (!currentSegment) {
+      return;
+    }
+
+    setSegmentTimelineRedoSnapshots((current) => ({
+      ...current,
+      [historyKey]: {
+        kind,
+        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+        segmentIndex: safeSegmentIndex,
+      },
+    }));
+
+    if (kind === "visual") {
+      const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+        (segment) => segment.index === safeSegmentIndex,
+      );
+      if (isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
+        restoreSegmentEditorVisualByIndex(safeSegmentIndex);
+      } else {
+        resetSegmentEditorVisualByIndex(safeSegmentIndex);
+      }
+      return;
+    }
+
+    if (kind === "sound") {
+      resetSegmentEditorSceneSoundByIndex(safeSegmentIndex);
+      return;
+    }
+
+    if (kind === "voice") {
+      resetSegmentEditorVoiceByIndex(safeSegmentIndex);
+      return;
+    }
+
+    resetSegmentEditorTextByIndex(safeSegmentIndex);
+  };
+
+  const handleSegmentTimelineHistoryForward = (
+    kind: WorkspaceSegmentTimelineHistoryKind,
+    segmentIndex?: number | null,
+  ) => {
+    if (isSegmentEditorStructureActionBusy) {
+      return;
+    }
+
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
+    const snapshot = segmentTimelineRedoSnapshots[historyKey];
+    if (!snapshot || snapshot.kind !== kind) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    if (snapshot.kind === "music") {
+      applySegmentTimelineMusicSnapshot(snapshot);
+    } else {
+      if (snapshot.kind === "visual") {
+        resetSegmentEditorPreviewPlaybackState();
+      }
+      updateSegmentEditorDraftSegmentByIndex(snapshot.segmentIndex, (segment) =>
+        restoreWorkspaceSegmentTimelineSnapshot(segment, snapshot.segment, snapshot.kind),
+      );
+
+      if (
+        snapshot.kind === "sound" &&
+        (activeSegment?.index === snapshot.segmentIndex || segmentAiPhotoModalSegmentIndex === snapshot.segmentIndex)
+      ) {
+        setSegmentSceneSoundModalPrompt(snapshot.segment.sceneSoundPromptInitialized ? snapshot.segment.sceneSoundPrompt : "");
+      }
+    }
+
+    setSegmentTimelineRedoSnapshots((current) => {
+      const next = { ...current };
+      delete next[historyKey];
+      return next;
+    });
+  };
+
+  const handleSegmentTimelineDelete = (
+    kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "visual">,
+    segmentIndex?: number | null,
+  ) => {
+    if (isSegmentEditorStructureActionBusy || !segmentEditorDraft) {
+      return;
+    }
+
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
+    setSegmentEditorVideoError(null);
+
+    if (kind === "music") {
+      setSegmentTimelineRedoSnapshots((current) => ({
+        ...current,
+        [historyKey]: createSegmentTimelineMusicRedoSnapshot(segmentEditorDraft),
+      }));
+      setSelectedMusicType("none");
+      setSelectedCustomMusic(null);
+      updateSegmentEditorDraft((currentDraft) => ({
+        ...currentDraft,
+        customMusicAssetId: null,
+        customMusicFileName: null,
+        musicAssetId: null,
+        musicName: null,
+        musicType: "none",
+      }));
+      return;
+    }
+
+    const safeSegmentIndex = Number(segmentIndex);
+    if (!Number.isInteger(safeSegmentIndex)) {
+      return;
+    }
+
+    const currentSegment = segmentEditorDraft.segments.find((segment) => segment.index === safeSegmentIndex);
+    if (!currentSegment) {
+      return;
+    }
+
+    setSegmentTimelineRedoSnapshots((current) => ({
+      ...current,
+      [historyKey]: {
+        kind,
+        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+        segmentIndex: safeSegmentIndex,
+      },
+    }));
+
+    if (kind === "voice") {
+      updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) => ({
+        ...segment,
+        voiceType: "none",
+      }));
+      setSegmentTimelineVoiceMenuSegmentIndex(null);
+      return;
+    }
+
+    if (kind === "sound") {
+      cancelPendingSegmentSceneSoundRun(safeSegmentIndex);
+      updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) => ({
+        ...segment,
+        sceneSoundAsset: null,
+        sceneSoundGeneratedFromPrompt: null,
+        sceneSoundPrompt: "",
+        sceneSoundPromptInitialized: false,
+      }));
+      if (activeSegment?.index === safeSegmentIndex || segmentAiPhotoModalSegmentIndex === safeSegmentIndex) {
+        setSegmentSceneSoundModalPrompt("");
+      }
+      return;
+    }
+
+    updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) => ({
+      ...segment,
+      text: "",
+      textByLanguage: {
+        ...segment.textByLanguage,
+        [selectedLanguage]: "",
+      },
     }));
   };
 
@@ -26383,6 +27067,98 @@ export function WorkspacePage({
     setSegmentEditorPromptToolTab(tab);
     setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(activeSegment, tab));
   };
+  const openSegmentEditorTimelineTool = (
+    segmentArrayIndex: number,
+    tab: WorkspaceSegmentVisualModalTab,
+    options?: { focusPrompt?: boolean; focusText?: boolean; sceneMode?: "create" | "edit" },
+  ) => {
+    const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!targetSegment) {
+      return;
+    }
+
+    setSegmentEditorVideoError(null);
+    activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
+    const nextSceneMode = options?.sceneMode ?? getWorkspaceSegmentPromptSceneModeForTab(tab);
+    const nextTab =
+      options?.sceneMode === "create"
+        ? getWorkspaceSegmentVisualTabForPromptSceneMode(targetSegment, "create", segmentEditorPromptToolTab)
+        : resolveWorkspaceSegmentVisualModalTab(targetSegment, tab);
+
+    setSegmentEditorPromptSceneMode(nextSceneMode);
+    syncSegmentAiPhotoModalForSegment(targetSegment, {
+      preserveTab: true,
+      resetLibraryFilter: nextTab === "library",
+    });
+    setSegmentEditorPromptToolTab(nextTab);
+    setSegmentAiPhotoModalTab(nextTab);
+
+    if (options?.focusText) {
+      setSegmentTimelineTextEditRequest((current) => ({
+        requestId: (current?.requestId ?? 0) + 1,
+        segmentIndex: targetSegment.index,
+      }));
+    }
+    if (options?.focusPrompt) {
+      setSegmentTimelinePromptFocusRequest((current) => ({
+        requestId: (current?.requestId ?? 0) + 1,
+        segmentIndex: targetSegment.index,
+        tab: nextTab,
+      }));
+    }
+  };
+  const handleSegmentEditorTimelineVisualClick = (segmentArrayIndex: number) => {
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    openSegmentEditorTimelineTool(segmentArrayIndex, segmentEditorPromptToolTab, { sceneMode: "create" });
+  };
+  const handleSegmentEditorTimelineMusicClick = () => {
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    setSegmentTimelineMusicOpenRequestId((current) => current + 1);
+  };
+  const handleSegmentEditorTimelineVoiceClick = (
+    segmentArrayIndex: number,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!targetSegment) {
+      return;
+    }
+
+    openSegmentEditorTimelineTool(segmentArrayIndex, "voiceover");
+    setSegmentTimelineVoiceMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
+    event.currentTarget.focus({ preventScroll: true });
+  };
+  const handleSegmentEditorTimelineSoundClick = (segmentArrayIndex: number) => {
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    openSegmentEditorTimelineTool(segmentArrayIndex, "scene_sound", {
+      focusPrompt: true,
+      sceneMode: "edit",
+    });
+  };
+  const handleSegmentEditorTimelineTextClick = (segmentArrayIndex: number) => {
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    openSegmentEditorTimelineTool(segmentArrayIndex, "talking_photo", {
+      focusText: true,
+      sceneMode: "edit",
+    });
+  };
+  const handleSegmentTimelineVoiceUseGlobal = (segmentIndex: number) => {
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+      ...segment,
+      voiceType: null,
+    }));
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+  };
+  const handleSegmentTimelineVoiceSelect = (segmentIndex: number, voiceId: StudioVoiceOption["id"]) => {
+    const nextVoiceId = resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+      ...segment,
+      voiceType: nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
+    }));
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+  };
   const handleSegmentEditorPromptVisualToolButtonClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
     tab: WorkspaceSegmentVisualModalTab,
@@ -26398,6 +27174,882 @@ export function WorkspacePage({
     `studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${
       segmentEditorPromptToolTab === tab ? " is-active" : ""
     }${releasedSegmentEditorPromptTool === tab ? " is-hover-released" : ""}`;
+  const getSegmentEditorTimelineSpanStyle = (
+    span: {
+      duration: number;
+      leftRatio: number;
+      widthRatio: number;
+    },
+  ): CSSProperties =>
+    ({
+      "--studio-segment-editor-timeline-span-grow": Math.max(0.6, span.duration),
+      "--studio-segment-editor-timeline-span-left": `${span.leftRatio * 100}%`,
+      "--studio-segment-editor-timeline-span-width": `${span.widthRatio * 100}%`,
+    }) as CSSProperties;
+  const getSegmentEditorTimelineInsertGapStyle = (insertIndex: number): CSSProperties => {
+    const spans = segmentEditorTimelineVisualRow?.spans ?? [];
+    const previousSpan = spans[insertIndex - 1] ?? null;
+    const leftRatio = insertIndex <= 0 ? 0 : previousSpan ? previousSpan.leftRatio + previousSpan.widthRatio : 1;
+
+    return {
+      "--studio-segment-editor-timeline-drop-left": `${Math.min(1, Math.max(0, leftRatio)) * 100}%`,
+    } as CSSProperties;
+  };
+  const segmentEditorTimelineAddStyle = {
+    "--studio-segment-editor-timeline-span-left": "calc(100% + 8px)",
+    "--studio-segment-editor-timeline-span-width": "58px",
+  } as CSSProperties;
+  const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
+      return workspaceText(locale, "Без озвучки", "No voiceover");
+    }
+
+    const voiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(segment, selectedLanguage);
+    if (!studioSidebarVoiceEnabled && !voiceOverrideId) {
+      return workspaceText(locale, "Без озвучки", "No voiceover");
+    }
+
+    const voiceId = voiceOverrideId
+      ? resolveStudioVoiceIdForLanguage(selectedLanguage, voiceOverrideId, studioSidebarVoiceId)
+      : studioSidebarVoiceId;
+    const voice = selectedVoiceOptions.find((option) => option.id === voiceId);
+    if (voiceOverrideId && voiceId !== studioSidebarVoiceId) {
+      return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
+    }
+
+    return voice?.label
+      ? workspaceText(locale, `Общий: ${voice.label}`, `Global: ${voice.label}`)
+      : workspaceText(locale, "Голос видео", "Video voice");
+  };
+  const getSegmentTimelineVoiceOption = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
+      return null;
+    }
+
+    const voiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(segment, selectedLanguage);
+    if (!studioSidebarVoiceEnabled && !voiceOverrideId) {
+      return null;
+    }
+
+    const voiceId = voiceOverrideId
+      ? resolveStudioVoiceIdForLanguage(selectedLanguage, voiceOverrideId, studioSidebarVoiceId)
+      : studioSidebarVoiceId;
+    return selectedVoiceOptions.find((option) => option.id === voiceId) ?? null;
+  };
+  const getSegmentTimelineAudioPlaybackStatus = (audioKey: string) =>
+    segmentTimelineAudioPlayback?.key === audioKey ? segmentTimelineAudioPlayback.status : null;
+  const renderSegmentTimelineAudioButton = (options: {
+    audioKey: string;
+    className?: string;
+    disabledReason?: string;
+    label: string;
+    mediaKind?: "audio" | "video";
+    url: string | null;
+  }) => {
+    const playbackStatus = getSegmentTimelineAudioPlaybackStatus(options.audioKey);
+    const isLoading = playbackStatus === "loading";
+    const isPlaying = playbackStatus === "playing";
+    const disabledReason = options.disabledReason ?? workspaceText(locale, "Превью недоступно", "Preview unavailable");
+    const ariaLabel = !options.url
+      ? disabledReason
+      : isPlaying || isLoading
+        ? workspaceText(locale, `Остановить: ${options.label}`, `Stop: ${options.label}`)
+        : workspaceText(locale, `Прослушать: ${options.label}`, `Listen: ${options.label}`);
+
+    return (
+      <button
+        className={`studio-segment-editor__timeline-play${isPlaying ? " is-playing" : ""}${
+          isLoading ? " is-loading" : ""
+        }${options.className ? ` ${options.className}` : ""}`}
+        type="button"
+        disabled={!options.url}
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        onClick={(event) =>
+          void handleSegmentTimelineAudioPreview(event, {
+            key: options.audioKey,
+            mediaKind: options.mediaKind,
+            url: options.url,
+          })
+        }
+      >
+        {isLoading ? (
+          <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>
+        ) : isPlaying ? (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.2" fill="currentColor" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M4.2 3.5v7l5.8-3.5-5.8-3.5Z" fill="currentColor" />
+          </svg>
+        )}
+      </button>
+    );
+  };
+  const renderSegmentTimelineHistoryButtons = (options: {
+    canBack: boolean;
+    canDelete?: boolean;
+    canForward: boolean;
+    deleteLabel?: string;
+    kind: WorkspaceSegmentTimelineHistoryKind;
+    label: string;
+    onDelete?: () => void;
+    segmentIndex?: number | null;
+    withPlay?: boolean;
+  }) => {
+    if (!options.canBack && !options.canForward && !options.canDelete) {
+      return null;
+    }
+
+    const isActionDisabled = isSegmentEditorStructureActionBusy;
+    const backLabel = workspaceText(locale, `Откатить: ${options.label}`, `Revert: ${options.label}`);
+    const forwardLabel = workspaceText(locale, `Вернуть: ${options.label}`, `Restore: ${options.label}`);
+    const deleteLabel = options.deleteLabel ?? workspaceText(locale, `Удалить: ${options.label}`, `Delete: ${options.label}`);
+
+    return (
+      <span
+        className={`studio-segment-editor__timeline-history${
+          options.canBack || options.canForward ? " is-history-active" : ""
+        }${options.withPlay ? " studio-segment-editor__timeline-history--before-play" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        {options.canDelete && options.onDelete ? (
+          <button
+            className="studio-segment-editor__timeline-history-button studio-segment-editor__timeline-history-button--delete"
+            type="button"
+            disabled={isActionDisabled}
+            aria-label={deleteLabel}
+            title={deleteLabel}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              options.onDelete?.();
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M9 7V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="m9 11 .4 6M15 11l-.4 6M7.5 7l.8 12h7.4l.8-12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : null}
+        <button
+          className="studio-segment-editor__timeline-history-button"
+          type="button"
+          disabled={isActionDisabled || !options.canBack}
+          aria-label={backLabel}
+          title={backLabel}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleSegmentTimelineHistoryBack(options.kind, options.segmentIndex);
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 7 5 12l5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5.5 12H19" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+          </svg>
+        </button>
+        <button
+          className="studio-segment-editor__timeline-history-button"
+          type="button"
+          disabled={isActionDisabled || !options.canForward}
+          aria-label={forwardLabel}
+          title={forwardLabel}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleSegmentTimelineHistoryForward(options.kind, options.segmentIndex);
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m14 7 5 5-5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5 12h13.5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+          </svg>
+        </button>
+      </span>
+    );
+  };
+  const getSegmentTimelineSoundLabel = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    options?: { isEmpty?: boolean; isPending?: boolean },
+  ) => {
+    if (options?.isPending) {
+      return getSegmentVisualGenerationStatusLabel(segment.index, "compact") || workspaceText(locale, "Генерация", "Generating");
+    }
+
+    if (options?.isEmpty) {
+      return workspaceText(locale, "Добавить звук", "Add sound");
+    }
+
+    return (
+      formatWorkspaceSegmentEditorChecklistPreview(segment.sceneSoundPrompt || segment.sceneSoundGeneratedFromPrompt || "", 28) ||
+      workspaceText(locale, "Звук сцены", "Scene sound")
+    );
+  };
+  const getSegmentTimelineTextLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    formatWorkspaceSegmentEditorChecklistPreview(segment.text, 38) || workspaceText(locale, "Добавить текст", "Add text");
+  const segmentTimelineVoiceMenuSegment =
+    segmentTimelineVoiceMenuSegmentIndex !== null
+      ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentTimelineVoiceMenuSegmentIndex) ?? null
+      : null;
+  const segmentTimelineVoiceMenuArrayIndex =
+    segmentTimelineVoiceMenuSegment && segmentEditorDraft
+      ? segmentEditorDraft.segments.findIndex((segment) => segment.index === segmentTimelineVoiceMenuSegment.index)
+      : -1;
+  const segmentTimelineVoiceMenuOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(
+    segmentTimelineVoiceMenuSegment,
+    selectedLanguage,
+  );
+  const segmentTimelineVoiceMenuEffectiveVoiceId = segmentTimelineVoiceMenuOverrideId
+    ? resolveStudioVoiceIdForLanguage(selectedLanguage, segmentTimelineVoiceMenuOverrideId, studioSidebarVoiceId)
+    : studioSidebarVoiceId;
+  const segmentTimelineVoiceMenuUsesGlobal =
+    !segmentTimelineVoiceMenuOverrideId || segmentTimelineVoiceMenuOverrideId === studioSidebarVoiceId;
+  const segmentTimelineVoiceMenuGlobalVoice =
+    selectedVoiceOptions.find((voice) => voice.id === studioSidebarVoiceId) ?? selectedVoiceOptions[0] ?? null;
+  const segmentTimelineVoiceMenu =
+    segmentTimelineVoiceMenuSegment && segmentTimelineVoiceMenuStyle && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={segmentTimelineVoiceMenuRef}
+            className="studio-voice-selector__menu studio-segment-editor__timeline-voice-menu"
+            role="menu"
+            aria-label={workspaceText(
+              locale,
+              `Голос сцены ${segmentTimelineVoiceMenuArrayIndex + 1}`,
+              `Scene ${segmentTimelineVoiceMenuArrayIndex + 1} voice`,
+            )}
+            style={segmentTimelineVoiceMenuStyle}
+          >
+            <span className="studio-voice-selector__menu-title">
+              {workspaceText(
+                locale,
+                `Голос сцены ${segmentTimelineVoiceMenuArrayIndex + 1}`,
+                `Scene ${segmentTimelineVoiceMenuArrayIndex + 1} voice`,
+              )}
+            </span>
+            <div className={`studio-voice-selector__option${segmentTimelineVoiceMenuUsesGlobal ? " is-selected" : ""}`}>
+              <button
+                className="studio-voice-selector__option-main"
+                type="button"
+                role="menuitemradio"
+                aria-checked={segmentTimelineVoiceMenuUsesGlobal}
+                onClick={() => handleSegmentTimelineVoiceUseGlobal(segmentTimelineVoiceMenuSegment.index)}
+              >
+                <span className="studio-voice-selector__option-title">
+                  <span>{workspaceText(locale, "Голос всего видео", "Whole-video voice")}</span>
+                </span>
+                <small>
+                  {studioSidebarVoiceEnabled
+                    ? segmentTimelineVoiceMenuGlobalVoice?.label ??
+                      workspaceText(locale, "Выбран в общих настройках", "Selected globally")
+                    : workspaceText(locale, "Без озвучки", "No voiceover")}
+                </small>
+              </button>
+            </div>
+            {selectedVoiceOptions.map((voice) => {
+              const isSelectedSceneVoice =
+                !segmentTimelineVoiceMenuUsesGlobal && segmentTimelineVoiceMenuEffectiveVoiceId === voice.id;
+
+              return (
+                <div
+                  className={`studio-voice-selector__option${isSelectedSceneVoice ? " is-selected" : ""}`}
+                  key={`timeline-scene-voice:${voice.id}`}
+                >
+                  <button
+                    className="studio-voice-selector__option-main"
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={isSelectedSceneVoice}
+                    onClick={() => handleSegmentTimelineVoiceSelect(segmentTimelineVoiceMenuSegment.index, voice.id)}
+                  >
+                    <span className="studio-voice-selector__option-title">
+                      <span>{voice.label}</span>
+                      {voice.badgeLabel ? (
+                        <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
+                      ) : null}
+                      {voice.creditCost ? (
+                        <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
+                      ) : null}
+                    </span>
+                    <small>{voice.description}</small>
+                  </button>
+                </div>
+              );
+            })}
+          </div>,
+          document.body,
+        )
+      : null;
+  const segmentEditorTimeline =
+    segmentEditorDraft && segmentEditorTracks ? (
+      <div
+        className="studio-segment-editor__timeline"
+        style={
+          {
+            "--studio-segment-editor-timeline-slot-count": segmentThumbVisibleSlotCount,
+          } as CSSProperties
+        }
+        aria-label={workspaceText(locale, "Дорожки Shorts", "Shorts tracks")}
+      >
+        <div className="studio-segment-editor__timeline-ruler" aria-hidden="true">
+          <div className="studio-segment-editor__timeline-label"></div>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineVisualRow?.spans.map((span, index) => (
+              <div
+                className="studio-segment-editor__timeline-tick"
+                key={`timeline-tick:${span.segmentIndex}`}
+                style={getSegmentEditorTimelineSpanStyle(span)}
+              >
+                <span>{formatWorkspaceSegmentEditorTime(span.startTime)}</span>
+                {index === (segmentEditorTimelineVisualRow?.spans.length ?? 0) - 1 ? (
+                  <span>{formatWorkspaceSegmentEditorTime(span.endTime, { roundUp: true })}</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--visual">
+          <div className="studio-segment-editor__timeline-label">
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                <path d="m7 16 4-4 3 3 2-2 2 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="15.5" cy="9.5" r="1.2" fill="currentColor" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Визуал", "Visual")}</span>
+          </div>
+          <div
+            ref={segmentThumbStripRef}
+            className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
+            role="list"
+            aria-label={workspaceText(locale, "Визуальные сегменты", "Visual segments")}
+          >
+            {visibleSegmentThumbInsertIndex === 0 ? (
+              <div
+                className="studio-segment-editor__timeline-drop-gap"
+                style={getSegmentEditorTimelineInsertGapStyle(0)}
+                aria-hidden="true"
+              ></div>
+            ) : null}
+            {segmentEditorTimelineVisualRow?.spans.map((span) => {
+              const index = span.arrayIndex ?? 0;
+              const segment = segmentEditorDraft.segments[index];
+              if (!segment) {
+                return null;
+              }
+
+              const thumbMediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+              const thumbPreviewKind = thumbMediaSurface.previewKind;
+              const thumbUrl = thumbMediaSurface.displayUrl;
+              const isActiveThumb = index === activeSegmentIndex;
+              const isThumbVisualEdited = span.isEdited;
+              const isDraggedThumb = index === draggedSegmentThumbIndex;
+              const thumbGenerationLabel = getSegmentVisualGenerationStatusLabel(segment.index, "compact");
+              const isThumbVisualGenerationPending = Boolean(thumbGenerationLabel);
+              const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);
+              const baselineVisualSegment = segmentEditorChecklistBaseSession?.segments.find(
+                (baselineSegment) => baselineSegment.index === segment.index,
+              );
+              const canBackVisual =
+                isWorkspaceSegmentDraftVisualResettable(segment) ||
+                isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
+              const canForwardVisual = Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]);
+
+              return (
+                <Fragment key={`segment-timeline-visual:${segment.index}`}>
+                  <div
+                    className={`studio-segment-editor__timeline-cell-shell${isDraggedThumb ? " is-dragging" : ""}`}
+                    style={getSegmentEditorTimelineSpanStyle(span)}
+                  >
+                    <button
+                      ref={setSegmentThumbButtonRef(segment.index)}
+                      className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--visual${
+                        canBackVisual || canForwardVisual ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      }${
+                        isActiveThumb ? " is-active" : ""
+                      }${isThumbVisualEdited ? " is-edited" : ""}${isThumbVisualGenerationPending ? " is-pending" : ""}`}
+                      type="button"
+                      aria-busy={isThumbVisualGenerationPending ? true : undefined}
+                      aria-pressed={isActiveThumb}
+                      aria-grabbed={isDraggedThumb ? true : undefined}
+                      aria-label={workspaceText(locale, `Открыть визуал сцены ${index + 1}`, `Open scene ${index + 1} visual`)}
+                      onPointerCancel={(event) => finishSegmentThumbPointerDrag(index)(event, { cancelled: true })}
+                      onPointerDown={handleSegmentThumbPointerDown(index)}
+                      onPointerMove={handleSegmentThumbPointerMove(index)}
+                      onPointerUp={finishSegmentThumbPointerDrag(index)}
+                      onClick={(event) => {
+                        if (isSegmentThumbClickSuppressed()) {
+                          event.preventDefault();
+                          return;
+                        }
+
+                        event.preventDefault();
+                        handleSegmentEditorTimelineVisualClick(index);
+                      }}
+                    >
+                      <span className="studio-segment-editor__timeline-visual-media">
+                        {thumbUrl ? (
+                          <WorkspaceSegmentPreviewCardMedia
+                            allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
+                            allowVideoPlayback={thumbMediaSurface.mountVideoWhenIdle}
+                            autoplay={false}
+                            fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
+                            imageLoading="lazy"
+                            loop={false}
+                            mediaKey={`timeline-thumb:${getWorkspaceSegmentMediaIdentityKey(segment, thumbMediaSurface)}`}
+                            mountVideoWhenIdle={thumbMediaSurface.mountVideoWhenIdle}
+                            muted
+                            posterUrl={thumbMediaSurface.posterUrl}
+                            preferPosterFrame={thumbMediaSurface.preferPosterFrame}
+                            preload={thumbPreviewKind === "video" ? thumbMediaSurface.preloadPolicy : undefined}
+                            primePausedFrame={thumbMediaSurface.primePausedFrame}
+                            previewFallbackUrls={thumbMediaSurface.fallbackUrls}
+                            previewKind={thumbPreviewKind}
+                            previewUrl={thumbUrl}
+                          />
+                        ) : (
+                          <span className="studio-segment-editor__timeline-placeholder">
+                            {getSegmentVisualPlaceholderLabel(segment.index)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="studio-segment-editor__timeline-cell-copy">
+                        <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
+                        <small>
+                          {formatWorkspaceSegmentEditorTime(span.startTime)} -{" "}
+                          {formatWorkspaceSegmentEditorTime(span.endTime, { roundUp: true })}
+                        </small>
+                      </span>
+                      {isThumbVisualEdited ? (
+                        <span className="studio-segment-editor__timeline-status">
+                          {workspaceText(locale, "Изменен", "Changed")}
+                        </span>
+                      ) : null}
+                      {isThumbVisualGenerationPending ? (
+                        <span className="studio-segment-editor__timeline-pending" role="status" aria-live="polite">
+                          <span className="studio-segment-editor__thumb-status-spinner" aria-hidden="true"></span>
+                          <span>{thumbGenerationLabel}</span>
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      className="studio-segment-editor__timeline-delete"
+                      type="button"
+                      disabled={!canDeleteSegmentEditorSegment || isSegmentEditorStructureActionBusy}
+                      aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
+                      title={
+                        canDeleteSegmentEditorSegment
+                          ? workspaceText(locale, "Удалить сцену", "Delete scene")
+                          : workspaceText(
+                              locale,
+                              `Нужно оставить минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент`,
+                              `Keep at least ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} segments`,
+                            )
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        requestDeleteSegmentEditorSegment(segment.index);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M7 7l10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M17 7 7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    {renderSegmentTimelineHistoryButtons({
+                      canBack: canBackVisual && !isThumbVisualGenerationPending,
+                      canForward: canForwardVisual && !isThumbVisualGenerationPending,
+                      kind: "visual",
+                      label: workspaceText(locale, `Визуал сцены ${index + 1}`, `Scene ${index + 1} visual`),
+                      segmentIndex: segment.index,
+                    })}
+                  </div>
+                  {visibleSegmentThumbInsertIndex === index + 1 ? (
+                    <div
+                      className="studio-segment-editor__timeline-drop-gap"
+                      style={getSegmentEditorTimelineInsertGapStyle(index + 1)}
+                      aria-hidden="true"
+                    ></div>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            {canAddSegmentEditorSegment ? (
+              <div
+                className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--add"
+                style={segmentEditorTimelineAddStyle}
+              >
+                <button
+                  className="studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--add"
+                  type="button"
+                  disabled={isSegmentEditorStructureActionBusy}
+                  aria-label={workspaceText(locale, "Добавить сегмент", "Add segment")}
+                  title={
+                    isSegmentEditorStructureActionBusy
+                      ? workspaceText(locale, "Сейчас нельзя менять состав сегментов", "Segment structure cannot be changed right now")
+                      : workspaceText(locale, "Добавить сегмент", "Add segment")
+                  }
+                  onClick={handleAddSegmentEditorSegment}
+                >
+                  <span className="studio-segment-editor__timeline-add-icon" aria-hidden="true">
+                    +
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--music">
+          <div className="studio-segment-editor__timeline-label">
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Музыка", "Music")}</span>
+          </div>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineMusicRow?.spans.map((span) => {
+              const musicHistoryKey = getWorkspaceSegmentTimelineHistoryKey("music");
+              const canForwardMusic = Boolean(segmentTimelineRedoSnapshots[musicHistoryKey]);
+              const canDeleteMusic = studioSidebarMusicType !== "none";
+
+              return (
+                <div
+                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio studio-segment-editor__timeline-cell-shell--global-audio"
+                  key={span.key}
+                  style={getSegmentEditorTimelineSpanStyle(span)}
+                >
+                  <button
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--music studio-segment-editor__timeline-cell--has-play${
+                      span.isEdited || canForwardMusic || canDeleteMusic ? " studio-segment-editor__timeline-cell--has-history" : ""
+                    }${
+                      span.isEdited ? " is-edited" : ""
+                    }`}
+                    type="button"
+                    aria-label={workspaceText(locale, "Изменить музыку", "Change music")}
+                    onClick={handleSegmentEditorTimelineMusicClick}
+                  >
+                  <span className="studio-segment-editor__timeline-waveform" aria-hidden="true">
+                    <svg viewBox="0 0 720 48" preserveAspectRatio="none" focusable="false">
+                      <path
+                        className="studio-segment-editor__timeline-waveform-fill"
+                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24 L706 31 L694 27 L682 35 L670 30 L658 38 L646 28 L634 34 L622 25 L610 32 L598 27 L586 37 L574 31 L562 40 L550 28 L538 33 L526 26 L514 35 L502 29 L490 39 L478 27 L466 32 L454 25 L442 36 L430 30 L418 41 L406 28 L394 34 L382 26 L370 38 L358 31 L346 40 L334 29 L322 36 L310 25 L298 33 L286 27 L274 37 L262 31 L250 42 L238 28 L226 35 L214 26 L202 32 L190 39 L178 29 L166 37 L156 27 L146 34 L136 25 L126 30 L116 40 L106 28 L96 36 L86 26 L76 33 L66 28 L58 41 L50 30 L42 38 L34 27 L26 34 L18 25 L10 31 L0 24 Z"
+                      />
+                      <path
+                        className="studio-segment-editor__timeline-waveform-ridge"
+                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24"
+                      />
+                      <path
+                        className="studio-segment-editor__timeline-waveform-ridge studio-segment-editor__timeline-waveform-ridge--low"
+                        d="M0 24 L10 31 L18 25 L26 34 L34 27 L42 38 L50 30 L58 41 L66 28 L76 33 L86 26 L96 36 L106 28 L116 40 L126 30 L136 25 L146 34 L156 27 L166 37 L178 29 L190 39 L202 32 L214 26 L226 35 L238 28 L250 42 L262 31 L274 37 L286 27 L298 33 L310 25 L322 36 L334 29 L346 40 L358 31 L370 38 L382 26 L394 34 L406 28 L418 41 L430 30 L442 36 L454 25 L466 32 L478 27 L490 39 L502 29 L514 35 L526 26 L538 33 L550 28 L562 40 L574 31 L586 37 L598 27 L610 32 L622 25 L634 34 L646 28 L658 38 L670 30 L682 35 L694 27 L706 31 L720 24"
+                      />
+                    </svg>
+                  </span>
+                  <span className="studio-segment-editor__timeline-cell-copy">
+                    <strong>{segmentTimelineMusicLabel}</strong>
+                    <small>{span.isEdited ? workspaceText(locale, "Музыка изменена", "Music changed") : workspaceText(locale, "Фоновая дорожка", "Background track")}</small>
+                  </span>
+                </button>
+                {renderSegmentTimelineHistoryButtons({
+                  canBack: span.isEdited,
+                  canDelete: canDeleteMusic,
+                  canForward: canForwardMusic,
+                  deleteLabel: workspaceText(locale, "Удалить музыку", "Delete music"),
+                  kind: "music",
+                  label: workspaceText(locale, "Музыка", "Music"),
+                  onDelete: () => handleSegmentTimelineDelete("music"),
+                  withPlay: true,
+                })}
+                {renderSegmentTimelineAudioButton({
+                  audioKey: segmentTimelineMusicAudioKey,
+                  disabledReason: segmentTimelineMusicPreviewDisabledReason,
+                  label: segmentTimelineMusicLabel,
+                  url: segmentTimelineMusicPreviewUrl,
+                })}
+              </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--voice">
+          <div className="studio-segment-editor__timeline-label">
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <rect x="9" y="4" width="6" height="10" rx="3" stroke="currentColor" strokeWidth="1.9" />
+                <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Озвучка", "Voice")}</span>
+          </div>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineVoiceRow?.spans.map((span) => {
+              const index = span.arrayIndex ?? 0;
+              const segment = segmentEditorDraft.segments[index];
+              if (!segment) {
+                return null;
+              }
+              const voiceOption = getSegmentTimelineVoiceOption(segment);
+              const isVoiceAudioStale =
+                isSegmentTimelineGlobalVoiceEdited || span.isEdited || isWorkspaceSegmentDraftTextEdited(segment);
+              const voiceoverAudioVersion = [
+                segmentEditorDraft.ttsAssetId ?? "",
+                segment.startTime,
+                segment.endTime,
+                segment.speechStartTime ?? "",
+                segment.speechEndTime ?? "",
+                normalizeWorkspaceSegmentEditorTextForCompare(segment.text),
+                voiceOption?.id ?? "",
+              ].join(":");
+              const voiceoverAudioUrl =
+                studioSidebarVoiceEnabled && voiceOption
+                  ? buildWorkspaceSegmentVoiceoverAudioProxyUrl(
+                      segmentEditorDraft.projectId,
+                      segment.index,
+                      voiceoverAudioVersion,
+                    )
+                  : null;
+              const effectiveVoiceoverAudioUrl = isVoiceAudioStale ? null : voiceoverAudioUrl;
+              const voiceAudioKey = `timeline:voice:${segment.index}:${effectiveVoiceoverAudioUrl ?? "empty"}`;
+              const voiceLabel = workspaceText(
+                locale,
+                `Озвучка сцены ${index + 1}: ${getSegmentTimelineVoiceLabel(segment)}`,
+                `Scene ${index + 1} voiceover: ${getSegmentTimelineVoiceLabel(segment)}`,
+              );
+              const voiceDisabledReason = isVoiceAudioStale
+                ? workspaceText(locale, "Сначала примените изменения озвучки/текста", "Apply voice/text changes first")
+                : !studioSidebarVoiceEnabled || !voiceOption
+                  ? workspaceText(locale, "Озвучка выключена", "Voiceover is off")
+                  : workspaceText(
+                      locale,
+                      "Озвучка сегмента пока недоступна как отдельный аудиофайл",
+                      "Segment voiceover is not available as an isolated audio file yet",
+                    );
+              const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segment.index);
+              const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
+              const canDeleteVoice =
+                getWorkspaceSegmentVoiceOverrideId(segment) !== "none" &&
+                (studioSidebarVoiceEnabled || Boolean(getWorkspaceSegmentVoiceOverrideId(segment)));
+
+              return (
+                <div
+                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio"
+                  key={span.key}
+                  style={getSegmentEditorTimelineSpanStyle(span)}
+                >
+                  <button
+                    ref={setSegmentTimelineVoiceButtonRef(segment.index)}
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--voice studio-segment-editor__timeline-cell--has-play${
+                      span.isEdited || canForwardVoice || canDeleteVoice ? " studio-segment-editor__timeline-cell--has-history" : ""
+                    }${
+                      span.isActive ? " is-active" : ""
+                    }${span.isEdited ? " is-edited" : ""}`}
+                    type="button"
+                    aria-label={workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`)}
+                    onClick={(event) => handleSegmentEditorTimelineVoiceClick(index, event)}
+                  >
+                    <span className="studio-segment-editor__timeline-cell-copy">
+                      <strong>{getSegmentTimelineVoiceLabel(segment)}</strong>
+                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
+                    </span>
+                  </button>
+                  {renderSegmentTimelineHistoryButtons({
+                    canBack: span.isEdited,
+                    canDelete: canDeleteVoice,
+                    canForward: canForwardVoice,
+                    deleteLabel: workspaceText(locale, `Удалить озвучку сцены ${index + 1}`, `Delete scene ${index + 1} voiceover`),
+                    kind: "voice",
+                    label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
+                    onDelete: () => handleSegmentTimelineDelete("voice", segment.index),
+                    segmentIndex: segment.index,
+                    withPlay: true,
+                  })}
+                  {renderSegmentTimelineAudioButton({
+                    audioKey: voiceAudioKey,
+                    disabledReason: voiceDisabledReason,
+                    label: voiceLabel,
+                    url: effectiveVoiceoverAudioUrl,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--sound">
+          <div className="studio-segment-editor__timeline-label">
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M4 12h3l4-4v8l-4-4H4Z" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M15 9.5c.8.7 1.2 1.5 1.2 2.5s-.4 1.8-1.2 2.5M18 7c1.5 1.3 2.3 3 2.3 5s-.8 3.7-2.3 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Звуки", "Sounds")}</span>
+          </div>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineSoundRow?.spans.map((span) => {
+              const index = span.arrayIndex ?? 0;
+              const segment = segmentEditorDraft.segments[index];
+              if (!segment) {
+                return null;
+              }
+
+              const isSoundGenerationPending = hasWorkspaceSegmentVisualRun(
+                segmentEditorGeneratingSceneSoundRunIds,
+                segment.index,
+              );
+              const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segment.sceneSoundAsset);
+              const soundAudioKey = `timeline:sound:${segment.index}:${soundPreviewUrl ?? "empty"}`;
+              const soundLabel = getSegmentTimelineSoundLabel(segment, {
+                isEmpty: span.isEmpty,
+                isPending: isSoundGenerationPending,
+              });
+              const soundHistoryKey = getWorkspaceSegmentTimelineHistoryKey("sound", segment.index);
+              const canForwardSound = Boolean(segmentTimelineRedoSnapshots[soundHistoryKey]);
+              const canDeleteSound = Boolean(
+                segment.sceneSoundAsset ||
+                  segment.sceneSoundPrompt ||
+                  segment.sceneSoundGeneratedFromPrompt ||
+                  isSoundGenerationPending,
+              );
+
+              return (
+                <div
+                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio"
+                  key={span.key}
+                  style={getSegmentEditorTimelineSpanStyle(span)}
+                >
+                  <button
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--sound studio-segment-editor__timeline-cell--has-play${
+                      (span.isEdited && !isSoundGenerationPending) || canForwardSound || canDeleteSound
+                        ? " studio-segment-editor__timeline-cell--has-history"
+                        : ""
+                    }${
+                      span.isActive ? " is-active" : ""
+                    }${span.isEdited ? " is-edited" : ""}${span.isEmpty ? " is-empty" : ""}${
+                      isSoundGenerationPending ? " is-pending" : ""
+                    }`}
+                    type="button"
+                    aria-label={workspaceText(locale, `Изменить звуки сцены ${index + 1}`, `Change scene ${index + 1} sounds`)}
+                    onClick={() => handleSegmentEditorTimelineSoundClick(index)}
+                  >
+                    <span className="studio-segment-editor__timeline-cell-copy">
+                      <strong>{soundLabel}</strong>
+                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
+                    </span>
+                  </button>
+                  {renderSegmentTimelineHistoryButtons({
+                    canBack: span.isEdited && !isSoundGenerationPending,
+                    canDelete: canDeleteSound,
+                    canForward: canForwardSound && !isSoundGenerationPending,
+                    deleteLabel: workspaceText(locale, `Удалить звук сцены ${index + 1}`, `Delete scene ${index + 1} sound`),
+                    kind: "sound",
+                    label: workspaceText(locale, `Звуки сцены ${index + 1}`, `Scene ${index + 1} sounds`),
+                    onDelete: () => handleSegmentTimelineDelete("sound", segment.index),
+                    segmentIndex: segment.index,
+                    withPlay: true,
+                  })}
+                  {renderSegmentTimelineAudioButton({
+                    audioKey: soundAudioKey,
+                    disabledReason: isSoundGenerationPending
+                      ? workspaceText(locale, "Дождитесь генерации звука", "Wait for sound generation")
+                      : workspaceText(locale, "Сначала добавьте звук сцены", "Add scene sound first"),
+                    label: soundLabel,
+                    url: isSoundGenerationPending ? null : soundPreviewUrl,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--text">
+          <div className="studio-segment-editor__timeline-label">
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Текст", "Text")}</span>
+          </div>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineTextRow?.spans.map((span) => {
+              const index = span.arrayIndex ?? 0;
+              const segment = segmentEditorDraft.segments[index];
+              if (!segment) {
+                return null;
+              }
+              const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
+              const canForwardText = Boolean(segmentTimelineRedoSnapshots[textHistoryKey]);
+              const canDeleteText = Boolean(segment.text.trim());
+
+              return (
+                <div
+                  className="studio-segment-editor__timeline-cell-shell"
+                  key={span.key}
+                  style={getSegmentEditorTimelineSpanStyle(span)}
+                >
+                  <button
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--text${
+                      span.isEdited || canForwardText || canDeleteText ? " studio-segment-editor__timeline-cell--has-history" : ""
+                    }${
+                      span.isActive ? " is-active" : ""
+                    }${span.isEdited ? " is-edited" : ""}${span.isEmpty ? " is-empty" : ""}`}
+                    type="button"
+                    aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
+                    onClick={() => handleSegmentEditorTimelineTextClick(index)}
+                  >
+                    <span className="studio-segment-editor__timeline-cell-copy">
+                      <strong>{getSegmentTimelineTextLabel(segment)}</strong>
+                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
+                    </span>
+                  </button>
+                  {renderSegmentTimelineHistoryButtons({
+                    canBack: span.isEdited,
+                    canDelete: canDeleteText,
+                    canForward: canForwardText,
+                    deleteLabel: workspaceText(locale, `Удалить текст сцены ${index + 1}`, `Delete scene ${index + 1} text`),
+                    kind: "text",
+                    label: workspaceText(locale, `Текст сцены ${index + 1}`, `Scene ${index + 1} text`),
+                    onDelete: () => handleSegmentTimelineDelete("text", segment.index),
+                    segmentIndex: segment.index,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {hasSegmentEditorResettableChanges ? (
+          <button
+            className="studio-segment-editor__timeline-reset"
+            type="button"
+            aria-label={workspaceText(locale, "Сбросить все изменения", "Reset all changes")}
+            title={
+              isSegmentEditorStructureActionBusy
+                ? workspaceText(locale, "Сейчас нельзя сбросить изменения", "Changes cannot be reset right now")
+                : workspaceText(locale, "Сбросить все изменения", "Reset all changes")
+            }
+            disabled={isSegmentEditorStructureActionBusy}
+            onClick={requestResetSegmentEditorChanges}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 1-2.34-5.66L20 8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+              <path d="M20 4v4h-4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
+    ) : null;
   const handleSegmentEditorPromptSceneModeSelect = (mode: "create" | "edit") => {
     if (!activeSegment) {
       return;
@@ -26498,7 +28150,7 @@ export function WorkspacePage({
     (isPromptTalkingPhotoMode && isSegmentTalkingPhotoModalGeneratingCurrentSegment) ||
     (isPromptImageEditMode && isSegmentImageEditModalGeneratingCurrentSegment) ||
     (isPromptUpscaleMode && isSegmentImageUpscaleCurrentSegment) ||
-    (isPromptSceneSoundMode && isSegmentSceneSoundCurrentSegment) ||
+    (isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent) ||
     (isPromptUploadMode && isSegmentEditorPreparingCustomVideo);
   const isPromptVisualBaseDisabled =
     !activeSegment ||
@@ -27453,8 +29105,17 @@ export function WorkspacePage({
                     <>
                       <div className={`studio-segment-editor__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                         <textarea
+                          key={`segment-editor-prompt:${activeSegment?.index ?? "none"}:${segmentEditorPromptToolTab}`}
                           ref={segmentAiPhotoModalTextareaRef}
                           className="studio-segment-editor__prompt-textarea"
+                          autoFocus={
+                            Boolean(
+                              segmentTimelinePromptFocusRequest &&
+                                activeSegment &&
+                                activeSegment.index === segmentTimelinePromptFocusRequest.segmentIndex &&
+                                segmentEditorPromptToolTab === segmentTimelinePromptFocusRequest.tab,
+                            )
+                          }
                           value={promptVisualTextareaValue}
                           onChange={handlePromptVisualTextareaChange}
                           rows={6}
@@ -27512,7 +29173,18 @@ export function WorkspacePage({
                           </button>
                         ) : null}
                       </div>
-                      {isPromptSceneSoundMode && activeSegmentSceneSoundUrl ? (
+                      {isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent ? (
+                        <div className="studio-segment-editor__prompt-info-card is-processing" role="status" aria-live="polite">
+                          <strong>{workspaceText(locale, "Генерируем звук сцены", "Generating scene sound")}</strong>
+                          <span>
+                            {workspaceText(
+                              locale,
+                              "Когда звук будет готов, дорожка «Звуки» подсветится и здесь появится прослушивание.",
+                              "When the sound is ready, the Sounds track will highlight and playback will appear here.",
+                            )}
+                          </span>
+                        </div>
+                      ) : isPromptSceneSoundMode && activeSegmentSceneSoundUrl ? (
                         <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
                           <strong>{workspaceText(locale, "Звук сцены добавлен", "Scene sound added")}</strong>
                           <audio controls src={activeSegmentSceneSoundUrl} preload="metadata" />
@@ -27605,6 +29277,7 @@ export function WorkspacePage({
                 <StudioMusicSelectorChip
                   customMusicFile={selectedCustomMusic}
                   isPreparingCustomMusic={isPreparingCustomMusic}
+                  openRequestId={segmentTimelineMusicOpenRequestId}
                   onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
                   onSelectMusicType={handleSegmentEditorMusicTypeSelect}
                   selectedMusicType={studioSidebarMusicType}
@@ -27986,9 +29659,13 @@ export function WorkspacePage({
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
                                 const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
+                                const segmentSubtitleEditRequestId =
+                                  segmentTimelineTextEditRequest?.segmentIndex === segment.index
+                                    ? segmentTimelineTextEditRequest.requestId
+                                    : 0;
                                 const shouldShowEditableSubtitleOverlay =
                                   isActiveCard &&
-                                  studioSidebarSubtitlesEnabled;
+                                  (studioSidebarSubtitlesEnabled || segmentSubtitleEditRequestId > 0);
 
                                 return (
                                   <div
@@ -28114,6 +29791,7 @@ export function WorkspacePage({
                                       {shouldShowEditableSubtitleOverlay ? (
                                         <WorkspaceSegmentSubtitleOverlay
                                           clipCurrentTime={subtitlePreviewTime}
+                                          editRequestId={segmentSubtitleEditRequestId}
                                           isEditable
                                           isPlaying={isSegmentPlaying}
                                           onResetText={handleSegmentEditorTextReset}
@@ -28253,216 +29931,12 @@ export function WorkspacePage({
                           </div>
                         </div>
 
-                        <div className="studio-segment-editor__thumbbar" style={segmentThumbBarStyle}>
-                          <div
-                            ref={segmentThumbStripRef}
-                            className="studio-segment-editor__thumbstrip"
-                            role="list"
-                            aria-label={workspaceText(locale, "Все сцены", "All scenes")}
-                          >
-                              {visibleSegmentThumbInsertIndex === 0 ? (
-                                <div className="studio-segment-editor__thumb-gap" aria-hidden="true">
-                                  <div className="studio-segment-editor__thumb-gap-line"></div>
-                                </div>
-                              ) : null}
-                              {segmentEditorDraft.segments.map((segment, index) => {
-                                const thumbMediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
-                                const thumbPreviewKind = thumbMediaSurface.previewKind;
-                                const thumbUrl = thumbMediaSurface.displayUrl;
-                                const isActiveThumb = index === activeSegmentIndex;
-                                const isThumbVisualEdited = isWorkspaceSegmentDraftVisualResettable(segment);
-                                const isDraggedThumb = index === draggedSegmentThumbIndex;
-                                const thumbGenerationLabel = getSegmentVisualGenerationStatusLabel(segment.index, "compact");
-                                const isThumbVisualGenerationPending = Boolean(thumbGenerationLabel);
-
-                                return (
-                                  <Fragment key={`segment-thumb:${segment.index}`}>
-                                    <div className={`studio-segment-editor__thumb-shell${isDraggedThumb ? " is-dragging" : ""}`}>
-                                      <button
-                                        ref={setSegmentThumbButtonRef(segment.index)}
-                                        className={`studio-segment-editor__thumb${isActiveThumb ? " is-active" : ""}${
-                                          isThumbVisualEdited ? " is-visual-edited" : ""
-                                        }${isThumbVisualGenerationPending ? " is-pending" : ""}`}
-                                        type="button"
-                                        aria-busy={isThumbVisualGenerationPending ? true : undefined}
-                                        aria-pressed={isActiveThumb}
-                                        aria-grabbed={isDraggedThumb ? true : undefined}
-                                        aria-label={
-                                          isThumbVisualGenerationPending
-                                            ? workspaceText(
-                                                locale,
-                                                `Открыть сцену ${index + 1}. ${thumbGenerationLabel}`,
-                                                `Open scene ${index + 1}. ${thumbGenerationLabel}`,
-                                              )
-                                            : workspaceText(locale, `Открыть сцену ${index + 1}`, `Open scene ${index + 1}`)
-                                        }
-                                        onPointerCancel={(event) => finishSegmentThumbPointerDrag(index)(event, { cancelled: true })}
-                                        onPointerDown={handleSegmentThumbPointerDown(index)}
-                                        onPointerMove={handleSegmentThumbPointerMove(index)}
-                                        onPointerUp={finishSegmentThumbPointerDrag(index)}
-                                        onClick={(event) => {
-                                          if (isSegmentThumbClickSuppressed()) {
-                                            event.preventDefault();
-                                            return;
-                                          }
-
-                                          event.preventDefault();
-                                          if (index !== activeSegmentIndex) {
-                                            void handleSegmentEditorCardClick(index, index, thumbPreviewKind);
-                                          }
-                                        }}
-                                      >
-                                        <span className="studio-segment-editor__thumb-media">
-                                          {thumbUrl ? (
-                                            <WorkspaceSegmentPreviewCardMedia
-                                              allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
-                                              allowVideoPlayback={thumbMediaSurface.mountVideoWhenIdle}
-                                              autoplay={false}
-                                              fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
-                                              imageLoading="lazy"
-                                              loop={false}
-                                              mediaKey={`thumb:${getWorkspaceSegmentMediaIdentityKey(segment, thumbMediaSurface)}`}
-                                              mountVideoWhenIdle={thumbMediaSurface.mountVideoWhenIdle}
-                                              muted
-                                              posterUrl={thumbMediaSurface.posterUrl}
-                                              preferPosterFrame={thumbMediaSurface.preferPosterFrame}
-                                              preload={thumbPreviewKind === "video" ? thumbMediaSurface.preloadPolicy : undefined}
-                                              primePausedFrame={thumbMediaSurface.primePausedFrame}
-                                              previewFallbackUrls={thumbMediaSurface.fallbackUrls}
-                                              previewKind={thumbPreviewKind}
-                                              previewUrl={thumbUrl}
-                                            />
-                                          ) : (
-                                            <span className="studio-segment-editor__thumb-placeholder">
-                                              {getSegmentVisualPlaceholderLabel(segment.index)}
-                                            </span>
-                                          )}
-                                          {renderSegmentEditorBrandOverlay("thumb")}
-                                          <span className="studio-segment-editor__thumb-copy">
-                                            <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
-                                            <small>
-                                              {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
-                                              {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
-                                                roundUp: true,
-                                              })}
-                                            </small>
-                                          </span>
-                                          {isThumbVisualGenerationPending ? (
-                                            <span className="studio-segment-editor__thumb-status" role="status" aria-live="polite">
-                                              <span className="studio-segment-editor__thumb-status-spinner" aria-hidden="true"></span>
-                                              <span>{thumbGenerationLabel}</span>
-                                            </span>
-                                          ) : null}
-                                        </span>
-                                      </button>
-                                      <button
-                                        className="studio-segment-editor__thumb-delete"
-                                        type="button"
-                                        disabled={!canDeleteSegmentEditorSegment || isSegmentEditorStructureActionBusy}
-                                        aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
-                                        title={
-                                          canDeleteSegmentEditorSegment
-                                            ? workspaceText(locale, "Удалить сцену", "Delete scene")
-                                            : workspaceText(
-                                                locale,
-                                                `Нужно оставить минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент`,
-                                                `Keep at least ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} segments`,
-                                              )
-                                        }
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          requestDeleteSegmentEditorSegment(segment.index);
-                                        }}
-                                      >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                          <path
-                                            d="M7 7l10 10"
-                                            stroke="currentColor"
-                                            strokeWidth="1.8"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          />
-                                          <path
-                                            d="M17 7 7 17"
-                                            stroke="currentColor"
-                                            strokeWidth="1.8"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                    {visibleSegmentThumbInsertIndex === index + 1 ? (
-                                      <div className="studio-segment-editor__thumb-gap" aria-hidden="true">
-                                        <div className="studio-segment-editor__thumb-gap-line"></div>
-                                      </div>
-                                    ) : null}
-                                  </Fragment>
-                                );
-                              })}
-                              {canAddSegmentEditorSegment ? (
-                                <div className="studio-segment-editor__thumb-shell studio-segment-editor__thumb-shell--add">
-                                  <button
-                                    className="studio-segment-editor__thumb studio-segment-editor__thumb--add"
-                                    type="button"
-                                    disabled={isSegmentEditorStructureActionBusy}
-                                    aria-label={workspaceText(locale, "Добавить сегмент", "Add segment")}
-                                    title={
-                                      isSegmentEditorStructureActionBusy
-                                        ? workspaceText(locale, "Сейчас нельзя менять состав сегментов", "Segment structure cannot be changed right now")
-                                        : workspaceText(locale, "Добавить сегмент", "Add segment")
-                                    }
-                                    onClick={handleAddSegmentEditorSegment}
-                                  >
-                                    <span className="studio-segment-editor__thumb-media studio-segment-editor__thumb-media--add">
-                                      <span className="studio-segment-editor__thumb-add-icon" aria-hidden="true">
-                                        +
-                                      </span>
-                                    </span>
-                                    <span className="studio-segment-editor__thumb-copy">
-                                      <strong>{workspaceText(locale, "Добавить сегмент", "Add segment")}</strong>
-                                    </span>
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                            {hasSegmentEditorResettableChanges ? (
-                              <button
-                                className="studio-segment-editor__thumbbar-reset"
-                                type="button"
-                                aria-label={workspaceText(locale, "Сбросить все изменения", "Reset all changes")}
-                                title={
-                                  isSegmentEditorStructureActionBusy
-                                    ? workspaceText(locale, "Сейчас нельзя сбросить изменения", "Changes cannot be reset right now")
-                                    : workspaceText(locale, "Сбросить все изменения", "Reset all changes")
-                                }
-                                disabled={isSegmentEditorStructureActionBusy}
-                                onClick={requestResetSegmentEditorChanges}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                  <path
-                                    d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                  />
-                                  <path
-                                    d="M20 4v4h-4"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                  />
-                                </svg>
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                ) : createMode === "segment-editor" ? (
+	                      </div>
+                        {segmentEditorTimeline}
+                        {segmentTimelineVoiceMenu}
+	                    </div>
+	                  </div>
+	                ) : createMode === "segment-editor" ? (
                   <div
                     className={`studio-canvas-preview__placeholder studio-canvas-preview__placeholder--segment-editor${
                       isSegmentEditorLoading ? " is-loading" : ""
