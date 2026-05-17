@@ -14045,6 +14045,8 @@ export function WorkspacePage({
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
   const [segmentTimelineMusicOpenRequestId, setSegmentTimelineMusicOpenRequestId] = useState(0);
+  const [segmentTimelineVisualMenuSegmentIndex, setSegmentTimelineVisualMenuSegmentIndex] = useState<number | null>(null);
+  const [segmentTimelineVisualMenuStyle, setSegmentTimelineVisualMenuStyle] = useState<CSSProperties | null>(null);
   const [segmentTimelineVoiceMenuSegmentIndex, setSegmentTimelineVoiceMenuSegmentIndex] = useState<number | null>(null);
   const [segmentTimelineVoiceMenuStyle, setSegmentTimelineVoiceMenuStyle] = useState<CSSProperties | null>(null);
   const [segmentTimelineTextEditRequest, setSegmentTimelineTextEditRequest] = useState<{
@@ -14280,6 +14282,7 @@ export function WorkspacePage({
   const segmentTimelineAudioRef = useRef<HTMLMediaElement | null>(null);
   const segmentThumbStripRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const segmentTimelineVisualMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineVoiceButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineVoiceMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
@@ -17991,6 +17994,76 @@ export function WorkspacePage({
   );
   useEffect(() => () => stopSegmentTimelineAudioPlayback(), [stopSegmentTimelineAudioPlayback]);
   useEffect(() => {
+    if (segmentTimelineVisualMenuSegmentIndex === null) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      const trigger = segmentThumbButtonRefs.current[segmentTimelineVisualMenuSegmentIndex] ?? null;
+      if (trigger?.contains(target) || segmentTimelineVisualMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setSegmentTimelineVisualMenuSegmentIndex(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSegmentTimelineVisualMenuSegmentIndex(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [segmentTimelineVisualMenuSegmentIndex]);
+  useLayoutEffect(() => {
+    if (segmentTimelineVisualMenuSegmentIndex === null) {
+      setSegmentTimelineVisualMenuStyle(null);
+      return undefined;
+    }
+
+    const updateMenuPosition = () => {
+      const triggerRect = segmentThumbButtonRefs.current[segmentTimelineVisualMenuSegmentIndex]?.getBoundingClientRect();
+      if (!triggerRect) {
+        setSegmentTimelineVisualMenuStyle(null);
+        return;
+      }
+
+      setSegmentTimelineVisualMenuStyle(
+        getStudioCompactMenuStyle({
+          estimatedMenuHeight: Math.min(window.innerHeight - 32, 96),
+          minWidth: 300,
+          preferredWidth: 980,
+          triggerRect,
+        }),
+      );
+    };
+
+    updateMenuPosition();
+
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [segmentTimelineVisualMenuSegmentIndex]);
+  useEffect(() => {
+    if (
+      segmentTimelineVisualMenuSegmentIndex !== null &&
+      !segmentEditorDraft?.segments.some((segment) => segment.index === segmentTimelineVisualMenuSegmentIndex)
+    ) {
+      setSegmentTimelineVisualMenuSegmentIndex(null);
+    }
+  }, [segmentEditorDraft?.segments, segmentTimelineVisualMenuSegmentIndex]);
+  useEffect(() => {
     if (segmentTimelineVoiceMenuSegmentIndex === null) {
       return undefined;
     }
@@ -18142,6 +18215,7 @@ export function WorkspacePage({
     return visibleInsertIndex >= draggedIndex ? visibleInsertIndex + 1 : visibleInsertIndex;
   };
   const startSegmentThumbPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>, draggedIndex: number) => {
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     const bounds = event.currentTarget.getBoundingClientRect();
     const nextDragState: WorkspaceSegmentThumbDragState = {
       draggedIndex,
@@ -27058,6 +27132,7 @@ export function WorkspacePage({
       return;
     }
 
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentEditorVideoError(null);
     setSegmentEditorPromptSceneMode(getWorkspaceSegmentPromptSceneModeForTab(tab));
     if (tab === "library") {
@@ -27080,10 +27155,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
     const nextSceneMode = options?.sceneMode ?? getWorkspaceSegmentPromptSceneModeForTab(tab);
-    const nextTab =
-      options?.sceneMode === "create"
-        ? getWorkspaceSegmentVisualTabForPromptSceneMode(targetSegment, "create", segmentEditorPromptToolTab)
-        : resolveWorkspaceSegmentVisualModalTab(targetSegment, tab);
+    const nextTab = resolveWorkspaceSegmentVisualModalTab(targetSegment, tab);
 
     setSegmentEditorPromptSceneMode(nextSceneMode);
     syncSegmentAiPhotoModalForSegment(targetSegment, {
@@ -27107,11 +27179,47 @@ export function WorkspacePage({
       }));
     }
   };
-  const handleSegmentEditorTimelineVisualClick = (segmentArrayIndex: number) => {
+  const isSegmentTimelineVisualPromptTool = (tab: WorkspaceSegmentVisualModalTab) =>
+    tab === "ai_photo" ||
+    tab === "ai_video" ||
+    tab === "photo_animation" ||
+    tab === "talking_photo" ||
+    tab === "image_edit";
+  const handleSegmentEditorTimelineVisualClick = (
+    segmentArrayIndex: number,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!targetSegment) {
+      return;
+    }
+
+    event.currentTarget.focus({ preventScroll: true });
     setSegmentTimelineVoiceMenuSegmentIndex(null);
-    openSegmentEditorTimelineTool(segmentArrayIndex, segmentEditorPromptToolTab, { sceneMode: "create" });
+    setSegmentEditorVideoError(null);
+    activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
+    syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
+    setSegmentTimelineVisualMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
+  };
+  const handleSegmentTimelineVisualToolSelect = (
+    segmentArrayIndex: number,
+    tab: WorkspaceSegmentVisualModalTab,
+  ) => {
+    const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!targetSegment || !isWorkspaceSegmentVisualModalTabAllowed(targetSegment, tab)) {
+      return;
+    }
+
+    const sceneMode = getWorkspaceSegmentPromptSceneModeForTab(tab);
+    setSegmentTimelineVisualMenuSegmentIndex(null);
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    openSegmentEditorTimelineTool(segmentArrayIndex, tab, {
+      focusPrompt: isSegmentTimelineVisualPromptTool(tab),
+      sceneMode,
+    });
   };
   const handleSegmentEditorTimelineMusicClick = () => {
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentTimelineVoiceMenuSegmentIndex(null);
     setSegmentTimelineMusicOpenRequestId((current) => current + 1);
   };
@@ -27124,11 +27232,13 @@ export function WorkspacePage({
       return;
     }
 
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     openSegmentEditorTimelineTool(segmentArrayIndex, "voiceover");
     setSegmentTimelineVoiceMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
     event.currentTarget.focus({ preventScroll: true });
   };
   const handleSegmentEditorTimelineSoundClick = (segmentArrayIndex: number) => {
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentTimelineVoiceMenuSegmentIndex(null);
     openSegmentEditorTimelineTool(segmentArrayIndex, "scene_sound", {
       focusPrompt: true,
@@ -27136,6 +27246,7 @@ export function WorkspacePage({
     });
   };
   const handleSegmentEditorTimelineTextClick = (segmentArrayIndex: number) => {
+    setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentTimelineVoiceMenuSegmentIndex(null);
     openSegmentEditorTimelineTool(segmentArrayIndex, "talking_photo", {
       focusText: true,
@@ -27391,6 +27502,171 @@ export function WorkspacePage({
   };
   const getSegmentTimelineTextLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
     formatWorkspaceSegmentEditorChecklistPreview(segment.text, 38) || workspaceText(locale, "Добавить текст", "Add text");
+  const getSegmentTimelineVisualToolDisabledReason = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    tab: WorkspaceSegmentVisualModalTab,
+  ) => {
+    if (isWorkspaceSegmentVisualModalTabAllowed(segment, tab)) {
+      return null;
+    }
+
+    if (tab === "photo_animation" || tab === "talking_photo" || tab === "image_edit" || tab === "image_upscale") {
+      return getWorkspaceSegmentPhotoToolUnavailableReason(
+        segment,
+        workspaceText(locale, "Сначала выберите фото", "Select a photo first"),
+      );
+    }
+
+    return workspaceText(locale, "Недоступно для этой сцены", "Unavailable for this scene");
+  };
+  const segmentTimelineVisualMenuSegment =
+    segmentTimelineVisualMenuSegmentIndex !== null
+      ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentTimelineVisualMenuSegmentIndex) ?? null
+      : null;
+  const segmentTimelineVisualMenuArrayIndex =
+    segmentTimelineVisualMenuSegment && segmentEditorDraft
+      ? segmentEditorDraft.segments.findIndex((segment) => segment.index === segmentTimelineVisualMenuSegment.index)
+      : -1;
+  const segmentTimelineVisualMenuGroups: Array<{
+    key: string;
+    label: string;
+    options: Array<{
+      description: string;
+      icon: string;
+      tab: WorkspaceSegmentVisualModalTab;
+      title: string;
+    }>;
+  }> = segmentTimelineVisualMenuSegment
+    ? [
+        {
+          key: "create",
+          label: workspaceText(locale, "Создать визуал", "Create visual"),
+          options: [
+            {
+              description: workspaceText(locale, "Сцена по описанию", "Scene from description"),
+              icon: "AI",
+              tab: "ai_photo",
+              title: workspaceText(locale, "ИИ фото", "AI photo"),
+            },
+            {
+              description: workspaceText(locale, "Сцена и движение", "Scene and motion"),
+              icon: "VID",
+              tab: "ai_video",
+              title: workspaceText(locale, "ИИ видео", "AI video"),
+            },
+            {
+              description: workspaceText(locale, "Готовые AI-визуалы", "Ready AI visuals"),
+              icon: "LIB",
+              tab: "library",
+              title: workspaceText(locale, "Медиатека", "Media library"),
+            },
+            {
+              description: workspaceText(locale, "Фото или видео", "Photo or video"),
+              icon: "UP",
+              tab: "upload",
+              title: workspaceText(locale, "Свой визуал", "Custom visual"),
+            },
+          ],
+        },
+        {
+          key: "edit",
+          label: workspaceText(locale, "Изменить текущий", "Edit current"),
+          options: [
+            {
+              description: workspaceText(locale, "Движение из фото", "Motion from photo"),
+              icon: "ANM",
+              tab: "photo_animation",
+              title: workspaceText(locale, "ИИ анимация", "AI animation"),
+            },
+            {
+              description: workspaceText(locale, "Фото говорит текстом сцены", "Photo speaks scene text"),
+              icon: "TALK",
+              tab: "talking_photo",
+              title: workspaceText(locale, "Говорящее фото", "Talking photo"),
+            },
+            {
+              description: workspaceText(locale, "Изменить выбранное фото", "Edit selected photo"),
+              icon: "EDIT",
+              tab: "image_edit",
+              title: workspaceText(locale, "Дорисовать", "Image edit"),
+            },
+            {
+              description: workspaceText(locale, "Апскейл фото", "Photo upscale"),
+              icon: "HD",
+              tab: "image_upscale",
+              title: workspaceText(locale, "Улучшить качество", "Upscale image"),
+            },
+          ],
+        },
+      ]
+    : [];
+  const segmentTimelineVisualMenuOptions = segmentTimelineVisualMenuGroups.flatMap((group) =>
+    group.options.map((option) => ({
+      ...option,
+      groupLabel: group.label,
+    })),
+  );
+  const segmentTimelineVisualMenu =
+    segmentTimelineVisualMenuSegment &&
+    segmentTimelineVisualMenuArrayIndex >= 0 &&
+    segmentTimelineVisualMenuStyle &&
+    typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={segmentTimelineVisualMenuRef}
+            className="studio-segment-editor__timeline-visual-menu"
+            role="menu"
+            aria-label={workspaceText(
+              locale,
+              `Визуал сцены ${segmentTimelineVisualMenuArrayIndex + 1}`,
+              `Scene ${segmentTimelineVisualMenuArrayIndex + 1} visual`,
+            )}
+            style={segmentTimelineVisualMenuStyle}
+          >
+            <span className="studio-segment-editor__timeline-visual-menu-title">
+              {workspaceText(
+                locale,
+                `Визуал сцены ${segmentTimelineVisualMenuArrayIndex + 1}`,
+                `Scene ${segmentTimelineVisualMenuArrayIndex + 1} visual`,
+              )}
+            </span>
+            <div className="studio-segment-editor__timeline-visual-menu-strip">
+              {segmentTimelineVisualMenuOptions.map((option) => {
+                const disabledReason = getSegmentTimelineVisualToolDisabledReason(segmentTimelineVisualMenuSegment, option.tab);
+                const isSelected =
+                  activeSegment?.index === segmentTimelineVisualMenuSegment.index &&
+                  segmentEditorPromptToolTab === option.tab;
+
+                return (
+                  <button
+                    className={`studio-segment-editor__timeline-visual-menu-option${
+                      isSelected ? " is-selected" : ""
+                    }`}
+                    key={`timeline-visual-tool:${option.tab}`}
+                    type="button"
+                    role="menuitem"
+                    disabled={Boolean(disabledReason)}
+                    title={`${option.groupLabel}: ${disabledReason ?? option.description}`}
+                    onClick={() => handleSegmentTimelineVisualToolSelect(segmentTimelineVisualMenuArrayIndex, option.tab)}
+                  >
+                    <span
+                      className={`studio-segment-editor__timeline-visual-menu-icon is-${option.tab.replace(/_/g, "-")}`}
+                      aria-hidden="true"
+                    >
+                      {option.icon}
+                    </span>
+                    <span className="studio-segment-editor__timeline-visual-menu-copy">
+                      <strong>{option.title}</strong>
+                      <small>{disabledReason ?? option.description}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
   const segmentTimelineVoiceMenuSegment =
     segmentTimelineVoiceMenuSegmentIndex !== null
       ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentTimelineVoiceMenuSegmentIndex) ?? null
@@ -27590,7 +27866,7 @@ export function WorkspacePage({
                         }
 
                         event.preventDefault();
-                        handleSegmentEditorTimelineVisualClick(index);
+                        handleSegmentEditorTimelineVisualClick(index, event);
                       }}
                     >
                       <span className="studio-segment-editor__timeline-visual-media">
@@ -29933,6 +30209,7 @@ export function WorkspacePage({
 
 	                      </div>
                         {segmentEditorTimeline}
+                        {segmentTimelineVisualMenu}
                         {segmentTimelineVoiceMenu}
 	                    </div>
 	                  </div>

@@ -24439,6 +24439,185 @@ textarea {
   opacity: 0.38;
 }
 
+.studio-segment-editor__timeline-visual-menu {
+  position: fixed;
+  z-index: 190;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 300px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(3, 7, 18, 0.7)),
+    rgba(8, 13, 25, 0.82);
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.studio-segment-editor__timeline-visual-menu-title {
+  display: block;
+  flex: 0 0 auto;
+  max-width: 118px;
+  padding: 0 2px;
+  overflow: hidden;
+  color: rgba(226, 232, 240, 0.58);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.studio-segment-editor__timeline-visual-menu-strip {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.34) transparent;
+}
+
+.studio-segment-editor__timeline-visual-menu-strip::-webkit-scrollbar {
+  height: 5px;
+}
+
+.studio-segment-editor__timeline-visual-menu-strip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.studio-segment-editor__timeline-visual-menu-strip::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.32);
+}
+
+.studio-segment-editor__timeline-visual-menu-option {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 112px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(15, 23, 42, 0.04)),
+    rgba(15, 23, 42, 0.38);
+  color: rgba(248, 250, 252, 0.92);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.studio-segment-editor__timeline-visual-menu-option:hover:not(:disabled),
+.studio-segment-editor__timeline-visual-menu-option:focus-visible {
+  border-color: rgba(45, 212, 191, 0.34);
+  background:
+    linear-gradient(145deg, rgba(45, 212, 191, 0.13), rgba(59, 130, 246, 0.06)),
+    rgba(15, 23, 42, 0.52);
+  transform: translateY(-1px);
+}
+
+.studio-segment-editor__timeline-visual-menu-option:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.38);
+  outline-offset: 2px;
+}
+
+.studio-segment-editor__timeline-visual-menu-option.is-selected {
+  border-color: rgba(45, 212, 191, 0.42);
+  background:
+    linear-gradient(145deg, rgba(45, 212, 191, 0.16), rgba(124, 58, 237, 0.08)),
+    rgba(8, 47, 73, 0.42);
+}
+
+.studio-segment-editor__timeline-visual-menu-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.studio-segment-editor__timeline-visual-menu-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.28), transparent 32%),
+    linear-gradient(145deg, rgba(45, 212, 191, 0.2), rgba(124, 58, 237, 0.18));
+  color: rgba(224, 242, 254, 0.98);
+  font-size: 0.46rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 10px 20px -16px rgba(45, 212, 191, 0.8);
+}
+
+.studio-segment-editor__timeline-visual-menu-icon.is-ai-video,
+.studio-segment-editor__timeline-visual-menu-icon.is-photo-animation {
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.26), transparent 32%),
+    linear-gradient(145deg, rgba(96, 165, 250, 0.24), rgba(236, 72, 153, 0.16));
+}
+
+.studio-segment-editor__timeline-visual-menu-icon.is-library,
+.studio-segment-editor__timeline-visual-menu-icon.is-upload {
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.22), transparent 32%),
+    linear-gradient(145deg, rgba(148, 163, 184, 0.2), rgba(45, 212, 191, 0.14));
+}
+
+.studio-segment-editor__timeline-visual-menu-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.studio-segment-editor__timeline-visual-menu-copy strong,
+.studio-segment-editor__timeline-visual-menu-copy small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.studio-segment-editor__timeline-visual-menu-copy strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.studio-segment-editor__timeline-visual-menu-copy small {
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.54rem;
+  font-weight: 650;
+  line-height: 1.12;
+}
+
 @media (hover: hover) {
   .studio-segment-editor__timeline-delete {
     opacity: 0;
@@ -24460,6 +24639,14 @@ textarea {
 }
 
 @media (max-width: 980px) {
+  .studio-segment-editor__timeline-visual-menu {
+    min-width: min(300px, calc(100vw - 32px));
+  }
+
+  .studio-segment-editor__timeline-visual-menu-option {
+    flex-basis: 104px;
+  }
+
   .studio-segment-editor__timeline {
     --studio-segment-editor-timeline-track-width: max(
       520px,
@@ -33027,6 +33214,7 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-canvas-content.is-segment-editor {
   width: 100%;
   max-width: none;
+  padding: 0;
 }
 
 .studio-canvas-main.is-segment-editor .studio-canvas-create-layout {
@@ -33052,7 +33240,8 @@ html, body {
   display: grid;
   grid-template-columns: var(--studio-segment-editor-panel-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: clamp(22px, 3vw, 44px);
+  column-gap: clamp(22px, 3vw, 44px);
+  row-gap: clamp(14px, 2dvh, 22px);
   align-items: stretch;
   justify-content: stretch;
   min-height: max(620px, var(--studio-segment-editor-layout-height));
@@ -33061,7 +33250,7 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-column {
   grid-column: 1;
-  grid-row: 1 / 3;
+  grid-row: 1;
   align-self: stretch;
   justify-self: stretch;
   width: 100%;
@@ -34496,7 +34685,7 @@ html, body {
     720px,
     calc(var(--studio-segment-editor-timeline-slot-count) * 128px)
   );
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 2;
   align-self: end;
   justify-self: stretch;
