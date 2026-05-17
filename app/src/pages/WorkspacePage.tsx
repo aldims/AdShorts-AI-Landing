@@ -3288,6 +3288,20 @@ const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 90_000;
 const SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS = 1_500;
 const WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
+type StudioMenuAnchorRect = Pick<DOMRect, "left" | "right" | "top" | "bottom" | "width" | "height">;
+
+const getStudioMenuAnchorRect = (element: Element): StudioMenuAnchorRect => {
+  const rect = element.getBoundingClientRect();
+  return {
+    bottom: rect.bottom,
+    height: rect.height,
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    width: rect.width,
+  };
+};
+
 const getStudioCompactMenuStyle = ({
   estimatedMenuHeight,
   minWidth,
@@ -3297,7 +3311,7 @@ const getStudioCompactMenuStyle = ({
   estimatedMenuHeight: number;
   minWidth: number;
   preferredWidth?: number;
-  triggerRect: DOMRect;
+  triggerRect: StudioMenuAnchorRect;
 }): CSSProperties => {
   const safePreferredWidth = preferredWidth ?? triggerRect.width;
   const menuWidth = Math.min(
@@ -11029,7 +11043,11 @@ type StudioSubtitleSelectorChipProps = {
   bulkTextError?: string | null;
   bulkTextSegmentCount?: number;
   bulkTextValue?: string;
+  closeRequestId?: number;
   isEnabled: boolean;
+  openAnchorRect?: StudioMenuAnchorRect | null;
+  openRequestId?: number;
+  onOpenChange?: (isOpen: boolean) => void;
   onApplyBulkText?: () => boolean | void;
   onBulkTextChange?: (value: string) => void;
   onSelectColor: (colorId: StudioSubtitleColorOption["id"]) => void;
@@ -11051,7 +11069,11 @@ type StudioLanguageSelectorChipProps = {
 };
 
 type StudioVoiceSelectorChipProps = {
+  closeRequestId?: number;
   isEnabled: boolean;
+  openAnchorRect?: StudioMenuAnchorRect | null;
+  openRequestId?: number;
+  onOpenChange?: (isOpen: boolean) => void;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
   onToggleEnabled: (enabled: boolean) => void;
   selectedVoiceId: StudioVoiceOption["id"];
@@ -11060,9 +11082,12 @@ type StudioVoiceSelectorChipProps = {
 };
 
 type StudioMusicSelectorChipProps = {
+  closeRequestId?: number;
   customMusicFile: StudioCustomMusicFile | null;
   isPreparingCustomMusic: boolean;
+  openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
+  onOpenChange?: (isOpen: boolean) => void;
   onSelectCustomFile: (file: File) => Promise<boolean | void>;
   onSelectMusicType: (musicType: StudioMusicType) => void;
   selectedMusicType: StudioMusicType;
@@ -11106,7 +11131,11 @@ function StudioSubtitleSelectorChip({
   bulkTextError = null,
   bulkTextSegmentCount,
   bulkTextValue,
+  closeRequestId = 0,
   isEnabled,
+  openAnchorRect = null,
+  openRequestId = 0,
+  onOpenChange,
   onApplyBulkText,
   onBulkTextChange,
   onSelectColor,
@@ -11123,11 +11152,14 @@ function StudioSubtitleSelectorChip({
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const [requestAnchorRect, setRequestAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const menuId = useId();
   const bulkTextAreaId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const lastHandledOpenRequestIdRef = useRef(0);
+  const lastReportedOpenRef = useRef(isOpen);
   const safeStyleOptions = subtitleStyleOptions.length ? subtitleStyleOptions : [fallbackStudioSubtitleStyleOption];
   const safeColorOptions = subtitleColorOptions.length ? subtitleColorOptions : [fallbackStudioSubtitleColorOption];
   const selectedStyle = safeStyleOptions.find((style) => style.id === selectedStyleId) ?? safeStyleOptions[0];
@@ -11145,6 +11177,35 @@ function StudioSubtitleSelectorChip({
     typeof bulkTextValue === "string" &&
     typeof onBulkTextChange === "function" &&
     typeof onApplyBulkText === "function";
+
+  useEffect(() => {
+    if (openRequestId <= 0 || lastHandledOpenRequestIdRef.current === openRequestId) {
+      return;
+    }
+
+    lastHandledOpenRequestIdRef.current = openRequestId;
+    setRequestAnchorRect(openAnchorRect);
+    setIsOpen(true);
+    triggerRef.current?.focus({ preventScroll: true });
+  }, [openAnchorRect, openRequestId]);
+
+  useEffect(() => {
+    if (closeRequestId <= 0) {
+      return;
+    }
+
+    setRequestAnchorRect(null);
+    setIsOpen(false);
+  }, [closeRequestId]);
+
+  useEffect(() => {
+    if (lastReportedOpenRef.current === isOpen) {
+      return;
+    }
+
+    lastReportedOpenRef.current = isOpen;
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -11178,7 +11239,7 @@ function StudioSubtitleSelectorChip({
     }
 
     const updateMenuPosition = () => {
-      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      const triggerRect = requestAnchorRect ?? triggerRef.current?.getBoundingClientRect();
       const menuRect = menuRef.current?.getBoundingClientRect();
       if (!triggerRect || !menuRect) return;
 
@@ -11209,7 +11270,7 @@ function StudioSubtitleSelectorChip({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, requestAnchorRect]);
 
   return (
     <div className={`studio-subtitle-selector${isSidebarVariant ? " studio-subtitle-selector--sidebar" : ""}`} ref={rootRef}>
@@ -11226,7 +11287,10 @@ function StudioSubtitleSelectorChip({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          setRequestAnchorRect(null);
+          setIsOpen((open) => !open);
+        }}
       >
         {isSidebarVariant ? (
           <>
@@ -11612,7 +11676,11 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
 }
 
 function StudioVoiceSelectorChip({
+  closeRequestId = 0,
   isEnabled,
+  openAnchorRect = null,
+  openRequestId = 0,
+  onOpenChange,
   onSelect,
   onToggleEnabled,
   selectedVoiceId,
@@ -11622,12 +11690,15 @@ function StudioVoiceSelectorChip({
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const [requestAnchorRect, setRequestAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<StudioVoiceOption["id"] | null>(null);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastHandledOpenRequestIdRef = useRef(0);
+  const lastReportedOpenRef = useRef(isOpen);
   const selectedVoice = voiceOptions.find((voice) => voice.id === selectedVoiceId) ?? voiceOptions[0];
   const isSidebarVariant = variant === "sidebar";
 
@@ -11649,6 +11720,37 @@ function StudioVoiceSelectorChip({
       stopVoicePreview();
     };
   }, []);
+
+  useEffect(() => {
+    if (openRequestId <= 0 || lastHandledOpenRequestIdRef.current === openRequestId) {
+      return;
+    }
+
+    lastHandledOpenRequestIdRef.current = openRequestId;
+    stopVoicePreview();
+    setRequestAnchorRect(openAnchorRect);
+    setIsOpen(true);
+    triggerRef.current?.focus({ preventScroll: true });
+  }, [openAnchorRect, openRequestId]);
+
+  useEffect(() => {
+    if (closeRequestId <= 0) {
+      return;
+    }
+
+    stopVoicePreview();
+    setRequestAnchorRect(null);
+    setIsOpen(false);
+  }, [closeRequestId]);
+
+  useEffect(() => {
+    if (lastReportedOpenRef.current === isOpen) {
+      return;
+    }
+
+    lastReportedOpenRef.current = isOpen;
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     if (!previewingVoiceId) return;
@@ -11690,7 +11792,7 @@ function StudioVoiceSelectorChip({
     }
 
     const updateMenuPosition = () => {
-      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      const triggerRect = requestAnchorRect ?? triggerRef.current?.getBoundingClientRect();
       if (!triggerRect) return;
 
       const estimatedMenuHeight = Math.min(window.innerHeight - 32, 48 + voiceOptions.length * 58);
@@ -11712,7 +11814,7 @@ function StudioVoiceSelectorChip({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen, voiceOptions.length]);
+  }, [isOpen, requestAnchorRect, voiceOptions.length]);
 
   const handlePreviewVoice = async (voice: StudioVoiceOption) => {
     if (typeof window === "undefined") {
@@ -11768,7 +11870,10 @@ function StudioVoiceSelectorChip({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          setRequestAnchorRect(null);
+          setIsOpen((open) => !open);
+        }}
       >
         {isSidebarVariant ? (
           <>
@@ -13619,9 +13724,12 @@ function StudioBrandSelectorChip({
 }
 
 function StudioMusicSelectorChip({
+  closeRequestId = 0,
   customMusicFile,
   isPreparingCustomMusic,
+  openAnchorRect = null,
   openRequestId = 0,
+  onOpenChange,
   onSelectCustomFile,
   onSelectMusicType,
   selectedMusicType,
@@ -13631,24 +13739,47 @@ function StudioMusicSelectorChip({
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const [requestAnchorRect, setRequestAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastHandledOpenRequestIdRef = useRef(0);
+  const lastReportedOpenRef = useRef(isOpen);
   const selectedMusicLabel = getStudioMusicChipValue(selectedMusicType, customMusicFile, locale);
   const selectedMusicTitle = customMusicFile?.fileName ?? selectedMusicLabel;
   const customMusicFileLabel = customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : null;
   const isSidebarVariant = variant === "sidebar";
 
   useEffect(() => {
-    if (openRequestId <= 0) {
+    if (openRequestId <= 0 || lastHandledOpenRequestIdRef.current === openRequestId) {
       return;
     }
 
+    lastHandledOpenRequestIdRef.current = openRequestId;
+    setRequestAnchorRect(openAnchorRect);
     setIsOpen(true);
     triggerRef.current?.focus({ preventScroll: true });
-  }, [openRequestId]);
+  }, [openAnchorRect, openRequestId]);
+
+  useEffect(() => {
+    if (closeRequestId <= 0) {
+      return;
+    }
+
+    setRequestAnchorRect(null);
+    setIsOpen(false);
+  }, [closeRequestId]);
+
+  useEffect(() => {
+    if (lastReportedOpenRef.current === isOpen) {
+      return;
+    }
+
+    lastReportedOpenRef.current = isOpen;
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -13682,7 +13813,7 @@ function StudioMusicSelectorChip({
     }
 
     const updateMenuPosition = () => {
-      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      const triggerRect = requestAnchorRect ?? triggerRef.current?.getBoundingClientRect();
       if (!triggerRect) return;
 
       const estimatedMenuHeight = Math.min(window.innerHeight - 32, 460);
@@ -13705,7 +13836,7 @@ function StudioMusicSelectorChip({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, requestAnchorRect]);
 
   const openCustomMusicPicker = () => {
     fileInputRef.current?.click();
@@ -13755,7 +13886,10 @@ function StudioMusicSelectorChip({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          setRequestAnchorRect(null);
+          setIsOpen((open) => !open);
+        }}
       >
         {isSidebarVariant ? (
           <>
@@ -14044,7 +14178,16 @@ export function WorkspacePage({
   const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
+  const [segmentTimelineGlobalControlOpen, setSegmentTimelineGlobalControlOpen] =
+    useState<"music" | "subtitle" | "voice" | null>(null);
+  const [segmentTimelineSubtitleOpenRequestId, setSegmentTimelineSubtitleOpenRequestId] = useState(0);
+  const [segmentTimelineSubtitleCloseRequestId, setSegmentTimelineSubtitleCloseRequestId] = useState(0);
+  const [segmentTimelineVoiceOpenRequestId, setSegmentTimelineVoiceOpenRequestId] = useState(0);
+  const [segmentTimelineVoiceCloseRequestId, setSegmentTimelineVoiceCloseRequestId] = useState(0);
   const [segmentTimelineMusicOpenRequestId, setSegmentTimelineMusicOpenRequestId] = useState(0);
+  const [segmentTimelineMusicCloseRequestId, setSegmentTimelineMusicCloseRequestId] = useState(0);
+  const [segmentTimelineGlobalControlAnchorRect, setSegmentTimelineGlobalControlAnchorRect] =
+    useState<StudioMenuAnchorRect | null>(null);
   const [segmentTimelineVisualMenuSegmentIndex, setSegmentTimelineVisualMenuSegmentIndex] = useState<number | null>(null);
   const [segmentTimelineVisualMenuStyle, setSegmentTimelineVisualMenuStyle] = useState<CSSProperties | null>(null);
   const [segmentTimelineVoiceMenuSegmentIndex, setSegmentTimelineVoiceMenuSegmentIndex] = useState<number | null>(null);
@@ -27218,10 +27361,91 @@ export function WorkspacePage({
       sceneMode,
     });
   };
-  const handleSegmentEditorTimelineMusicClick = () => {
+  const requestCloseSegmentTimelineGlobalControl = useCallback((control: "music" | "subtitle" | "voice") => {
+    if (control === "music") {
+      setSegmentTimelineMusicCloseRequestId((current) => current + 1);
+      return;
+    }
+
+    if (control === "voice") {
+      setSegmentTimelineVoiceCloseRequestId((current) => current + 1);
+      return;
+    }
+
+    setSegmentTimelineSubtitleCloseRequestId((current) => current + 1);
+  }, []);
+  const handleSegmentTimelineGlobalControlOpenChange = useCallback(
+    (control: "music" | "subtitle" | "voice", isOpen: boolean) => {
+      if (isOpen) {
+        (["music", "voice", "subtitle"] as const).forEach((nextControl) => {
+          if (nextControl !== control) {
+            requestCloseSegmentTimelineGlobalControl(nextControl);
+          }
+        });
+      }
+
+      setSegmentTimelineGlobalControlOpen((current) => {
+        if (isOpen) {
+          return control;
+        }
+
+        return current === control ? null : current;
+      });
+    },
+    [requestCloseSegmentTimelineGlobalControl],
+  );
+  const openSegmentEditorTimelineGlobalControl = (
+    control: "music" | "subtitle" | "voice",
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
+  ) => {
     setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentTimelineVoiceMenuSegmentIndex(null);
-    setSegmentTimelineMusicOpenRequestId((current) => current + 1);
+
+    if (segmentTimelineGlobalControlOpen === control) {
+      setSegmentTimelineGlobalControlOpen(null);
+      setSegmentTimelineGlobalControlAnchorRect(null);
+      requestCloseSegmentTimelineGlobalControl(control);
+      return;
+    }
+
+    setSegmentTimelineGlobalControlOpen(control);
+    setSegmentTimelineGlobalControlAnchorRect(getStudioMenuAnchorRect(event.currentTarget));
+    (["music", "voice", "subtitle"] as const).forEach((nextControl) => {
+      if (nextControl !== control) {
+        requestCloseSegmentTimelineGlobalControl(nextControl);
+      }
+    });
+
+    if (control === "music") {
+      setSegmentTimelineMusicOpenRequestId((current) => current + 1);
+      return;
+    }
+
+    if (control === "voice") {
+      setSegmentTimelineVoiceOpenRequestId((current) => current + 1);
+      return;
+    }
+
+    setSegmentTimelineSubtitleOpenRequestId((current) => current + 1);
+  };
+  const handleSegmentEditorTimelineGlobalControlPointerDown = (
+    control: "music" | "subtitle" | "voice",
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSegmentEditorTimelineGlobalControl(control, event);
+  };
+  const handleSegmentEditorTimelineGlobalControlClick = (
+    control: "music" | "subtitle" | "voice",
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    if (event.detail !== 0) {
+      event.preventDefault();
+      return;
+    }
+
+    openSegmentEditorTimelineGlobalControl(control, event);
   };
   const handleSegmentEditorTimelineVoiceClick = (
     segmentArrayIndex: number,
@@ -27984,14 +28208,21 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--music">
-          <div className="studio-segment-editor__timeline-label">
+          <button
+            className="studio-segment-editor__timeline-label"
+            type="button"
+            aria-label={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
+            title={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
+            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
+            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
+          >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
             <span>{workspaceText(locale, "Музыка", "Music")}</span>
-          </div>
+          </button>
           <div className="studio-segment-editor__timeline-track">
             {segmentEditorTimelineMusicRow?.spans.map((span) => {
               const musicHistoryKey = getWorkspaceSegmentTimelineHistoryKey("music");
@@ -28012,7 +28243,8 @@ export function WorkspacePage({
                     }`}
                     type="button"
                     aria-label={workspaceText(locale, "Изменить музыку", "Change music")}
-                    onClick={handleSegmentEditorTimelineMusicClick}
+                    onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
+                    onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
                   >
                   <span className="studio-segment-editor__timeline-waveform" aria-hidden="true">
                     <svg viewBox="0 0 720 48" preserveAspectRatio="none" focusable="false">
@@ -28058,7 +28290,14 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--voice">
-          <div className="studio-segment-editor__timeline-label">
+          <button
+            className="studio-segment-editor__timeline-label"
+            type="button"
+            aria-label={workspaceText(locale, "Настроить озвучку всего видео", "Configure whole-video voiceover")}
+            title={workspaceText(locale, "Настроить озвучку всего видео", "Configure whole-video voiceover")}
+            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("voice", event)}
+            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("voice", event)}
+          >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="9" y="4" width="6" height="10" rx="3" stroke="currentColor" strokeWidth="1.9" />
@@ -28066,7 +28305,7 @@ export function WorkspacePage({
               </svg>
             </span>
             <span>{workspaceText(locale, "Озвучка", "Voice")}</span>
-          </div>
+          </button>
           <div className="studio-segment-editor__timeline-track">
             {segmentEditorTimelineVoiceRow?.spans.map((span) => {
               const index = span.arrayIndex ?? 0;
@@ -28249,14 +28488,21 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--text">
-          <div className="studio-segment-editor__timeline-label">
+          <button
+            className="studio-segment-editor__timeline-label"
+            type="button"
+            aria-label={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
+            title={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
+            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event)}
+            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event)}
+          >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
             <span>{workspaceText(locale, "Текст", "Text")}</span>
-          </div>
+          </button>
           <div className="studio-segment-editor__timeline-track">
             {segmentEditorTimelineTextRow?.spans.map((span) => {
               const index = span.arrayIndex ?? 0;
@@ -29530,7 +29776,11 @@ export function WorkspacePage({
                   bulkTextError={segmentSubtitleBulkTextError}
                   bulkTextSegmentCount={segmentEditorSegmentCount}
                   bulkTextValue={segmentSubtitleBulkTextValue}
+                  closeRequestId={segmentTimelineSubtitleCloseRequestId}
                   isEnabled={studioSidebarSubtitlesEnabled}
+                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                  openRequestId={segmentTimelineSubtitleOpenRequestId}
+                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
                   onApplyBulkText={handleApplySegmentSubtitleBulkText}
                   onBulkTextChange={handleSegmentSubtitleBulkTextChange}
                   onToggleEnabled={handleSegmentEditorSubtitleToggle}
@@ -29544,16 +29794,23 @@ export function WorkspacePage({
                   onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
                 />
                 <StudioVoiceSelectorChip
+                  closeRequestId={segmentTimelineVoiceCloseRequestId}
                   isEnabled={studioSidebarVoiceEnabled}
+                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                  openRequestId={segmentTimelineVoiceOpenRequestId}
+                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
                   onToggleEnabled={handleSegmentEditorVoiceToggle}
                   selectedVoiceId={studioSidebarVoiceId}
                   voiceOptions={selectedVoiceOptions}
                   onSelect={handleSegmentEditorVoiceSelect}
                 />
                 <StudioMusicSelectorChip
+                  closeRequestId={segmentTimelineMusicCloseRequestId}
                   customMusicFile={selectedCustomMusic}
                   isPreparingCustomMusic={isPreparingCustomMusic}
+                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
                   openRequestId={segmentTimelineMusicOpenRequestId}
+                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("music", isOpen)}
                   onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
                   onSelectMusicType={handleSegmentEditorMusicTypeSelect}
                   selectedMusicType={studioSidebarMusicType}

@@ -25,7 +25,7 @@ const createSegment = (
 });
 
 describe("buildWorkspaceSegmentEditorTracks", () => {
-  it("builds proportional segment spans from timeline start and end times", () => {
+  it("builds equal scene spans while preserving timeline start and end times", () => {
     const tracks = buildWorkspaceSegmentEditorTracks([
       createSegment(1, { endTime: 3, startTime: 0 }),
       createSegment(2, { endTime: 8, startTime: 3 }),
@@ -35,13 +35,37 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
     expect(tracks.segmentSpans).toHaveLength(2);
     expect(tracks.segmentSpans[0]).toMatchObject({
       duration: 3,
+      endTime: 3,
       leftRatio: 0,
-      widthRatio: 3 / 8,
+      startTime: 0,
+      widthRatio: 1 / 2,
     });
     expect(tracks.segmentSpans[1]).toMatchObject({
       duration: 5,
-      leftRatio: 3 / 8,
-      widthRatio: 5 / 8,
+      endTime: 8,
+      leftRatio: 1 / 2,
+      startTime: 3,
+      widthRatio: 1 / 2,
+    });
+  });
+
+  it("keeps visual, voice, sound, and text scene columns aligned after uneven durations", () => {
+    const tracks = buildWorkspaceSegmentEditorTracks([
+      createSegment(1, { endTime: 5, startTime: 0 }),
+      createSegment(2, { endTime: 14, startTime: 5 }),
+      createSegment(3, { endTime: 16, startTime: 14 }),
+      createSegment(4, { endTime: 31, startTime: 16 }),
+    ]);
+    const sceneRows = tracks.rows.filter((row) => row.kind !== "music");
+
+    expect(sceneRows).toHaveLength(4);
+    sceneRows.forEach((row) => {
+      expect(row.spans.map((span) => span.leftRatio)).toEqual([0, 0.25, 0.5, 0.75]);
+      expect(row.spans.map((span) => span.widthRatio)).toEqual([0.25, 0.25, 0.25, 0.25]);
+    });
+    expect(tracks.rows.find((row) => row.kind === "music")?.spans[0]).toMatchObject({
+      leftRatio: 0,
+      widthRatio: 1,
     });
   });
 

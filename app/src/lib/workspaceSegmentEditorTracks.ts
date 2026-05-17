@@ -107,6 +107,16 @@ const getTrackSpanRatios = (startTime: number, duration: number, totalDuration: 
   };
 };
 
+const getEqualSegmentSpanRatios = (arrayIndex: number, segmentCount: number) => {
+  const safeSegmentCount = Math.max(1, segmentCount);
+  const widthRatio = 1 / safeSegmentCount;
+
+  return {
+    leftRatio: Math.min(1, Math.max(0, arrayIndex * widthRatio)),
+    widthRatio,
+  };
+};
+
 const createTrackSpan = (options: {
   arrayIndex: number | null;
   duration: number;
@@ -115,13 +125,21 @@ const createTrackSpan = (options: {
   isEmpty?: boolean;
   key: string;
   kind: WorkspaceSegmentEditorTrackKind;
+  leftRatio?: number;
   segmentIndex: number | null;
   startTime: number;
   totalDuration: number;
+  widthRatio?: number;
 }): WorkspaceSegmentEditorTrackSpan => {
   const duration = Math.max(0, options.duration);
   const endTime = options.startTime + duration;
-  const ratios = getTrackSpanRatios(options.startTime, duration, options.totalDuration);
+  const ratios =
+    typeof options.leftRatio === "number" && typeof options.widthRatio === "number"
+      ? {
+          leftRatio: Math.min(1, Math.max(0, options.leftRatio)),
+          widthRatio: Math.min(1, Math.max(0, options.widthRatio)),
+        }
+      : getTrackSpanRatios(options.startTime, duration, options.totalDuration);
 
   return {
     arrayIndex: options.arrayIndex,
@@ -147,6 +165,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
   options: WorkspaceSegmentEditorTracksBuildOptions<T> = {},
 ): WorkspaceSegmentEditorTracks => {
   const baselineSegmentsByIndex = new Map(baselineSegments.map((segment) => [segment.index, segment] as const));
+  const segmentCount = Math.max(1, segments.length);
   const segmentTimes = segments.map((segment) => {
     const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
     const endTime = Math.max(startTime, getWorkspaceSegmentEditorDisplayEndTime(segment));
@@ -161,6 +180,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
 
   const segmentSpans = segmentTimes.map((item, arrayIndex) => {
     const baselineSegment = baselineSegmentsByIndex.get(item.segment.index) ?? null;
+    const ratios = getEqualSegmentSpanRatios(arrayIndex, segmentCount);
 
     return createTrackSpan({
       arrayIndex,
@@ -169,9 +189,11 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
       isEdited: options.isVisualEdited?.(item.segment, baselineSegment) ?? false,
       key: `visual:${item.segment.index}`,
       kind: "visual",
+      leftRatio: ratios.leftRatio,
       segmentIndex: item.segment.index,
       startTime: item.startTime,
       totalDuration,
+      widthRatio: ratios.widthRatio,
     });
   });
 
@@ -184,6 +206,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
     spans: segmentTimes.map((item, arrayIndex) => {
       const baselineSegment = baselineSegmentsByIndex.get(item.segment.index) ?? null;
       const isEdited = getEdited?.(item.segment, baselineSegment) ?? false;
+      const ratios = getEqualSegmentSpanRatios(arrayIndex, segmentCount);
 
       return createTrackSpan({
         arrayIndex,
@@ -193,9 +216,11 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
         isEmpty: getEmpty(item.segment, baselineSegment, isEdited),
         key: `${kind}:${item.segment.index}`,
         kind,
+        leftRatio: ratios.leftRatio,
         segmentIndex: item.segment.index,
         startTime: item.startTime,
         totalDuration,
+        widthRatio: ratios.widthRatio,
       });
     }),
   });

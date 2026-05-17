@@ -23826,6 +23826,32 @@ textarea {
   white-space: nowrap;
 }
 
+button.studio-segment-editor__timeline-label {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+button.studio-segment-editor__timeline-label:hover,
+button.studio-segment-editor__timeline-label:focus-visible {
+  background:
+    linear-gradient(90deg, rgba(10, 20, 34, 0.98) 72%, rgba(10, 20, 34, 0.72));
+  color: rgba(248, 250, 252, 0.96);
+}
+
+button.studio-segment-editor__timeline-label:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.42);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.08);
+}
+
 .studio-segment-editor__timeline-label-icon {
   display: inline-flex;
   flex: 0 0 auto;
