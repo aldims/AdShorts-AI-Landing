@@ -5445,6 +5445,33 @@ const getSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQuality)
 const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
 const cloneStudioCustomMusicFile = (value: StudioCustomMusicFile | null) => (value ? { ...value } : null);
 const cloneWorkspaceMediaAssetRef = (value: WorkspaceMediaAssetRef | null) => (value ? { ...value } : null);
+const getStudioCustomVideoFileIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
+  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  if (assetId) {
+    return `asset:${assetId}`;
+  }
+
+  const remoteAssetId = getWorkspaceMediaAssetBaseProxyUrlAssetId(asset?.remoteUrl);
+  if (remoteAssetId) {
+    return `asset:${remoteAssetId}`;
+  }
+
+  const libraryItemKey = String(asset?.libraryItemKey ?? "").trim();
+  if (libraryItemKey) {
+    return `library:${libraryItemKey}`;
+  }
+
+  const remoteUrl = String(asset?.remoteUrl ?? "").trim();
+  return remoteUrl ? `url:${remoteUrl}` : null;
+};
+const areStudioCustomVideoFilesSameIdentity = (
+  left: StudioCustomVideoFile | null | undefined,
+  right: StudioCustomVideoFile | null | undefined,
+) => {
+  const leftIdentity = getStudioCustomVideoFileIdentityKey(left);
+  const rightIdentity = getStudioCustomVideoFileIdentityKey(right);
+  return Boolean(leftIdentity && rightIdentity && leftIdentity === rightIdentity);
+};
 const getWorkspaceSegmentTimelineHistoryKey = (
   kind: WorkspaceSegmentTimelineHistoryKind,
   segmentIndex?: number | null,
@@ -7690,7 +7717,21 @@ const resolveWorkspaceSegmentExportVideoAction = (
   return videoAction;
 };
 
-const buildWorkspaceSegmentEditorPayload = async (
+const isWorkspaceSegmentCustomVisualSameAsExisting = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  asset: StudioCustomVideoFile | null | undefined,
+) => {
+  const assetIdentity = getStudioCustomVideoFileIdentityKey(asset);
+  if (!assetIdentity) {
+    return false;
+  }
+
+  return [getWorkspaceSegmentCurrentVisualIdentityKey(segment), getWorkspaceSegmentOriginalVisualIdentityKey(segment)]
+    .filter(Boolean)
+    .includes(assetIdentity);
+};
+
+export const buildWorkspaceSegmentEditorPayload = async (
   session: WorkspaceSegmentEditorDraftSession,
   options: {
     allowStructureChange?: boolean;
@@ -7740,6 +7781,12 @@ const buildWorkspaceSegmentEditorPayload = async (
     const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(segment.sceneSoundAsset?.assetId) ?? undefined;
 
     if (payloadVideoAction === "custom") {
+      if (isWorkspaceSegmentCustomVisualSameAsExisting(segment, customVisualAsset)) {
+        throw new Error(
+          `Визуал сегмента ${segment.index + 1} не обновился. Сгенерируйте ИИ фото ещё раз или обновите редактор.`,
+        );
+      }
+
       if (customVisualAsset?.assetId) {
         customVideoAssetId = customVisualAsset.assetId;
       } else if (customVisualAsset) {
@@ -9042,11 +9089,17 @@ const shouldHydrateWorkspaceGeneratedMediaLibraryItem = (
   segment: WorkspaceSegmentEditorDraftSegment,
   item: WorkspaceMediaLibraryItem,
   options: {
+    allowExplicitDraftVisual?: boolean;
     videoAction: WorkspaceSegmentEditorVideoAction;
     aiVideoMode?: WorkspaceSegmentAiVideoMode;
   },
 ) => {
-  if (segment.visualReset || hasWorkspaceSegmentExplicitDraftVisual(segment)) {
+  if (segment.visualReset) {
+    return false;
+  }
+
+  const hasExplicitDraftVisual = hasWorkspaceSegmentExplicitDraftVisual(segment);
+  if (hasExplicitDraftVisual && !options.allowExplicitDraftVisual) {
     return false;
   }
 
@@ -9057,7 +9110,7 @@ const shouldHydrateWorkspaceGeneratedMediaLibraryItem = (
     return true;
   }
 
-  if (segment.videoAction !== "original" || item.source !== "live") {
+  if (hasExplicitDraftVisual || segment.videoAction !== "original" || item.source !== "live") {
     return false;
   }
 
@@ -9108,86 +9161,101 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
     const resolveItem = (kind: WorkspaceMediaLibraryItemKind) =>
       latestItemsByRestoreKey.get(getWorkspaceGeneratedMediaLibraryRestoreKey(draft.projectId, segment.index, kind)) ?? null;
 
-    if (!nextSegment.aiVideoAsset) {
-      const aiVideoItem = resolveItem("ai_video");
+    const applyGeneratedVisualAsset = (
+      item: WorkspaceMediaLibraryItem,
+      currentAsset: StudioCustomVideoFile | null,
+      patch: (asset: StudioCustomVideoFile) => Partial<WorkspaceSegmentEditorDraftSegment>,
+    ) => {
+      if (!item) {
+        return false;
+      }
+
+      const nextAsset = createStudioCustomVideoFileFromMediaLibraryItem(item);
+      if (areStudioCustomVideoFilesSameIdentity(currentAsset, nextAsset)) {
+        return true;
+      }
+
+      applyPatch(patch(nextAsset));
+      return true;
+    };
+
+    const aiVideoItem = resolveItem("ai_video");
+    if (
+      aiVideoItem &&
+      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiVideoItem, {
+        allowExplicitDraftVisual: true,
+        aiVideoMode: "ai_video",
+        videoAction: "ai",
+      })
+    ) {
+      applyGeneratedVisualAsset(aiVideoItem, nextSegment.aiVideoAsset, (asset) => ({
+        aiVideoAsset: asset,
+        aiVideoGeneratedMode: "ai_video",
+        visualReset: false,
+        videoAction: "ai",
+      }));
+    } else if (!nextSegment.aiVideoAsset) {
+      const photoAnimationItem = resolveItem("photo_animation");
       if (
-        aiVideoItem &&
-        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiVideoItem, {
-          aiVideoMode: "ai_video",
-          videoAction: "ai",
+        photoAnimationItem &&
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, photoAnimationItem, {
+          aiVideoMode: "photo_animation",
+          videoAction: "photo_animation",
         })
       ) {
-        applyPatch({
-          aiVideoAsset: createStudioCustomVideoFileFromMediaLibraryItem(aiVideoItem),
-          aiVideoGeneratedMode: "ai_video",
+        applyGeneratedVisualAsset(photoAnimationItem, nextSegment.aiVideoAsset, (asset) => ({
+          aiVideoAsset: asset,
+          aiVideoGeneratedMode: "photo_animation",
           visualReset: false,
-          videoAction: "ai",
-        });
+          videoAction: "photo_animation",
+        }));
       } else {
-        const photoAnimationItem = resolveItem("photo_animation");
+        const talkingPhotoItem = resolveItem("talking_photo");
         if (
-          photoAnimationItem &&
-          shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, photoAnimationItem, {
-            aiVideoMode: "photo_animation",
-            videoAction: "photo_animation",
+          talkingPhotoItem &&
+          shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, talkingPhotoItem, {
+            aiVideoMode: "talking_photo",
+            videoAction: "talking_photo",
           })
         ) {
-          applyPatch({
-            aiVideoAsset: createStudioCustomVideoFileFromMediaLibraryItem(photoAnimationItem),
-            aiVideoGeneratedMode: "photo_animation",
+          applyGeneratedVisualAsset(talkingPhotoItem, nextSegment.aiVideoAsset, (asset) => ({
+            aiVideoAsset: asset,
+            aiVideoGeneratedMode: "talking_photo",
             visualReset: false,
-            videoAction: "photo_animation",
-          });
-        } else {
-          const talkingPhotoItem = resolveItem("talking_photo");
-          if (
-            talkingPhotoItem &&
-            shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, talkingPhotoItem, {
-              aiVideoMode: "talking_photo",
-              videoAction: "talking_photo",
-            })
-          ) {
-            applyPatch({
-              aiVideoAsset: createStudioCustomVideoFileFromMediaLibraryItem(talkingPhotoItem),
-              aiVideoGeneratedMode: "talking_photo",
-              visualReset: false,
-              videoAction: "talking_photo",
-            });
-          }
+            videoAction: "talking_photo",
+          }));
         }
       }
     }
 
-    if (!nextSegment.aiPhotoAsset) {
-      const aiPhotoItem = resolveItem("ai_photo");
-      if (
-        aiPhotoItem &&
-        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiPhotoItem, {
-          videoAction: "ai_photo",
-        })
-      ) {
-        applyPatch({
-          aiPhotoAsset: createStudioCustomVideoFileFromMediaLibraryItem(aiPhotoItem),
-          visualReset: false,
-          videoAction: "ai_photo",
-        });
-      }
+    const aiPhotoItem = resolveItem("ai_photo");
+    if (
+      aiPhotoItem &&
+      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiPhotoItem, {
+        allowExplicitDraftVisual: true,
+        videoAction: "ai_photo",
+      })
+    ) {
+      applyGeneratedVisualAsset(aiPhotoItem, nextSegment.aiPhotoAsset, (asset) => ({
+        aiPhotoAsset: asset,
+        visualReset: false,
+        videoAction: "ai_photo",
+      }));
     }
 
-    if (!nextSegment.imageEditAsset) {
-      const imageEditItem = resolveItem("image_edit");
-      if (
-        imageEditItem &&
-        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, imageEditItem, {
-          videoAction: "image_edit",
-        })
-      ) {
-        applyPatch({
-          imageEditAsset: createStudioCustomVideoFileFromMediaLibraryItem(imageEditItem),
-          visualReset: false,
-          videoAction: "image_edit",
-        });
-      }
+    const imageEditItem = resolveItem("image_edit");
+    if (
+      imageEditItem &&
+      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, imageEditItem, {
+        allowExplicitDraftVisual: true,
+        videoAction: "image_edit",
+      })
+    ) {
+      applyGeneratedVisualAsset(imageEditItem, nextSegment.imageEditAsset, (asset) => ({
+        imageEditAsset: asset,
+        visualReset: false,
+        videoAction: "image_edit",
+      }));
     }
 
     return nextSegment;
@@ -15880,9 +15948,13 @@ export function WorkspacePage({
       return;
     }
 
-    setSegmentEditorDraft((currentDraft) =>
-      currentDraft ? hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(currentDraft, generatedMediaLibraryEntries) : currentDraft,
-    );
+    setSegmentEditorDraft((currentDraft) => {
+      const nextDraft = currentDraft
+        ? hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(currentDraft, generatedMediaLibraryEntries)
+        : currentDraft;
+      segmentEditorDraftRef.current = nextDraft;
+      return nextDraft;
+    });
   }, [generatedMediaLibraryEntries]);
 
   useEffect(() => {
@@ -20643,6 +20715,14 @@ export function WorkspacePage({
   const updateSegmentEditorDraft = (
     updater: (draft: WorkspaceSegmentEditorDraftSession) => WorkspaceSegmentEditorDraftSession,
   ) => {
+    const draftFromRef = segmentEditorDraftRef.current;
+    if (draftFromRef) {
+      const nextDraft = updater(draftFromRef);
+      segmentEditorDraftRef.current = nextDraft;
+      setSegmentEditorDraft(nextDraft);
+      return;
+    }
+
     setSegmentEditorDraft((currentDraft) => {
       if (!currentDraft) {
         segmentEditorDraftRef.current = currentDraft;
@@ -24401,16 +24481,17 @@ export function WorkspacePage({
   };
 
   const handleCreateShortsFromSegmentEditor = async () => {
-    if (!segmentEditorDraft) {
+    const currentSegmentEditorDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentSegmentEditorDraft) {
       return;
     }
 
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.start", {
-      segmentCount: segmentEditorDraft.segments.length,
+      segmentCount: currentSegmentEditorDraft.segments.length,
     }, { includeOrder: true });
 
     const effectiveDraft = createWorkspaceSegmentEditorComparableDraftSession(
-      segmentEditorDraft,
+      currentSegmentEditorDraft,
       segmentEditorChecklistBaseSession,
     );
 
@@ -25720,6 +25801,9 @@ export function WorkspacePage({
         console.info("[studio] generate.segment-editor-payload.success", {
           allowStructureChange: effectiveSegmentEditorBuild.payload.allowStructureChange,
           projectId: effectiveSegmentEditorBuild.payload.projectId,
+          segmentCustomAssetIds: effectiveSegmentEditorBuild.payload.segments.map(
+            (segment) => segment.customVideoAssetId ?? null,
+          ),
           segmentCount: effectiveSegmentEditorBuild.payload.segments.length,
           segmentOrder: effectiveSegmentEditorBuild.payload.segments.map((segment) => segment.index),
           uploadCount: effectiveSegmentEditorBuild.uploads.length,

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import {
+  buildWorkspaceSegmentEditorPayload,
   buildWorkspaceSegmentEditorChangeChecklist,
   createStudioCustomVideoFileFromMediaLibraryItem,
   distributeWorkspaceSegmentBulkSubtitleText,
@@ -196,33 +197,41 @@ const createFreshSessionFromDraftSegments = (segments: DraftSegment[]): FreshSes
 const createGeneratedMediaLibraryEntry = (
   assetId: number,
   kind: GeneratedMediaLibraryEntry["item"]["kind"] = "ai_photo",
-): GeneratedMediaLibraryEntry => ({
-  createdAt: 1,
-  id: `live:${kind}:job:test-job`,
-  item: {
+  overrides: Partial<GeneratedMediaLibraryEntry["item"]> = {},
+): GeneratedMediaLibraryEntry => {
+  const segmentIndex = typeof overrides.segmentIndex === "number" ? overrides.segmentIndex : 0;
+  const sourceJobId = `test-job-${assetId}`;
+  const item: GeneratedMediaLibraryEntry["item"] = {
     assetExpiresAt: null,
     assetId,
     assetKind: null,
     assetLifecycle: null,
     assetMediaType: kind === "ai_photo" || kind === "image_edit" ? "photo" : "video",
     createdAt: 1,
-    dedupeKey: `live:${kind}:job:test-job`,
+    dedupeKey: `live:${kind}:job:${sourceJobId}`,
     downloadName: "segment-ai-photo-1.jpg",
     downloadUrl: `/api/workspace/media-assets/${assetId}`,
-    itemKey: `live:${kind}:job:test-job`,
+    itemKey: `live:${kind}:job:${sourceJobId}`,
     kind,
     previewKind: kind === "ai_photo" || kind === "image_edit" ? "image" : "video",
     previewPosterUrl: `/api/workspace/media-assets/${assetId}`,
     previewUrl: `/api/workspace/media-assets/${assetId}`,
     projectId: 77,
     projectTitle: "Session",
-    segmentIndex: 0,
-    segmentListIndex: 0,
-    segmentNumber: 1,
+    segmentIndex,
+    segmentListIndex: segmentIndex,
+    segmentNumber: segmentIndex + 1,
     source: "live",
-  },
-  sourceJobId: "test-job",
-});
+    ...overrides,
+  };
+
+  return {
+    createdAt: 1,
+    id: item.itemKey,
+    item,
+    sourceJobId,
+  };
+};
 
 const createMediaLibraryItem = (overrides: Partial<MediaLibraryItem> = {}): MediaLibraryItem => ({
   assetExpiresAt: null,
@@ -856,6 +865,122 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(hydratedSegment?.videoAction).toBe("ai_photo");
     expect(hydratedSegment?.aiPhotoAsset?.assetId).toBe(303);
     expect(hydratedSegment && isWorkspaceSegmentDraftVisualResettable(hydratedSegment)).toBe(true);
+  });
+
+  it("replaces a stale AI photo asset with the latest generated media entry", () => {
+    const stockAsset = createMediaAsset(3543, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const draft = createDraftSession(createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 3543,
+        fileName: "old-stock.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/3543",
+      },
+      currentAsset: stockAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/3543",
+      currentSourceKind: "stock",
+      originalAsset: stockAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/3543",
+      originalSourceKind: "stock",
+      videoAction: "ai_photo",
+    }));
+
+    const hydratedDraft = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(
+      draft,
+      [createGeneratedMediaLibraryEntry(3553, "ai_photo")],
+    );
+
+    expect(hydratedDraft?.segments[0]?.aiPhotoAsset?.assetId).toBe(3553);
+    expect(hydratedDraft?.segments[0]?.aiPhotoAsset?.remoteUrl).toBe("/api/workspace/media-assets/3553");
+  });
+
+  it("exports distinct AI photo asset ids for multiple edited segments", async () => {
+    const firstOriginalAsset = createMediaAsset(3542, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const secondOriginalAsset = createMediaAsset(3543, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const firstSegment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 3551,
+        fileName: "segment-ai-photo-1.png",
+        fileSize: 0,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/3551",
+      },
+      currentAsset: firstOriginalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/3542",
+      currentSourceKind: "stock",
+      index: 0,
+      originalAsset: firstOriginalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/3542",
+      originalSourceKind: "stock",
+      text: "First segment",
+      videoAction: "ai_photo",
+    });
+    const secondSegment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 3553,
+        fileName: "segment-ai-photo-2.png",
+        fileSize: 0,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/3553",
+      },
+      currentAsset: secondOriginalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/3543",
+      currentSourceKind: "stock",
+      index: 1,
+      originalAsset: secondOriginalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/3543",
+      originalSourceKind: "stock",
+      text: "Second segment",
+      videoAction: "ai_photo",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(
+      {
+        ...createDraftSession(firstSegment),
+        segments: [firstSegment, secondSegment],
+      },
+      { language: "ru" },
+    );
+
+    expect(result.payload.segments.map((segment) => segment.customVideoAssetId)).toEqual([3551, 3553]);
+    expect(result.payload.segments.map((segment) => segment.videoAction)).toEqual(["custom", "custom"]);
+  });
+
+  it("blocks AI photo export when the selected asset is still the original visual", async () => {
+    const stockAsset = createMediaAsset(3543, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const staleSegment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 3543,
+        fileName: "old-stock.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/3543",
+      },
+      currentAsset: stockAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/3543",
+      currentSourceKind: "stock",
+      originalAsset: stockAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/3543",
+      originalSourceKind: "stock",
+      videoAction: "ai_photo",
+    });
+
+    await expect(
+      buildWorkspaceSegmentEditorPayload(createDraftSession(staleSegment), { language: "ru" }),
+    ).rejects.toThrow("Визуал сегмента 1 не обновился");
   });
 
   it("keeps the latest AI photo visible while image edit is pending", () => {
