@@ -14289,6 +14289,7 @@ export function WorkspacePage({
   const [segmentEditorBrandAnchorRect, setSegmentEditorBrandAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const [segmentTimelineGlobalControlAnchorRect, setSegmentTimelineGlobalControlAnchorRect] =
     useState<StudioMenuAnchorRect | null>(null);
+  const [isSegmentEditorVisualPanelOpen, setIsSegmentEditorVisualPanelOpen] = useState(false);
   const [segmentTimelineVisualMenuSegmentIndex, setSegmentTimelineVisualMenuSegmentIndex] = useState<number | null>(null);
   const [segmentTimelineVisualMenuStyle, setSegmentTimelineVisualMenuStyle] = useState<CSSProperties | null>(null);
   const [segmentTimelineVoiceMenuSegmentIndex, setSegmentTimelineVoiceMenuSegmentIndex] = useState<number | null>(null);
@@ -14315,6 +14316,9 @@ export function WorkspacePage({
   >({});
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
+  }, [segmentEditorLoadedSession?.projectId]);
+  useEffect(() => {
+    setIsSegmentEditorVisualPanelOpen(false);
   }, [segmentEditorLoadedSession?.projectId]);
   const [queuedSegmentEditorPlaybackIndex, setQueuedSegmentEditorPlaybackIndex] = useState<number | null>(null);
   const [segmentCarouselDragProgress, setSegmentCarouselDragProgress] = useState(0);
@@ -27587,6 +27591,7 @@ export function WorkspacePage({
       return;
     }
 
+    setIsSegmentEditorVisualPanelOpen(true);
     setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentEditorVideoError(null);
     setSegmentEditorPromptSceneMode(getWorkspaceSegmentPromptSceneModeForTab(tab));
@@ -27612,6 +27617,7 @@ export function WorkspacePage({
     const nextSceneMode = options?.sceneMode ?? getWorkspaceSegmentPromptSceneModeForTab(tab);
     const nextTab = resolveWorkspaceSegmentVisualModalTab(targetSegment, tab);
 
+    setIsSegmentEditorVisualPanelOpen(true);
     setSegmentEditorPromptSceneMode(nextSceneMode);
     syncSegmentAiPhotoModalForSegment(targetSegment, {
       preserveTab: true,
@@ -27650,10 +27656,18 @@ export function WorkspacePage({
     }
 
     event.currentTarget.focus({ preventScroll: true });
+    const shouldCloseVisualPanel = isSegmentEditorVisualPanelOpen && segmentArrayIndex === activeSegmentIndex;
     setSegmentTimelineVoiceMenuSegmentIndex(null);
     setSegmentTimelineSoundMenuSegmentIndex(null);
     setSegmentTimelineTextMenuSegmentIndex(null);
     setSegmentEditorVideoError(null);
+    if (shouldCloseVisualPanel) {
+      setIsSegmentEditorVisualPanelOpen(false);
+      setSegmentTimelineVisualMenuSegmentIndex(null);
+      return;
+    }
+
+    setIsSegmentEditorVisualPanelOpen(true);
     activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
     syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
     setSegmentTimelineVisualMenuSegmentIndex(null);
@@ -28717,7 +28731,15 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--visual">
-          <div className="studio-segment-editor__timeline-label">
+          <button
+            className={`studio-segment-editor__timeline-label studio-segment-editor__timeline-label--brand${
+              isSegmentEditorBrandDirty || hasAppliedSegmentEditorBranding ? " is-brand-active" : ""
+            }`}
+            type="button"
+            aria-label={workspaceText(locale, "Настроить бренд всего видео", "Configure whole-video brand")}
+            title={workspaceText(locale, "Настроить бренд всего видео", "Configure whole-video brand")}
+            onClick={handleSegmentEditorPromptBrandToolButtonClick}
+          >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
@@ -28726,7 +28748,7 @@ export function WorkspacePage({
               </svg>
             </span>
             <span>{workspaceText(locale, "Визуал", "Visual")}</span>
-          </div>
+          </button>
           <div
             ref={segmentThumbStripRef}
             className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
@@ -28848,6 +28870,23 @@ export function WorkspacePage({
                       label: workspaceText(locale, `Визуал сцены ${index + 1}`, `Scene ${index + 1} visual`),
                       segmentIndex: segment.index,
                     })}
+                    <button
+                      className="studio-segment-editor__timeline-delete studio-segment-editor__timeline-delete--visual"
+                      type="button"
+                      aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
+                      title={workspaceText(locale, "Удалить сцену", "Delete scene")}
+                      disabled={isSegmentEditorStructureActionBusy || !canDeleteSegmentEditorSegment}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSegmentEditorPendingDeleteIndex(segment.index);
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                   {visibleSegmentThumbInsertIndex === index + 1 ? (
                     <div
@@ -29875,22 +29914,6 @@ export function WorkspacePage({
                       workspaceText(locale, "Загрузить файл", "Upload a file"),
                     )}
                   </button>
-                  <button
-                    className={`studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon studio-segment-editor__prompt-submenu-button--brand${
-                      isSegmentEditorBrandDirty || hasAppliedSegmentEditorBranding ? " is-active" : ""
-                    }`}
-                    type="button"
-                    aria-label={workspaceText(locale, "Бренд", "Brand")}
-                    title={workspaceText(locale, "Бренд", "Brand")}
-                    onClick={handleSegmentEditorPromptBrandToolButtonClick}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent(
-                      "brand",
-                      workspaceText(locale, "Бренд", "Brand"),
-                      workspaceText(locale, "Логотип / водяной знак", "Logo / watermark"),
-                      isSegmentEditorBrandDirty ? <span>{workspaceText(locale, "Применить", "Apply")}</span> : null,
-                    )}
-                  </button>
                 </div>
               </div>
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--edit">
@@ -30290,7 +30313,6 @@ export function WorkspacePage({
                           <audio controls src={activeSegmentSceneSoundUrl} preload="metadata" />
                         </div>
                       ) : null}
-                      {canPromptPreserveCharacters ? renderCharacterContinuityToggle("editor") : null}
                     </>
                   )}
                   {segmentEditorVideoError ? (
@@ -30298,6 +30320,7 @@ export function WorkspacePage({
                   ) : null}
                   {!isPromptLibraryMode && !isPromptVoiceoverMode ? (
                     <div className="studio-segment-editor__prompt-action-row">
+                      {canPromptPreserveCharacters ? renderCharacterContinuityToggle("editor") : null}
                       {isPromptAiPhotoMode
                         ? renderSegmentVisualQualitySwitch({
                             ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
@@ -30641,8 +30664,15 @@ export function WorkspacePage({
 	              <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
 	                {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
 	                  <div className="studio-segment-editor">
-	                    <div className="studio-segment-editor__layout">
-                      <div className="studio-segment-editor__prompt-column">
+	                    <div
+                        className={`studio-segment-editor__layout${
+                          isSegmentEditorVisualPanelOpen ? " is-visual-panel-open" : " is-visual-panel-closed"
+                        }`}
+                      >
+                      <div
+                        className="studio-segment-editor__prompt-column"
+                        aria-hidden={!isSegmentEditorVisualPanelOpen}
+                      >
                         {segmentEditorPromptPanel}
                       </div>
                       <div className="studio-segment-editor__preview-column">
