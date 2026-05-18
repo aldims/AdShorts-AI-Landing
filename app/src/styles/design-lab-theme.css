@@ -37509,3 +37509,300 @@ html, body {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
+
+/* Final segment editor visual matrix overrides. Keep this after mobile hardening rules. */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__editor-pane {
+  grid-template-rows: auto minmax(168px, 1fr) 0 !important;
+  gap: 10px !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  border: 1px solid rgba(129, 140, 248, 0.22) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(180deg, rgba(8, 16, 31, 0.88), rgba(3, 10, 20, 0.78)),
+    rgba(4, 9, 18, 0.86) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 36px -28px rgba(0, 0, 0, 0.84) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title strong {
+  overflow: hidden !important;
+  color: rgba(241, 245, 249, 0.96) !important;
+  font-size: clamp(1rem, 1.35vw, 1.18rem) !important;
+  font-weight: 900 !important;
+  line-height: 1.12 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title span:not(.studio-segment-editor__prompt-heading-info) {
+  flex: 0 0 auto !important;
+  color: rgba(148, 163, 184, 0.72) !important;
+  font-size: 0.76rem !important;
+  font-weight: 820 !important;
+  white-space: nowrap !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-info {
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: 0 0 auto !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
+  border-radius: 999px !important;
+  color: rgba(203, 213, 225, 0.86) !important;
+  font-size: 0.68rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  border-color: rgba(148, 163, 184, 0.14) !important;
+  background: rgba(15, 23, 42, 0.58) !important;
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block {
+  display: grid !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block > .studio-segment-editor__prompt-section-label {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 12px !important;
+  color: rgba(216, 180, 254, 0.96) !important;
+  font-size: 0.78rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.07em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block > .studio-segment-editor__prompt-section-label::after {
+  content: "" !important;
+  height: 2px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.68), rgba(168, 85, 247, 0.18)) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit > .studio-segment-editor__prompt-section-label {
+  color: rgba(45, 212, 191, 0.96) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit > .studio-segment-editor__prompt-section-label::after {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.7), rgba(45, 212, 191, 0.16)) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  max-width: none !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 62px !important;
+  height: auto !important;
+  flex: 1 1 auto !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(168, 85, 247, 0.42) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(88, 28, 135, 0.34), rgba(30, 20, 66, 0.54)),
+    rgba(18, 16, 44, 0.82) !important;
+  color: rgba(233, 213, 255, 0.92) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 22px -20px rgba(168, 85, 247, 0.52) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-submenu-button {
+  border-color: rgba(45, 212, 191, 0.4) !important;
+  background:
+    linear-gradient(180deg, rgba(13, 148, 136, 0.26), rgba(8, 47, 73, 0.52)),
+    rgba(5, 35, 49, 0.84) !important;
+  color: rgba(204, 251, 241, 0.92) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button.is-active {
+  border-color: rgba(216, 180, 254, 0.86) !important;
+  background:
+    linear-gradient(180deg, rgba(126, 34, 206, 0.46), rgba(49, 31, 94, 0.68)),
+    rgba(25, 18, 58, 0.94) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 1px rgba(216, 180, 254, 0.12),
+    0 0 18px rgba(168, 85, 247, 0.22) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-submenu-button.is-active {
+  border-color: rgba(94, 234, 212, 0.78) !important;
+  background:
+    linear-gradient(180deg, rgba(20, 184, 166, 0.34), rgba(10, 75, 86, 0.68)),
+    rgba(5, 48, 64, 0.94) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon::before,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon::after {
+  content: none !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
+  display: grid !important;
+  grid-template-columns: 44px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon--asset {
+  width: 44px !important;
+  height: 44px !important;
+  margin: 0 !important;
+  opacity: 1 !important;
+  filter: brightness(1.08) saturate(1.15) drop-shadow(0 0 10px rgba(216, 180, 254, 0.22)) !important;
+  transform: none !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon-asset {
+  transform: none !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label {
+  display: grid !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  text-align: left !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
+  overflow: hidden !important;
+  color: rgba(245, 243, 255, 0.96) !important;
+  font-size: 0.92rem !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-tool-label strong {
+  color: rgba(236, 253, 245, 0.96) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
+  overflow: hidden !important;
+  color: rgba(203, 213, 225, 0.64) !important;
+  font-size: 0.72rem !important;
+  font-weight: 720 !important;
+  line-height: 1.12 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-meta {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 3px 7px !important;
+  border-radius: 999px !important;
+  background: rgba(34, 197, 94, 0.14) !important;
+  color: rgba(187, 247, 208, 0.94) !important;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__input-row,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__input-main {
+  min-height: 168px !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-visual-panel {
+  min-height: 168px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.13) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(180deg, rgba(10, 18, 32, 0.74), rgba(4, 9, 18, 0.84)),
+    rgba(4, 9, 18, 0.82) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__footer {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 640px) {
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
+    align-items: flex-start !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
+    display: grid !important;
+    gap: 5px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title strong {
+    white-space: normal !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
+    grid-template-columns: 1fr !important;
+  }
+}
