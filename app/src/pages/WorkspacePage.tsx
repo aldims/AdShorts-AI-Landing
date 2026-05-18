@@ -26005,6 +26005,14 @@ export function WorkspacePage({
           ),
           segmentCount: effectiveSegmentEditorBuild.payload.segments.length,
           segmentOrder: effectiveSegmentEditorBuild.payload.segments.map((segment) => segment.index),
+          segmentTimings: effectiveSegmentEditorBuild.payload.segments.map((segment) => ({
+            duration: segment.duration ?? null,
+            durationMode: segment.durationMode ?? null,
+            endTime: segment.endTime ?? null,
+            index: segment.index,
+            manualDurationSeconds: segment.manualDurationSeconds ?? null,
+            startTime: segment.startTime ?? null,
+          })),
           uploadCount: effectiveSegmentEditorBuild.uploads.length,
         });
       }

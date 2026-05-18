@@ -33823,7 +33823,7 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-  --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 146px);
+  --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 108px);
   --studio-segment-editor-panel-width: clamp(460px, 34vw, 600px);
   --studio-segment-editor-carousel-width: min(430px, calc((var(--studio-segment-editor-viewport-height) - 324px) * 9 / 16));
   --studio-segment-editor-side-card-width: 56%;
@@ -37954,14 +37954,28 @@ html, body {
     --studio-segment-editor-panel-width: clamp(560px, 44vw, 740px) !important;
     --studio-segment-editor-carousel-width: clamp(
       260px,
-      calc((var(--studio-segment-editor-viewport-height) - 460px) * 9 / 16),
-      320px
+      calc((var(--studio-segment-editor-viewport-height) - 400px) * 9 / 16),
+      450px
     );
+    grid-template-rows: minmax(0, 1fr) auto !important;
     column-gap: clamp(40px, 5vw, 88px) !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
     padding-left: clamp(38px, 4.8vw, 92px) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
+    grid-row: 1 !important;
+    pointer-events: none;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__prompt-submit {
+    pointer-events: auto;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    grid-row: 2 !important;
   }
 }
 
