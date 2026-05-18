@@ -99,12 +99,14 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   currentSourceKind: "unknown",
   customVideo: null,
   duration: 4,
+  durationMode: "auto",
   endTime: 4,
   imageEditAsset: null,
   imageEditGeneratedFromPrompt: null,
   imageEditPrompt: "",
   imageEditPromptInitialized: false,
   index: 0,
+  manualDurationSeconds: null,
   mediaType: "photo",
   originalAsset: null,
   originalExternalPlaybackUrl: null,
@@ -164,8 +166,10 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
       currentPreviewUrl: segment.currentPreviewUrl,
       currentSourceKind: segment.currentSourceKind,
       duration: segment.duration,
+      durationMode: segment.durationMode,
       endTime: segment.endTime,
       index: segment.index,
+      manualDurationSeconds: segment.manualDurationSeconds,
       mediaType: segment.mediaType,
       originalAsset: segment.originalAsset,
       originalExternalPlaybackUrl: segment.originalExternalPlaybackUrl,
@@ -837,6 +841,57 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(asset?.remoteUrl).toBe("/api/workspace/media-assets/303");
     expect(normalizedSegment && getWorkspaceSegmentDraftPreviewUrl(normalizedSegment)).toBe("/api/workspace/media-assets/303");
     expect(JSON.stringify(normalized)).not.toContain("data:image/png");
+  });
+
+  it("preserves manual duration in stored drafts and rebuilds the draft timeline", () => {
+    const firstSegment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      endTime: 4,
+      index: 0,
+      manualDurationSeconds: 6.5,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const secondSegment = createDraftSegment({
+      duration: 4,
+      endTime: 8,
+      index: 1,
+      startTime: 4,
+      text: "Auto segment",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[0]?.durationMode).toBe("manual");
+    expect(normalized.segments[0]?.manualDurationSeconds).toBe(6.5);
+    expect(normalized.segments[0]?.duration).toBe(6.5);
+    expect(normalized.segments[0]?.endTime).toBe(6.5);
+    expect(normalized.segments[1]?.startTime).toBe(6.5);
+  });
+
+  it("includes manual duration fields and resolved timeline duration in segment editor payload", async () => {
+    const segment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      manualDurationSeconds: 7.2,
+      text: "Manual payload segment",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        duration: 7.2,
+        durationMode: "manual",
+        endTime: 7.2,
+        manualDurationSeconds: 7.2,
+        startTime: 0,
+      }),
+    );
   });
 
   it("restores a live generated AI photo when server state lost the draft video action", () => {

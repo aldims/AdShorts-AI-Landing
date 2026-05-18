@@ -32,8 +32,10 @@ type AdsflowSegmentEditorSpeechWordPayload = {
 type AdsflowSegmentEditorSegmentPayload = {
   current_video?: string | null;
   duration?: number | string | null;
+  duration_mode?: string | null;
   end_time?: number | string | null;
   index?: number | string | null;
+  manual_duration_seconds?: number | string | null;
   media_type?: string | null;
   original_video?: string | null;
   speech_duration?: number | string | null;
@@ -155,8 +157,10 @@ export type WorkspaceSegmentEditorSegment = {
   currentPreviewUrl: string | null;
   currentSourceKind: WorkspaceSegmentEditorSourceKind;
   duration: number;
+  durationMode: "auto" | "manual";
   endTime: number;
   index: number;
+  manualDurationSeconds: number | null;
   mediaType: WorkspaceSegmentEditorMediaType;
   originalAsset: WorkspaceMediaAssetRef | null;
   originalExternalPlaybackUrl: string | null;
@@ -220,6 +224,16 @@ const normalizeInteger = (value: unknown) => {
 const normalizeNumber = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const normalizeSegmentDurationMode = (value: unknown): "auto" | "manual" => {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === "manual" ? "manual" : "auto";
+};
+
+const normalizeManualDurationSeconds = (value: unknown) => {
+  const numeric = normalizeNumber(value);
+  return numeric !== null && numeric >= 1 ? numeric : null;
 };
 
 const normalizePositiveProjectId = (value: unknown) => {
@@ -1178,8 +1192,10 @@ export const buildWorkspaceSegmentEditorSegment = (
       : null,
     currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
     duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
+    durationMode: normalizeSegmentDurationMode(payload.duration_mode),
     endTime,
     index,
+    manualDurationSeconds: normalizeManualDurationSeconds(payload.manual_duration_seconds),
     mediaType: resolvedMediaType,
     originalAsset,
     originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),

@@ -27,6 +27,14 @@ const normalizeNumber = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 };
+const normalizeSegmentDurationMode = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "manual" ? "manual" : "auto";
+};
+const normalizeManualDurationSeconds = (value) => {
+    const numeric = normalizeNumber(value);
+    return numeric !== null && numeric >= 1 ? numeric : null;
+};
 const normalizePositiveProjectId = (value) => {
     const normalized = normalizeInteger(value);
     return normalized !== null && normalized > 0 ? normalized : null;
@@ -722,8 +730,10 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
             : null,
         currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
         duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
+        durationMode: normalizeSegmentDurationMode(payload.duration_mode),
         endTime,
         index,
+        manualDurationSeconds: normalizeManualDurationSeconds(payload.manual_duration_seconds),
         mediaType: resolvedMediaType,
         originalAsset,
         originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),

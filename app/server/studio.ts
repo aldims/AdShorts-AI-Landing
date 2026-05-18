@@ -564,6 +564,7 @@ export type StudioGenerationStatus = {
 };
 
 export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original";
+export type StudioSegmentEditorDurationMode = "auto" | "manual";
 
 export type StudioSegmentEditorSegment = {
   customVideoAssetId?: number;
@@ -571,8 +572,10 @@ export type StudioSegmentEditorSegment = {
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
   duration?: number;
+  durationMode?: StudioSegmentEditorDurationMode;
   endTime?: number;
   index: number;
+  manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
   startTime?: number;
@@ -963,7 +966,17 @@ const normalizeStudioSegmentVideoAction = (value: unknown): StudioSegmentEditorV
   return studioSupportedSegmentVideoActions.has(normalized) ? (normalized as StudioSegmentEditorVideoAction) : "original";
 };
 
-const normalizeStudioSegmentEditorPayload = (
+const normalizeStudioSegmentDurationMode = (value: unknown): StudioSegmentEditorDurationMode => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "manual" ? "manual" : "auto";
+};
+
+const normalizeStudioSegmentManualDurationSeconds = (value: unknown) => {
+  const normalized = normalizeNumber(value);
+  return normalized !== null && normalized >= 1 ? normalized : null;
+};
+
+export const normalizeStudioSegmentEditorPayload = (
   value: unknown,
   language: Locale,
   fallbackProjectId?: number,
@@ -997,8 +1010,12 @@ const normalizeStudioSegmentEditorPayload = (
       customVideoFileMimeType?: unknown;
       customVideoFileName?: unknown;
       duration?: unknown;
+      durationMode?: unknown;
+      duration_mode?: unknown;
       endTime?: unknown;
       index?: unknown;
+      manualDurationSeconds?: unknown;
+      manual_duration_seconds?: unknown;
       resetVisual?: unknown;
       sceneSoundAssetId?: unknown;
       startTime?: unknown;
@@ -1020,6 +1037,10 @@ const normalizeStudioSegmentEditorPayload = (
     const startTime = normalizeNumber(segmentRecord.startTime) ?? undefined;
     const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
     const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
+    const durationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+    const manualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
+      segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
+    );
     const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
     const segmentVoiceType =
       segmentVoiceTypeRaw === null
@@ -1036,8 +1057,10 @@ const normalizeStudioSegmentEditorPayload = (
       customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
       customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
       duration,
+      durationMode,
       endTime,
       index,
+      manualDurationSeconds,
       resetVisual: Boolean(segmentRecord.resetVisual),
       sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
       startTime,
@@ -4315,8 +4338,10 @@ export async function createStudioGenerationJob(
                 custom_video_mime_type: segment.customVideoFileMimeType,
                 custom_video_original_name: segment.customVideoFileName,
                 duration: segment.duration,
+                duration_mode: segment.durationMode,
                 end_time: segment.endTime,
                 index: segment.index,
+                manual_duration_seconds: segment.manualDurationSeconds,
                 reset_visual: Boolean(segment.resetVisual),
                 scene_sound_asset_id: segment.sceneSoundAssetId,
                 start_time: segment.startTime,

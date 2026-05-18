@@ -369,7 +369,15 @@ const normalizeStudioSegmentVideoAction = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedSegmentVideoActions.has(normalized) ? normalized : "original";
 };
-const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId) => {
+const normalizeStudioSegmentDurationMode = (value) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return normalized === "manual" ? "manual" : "auto";
+};
+const normalizeStudioSegmentManualDurationSeconds = (value) => {
+    const normalized = normalizeNumber(value);
+    return normalized !== null && normalized >= 1 ? normalized : null;
+};
+export const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId) => {
     if (!value || typeof value !== "object") {
         return undefined;
     }
@@ -397,6 +405,8 @@ const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId)
         const startTime = normalizeNumber(segmentRecord.startTime) ?? undefined;
         const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
         const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
+        const durationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+        const manualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds);
         const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
         const segmentVoiceType = segmentVoiceTypeRaw === null
             ? null
@@ -410,8 +420,10 @@ const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId)
             customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
             customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
             duration,
+            durationMode,
             endTime,
             index,
+            manualDurationSeconds,
             resetVisual: Boolean(segmentRecord.resetVisual),
             sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
             startTime,
@@ -2944,8 +2956,10 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         custom_video_mime_type: segment.customVideoFileMimeType,
                         custom_video_original_name: segment.customVideoFileName,
                         duration: segment.duration,
+                        duration_mode: segment.durationMode,
                         end_time: segment.endTime,
                         index: segment.index,
+                        manual_duration_seconds: segment.manualDurationSeconds,
                         reset_visual: Boolean(segment.resetVisual),
                         scene_sound_asset_id: segment.sceneSoundAssetId,
                         start_time: segment.startTime,

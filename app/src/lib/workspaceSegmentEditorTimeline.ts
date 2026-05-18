@@ -3,9 +3,14 @@ export type WorkspaceSegmentTimelineWord = {
   startTime?: number | null;
 };
 
+export type WorkspaceSegmentDurationMode = "auto" | "manual";
+
 export type WorkspaceSegmentTimelineSegment = {
   duration?: number | null;
+  durationMode?: WorkspaceSegmentDurationMode | null;
   endTime?: number | null;
+  manualDurationSeconds?: number | null;
+  mediaType?: string | null;
   speechDuration?: number | null;
   speechEndTime?: number | null;
   speechStartTime?: number | null;
@@ -14,7 +19,7 @@ export type WorkspaceSegmentTimelineSegment = {
   text?: string | null;
 };
 
-const WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS = 1;
+export const WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS = 1;
 const WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS = 1.8;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD = 0.34;
 const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
@@ -22,6 +27,13 @@ const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
 const normalizeWorkspaceSegmentTimelineTimeValue = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+};
+
+export const normalizeWorkspaceSegmentManualDurationSeconds = (value: unknown) => {
+  const normalizedValue = normalizeWorkspaceSegmentTimelineTimeValue(value);
+  return normalizedValue !== null && normalizedValue >= WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS
+    ? normalizedValue
+    : null;
 };
 
 const tokenizeWorkspaceSegmentTimelineText = (value: string) =>
@@ -50,6 +62,24 @@ export const getWorkspaceSegmentEditorDisplayEndTime = <T extends WorkspaceSegme
     normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime) ??
     normalizeWorkspaceSegmentTimelineTimeValue(speechWords[speechWords.length - 1]?.endTime) ??
     getWorkspaceSegmentEditorDisplayStartTime(segment)
+  );
+};
+
+export const getWorkspaceSegmentEditorSpeechDuration = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
+  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
+  const speechStart =
+    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime) ??
+    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[0]?.startTime);
+  const speechEnd =
+    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime) ??
+    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[speechWords.length - 1]?.endTime);
+  const speechTimelineDuration =
+    speechStart !== null && speechEnd !== null && speechEnd > speechStart ? speechEnd - speechStart : null;
+
+  return (
+    (typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
+      ? segment.speechDuration
+      : null) ?? speechTimelineDuration
   );
 };
 
@@ -99,22 +129,86 @@ export const getWorkspaceSegmentEditorPlaybackDuration = <T extends WorkspaceSeg
   return Math.max(...candidates);
 };
 
+export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimelineSegment>(
+  segment: T,
+  options?: {
+    fallbackDuration?: number | null;
+    preferEstimatedDuration?: boolean;
+    stillNoTextFallbackDuration?: number | null;
+    subtitleEnabled?: boolean;
+    visualDurationSeconds?: number | null;
+    visualKind?: "image" | "video" | null;
+    voiceEnabled?: boolean;
+  },
+) => {
+  const speechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
+  const voiceEnabled = options?.voiceEnabled !== false;
+  const voiceMinimumDuration = voiceEnabled && speechDuration !== null ? speechDuration : null;
+  const minimumDuration = Math.max(
+    WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+    voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+  );
+  const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+
+  if (segment.durationMode === "manual" && manualDuration !== null) {
+    return Math.max(minimumDuration, manualDuration);
+  }
+
+  if (voiceEnabled && speechDuration !== null) {
+    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, speechDuration);
+  }
+
+  const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
+  const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
+  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
+    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, visualDuration);
+  }
+
+  if (options?.subtitleEnabled === false && visualKind === "image") {
+    const fallbackDuration = normalizeWorkspaceSegmentTimelineTimeValue(options.fallbackDuration);
+    const stillFallbackDuration = normalizeWorkspaceSegmentTimelineTimeValue(options.stillNoTextFallbackDuration);
+    return Math.max(
+      WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+      options.preferEstimatedDuration
+        ? stillFallbackDuration ?? fallbackDuration ?? WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS
+        : fallbackDuration ?? stillFallbackDuration ?? WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS,
+    );
+  }
+
+  return Math.max(
+    WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+    getWorkspaceSegmentEditorPlaybackDuration(segment, undefined, {
+      preferEstimatedDuration: options?.preferEstimatedDuration ?? false,
+    }),
+  );
+};
+
 export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegmentTimelineSegment>(
   segments: T[],
   options?: {
     preferEstimatedDuration?: (segment: T) => boolean;
+    stillNoTextFallbackDuration?: number | null;
+    subtitleEnabled?: boolean;
+    visualDurationSeconds?: (segment: T) => number | null | undefined;
+    visualKind?: (segment: T) => "image" | "video" | null | undefined;
+    voiceEnabled?: boolean | ((segment: T) => boolean);
   },
 ) => {
   let cursor = 0;
   let hasChanges = false;
 
   const nextSegments = segments.map((segment) => {
-    const duration = Math.max(
-      WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
-      getWorkspaceSegmentEditorPlaybackDuration(segment, undefined, {
-        preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
-      }),
-    );
+    const voiceEnabled =
+      typeof options?.voiceEnabled === "function" ? options.voiceEnabled(segment) : options?.voiceEnabled;
+    const duration = resolveWorkspaceSegmentDuration(segment, {
+      fallbackDuration: segment.duration,
+      preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
+      stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
+      subtitleEnabled: options?.subtitleEnabled,
+      visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
+      visualKind: options?.visualKind?.(segment) ?? null,
+      voiceEnabled,
+    });
     const startTime = cursor;
     const endTime = startTime + duration;
     cursor = endTime;

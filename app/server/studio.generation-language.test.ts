@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canExposeStudioFinalVideoFromStatus,
   getStudioVoiceCreditCost,
+  normalizeStudioSegmentEditorPayload,
   normalizeStudioVoiceIdForLanguage,
   resolveStudioGenerationLanguage,
 } from "./studio.js";
@@ -68,5 +69,49 @@ describe("studio generation language resolution", () => {
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
+  });
+
+  it("normalizes segment editor manual duration fields and keeps old payloads compatible", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 7.2,
+            durationMode: "manual",
+            endTime: 7.2,
+            index: 0,
+            manualDurationSeconds: 7.2,
+            startTime: 0,
+            text: "Manual scene",
+            videoAction: "original",
+          },
+          {
+            duration: 3,
+            endTime: 10.2,
+            index: 1,
+            startTime: 7.2,
+            text: "Legacy scene",
+            videoAction: "original",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        duration: 7.2,
+        durationMode: "manual",
+        manualDurationSeconds: 7.2,
+      }),
+    );
+    expect(normalized?.segments[1]).toEqual(
+      expect.objectContaining({
+        duration: 3,
+        durationMode: "auto",
+        manualDurationSeconds: null,
+      }),
+    );
   });
 });
