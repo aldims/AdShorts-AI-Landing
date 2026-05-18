@@ -3286,7 +3286,6 @@ const PROJECTS_REQUEST_TIMEOUT_MS = 25_000;
 const MEDIA_LIBRARY_REQUEST_TIMEOUT_MS = 25_000;
 const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 90_000;
 const SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS = 1_500;
-const SEGMENT_EDITOR_TIMELINE_ADD_GUTTER_PX = 66;
 const SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS = 8;
 const WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
@@ -4757,7 +4756,7 @@ const getWorkspaceSegmentVisualTabForPromptSceneMode = (
   const candidateTabs =
     mode === "create"
       ? (["ai_photo", "ai_video", "library", "upload"] as const)
-      : (["photo_animation", "talking_photo", "image_edit", "image_upscale", "scene_sound", "voiceover"] as const);
+      : (["photo_animation", "talking_photo", "image_edit", "image_upscale"] as const);
 
   if (candidateTabs.some((tab) => tab === currentTab)) {
     return resolveWorkspaceSegmentVisualModalTab(segment, currentTab);
@@ -11046,6 +11045,7 @@ type StudioSubtitleSelectorChipProps = {
   bulkTextSegmentCount?: number;
   bulkTextValue?: string;
   closeRequestId?: number;
+  isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
@@ -11072,6 +11072,7 @@ type StudioLanguageSelectorChipProps = {
 
 type StudioVoiceSelectorChipProps = {
   closeRequestId?: number;
+  isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
@@ -11088,6 +11089,7 @@ type StudioVoiceSelectorChipProps = {
 type StudioMusicSelectorChipProps = {
   closeRequestId?: number;
   customMusicFile: StudioCustomMusicFile | null;
+  isProgrammaticOnly?: boolean;
   isPreparingCustomMusic: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
@@ -11136,6 +11138,7 @@ function StudioSubtitleSelectorChip({
   bulkTextSegmentCount,
   bulkTextValue,
   closeRequestId = 0,
+  isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
@@ -11190,7 +11193,9 @@ function StudioSubtitleSelectorChip({
     lastHandledOpenRequestIdRef.current = openRequestId;
     setRequestAnchorRect(openAnchorRect);
     setIsOpen(true);
-    triggerRef.current?.focus({ preventScroll: true });
+    if (!openAnchorRect) {
+      triggerRef.current?.focus({ preventScroll: true });
+    }
   }, [openAnchorRect, openRequestId]);
 
   useEffect(() => {
@@ -11288,6 +11293,7 @@ function StudioSubtitleSelectorChip({
             : `studio-canvas-prompt__chip studio-subtitle-selector__trigger${isOpen ? " is-open" : ""}`
         }
         type="button"
+        tabIndex={isProgrammaticOnly ? -1 : undefined}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
@@ -11681,6 +11687,7 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
 
 function StudioVoiceSelectorChip({
   closeRequestId = 0,
+  isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
@@ -11747,7 +11754,9 @@ function StudioVoiceSelectorChip({
     stopVoicePreview();
     setRequestAnchorRect(openAnchorRect);
     setIsOpen(true);
-    triggerRef.current?.focus({ preventScroll: true });
+    if (!openAnchorRect) {
+      triggerRef.current?.focus({ preventScroll: true });
+    }
   }, [openAnchorRect, openRequestId]);
 
   useEffect(() => {
@@ -11887,6 +11896,7 @@ function StudioVoiceSelectorChip({
             : `studio-canvas-prompt__chip studio-voice-selector__trigger${isOpen ? " is-open" : ""}`
         }
         type="button"
+        tabIndex={isProgrammaticOnly ? -1 : undefined}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
@@ -13777,6 +13787,7 @@ function StudioBrandSelectorChip({
 function StudioMusicSelectorChip({
   closeRequestId = 0,
   customMusicFile,
+  isProgrammaticOnly = false,
   isPreparingCustomMusic,
   openAnchorRect = null,
   openRequestId = 0,
@@ -13811,7 +13822,9 @@ function StudioMusicSelectorChip({
     lastHandledOpenRequestIdRef.current = openRequestId;
     setRequestAnchorRect(openAnchorRect);
     setIsOpen(true);
-    triggerRef.current?.focus({ preventScroll: true });
+    if (!openAnchorRect) {
+      triggerRef.current?.focus({ preventScroll: true });
+    }
   }, [openAnchorRect, openRequestId]);
 
   useEffect(() => {
@@ -13918,6 +13931,7 @@ function StudioMusicSelectorChip({
         ref={fileInputRef}
         className="studio-music-selector__file-input"
         type="file"
+        tabIndex={isProgrammaticOnly ? -1 : undefined}
         accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,audio/*"
         onChange={(event) => {
           void handleCustomMusicChange(event);
@@ -13934,6 +13948,7 @@ function StudioMusicSelectorChip({
             : `studio-canvas-prompt__chip studio-music-selector__trigger${isOpen ? " is-open" : ""}`
         }
         type="button"
+        tabIndex={isProgrammaticOnly ? -1 : undefined}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
@@ -17926,11 +17941,11 @@ export function WorkspacePage({
     segmentEditorDraft && segmentThumbDragState ? segmentEditorDraft.segments[segmentThumbDragState.draggedIndex] ?? null : null;
   const segmentThumbVisibleSlotCount = Math.max(
     1,
-    segmentEditorSegmentCount + (canAddSegmentEditorSegment ? 1 : 0) + (visibleSegmentThumbInsertIndex === null ? 0 : 1),
+    segmentEditorSegmentCount + (visibleSegmentThumbInsertIndex === null ? 0 : 1),
   );
   const isSegmentEditorTimelineStandardFit =
     segmentThumbVisibleSlotCount <= SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS;
-  const segmentEditorTimelineAddGutterPx = canAddSegmentEditorSegment ? SEGMENT_EDITOR_TIMELINE_ADD_GUTTER_PX : 0;
+  const segmentEditorTimelineAddGutterPx = 0;
   const segmentThumbDragGhostStyle: CSSProperties | null = segmentThumbDragState
     ? {
         left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
@@ -17984,12 +17999,17 @@ export function WorkspacePage({
         normalizeWorkspaceSegmentEditorSetting(segmentEditorChecklistBaseSession.voiceType),
   );
   const activeSegmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(activeSegment, selectedLanguage);
+  const activeSegmentVoiceRawOverrideId = getWorkspaceSegmentVoiceOverrideId(activeSegment);
+  const activeSegmentVoiceDisabled = activeSegmentVoiceRawOverrideId === "none";
   const activeSegmentEffectiveVoiceId = activeSegmentVoiceOverrideId
     ? resolveStudioVoiceIdForLanguage(selectedLanguage, activeSegmentVoiceOverrideId, studioSidebarVoiceId)
+    : activeSegmentVoiceDisabled
+      ? null
     : studioSidebarVoiceId;
   const activeSegmentVoiceOption =
     selectedVoiceOptions.find((voice) => voice.id === activeSegmentEffectiveVoiceId) ?? selectedVoiceOptions[0] ?? null;
-  const activeSegmentUsesGlobalVoice = !activeSegmentVoiceOverrideId || activeSegmentVoiceOverrideId === studioSidebarVoiceId;
+  const activeSegmentUsesGlobalVoice =
+    !activeSegmentVoiceDisabled && (!activeSegmentVoiceOverrideId || activeSegmentVoiceOverrideId === studioSidebarVoiceId);
   const studioSidebarMusicTypeRaw = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.musicType);
   const studioSidebarMusicType = studioMusicOptions.some((option) => option.id === studioSidebarMusicTypeRaw)
     ? (studioSidebarMusicTypeRaw as StudioMusicType)
@@ -20658,39 +20678,6 @@ export function WorkspacePage({
     setActiveSegmentIndex(insertAt);
   };
 
-  const requestDeleteSegmentEditorSegment = (targetSegmentIndex: number) => {
-    if (!segmentEditorDraft) {
-      return;
-    }
-
-    if (isSegmentEditorStructureActionBusy) {
-      return;
-    }
-
-    if (segmentEditorDraft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
-      setSegmentEditorVideoError(`В редакторе должен остаться минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент.`);
-      return;
-    }
-
-    if (!segmentEditorDraft.segments.some((segment) => segment.index === targetSegmentIndex)) {
-      return;
-    }
-
-    setSegmentEditorVideoError(null);
-    if (
-      getWorkspaceSegmentEditorPendingInsertedSegmentIndices(
-        segmentEditorDraft,
-        segmentEditorChecklistBaseSession,
-      ).has(targetSegmentIndex)
-    ) {
-      setSegmentEditorPendingDeleteIndex(null);
-      handleDeleteSegmentEditorSegment(targetSegmentIndex);
-      return;
-    }
-
-    setSegmentEditorPendingDeleteIndex(targetSegmentIndex);
-  };
-
   const handleDeleteSegmentEditorSegment = (targetSegmentIndex: number) => {
     if (!segmentEditorDraft) {
       return;
@@ -21096,7 +21083,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
       ...segment,
-      voiceType: null,
+      voiceType: "none",
     }));
   };
 
@@ -27634,7 +27621,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
     syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
-    setSegmentTimelineVisualMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
+    setSegmentTimelineVisualMenuSegmentIndex(null);
   };
   const handleSegmentTimelineVisualToolSelect = (
     segmentArrayIndex: number,
@@ -27759,7 +27746,12 @@ export function WorkspacePage({
     setSegmentTimelineVisualMenuSegmentIndex(null);
     setSegmentTimelineSoundMenuSegmentIndex(null);
     setSegmentTimelineTextMenuSegmentIndex(null);
-    openSegmentEditorTimelineTool(segmentArrayIndex, "voiceover");
+    (["music", "voice", "subtitle"] as const).forEach((control) => requestCloseSegmentTimelineGlobalControl(control));
+    setSegmentTimelineGlobalControlOpen(null);
+    setSegmentTimelineGlobalControlAnchorRect(null);
+    setSegmentEditorVideoError(null);
+    activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
+    syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
     setSegmentTimelineVoiceMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
     event.currentTarget.focus({ preventScroll: true });
   };
@@ -27837,7 +27829,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
-      voiceType: null,
+      voiceType: "none",
     }));
     setSegmentTimelineVoiceMenuSegmentIndex(null);
   };
@@ -27893,10 +27885,6 @@ export function WorkspacePage({
       "--studio-segment-editor-timeline-drop-left": getSegmentEditorTimelineScaledValue(leftRatio),
     } as CSSProperties;
   };
-  const segmentEditorTimelineAddStyle = {
-    "--studio-segment-editor-timeline-span-left": `calc(100% - ${SEGMENT_EDITOR_TIMELINE_ADD_GUTTER_PX - 8}px)`,
-    "--studio-segment-editor-timeline-span-width": "58px",
-  } as CSSProperties;
   const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
     if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
       return workspaceText(locale, "Без озвучки", "No voiceover");
@@ -27915,9 +27903,7 @@ export function WorkspacePage({
       return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
     }
 
-    return voice?.label
-      ? workspaceText(locale, `Общий: ${voice.label}`, `Global: ${voice.label}`)
-      : workspaceText(locale, "Голос видео", "Video voice");
+    return voice?.label ?? workspaceText(locale, "Голос видео", "Video voice");
   };
   const getSegmentTimelineVoiceOption = (segment: WorkspaceSegmentEditorDraftSegment) => {
     if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
@@ -28259,13 +28245,13 @@ export function WorkspacePage({
     segmentTimelineVoiceMenuSegment,
     selectedLanguage,
   );
+  const segmentTimelineVoiceMenuRawOverrideId = getWorkspaceSegmentVoiceOverrideId(segmentTimelineVoiceMenuSegment);
+  const segmentTimelineVoiceMenuIsDisabled = segmentTimelineVoiceMenuRawOverrideId === "none";
   const segmentTimelineVoiceMenuEffectiveVoiceId = segmentTimelineVoiceMenuOverrideId
     ? resolveStudioVoiceIdForLanguage(selectedLanguage, segmentTimelineVoiceMenuOverrideId, studioSidebarVoiceId)
+    : segmentTimelineVoiceMenuIsDisabled
+      ? null
     : studioSidebarVoiceId;
-  const segmentTimelineVoiceMenuUsesGlobal =
-    !segmentTimelineVoiceMenuOverrideId || segmentTimelineVoiceMenuOverrideId === studioSidebarVoiceId;
-  const segmentTimelineVoiceMenuGlobalVoice =
-    selectedVoiceOptions.find((voice) => voice.id === studioSidebarVoiceId) ?? selectedVoiceOptions[0] ?? null;
   const getSegmentTimelineVoiceLanguageLabel = (language: StudioLanguage) =>
     locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getSegmentTimelineVoiceLanguageDescription = (language: StudioLanguage) =>
@@ -28325,28 +28311,29 @@ export function WorkspacePage({
                 `Scene ${segmentTimelineVoiceMenuArrayIndex + 1} voice`,
               )}
             </span>
-            <div className={`studio-voice-selector__option${segmentTimelineVoiceMenuUsesGlobal ? " is-selected" : ""}`}>
+            <div className={`studio-voice-selector__option${segmentTimelineVoiceMenuIsDisabled ? " is-selected" : ""}`}>
               <button
                 className="studio-voice-selector__option-main"
                 type="button"
                 role="menuitemradio"
-                aria-checked={segmentTimelineVoiceMenuUsesGlobal}
+                aria-checked={segmentTimelineVoiceMenuIsDisabled}
                 onClick={() => handleSegmentTimelineVoiceUseGlobal(segmentTimelineVoiceMenuSegment.index)}
               >
                 <span className="studio-voice-selector__option-title">
-                  <span>{workspaceText(locale, "Голос всего видео", "Whole-video voice")}</span>
+                  <span>{workspaceText(locale, "Без озвучки", "No voiceover")}</span>
                 </span>
                 <small>
-                  {studioSidebarVoiceEnabled
-                    ? segmentTimelineVoiceMenuGlobalVoice?.label ??
-                      workspaceText(locale, "Выбран в общих настройках", "Selected globally")
-                    : workspaceText(locale, "Без озвучки", "No voiceover")}
+                  {workspaceText(
+                    locale,
+                    "Отключить голос только для этой сцены",
+                    "Turn voice off only for this scene",
+                  )}
                 </small>
               </button>
             </div>
             {selectedVoiceOptions.map((voice) => {
               const isSelectedSceneVoice =
-                !segmentTimelineVoiceMenuUsesGlobal && segmentTimelineVoiceMenuEffectiveVoiceId === voice.id;
+                !segmentTimelineVoiceMenuIsDisabled && segmentTimelineVoiceMenuEffectiveVoiceId === voice.id;
 
               return (
                 <div
@@ -28643,6 +28630,24 @@ export function WorkspacePage({
         }
         aria-label={workspaceText(locale, "Дорожки Shorts", "Shorts tracks")}
       >
+        {canAddSegmentEditorSegment ? (
+          <button
+            className="studio-segment-editor__timeline-add-rail"
+            type="button"
+            disabled={isSegmentEditorStructureActionBusy}
+            aria-label={workspaceText(locale, "Добавить сегмент", "Add segment")}
+            title={
+              isSegmentEditorStructureActionBusy
+                ? workspaceText(locale, "Сейчас нельзя менять состав сегментов", "Segment structure cannot be changed right now")
+                : workspaceText(locale, "Добавить сегмент", "Add segment")
+            }
+            onClick={handleAddSegmentEditorSegment}
+          >
+            <span className="studio-segment-editor__timeline-add-icon" aria-hidden="true">
+              +
+            </span>
+          </button>
+        ) : null}
         <div className="studio-segment-editor__timeline-ruler" aria-hidden="true">
           <div className="studio-segment-editor__timeline-label"></div>
           <div className="studio-segment-editor__timeline-track">
@@ -28786,31 +28791,6 @@ export function WorkspacePage({
                         </span>
                       ) : null}
                     </button>
-                    <button
-                      className="studio-segment-editor__timeline-delete"
-                      type="button"
-                      disabled={!canDeleteSegmentEditorSegment || isSegmentEditorStructureActionBusy}
-                      aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
-                      title={
-                        canDeleteSegmentEditorSegment
-                          ? workspaceText(locale, "Удалить сцену", "Delete scene")
-                          : workspaceText(
-                              locale,
-                              `Нужно оставить минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент`,
-                              `Keep at least ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} segments`,
-                            )
-                      }
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        requestDeleteSegmentEditorSegment(segment.index);
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M7 7l10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M17 7 7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
                     {renderSegmentTimelineHistoryButtons({
                       canBack: canBackVisual && !isThumbVisualGenerationPending,
                       canForward: canForwardVisual && !isThumbVisualGenerationPending,
@@ -28829,29 +28809,6 @@ export function WorkspacePage({
                 </Fragment>
               );
             })}
-            {canAddSegmentEditorSegment ? (
-              <div
-                className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--add"
-                style={segmentEditorTimelineAddStyle}
-              >
-                <button
-                  className="studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--add"
-                  type="button"
-                  disabled={isSegmentEditorStructureActionBusy}
-                  aria-label={workspaceText(locale, "Добавить сегмент", "Add segment")}
-                  title={
-                    isSegmentEditorStructureActionBusy
-                      ? workspaceText(locale, "Сейчас нельзя менять состав сегментов", "Segment structure cannot be changed right now")
-                      : workspaceText(locale, "Добавить сегмент", "Add segment")
-                  }
-                  onClick={handleAddSegmentEditorSegment}
-                >
-                  <span className="studio-segment-editor__timeline-add-icon" aria-hidden="true">
-                    +
-                  </span>
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -28875,7 +28832,6 @@ export function WorkspacePage({
             {segmentEditorTimelineMusicRow?.spans.map((span) => {
               const musicHistoryKey = getWorkspaceSegmentTimelineHistoryKey("music");
               const canForwardMusic = Boolean(segmentTimelineRedoSnapshots[musicHistoryKey]);
-              const canDeleteMusic = studioSidebarMusicType !== "none";
 
               return (
                 <div
@@ -28885,10 +28841,11 @@ export function WorkspacePage({
                 >
                   <button
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--music studio-segment-editor__timeline-cell--has-play${
-                      span.isEdited || canForwardMusic || canDeleteMusic ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      span.isEdited || canForwardMusic ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
                       span.isEdited ? " is-edited" : ""
                     }`}
+                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, "Изменить музыку", "Change music")}
                     onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
@@ -28917,12 +28874,9 @@ export function WorkspacePage({
                 </button>
                 {renderSegmentTimelineHistoryButtons({
                   canBack: span.isEdited,
-                  canDelete: canDeleteMusic,
                   canForward: canForwardMusic,
-                  deleteLabel: workspaceText(locale, "Удалить музыку", "Delete music"),
                   kind: "music",
                   label: workspaceText(locale, "Музыка", "Music"),
-                  onDelete: () => handleSegmentTimelineDelete("music"),
                   withPlay: true,
                 })}
                 {renderSegmentTimelineAudioButton({
@@ -28999,9 +28953,6 @@ export function WorkspacePage({
                     );
               const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segment.index);
               const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
-              const canDeleteVoice =
-                getWorkspaceSegmentVoiceOverrideId(segment) !== "none" &&
-                (studioSidebarVoiceEnabled || Boolean(getWorkspaceSegmentVoiceOverrideId(segment)));
 
               return (
                 <div
@@ -29012,27 +28963,24 @@ export function WorkspacePage({
                   <button
                     ref={setSegmentTimelineVoiceButtonRef(segment.index)}
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--voice studio-segment-editor__timeline-cell--has-play${
-                      span.isEdited || canForwardVoice || canDeleteVoice ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      span.isEdited || canForwardVoice ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
                       span.isActive ? " is-active" : ""
                     }${span.isEdited ? " is-edited" : ""}`}
+                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`)}
                     onClick={(event) => handleSegmentEditorTimelineVoiceClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
                       <strong>{getSegmentTimelineVoiceLabel(segment)}</strong>
-                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
                     </span>
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited,
-                    canDelete: canDeleteVoice,
                     canForward: canForwardVoice,
-                    deleteLabel: workspaceText(locale, `Удалить озвучку сцены ${index + 1}`, `Delete scene ${index + 1} voiceover`),
                     kind: "voice",
                     label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
-                    onDelete: () => handleSegmentTimelineDelete("voice", segment.index),
                     segmentIndex: segment.index,
                     withPlay: true,
                   })}
@@ -29078,12 +29026,6 @@ export function WorkspacePage({
               });
               const soundHistoryKey = getWorkspaceSegmentTimelineHistoryKey("sound", segment.index);
               const canForwardSound = Boolean(segmentTimelineRedoSnapshots[soundHistoryKey]);
-              const canDeleteSound = Boolean(
-                segment.sceneSoundAsset ||
-                  segment.sceneSoundPrompt ||
-                  segment.sceneSoundGeneratedFromPrompt ||
-                  isSoundGenerationPending,
-              );
 
               return (
                 <div
@@ -29094,7 +29036,7 @@ export function WorkspacePage({
                   <button
                     ref={setSegmentTimelineSoundButtonRef(segment.index)}
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--sound studio-segment-editor__timeline-cell--has-play${
-                      (span.isEdited && !isSoundGenerationPending) || canForwardSound || canDeleteSound
+                      (span.isEdited && !isSoundGenerationPending) || canForwardSound
                         ? " studio-segment-editor__timeline-cell--has-history"
                         : ""
                     }${
@@ -29104,23 +29046,20 @@ export function WorkspacePage({
                     }${span.isEmpty ? " is-empty" : ""}${
                       isSoundGenerationPending ? " is-pending" : ""
                     }`}
+                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить звуки сцены ${index + 1}`, `Change scene ${index + 1} sounds`)}
                     onClick={(event) => handleSegmentEditorTimelineSoundClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
                       <strong>{soundLabel}</strong>
-                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
                     </span>
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited && !isSoundGenerationPending,
-                    canDelete: canDeleteSound,
                     canForward: canForwardSound && !isSoundGenerationPending,
-                    deleteLabel: workspaceText(locale, `Удалить звук сцены ${index + 1}`, `Delete scene ${index + 1} sound`),
                     kind: "sound",
                     label: workspaceText(locale, `Звуки сцены ${index + 1}`, `Scene ${index + 1} sounds`),
-                    onDelete: () => handleSegmentTimelineDelete("sound", segment.index),
                     segmentIndex: segment.index,
                     withPlay: true,
                   })}
@@ -29163,7 +29102,6 @@ export function WorkspacePage({
               }
               const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
               const canForwardText = Boolean(segmentTimelineRedoSnapshots[textHistoryKey]);
-              const canDeleteText = Boolean(segment.text.trim());
 
               return (
                 <div
@@ -29174,29 +29112,26 @@ export function WorkspacePage({
                   <button
                     ref={setSegmentTimelineTextButtonRef(segment.index)}
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--text${
-                      span.isEdited || canForwardText || canDeleteText ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      span.isEdited || canForwardText ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
                       span.isActive ? " is-active" : ""
                     }${segmentTimelineTextMenuSegmentIndex === segment.index ? " is-menu-open" : ""}${
                       span.isEdited ? " is-edited" : ""
                     }${span.isEmpty ? " is-empty" : ""}`}
+                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
                     onClick={(event) => handleSegmentEditorTimelineTextClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
                       <strong>{getSegmentTimelineTextLabel(segment)}</strong>
-                      <small>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</small>
                     </span>
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited,
-                    canDelete: canDeleteText,
                     canForward: canForwardText,
-                    deleteLabel: workspaceText(locale, `Удалить текст сцены ${index + 1}`, `Delete scene ${index + 1} text`),
                     kind: "text",
                     label: workspaceText(locale, `Текст сцены ${index + 1}`, `Scene ${index + 1} text`),
-                    onDelete: () => handleSegmentTimelineDelete("text", segment.index),
                     segmentIndex: segment.index,
                   })}
                 </div>
@@ -30017,34 +29952,6 @@ export function WorkspacePage({
                     >
                       {renderSegmentEditorPromptToolButtonContent("image_upscale", workspaceText(locale, "Улучшить качество", "Upscale image"))}
                     </button>
-                    <button
-                      className={getSegmentEditorPromptVisualToolButtonClass("scene_sound")}
-                      type="button"
-                      aria-label={workspaceText(locale, "Звук сцены", "Scene sound")}
-                      disabled={!canSelectSegmentEditorPromptVisualTool("scene_sound")}
-                      title={workspaceText(locale, "Звук сцены", "Scene sound")}
-                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("scene_sound")}
-                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("scene_sound")}
-                      onClick={(event) => {
-                        handleSegmentEditorPromptVisualToolButtonClick(event, "scene_sound");
-                      }}
-                    >
-                      {renderSegmentEditorPromptToolButtonContent("scene_sound", workspaceText(locale, "Звук сцены", "Scene sound"))}
-                    </button>
-                    <button
-                      className={getSegmentEditorPromptVisualToolButtonClass("voiceover")}
-                      type="button"
-                      aria-label={workspaceText(locale, "Озвучка", "Voiceover")}
-                      disabled={!canSelectSegmentEditorPromptVisualTool("voiceover")}
-                      title={workspaceText(locale, "Озвучка", "Voiceover")}
-                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("voiceover")}
-                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("voiceover")}
-                      onClick={(event) => {
-                        handleSegmentEditorPromptVisualToolButtonClick(event, "voiceover");
-                      }}
-                    >
-                      {renderSegmentEditorPromptToolButtonContent("voiceover", workspaceText(locale, "Озвучка", "Voiceover"))}
-                    </button>
                   </div>
                 )}
               </div>
@@ -30215,36 +30122,38 @@ export function WorkspacePage({
                       <div className="studio-segment-editor__scene-voice-summary">
                         <span>{workspaceText(locale, "Сейчас", "Current")}</span>
                         <strong>
-                          {activeSegmentUsesGlobalVoice
-                            ? workspaceText(locale, "Голос всего видео", "Whole-video voice")
+                          {activeSegmentVoiceDisabled
+                            ? workspaceText(locale, "Без озвучки", "No voiceover")
                             : activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбранный голос", "Selected voice")}
                         </strong>
                         <small>
-                          {activeSegmentUsesGlobalVoice
-                            ? studioSidebarVoiceEnabled
-                              ? activeSegmentVoiceOption?.label ?? workspaceText(locale, "Голос выбран в общих настройках", "Voice selected in global settings")
-                              : workspaceText(locale, "В общем видео озвучка выключена", "Voiceover is off for the whole video")
-                            : workspaceText(locale, "Этот голос будет применен только к сцене", "This voice will be applied only to this scene")}
+                          {activeSegmentVoiceDisabled
+                            ? workspaceText(locale, "Для этой сцены голос выключен", "Voice is off for this scene")
+                            : activeSegmentUsesGlobalVoice
+                              ? workspaceText(locale, "Используется голос из общих настроек", "Using the global voice setting")
+                              : workspaceText(locale, "Этот голос будет применен только к сцене", "This voice will be applied only to this scene")}
                         </small>
                       </div>
                       <div className="studio-segment-editor__scene-voice-list" aria-label={workspaceText(locale, "Голоса сцены", "Scene voices")}>
                         <button
-                          className={`studio-segment-editor__scene-voice-option${activeSegmentUsesGlobalVoice ? " is-selected" : ""}`}
+                          className={`studio-segment-editor__scene-voice-option${activeSegmentVoiceDisabled ? " is-selected" : ""}`}
                           type="button"
-                          aria-pressed={activeSegmentUsesGlobalVoice}
+                          aria-pressed={activeSegmentVoiceDisabled}
                           onClick={handleSegmentEditorSceneVoiceUseGlobal}
                         >
                           <span>
-                            <strong>{workspaceText(locale, "Голос всего видео", "Whole-video voice")}</strong>
+                            <strong>{workspaceText(locale, "Без озвучки", "No voiceover")}</strong>
                             <small>
-                              {studioSidebarVoiceEnabled
-                                ? activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбран в общих настройках", "Selected globally")
-                                : workspaceText(locale, "Без озвучки", "No voiceover")}
+                              {workspaceText(
+                                locale,
+                                "Отключить голос только для этой сцены",
+                                "Turn voice off only for this scene",
+                              )}
                             </small>
                           </span>
                         </button>
                         {selectedVoiceOptions.map((voice) => {
-                          const isSelectedSceneVoice = !activeSegmentUsesGlobalVoice && activeSegmentEffectiveVoiceId === voice.id;
+                          const isSelectedSceneVoice = !activeSegmentVoiceDisabled && activeSegmentEffectiveVoiceId === voice.id;
                           return (
                             <button
                               className={`studio-segment-editor__scene-voice-option${isSelectedSceneVoice ? " is-selected" : ""}`}
@@ -30426,52 +30335,57 @@ export function WorkspacePage({
             </div>
             <div className="studio-canvas-prompt__footer">
               <div className="studio-segment-editor__prompt-controls">
-                <StudioSubtitleSelectorChip
-                  bulkTextError={segmentSubtitleBulkTextError}
-                  bulkTextSegmentCount={segmentEditorSegmentCount}
-                  bulkTextValue={segmentSubtitleBulkTextValue}
-                  closeRequestId={segmentTimelineSubtitleCloseRequestId}
-                  isEnabled={studioSidebarSubtitlesEnabled}
-                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                  openRequestId={segmentTimelineSubtitleOpenRequestId}
-                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
-                  onApplyBulkText={handleApplySegmentSubtitleBulkText}
-                  onBulkTextChange={handleSegmentSubtitleBulkTextChange}
-                  onToggleEnabled={handleSegmentEditorSubtitleToggle}
-                  selectedColorId={studioSidebarSubtitleColorId}
-                  selectedExampleId={selectedSubtitleExampleId}
-                  selectedStyleId={studioSidebarSubtitleStyleId}
-                  subtitleColorOptions={subtitleColorOptions}
-                  subtitleStyleOptions={subtitleStyleOptions}
-                  onSelectColor={handleSegmentEditorSubtitleColorSelect}
-                  onSelectExample={setSelectedSubtitleExampleId}
-                  onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
-                />
-                <StudioVoiceSelectorChip
-                  closeRequestId={segmentTimelineVoiceCloseRequestId}
-                  isEnabled={studioSidebarVoiceEnabled}
-                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                  openRequestId={segmentTimelineVoiceOpenRequestId}
-                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
-                  onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
-                  onToggleEnabled={handleSegmentEditorVoiceToggle}
-                  selectedLanguage={selectedLanguage}
-                  selectedVoiceId={studioSidebarVoiceId}
-                  voiceOptions={selectedVoiceOptions}
-                  onSelect={handleSegmentEditorVoiceSelect}
-                />
-                <StudioMusicSelectorChip
-                  closeRequestId={segmentTimelineMusicCloseRequestId}
-                  customMusicFile={selectedCustomMusic}
-                  isPreparingCustomMusic={isPreparingCustomMusic}
-                  openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                  openRequestId={segmentTimelineMusicOpenRequestId}
-                  onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("music", isOpen)}
-                  onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
-                  onSelectMusicType={handleSegmentEditorMusicTypeSelect}
-                  selectedMusicType={studioSidebarMusicType}
-                  uploadError={musicSelectionError}
-                />
+                <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
+                  <StudioSubtitleSelectorChip
+                    bulkTextError={segmentSubtitleBulkTextError}
+                    bulkTextSegmentCount={segmentEditorSegmentCount}
+                    bulkTextValue={segmentSubtitleBulkTextValue}
+                    closeRequestId={segmentTimelineSubtitleCloseRequestId}
+                    isProgrammaticOnly
+                    isEnabled={studioSidebarSubtitlesEnabled}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineSubtitleOpenRequestId}
+                    onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
+                    onApplyBulkText={handleApplySegmentSubtitleBulkText}
+                    onBulkTextChange={handleSegmentSubtitleBulkTextChange}
+                    onToggleEnabled={handleSegmentEditorSubtitleToggle}
+                    selectedColorId={studioSidebarSubtitleColorId}
+                    selectedExampleId={selectedSubtitleExampleId}
+                    selectedStyleId={studioSidebarSubtitleStyleId}
+                    subtitleColorOptions={subtitleColorOptions}
+                    subtitleStyleOptions={subtitleStyleOptions}
+                    onSelectColor={handleSegmentEditorSubtitleColorSelect}
+                    onSelectExample={setSelectedSubtitleExampleId}
+                    onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
+                  />
+                  <StudioVoiceSelectorChip
+                    closeRequestId={segmentTimelineVoiceCloseRequestId}
+                    isProgrammaticOnly
+                    isEnabled={studioSidebarVoiceEnabled}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineVoiceOpenRequestId}
+                    onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
+                    onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
+                    onToggleEnabled={handleSegmentEditorVoiceToggle}
+                    selectedLanguage={selectedLanguage}
+                    selectedVoiceId={studioSidebarVoiceId}
+                    voiceOptions={selectedVoiceOptions}
+                    onSelect={handleSegmentEditorVoiceSelect}
+                  />
+                  <StudioMusicSelectorChip
+                    closeRequestId={segmentTimelineMusicCloseRequestId}
+                    customMusicFile={selectedCustomMusic}
+                    isProgrammaticOnly
+                    isPreparingCustomMusic={isPreparingCustomMusic}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineMusicOpenRequestId}
+                    onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("music", isOpen)}
+                    onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
+                    onSelectMusicType={handleSegmentEditorMusicTypeSelect}
+                    selectedMusicType={studioSidebarMusicType}
+                    uploadError={musicSelectionError}
+                  />
+                </div>
                 <StudioBrandSelectorChip
                   appliedBrandLogoFile={appliedSegmentEditorBrandSnapshot.brandLogoFile}
                   appliedBrandText={appliedSegmentEditorBrandSnapshot.brandText}
@@ -30485,10 +30399,6 @@ export function WorkspacePage({
                   onBrandTextChange={handleBrandTextChange}
                   onClearBrandText={handleClearBrandText}
                   onRemoveBrandLogo={handleRemoveBrandLogo}
-                />
-                <StudioLanguageSelectorChip
-                  selectedLanguage={selectedLanguage}
-                  onSelect={handleSegmentEditorLanguageSelect}
                 />
               </div>
             </div>
