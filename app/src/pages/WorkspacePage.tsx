@@ -320,6 +320,7 @@ type WorkspaceGenerateOptions = {
   subtitleEnabled?: boolean;
   subtitleColorId?: string;
   subtitleStyleId?: string;
+  videoMode?: StudioVideoMode | string;
   versionRootProjectAdId?: number;
   voiceEnabled?: boolean;
   voiceId?: string;
@@ -1379,6 +1380,38 @@ type StudioCustomMusicFile = {
 };
 
 type StudioVideoMode = "ai_photo" | "ai_video" | "custom" | "standard";
+
+const workspaceStudioVideoModeIds = new Set<StudioVideoMode>([
+  "ai_photo",
+  "ai_video",
+  "custom",
+  "standard",
+]);
+
+const normalizeWorkspaceStudioVideoModeValue = (value: unknown): StudioVideoMode | null => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return workspaceStudioVideoModeIds.has(normalized as StudioVideoMode) ? (normalized as StudioVideoMode) : null;
+};
+
+export const resolveWorkspaceGenerationEffectiveVideoMode = (options: {
+  hasSelectedCustomVideo?: boolean;
+  isSegmentEditorGeneration?: boolean;
+  requestedVideoMode?: StudioVideoMode | string | null;
+  selectedVideoMode: StudioVideoMode;
+}): StudioVideoMode => {
+  const requestedVideoMode = normalizeWorkspaceStudioVideoModeValue(options.requestedVideoMode);
+  const effectiveVideoMode = requestedVideoMode ?? options.selectedVideoMode;
+  if (options.isSegmentEditorGeneration && effectiveVideoMode === "custom" && !options.hasSelectedCustomVideo) {
+    return "standard";
+  }
+
+  return effectiveVideoMode;
+};
+
+export const resolveWorkspaceRegenerationVideoMode = (options: {
+  selectedVideoMode: StudioVideoMode;
+  wasVideoModeExplicitlyChanged?: boolean;
+}): StudioVideoMode => (options.wasVideoModeExplicitlyChanged ? options.selectedVideoMode : "standard");
 
 type StudioVideoOption = {
   description: string;
@@ -7593,6 +7626,27 @@ export const shouldAllowWorkspaceSegmentEditorStructureChange = (
       (baseline) => !areWorkspaceSegmentEditorSegmentOrdersEqual(draft, baseline),
     ) || hasWorkspaceSegmentEditorNonCanonicalSourceOrder(draft)
   );
+};
+
+export const resolveWorkspaceSegmentEditorStructureChangePermission = (options: {
+  baselineOrBaselines?:
+    | WorkspaceSegmentEditorStructureSnapshot
+    | readonly (WorkspaceSegmentEditorStructureSnapshot | null | undefined)[]
+    | null;
+  draft?: WorkspaceSegmentEditorStructureSnapshot | null;
+  isExplicitStructureChange?: boolean;
+}) => {
+  const hasStructureChange = shouldAllowWorkspaceSegmentEditorStructureChange(
+    options.draft,
+    options.baselineOrBaselines,
+  );
+  const isExplicitStructureChange = Boolean(options.isExplicitStructureChange);
+
+  return {
+    allowStructureChange: hasStructureChange && isExplicitStructureChange,
+    hasStructureChange,
+    shouldBlockImplicitStructureChange: hasStructureChange && !isExplicitStructureChange,
+  };
 };
 
 export const doesWorkspaceSegmentEditorPayloadMatchSessionStructure = (
@@ -14434,6 +14488,7 @@ export function WorkspacePage({
         : getDefaultStudioVoiceId("en"),
   });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(examplePrefillInitialStudioState.videoMode);
+  const selectedVideoModeExplicitlyChangedRef = useRef(false);
   const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentAiVideoQuality, setSelectedSegmentAiVideoQuality] =
@@ -15959,6 +16014,7 @@ export function WorkspacePage({
     setPublishTargetTitle("");
     if (!preserveExamplePrefillRef.current && !isGuestAuthHandoff) {
       setSelectedVideoMode("standard");
+      selectedVideoModeExplicitlyChangedRef.current = false;
       setSelectedSegmentAiPhotoQuality("standard");
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
@@ -19853,6 +19909,7 @@ export function WorkspacePage({
   };
 
   const handleVideoModeSelect = (videoMode: StudioVideoMode) => {
+    selectedVideoModeExplicitlyChangedRef.current = true;
     setSelectedVideoMode(videoMode);
     setVideoSelectionError(null);
   };
@@ -19883,6 +19940,7 @@ export function WorkspacePage({
         mimeType,
         objectUrl,
       });
+      selectedVideoModeExplicitlyChangedRef.current = true;
       setSelectedVideoMode("custom");
     } catch (error) {
       setVideoSelectionError(error instanceof Error ? error.message : "Не удалось подготовить визуал.");
@@ -20086,6 +20144,7 @@ export function WorkspacePage({
       projectSettings.videoMode !== "custom" &&
       studioVideoOptions.some((option) => option.id === projectSettings.videoMode)
     ) {
+      selectedVideoModeExplicitlyChangedRef.current = false;
       setSelectedVideoMode(projectSettings.videoMode);
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
@@ -24735,7 +24794,6 @@ export function WorkspacePage({
       const clonedSession = cloneWorkspaceSegmentEditorDraftSession(effectiveDraft);
       return rebuildWorkspaceSegmentEditorDraftSessionTimeline(clonedSession);
     })();
-    setSegmentEditorAppliedSession(nextAppliedSession);
     const loadedServerBaseSession =
       segmentEditorLoadedSession?.projectId === effectiveDraft.projectId
         ? createWorkspaceSegmentEditorDraftSession(segmentEditorLoadedSession)
@@ -24745,14 +24803,35 @@ export function WorkspacePage({
       return storedSession ? createWorkspaceSegmentEditorDraftSession(storedSession) : null;
     })();
     const isExplicitStructureChange = segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId);
-    const allowSegmentStructureChange = shouldAllowWorkspaceSegmentEditorStructureChange(
-      effectiveDraft,
-      [
-        loadedServerBaseSession,
-        storedServerBaseSession,
-        segmentEditorChecklistBaseSession,
-      ],
-    ) || isExplicitStructureChange;
+    const structureBaselines = [loadedServerBaseSession, segmentEditorChecklistBaseSession].some(Boolean)
+      ? [loadedServerBaseSession, segmentEditorChecklistBaseSession]
+      : [storedServerBaseSession];
+    const structureChangePermission = resolveWorkspaceSegmentEditorStructureChangePermission({
+      baselineOrBaselines: structureBaselines,
+      draft: effectiveDraft,
+      isExplicitStructureChange,
+    });
+    const allowSegmentStructureChange = structureChangePermission.allowStructureChange;
+    if (structureChangePermission.shouldBlockImplicitStructureChange) {
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.create-shorts.implicit-structure-blocked",
+        {
+          baselineOrder: structureBaselines.find(Boolean)?.segments.map((segment) => segment.index) ?? null,
+          hasExplicitStructureChange: isExplicitStructureChange,
+          projectId: effectiveDraft.projectId,
+          segmentCount: effectiveDraft.segments.length,
+        },
+        { includeOrder: true, draft: effectiveDraft, level: "warn" },
+      );
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Структура сегментов изменилась без явного добавления, удаления или перестановки. Обновите редактор и повторите правку текста.",
+          "Segment structure changed without an explicit add, delete, or reorder. Reload the editor and apply the text edit again.",
+        ),
+      );
+      return;
+    }
 
     const regenerationPrompt = resolveWorkspaceRegenerationPrompt({
       draftDescription: effectiveDraft.description,
@@ -24766,9 +24845,11 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Не удалось определить тему проекта для перегенерации.");
       return;
     }
+    setSegmentEditorAppliedSession(nextAppliedSession);
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.apply", {
       allowSegmentStructureChange,
       hasExplicitStructureChange: isExplicitStructureChange,
+      hasStructureChange: structureChangePermission.hasStructureChange,
       projectId: effectiveDraft.projectId,
       regenerationPromptLength: regenerationPrompt.length,
       segmentCount: effectiveDraft.segments.length,
@@ -25754,10 +25835,12 @@ export function WorkspacePage({
     const effectiveBrandText = normalizeStudioBrandSettingsText(
       hasBrandTextOverride ? options?.brandText ?? "" : brandText,
     );
-    const effectiveVideoMode =
-      isSegmentEditorGeneration && selectedVideoMode === "custom" && !selectedCustomVideo
-        ? "standard"
-        : selectedVideoMode;
+    const effectiveVideoMode = resolveWorkspaceGenerationEffectiveVideoMode({
+      hasSelectedCustomVideo: Boolean(selectedCustomVideo),
+      isSegmentEditorGeneration,
+      requestedVideoMode: options?.videoMode ?? null,
+      selectedVideoMode,
+    });
     const reportGeneratePreflightFailure = (errorMessage: string, statusLabel: string) => {
       console.warn("[studio] generate.preflight-blocked", {
         effectiveVideoMode,
@@ -25918,6 +26001,7 @@ export function WorkspacePage({
       ? "expanded"
       : "compact";
     pendingGeneratedVideoActionModeRef.current = nextGeneratedVideoActionMode;
+    selectedVideoModeExplicitlyChangedRef.current = false;
 
     flushSync(() => {
       if (isSegmentEditorGeneration) {
@@ -26214,6 +26298,10 @@ export function WorkspacePage({
     if (!projectId) {
       return {
         isRegeneration: true,
+        videoMode: resolveWorkspaceRegenerationVideoMode({
+          selectedVideoMode,
+          wasVideoModeExplicitlyChanged: selectedVideoModeExplicitlyChangedRef.current,
+        }),
         ...generationOverrides,
       };
     }
@@ -26222,6 +26310,10 @@ export function WorkspacePage({
       clearAppliedSegmentEditorOnSuccess: Boolean(effectiveSegmentEditorSession),
       ...(editedFromProjectAdId ? { editedFromProjectAdId } : {}),
       isRegeneration: true,
+      videoMode: resolveWorkspaceRegenerationVideoMode({
+        selectedVideoMode,
+        wasVideoModeExplicitlyChanged: selectedVideoModeExplicitlyChangedRef.current,
+      }),
       ...generationOverrides,
       projectId,
       ...(effectiveSegmentEditorSession ? { segmentEditorSession: effectiveSegmentEditorSession } : {}),

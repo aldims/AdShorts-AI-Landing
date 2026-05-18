@@ -26,10 +26,13 @@ import {
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
+  resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
+  resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
@@ -710,6 +713,92 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(overrides.language).toBe("en");
     expect(overrides.voiceEnabled).toBe(true);
     expect(overrides.voiceId).toBe("Ryan");
+  });
+
+  it("preserves existing visuals for regeneration until the video mode is explicitly changed", () => {
+    expect(
+      resolveWorkspaceRegenerationVideoMode({
+        selectedVideoMode: "ai_photo",
+        wasVideoModeExplicitlyChanged: false,
+      }),
+    ).toBe("standard");
+
+    expect(
+      resolveWorkspaceRegenerationVideoMode({
+        selectedVideoMode: "ai_photo",
+        wasVideoModeExplicitlyChanged: true,
+      }),
+    ).toBe("ai_photo");
+  });
+
+  it("lets regeneration options override the selected studio video mode", () => {
+    expect(
+      resolveWorkspaceGenerationEffectiveVideoMode({
+        requestedVideoMode: "standard",
+        selectedVideoMode: "ai_photo",
+      }),
+    ).toBe("standard");
+  });
+
+  it("falls back from segment editor custom visual mode when no custom file is selected", () => {
+    expect(
+      resolveWorkspaceGenerationEffectiveVideoMode({
+        hasSelectedCustomVideo: false,
+        isSegmentEditorGeneration: true,
+        requestedVideoMode: "custom",
+        selectedVideoMode: "custom",
+      }),
+    ).toBe("standard");
+  });
+
+  it("blocks implicit segment structure changes before export", () => {
+    const firstSegment = createDraftSegment({ index: 0 });
+    const secondSegment = createDraftSegment({ index: 1 });
+    const baseline = {
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    };
+    const draft = {
+      ...baseline,
+      segments: [firstSegment],
+    };
+
+    expect(
+      resolveWorkspaceSegmentEditorStructureChangePermission({
+        baselineOrBaselines: baseline,
+        draft,
+        isExplicitStructureChange: false,
+      }),
+    ).toEqual({
+      allowStructureChange: false,
+      hasStructureChange: true,
+      shouldBlockImplicitStructureChange: true,
+    });
+  });
+
+  it("allows explicit segment structure changes after add, delete, or reorder", () => {
+    const firstSegment = createDraftSegment({ index: 0 });
+    const secondSegment = createDraftSegment({ index: 1 });
+    const baseline = {
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    };
+    const draft = {
+      ...baseline,
+      segments: [secondSegment, firstSegment],
+    };
+
+    expect(
+      resolveWorkspaceSegmentEditorStructureChangePermission({
+        baselineOrBaselines: baseline,
+        draft,
+        isExplicitStructureChange: true,
+      }),
+    ).toEqual({
+      allowStructureChange: true,
+      hasStructureChange: true,
+      shouldBlockImplicitStructureChange: false,
+    });
   });
 
   it("does not mark untouched generated source media as resettable", () => {
