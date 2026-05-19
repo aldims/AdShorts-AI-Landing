@@ -21192,7 +21192,9 @@ textarea {
   --studio-segment-editor-viewport-height: 100vh;
   --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 158px);
   --studio-segment-editor-panel-vertical-gap: 18px;
-  --studio-segment-editor-carousel-width: min(430px, calc((var(--studio-segment-editor-viewport-height) - 280px) * 9 / 16));
+  --studio-segment-editor-carousel-width-basis: 56.25vh;
+  --studio-segment-editor-carousel-width: clamp(220px, calc(var(--studio-segment-editor-carousel-width-basis) - 157.5px), 430px);
+  --studio-segment-editor-carousel-height: clamp(391px, calc(var(--studio-segment-editor-viewport-height) - 280px), 764px);
   --studio-segment-editor-preview-safe-left: clamp(82px, 7vw, 112px);
   --studio-segment-editor-preview-safe-right: clamp(128px, 10vw, 176px);
   --studio-segment-editor-panel-max-width: calc(
@@ -21210,7 +21212,8 @@ textarea {
     )
   );
   --studio-segment-editor-panel-height: calc(
-    var(--studio-segment-editor-layout-height) - (var(--studio-segment-editor-panel-vertical-gap) * 2)
+    var(--studio-segment-editor-layout-height) - var(--studio-segment-editor-panel-vertical-gap) -
+      var(--studio-segment-editor-panel-vertical-gap)
   );
   --studio-segment-editor-panel-max-height: var(--studio-segment-editor-panel-height);
   display: grid;
@@ -21234,6 +21237,7 @@ textarea {
 @supports (height: 100lvh) {
   .studio-segment-editor__layout {
     --studio-segment-editor-viewport-height: 100lvh;
+    --studio-segment-editor-carousel-width-basis: 56.25lvh;
   }
 }
 
@@ -22711,8 +22715,8 @@ textarea {
 .studio-segment-editor__carousel {
   position: relative;
   width: min(100%, var(--studio-segment-editor-carousel-width));
-  height: auto;
-  max-height: 100%;
+  height: var(--studio-segment-editor-carousel-height, auto);
+  max-height: none;
   aspect-ratio: 9 / 16;
   justify-self: end;
   overscroll-behavior-x: contain;
@@ -28243,7 +28247,8 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   }
 
   .studio-segment-editor__preview-column {
-    --studio-segment-editor-carousel-width: min(400px, calc((var(--studio-segment-editor-viewport-height) - 360px) * 9 / 16));
+    --studio-segment-editor-carousel-width: clamp(180px, calc(var(--studio-segment-editor-carousel-width-basis) - 202.5px), 400px);
+    --studio-segment-editor-carousel-height: clamp(320px, calc(var(--studio-segment-editor-viewport-height) - 360px), 711px);
     grid-column: auto;
     order: 1;
     gap: 6px;
@@ -34152,7 +34157,8 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
   --studio-segment-editor-layout-height: calc(var(--studio-segment-editor-viewport-height) - 108px);
   --studio-segment-editor-panel-width: clamp(460px, 34vw, 600px);
-  --studio-segment-editor-carousel-width: min(430px, calc((var(--studio-segment-editor-viewport-height) - 324px) * 9 / 16));
+  --studio-segment-editor-carousel-width: clamp(220px, calc(var(--studio-segment-editor-carousel-width-basis) - 182.25px), 430px);
+  --studio-segment-editor-carousel-height: clamp(391px, calc(var(--studio-segment-editor-viewport-height) - 324px), 764px);
   --studio-segment-editor-side-card-width: 56%;
   --studio-segment-editor-side-card-offset: -28%;
   display: grid;
@@ -35627,6 +35633,7 @@ html, body {
   align-self: center;
   justify-self: center;
   width: var(--studio-segment-editor-segment-area-width);
+  min-width: var(--studio-segment-editor-carousel-width);
   height: 100%;
   max-height: 100%;
   margin: 0;
@@ -35653,9 +35660,12 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__carousel {
   position: relative;
   justify-self: center;
-  width: min(100%, var(--studio-segment-editor-carousel-width));
-  max-width: min(100%, var(--studio-segment-editor-carousel-width));
-  height: min(100%, calc(var(--studio-segment-editor-carousel-width) * 16 / 9));
+  width: var(--studio-segment-editor-carousel-width);
+  min-width: var(--studio-segment-editor-carousel-width);
+  max-width: calc(100vw - 48px);
+  height: var(--studio-segment-editor-carousel-height, auto);
+  max-height: none;
+  aspect-ratio: 9 / 16;
   cursor: grab;
   touch-action: pan-y;
   user-select: none;
@@ -35671,6 +35681,7 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__cards {
+  min-width: 100%;
   z-index: 1;
 }
 
@@ -35680,7 +35691,9 @@ html, body {
   right: auto;
   top: 0;
   width: 100%;
+  min-width: var(--studio-segment-editor-carousel-width);
   height: 100%;
+  min-height: var(--studio-segment-editor-carousel-height, calc(var(--studio-segment-editor-carousel-width) * 16 / 9));
   opacity: var(--studio-segment-card-opacity, 1);
   transform: translateX(calc(-50% + var(--studio-segment-card-x, 0%))) scale(var(--studio-segment-card-scale, 1));
   transform-origin: center center;
@@ -35701,6 +35714,8 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-media {
   isolation: isolate;
+  min-width: var(--studio-segment-editor-carousel-width);
+  min-height: var(--studio-segment-editor-carousel-height, calc(var(--studio-segment-editor-carousel-width) * 16 / 9));
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(2, 6, 12, 0.92)),
@@ -36132,7 +36147,8 @@ html, body {
 @media (max-width: 1180px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
     --studio-segment-editor-panel-width: clamp(460px, 42vw, 560px);
-    --studio-segment-editor-carousel-width: min(410px, calc((var(--studio-segment-editor-viewport-height) - 300px) * 9 / 16));
+    --studio-segment-editor-carousel-width: clamp(220px, calc(var(--studio-segment-editor-carousel-width-basis) - 168.75px), 410px);
+    --studio-segment-editor-carousel-height: clamp(391px, calc(var(--studio-segment-editor-viewport-height) - 300px), 729px);
     gap: 18px;
   }
 
@@ -36144,7 +36160,8 @@ html, body {
 @media (max-width: 980px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
     --studio-segment-editor-panel-width: min(100%, 560px);
-    --studio-segment-editor-carousel-width: min(410px, calc((var(--studio-segment-editor-viewport-height) - 330px) * 9 / 16));
+    --studio-segment-editor-carousel-width: clamp(180px, calc(var(--studio-segment-editor-carousel-width-basis) - 185.625px), 410px);
+    --studio-segment-editor-carousel-height: clamp(320px, calc(var(--studio-segment-editor-viewport-height) - 330px), 729px);
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto auto;
     min-height: 0;
@@ -36279,7 +36296,8 @@ html, body {
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-carousel-width: clamp(150px, calc((var(--studio-segment-editor-viewport-height) - 520px) * 9 / 16), 260px);
+    --studio-segment-editor-carousel-width: clamp(150px, calc(var(--studio-segment-editor-carousel-width-basis) - 292.5px), 260px);
+    --studio-segment-editor-carousel-height: clamp(267px, calc(var(--studio-segment-editor-viewport-height) - 520px), 462px);
     grid-template-rows: max-content max-content max-content;
     align-content: start;
     gap: 12px;
@@ -36378,7 +36396,7 @@ html, body {
 
 @media (max-width: 640px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-carousel-width: min(372px, calc((var(--studio-segment-editor-viewport-height) - 336px) * 9 / 16));
+    --studio-segment-editor-carousel-width: clamp(180px, calc(var(--studio-segment-editor-carousel-width-basis) - 189px), 372px);
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-mode-block {
@@ -38292,9 +38310,10 @@ html, body {
     --studio-segment-editor-panel-width: clamp(860px, 68vw, 980px) !important;
     --studio-segment-editor-carousel-width: clamp(
       220px,
-      calc((var(--studio-segment-editor-viewport-height) - 500px) * 9 / 16),
+      calc(var(--studio-segment-editor-carousel-width-basis) - 281.25px),
       450px
     );
+    --studio-segment-editor-carousel-height: clamp(391px, calc(var(--studio-segment-editor-viewport-height) - 500px), 800px);
     grid-template-rows: minmax(0, 1fr) auto !important;
     column-gap: clamp(24px, 3vw, 56px) !important;
   }
@@ -38654,13 +38673,17 @@ html, body {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-closed .studio-segment-editor__prompt-column {
     grid-column: 1;
     grid-row: 1;
-    visibility: visible !important;
-    opacity: 1 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
     filter: none !important;
     pointer-events: none !important;
     transform: none !important;
     animation: none !important;
     transition: none !important;
+    z-index: -1 !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    overflow: hidden !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open .studio-canvas-prompt__inner {

@@ -14973,7 +14973,7 @@ export function WorkspacePage({
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
-  const [selectedSegmentReferenceSceneAssetId, setSelectedSegmentReferenceSceneAssetId] = useState<number | null>(null);
+  const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [segmentReferencePanelOpen, setSegmentReferencePanelOpen] = useState(false);
   const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<"characters" | "scene">("characters");
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
@@ -16507,7 +16507,7 @@ export function WorkspacePage({
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
-      setSelectedSegmentReferenceSceneAssetId(null);
+      setSelectedSegmentReferenceSceneKey(null);
       setSegmentReferencePanelOpen(false);
       setSegmentReferencePanelTab("characters");
       setSelectedCustomVideo(null);
@@ -17364,12 +17364,13 @@ export function WorkspacePage({
         if (controller.signal.aborted) {
           if (controller.signal.reason === "media-library-timeout") {
             setMediaLibraryError(mediaLibraryItems.length > 0 ? null : "Сервер слишком долго отвечает. Попробуйте обновить.");
-            setIsMediaLibraryLoading(false);
           }
+          setIsMediaLibraryLoading(false);
           return;
         }
 
         if (isAbortLikeError(error)) {
+          setIsMediaLibraryLoading(false);
           return;
         }
 
@@ -18461,6 +18462,7 @@ export function WorkspacePage({
             : segment.index + 1,
           mediaIdentityKey,
           previewKind: mediaSurface.previewKind,
+          referenceKey: mediaIdentityKey,
           segment,
           videoPosterReferenceUrl,
           videoReferenceUrl,
@@ -18477,11 +18479,89 @@ export function WorkspacePage({
   );
   const selectedSegmentReferenceScene = useMemo(
     () =>
-      selectedSegmentReferenceSceneAssetId
-        ? segmentReferenceSceneOptions.find((option) => option.assetId === selectedSegmentReferenceSceneAssetId) ?? null
+      selectedSegmentReferenceSceneKey
+        ? segmentReferenceSceneOptions.find((option) => option.referenceKey === selectedSegmentReferenceSceneKey) ?? null
         : null,
-    [segmentReferenceSceneOptions, selectedSegmentReferenceSceneAssetId],
+    [segmentReferenceSceneOptions, selectedSegmentReferenceSceneKey],
   );
+  const resolveSegmentReferenceAssetId = async (
+    option: (typeof segmentReferenceSceneOptions)[number],
+    referenceKind: "character" | "scene",
+  ) => {
+    const videoReferenceUrl = option.videoReferenceUrl?.trim();
+    const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
+    if (option.assetId && !shouldUseVideoFrame) {
+      return option.assetId;
+    }
+
+    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId) {
+      return null;
+    }
+
+    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.mediaIdentityKey}`;
+    const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
+    if (cachedAssetId) {
+      return cachedAssetId;
+    }
+
+    const frameFileName = `segment-${option.displayNumber}-reference-frame.jpg`;
+    let frameAsset: StudioCustomVideoFile;
+    try {
+      frameAsset = {
+        dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
+        fileName: frameFileName,
+        fileSize: 0,
+        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+      };
+    } catch (error) {
+      const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
+      if (!posterReferenceUrl) {
+        throw error;
+      }
+
+      frameAsset = {
+        fileName: frameFileName,
+        fileSize: 0,
+        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+        remoteUrl: posterReferenceUrl,
+      };
+    }
+
+    const assetId = await ensureStudioUploadedAssetId(frameAsset, {
+      fallbackFileName: frameAsset.fileName,
+      fallbackMimeType: frameAsset.mimeType,
+      kind: "segment_source",
+      language: selectedLanguage,
+      mediaType: "photo",
+      projectId: segmentEditorDraft.projectId,
+      role: "segment_source",
+      segmentIndex: option.segment.index,
+    });
+    if (!assetId) {
+      throw new Error(
+        referenceKind === "scene"
+          ? workspaceText(locale, "Не удалось подготовить кадр видео для сцены.", "Could not prepare the video frame for the scene.")
+          : workspaceText(locale, "Не удалось подготовить кадр видео для персонажа.", "Could not prepare the video frame for the character."),
+      );
+    }
+
+    segmentReferenceFrameAssetIdsRef.current.set(cacheKey, assetId);
+    return assetId;
+  };
+  const resolveSegmentReferenceSceneAssetIds = async (
+    option: (typeof segmentReferenceSceneOptions)[number] | null,
+  ) => {
+    if (!option) {
+      return [];
+    }
+
+    const assetId = await resolveSegmentReferenceAssetId(option, "scene");
+    if (!assetId) {
+      throw new Error(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
+    }
+
+    return [assetId];
+  };
   const segmentEditorPendingDeleteSegment =
     typeof segmentEditorPendingDeleteIndex === "number"
       ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentEditorPendingDeleteIndex) ?? null
@@ -18503,7 +18583,7 @@ export function WorkspacePage({
   }, [segmentEditorDraft?.projectId]);
   useEffect(() => {
     setSelectedSegmentReferenceCharacterIds([]);
-    setSelectedSegmentReferenceSceneAssetId(null);
+    setSelectedSegmentReferenceSceneKey(null);
     setSegmentReferencePanelOpen(false);
     setSegmentReferencePanelTab("characters");
   }, [activeSegment?.index, segmentEditorDraft?.projectId]);
@@ -18557,12 +18637,12 @@ export function WorkspacePage({
   }, [segmentProjectCharacters]);
   useEffect(() => {
     if (
-      selectedSegmentReferenceSceneAssetId &&
-      !segmentReferenceSceneOptions.some((option) => option.assetId === selectedSegmentReferenceSceneAssetId)
+      selectedSegmentReferenceSceneKey &&
+      !segmentReferenceSceneOptions.some((option) => option.referenceKey === selectedSegmentReferenceSceneKey)
     ) {
-      setSelectedSegmentReferenceSceneAssetId(null);
+      setSelectedSegmentReferenceSceneKey(null);
     }
-  }, [segmentReferenceSceneOptions, selectedSegmentReferenceSceneAssetId]);
+  }, [segmentReferenceSceneOptions, selectedSegmentReferenceSceneKey]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
@@ -23866,7 +23946,7 @@ export function WorkspacePage({
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const sceneReferenceAssetIds = selectedSegmentReferenceSceneAssetId ? [selectedSegmentReferenceSceneAssetId] : [];
+    const sceneReferenceOption = selectedSegmentReferenceScene;
     const preserveCharacters = characterIds.length > 0;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
@@ -23895,6 +23975,8 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
       }
@@ -23997,7 +24079,7 @@ export function WorkspacePage({
       return;
     }
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const sceneReferenceAssetIds = selectedSegmentReferenceSceneAssetId ? [selectedSegmentReferenceSceneAssetId] : [];
+    const sceneReferenceOption = selectedSegmentReferenceScene;
     const preserveCharacters = characterIds.length > 0;
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -24025,6 +24107,8 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+
       const requestImageEditJob = async (request: WorkspaceSegmentImageEditRequest) => {
         const response = await fetch("/api/studio/segment-image-edit/jobs", {
           method: "POST",
@@ -24202,7 +24286,7 @@ export function WorkspacePage({
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const sceneReferenceAssetIds = selectedSegmentReferenceSceneAssetId ? [selectedSegmentReferenceSceneAssetId] : [];
+    const sceneReferenceOption = selectedSegmentReferenceScene;
     const preserveCharacters = characterIds.length > 0;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
@@ -24232,6 +24316,8 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
       }
@@ -30508,7 +30594,7 @@ export function WorkspacePage({
   };
   const clearSegmentVisualReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
-    setSelectedSegmentReferenceSceneAssetId(null);
+    setSelectedSegmentReferenceSceneKey(null);
   };
   const renderSegmentReferencePreview = (
     segment: WorkspaceSegmentEditorDraftSegment,
@@ -30535,65 +30621,6 @@ export function WorkspacePage({
       </span>
     );
   };
-  const resolveSegmentReferenceCharacterAssetId = async (
-    option: (typeof segmentReferenceSceneOptions)[number],
-  ) => {
-    const videoReferenceUrl = option.videoReferenceUrl?.trim();
-    const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
-    if (option.assetId && !shouldUseVideoFrame) {
-      return option.assetId;
-    }
-
-    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId) {
-      return null;
-    }
-
-    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.mediaIdentityKey}`;
-    const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
-    if (cachedAssetId) {
-      return cachedAssetId;
-    }
-
-    const frameFileName = `segment-${option.displayNumber}-reference-frame.jpg`;
-    let frameAsset: StudioCustomVideoFile;
-    try {
-      frameAsset = {
-        dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
-        fileName: frameFileName,
-        fileSize: 0,
-        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
-      };
-    } catch (error) {
-      const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
-      if (!posterReferenceUrl) {
-        throw error;
-      }
-
-      frameAsset = {
-        fileName: frameFileName,
-        fileSize: 0,
-        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
-        remoteUrl: posterReferenceUrl,
-      };
-    }
-
-    const assetId = await ensureStudioUploadedAssetId(frameAsset, {
-      fallbackFileName: frameAsset.fileName,
-      fallbackMimeType: frameAsset.mimeType,
-      kind: "segment_source",
-      language: selectedLanguage,
-      mediaType: "photo",
-      projectId: segmentEditorDraft.projectId,
-      role: "segment_source",
-      segmentIndex: option.segment.index,
-    });
-    if (!assetId) {
-      throw new Error("Не удалось подготовить кадр видео для персонажа.");
-    }
-
-    segmentReferenceFrameAssetIdsRef.current.set(cacheKey, assetId);
-    return assetId;
-  };
   const handleCreateSegmentReferenceCharacter = async (
     option: (typeof segmentReferenceSceneOptions)[number],
   ) => {
@@ -30610,7 +30637,7 @@ export function WorkspacePage({
     setSegmentProjectCharactersError(null);
 
     try {
-      const referenceAssetId = await resolveSegmentReferenceCharacterAssetId(option);
+      const referenceAssetId = await resolveSegmentReferenceAssetId(option, "character");
       if (!referenceAssetId) {
         throw new Error(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
       }
@@ -30805,25 +30832,36 @@ export function WorkspacePage({
             <div className="studio-segment-references__body">
               <div className="studio-segment-references__grid">
                 {segmentReferenceSceneOptions.map((option) => {
-                  const isSelected = Boolean(option.assetId && option.assetId === selectedSegmentReferenceSceneAssetId);
+                  const isSelected = option.referenceKey === selectedSegmentReferenceSceneKey;
+                  const usesVideoFrame = option.previewKind === "video" && Boolean(option.videoReferenceUrl);
+                  const canUseScene = Boolean(option.assetId || option.videoReferenceUrl);
                   return (
                     <button
                       key={`scene-reference:${option.segment.index}`}
                       className={`studio-segment-references__card${isSelected ? " is-selected" : ""}`}
                       type="button"
                       aria-pressed={isSelected}
-                      disabled={!option.assetId}
-                      onClick={() => setSelectedSegmentReferenceSceneAssetId(isSelected ? null : option.assetId)}
+                      disabled={!canUseScene}
+                      onClick={() => setSelectedSegmentReferenceSceneKey(isSelected ? null : option.referenceKey)}
                     >
                       {renderSegmentReferencePreview(option.segment, `scene-reference:${option.segment.index}`)}
+                      {usesVideoFrame ? (
+                        <span className="studio-segment-references__badge">
+                          {workspaceText(locale, "Кадр", "Frame")}
+                        </span>
+                      ) : null}
                       <span className="studio-segment-references__card-copy">
                         <strong>{workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`)}</strong>
                         <small>
-                          {option.assetId
+                          {canUseScene
                             ? isSelected
-                              ? workspaceText(locale, "Выбрана", "Selected")
-                              : workspaceText(locale, "Использовать сцену", "Use scene")
-                            : workspaceText(locale, "Нет фото", "No photo")}
+                              ? usesVideoFrame
+                                ? workspaceText(locale, "Кадр видео выбран", "Video frame selected")
+                                : workspaceText(locale, "Выбрана", "Selected")
+                              : usesVideoFrame
+                                ? workspaceText(locale, "Использовать кадр видео", "Use video frame")
+                                : workspaceText(locale, "Использовать сцену", "Use scene")
+                            : workspaceText(locale, "Нет визуала", "No visual")}
                         </small>
                       </span>
                     </button>
@@ -31654,7 +31692,7 @@ export function WorkspacePage({
                             <strong>{workspaceText(locale, "Открываем медиатеку", "Opening media library")}</strong>
                             <span>{workspaceText(locale, "Подготавливаем превью.", "Preparing previews.")}</span>
                           </div>
-                        ) : isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
+                        ) : isMediaLibraryInitialLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
                           <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
                             <strong>{workspaceText(locale, "Загружаем медиатеку", "Loading media library")}</strong>
                             <span>{workspaceText(locale, "Собираем AI-визуалы.", "Collecting AI visuals.")}</span>
@@ -34574,7 +34612,7 @@ export function WorkspacePage({
                                   <p>{workspaceText(locale, "Подготавливаем превью.", "Preparing previews.")}</p>
                                 </div>
                               </div>
-                            ) : isMediaLibraryLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
+                            ) : isMediaLibraryInitialLoading && segmentAiPhotoModalLibraryItems.length === 0 ? (
                               <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
                                 <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                                 <div className="studio-ai-photo-modal__library-state-copy">

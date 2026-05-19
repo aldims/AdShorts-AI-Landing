@@ -239,8 +239,10 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
         return {
             current_video: getProjectSegmentMarker(currentEntry, `project:${projectId}:segment:${index}:current`),
             duration,
+            duration_mode: normalizeText(record.duration_mode),
             end_time: endTime,
             index,
+            manual_duration_seconds: normalizeNumber(record.manual_duration_seconds),
             media_type: normalizeMediaType(currentEntry?.media_type ?? originalEntry?.media_type ?? record.media_type),
             original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
             speech_duration: normalizeNumber(record.speech_duration),
@@ -683,6 +685,9 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     const startTime = normalizeNumber(payload.start_time) ?? 0;
     const endTime = normalizeNumber(payload.end_time) ?? Math.max(startTime, startTime + (normalizeNumber(payload.duration) ?? 0));
     const duration = normalizeNumber(payload.duration) ?? Math.max(0, endTime - startTime);
+    const durationMode = normalizeSegmentDurationMode(payload.duration_mode);
+    const manualDurationSeconds = normalizeManualDurationSeconds(payload.manual_duration_seconds) ??
+        (durationMode === "manual" ? normalizeManualDurationSeconds(duration) : null);
     const speechStartTime = normalizeNumber(payload.speech_start_time);
     const speechEndTime = normalizeNumber(payload.speech_end_time);
     const speechDuration = normalizeNumber(payload.speech_duration) ??
@@ -730,10 +735,10 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
             : null,
         currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
         duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
-        durationMode: normalizeSegmentDurationMode(payload.duration_mode),
+        durationMode,
         endTime,
         index,
-        manualDurationSeconds: normalizeManualDurationSeconds(payload.manual_duration_seconds),
+        manualDurationSeconds,
         mediaType: resolvedMediaType,
         originalAsset,
         originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),
