@@ -23,6 +23,7 @@ import {
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
+  isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
@@ -813,6 +814,115 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(isWorkspaceSegmentDraftVisualResettable(segment)).toBe(false);
+  });
+
+  it("does not mark saved current visuals as new visual changes against the editor baseline", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const savedGeneratedAsset = createMediaAsset(303, {
+      kind: "source_ai_video",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const savedSegment = createDraftSegment({
+      currentAsset: savedGeneratedAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+
+    expect(isWorkspaceSegmentDraftVisualResettable(savedSegment)).toBe(true);
+    expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(savedSegment, savedSegment)).toBe(false);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(savedSegment), createDraftSession(savedSegment))).toEqual([]);
+  });
+
+  it("marks only the generated segment as a visual change when the other segment already had saved media", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const savedGeneratedAsset = createMediaAsset(303, {
+      kind: "source_ai_video",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const untouchedSavedSegment = createDraftSegment({
+      currentAsset: savedGeneratedAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      index: 0,
+      mediaType: "video",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+    const photoSegment = createDraftSegment({
+      currentAsset: originalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      index: 1,
+      mediaType: "photo",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+    const animatedSegment = createDraftSegment({
+      ...photoSegment,
+      aiVideoAsset: {
+        assetId: 404,
+        fileName: "segment-2-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/404",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      currentAsset: createMediaAsset(404, {
+        kind: "source_ai_video",
+        mediaType: "video",
+        role: "segment_current",
+        sourceKind: "ai_generated",
+      }),
+      currentPlaybackUrl: "/api/workspace/media-assets/404",
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      videoAction: "photo_animation",
+    });
+    const baseline = {
+      ...createDraftSession(untouchedSavedSegment),
+      segments: [untouchedSavedSegment, photoSegment],
+    };
+    const draft = {
+      ...baseline,
+      segments: [untouchedSavedSegment, animatedSegment],
+    };
+
+    expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(untouchedSavedSegment, untouchedSavedSegment)).toBe(false);
+    expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(animatedSegment, photoSegment)).toBe(true);
+    expect(
+      isWorkspaceSegmentDraftVisualChangedFromBaseline(animatedSegment, {
+        ...animatedSegment,
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
+        videoAction: "original",
+      }),
+    ).toBe(true);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, baseline)).toEqual([
+      expect.objectContaining({
+        label: "Сегмент 2: добавлено движение в фото",
+        resetVisual: true,
+        segmentIndex: 1,
+      }),
+    ]);
   });
 
   it("keeps AI photo replacements resettable after a fresh session refresh", () => {

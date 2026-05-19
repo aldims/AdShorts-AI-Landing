@@ -2400,6 +2400,36 @@ export const isWorkspaceSegmentDraftVisualResettable = (segment: WorkspaceSegmen
   return isWorkspaceSegmentDraftVisualEdited(segment);
 };
 
+const getWorkspaceSegmentDraftVisualChangeIdentity = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  JSON.stringify([
+    getWorkspaceSegmentCurrentVisualIdentityKey(segment),
+    segment.currentSourceKind,
+    segment.mediaType,
+    segment.videoAction,
+    segment.aiVideoGeneratedMode ?? null,
+    getWorkspaceSegmentCustomAssetIdentityKey(segment.customVideo),
+    getWorkspaceSegmentCustomAssetIdentityKey(segment.aiPhotoAsset),
+    getWorkspaceSegmentCustomAssetIdentityKey(segment.aiVideoAsset),
+    getWorkspaceSegmentCustomAssetIdentityKey(segment.imageEditAsset),
+    getWorkspaceSegmentCustomAssetIdentityKey(segment.photoAnimationSourceAsset),
+    Boolean(segment.visualReset && !isWorkspaceSegmentVisualResetApplied(segment)),
+  ]);
+
+export const isWorkspaceSegmentDraftVisualChangedFromBaseline = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!baselineSegment) {
+    return isWorkspaceSegmentDraftVisualResettable(segment);
+  }
+
+  if (isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)) {
+    return false;
+  }
+
+  return getWorkspaceSegmentDraftVisualChangeIdentity(segment) !== getWorkspaceSegmentDraftVisualChangeIdentity(baselineSegment);
+};
+
 export const resolveWorkspaceSegmentActivationPlaybackIndex = (
   segments: Array<{ index: number }>,
   boundedSegmentArrayIndex: number,
@@ -2641,7 +2671,7 @@ const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegment
   return "обновлен визуал";
 };
 
-const getWorkspaceSegmentSceneSoundIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
+const getWorkspaceSegmentCustomAssetIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
   if (!asset) {
     return null;
   }
@@ -2666,6 +2696,8 @@ const getWorkspaceSegmentSceneSoundIdentityKey = (asset: StudioCustomVideoFile |
     .join(":");
   return fallbackIdentity || null;
 };
+
+const getWorkspaceSegmentSceneSoundIdentityKey = getWorkspaceSegmentCustomAssetIdentityKey;
 
 const isWorkspaceSegmentDraftSceneSoundEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -2855,7 +2887,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
       resetText = true;
     }
 
-    const isVisualEdited = isWorkspaceSegmentDraftVisualResettable(segment);
+    const isVisualEdited = isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment);
     const isVisualResetChange = isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment);
     if (isVisualEdited || isVisualResetChange) {
       segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
@@ -18500,7 +18532,7 @@ export function WorkspacePage({
           isSoundEdited: isWorkspaceSegmentDraftSceneSoundEdited,
           isTextEdited: (segment) => isWorkspaceSegmentDraftTextEdited(segment),
           isVisualEdited: (segment, baselineSegment) =>
-            isWorkspaceSegmentDraftVisualResettable(segment) ||
+            isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ||
             isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment),
           isVoiceEdited: isWorkspaceSegmentDraftVoiceEdited,
         },
@@ -29502,7 +29534,7 @@ export function WorkspacePage({
                 (baselineSegment) => baselineSegment.index === segment.index,
               );
               const canBackVisual =
-                isWorkspaceSegmentDraftVisualResettable(segment) ||
+                isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineVisualSegment) ||
                 isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
               const canForwardVisual = Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]);
 
@@ -31518,7 +31550,13 @@ export function WorkspacePage({
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
+                                const baselineVisualSegment = segmentEditorChecklistBaseSession?.segments.find(
+                                  (baselineSegment) => baselineSegment.index === segment.index,
+                                );
                                 const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
+                                const isSegmentVisualChanged =
+                                  isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineVisualSegment) ||
+                                  isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
                                 const segmentSubtitleEditRequestId =
                                   segmentTimelineTextEditRequest?.segmentIndex === segment.index
                                     ? segmentTimelineTextEditRequest.requestId
@@ -31531,7 +31569,7 @@ export function WorkspacePage({
                                   <div
                                     key={`segment-card:${nextSegmentArrayIndex}:${segment.index}:${mediaKey}`}
                                     className={`studio-segment-editor__card ${slotClass}${isVisualGenerationPending ? " is-pending" : ""}${
-                                      canResetVisual ? " is-visual-edited" : ""
+                                      isSegmentVisualChanged ? " is-visual-edited" : ""
                                     }`}
                                     style={getSegmentCarouselCardStyle(offset)}
                                     aria-current={offset === 0 ? "true" : undefined}
@@ -31721,7 +31759,7 @@ export function WorkspacePage({
                                     </div>
                                     {isActiveCard ? (
                                       <div className="studio-segment-editor__card-visual-meta">
-                                        {canResetVisual ? (
+                                        {isSegmentVisualChanged ? (
                                           <span className="studio-segment-editor__card-visual-status">{workspaceText(locale, "Визуал изменен", "Visual changed")}</span>
                                         ) : (
                                           <span className="studio-segment-editor__card-visual-spacer" aria-hidden="true"></span>
