@@ -321,6 +321,7 @@ type WorkspaceGenerateOptions = {
   subtitleColorId?: string;
   subtitleStyleId?: string;
   videoMode?: StudioVideoMode | string;
+  videoModeChanged?: boolean;
   versionRootProjectAdId?: number;
   voiceEnabled?: boolean;
   voiceId?: string;
@@ -7925,7 +7926,7 @@ const resolveWorkspaceSegmentExportVideoAction = (
   return videoAction;
 };
 
-const isWorkspaceSegmentCustomVisualSameAsExisting = (
+const isWorkspaceSegmentCustomVisualSameAsOriginal = (
   segment: WorkspaceSegmentEditorDraftSegment,
   asset: StudioCustomVideoFile | null | undefined,
 ) => {
@@ -7934,9 +7935,7 @@ const isWorkspaceSegmentCustomVisualSameAsExisting = (
     return false;
   }
 
-  return [getWorkspaceSegmentCurrentVisualIdentityKey(segment), getWorkspaceSegmentOriginalVisualIdentityKey(segment)]
-    .filter(Boolean)
-    .includes(assetIdentity);
+  return getWorkspaceSegmentOriginalVisualIdentityKey(segment) === assetIdentity;
 };
 
 export const buildWorkspaceSegmentEditorPayload = async (
@@ -7989,7 +7988,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(segment.sceneSoundAsset?.assetId) ?? undefined;
 
     if (payloadVideoAction === "custom") {
-      if (isWorkspaceSegmentCustomVisualSameAsExisting(segment, customVisualAsset)) {
+      if (isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset)) {
         throw new Error(
           `Визуал сегмента ${segment.index + 1} не обновился. Сгенерируйте ИИ фото ещё раз или обновите редактор.`,
         );
@@ -18484,6 +18483,10 @@ export function WorkspacePage({
 
       delete segmentThumbButtonRefs.current[segmentIndex];
     };
+  const getSegmentThumbDragSourceElement = (segmentArrayIndex: number) => {
+    const segment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    return segment ? (segmentThumbButtonRefs.current[segment.index] ?? null) : null;
+  };
   const setSegmentTimelineVoiceButtonRef =
     (segmentIndex: number) =>
     (element: HTMLButtonElement | null) => {
@@ -19000,12 +19003,14 @@ export function WorkspacePage({
   };
   const startSegmentThumbPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>, draggedIndex: number) => {
     setSegmentTimelineVisualMenuSegmentIndex(null);
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const bounds = (getSegmentThumbDragSourceElement(draggedIndex) ?? event.currentTarget).getBoundingClientRect();
+    const offsetX = Math.min(Math.max(event.clientX - bounds.left, 0), bounds.width);
+    const offsetY = Math.min(Math.max(event.clientY - bounds.top, 0), bounds.height);
     const nextDragState: WorkspaceSegmentThumbDragState = {
       draggedIndex,
       height: bounds.height,
-      offsetX: event.clientX - bounds.left,
-      offsetY: event.clientY - bounds.top,
+      offsetX,
+      offsetY,
       pointerId: event.pointerId,
       width: bounds.width,
       x: event.clientX,
@@ -26113,6 +26118,7 @@ export function WorkspacePage({
       appendStudioFormValue(formData, "subtitleStyleId", effectiveSubtitleStyleId);
       appendStudioFormValue(formData, "versionRootProjectAdId", options?.versionRootProjectAdId);
       appendStudioFormValue(formData, "videoMode", effectiveVideoMode);
+      appendStudioFormValue(formData, "videoModeChanged", Boolean(options?.videoModeChanged));
       appendStudioFormValue(formData, "voiceEnabled", effectiveVoiceEnabled);
       appendStudioFormValue(formData, "voiceId", effectiveVoiceId);
       appendStudioFormValue(formData, "brandText", effectiveBrandText || undefined);
@@ -26290,6 +26296,7 @@ export function WorkspacePage({
     const projectId = effectiveSegmentEditorSession?.projectId ?? generatedVideo?.adId ?? undefined;
     const generationOverrides = getWorkspaceSegmentEditorGenerationOverrides(effectiveSegmentEditorSession);
     const editedFromProjectAdId = effectiveSegmentEditorSession?.projectId ?? undefined;
+    const wasVideoModeExplicitlyChanged = selectedVideoModeExplicitlyChangedRef.current;
     const versionRootProjectAdId = effectiveSegmentEditorSession?.projectId
       ? (projects.find((project) => project.adId === effectiveSegmentEditorSession.projectId)?.versionRootProjectAdId ??
         effectiveSegmentEditorSession.projectId)
@@ -26300,8 +26307,9 @@ export function WorkspacePage({
         isRegeneration: true,
         videoMode: resolveWorkspaceRegenerationVideoMode({
           selectedVideoMode,
-          wasVideoModeExplicitlyChanged: selectedVideoModeExplicitlyChangedRef.current,
+          wasVideoModeExplicitlyChanged,
         }),
+        videoModeChanged: wasVideoModeExplicitlyChanged,
         ...generationOverrides,
       };
     }
@@ -26312,8 +26320,9 @@ export function WorkspacePage({
       isRegeneration: true,
       videoMode: resolveWorkspaceRegenerationVideoMode({
         selectedVideoMode,
-        wasVideoModeExplicitlyChanged: selectedVideoModeExplicitlyChangedRef.current,
+        wasVideoModeExplicitlyChanged,
       }),
+      videoModeChanged: wasVideoModeExplicitlyChanged,
       ...generationOverrides,
       projectId,
       ...(effectiveSegmentEditorSession ? { segmentEditorSession: effectiveSegmentEditorSession } : {}),
@@ -29220,8 +29229,14 @@ export function WorkspacePage({
           <div className="studio-segment-editor__timeline-track">
             {segmentEditorTimelineVisualRow?.spans.map((span, index) => {
               const isLastSpan = index === (segmentEditorTimelineVisualRow?.spans.length ?? 0) - 1;
+              const segmentArrayIndex = span.arrayIndex ?? index;
+              const segment = segmentEditorDraft.segments[segmentArrayIndex] ?? null;
               const startBoundarySegment = index > 0 ? segmentEditorDraft.segments[index - 1] ?? null : null;
               const endBoundarySegment = isLastSpan ? segmentEditorDraft.segments[index] ?? null : null;
+              const segmentDisplayNumber = segment
+                ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index)
+                : segmentArrayIndex + 1;
+              const isDraggedTimelineHandle = segmentArrayIndex === draggedSegmentThumbIndex;
 
               return (
                 <div
@@ -29255,6 +29270,43 @@ export function WorkspacePage({
                         endBoundarySegment.index,
                       ),
                     })
+                  ) : null}
+                  {segment ? (
+                    <button
+                      className={`studio-segment-editor__timeline-drag-handle${isLastSpan ? " is-last" : ""}${
+                        isDraggedTimelineHandle ? " is-dragging" : ""
+                      }`}
+                      type="button"
+                      disabled={!isSegmentThumbReorderEnabled}
+                      aria-grabbed={isDraggedTimelineHandle ? true : undefined}
+                      aria-label={workspaceText(
+                        locale,
+                        `Перетащить сцену ${segmentDisplayNumber}`,
+                        `Drag scene ${segmentDisplayNumber}`,
+                      )}
+                      title={workspaceText(locale, "Перетащить сцену", "Drag scene")}
+                      onPointerCancel={(event) => finishSegmentThumbPointerDrag(segmentArrayIndex)(event, { cancelled: true })}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleSegmentThumbPointerDown(segmentArrayIndex)(event);
+                      }}
+                      onPointerMove={handleSegmentThumbPointerMove(segmentArrayIndex)}
+                      onPointerUp={finishSegmentThumbPointerDrag(segmentArrayIndex)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                    >
+                      <span className="studio-segment-editor__timeline-drag-handle-dots" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    </button>
                   ) : null}
                 </div>
               );
@@ -29334,12 +29386,7 @@ export function WorkspacePage({
                       type="button"
                       aria-busy={isThumbVisualGenerationPending ? true : undefined}
                       aria-pressed={isActiveThumb}
-                      aria-grabbed={isDraggedThumb ? true : undefined}
                       aria-label={workspaceText(locale, `Открыть визуал сцены ${index + 1}`, `Open scene ${index + 1} visual`)}
-                      onPointerCancel={(event) => finishSegmentThumbPointerDrag(index)(event, { cancelled: true })}
-                      onPointerDown={handleSegmentThumbPointerDown(index)}
-                      onPointerMove={handleSegmentThumbPointerMove(index)}
-                      onPointerUp={finishSegmentThumbPointerDrag(index)}
                       onClick={(event) => {
                         if (isSegmentThumbClickSuppressed()) {
                           event.preventDefault();

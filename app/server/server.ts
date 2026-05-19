@@ -859,6 +859,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
     subtitleStyleId: getFormDataString(formData, "subtitleStyleId"),
     versionRootProjectAdId: normalizeRequestPositiveInteger(getFormDataString(formData, "versionRootProjectAdId")),
     videoMode: getFormDataString(formData, "videoMode"),
+    videoModeChanged: getFormDataBoolean(formData, "videoModeChanged", false),
     voiceEnabled: getFormDataBoolean(formData, "voiceEnabled", true),
     voiceId: getFormDataString(formData, "voiceId"),
   };
@@ -3154,6 +3155,7 @@ app.post("/api/studio/generate", async (req, res) => {
         subtitleStyleId: typeof req.body?.subtitleStyleId === "string" ? req.body.subtitleStyleId.trim() : "",
         versionRootProjectAdId: normalizeRequestPositiveInteger(req.body?.versionRootProjectAdId),
         videoMode: typeof req.body?.videoMode === "string" ? req.body.videoMode.trim() : "",
+        videoModeChanged: Boolean(req.body?.videoModeChanged),
         voiceEnabled: req.body?.voiceEnabled !== false,
         voiceId: typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "",
       };
@@ -3183,6 +3185,7 @@ app.post("/api/studio/generate", async (req, res) => {
   const projectId = requestBody.projectId;
   const segmentEditor = requestBody.segmentEditor;
   const versionRootProjectAdId = requestBody.versionRootProjectAdId;
+  const videoModeChanged = requestBody.videoModeChanged;
 
   console.info("[studio] generate.brand-input", {
     brandLogoDataUrlLength: brandLogoFileDataUrl.length,
@@ -3228,6 +3231,7 @@ app.post("/api/studio/generate", async (req, res) => {
       subtitleStyleId,
       versionRootProjectAdId: versionRootProjectAdId ?? undefined,
       videoMode,
+      videoModeChanged,
       voiceEnabled,
       voiceId,
     });

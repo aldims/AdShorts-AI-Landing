@@ -4162,6 +4162,7 @@ export async function createStudioGenerationJob(
     subtitleStyleId?: string;
     versionRootProjectAdId?: number;
     videoMode?: string;
+    videoModeChanged?: boolean;
     voiceEnabled?: boolean;
     voiceId?: string;
   },
@@ -4405,6 +4406,7 @@ export async function createStudioGenerationJob(
         subtitle_color: normalizedSubtitleColorId,
         subtitle_style: normalizedSubtitleStyleId,
         video_mode: normalizedVideoMode,
+        video_mode_changed: Boolean(options?.videoModeChanged),
         voice_type: isVoiceEnabled ? undefined : "none",
         voice_code: normalizedVoiceId,
       })),

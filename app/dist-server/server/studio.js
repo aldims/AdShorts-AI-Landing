@@ -2970,6 +2970,22 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 })),
             }
             : undefined;
+        if (normalizedSegmentEditorAssetPayload) {
+            console.info("[studio] adsflow.segment-editor-payload", {
+                allowStructureChange: normalizedSegmentEditorAssetPayload.allow_structure_change,
+                projectId: normalizedProjectId ?? null,
+                segmentCount: normalizedSegmentEditorAssetPayload.segments.length,
+                segmentOrder: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.index),
+                segmentTimings: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
+                    duration: segment.duration ?? null,
+                    durationMode: segment.duration_mode ?? null,
+                    endTime: segment.end_time ?? null,
+                    index: segment.index,
+                    manualDurationSeconds: segment.manual_duration_seconds ?? null,
+                    startTime: segment.start_time ?? null,
+                })),
+            });
+        }
         const payload = await fetchAdsflowJson(buildAdsflowUrl("/api/web/generations"), {
             method: "POST",
             headers: {
@@ -3004,6 +3020,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 subtitle_color: normalizedSubtitleColorId,
                 subtitle_style: normalizedSubtitleStyleId,
                 video_mode: normalizedVideoMode,
+                video_mode_changed: Boolean(options?.videoModeChanged),
                 voice_type: isVoiceEnabled ? undefined : "none",
                 voice_code: normalizedVoiceId,
             })),

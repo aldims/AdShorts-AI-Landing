@@ -1127,6 +1127,52 @@ describe("WorkspacePage studio locale defaults", () => {
     ).rejects.toThrow("Визуал сегмента 1 не обновился");
   });
 
+  it("allows exporting an already-applied AI animation while adding scene sound", async () => {
+    const originalAsset = createMediaAsset(3543, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const animationAsset = createMediaAsset(7001, {
+      mediaType: "video",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 7001,
+        fileName: "segment-photo-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/7001",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      aiVideoGeneratedFromPrompt: "slow camera push",
+      aiVideoPrompt: "slow camera push",
+      aiVideoPromptInitialized: true,
+      currentAsset: animationAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/7001",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/3543",
+      originalSourceKind: "stock",
+      sceneSoundAsset: {
+        assetId: 8801,
+        fileName: "segment-scene-sound.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/8801",
+      },
+      videoAction: "photo_animation",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: 7001,
+      sceneSoundAssetId: 8801,
+      videoAction: "custom",
+    });
+  });
+
   it("keeps the latest AI photo visible while image edit is pending", () => {
     const segment = createDraftSegment({
       aiPhotoAsset: {
