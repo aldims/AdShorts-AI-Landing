@@ -1124,6 +1124,7 @@ type WorkspaceSegmentImageUpscaleJobStatusResponse = {
 type WorkspaceSegmentAiVideoJobCreateRequest = {
   characterContinuityMode?: "auto" | "off" | "force";
   characterIds?: number[];
+  durationSeconds?: number;
   imageAssetId?: number;
   imageDataUrl?: string;
   imageFileName?: string;
@@ -1149,6 +1150,7 @@ type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
+  durationSeconds?: number;
   language: StudioLanguage;
   projectId?: number;
   prompt?: string;
@@ -6411,6 +6413,29 @@ const getWorkspaceSegmentManualDurationMinimum = (
       : 1,
   );
 
+export const getWorkspaceSegmentVisualGenerationDurationSeconds = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!segment) {
+    return undefined;
+  }
+
+  const timelineDuration =
+    getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const timelineDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
+  const segmentDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+  const manualDurationCandidates = [manualDuration, timelineDurationSeconds, segmentDurationSeconds].filter(
+    (value): value is number => value !== null,
+  );
+  const resolvedDuration =
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" && manualDurationCandidates.length > 0
+      ? Math.max(...manualDurationCandidates)
+      : timelineDurationSeconds ?? segmentDurationSeconds;
+
+  return resolvedDuration !== null ? Number(resolvedDuration.toFixed(3)) : undefined;
+};
+
 const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   session?: Pick<WorkspaceSegmentEditorDraftSession, "subtitleType" | "voiceType"> | null,
@@ -8035,6 +8060,25 @@ export const buildWorkspaceSegmentEditorPayload = async (
       }
     }
 
+    const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+    const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+    const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+    const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - startTime;
+    const normalizedTimelineDuration = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
+    const normalizedSegmentDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+    const manualDurationCandidates = [manualDurationSeconds, normalizedTimelineDuration, normalizedSegmentDuration].filter(
+      (value): value is number => value !== null,
+    );
+    const resolvedManualDurationSeconds =
+      durationMode === "manual" && manualDurationCandidates.length > 0
+        ? Math.max(...manualDurationCandidates)
+        : null;
+    const duration =
+      durationMode === "manual" && resolvedManualDurationSeconds !== null
+        ? resolvedManualDurationSeconds
+        : normalizedSegmentDuration ?? normalizedTimelineDuration ?? undefined;
+    const endTime = typeof duration === "number" ? Number((startTime + duration).toFixed(3)) : segment.endTime;
+
     segments.push({
       customVideoAssetId,
       customVideoFileDataUrl,
@@ -8042,15 +8086,15 @@ export const buildWorkspaceSegmentEditorPayload = async (
       customVideoFileName: payloadVideoActionForSegment === "custom" ? customVisualAsset?.fileName : undefined,
       customVideoRemoteUrl,
       customVideoFileUploadKey,
-      duration: segment.duration,
-      durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
-      endTime: segment.endTime,
+      duration,
+      durationMode,
+      endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
       index: segment.index,
-      manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+      manualDurationSeconds: durationMode === "manual" ? resolvedManualDurationSeconds : null,
       resetVisual: Boolean(segment.visualReset),
       sceneSoundAssetId,
-      startTime: segment.startTime,
+      startTime,
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
       voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
@@ -23614,6 +23658,7 @@ export function WorkspacePage({
     const nextPrompt = options?.prompt ?? targetSegment?.aiVideoPrompt ?? "";
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentAiVideoQuality;
+    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
     const characterReferenceAssetIds = preserveSegmentCharacters
       ? getWorkspaceSegmentCharacterReferenceAssetIds(targetSegment)
@@ -23657,6 +23702,7 @@ export function WorkspacePage({
         },
         body: JSON.stringify({
           characterContinuityMode: preserveSegmentCharacters ? "force" : "off",
+          durationSeconds,
           language: selectedLanguage,
           preserveCharacters: preserveSegmentCharacters,
           projectId: visualJobBinding.projectId,
@@ -23764,6 +23810,7 @@ export function WorkspacePage({
     const nextPrompt = options?.prompt ?? targetSegment?.aiVideoPrompt ?? "";
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
+    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentPhotoAnimationCreditCost(generationQuality);
     logSegmentEditorDiagnostics("client.segment-editor.photo-animation.resolved", {
       hasPhotoAnimationSourceAsset: Boolean(photoAnimationSourceAsset),
@@ -23878,6 +23925,7 @@ export function WorkspacePage({
           customVideoFileDataUrl,
           customVideoFileMimeType,
           customVideoFileName,
+          durationSeconds,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
@@ -24004,6 +24052,7 @@ export function WorkspacePage({
       : talkingPhotoSourceAsset;
     const script = normalizeWorkspaceSegmentAiPhotoPrompt(options?.prompt ?? targetSegment?.text ?? "");
     const visualPrompt = "natural talking avatar, stable camera, realistic lip sync";
+    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST;
 
     if (!script) {
@@ -24085,6 +24134,7 @@ export function WorkspacePage({
           customVideoAssetId: customVideoAssetId ?? undefined,
           customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
           customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
+          durationSeconds,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: visualPrompt,

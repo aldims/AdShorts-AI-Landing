@@ -14,6 +14,7 @@ import {
   getStudioVoiceCreditCost,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
+  getWorkspaceSegmentVisualGenerationDurationSeconds,
   getWorkspaceSegmentDraftPosterUrl,
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
@@ -981,6 +982,19 @@ describe("WorkspacePage studio locale defaults", () => {
         startTime: 0,
       }),
     );
+  });
+
+  it("uses current manual scene timing for segment visual generation jobs", () => {
+    const segment = createDraftSegment({
+      duration: 3,
+      durationMode: "manual",
+      endTime: 13,
+      manualDurationSeconds: 13,
+      startTime: 0,
+      text: "Manual visual timing",
+    });
+
+    expect(getWorkspaceSegmentVisualGenerationDurationSeconds(segment)).toBe(13);
   });
 
   it("restores a live generated AI photo when server state lost the draft video action", () => {

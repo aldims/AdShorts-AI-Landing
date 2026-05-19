@@ -384,6 +384,10 @@ const normalizeRequestNonNegativeInteger = (value) => {
     const rounded = Math.trunc(numeric);
     return rounded >= 0 ? rounded : undefined;
 };
+const normalizeRequestDurationSeconds = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= 1 ? Number(numeric.toFixed(3)) : undefined;
+};
 const isStudioSegmentVisualJobReadyStatus = (value) => {
     const status = String(value ?? "").trim().toLowerCase();
     return ["completed", "done", "ready", "success", "succeeded"].includes(status);
@@ -2953,6 +2957,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
     const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
+    const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -2968,6 +2973,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
             language,
             characterContinuityMode,
             characterIds,
+            durationSeconds,
             preserveCharacters,
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
@@ -3070,6 +3076,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+    const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -3086,6 +3093,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
             customVideoFileDataUrl: customVideoFileDataUrl || undefined,
             customVideoFileMimeType: customVideoFileMimeType || undefined,
             customVideoFileName: customVideoFileName || undefined,
+            durationSeconds,
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             quality,
@@ -3188,6 +3196,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+    const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!script) {
@@ -3204,6 +3213,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
             customVideoFileDataUrl: customVideoFileDataUrl || undefined,
             customVideoFileMimeType: customVideoFileMimeType || undefined,
             customVideoFileName: customVideoFileName || undefined,
+            durationSeconds,
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             prompt: prompt || undefined,

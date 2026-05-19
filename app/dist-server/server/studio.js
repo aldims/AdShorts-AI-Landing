@@ -365,6 +365,14 @@ const normalizeNumber = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 };
+const normalizeStudioSegmentVisualDurationSeconds = (value) => {
+    const normalized = normalizeNumber(value);
+    return normalized !== null && normalized >= 1 ? Number(normalized.toFixed(3)) : undefined;
+};
+export const buildStudioSegmentVisualDurationPayload = (durationSeconds) => {
+    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(durationSeconds);
+    return normalizedDurationSeconds ? { duration: normalizedDurationSeconds } : {};
+};
 const normalizeStudioSegmentVideoAction = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedSegmentVideoActions.has(normalized) ? normalized : "original";
@@ -402,11 +410,22 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         const customVideoFileDataUrl = String(segmentRecord.customVideoFileDataUrl ?? "").trim() || undefined;
         const customVideoFileMimeType = String(segmentRecord.customVideoFileMimeType ?? "").trim() || undefined;
         const customVideoFileName = String(segmentRecord.customVideoFileName ?? "").trim() || undefined;
-        const startTime = normalizeNumber(segmentRecord.startTime) ?? undefined;
-        const endTime = normalizeNumber(segmentRecord.endTime) ?? undefined;
-        const duration = normalizeNumber(segmentRecord.duration) ?? undefined;
+        const rawStartTime = normalizeNumber(segmentRecord.startTime);
+        const rawEndTime = normalizeNumber(segmentRecord.endTime);
+        const rawDuration = normalizeNumber(segmentRecord.duration);
         const durationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
-        const manualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds);
+        const rawManualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds);
+        const timelineDuration = rawStartTime !== null && rawEndTime !== null && rawEndTime > rawStartTime ? rawEndTime - rawStartTime : null;
+        const manualDurationSeconds = durationMode === "manual"
+            ? rawManualDurationSeconds ??
+                normalizeStudioSegmentManualDurationSeconds(timelineDuration) ??
+                normalizeStudioSegmentManualDurationSeconds(rawDuration)
+            : null;
+        const duration = durationMode === "manual" && manualDurationSeconds !== null ? manualDurationSeconds : rawDuration ?? undefined;
+        const startTime = rawStartTime ?? undefined;
+        const endTime = durationMode === "manual" && manualDurationSeconds !== null && rawStartTime !== null
+            ? Number((rawStartTime + manualDurationSeconds).toFixed(3))
+            : rawEndTime ?? undefined;
         const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
         const segmentVoiceType = segmentVoiceTypeRaw === null
             ? null
@@ -3494,6 +3513,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
@@ -3510,6 +3530,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         admin_token: env.adsflowAdminToken,
         credit_cost: requiredCredits,
         external_user_id: externalUserId,
+        ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
         character_ids: characterIds,
         character_reference_mode: characterReferenceMode,
@@ -3541,6 +3562,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     const requiredCredits = getStudioSegmentPhotoAnimationCreditCost(normalizedQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
@@ -3583,6 +3605,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
         custom_video_mime_type: normalizedCustomVideoFileMimeType,
         custom_video_original_name: normalizedCustomVideoFileName,
         external_user_id: externalUserId,
+        ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
         language: normalizedLanguage,
         project_id: normalizedProjectId,
@@ -3621,6 +3644,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
     const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
     const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
         throw new Error("Photo source asset id or image data URL is required.");
     }
@@ -3653,6 +3677,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         custom_video_mime_type: normalizedCustomVideoFileMimeType,
         custom_video_original_name: normalizedCustomVideoFileName,
         external_user_id: externalUserId,
+        ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
         language: normalizedLanguage,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,

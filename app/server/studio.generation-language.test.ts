@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStudioSegmentVisualDurationPayload,
   canExposeStudioFinalVideoFromStatus,
   getStudioVoiceCreditCost,
   normalizeStudioSegmentEditorPayload,
@@ -77,20 +78,20 @@ describe("studio generation language resolution", () => {
         projectId: 42,
         segments: [
           {
-            duration: 7.2,
+            duration: 3,
             durationMode: "manual",
-            endTime: 7.2,
+            endTime: 13,
             index: 0,
-            manualDurationSeconds: 7.2,
+            manualDurationSeconds: 13,
             startTime: 0,
             text: "Manual scene",
             videoAction: "original",
           },
           {
             duration: 3,
-            endTime: 10.2,
+            endTime: 16,
             index: 1,
-            startTime: 7.2,
+            startTime: 13,
             text: "Legacy scene",
             videoAction: "original",
           },
@@ -101,9 +102,10 @@ describe("studio generation language resolution", () => {
 
     expect(normalized?.segments[0]).toEqual(
       expect.objectContaining({
-        duration: 7.2,
+        duration: 13,
+        endTime: 13,
         durationMode: "manual",
-        manualDurationSeconds: 7.2,
+        manualDurationSeconds: 13,
       }),
     );
     expect(normalized?.segments[1]).toEqual(
@@ -113,5 +115,10 @@ describe("studio generation language resolution", () => {
         manualDurationSeconds: null,
       }),
     );
+  });
+
+  it("forwards visual generation target duration with the upstream field name", () => {
+    expect(buildStudioSegmentVisualDurationPayload(13)).toEqual({ duration: 13 });
+    expect(buildStudioSegmentVisualDurationPayload(0.5)).toEqual({});
   });
 });
