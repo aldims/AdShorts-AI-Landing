@@ -3314,6 +3314,18 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
     const source = typeof req.body?.source === "string" ? req.body.source.trim() : "";
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+    const visualMediaAssetId = normalizeRequestPositiveInteger(req.body?.visualMediaAssetId ?? req.body?.visual_media_asset_id);
+    const visualSourceJobId = typeof req.body?.visualSourceJobId === "string"
+        ? req.body.visualSourceJobId.trim()
+        : typeof req.body?.visual_source_job_id === "string"
+            ? req.body.visual_source_job_id.trim()
+            : "";
+    const visualSourceKind = typeof req.body?.visualSourceKind === "string"
+        ? req.body.visualSourceKind.trim()
+        : typeof req.body?.visual_source_kind === "string"
+            ? req.body.visual_source_kind.trim()
+            : "";
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
         return;
@@ -3323,7 +3335,11 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            durationSeconds,
             source,
+            visualMediaAssetId,
+            visualSourceJobId,
+            visualSourceKind,
         });
         res.json({ data: job });
     }

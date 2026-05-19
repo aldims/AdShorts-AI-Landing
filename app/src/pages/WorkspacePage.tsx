@@ -1160,11 +1160,15 @@ type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
 };
 
 type WorkspaceSegmentSceneSoundJobCreateRequest = {
+  durationSeconds?: number;
   language: StudioLanguage;
   projectId?: number;
   prompt: string;
   segmentIndex?: number;
   source?: "current" | "original";
+  visualMediaAssetId?: number;
+  visualSourceJobId?: string;
+  visualSourceKind?: "segment-ai-video" | "segment-photo-animation" | "segment-talking-photo";
 };
 
 type StoredWorkspaceSegmentPhotoAnimationJob = {
@@ -4458,6 +4462,62 @@ const getWorkspaceSegmentDraftVisualAsset = (segment: WorkspaceSegmentEditorDraf
   }
 
   return null;
+};
+
+const getWorkspaceSegmentSceneSoundVisualAssetId = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!segment) {
+    return undefined;
+  }
+
+  const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
+  const draftVisualAssetId = getPositiveWorkspaceMediaAssetId(draftVisualAsset?.assetId);
+  if (draftVisualAssetId) {
+    return draftVisualAssetId;
+  }
+  if (draftVisualAsset) {
+    return undefined;
+  }
+
+  const currentAssetId = getPositiveWorkspaceMediaAssetId(segment.currentAsset?.assetId);
+  if (currentAssetId) {
+    return currentAssetId;
+  }
+
+  return getPositiveWorkspaceMediaAssetId(segment.originalAsset?.assetId) ?? undefined;
+};
+
+const getWorkspaceSegmentSceneSoundVisualJobSource = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  const visualAsset = segment ? getWorkspaceSegmentDraftVisualAsset(segment) : null;
+  const remoteUrl = String(visualAsset?.remoteUrl ?? "").trim();
+  if (!remoteUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(remoteUrl, "http://localhost");
+    const match = url.pathname.match(
+      /^\/api\/studio\/(segment-ai-video|segment-photo-animation|segment-talking-photo)\/jobs\/([^/]+)\/video$/i,
+    );
+    if (!match) {
+      return null;
+    }
+
+    const visualSourceJobId = decodeURIComponent(match[2] ?? "").trim();
+    if (!visualSourceJobId) {
+      return null;
+    }
+
+    return {
+      visualSourceJobId,
+      visualSourceKind: match[1] as "segment-ai-video" | "segment-photo-animation" | "segment-talking-photo",
+    };
+  } catch {
+    return null;
+  }
 };
 
 const getWorkspaceSegmentOriginalPhotoAsset = (segment: WorkspaceSegmentEditorDraftSegment): StudioCustomVideoFile | null => {
@@ -24431,6 +24491,9 @@ export function WorkspacePage({
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
+    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
+    const visualMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
+    const visualJobSource = getWorkspaceSegmentSceneSoundVisualJobSource(targetSegment);
     const nextPrompt = options?.prompt ?? targetSegment?.sceneSoundPrompt ?? segmentSceneSoundModalPrompt;
     const normalizedPrompt = normalizeWorkspaceSegmentSceneSoundPrompt(nextPrompt);
     if (!normalizedPrompt) {
@@ -24463,11 +24526,15 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          durationSeconds,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           segmentIndex: visualJobBinding.segmentIndex,
           source: "current",
+          visualMediaAssetId,
+          visualSourceJobId: visualJobSource?.visualSourceJobId,
+          visualSourceKind: visualJobSource?.visualSourceKind,
         } satisfies WorkspaceSegmentSceneSoundJobCreateRequest),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;

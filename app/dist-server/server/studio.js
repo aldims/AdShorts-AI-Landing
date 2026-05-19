@@ -3714,7 +3714,16 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     const normalizedSource = String(options?.source ?? "current").trim().toLowerCase() === "original" ? "original" : "current";
+    const normalizedVisualMediaAssetId = normalizePositiveInteger(options?.visualMediaAssetId);
+    const normalizedVisualSourceJobId = normalizeGenerationText(options?.visualSourceJobId);
+    const normalizedVisualSourceKind = normalizeGenerationText(options?.visualSourceKind).toLowerCase();
+    const visualSourceKind = normalizedVisualSourceKind === "segment-ai-video" ||
+        normalizedVisualSourceKind === "segment-photo-animation" ||
+        normalizedVisualSourceKind === "segment-talking-photo"
+        ? normalizedVisualSourceKind
+        : undefined;
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-scene-sound/jobs", {
@@ -3722,12 +3731,16 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
         credit_cost: STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
         external_user_id: externalUserId,
         language: normalizedLanguage,
+        ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
         segment_index: normalizedSegmentIndex,
         source: normalizedSource,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
+        visual_media_asset_id: normalizedVisualMediaAssetId,
+        visual_source_job_id: normalizedVisualSourceJobId || undefined,
+        visual_source_kind: visualSourceKind,
     }, {
         retryDelaysMs: [],
         timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
