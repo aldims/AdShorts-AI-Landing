@@ -149,11 +149,11 @@ describe("workspace segment editor timeline", () => {
     ).toBeCloseTo(5.5, 6);
   });
 
-  it("uses speech duration for video when voice is enabled", () => {
+  it("keeps known video duration when voice is shorter", () => {
     const segment = createSegment({
       mediaType: "video",
       speechDuration: 3.75,
-      text: "voice defines this video segment",
+      text: "voice is shorter than this video segment",
     });
 
     expect(
@@ -162,7 +162,23 @@ describe("workspace segment editor timeline", () => {
         visualKind: "video",
         voiceEnabled: true,
       }),
-    ).toBeCloseTo(3.75, 6);
+    ).toBeCloseTo(10, 6);
+  });
+
+  it("extends video duration when voice is longer than the known video", () => {
+    const segment = createSegment({
+      mediaType: "video",
+      speechDuration: 12,
+      text: "voice is longer than this video segment",
+    });
+
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        visualDurationSeconds: 10,
+        visualKind: "video",
+        voiceEnabled: true,
+      }),
+    ).toBeCloseTo(12, 6);
   });
 
   it("ignores text for silent stills when subtitles are disabled", () => {

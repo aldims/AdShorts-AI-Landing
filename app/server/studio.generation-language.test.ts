@@ -72,7 +72,7 @@ describe("studio generation language resolution", () => {
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
   });
 
-  it("normalizes segment editor manual duration fields and keeps old payloads compatible", () => {
+  it("locks segment editor timeline durations for generation", () => {
     const normalized = normalizeStudioSegmentEditorPayload(
       {
         projectId: 42,
@@ -111,8 +111,9 @@ describe("studio generation language resolution", () => {
     expect(normalized?.segments[1]).toEqual(
       expect.objectContaining({
         duration: 3,
-        durationMode: "auto",
-        manualDurationSeconds: null,
+        durationMode: "manual",
+        endTime: 16,
+        manualDurationSeconds: 3,
       }),
     );
   });

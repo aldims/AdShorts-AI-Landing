@@ -1,6 +1,8 @@
 type WorkspaceProjectStackRecord = {
   adId: number | null;
+  createdAt?: string | null;
   editedFromProjectAdId: number | null;
+  generatedAt?: string | null;
   id: string;
   updatedAt: string;
   versionRootProjectAdId: number | null;
@@ -13,16 +15,20 @@ export type WorkspaceProjectStackGroup<TProject extends WorkspaceProjectStackRec
   projects: TProject[];
 };
 
-const getProjectSortTime = (project: Pick<WorkspaceProjectStackRecord, "updatedAt">) => {
-  const timestamp = Date.parse(project.updatedAt);
+const getProjectVersionSortTime = (
+  project: Pick<WorkspaceProjectStackRecord, "createdAt" | "generatedAt" | "updatedAt">,
+) => {
+  const timestamp = Date.parse(project.generatedAt || project.createdAt || project.updatedAt);
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-const compareProjectsByUpdatedAtDesc = <TProject extends Pick<WorkspaceProjectStackRecord, "id" | "updatedAt">>(
+const compareProjectsByVersionTimeDesc = <
+  TProject extends Pick<WorkspaceProjectStackRecord, "createdAt" | "generatedAt" | "id" | "updatedAt">,
+>(
   left: TProject,
   right: TProject,
 ) => {
-  const timeDifference = getProjectSortTime(right) - getProjectSortTime(left);
+  const timeDifference = getProjectVersionSortTime(right) - getProjectVersionSortTime(left);
   if (timeDifference !== 0) {
     return timeDifference;
   }
@@ -61,7 +67,7 @@ export const buildWorkspaceProjectStackGroups = <TProject extends WorkspaceProje
 
   return Array.from(groups.entries())
     .map(([key, groupedProjects]) => {
-      const sortedProjects = [...groupedProjects].sort(compareProjectsByUpdatedAtDesc);
+      const sortedProjects = [...groupedProjects].sort(compareProjectsByVersionTimeDesc);
       const leadProject = sortedProjects[0];
 
       if (!leadProject) {
@@ -78,5 +84,5 @@ export const buildWorkspaceProjectStackGroups = <TProject extends WorkspaceProje
       };
     })
     .filter((group): group is WorkspaceProjectStackGroup<TProject> => Boolean(group))
-    .sort((left, right) => compareProjectsByUpdatedAtDesc(left.leadProject, right.leadProject));
+    .sort((left, right) => compareProjectsByVersionTimeDesc(left.leadProject, right.leadProject));
 };

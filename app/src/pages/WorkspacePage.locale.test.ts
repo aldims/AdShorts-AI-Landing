@@ -37,6 +37,7 @@ import {
   resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentEditorStructureChange,
+  shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
   shouldDeferSegmentEditorRouteRestore,
   shouldShowWorkspaceMediaLibraryLoadingState,
@@ -803,6 +804,47 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("recovers explicit structure changes from a restored draft after a failed generation attempt", () => {
+    const segments = [0, 1, 2, 3, 4, 5].map((index) => createDraftSegment({ index }));
+    const insertedSegment = createDraftSegment({ index: 6 });
+    const baseline = {
+      ...createDraftSession(segments[0]),
+      segments,
+    };
+    const restoredDraft = {
+      ...baseline,
+      segments: [segments[0], segments[1], segments[2], insertedSegment, segments[3], segments[4], segments[5]],
+    };
+
+    expect(shouldRecoverWorkspaceSegmentEditorExplicitStructureChange(restoredDraft, baseline)).toBe(true);
+    expect(
+      resolveWorkspaceSegmentEditorStructureChangePermission({
+        baselineOrBaselines: baseline,
+        draft: restoredDraft,
+        isExplicitStructureChange: shouldRecoverWorkspaceSegmentEditorExplicitStructureChange(restoredDraft, baseline),
+      }),
+    ).toEqual({
+      allowStructureChange: true,
+      hasStructureChange: true,
+      shouldBlockImplicitStructureChange: false,
+    });
+  });
+
+  it("does not recover an implicit tail deletion as an explicit structure change", () => {
+    const firstSegment = createDraftSegment({ index: 0 });
+    const secondSegment = createDraftSegment({ index: 1 });
+    const baseline = {
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    };
+    const draft = {
+      ...baseline,
+      segments: [firstSegment],
+    };
+
+    expect(shouldRecoverWorkspaceSegmentEditorExplicitStructureChange(draft, baseline)).toBe(false);
+  });
+
   it("does not mark untouched generated source media as resettable", () => {
     const originalAsset = createMediaAsset(101);
     const segment = createDraftSegment({
@@ -1014,6 +1056,65 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedDraft.musicType).toBe("custom");
     expect(refreshedDraft.customMusicAssetId).toBeNull();
     expect(refreshedDraft.customMusicFileName).toBe("new-track.mp3");
+  });
+
+  it("preserves manual segment timing during a fresh session refresh", () => {
+    const manualLiveSegment = createDraftSegment({
+      duration: 6.5,
+      durationMode: "manual",
+      endTime: 6.5,
+      index: 0,
+      manualDurationSeconds: 6.5,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const nextLiveSegment = createDraftSegment({
+      duration: 4,
+      endTime: 10.5,
+      index: 1,
+      startTime: 6.5,
+      text: "Next segment",
+    });
+    const staleFreshManualSegment = createDraftSegment({
+      duration: 4,
+      durationMode: "auto",
+      endTime: 4,
+      index: 0,
+      manualDurationSeconds: null,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const staleFreshNextSegment = createDraftSegment({
+      duration: 4,
+      endTime: 8,
+      index: 1,
+      startTime: 4,
+      text: "Next segment",
+    });
+    const staleFreshManualSession = createFreshSession(staleFreshManualSegment);
+    const staleFreshNextSession = createFreshSession(staleFreshNextSegment);
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(manualLiveSegment),
+        segments: [manualLiveSegment, nextLiveSegment],
+      },
+      {
+        ...staleFreshManualSession,
+        segments: [staleFreshManualSession.segments[0]!, staleFreshNextSession.segments[0]!],
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 6.5,
+      durationMode: "manual",
+      endTime: 6.5,
+      manualDurationSeconds: 6.5,
+      startTime: 0,
+    });
+    expect(refreshedDraft.segments[1]).toMatchObject({
+      startTime: 6.5,
+    });
   });
 
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {
@@ -1366,7 +1467,47 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("allows exporting an already-applied AI animation while adding scene sound", async () => {
+  it("keeps an already-applied AI video when it matches the current segment media", async () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(707, {
+      mediaType: "video",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 707,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/707/playback",
+      },
+      aiVideoGeneratedFromPrompt: "hearts",
+      aiVideoGeneratedMode: "ai_video",
+      aiVideoPrompt: "hearts",
+      aiVideoPromptInitialized: true,
+      currentAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/707/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/707/playback",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPlaybackUrl: "/api/workspace/media-assets/101/playback",
+      originalPreviewUrl: "/api/workspace/media-assets/101/playback",
+      originalSourceKind: "stock",
+      videoAction: "ai",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: undefined,
+      videoAction: "original",
+    });
+  });
+
+  it("preserves an already-applied AI animation while adding scene sound", async () => {
     const originalAsset = createMediaAsset(3543, {
       mediaType: "photo",
       sourceKind: "stock",
@@ -1406,9 +1547,9 @@ describe("WorkspacePage studio locale defaults", () => {
     const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
 
     expect(result.payload.segments[0]).toMatchObject({
-      customVideoAssetId: 7001,
+      customVideoAssetId: undefined,
       sceneSoundAssetId: 8801,
-      videoAction: "custom",
+      videoAction: "original",
     });
   });
 

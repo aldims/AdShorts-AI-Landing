@@ -6835,6 +6835,27 @@ textarea {
   opacity: 0.46;
 }
 
+.studio-segment-references__badge {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  max-width: calc(100% - 14px);
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid rgba(125, 211, 252, 0.26);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.76);
+  color: rgba(186, 230, 253, 0.92);
+  font-size: 0.58rem;
+  font-weight: 860;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
 .studio-segment-references__media,
 .studio-segment-references__media .studio-segment-editor__preview-media,
 .studio-segment-references__media .studio-segment-editor__preview-video,

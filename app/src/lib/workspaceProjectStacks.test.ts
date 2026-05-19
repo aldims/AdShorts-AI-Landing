@@ -4,7 +4,9 @@ import { buildWorkspaceProjectStackGroups } from "./workspaceProjectStacks";
 
 type TestProject = {
   adId: number | null;
+  createdAt?: string | null;
   editedFromProjectAdId: number | null;
+  generatedAt?: string | null;
   id: string;
   updatedAt: string;
   versionRootProjectAdId: number | null;
@@ -80,6 +82,29 @@ describe("workspace project stacks", () => {
       "project-57",
       "project-42",
     ]);
+  });
+
+  it("keeps the newest generated version as stack lead when an older project is updated later", () => {
+    const groups = buildWorkspaceProjectStackGroups([
+      createProject({
+        adId: 42,
+        generatedAt: "2026-04-10T10:00:00.000Z",
+        id: "project-42",
+        updatedAt: "2026-04-12T10:00:00.000Z",
+      }),
+      createProject({
+        adId: 57,
+        editedFromProjectAdId: 42,
+        generatedAt: "2026-04-11T10:00:00.000Z",
+        id: "project-57",
+        updatedAt: "2026-04-11T10:05:00.000Z",
+        versionRootProjectAdId: 42,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.projects.map((project) => project.id)).toEqual(["project-57", "project-42"]);
+    expect(groups[0]?.leadProject.id).toBe("project-57");
   });
 
   it("does not group legacy projects without lineage metadata", () => {

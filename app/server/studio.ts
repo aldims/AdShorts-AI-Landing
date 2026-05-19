@@ -1124,23 +1124,23 @@ export const normalizeStudioSegmentEditorPayload = (
     const rawStartTime = normalizeNumber(segmentRecord.startTime);
     const rawEndTime = normalizeNumber(segmentRecord.endTime);
     const rawDuration = normalizeNumber(segmentRecord.duration);
-    const durationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+    const rawDurationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
     const rawManualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
       segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
     );
     const timelineDuration =
       rawStartTime !== null && rawEndTime !== null && rawEndTime > rawStartTime ? rawEndTime - rawStartTime : null;
+    // Generation must use the editor timeline snapshot. If an already resolved timeline is exported as "auto",
+    // AdsFlow can infer the original media clip duration and cut a segment earlier than the editor shows.
     const manualDurationSeconds =
-      durationMode === "manual"
-        ? rawManualDurationSeconds ??
-          normalizeStudioSegmentManualDurationSeconds(timelineDuration) ??
-          normalizeStudioSegmentManualDurationSeconds(rawDuration)
-        : null;
-    const duration =
-      durationMode === "manual" && manualDurationSeconds !== null ? manualDurationSeconds : rawDuration ?? undefined;
+      rawManualDurationSeconds ??
+      normalizeStudioSegmentManualDurationSeconds(timelineDuration) ??
+      normalizeStudioSegmentManualDurationSeconds(rawDuration);
+    const durationMode = manualDurationSeconds !== null ? "manual" : rawDurationMode;
+    const duration = manualDurationSeconds ?? rawDuration ?? undefined;
     const startTime = rawStartTime ?? undefined;
     const endTime =
-      durationMode === "manual" && manualDurationSeconds !== null && rawStartTime !== null
+      manualDurationSeconds !== null && rawStartTime !== null
         ? Number((rawStartTime + manualDurationSeconds).toFixed(3))
         : rawEndTime ?? undefined;
     const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;

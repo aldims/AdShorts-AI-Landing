@@ -4177,6 +4177,167 @@ const ensureStudioUploadedAssetId = async (
   });
 };
 
+const WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE = "image/jpeg";
+const WORKSPACE_SEGMENT_REFERENCE_FRAME_QUALITY = 0.92;
+const WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE = 1280;
+const WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS = 0.25;
+
+const extractWorkspaceVideoFrameDataUrl = async (
+  videoUrl: string,
+  options: {
+    maxSide?: number;
+    seekSeconds?: number;
+  } = {},
+) => {
+  const sourceUrl = videoUrl.trim();
+  if (!sourceUrl || typeof document === "undefined") {
+    throw new Error("Не удалось открыть видео для референса.");
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const video = document.createElement("video");
+    const maxSide = Math.max(64, options.maxSide ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE);
+    const seekSeconds = Math.max(0, options.seekSeconds ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS);
+    let isDone = false;
+    let metadataTimeoutId: number | null = null;
+    let seekTimeoutId: number | null = null;
+    let loadedDataHandler: (() => void) | null = null;
+
+    const clearTimers = () => {
+      if (metadataTimeoutId !== null) {
+        window.clearTimeout(metadataTimeoutId);
+        metadataTimeoutId = null;
+      }
+      if (seekTimeoutId !== null) {
+        window.clearTimeout(seekTimeoutId);
+        seekTimeoutId = null;
+      }
+    };
+    const cleanup = () => {
+      clearTimers();
+      video.onerror = null;
+      video.onloadedmetadata = null;
+      video.onseeked = null;
+      if (loadedDataHandler) {
+        video.removeEventListener("loadeddata", loadedDataHandler);
+        loadedDataHandler = null;
+      }
+      video.removeAttribute("src");
+      try {
+        video.load();
+      } catch {
+        // Best effort cleanup for detached browser media elements.
+      }
+    };
+    const fail = (error: Error) => {
+      if (isDone) {
+        return;
+      }
+      isDone = true;
+      cleanup();
+      reject(error);
+    };
+    const finish = (dataUrl: string) => {
+      if (isDone) {
+        return;
+      }
+      isDone = true;
+      cleanup();
+      resolve(dataUrl);
+    };
+    const captureFrame = () => {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      if (!sourceWidth || !sourceHeight) {
+        fail(new Error("Не удалось прочитать кадр видео."));
+        return;
+      }
+
+      const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        fail(new Error("Не удалось подготовить кадр видео."));
+        return;
+      }
+
+      try {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL(
+          WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+          WORKSPACE_SEGMENT_REFERENCE_FRAME_QUALITY,
+        );
+        if (!dataUrl || dataUrl === "data:,") {
+          fail(new Error("Не удалось сохранить кадр видео."));
+          return;
+        }
+        finish(dataUrl);
+      } catch {
+        fail(new Error("Не удалось снять кадр с видео."));
+      }
+    };
+    const scheduleSeekTimeout = () => {
+      seekTimeoutId = window.setTimeout(() => {
+        fail(new Error("Видео не вернуло кадр для референса."));
+      }, 15_000);
+    };
+
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.onerror = () => fail(new Error("Не удалось загрузить видео для референса."));
+    video.onseeked = () => {
+      if (seekTimeoutId !== null) {
+        window.clearTimeout(seekTimeoutId);
+        seekTimeoutId = null;
+      }
+      captureFrame();
+    };
+    video.onloadedmetadata = () => {
+      if (metadataTimeoutId !== null) {
+        window.clearTimeout(metadataTimeoutId);
+        metadataTimeoutId = null;
+      }
+
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      const targetTime = duration > 0 ? Math.min(seekSeconds, Math.max(0, duration - 0.05)) : 0;
+      if (targetTime <= 0.02) {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          captureFrame();
+          return;
+        }
+
+        loadedDataHandler = captureFrame;
+        video.addEventListener("loadeddata", loadedDataHandler, { once: true });
+        scheduleSeekTimeout();
+        return;
+      }
+
+      try {
+        scheduleSeekTimeout();
+        video.currentTime = targetTime;
+      } catch {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          captureFrame();
+          return;
+        }
+        fail(new Error("Не удалось перейти к кадру видео."));
+      }
+    };
+
+    metadataTimeoutId = window.setTimeout(() => {
+      fail(new Error("Видео слишком долго готовит референс."));
+    }, 15_000);
+    video.src = sourceUrl;
+    video.load();
+  });
+};
+
 const getProjectPosterCacheValue = (videoUrl: string | null | undefined) => {
   const normalized = String(videoUrl ?? "").trim();
   if (!normalized) {
@@ -6848,6 +7009,8 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     ? createWorkspaceSegmentFreshAiVideoAsset(normalizedFreshSegment)
     : null;
   const freshSceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(normalizedFreshSegment, normalizedFreshSegment.index);
+  const liveDurationMode = normalizeWorkspaceSegmentDurationMode(liveSegment.durationMode);
+  const liveManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(liveSegment.manualDurationSeconds);
   const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
     ? liveSegment
     : normalizedFreshSegment;
@@ -6872,10 +7035,12 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     aiVideoPrompt: liveSegment.aiVideoPrompt,
     aiVideoPromptInitialized: shouldUseFreshServerVideo || shouldUseFreshServerAiVideo ? true : liveSegment.aiVideoPromptInitialized,
     customVideo: cloneStudioCustomVideoFile(liveSegment.customVideo),
+    durationMode: liveDurationMode,
     imageEditAsset: cloneStudioCustomVideoFile(liveSegment.imageEditAsset),
     imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
     imageEditPrompt: liveSegment.imageEditPrompt,
     imageEditPromptInitialized: liveSegment.imageEditPromptInitialized,
+    manualDurationSeconds: liveManualDurationSeconds,
     originalText: liveSegment.originalText,
     originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
       liveSegment.originalTextByLanguage,
@@ -7331,6 +7496,7 @@ const removeStoredWorkspaceSegmentEditorSession = (
 };
 
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
+const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
@@ -7347,6 +7513,9 @@ export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRef
 
 const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, projectId: number) =>
+  `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
 
 const getWorkspaceSegmentPhotoAnimationPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX}${email}`;
@@ -7718,6 +7887,63 @@ const removeStoredWorkspaceSegmentEditorDraft = (
   removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId));
 };
 
+const readStoredWorkspaceSegmentEditorExplicitStructureChange = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return false;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorExplicitStructureStorageKey(normalizedEmail, normalizedProjectId);
+  return readWorkspaceSegmentEditorStorageCandidates(storageKey).some((candidate) => candidate.rawValue === "1");
+};
+
+const writeStoredWorkspaceSegmentEditorExplicitStructureChange = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorExplicitStructureStorageKey(normalizedEmail, normalizedProjectId),
+    "1",
+  );
+};
+
+const removeStoredWorkspaceSegmentEditorExplicitStructureChange = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorExplicitStructureStorageKey(normalizedEmail, normalizedProjectId),
+  );
+};
+
 const moveArrayItemToInsertIndex = <T,>(items: T[], fromIndex: number, insertIndex: number) => {
   if (fromIndex < 0 || fromIndex >= items.length) {
     return items;
@@ -7799,6 +8025,32 @@ const normalizeWorkspaceSegmentEditorStructureBaselines = (
 
 const hasWorkspaceSegmentEditorNonCanonicalSourceOrder = (draft: WorkspaceSegmentEditorStructureSnapshot) =>
   draft.segments.some((segment, index) => segment.index !== index);
+
+export const shouldRecoverWorkspaceSegmentEditorExplicitStructureChange = (
+  draft?: WorkspaceSegmentEditorStructureSnapshot | null,
+  baselineOrBaselines?:
+    | WorkspaceSegmentEditorStructureSnapshot
+    | readonly (WorkspaceSegmentEditorStructureSnapshot | null | undefined)[]
+    | null,
+) => {
+  if (!draft) {
+    return false;
+  }
+
+  if (hasWorkspaceSegmentEditorNonCanonicalSourceOrder(draft)) {
+    return true;
+  }
+
+  const baselines = normalizeWorkspaceSegmentEditorStructureBaselines(baselineOrBaselines);
+  if (!baselines.length) {
+    return false;
+  }
+
+  return baselines.some((baseline) => {
+    const baselineSegmentIndexes = new Set(baseline.segments.map((segment) => segment.index));
+    return draft.segments.some((segment) => !baselineSegmentIndexes.has(segment.index));
+  });
+};
 
 export const shouldAllowWorkspaceSegmentEditorStructureChange = (
   draft?: WorkspaceSegmentEditorStructureSnapshot | null,
@@ -8189,7 +8441,6 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(segment.sceneSoundAsset?.assetId) ?? undefined;
     const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
       payloadVideoAction === "custom" &&
-      (exportAction === "custom" || exportAction === "ai_photo" || exportAction === "image_edit") &&
       isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
       isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)
         ? "original"
@@ -14730,6 +14981,7 @@ export function WorkspacePage({
   const [segmentProjectCharactersError, setSegmentProjectCharactersError] = useState<string | null>(null);
   const [newSegmentCharacterName, setNewSegmentCharacterName] = useState("");
   const [creatingSegmentCharacterKey, setCreatingSegmentCharacterKey] = useState<string | null>(null);
+  const segmentReferenceFrameAssetIdsRef = useRef<Map<string, number>>(new Map());
   const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
     id: string;
     left: number;
@@ -15724,6 +15976,7 @@ export function WorkspacePage({
     const normalizedProjectId = Number(projectId);
     if (Number.isInteger(normalizedProjectId) && normalizedProjectId > 0) {
       segmentEditorExplicitStructureChangeProjectIdsRef.current.add(normalizedProjectId);
+      writeStoredWorkspaceSegmentEditorExplicitStructureChange(session.email, normalizedProjectId);
     }
   };
 
@@ -15731,6 +15984,7 @@ export function WorkspacePage({
     const normalizedProjectId = Number(projectId);
     if (Number.isInteger(normalizedProjectId) && normalizedProjectId > 0) {
       segmentEditorExplicitStructureChangeProjectIdsRef.current.delete(normalizedProjectId);
+      removeStoredWorkspaceSegmentEditorExplicitStructureChange(session.email, normalizedProjectId);
     }
   };
 
@@ -18188,13 +18442,30 @@ export function WorkspacePage({
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
   const segmentReferenceSceneOptions = useMemo(
     () =>
-      (segmentEditorDraft?.segments ?? []).map((segment) => ({
-        assetId: getWorkspaceSegmentSceneReferenceAssetId(segment) ?? null,
-        displayNumber: segmentEditorDraft
-          ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index)
-          : segment.index + 1,
-        segment,
-      })),
+      (segmentEditorDraft?.segments ?? []).map((segment) => {
+        const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-modal-library-tile");
+        const videoReferenceUrl =
+          mediaSurface.previewKind === "video"
+            ? mediaSurface.viewerUrl ?? mediaSurface.displayUrl ?? getWorkspaceSegmentDraftVideoUrl(segment)
+            : null;
+        const videoPosterReferenceUrl =
+          mediaSurface.previewKind === "video"
+            ? mediaSurface.posterUrl ?? mediaSurface.fallbackPosterUrl ?? null
+            : null;
+        const mediaIdentityKey = getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface);
+
+        return {
+          assetId: getWorkspaceSegmentSceneReferenceAssetId(segment) ?? null,
+          displayNumber: segmentEditorDraft
+            ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index)
+            : segment.index + 1,
+          mediaIdentityKey,
+          previewKind: mediaSurface.previewKind,
+          segment,
+          videoPosterReferenceUrl,
+          videoReferenceUrl,
+        };
+      }),
     [segmentEditorDraft],
   );
   const selectedSegmentReferenceCharacters = useMemo(
@@ -25155,10 +25426,24 @@ export function WorkspacePage({
       const storedSession = readStoredWorkspaceSegmentEditorSession(session.email, effectiveDraft.projectId);
       return storedSession ? createWorkspaceSegmentEditorDraftSession(storedSession) : null;
     })();
-    const isExplicitStructureChange = segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId);
     const structureBaselines = [loadedServerBaseSession, segmentEditorChecklistBaseSession].some(Boolean)
       ? [loadedServerBaseSession, segmentEditorChecklistBaseSession]
       : [storedServerBaseSession];
+    const hasPersistedExplicitStructureChange = readStoredWorkspaceSegmentEditorExplicitStructureChange(
+      session.email,
+      effectiveDraft.projectId,
+    );
+    const hasRecoveredExplicitStructureChange = shouldRecoverWorkspaceSegmentEditorExplicitStructureChange(
+      effectiveDraft,
+      structureBaselines,
+    );
+    const isExplicitStructureChange =
+      segmentEditorExplicitStructureChangeProjectIdsRef.current.has(effectiveDraft.projectId) ||
+      hasPersistedExplicitStructureChange ||
+      hasRecoveredExplicitStructureChange;
+    if (hasPersistedExplicitStructureChange || hasRecoveredExplicitStructureChange) {
+      markSegmentEditorExplicitStructureChange(effectiveDraft.projectId);
+    }
     const structureChangePermission = resolveWorkspaceSegmentEditorStructureChangePermission({
       baselineOrBaselines: structureBaselines,
       draft: effectiveDraft,
@@ -25170,6 +25455,8 @@ export function WorkspacePage({
         "client.segment-editor.create-shorts.implicit-structure-blocked",
         {
           baselineOrder: structureBaselines.find(Boolean)?.segments.map((segment) => segment.index) ?? null,
+          hasPersistedExplicitStructureChange,
+          hasRecoveredExplicitStructureChange,
           hasExplicitStructureChange: isExplicitStructureChange,
           projectId: effectiveDraft.projectId,
           segmentCount: effectiveDraft.segments.length,
@@ -25201,6 +25488,8 @@ export function WorkspacePage({
     setSegmentEditorAppliedSession(nextAppliedSession);
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.apply", {
       allowSegmentStructureChange,
+      hasPersistedExplicitStructureChange,
+      hasRecoveredExplicitStructureChange,
       hasExplicitStructureChange: isExplicitStructureChange,
       hasStructureChange: structureChangePermission.hasStructureChange,
       projectId: effectiveDraft.projectId,
@@ -25250,6 +25539,7 @@ export function WorkspacePage({
 
     removeStoredWorkspaceSegmentEditorDraft(session.email, normalizedProjectId);
     removeStoredWorkspaceSegmentEditorSession(session.email, normalizedProjectId);
+    removeStoredWorkspaceSegmentEditorExplicitStructureChange(session.email, normalizedProjectId);
     setStoredSegmentEditorDrafts((currentDrafts) =>
       currentDrafts.filter((draft) => draft.projectId !== normalizedProjectId),
     );
@@ -25800,6 +26090,7 @@ export function WorkspacePage({
         if (statusPayload.data.generation) {
           doneWithoutPreviewAttempts = 0;
           setGeneratedVideo(statusPayload.data.generation);
+          setHasLoadedProjects(false);
           if (!createdVideoAnalyticsJobIdsRef.current.has(safeJobId)) {
             createdVideoAnalyticsJobIdsRef.current.add(safeJobId);
             void logClientEvent(readyProjectsCount === 0 ? "first_video_created" : "video_created", {
@@ -30244,11 +30535,70 @@ export function WorkspacePage({
       </span>
     );
   };
+  const resolveSegmentReferenceCharacterAssetId = async (
+    option: (typeof segmentReferenceSceneOptions)[number],
+  ) => {
+    const videoReferenceUrl = option.videoReferenceUrl?.trim();
+    const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
+    if (option.assetId && !shouldUseVideoFrame) {
+      return option.assetId;
+    }
+
+    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId) {
+      return null;
+    }
+
+    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.mediaIdentityKey}`;
+    const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
+    if (cachedAssetId) {
+      return cachedAssetId;
+    }
+
+    const frameFileName = `segment-${option.displayNumber}-reference-frame.jpg`;
+    let frameAsset: StudioCustomVideoFile;
+    try {
+      frameAsset = {
+        dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
+        fileName: frameFileName,
+        fileSize: 0,
+        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+      };
+    } catch (error) {
+      const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
+      if (!posterReferenceUrl) {
+        throw error;
+      }
+
+      frameAsset = {
+        fileName: frameFileName,
+        fileSize: 0,
+        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+        remoteUrl: posterReferenceUrl,
+      };
+    }
+
+    const assetId = await ensureStudioUploadedAssetId(frameAsset, {
+      fallbackFileName: frameAsset.fileName,
+      fallbackMimeType: frameAsset.mimeType,
+      kind: "segment_source",
+      language: selectedLanguage,
+      mediaType: "photo",
+      projectId: segmentEditorDraft.projectId,
+      role: "segment_source",
+      segmentIndex: option.segment.index,
+    });
+    if (!assetId) {
+      throw new Error("Не удалось подготовить кадр видео для персонажа.");
+    }
+
+    segmentReferenceFrameAssetIdsRef.current.set(cacheKey, assetId);
+    return assetId;
+  };
   const handleCreateSegmentReferenceCharacter = async (
     option: (typeof segmentReferenceSceneOptions)[number],
   ) => {
-    if (!segmentEditorDraft?.projectId || !option.assetId) {
-      setSegmentEditorVideoError(workspaceText(locale, "У этой сцены нет доступного фото-референса.", "This scene has no available photo reference."));
+    if (!segmentEditorDraft?.projectId || (!option.assetId && !option.videoReferenceUrl)) {
+      setSegmentEditorVideoError(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
       return;
     }
 
@@ -30260,12 +30610,17 @@ export function WorkspacePage({
     setSegmentProjectCharactersError(null);
 
     try {
+      const referenceAssetId = await resolveSegmentReferenceCharacterAssetId(option);
+      if (!referenceAssetId) {
+        throw new Error(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
+      }
+
       const response = await fetch(`/api/studio/projects/${encodeURIComponent(String(segmentEditorDraft.projectId))}/characters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label,
-          referenceAssetIds: [option.assetId],
+          referenceAssetIds: [referenceAssetId],
           segmentIndex: option.segment.index,
         }),
       });
@@ -30405,25 +30760,36 @@ export function WorkspacePage({
                   {segmentReferenceSceneOptions.map((option) => {
                     const createKey = `segment:${option.segment.index}`;
                     const isBusy = creatingSegmentCharacterKey === createKey;
+                    const createsFromVideoFrame = option.previewKind === "video" && Boolean(option.videoReferenceUrl);
+                    const canCreateCharacter = Boolean(option.assetId || option.videoReferenceUrl);
                     return (
                       <button
                         key={`create-character:${option.segment.index}`}
                         className="studio-segment-references__card studio-segment-references__card--create"
                         type="button"
-                        disabled={!option.assetId || Boolean(creatingSegmentCharacterKey)}
+                        disabled={!canCreateCharacter || Boolean(creatingSegmentCharacterKey)}
                         onClick={() => {
                           void handleCreateSegmentReferenceCharacter(option);
                         }}
                       >
                         {renderSegmentReferencePreview(option.segment, `create-character:${option.segment.index}`)}
+                        {createsFromVideoFrame ? (
+                          <span className="studio-segment-references__badge">
+                            {workspaceText(locale, "Кадр", "Frame")}
+                          </span>
+                        ) : null}
                         <span className="studio-segment-references__card-copy">
                           <strong>{workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`)}</strong>
                           <small>
                             {isBusy
-                              ? workspaceText(locale, "Создаем...", "Creating...")
-                              : option.assetId
+                              ? createsFromVideoFrame
+                                ? workspaceText(locale, "Готовим кадр...", "Preparing frame...")
+                                : workspaceText(locale, "Создаем...", "Creating...")
+                              : createsFromVideoFrame
+                                ? workspaceText(locale, "Создать из кадра", "Create from frame")
+                                : option.assetId
                                 ? workspaceText(locale, "Создать персонажа", "Create character")
-                                : workspaceText(locale, "Нет фото", "No photo")}
+                                : workspaceText(locale, "Нет визуала", "No visual")}
                           </small>
                         </span>
                       </button>

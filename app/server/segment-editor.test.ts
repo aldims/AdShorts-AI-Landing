@@ -223,6 +223,44 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.originalPosterUrl).toContain("source=original");
   });
 
+  it("restores manual duration from upstream timeline metadata", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(42, {
+      duration: 10,
+      duration_mode: "manual",
+      end_time: 10,
+      index: 0,
+      manual_duration_seconds: 10,
+      media_type: "video",
+      start_time: 0,
+      text: "Locked timing",
+    });
+
+    expect(segment).toEqual(
+      expect.objectContaining({
+        duration: 10,
+        durationMode: "manual",
+        endTime: 10,
+        manualDurationSeconds: 10,
+        startTime: 0,
+      }),
+    );
+  });
+
+  it("derives manual duration when upstream marks a segment manual without the explicit field", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(42, {
+      duration: 10,
+      duration_mode: "manual",
+      end_time: 10,
+      index: 0,
+      media_type: "video",
+      start_time: 0,
+      text: "Legacy locked timing",
+    });
+
+    expect(segment?.durationMode).toBe("manual");
+    expect(segment?.manualDurationSeconds).toBe(10);
+  });
+
   it("does not treat a current upload as the original visual when an original marker exists", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

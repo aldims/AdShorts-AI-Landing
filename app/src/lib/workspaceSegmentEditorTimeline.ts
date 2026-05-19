@@ -149,19 +149,19 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
   );
   const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
+  const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
 
   if (segment.durationMode === "manual" && manualDuration !== null) {
     return Math.max(minimumDuration, manualDuration);
   }
 
-  if (voiceEnabled && speechDuration !== null) {
-    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, speechDuration);
+  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
+    return Math.max(minimumDuration, visualDuration);
   }
 
-  const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
-  const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
-  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
-    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, visualDuration);
+  if (voiceEnabled && speechDuration !== null) {
+    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, speechDuration);
   }
 
   if (options?.subtitleEnabled === false && visualKind === "image") {
