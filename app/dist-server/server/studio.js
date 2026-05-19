@@ -1770,14 +1770,14 @@ const fetchRemoteStudioGeneratedImage = async (url) => {
         mimeType: normalizeStudioGeneratedImageMimeType(response.headers.get("content-type")),
     };
 };
-const normalizeAdsflowSegmentAiPhotoAsset = async (payload) => {
+const normalizeAdsflowSegmentAiPhotoAsset = async (payload, options) => {
     const assetId = normalizePositiveInteger(payload?.media_asset_id) ?? null;
     const inlineDataUrl = normalizeGenerationText(payload?.data_url);
     const remoteUrl = resolveAdsflowAssetUrl(payload?.remote_url ?? payload?.download_url ?? payload?.url);
     if (!assetId && !inlineDataUrl && !remoteUrl) {
         throw new Error("AdsFlow did not return a generated image.");
     }
-    if (assetId) {
+    if (assetId && !(options?.preferPortableResult && (inlineDataUrl || remoteUrl))) {
         const mimeType = inferStudioGeneratedImageMimeType(payload?.mime_type, payload?.file_name, payload?.remote_url ?? payload?.download_url ?? payload?.url);
         const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
         return {
@@ -1808,7 +1808,6 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (payload) => {
     }
     const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
     return {
-        assetId,
         dataUrl: inlineDataUrl || buildDataUrlFromBytes(bytes, mimeType),
         fileName,
         fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),
@@ -3325,7 +3324,9 @@ export async function getStudioSegmentImageEditJobStatus(jobId, user) {
     const payload = await fetchAdsflowSegmentImageEditJobStatus(jobId, user);
     const status = String(payload.status ?? "queued").trim() || "queued";
     const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
-    const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+    const asset = payload.asset
+        ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset, { preferPortableResult: true })
+        : undefined;
     const error = normalizeGenerationText(payload.error) || undefined;
     if (error || status === "failed") {
         console.warn("[studio] segment-image-edit job status has error", JSON.stringify({

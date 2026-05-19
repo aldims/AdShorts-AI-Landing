@@ -2782,6 +2782,9 @@ const fetchRemoteStudioGeneratedImage = async (url: URL) => {
 
 const normalizeAdsflowSegmentAiPhotoAsset = async (
   payload?: AdsflowSegmentAiPhotoAssetPayload | null,
+  options?: {
+    preferPortableResult?: boolean;
+  },
 ): Promise<StudioGeneratedImageAsset> => {
   const assetId = normalizePositiveInteger(payload?.media_asset_id) ?? null;
   const inlineDataUrl = normalizeGenerationText(payload?.data_url);
@@ -2791,7 +2794,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
     throw new Error("AdsFlow did not return a generated image.");
   }
 
-  if (assetId) {
+  if (assetId && !(options?.preferPortableResult && (inlineDataUrl || remoteUrl))) {
     const mimeType = inferStudioGeneratedImageMimeType(
       payload?.mime_type,
       payload?.file_name,
@@ -2829,7 +2832,6 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
   const fileName = normalizeStudioGeneratedImageFileName(payload?.file_name, mimeType);
 
   return {
-    assetId,
     dataUrl: inlineDataUrl || buildDataUrlFromBytes(bytes, mimeType),
     fileName,
     fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),
@@ -4783,7 +4785,9 @@ export async function getStudioSegmentImageEditJobStatus(
   const payload = await fetchAdsflowSegmentImageEditJobStatus(jobId, user);
   const status = String(payload.status ?? "queued").trim() || "queued";
   const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
-  const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+  const asset = payload.asset
+    ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset, { preferPortableResult: true })
+    : undefined;
   const error = normalizeGenerationText(payload.error) || undefined;
 
   if (error || status === "failed") {

@@ -24004,26 +24004,25 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 
 .studio-segment-editor__timeline-drag-handle {
   position: absolute;
-  right: 12px;
-  top: -2px;
+  right: 10px;
+  top: 0;
   z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 18px;
+  width: 22px;
+  height: 14px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 6px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)),
-    rgba(2, 6, 12, 0.58);
-  color: rgba(203, 213, 225, 0.78);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    rgba(2, 6, 12, 0.34);
+  color: rgba(203, 213, 225, 0.48);
   cursor: grab;
+  opacity: 0.58;
   touch-action: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 16px -14px rgba(0, 0, 0, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition:
     transform 0.16s ease,
     border-color 0.16s ease,
@@ -24034,19 +24033,20 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-drag-handle.is-last {
-  right: 44px;
+  right: 42px;
 }
 
 .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
 .studio-segment-editor__timeline-drag-handle:focus-visible {
-  border-color: rgba(45, 212, 191, 0.42);
+  border-color: rgba(45, 212, 191, 0.26);
   background:
-    linear-gradient(180deg, rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0.045)),
-    rgba(2, 6, 12, 0.74);
-  color: rgba(240, 253, 250, 0.94);
+    linear-gradient(180deg, rgba(45, 212, 191, 0.12), rgba(45, 212, 191, 0.035)),
+    rgba(2, 6, 12, 0.52);
+  color: rgba(240, 253, 250, 0.76);
+  opacity: 0.86;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 18px rgba(45, 212, 191, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 12px rgba(45, 212, 191, 0.08);
   transform: translateY(-1px);
 }
 
@@ -24058,11 +24058,12 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 .studio-segment-editor__timeline-drag-handle:active,
 .studio-segment-editor__timeline-drag-handle.is-dragging {
   cursor: grabbing;
-  border-color: rgba(251, 191, 36, 0.48);
-  color: rgba(254, 243, 199, 0.96);
+  border-color: rgba(251, 191, 36, 0.32);
+  color: rgba(254, 243, 199, 0.82);
+  opacity: 0.9;
   background:
-    linear-gradient(180deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.06)),
-    rgba(2, 6, 12, 0.78);
+    linear-gradient(180deg, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0.045)),
+    rgba(2, 6, 12, 0.58);
 }
 
 .studio-segment-editor__timeline-drag-handle:disabled {
@@ -24072,13 +24073,13 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 
 .studio-segment-editor__timeline-drag-handle-dots {
   display: grid;
-  grid-template-columns: repeat(3, 3px);
-  gap: 2px 3px;
+  grid-template-columns: repeat(3, 2px);
+  gap: 2px;
 }
 
 .studio-segment-editor__timeline-drag-handle-dots span {
-  width: 3px;
-  height: 3px;
+  width: 2px;
+  height: 2px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -24168,7 +24169,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-cell--has-play {
-  padding-right: 46px;
+  padding-left: 46px;
 }
 
 .studio-segment-editor__timeline-cell--has-history {
@@ -24176,12 +24177,13 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
-  padding-right: 98px;
+  padding-left: 46px;
+  padding-right: 66px;
 }
 
 .studio-segment-editor__timeline-play {
   position: absolute;
-  right: 8px;
+  left: 8px;
   top: 50%;
   z-index: 8;
   display: inline-flex;
@@ -24272,14 +24274,8 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   right: 6px;
 }
 
-.studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-play {
-  right: auto;
-  left: 216px;
-}
-
 .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-history--before-play {
   right: 6px;
-  left: auto;
 }
 
 .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-cell-copy {
@@ -24464,7 +24460,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-cell--has-play.is-edited:not(.studio-segment-editor__timeline-cell--visual)::after {
-  right: 42px;
+  right: 8px;
 }
 
 .studio-segment-editor__timeline-cell--has-history.is-edited:not(.studio-segment-editor__timeline-cell--visual)::after {
@@ -24472,7 +24468,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history.is-edited:not(.studio-segment-editor__timeline-cell--visual)::after {
-  right: 96px;
+  right: 64px;
 }
 
 .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-cell.is-edited::after {
@@ -24480,8 +24476,8 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-segment-editor__timeline-cell.is-empty {
-  border-style: dashed;
-  opacity: 0.58;
+  border-style: solid;
+  opacity: 1;
 }
 
 .studio-segment-editor__timeline-cell.is-pending {
@@ -24491,25 +24487,16 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
     rgba(29, 18, 5, 0.42);
 }
 
-.studio-segment-editor__timeline-cell--music {
+.studio-segment-editor__timeline-cell--music,
+.studio-segment-editor__timeline-cell--voice,
+.studio-segment-editor__timeline-cell--sound,
+.studio-segment-editor__timeline-cell--text {
   min-height: 46px;
   overflow: hidden;
-  border-color: rgba(168, 85, 247, 0.22);
+  border-color: rgba(88, 101, 136, 0.38);
   background:
-    linear-gradient(90deg, rgba(88, 28, 135, 0.42), rgba(15, 23, 42, 0.5)),
-    rgba(17, 24, 39, 0.62);
-}
-
-.studio-segment-editor__timeline-cell--voice {
-  border-color: rgba(251, 191, 36, 0.18);
-}
-
-.studio-segment-editor__timeline-cell--sound {
-  border-color: rgba(45, 212, 191, 0.18);
-}
-
-.studio-segment-editor__timeline-cell--text {
-  border-color: rgba(96, 165, 250, 0.18);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(15, 23, 42, 0.22)),
+    rgba(15, 23, 42, 0.58);
 }
 
 .studio-segment-editor__timeline-status {
@@ -25239,7 +25226,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   }
 
   .studio-segment-editor__timeline-cell--has-play {
-    padding-right: 40px;
+    padding-left: 40px;
   }
 
   .studio-segment-editor__timeline-cell--has-history {
@@ -25247,15 +25234,16 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   }
 
   .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
-    padding-right: 88px;
+    padding-left: 40px;
+    padding-right: 58px;
   }
 
   .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history.is-edited:not(.studio-segment-editor__timeline-cell--visual)::after {
-    right: 86px;
+    right: 58px;
   }
 
   .studio-segment-editor__timeline-play {
-    right: 6px;
+    left: 6px;
     width: 28px;
     height: 28px;
   }
@@ -25264,13 +25252,8 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
     right: 6px;
   }
 
-  .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-play {
-    left: 194px;
-  }
-
   .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-history--before-play {
     right: 6px;
-    left: auto;
   }
 
   .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-cell-copy {
@@ -37896,17 +37879,18 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
   display: grid !important;
-  grid-template-columns: 34px minmax(0, 1fr) auto !important;
+  grid-template-columns: 54px minmax(0, 1fr) auto !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 12px !important;
   width: 100% !important;
   min-width: 0 !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon--asset {
-  width: 34px !important;
-  height: 34px !important;
+  justify-self: center !important;
+  width: 46px !important;
+  height: 46px !important;
   margin: 0 !important;
   opacity: 1 !important;
   filter: brightness(1.08) saturate(1.15) drop-shadow(0 0 10px rgba(216, 180, 254, 0.22)) !important;
@@ -37919,19 +37903,26 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label {
   display: grid !important;
+  align-content: center !important;
   gap: 2px !important;
+  justify-self: stretch !important;
+  max-width: 100% !important;
   min-width: 0 !important;
+  overflow: visible !important;
   text-align: left !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
-  overflow: hidden !important;
+  display: block !important;
+  overflow: visible !important;
   color: rgba(245, 243, 255, 0.96) !important;
   font-size: 0.8rem !important;
   font-weight: 900 !important;
   line-height: 1.08 !important;
-  text-overflow: ellipsis !important;
+  overflow-wrap: normal !important;
+  text-overflow: clip !important;
   white-space: nowrap !important;
+  word-break: normal !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-tool-label strong {
@@ -37939,13 +37930,16 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
-  overflow: hidden !important;
+  display: block !important;
+  overflow: visible !important;
   color: rgba(203, 213, 225, 0.64) !important;
   font-size: 0.62rem !important;
   font-weight: 720 !important;
   line-height: 1.12 !important;
-  text-overflow: ellipsis !important;
+  overflow-wrap: normal !important;
+  text-overflow: clip !important;
   white-space: nowrap !important;
+  word-break: normal !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-meta {
@@ -38032,18 +38026,18 @@ html, body {
 
 @media (min-width: 981px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-panel-width: clamp(560px, 44vw, 740px) !important;
+    --studio-segment-editor-panel-width: clamp(860px, 68vw, 980px) !important;
     --studio-segment-editor-carousel-width: clamp(
       220px,
       calc((var(--studio-segment-editor-viewport-height) - 500px) * 9 / 16),
       450px
     );
     grid-template-rows: minmax(0, 1fr) auto !important;
-    column-gap: clamp(40px, 5vw, 88px) !important;
+    column-gap: clamp(24px, 3vw, 56px) !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
-    padding-left: clamp(38px, 4.8vw, 92px) !important;
+    padding-left: clamp(18px, 2.8vw, 52px) !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
@@ -38105,24 +38099,26 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon {
-  min-height: 50px !important;
-  padding: 7px 10px !important;
+  min-height: 64px !important;
+  padding: 8px 14px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
-  grid-template-columns: 36px minmax(max-content, 1fr) auto !important;
-  gap: 8px !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto !important;
+  gap: 10px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon--asset {
-  width: 36px !important;
-  height: 36px !important;
+  justify-self: center !important;
+  width: 42px !important;
+  height: 42px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
   font-size: 0.86rem !important;
   overflow: visible !important;
+  overflow-wrap: normal !important;
   text-overflow: clip !important;
   white-space: nowrap !important;
 }
@@ -38130,8 +38126,25 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
   font-size: 0.66rem !important;
   overflow: visible !important;
+  overflow-wrap: normal !important;
   text-overflow: clip !important;
   white-space: nowrap !important;
+}
+
+@media (min-width: 981px) and (max-width: 1120px) {
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    --studio-segment-editor-panel-width: min(calc(100vw - 48px), 720px) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
+    grid-template-columns: 1fr !important;
+    row-gap: 12px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--create,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit {
+    grid-column: 1 !important;
+  }
 }
 
 .studio-canvas-main.is-segment-editor .studio-character-continuity--editor {
@@ -38328,7 +38341,7 @@ html, body {
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open {
     grid-template-columns: var(--studio-segment-editor-panel-width) minmax(0, 1fr) !important;
-    column-gap: clamp(40px, 5vw, 88px) !important;
+    column-gap: clamp(24px, 3vw, 56px) !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-closed {
@@ -38397,8 +38410,8 @@ html, body {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__preview-column {
     grid-column: 2;
     grid-row: 1;
-    padding-left: clamp(38px, 4.8vw, 92px) !important;
-    transform: translateX(clamp(10px, 1.4vw, 26px));
+    padding-left: clamp(18px, 2.8vw, 52px) !important;
+    transform: translateX(clamp(6px, 0.8vw, 16px));
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-closed .studio-segment-editor__preview-column {

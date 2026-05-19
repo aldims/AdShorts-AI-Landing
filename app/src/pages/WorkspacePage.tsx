@@ -7938,6 +7938,18 @@ const isWorkspaceSegmentCustomVisualSameAsOriginal = (
   return getWorkspaceSegmentOriginalVisualIdentityKey(segment) === assetIdentity;
 };
 
+const isWorkspaceSegmentCustomVisualSameAsCurrent = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  asset: StudioCustomVideoFile | null | undefined,
+) => {
+  const assetIdentity = getStudioCustomVideoFileIdentityKey(asset);
+  if (!assetIdentity) {
+    return false;
+  }
+
+  return getWorkspaceSegmentCurrentVisualIdentityKey(segment) === assetIdentity;
+};
+
 export const buildWorkspaceSegmentEditorPayload = async (
   session: WorkspaceSegmentEditorDraftSession,
   options: {
@@ -7986,8 +7998,15 @@ export const buildWorkspaceSegmentEditorPayload = async (
     let customVideoFileUploadKey: string | undefined;
     let customVideoRemoteUrl: string | undefined;
     const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(segment.sceneSoundAsset?.assetId) ?? undefined;
+    const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
+      payloadVideoAction === "custom" &&
+      (exportAction === "custom" || exportAction === "ai_photo" || exportAction === "image_edit") &&
+      isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
+      isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)
+        ? "original"
+        : payloadVideoAction;
 
-    if (payloadVideoAction === "custom") {
+    if (payloadVideoActionForSegment === "custom") {
       if (isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset)) {
         throw new Error(
           `Визуал сегмента ${segment.index + 1} не обновился. Сгенерируйте ИИ фото ещё раз или обновите редактор.`,
@@ -8019,8 +8038,8 @@ export const buildWorkspaceSegmentEditorPayload = async (
     segments.push({
       customVideoAssetId,
       customVideoFileDataUrl,
-      customVideoFileMimeType: payloadVideoAction === "custom" ? customVisualAsset?.mimeType : undefined,
-      customVideoFileName: payloadVideoAction === "custom" ? customVisualAsset?.fileName : undefined,
+      customVideoFileMimeType: payloadVideoActionForSegment === "custom" ? customVisualAsset?.mimeType : undefined,
+      customVideoFileName: payloadVideoActionForSegment === "custom" ? customVisualAsset?.fileName : undefined,
       customVideoRemoteUrl,
       customVideoFileUploadKey,
       duration: segment.duration,
@@ -8033,7 +8052,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       sceneSoundAssetId,
       startTime: segment.startTime,
       text: segment.text,
-      videoAction: payloadVideoAction,
+      videoAction: payloadVideoActionForSegment,
       voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
     });
   }

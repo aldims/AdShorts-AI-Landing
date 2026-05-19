@@ -1127,6 +1127,121 @@ describe("WorkspacePage studio locale defaults", () => {
     ).rejects.toThrow("Визуал сегмента 1 не обновился");
   });
 
+  it("keeps the existing visual when custom media already matches the current segment media", async () => {
+    const originalAsset = createMediaAsset(101, {
+      kind: "segment_original",
+      mediaType: "photo",
+      role: "segment_original",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(303, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      currentAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      customVideo: {
+        assetId: 303,
+        fileName: "applied-ai-photo.jpg",
+        fileSize: 0,
+        mimeType: "image/jpeg",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      text: "Updated text",
+      videoAction: "custom",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]?.videoAction).toBe("original");
+    expect(result.payload.segments[0]?.customVideoAssetId).toBeUndefined();
+  });
+
+  it("keeps an already-applied AI photo when it matches the current segment media", async () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(303, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 303,
+        fileName: "applied-ai-photo.jpg",
+        fileSize: 0,
+        mimeType: "image/jpeg",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      aiPhotoGeneratedFromPrompt: "new photo",
+      aiPhotoPrompt: "new photo",
+      aiPhotoPromptInitialized: true,
+      currentAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "ai_photo",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: undefined,
+      videoAction: "original",
+    });
+  });
+
+  it("keeps an already-applied image edit when it matches the current segment media", async () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(404, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      currentAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/404",
+      currentSourceKind: "ai_generated",
+      imageEditAsset: {
+        assetId: 404,
+        fileName: "applied-image-edit.jpg",
+        fileSize: 0,
+        mimeType: "image/jpeg",
+        remoteUrl: "/api/workspace/media-assets/404",
+      },
+      imageEditGeneratedFromPrompt: "extend background",
+      imageEditPrompt: "extend background",
+      imageEditPromptInitialized: true,
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "image_edit",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: undefined,
+      videoAction: "original",
+    });
+  });
+
   it("allows exporting an already-applied AI animation while adding scene sound", async () => {
     const originalAsset = createMediaAsset(3543, {
       mediaType: "photo",
