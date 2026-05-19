@@ -347,6 +347,20 @@ const normalizePositiveIntegerList = (value) => {
     }
     return result;
 };
+const normalizeTextList = (value) => {
+    const source = Array.isArray(value) ? value : [];
+    const result = [];
+    const seen = new Set();
+    for (const item of source) {
+        const text = String(item ?? "").trim();
+        const key = text.toLowerCase();
+        if (text && !seen.has(key)) {
+            seen.add(key);
+            result.push(text);
+        }
+    }
+    return result;
+};
 const normalizeCharacterContinuityMode = (value, preserveCharacters) => {
     if (!preserveCharacters) {
         return "off";
@@ -354,12 +368,38 @@ const normalizeCharacterContinuityMode = (value, preserveCharacters) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return normalized === "auto" || normalized === "force" ? normalized : "force";
 };
+const normalizeAdsflowProjectCharacter = (payload) => {
+    const characterId = normalizePositiveInteger(payload?.character_id ?? payload?.characterId);
+    const label = normalizeGenerationText(payload?.label);
+    if (!characterId || !label) {
+        return null;
+    }
+    return {
+        aliases: normalizeTextList(payload?.aliases),
+        characterId,
+        description: normalizeGenerationText(payload?.description) || null,
+        label,
+        referenceAssetIds: normalizePositiveIntegerList(payload?.reference_asset_ids ?? payload?.referenceAssetIds),
+        sourceSegmentIds: normalizeNonNegativeIntegerList(payload?.source_segment_ids ?? payload?.sourceSegmentIds),
+    };
+};
 const normalizeNonNegativeInteger = (value) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric))
         return null;
     const rounded = Math.trunc(numeric);
     return rounded >= 0 ? rounded : null;
+};
+const normalizeNonNegativeIntegerList = (value) => {
+    const source = Array.isArray(value) ? value : [];
+    const result = [];
+    for (const item of source) {
+        const normalized = normalizeNonNegativeInteger(item);
+        if (normalized !== null && !result.includes(normalized)) {
+            result.push(normalized);
+        }
+    }
+    return result;
 };
 const normalizeNumber = (value) => {
     const numeric = Number(value);
@@ -2520,6 +2560,49 @@ const postAdsflowJson = async (path, body, options) => {
         body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
     }, options);
 };
+export async function getStudioProjectCharacters(projectId, _user, options) {
+    assertAdsflowConfigured();
+    const normalizedProjectId = normalizePositiveInteger(projectId);
+    if (!normalizedProjectId) {
+        throw new Error("Project id is required.");
+    }
+    const payload = await fetchAdsflowJson(buildAdsflowUrl(`/api/projects/${encodeURIComponent(String(normalizedProjectId))}/characters`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        bootstrap: options?.bootstrap === true ? "true" : "false",
+    }), undefined, { retryDelaysMs: [], timeoutMs: ADSFLOW_FETCH_TIMEOUT_MS });
+    return {
+        characters: (payload.characters ?? []).map(normalizeAdsflowProjectCharacter).filter(Boolean),
+        projectId: normalizedProjectId,
+    };
+}
+export async function createStudioProjectCharacter(projectId, _user, options) {
+    assertAdsflowConfigured();
+    const normalizedProjectId = normalizePositiveInteger(projectId);
+    const label = normalizeGenerationText(options.label);
+    const referenceAssetIds = normalizePositiveIntegerList(options.referenceAssetIds);
+    if (!normalizedProjectId) {
+        throw new Error("Project id is required.");
+    }
+    if (!label) {
+        throw new Error("Character name is required.");
+    }
+    if (referenceAssetIds.length === 0) {
+        throw new Error("Character reference asset is required.");
+    }
+    const payload = await postAdsflowJson(`/api/projects/${encodeURIComponent(String(normalizedProjectId))}/characters/upsert-from-generation`, {
+        admin_token: env.adsflowAdminToken,
+        aliases: normalizeTextList(options.aliases),
+        description: normalizeGenerationText(options.description) || undefined,
+        label,
+        prompt: label,
+        reference_asset_ids: referenceAssetIds,
+        segment_index: normalizeNonNegativeInteger(options.segmentIndex),
+    }, { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS });
+    return {
+        characters: (payload.characters ?? []).map(normalizeAdsflowProjectCharacter).filter(Boolean),
+        projectId: normalizedProjectId,
+    };
+}
 const uploadStudioMediaAsset = async (user, options) => {
     const normalizedDataUrl = String(options.dataUrl ?? "").trim();
     if (!normalizedDataUrl) {
@@ -3185,6 +3268,7 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
     const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
     const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
     const normalizedMimeType = normalizedImageDataUrl
         ? (() => {
             const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
@@ -3237,6 +3321,7 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
             project_id: normalizedProjectId,
             prompt: upstreamPrompt,
             reference_asset_ids: referenceAssetIds,
+            scene_reference_asset_ids: sceneReferenceAssetIds,
             segment_index: normalizedSegmentIndex,
             user_email: user.email ?? undefined,
             user_name: user.name ?? undefined,
@@ -3476,6 +3561,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
     const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
@@ -3491,6 +3577,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
         reference_asset_ids: referenceAssetIds,
+        scene_reference_asset_ids: sceneReferenceAssetIds,
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
@@ -3524,6 +3611,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
     const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-video/jobs", {
@@ -3540,6 +3628,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
         reference_asset_ids: referenceAssetIds,
+        scene_reference_asset_ids: sceneReferenceAssetIds,
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,

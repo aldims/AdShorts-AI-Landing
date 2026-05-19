@@ -18,7 +18,7 @@ import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -2765,6 +2765,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
     const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -2786,6 +2787,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
             preserveCharacters,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             referenceAssetIds,
+            sceneReferenceAssetIds,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
         });
         res.json({ data: job });
@@ -2874,6 +2876,77 @@ app.post("/api/studio/translate", async (req, res) => {
         });
     }
 });
+app.get("/api/studio/projects/:projectId/characters", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = normalizeRequestPositiveInteger(req.params.projectId);
+    if (!projectId) {
+        res.status(400).json({ error: "Project id is required." });
+        return;
+    }
+    try {
+        const result = await getStudioProjectCharacters(projectId, session.user, {
+            bootstrap: req.query.bootstrap === "true",
+        });
+        res.json({ data: result });
+    }
+    catch (error) {
+        console.error("[studio] Failed to fetch project characters", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to fetch project characters.",
+        });
+    }
+});
+app.post("/api/studio/projects/:projectId/characters", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = normalizeRequestPositiveInteger(req.params.projectId);
+    const label = typeof req.body?.label === "string" ? req.body.label.trim() : "";
+    const description = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+    const aliases = Array.isArray(req.body?.aliases)
+        ? req.body.aliases.map((item) => String(item ?? "").trim()).filter(Boolean)
+        : [];
+    const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds ?? req.body?.reference_asset_ids);
+    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+    if (!projectId) {
+        res.status(400).json({ error: "Project id is required." });
+        return;
+    }
+    if (!label) {
+        res.status(400).json({ error: "Character name is required." });
+        return;
+    }
+    if (referenceAssetIds.length === 0) {
+        res.status(400).json({ error: "Character reference asset is required." });
+        return;
+    }
+    try {
+        const result = await createStudioProjectCharacter(projectId, session.user, {
+            aliases,
+            description,
+            label,
+            referenceAssetIds,
+            segmentIndex,
+        });
+        res.json({ data: result });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create project character", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to create project character.",
+        });
+    }
+});
 app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -2889,6 +2962,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
     const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -2904,6 +2978,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             referenceAssetIds,
+            sceneReferenceAssetIds,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
         });
         res.json({ data: job });
@@ -2957,6 +3032,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
     const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
+    const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
@@ -2978,6 +3054,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             referenceAssetIds,
+            sceneReferenceAssetIds,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
         });
         res.json({ data: job });

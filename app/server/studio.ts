@@ -252,6 +252,23 @@ type AdsflowSegmentAiPhotoJobStatusResponse = {
   user?: AdsflowWebUserPayload | null;
 };
 
+type AdsflowProjectCharacterPayload = {
+  aliases?: unknown;
+  character_id?: number | string | null;
+  characterId?: number | string | null;
+  description?: string | null;
+  label?: string | null;
+  reference_asset_ids?: unknown;
+  referenceAssetIds?: unknown;
+  source_segment_ids?: unknown;
+  sourceSegmentIds?: unknown;
+};
+
+type AdsflowProjectCharactersResponse = {
+  characters?: AdsflowProjectCharacterPayload[] | null;
+  project_id?: number | string | null;
+};
+
 type AdsflowSegmentAiVideoAssetPayload = {
   download_url?: string | null;
   file_name?: string | null;
@@ -431,6 +448,20 @@ export type StudioSegmentAiVideoJobStatus = {
   jobId: string;
   profile: WorkspaceProfile;
   status: string;
+};
+
+export type StudioProjectCharacter = {
+  aliases: string[];
+  characterId: number;
+  description: string | null;
+  label: string;
+  referenceAssetIds: number[];
+  sourceSegmentIds: number[];
+};
+
+export type StudioProjectCharactersResult = {
+  characters: StudioProjectCharacter[];
+  projectId: number;
 };
 
 export type StudioSegmentSceneSoundJob = {
@@ -940,6 +971,21 @@ const normalizePositiveIntegerList = (value: unknown) => {
   return result;
 };
 
+const normalizeTextList = (value: unknown) => {
+  const source = Array.isArray(value) ? value : [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of source) {
+    const text = String(item ?? "").trim();
+    const key = text.toLowerCase();
+    if (text && !seen.has(key)) {
+      seen.add(key);
+      result.push(text);
+    }
+  }
+  return result;
+};
+
 const normalizeCharacterContinuityMode = (value: unknown, preserveCharacters: boolean) => {
   if (!preserveCharacters) {
     return "off";
@@ -948,12 +994,43 @@ const normalizeCharacterContinuityMode = (value: unknown, preserveCharacters: bo
   return normalized === "auto" || normalized === "force" ? normalized : "force";
 };
 
+const normalizeAdsflowProjectCharacter = (
+  payload: AdsflowProjectCharacterPayload | null | undefined,
+): StudioProjectCharacter | null => {
+  const characterId = normalizePositiveInteger(payload?.character_id ?? payload?.characterId);
+  const label = normalizeGenerationText(payload?.label);
+  if (!characterId || !label) {
+    return null;
+  }
+
+  return {
+    aliases: normalizeTextList(payload?.aliases),
+    characterId,
+    description: normalizeGenerationText(payload?.description) || null,
+    label,
+    referenceAssetIds: normalizePositiveIntegerList(payload?.reference_asset_ids ?? payload?.referenceAssetIds),
+    sourceSegmentIds: normalizeNonNegativeIntegerList(payload?.source_segment_ids ?? payload?.sourceSegmentIds),
+  };
+};
+
 const normalizeNonNegativeInteger = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
 
   const rounded = Math.trunc(numeric);
   return rounded >= 0 ? rounded : null;
+};
+
+const normalizeNonNegativeIntegerList = (value: unknown) => {
+  const source = Array.isArray(value) ? value : [];
+  const result: number[] = [];
+  for (const item of source) {
+    const normalized = normalizeNonNegativeInteger(item);
+    if (normalized !== null && !result.includes(normalized)) {
+      result.push(normalized);
+    }
+  }
+  return result;
 };
 
 const normalizeNumber = (value: unknown) => {
@@ -3747,6 +3824,79 @@ const postAdsflowJson = async <T>(path: string, body: Record<string, unknown>, o
   }, options);
 };
 
+export async function getStudioProjectCharacters(
+  projectId: number,
+  _user: StudioUser,
+  options?: { bootstrap?: boolean },
+): Promise<StudioProjectCharactersResult> {
+  assertAdsflowConfigured();
+
+  const normalizedProjectId = normalizePositiveInteger(projectId);
+  if (!normalizedProjectId) {
+    throw new Error("Project id is required.");
+  }
+
+  const payload = await fetchAdsflowJson<AdsflowProjectCharactersResponse>(
+    buildAdsflowUrl(`/api/projects/${encodeURIComponent(String(normalizedProjectId))}/characters`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      bootstrap: options?.bootstrap === true ? "true" : "false",
+    }),
+    undefined,
+    { retryDelaysMs: [], timeoutMs: ADSFLOW_FETCH_TIMEOUT_MS },
+  );
+
+  return {
+    characters: (payload.characters ?? []).map(normalizeAdsflowProjectCharacter).filter(Boolean) as StudioProjectCharacter[],
+    projectId: normalizedProjectId,
+  };
+}
+
+export async function createStudioProjectCharacter(
+  projectId: number,
+  _user: StudioUser,
+  options: {
+    aliases?: string[];
+    description?: string;
+    label: string;
+    referenceAssetIds: number[];
+    segmentIndex?: number;
+  },
+): Promise<StudioProjectCharactersResult> {
+  assertAdsflowConfigured();
+
+  const normalizedProjectId = normalizePositiveInteger(projectId);
+  const label = normalizeGenerationText(options.label);
+  const referenceAssetIds = normalizePositiveIntegerList(options.referenceAssetIds);
+  if (!normalizedProjectId) {
+    throw new Error("Project id is required.");
+  }
+  if (!label) {
+    throw new Error("Character name is required.");
+  }
+  if (referenceAssetIds.length === 0) {
+    throw new Error("Character reference asset is required.");
+  }
+
+  const payload = await postAdsflowJson<AdsflowProjectCharactersResponse>(
+    `/api/projects/${encodeURIComponent(String(normalizedProjectId))}/characters/upsert-from-generation`,
+    {
+      admin_token: env.adsflowAdminToken,
+      aliases: normalizeTextList(options.aliases),
+      description: normalizeGenerationText(options.description) || undefined,
+      label,
+      prompt: label,
+      reference_asset_ids: referenceAssetIds,
+      segment_index: normalizeNonNegativeInteger(options.segmentIndex),
+    },
+    { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS },
+  );
+
+  return {
+    characters: (payload.characters ?? []).map(normalizeAdsflowProjectCharacter).filter(Boolean) as StudioProjectCharacter[],
+    projectId: normalizedProjectId,
+  };
+}
+
 const uploadStudioMediaAsset = async (
   user: StudioUser,
   options: {
@@ -4592,6 +4742,7 @@ export async function createStudioSegmentImageEditJob(
     preserveCharacters?: boolean;
     projectId?: number;
     referenceAssetIds?: number[];
+    sceneReferenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiPhotoJob> {
@@ -4618,6 +4769,7 @@ export async function createStudioSegmentImageEditJob(
   const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
   const characterIds = normalizePositiveIntegerList(options?.characterIds);
   const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+  const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
   const normalizedMimeType = normalizedImageDataUrl
     ? (() => {
         const decodedImage = decodeDataUrlBytes(normalizedImageDataUrl);
@@ -4671,6 +4823,7 @@ export async function createStudioSegmentImageEditJob(
       project_id: normalizedProjectId,
       prompt: upstreamPrompt,
       reference_asset_ids: referenceAssetIds,
+      scene_reference_asset_ids: sceneReferenceAssetIds,
       segment_index: normalizedSegmentIndex,
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,
@@ -4991,6 +5144,7 @@ export async function createStudioSegmentAiPhotoJob(
     preserveCharacters?: boolean;
     projectId?: number;
     referenceAssetIds?: number[];
+    sceneReferenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiPhotoJob> {
@@ -5013,6 +5167,7 @@ export async function createStudioSegmentAiPhotoJob(
   const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
   const characterIds = normalizePositiveIntegerList(options?.characterIds);
   const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+  const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-ai-photo/jobs", {
@@ -5028,6 +5183,7 @@ export async function createStudioSegmentAiPhotoJob(
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
     reference_asset_ids: referenceAssetIds,
+    scene_reference_asset_ids: sceneReferenceAssetIds,
     segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
@@ -5065,6 +5221,7 @@ export async function createStudioSegmentAiVideoJob(
     preserveCharacters?: boolean;
     projectId?: number;
     referenceAssetIds?: number[];
+    sceneReferenceAssetIds?: number[];
     segmentIndex?: number;
   },
 ): Promise<StudioSegmentAiVideoJob> {
@@ -5088,6 +5245,7 @@ export async function createStudioSegmentAiVideoJob(
   const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
   const characterIds = normalizePositiveIntegerList(options?.characterIds);
   const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
+  const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
@@ -5104,6 +5262,7 @@ export async function createStudioSegmentAiVideoJob(
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
     reference_asset_ids: referenceAssetIds,
+    scene_reference_asset_ids: sceneReferenceAssetIds,
     segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
