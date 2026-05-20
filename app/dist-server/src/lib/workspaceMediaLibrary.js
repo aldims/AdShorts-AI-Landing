@@ -92,11 +92,14 @@ export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item) => (item.k
     : typeof item.assetId === "number" && item.assetId > 0
         ? `asset:${item.assetId}`
         : getWorkspaceMediaLibraryAssetIdentity(item.previewUrl);
-export const getWorkspaceMediaLibraryResolvedDedupeKey = (item) => `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
+export const getWorkspaceMediaLibraryResolvedDedupeKey = (item) => (item.kind === "character_reference" || item.kind === "scene_reference") && item.referenceId
+    ? `${item.kind}:reference:${item.referenceId}`
+    : `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
 export const getWorkspaceMediaLibraryHiddenIdentityKeys = (item) => Array.from(new Set([
     item.itemKey,
     item.dedupeKey,
     getWorkspaceMediaLibraryResolvedDedupeKey(item),
+    item.referenceId ? `reference:${item.referenceId}` : "",
     typeof item.assetId === "number" && item.assetId > 0 ? `asset:${Math.trunc(item.assetId)}` : "",
 ]
     .map((value) => String(value ?? "").trim())
@@ -133,6 +136,11 @@ export const dedupeWorkspaceMediaLibraryItems = (items) => {
     return Array.from(itemsByPrimaryKey.values());
 };
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options) => {
+    if ((options.kind === "character_reference" || options.kind === "scene_reference") &&
+        typeof options.referenceId === "string" &&
+        options.referenceId.trim()) {
+        return `reference:${options.kind}:${options.referenceId.trim()}`;
+    }
     if (typeof options.assetId === "number" && options.assetId > 0) {
         return `asset:${options.assetId}`;
     }
@@ -148,6 +156,7 @@ export const buildWorkspaceMediaLibraryItemKey = (source, options) => {
         projectId: options.projectId,
         segmentIndex: options.segmentIndex,
         assetId: options.assetId,
+        referenceId: options.referenceId,
     })}`;
 };
 export const createWorkspaceMediaLibraryItem = (options) => {
@@ -157,6 +166,7 @@ export const createWorkspaceMediaLibraryItem = (options) => {
         kind: options.kind,
         previewUrl: options.previewUrl,
         projectId: options.projectId,
+        referenceId: options.referenceId,
         segmentIndex: options.segmentIndex,
     });
     return {
@@ -178,6 +188,7 @@ export const createWorkspaceMediaLibraryItem = (options) => {
             segmentIndex: options.segmentIndex,
             sourceJobId: options.sourceJobId,
             assetId: options.assetId,
+            referenceId: options.referenceId,
         }),
         kind: options.kind,
         previewKind: options.previewKind,
@@ -185,6 +196,7 @@ export const createWorkspaceMediaLibraryItem = (options) => {
         previewUrl: options.previewUrl,
         projectId: options.projectId,
         projectTitle: options.projectTitle,
+        referenceId: typeof options.referenceId === "string" && options.referenceId.trim() ? options.referenceId.trim() : null,
         segmentIndex: options.segmentIndex,
         segmentListIndex: options.segmentListIndex,
         segmentNumber,

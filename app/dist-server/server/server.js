@@ -14,6 +14,7 @@ import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWor
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCacheByIdentityFragments, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
 import { getWorkspaceProjectMusicAudioProxyTarget, getWorkspaceProjectSegmentVoiceoverProxyTarget, getWorkspaceProjectSegmentVideoProxyTarget, WorkspaceSegmentEditorError, getWorkspaceSegmentEditorSession, invalidateWorkspaceSegmentEditorSessionCache, } from "./segment-editor.js";
 import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, invalidateWorkspaceMediaLibraryCache, WorkspaceMediaLibraryPreviewError, } from "./media-library.js";
+import { createWorkspaceSavedReference, deleteWorkspaceSavedReference, listWorkspaceSavedReferences, updateWorkspaceSavedReference, } from "./workspace-references.js";
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
@@ -1357,6 +1358,107 @@ app.get("/api/workspace/media-library", async (req, res) => {
         console.error("[workspace] Failed to load media library", error);
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load media library.",
+        });
+    }
+});
+app.get("/api/workspace/references", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const kind = typeof req.query.kind === "string" ? req.query.kind.trim() : "";
+    try {
+        const references = await listWorkspaceSavedReferences(session.user, {
+            kind: kind === "character" || kind === "scene" ? kind : null,
+        });
+        res.json({ data: { references } });
+    }
+    catch (error) {
+        console.error("[workspace] Failed to load saved references", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load saved references.",
+        });
+    }
+});
+app.post("/api/workspace/references", express.json({ limit: "2mb" }), async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const reference = await createWorkspaceSavedReference(session.user, {
+            assetId: req.body?.assetId ?? req.body?.asset_id,
+            description: req.body?.description,
+            kind: req.body?.kind,
+            name: req.body?.name,
+            sourceProjectId: req.body?.sourceProjectId ?? req.body?.source_project_id,
+            sourceSegmentIndex: req.body?.sourceSegmentIndex ?? req.body?.source_segment_index,
+        });
+        invalidateWorkspaceMediaLibraryCache(session.user);
+        res.status(201).json({ data: { reference } });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to save reference.",
+        });
+    }
+});
+app.patch("/api/workspace/references/:referenceId", express.json({ limit: "2mb" }), async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const patch = {};
+        if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "description")) {
+            patch.description = req.body.description;
+        }
+        if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "name")) {
+            patch.name = req.body.name;
+        }
+        const reference = await updateWorkspaceSavedReference(session.user, req.params.referenceId, patch);
+        if (!reference) {
+            res.status(404).json({ error: "Reference not found." });
+            return;
+        }
+        invalidateWorkspaceMediaLibraryCache(session.user);
+        res.json({ data: { reference } });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to update reference.",
+        });
+    }
+});
+app.delete("/api/workspace/references/:referenceId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const result = await deleteWorkspaceSavedReference(session.user, req.params.referenceId);
+        if (!result) {
+            res.status(404).json({ error: "Reference not found." });
+            return;
+        }
+        invalidateWorkspaceMediaLibraryCache(session.user);
+        res.json({ data: result });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to delete reference.",
         });
     }
 });
@@ -2961,6 +3063,8 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     const preserveCharacters = req.body?.preserveCharacters === true;
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
     const characterIds = normalizeRequestPositiveIntegerList(req.body?.characterIds);
+    const purpose = typeof req.body?.purpose === "string" ? req.body.purpose.trim() : "";
+    const referenceKind = typeof req.body?.referenceKind === "string" ? req.body.referenceKind.trim() : "";
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const projectId = Number(req.body?.projectId ?? 0);
@@ -2977,6 +3081,8 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
             preserveCharacters,
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+            purpose,
+            referenceKind,
             referenceAssetIds,
             sceneReferenceAssetIds,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,

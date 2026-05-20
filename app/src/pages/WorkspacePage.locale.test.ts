@@ -6,12 +6,15 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import {
   buildWorkspaceSegmentEditorPayload,
   buildWorkspaceSegmentEditorChangeChecklist,
+  buildWorkspaceSegmentVisualReferenceRequest,
   createStudioCustomVideoFileFromMediaLibraryItem,
+  buildWorkspaceReferenceAiPrompt,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
+  getNextWorkspaceReferenceDefaultName,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
@@ -328,6 +331,109 @@ describe("WorkspacePage segment subtitle bulk text", () => {
 
     expect(result.error).toBe("Для 5 сегментов нужно минимум 5 слов.");
     expect(result.texts).toEqual([]);
+  });
+});
+
+describe("WorkspacePage segment visual references payload", () => {
+  it("uses project character ids without duplicating them as asset references", () => {
+    expect(
+      buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds: [12, 12, "bad", 0],
+        referenceAssetIds: [],
+        sceneReferenceAssetIds: [],
+      }),
+    ).toEqual({
+      characterContinuityMode: "force",
+      characterIds: [12],
+      preserveCharacters: true,
+      referenceAssetIds: [],
+      sceneReferenceAssetIds: [],
+    });
+  });
+
+  it("uses saved character assets as referenceAssetIds", () => {
+    expect(
+      buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds: [],
+        referenceAssetIds: [501],
+        sceneReferenceAssetIds: [],
+      }),
+    ).toMatchObject({
+      characterContinuityMode: "force",
+      characterIds: [],
+      preserveCharacters: true,
+      referenceAssetIds: [501],
+    });
+  });
+
+  it("allows character and scene references together", () => {
+    expect(
+      buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds: [],
+        referenceAssetIds: [501],
+        sceneReferenceAssetIds: [901],
+      }),
+    ).toEqual({
+      characterContinuityMode: "force",
+      characterIds: [],
+      preserveCharacters: true,
+      referenceAssetIds: [501],
+      sceneReferenceAssetIds: [901],
+    });
+  });
+});
+
+describe("WorkspacePage reference creation defaults", () => {
+  it("uses the next default character and scene names independently", () => {
+    const references = [
+      { kind: "character" as const, name: "Персонаж 1" },
+      { kind: "character" as const, name: "Персонаж 3" },
+      { kind: "character" as const, name: "Hero" },
+      { kind: "scene" as const, name: "Сцена 2" },
+    ];
+
+    expect(getNextWorkspaceReferenceDefaultName(references, "character")).toBe("Персонаж 4");
+    expect(getNextWorkspaceReferenceDefaultName(references, "scene")).toBe("Сцена 3");
+  });
+
+  it("builds character prompts from structured creation fields", () => {
+    expect(
+      buildWorkspaceReferenceAiPrompt({
+        character: {
+          ageRange: "25-35 лет",
+          description: "Темные волосы, студийный портрет.",
+          gender: "male",
+          style: "Реалистичный",
+        },
+        kind: "character",
+      }),
+    ).toContain("Пол персонажа: мужской");
+    expect(
+      buildWorkspaceReferenceAiPrompt({
+        character: {
+          ageRange: "25-35 лет",
+          description: "Темные волосы, студийный портрет.",
+          gender: "male",
+          style: "Реалистичный",
+        },
+        kind: "character",
+      }),
+    ).toContain("Темные волосы");
+  });
+
+  it("builds scene prompts from structured creation fields", () => {
+    const prompt = buildWorkspaceReferenceAiPrompt({
+      kind: "scene",
+      scene: {
+        description: "Кафе у окна, детальная композиция.",
+        lightingMood: "Теплый вечерний свет",
+        placeType: "Интерьер",
+        style: "Кинематографичная",
+      },
+    });
+
+    expect(prompt).toContain("Тип сцены: Интерьер");
+    expect(prompt).toContain("Свет и атмосфера: Теплый вечерний свет");
   });
 });
 

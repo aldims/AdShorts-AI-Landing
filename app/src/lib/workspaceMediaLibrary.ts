@@ -2,7 +2,14 @@ import type { WorkspaceMediaAssetLifecycle } from "../../shared/workspace-media-
 
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
 
-export type WorkspaceMediaLibraryItemKind = "ai_photo" | "ai_video" | "photo_animation" | "talking_photo" | "image_edit";
+export type WorkspaceMediaLibraryItemKind =
+  | "ai_photo"
+  | "ai_video"
+  | "photo_animation"
+  | "talking_photo"
+  | "image_edit"
+  | "character_reference"
+  | "scene_reference";
 export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
 
@@ -23,6 +30,7 @@ export type WorkspaceMediaLibraryItem = {
   previewUrl: string;
   projectId: number;
   projectTitle: string;
+  referenceId?: string | null;
   segmentIndex: number;
   segmentListIndex: number;
   segmentNumber: number;
@@ -161,12 +169,15 @@ export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
 
 export const getWorkspaceMediaLibraryResolvedDedupeKey = (item: Pick<
   WorkspaceMediaLibraryItem,
-  "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
->) => `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
+  "assetId" | "kind" | "previewPosterUrl" | "previewUrl" | "referenceId"
+>) =>
+  (item.kind === "character_reference" || item.kind === "scene_reference") && item.referenceId
+    ? `${item.kind}:reference:${item.referenceId}`
+    : `${item.kind}:${getWorkspaceMediaLibraryDisplayAssetIdentityKey(item)}`;
 
 export const getWorkspaceMediaLibraryHiddenIdentityKeys = (item: Pick<
   WorkspaceMediaLibraryItem,
-  "assetId" | "dedupeKey" | "itemKey" | "kind" | "previewPosterUrl" | "previewUrl"
+  "assetId" | "dedupeKey" | "itemKey" | "kind" | "previewPosterUrl" | "previewUrl" | "referenceId"
 >) =>
   Array.from(
     new Set(
@@ -174,6 +185,7 @@ export const getWorkspaceMediaLibraryHiddenIdentityKeys = (item: Pick<
         item.itemKey,
         item.dedupeKey,
         getWorkspaceMediaLibraryResolvedDedupeKey(item),
+        item.referenceId ? `reference:${item.referenceId}` : "",
         typeof item.assetId === "number" && item.assetId > 0 ? `asset:${Math.trunc(item.assetId)}` : "",
       ]
         .map((value) => String(value ?? "").trim())
@@ -243,8 +255,17 @@ export const buildWorkspaceMediaLibraryItemDedupeKey = (options: {
   kind: WorkspaceMediaLibraryItemKind;
   previewUrl: string;
   projectId: number;
+  referenceId?: string | null;
   segmentIndex: number;
 }) => {
+  if (
+    (options.kind === "character_reference" || options.kind === "scene_reference") &&
+    typeof options.referenceId === "string" &&
+    options.referenceId.trim()
+  ) {
+    return `reference:${options.kind}:${options.referenceId.trim()}`;
+  }
+
   if (typeof options.assetId === "number" && options.assetId > 0) {
     return `asset:${options.assetId}`;
   }
@@ -259,6 +280,7 @@ export const buildWorkspaceMediaLibraryItemKey = (
     kind: WorkspaceMediaLibraryItemKind;
     previewUrl: string;
     projectId: number;
+    referenceId?: string | null;
     segmentIndex: number;
     sourceJobId?: string | null;
   },
@@ -273,6 +295,7 @@ export const buildWorkspaceMediaLibraryItemKey = (
     projectId: options.projectId,
     segmentIndex: options.segmentIndex,
     assetId: options.assetId,
+    referenceId: options.referenceId,
   })}`;
 };
 
@@ -291,6 +314,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
   previewUrl: string;
   projectId: number;
   projectTitle: string;
+  referenceId?: string | null;
   segmentIndex: number;
   segmentListIndex: number;
   source: WorkspaceMediaLibraryItemSource;
@@ -302,6 +326,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
     kind: options.kind,
     previewUrl: options.previewUrl,
     projectId: options.projectId,
+    referenceId: options.referenceId,
     segmentIndex: options.segmentIndex,
   });
 
@@ -325,6 +350,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
       segmentIndex: options.segmentIndex,
       sourceJobId: options.sourceJobId,
       assetId: options.assetId,
+      referenceId: options.referenceId,
     }),
     kind: options.kind,
     previewKind: options.previewKind,
@@ -332,6 +358,7 @@ export const createWorkspaceMediaLibraryItem = (options: {
     previewUrl: options.previewUrl,
     projectId: options.projectId,
     projectTitle: options.projectTitle,
+    referenceId: typeof options.referenceId === "string" && options.referenceId.trim() ? options.referenceId.trim() : null,
     segmentIndex: options.segmentIndex,
     segmentListIndex: options.segmentListIndex,
     segmentNumber,

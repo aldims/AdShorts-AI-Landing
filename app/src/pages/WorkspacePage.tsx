@@ -96,9 +96,30 @@ import {
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
+import type {
+  WorkspaceReferenceKind,
+  WorkspaceSavedReference,
+  WorkspaceSavedReferencesPayload,
+} from "../../shared/workspace-references";
 
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
-type WorkspaceMediaLibraryFilter = "all" | "photo" | "video";
+type WorkspaceMediaLibraryFilter = "all" | "photo" | "video" | "characters" | "scenes";
+type WorkspaceReferenceCreationSource = "ai" | "upload" | "project";
+type WorkspaceReferenceCharacterGender = "male" | "female";
+
+type WorkspaceReferenceCharacterPromptFields = {
+  ageRange: string;
+  description: string;
+  gender: WorkspaceReferenceCharacterGender;
+  style: string;
+};
+
+type WorkspaceReferenceScenePromptFields = {
+  description: string;
+  lightingMood: string;
+  placeType: string;
+  style: string;
+};
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 
@@ -1013,7 +1034,9 @@ type WorkspaceSegmentAiPhotoJobCreateRequest = {
   preserveCharacters?: boolean;
   prompt: string;
   projectId?: number;
+  purpose?: "workspace_reference";
   quality?: StudioSegmentVisualQuality;
+  referenceKind?: WorkspaceReferenceKind;
   referenceAssetIds?: number[];
   sceneReferenceAssetIds?: number[];
   segmentIndex?: number;
@@ -1158,6 +1181,44 @@ type WorkspaceProjectCharactersPayload = {
 type WorkspaceProjectCharactersResponse = {
   data?: WorkspaceProjectCharactersPayload;
   error?: string;
+};
+
+type WorkspaceReferenceCreateResponse = {
+  data?: {
+    reference: WorkspaceSavedReference;
+  };
+  error?: string;
+};
+
+type WorkspaceReferenceDeleteResponse = {
+  data?: {
+    referenceId: string;
+  };
+  error?: string;
+};
+
+type WorkspaceReferenceUpdateResponse = {
+  data?: {
+    reference: WorkspaceSavedReference;
+  };
+  error?: string;
+};
+
+type WorkspaceReferenceVisualOption = {
+  assetId: number | null;
+  displayNumber?: number;
+  key: string;
+  kind: WorkspaceReferenceKind;
+  label: string;
+  previewKind: WorkspaceSegmentPreviewKind;
+  savedReference?: WorkspaceSavedReference;
+  segment?: WorkspaceSegmentEditorDraftSegment;
+  source: "project-character" | "project-scene" | "saved";
+  sourceProjectId: number | null;
+  sourceSegmentIndex: number | null;
+  subtitle: string;
+  videoPosterReferenceUrl?: string | null;
+  videoReferenceUrl?: string | null;
 };
 
 type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiVideoJobCreateRequest & {
@@ -1581,8 +1642,8 @@ const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
 const WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS = 10 * 60 * 1000;
-const SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT = 24;
-const SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP = 48;
+const SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT = 12;
+const SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP = 12;
 const SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS = 280;
 const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
 
@@ -3616,6 +3677,140 @@ const WORKSPACE_VIDEO_FILE_NAME_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
 const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
   Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
+const WORKSPACE_REFERENCE_CHARACTER_DEFAULTS: WorkspaceReferenceCharacterPromptFields = {
+  ageRange: "25-35 лет",
+  description: "Темные волосы, легкая небритость, карие глаза, уверенный и дружелюбный взгляд. Нейтральный фон, студийный портрет.",
+  gender: "male",
+  style: "Реалистичный (фотографический)",
+};
+
+const WORKSPACE_REFERENCE_SCENE_DEFAULTS: WorkspaceReferenceScenePromptFields = {
+  description: "Детализированная сцена с выразительной композицией, глубиной кадра и чистым фокусом. Пространство подходит для короткого видео.",
+  lightingMood: "Естественное мягкое освещение",
+  placeType: "Интерьер",
+  style: "Фотореалистичная",
+};
+
+const WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS = [
+  "Реалистичный (фотографический)",
+  "Кинематографичный",
+  "Fashion/editorial",
+  "3D портрет",
+  "Аниме",
+] as const;
+
+const WORKSPACE_REFERENCE_CHARACTER_AGE_OPTIONS = [
+  "18-24 года",
+  "25-35 лет",
+  "36-45 лет",
+  "46-60 лет",
+  "60+ лет",
+] as const;
+
+const WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS = [
+  "Интерьер",
+  "Городская сцена",
+  "Природа",
+  "Офис / студия",
+  "Фантастическое место",
+] as const;
+
+const WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS = [
+  "Фотореалистичная",
+  "Кинематографичная",
+  "Документальная",
+  "Рекламная",
+  "Фэнтези / sci-fi",
+] as const;
+
+const WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS = [
+  "Естественное мягкое освещение",
+  "Драматичный контрастный свет",
+  "Теплый вечерний свет",
+  "Холодный неоновый свет",
+  "Студийное освещение",
+] as const;
+const WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT = 5;
+
+const getWorkspaceReferenceGenderLabel = (gender: WorkspaceReferenceCharacterGender) =>
+  gender === "female" ? "женский" : "мужской";
+
+const normalizeWorkspaceReferencePromptPart = (value: unknown) =>
+  String(value ?? "").replace(/\s+/g, " ").trim();
+
+export const buildWorkspaceReferenceAiPrompt = (options: {
+  character?: Partial<WorkspaceReferenceCharacterPromptFields> | null;
+  kind: WorkspaceReferenceKind;
+  scene?: Partial<WorkspaceReferenceScenePromptFields> | null;
+}) => {
+  if (options.kind === "scene") {
+    const scene = {
+      ...WORKSPACE_REFERENCE_SCENE_DEFAULTS,
+      ...(options.scene ?? {}),
+    };
+    return [
+      `Тип сцены: ${scene.placeType}`,
+      `Стиль: ${scene.style}`,
+      `Свет и атмосфера: ${scene.lightingMood}`,
+      scene.description,
+    ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
+  }
+
+  const character = {
+    ...WORKSPACE_REFERENCE_CHARACTER_DEFAULTS,
+    ...(options.character ?? {}),
+  };
+  return [
+    `Пол персонажа: ${getWorkspaceReferenceGenderLabel(character.gender)}`,
+    `Возраст: ${character.ageRange}`,
+    `Стиль: ${character.style}`,
+    character.description,
+  ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
+};
+
+export const getNextWorkspaceReferenceDefaultName = (
+  references: readonly Pick<WorkspaceSavedReference, "kind" | "name">[] | null | undefined,
+  kind: WorkspaceReferenceKind,
+) => {
+  const prefix = kind === "character" ? "Персонаж" : "Сцена";
+  const pattern = new RegExp(`^${prefix}\\s+(\\d+)$`, "i");
+  const maxNumber = (Array.isArray(references) ? references : [])
+    .filter((reference) => reference.kind === kind)
+    .reduce((currentMax, reference) => {
+      const match = String(reference.name ?? "").trim().match(pattern);
+      const parsed = match ? Number(match[1]) : Number.NaN;
+      return Number.isFinite(parsed) && parsed > currentMax ? parsed : currentMax;
+    }, 0);
+
+  return `${prefix} ${maxNumber + 1}`;
+};
+
+const normalizeWorkspaceReferenceIdList = (values: readonly unknown[] | null | undefined) =>
+  Array.from(new Set(
+    (Array.isArray(values) ? values : [])
+      .map(getPositiveWorkspaceMediaAssetId)
+      .filter((value): value is number => typeof value === "number" && value > 0),
+  ));
+
+export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
+  characterIds?: readonly unknown[] | null;
+  referenceAssetIds?: readonly unknown[] | null;
+  sceneReferenceAssetIds?: readonly unknown[] | null;
+}) => {
+  const characterIds = normalizeWorkspaceReferenceIdList(options.characterIds);
+  const referenceAssetIds = normalizeWorkspaceReferenceIdList(options.referenceAssetIds);
+  const sceneReferenceAssetIds = normalizeWorkspaceReferenceIdList(options.sceneReferenceAssetIds);
+  const preserveCharacters = characterIds.length > 0 || referenceAssetIds.length > 0;
+
+  return {
+    characterContinuityMode: preserveCharacters ? "force" as const : "off" as const,
+    characterIds,
+    preserveCharacters,
+    referenceAssetIds,
+    sceneReferenceAssetIds,
+  };
+};
+
 const getWorkspaceMediaAssetResolvedPreviewUrl = (
   asset:
     | {
@@ -4965,6 +5160,41 @@ const normalizeWorkspaceProjectCharacter = (value: unknown): WorkspaceProjectCha
       .map(getPositiveWorkspaceMediaAssetId)
       .filter((assetId): assetId is number => Boolean(assetId)),
     sourceSegmentIds: normalizeSegmentIds(record.sourceSegmentIds ?? record.source_segment_ids),
+  };
+};
+
+const normalizeWorkspaceSavedReference = (value: unknown): WorkspaceSavedReference | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const kind = record.kind === "character" || record.kind === "scene" ? record.kind : null;
+  const id = String(record.id ?? "").trim();
+  const name = String(record.name ?? "").trim();
+  const assetId = getPositiveWorkspaceMediaAssetId(record.assetId ?? record.asset_id);
+  if (!kind || !id || !name || !assetId) {
+    return null;
+  }
+
+  const createdAt = String(record.createdAt ?? record.created_at ?? "").trim() || new Date().toISOString();
+  const updatedAt = String(record.updatedAt ?? record.updated_at ?? "").trim() || createdAt;
+
+  return {
+    assetId,
+    createdAt,
+    description: String(record.description ?? "").trim() || null,
+    id,
+    kind,
+    name,
+    sourceProjectId: getPositiveWorkspaceMediaAssetId(record.sourceProjectId ?? record.source_project_id) ?? null,
+    sourceSegmentIndex:
+      typeof record.sourceSegmentIndex === "number"
+        ? Math.max(0, Math.trunc(record.sourceSegmentIndex))
+        : typeof record.source_segment_index === "number"
+          ? Math.max(0, Math.trunc(record.source_segment_index))
+          : null,
+    updatedAt,
   };
 };
 
@@ -9646,6 +9876,14 @@ const getWorkspaceMediaLibraryItemKindLabel = (
 
   if (kind === "image_edit") {
     return workspaceText(locale, "Дорисовать", "Image edit");
+  }
+
+  if (kind === "character_reference") {
+    return workspaceText(locale, "Персонаж", "Character");
+  }
+
+  if (kind === "scene_reference") {
+    return workspaceText(locale, "Сцена", "Scene");
   }
 
   return workspaceText(locale, "ИИ фото", "AI photo");
@@ -14973,15 +15211,44 @@ export function WorkspacePage({
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
+  const [selectedSegmentReferenceCharacterAssetKey, setSelectedSegmentReferenceCharacterAssetKey] = useState<string | null>(null);
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
-  const [segmentReferencePanelOpen, setSegmentReferencePanelOpen] = useState(false);
-  const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<"characters" | "scene">("characters");
+  const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
+  const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<WorkspaceReferenceKind>("character");
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
   const [isSegmentProjectCharactersLoading, setIsSegmentProjectCharactersLoading] = useState(false);
   const [segmentProjectCharactersError, setSegmentProjectCharactersError] = useState<string | null>(null);
-  const [newSegmentCharacterName, setNewSegmentCharacterName] = useState("");
-  const [creatingSegmentCharacterKey, setCreatingSegmentCharacterKey] = useState<string | null>(null);
+  const [savedWorkspaceReferences, setSavedWorkspaceReferences] = useState<WorkspaceSavedReference[]>([]);
+  const [isSavedWorkspaceReferencesLoading, setIsSavedWorkspaceReferencesLoading] = useState(false);
+  const [savedWorkspaceReferencesError, setSavedWorkspaceReferencesError] = useState<string | null>(null);
+  const [isWorkspaceReferenceCreatorOpen, setIsWorkspaceReferenceCreatorOpen] = useState(false);
+  const [referenceCreationSource, setReferenceCreationSource] = useState<WorkspaceReferenceCreationSource>("ai");
+  const [referenceCreationPrompt, setReferenceCreationPrompt] = useState("");
+  const [referenceCreationName, setReferenceCreationName] = useState("");
+  const [referenceCreationUploadFile, setReferenceCreationUploadFile] = useState<StudioCustomVideoFile | null>(null);
+  const [referenceCreationProjectKey, setReferenceCreationProjectKey] = useState<string | null>(null);
+  const [referenceCreationCharacterGender, setReferenceCreationCharacterGender] =
+    useState<WorkspaceReferenceCharacterGender>(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
+  const [referenceCreationCharacterAgeRange, setReferenceCreationCharacterAgeRange] =
+    useState(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.ageRange);
+  const [referenceCreationCharacterStyle, setReferenceCreationCharacterStyle] =
+    useState(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.style);
+  const [referenceCreationScenePlaceType, setReferenceCreationScenePlaceType] =
+    useState(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
+  const [referenceCreationSceneStyle, setReferenceCreationSceneStyle] =
+    useState(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
+  const [referenceCreationSceneLightingMood, setReferenceCreationSceneLightingMood] =
+    useState(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
+  const [referenceCreationExtraFiles, setReferenceCreationExtraFiles] = useState<StudioCustomVideoFile[]>([]);
+  const [generatingReferenceKind, setGeneratingReferenceKind] = useState<WorkspaceReferenceKind | null>(null);
+  const [deletingReferenceId, setDeletingReferenceId] = useState<string | null>(null);
+  const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
+  const [editingReferenceName, setEditingReferenceName] = useState("");
+  const [savingReferenceNameId, setSavingReferenceNameId] = useState<string | null>(null);
   const segmentReferenceFrameAssetIdsRef = useRef<Map<string, number>>(new Map());
+  const referenceCreationFileInputRef = useRef<HTMLInputElement | null>(null);
+  const referenceCreationExtraFileInputRef = useRef<HTMLInputElement | null>(null);
+  const referenceCreationExtraFilesRef = useRef<StudioCustomVideoFile[]>([]);
   const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
     id: string;
     left: number;
@@ -15253,6 +15520,8 @@ export function WorkspacePage({
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
+  const segmentAiPhotoModalLibraryBodyRef = useRef<HTMLDivElement | null>(null);
+  const segmentAiPhotoModalLibraryLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
@@ -15529,6 +15798,28 @@ export function WorkspacePage({
         current.filter((entry) => !doesMatchDismissedItem(entry.item)),
       );
 
+      if (
+        (item.kind === "character_reference" || item.kind === "scene_reference") &&
+        typeof item.referenceId === "string" &&
+        item.referenceId.trim()
+      ) {
+        void fetch(`/api/workspace/references/${encodeURIComponent(item.referenceId)}`, {
+          method: "DELETE",
+        }).then(async (response) => {
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(payload?.error ?? "Не удалось удалить референс из медиатеки.");
+          }
+
+          setSavedWorkspaceReferences((current) => current.filter((reference) => reference.id !== item.referenceId));
+          setMediaLibraryReloadToken((current) => current + 1);
+        }).catch((error) => {
+          setMediaLibraryError(error instanceof Error ? error.message : "Не удалось удалить референс из медиатеки.");
+          setMediaLibraryReloadToken((current) => current + 1);
+        });
+        return;
+      }
+
       if (typeof item.assetId === "number" && item.assetId > 0) {
         void fetch(`/api/workspace/media-library/${encodeURIComponent(String(item.assetId))}`, {
           method: "DELETE",
@@ -15725,8 +16016,8 @@ export function WorkspacePage({
     const shouldSyncStorageBackedMediaLibrary =
       activeTab === "studio" &&
       (studioView === "media" ||
-        ((isSegmentAiPhotoModalOpen || (studioView === "create" && createMode === "segment-editor")) &&
-          segmentAiPhotoModalTab === "library"));
+        (isSegmentAiPhotoModalOpen && segmentAiPhotoModalTab === "library") ||
+        (studioView === "create" && createMode === "segment-editor" && segmentEditorPromptToolTab === "library"));
 
     if (!shouldSyncStorageBackedMediaLibrary) {
       return;
@@ -15744,6 +16035,7 @@ export function WorkspacePage({
     createMode,
     isSegmentAiPhotoModalOpen,
     segmentAiPhotoModalTab,
+    segmentEditorPromptToolTab,
     studioView,
     syncStorageBackedMediaLibraryState,
   ]);
@@ -16507,9 +16799,15 @@ export function WorkspacePage({
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
+      setSelectedSegmentReferenceCharacterAssetKey(null);
       setSelectedSegmentReferenceSceneKey(null);
-      setSegmentReferencePanelOpen(false);
-      setSegmentReferencePanelTab("characters");
+      setIsSegmentReferencesModalOpen(false);
+      setIsWorkspaceReferenceCreatorOpen(false);
+      setReferenceCreationSource("ai");
+      setReferenceCreationPrompt("");
+      setReferenceCreationUploadFile(null);
+      setReferenceCreationProjectKey(null);
+      setSegmentReferencePanelTab("character");
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
       setIsPreparingCustomVideo(false);
@@ -17285,9 +17583,13 @@ export function WorkspacePage({
   }, [hasLoadedContentPlans, isGuest, shouldLoadContentPlans]);
 
   const isMediaLibraryStudioView = shouldLoadWorkspaceMediaLibraryView(activeTab, studioView);
+  const isSegmentEditorInlineMediaLibrary =
+    activeTab === "studio" &&
+    studioView === "create" &&
+    createMode === "segment-editor" &&
+    segmentEditorPromptToolTab === "library";
   const shouldLoadSegmentModalMediaLibrary =
-    (isSegmentAiPhotoModalOpen || (activeTab === "studio" && studioView === "create" && createMode === "segment-editor")) &&
-    segmentAiPhotoModalTab === "library";
+    (isSegmentAiPhotoModalOpen && segmentAiPhotoModalTab === "library") || isSegmentEditorInlineMediaLibrary;
   const shouldLoadMediaLibrary = isMediaLibraryStudioView || shouldLoadSegmentModalMediaLibrary;
 
   useEffect(() => {
@@ -17589,14 +17891,6 @@ export function WorkspacePage({
     mediaLibraryError,
     mediaLibraryNextCursor,
   ]);
-
-  useEffect(() => {
-    if (!shouldLoadSegmentModalMediaLibrary || !mediaLibraryNextCursor || isMediaLibraryLoading || mediaLibraryError) {
-      return;
-    }
-
-    void handleLoadMoreMediaLibrary();
-  }, [handleLoadMoreMediaLibrary, isMediaLibraryLoading, mediaLibraryError, mediaLibraryNextCursor, shouldLoadSegmentModalMediaLibrary]);
 
   const header = tabCopy[activeTab][locale];
   const sectionTitleId = header.heading ? "account-shell-title" : undefined;
@@ -18419,6 +18713,8 @@ export function WorkspacePage({
   const visibleAiVideoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_video").length;
   const visiblePhotoAnimationMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation").length;
   const visibleTalkingPhotoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "talking_photo").length;
+  const visibleCharacterReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "character_reference").length;
+  const visibleSceneReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "scene_reference").length;
   const visibleAiPhotoGroupMediaItemsCount = visibleAiPhotoMediaItemsCount + visibleImageEditMediaItemsCount;
   const visibleAiVideoGroupMediaItemsCount =
     visibleAiVideoMediaItemsCount + visiblePhotoAnimationMediaItemsCount + visibleTalkingPhotoMediaItemsCount;
@@ -18431,6 +18727,14 @@ export function WorkspacePage({
       return visibleMediaLibraryItems.filter(
         (item) => item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo",
       );
+    }
+
+    if (mediaLibraryFilter === "characters") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "character_reference");
+    }
+
+    if (mediaLibraryFilter === "scenes") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "scene_reference");
     }
 
     return visibleMediaLibraryItems;
@@ -18466,41 +18770,160 @@ export function WorkspacePage({
       }),
     [segmentEditorDraft],
   );
-  const selectedSegmentReferenceCharacters = useMemo(
+  const projectSceneReferenceOptions = useMemo<WorkspaceReferenceVisualOption[]>(
     () =>
-      selectedSegmentReferenceCharacterIds
-        .map((characterId) => segmentProjectCharacters.find((character) => character.characterId === characterId) ?? null)
-        .filter((character): character is WorkspaceProjectCharacter => Boolean(character)),
-    [segmentProjectCharacters, selectedSegmentReferenceCharacterIds],
+      segmentReferenceSceneOptions.map((option) => ({
+        assetId: option.assetId,
+        displayNumber: option.displayNumber,
+        key: `project-scene:${option.referenceKey}`,
+        kind: "scene",
+        label: workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`),
+        previewKind: option.previewKind,
+        segment: option.segment,
+        source: "project-scene",
+        sourceProjectId: segmentEditorDraft?.projectId ?? null,
+        sourceSegmentIndex: option.segment.index,
+        subtitle: workspaceText(locale, "Из текущего проекта", "From current project"),
+        videoPosterReferenceUrl: option.videoPosterReferenceUrl,
+        videoReferenceUrl: option.videoReferenceUrl,
+      })),
+    [locale, segmentEditorDraft?.projectId, segmentReferenceSceneOptions],
+  );
+  const projectCharacterReferenceOptions = useMemo<WorkspaceReferenceVisualOption[]>(
+    () => [
+      ...segmentProjectCharacters.map((character) => {
+        const sourceSegment = segmentEditorDraft?.segments.find((segment) =>
+          character.sourceSegmentIds.includes(segment.index),
+        ) ?? null;
+        const sourceLabel = sourceSegment && segmentEditorDraft
+          ? workspaceText(
+              locale,
+              `Сцена ${getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, sourceSegment.index)}`,
+              `Scene ${getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, sourceSegment.index)}`,
+            )
+          : workspaceText(locale, "Персонаж проекта", "Project character");
+
+        return {
+          assetId: character.referenceAssetIds[0] ?? null,
+          key: `project-character:${character.characterId}`,
+          kind: "character" as const,
+          label: character.label,
+          previewKind: "image" as const,
+          segment: sourceSegment ?? undefined,
+          source: "project-character" as const,
+          sourceProjectId: segmentEditorDraft?.projectId ?? null,
+          sourceSegmentIndex: sourceSegment?.index ?? null,
+          subtitle: sourceLabel,
+        };
+      }),
+      ...segmentReferenceSceneOptions.map((option) => ({
+        assetId: option.assetId,
+        displayNumber: option.displayNumber,
+        key: `project-scene-character:${option.referenceKey}`,
+        kind: "character" as const,
+        label: workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`),
+        previewKind: option.previewKind,
+        segment: option.segment,
+        source: "project-scene" as const,
+        sourceProjectId: segmentEditorDraft?.projectId ?? null,
+        sourceSegmentIndex: option.segment.index,
+        subtitle: workspaceText(locale, "Выбрать как персонажа без сохранения", "Use as a character without saving"),
+        videoPosterReferenceUrl: option.videoPosterReferenceUrl,
+        videoReferenceUrl: option.videoReferenceUrl,
+      })),
+    ],
+    [locale, segmentEditorDraft, segmentProjectCharacters, segmentReferenceSceneOptions],
+  );
+  const savedCharacterReferenceOptions = useMemo<WorkspaceReferenceVisualOption[]>(
+    () =>
+      savedWorkspaceReferences
+        .filter((reference) => reference.kind === "character")
+        .map((reference) => ({
+          assetId: reference.assetId,
+          key: `saved:${reference.id}`,
+          kind: "character",
+          label: reference.name,
+          previewKind: "image",
+          savedReference: reference,
+          source: "saved",
+          sourceProjectId: reference.sourceProjectId,
+          sourceSegmentIndex: reference.sourceSegmentIndex,
+          subtitle: reference.description || workspaceText(locale, "Сохраненный персонаж", "Saved character"),
+        })),
+    [locale, savedWorkspaceReferences],
+  );
+  const savedSceneReferenceOptions = useMemo<WorkspaceReferenceVisualOption[]>(
+    () =>
+      savedWorkspaceReferences
+        .filter((reference) => reference.kind === "scene")
+        .map((reference) => ({
+          assetId: reference.assetId,
+          key: `saved:${reference.id}`,
+          kind: "scene",
+          label: reference.name,
+          previewKind: "image",
+          savedReference: reference,
+          source: "saved",
+          sourceProjectId: reference.sourceProjectId,
+          sourceSegmentIndex: reference.sourceSegmentIndex,
+          subtitle: reference.description || workspaceText(locale, "Сохраненная сцена", "Saved scene"),
+        })),
+    [locale, savedWorkspaceReferences],
+  );
+  const selectedSegmentReferenceCharacterOption = useMemo(
+    () => {
+      const projectCharacterId = selectedSegmentReferenceCharacterIds[0] ?? null;
+      if (projectCharacterId) {
+        return projectCharacterReferenceOptions.find((option) => option.key === `project-character:${projectCharacterId}`) ?? null;
+      }
+
+      return selectedSegmentReferenceCharacterAssetKey
+        ? [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions].find(
+            (option) => option.key === selectedSegmentReferenceCharacterAssetKey,
+          ) ?? null
+        : null;
+    },
+    [
+      projectCharacterReferenceOptions,
+      savedCharacterReferenceOptions,
+      selectedSegmentReferenceCharacterAssetKey,
+      selectedSegmentReferenceCharacterIds,
+    ],
   );
   const selectedSegmentReferenceScene = useMemo(
     () =>
       selectedSegmentReferenceSceneKey
-        ? segmentReferenceSceneOptions.find((option) => option.referenceKey === selectedSegmentReferenceSceneKey) ?? null
+        ? [...projectSceneReferenceOptions, ...savedSceneReferenceOptions].find(
+            (option) => option.key === selectedSegmentReferenceSceneKey || option.key === `project-scene:${selectedSegmentReferenceSceneKey}`,
+          ) ?? null
         : null,
-    [segmentReferenceSceneOptions, selectedSegmentReferenceSceneKey],
+    [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey],
   );
   const resolveSegmentReferenceAssetId = async (
-    option: (typeof segmentReferenceSceneOptions)[number],
+    option: WorkspaceReferenceVisualOption,
     referenceKind: "character" | "scene",
   ) => {
+    if (option.assetId && option.previewKind !== "video") {
+      return option.assetId;
+    }
+
     const videoReferenceUrl = option.videoReferenceUrl?.trim();
     const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
     if (option.assetId && !shouldUseVideoFrame) {
       return option.assetId;
     }
 
-    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId) {
+    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId || !option.segment) {
       return null;
     }
 
-    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.mediaIdentityKey}`;
+    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.key}`;
     const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
     if (cachedAssetId) {
       return cachedAssetId;
     }
 
-    const frameFileName = `segment-${option.displayNumber}-reference-frame.jpg`;
+    const frameFileName = `segment-${option.displayNumber ?? option.segment.index + 1}-reference-frame.jpg`;
     let frameAsset: StudioCustomVideoFile;
     try {
       frameAsset = {
@@ -18545,7 +18968,7 @@ export function WorkspacePage({
     return assetId;
   };
   const resolveSegmentReferenceSceneAssetIds = async (
-    option: (typeof segmentReferenceSceneOptions)[number] | null,
+    option: WorkspaceReferenceVisualOption | null,
   ) => {
     if (!option) {
       return [];
@@ -18554,6 +18977,20 @@ export function WorkspacePage({
     const assetId = await resolveSegmentReferenceAssetId(option, "scene");
     if (!assetId) {
       throw new Error(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
+    }
+
+    return [assetId];
+  };
+  const resolveSegmentReferenceCharacterAssetIds = async (
+    option: WorkspaceReferenceVisualOption | null,
+  ) => {
+    if (!option || option.source === "project-character") {
+      return [];
+    }
+
+    const assetId = await resolveSegmentReferenceAssetId(option, "character");
+    if (!assetId) {
+      throw new Error(workspaceText(locale, "У персонажа нет доступного фото для референса.", "This character has no available image reference."));
     }
 
     return [assetId];
@@ -18579,10 +19016,51 @@ export function WorkspacePage({
   }, [segmentEditorDraft?.projectId]);
   useEffect(() => {
     setSelectedSegmentReferenceCharacterIds([]);
+    setSelectedSegmentReferenceCharacterAssetKey(null);
     setSelectedSegmentReferenceSceneKey(null);
-    setSegmentReferencePanelOpen(false);
-    setSegmentReferencePanelTab("characters");
+    setIsSegmentReferencesModalOpen(false);
+    setIsWorkspaceReferenceCreatorOpen(false);
+    setReferenceCreationSource("ai");
+    setReferenceCreationPrompt(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.description);
+    setReferenceCreationUploadFile(null);
+    setReferenceCreationProjectKey(null);
+    setReferenceCreationCharacterGender(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
+    setReferenceCreationCharacterAgeRange(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.ageRange);
+    setReferenceCreationCharacterStyle(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.style);
+    setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
+    setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
+    setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
+    referenceCreationExtraFilesRef.current.forEach((file) => {
+      if (file.objectUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(file.objectUrl);
+      }
+    });
+    referenceCreationExtraFilesRef.current = [];
+    setReferenceCreationExtraFiles([]);
+    setSegmentReferencePanelTab("character");
   }, [activeSegment?.index, segmentEditorDraft?.projectId]);
+  useEffect(() => {
+    const objectUrl = referenceCreationUploadFile?.objectUrl;
+    return () => {
+      if (objectUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [referenceCreationUploadFile?.objectUrl]);
+  useEffect(() => {
+    referenceCreationExtraFilesRef.current = referenceCreationExtraFiles;
+  }, [referenceCreationExtraFiles]);
+  useEffect(
+    () => () => {
+      referenceCreationExtraFilesRef.current.forEach((file) => {
+        if (file.objectUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(file.objectUrl);
+        }
+      });
+      referenceCreationExtraFilesRef.current = [];
+    },
+    [],
+  );
   useEffect(() => {
     const projectId = segmentEditorDraft?.projectId;
     if (!projectId) {
@@ -18632,13 +19110,67 @@ export function WorkspacePage({
     );
   }, [segmentProjectCharacters]);
   useEffect(() => {
+    if (isGuest) {
+      setSavedWorkspaceReferences([]);
+      setSavedWorkspaceReferencesError(null);
+      setIsSavedWorkspaceReferencesLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsSavedWorkspaceReferencesLoading(true);
+    setSavedWorkspaceReferencesError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/workspace/references");
+        const payload = (await response.json().catch(() => null)) as { data?: WorkspaceSavedReferencesPayload; error?: string } | null;
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error ?? "Не удалось загрузить сохраненные персонажи и сцены.");
+        }
+        if (isCancelled) {
+          return;
+        }
+        setSavedWorkspaceReferences(
+          (payload.data.references ?? []).map(normalizeWorkspaceSavedReference).filter(Boolean) as WorkspaceSavedReference[],
+        );
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+        setSavedWorkspaceReferences([]);
+        setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось загрузить сохраненные персонажи и сцены.");
+      } finally {
+        if (!isCancelled) {
+          setIsSavedWorkspaceReferencesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isGuest, session.email]);
+  useEffect(() => {
+    if (
+      selectedSegmentReferenceCharacterAssetKey &&
+      ![...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions].some(
+        (option) => option.key === selectedSegmentReferenceCharacterAssetKey,
+      )
+    ) {
+      setSelectedSegmentReferenceCharacterAssetKey(null);
+    }
+  }, [projectCharacterReferenceOptions, savedCharacterReferenceOptions, selectedSegmentReferenceCharacterAssetKey]);
+  useEffect(() => {
     if (
       selectedSegmentReferenceSceneKey &&
-      !segmentReferenceSceneOptions.some((option) => option.referenceKey === selectedSegmentReferenceSceneKey)
+      ![...projectSceneReferenceOptions, ...savedSceneReferenceOptions].some(
+        (option) => option.key === selectedSegmentReferenceSceneKey,
+      )
     ) {
       setSelectedSegmentReferenceSceneKey(null);
     }
-  }, [segmentReferenceSceneOptions, selectedSegmentReferenceSceneKey]);
+  }, [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
@@ -18747,8 +19279,8 @@ export function WorkspacePage({
     return segmentAiPhotoModalLibraryItems;
   }, [segmentAiPhotoModalLibraryFilter, segmentAiPhotoModalLibraryItems]);
   const shouldRenderSegmentAiPhotoModalLibraryGrid =
-    ((isSegmentAiPhotoModalOpen && isSegmentAiPhotoModalVisible) || (!isSegmentAiPhotoModalOpen && isSegmentEditorPageActive)) &&
-    segmentAiPhotoModalTab === "library";
+    (isSegmentAiPhotoModalOpen && isSegmentAiPhotoModalVisible && segmentAiPhotoModalTab === "library") ||
+    (!isSegmentAiPhotoModalOpen && isSegmentEditorPageActive && segmentEditorPromptToolTab === "library");
   const visibleSegmentAiPhotoModalLibraryItems = useMemo(
     () =>
       shouldRenderSegmentAiPhotoModalLibraryGrid
@@ -18763,6 +19295,10 @@ export function WorkspacePage({
   const hasMoreSegmentAiPhotoModalLibraryItems =
     shouldRenderSegmentAiPhotoModalLibraryGrid &&
     visibleSegmentAiPhotoModalLibraryItems.length < filteredSegmentAiPhotoModalLibraryItems.length;
+  const shouldShowSegmentAiPhotoModalLibraryLoadMoreSentinel =
+    shouldRenderSegmentAiPhotoModalLibraryGrid &&
+    filteredSegmentAiPhotoModalLibraryItems.length > 0 &&
+    (hasMoreSegmentAiPhotoModalLibraryItems || Boolean(mediaLibraryNextCursor && !mediaLibraryError));
   useEffect(() => {
     if (!shouldRenderSegmentAiPhotoModalLibraryGrid) {
       setSegmentAiPhotoModalLibraryRenderCount(SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT);
@@ -18775,21 +19311,68 @@ export function WorkspacePage({
     segmentAiPhotoModalSegment?.index,
     shouldRenderSegmentAiPhotoModalLibraryGrid,
   ]);
-  useEffect(() => {
-    if (!hasMoreSegmentAiPhotoModalLibraryItems) {
+  const revealNextSegmentAiPhotoModalLibraryItems = useCallback(() => {
+    setSegmentAiPhotoModalLibraryRenderCount((current) =>
+      Math.min(current + SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP, filteredSegmentAiPhotoModalLibraryItems.length),
+    );
+  }, [filteredSegmentAiPhotoModalLibraryItems.length]);
+  const handleSegmentAiPhotoModalLibraryViewportEnd = useCallback(() => {
+    if (hasMoreSegmentAiPhotoModalLibraryItems) {
+      revealNextSegmentAiPhotoModalLibraryItems();
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setSegmentAiPhotoModalLibraryRenderCount((current) =>
-        Math.min(current + SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP, filteredSegmentAiPhotoModalLibraryItems.length),
-      );
-    }, 32);
+    if (mediaLibraryNextCursor && !isMediaLibraryLoading && !mediaLibraryError) {
+      void handleLoadMoreMediaLibrary();
+    }
+  }, [
+    handleLoadMoreMediaLibrary,
+    hasMoreSegmentAiPhotoModalLibraryItems,
+    isMediaLibraryLoading,
+    mediaLibraryError,
+    mediaLibraryNextCursor,
+    revealNextSegmentAiPhotoModalLibraryItems,
+  ]);
+  useEffect(() => {
+    if (!shouldShowSegmentAiPhotoModalLibraryLoadMoreSentinel) {
+      return;
+    }
+
+    const sentinel = segmentAiPhotoModalLibraryLoadMoreSentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      const timeoutId = window.setTimeout(handleSegmentAiPhotoModalLibraryViewportEnd, 80);
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          handleSegmentAiPhotoModalLibraryViewportEnd();
+        }
+      },
+      {
+        root: segmentAiPhotoModalLibraryBodyRef.current,
+        rootMargin: "180px 0px",
+        threshold: 0,
+      },
+    );
+
+    observer.observe(sentinel);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      observer.disconnect();
     };
-  }, [filteredSegmentAiPhotoModalLibraryItems.length, hasMoreSegmentAiPhotoModalLibraryItems]);
+  }, [
+    handleSegmentAiPhotoModalLibraryViewportEnd,
+    segmentAiPhotoModalLibraryRenderCount,
+    shouldShowSegmentAiPhotoModalLibraryLoadMoreSentinel,
+  ]);
   const segmentAiPhotoModalScenarioPrompt = segmentAiPhotoModalSegment ? getWorkspaceSegmentAiPhotoPromptPrefill(segmentAiPhotoModalSegment) : "";
   const segmentAiPhotoModalSegmentNumber =
     segmentEditorDraft && segmentAiPhotoModalSegment
@@ -23942,8 +24525,8 @@ export function WorkspacePage({
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
+    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
     const sceneReferenceOption = selectedSegmentReferenceScene;
-    const preserveCharacters = characterIds.length > 0;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -23971,7 +24554,13 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+      const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+      });
 
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
@@ -23983,15 +24572,11 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          characterContinuityMode: preserveCharacters ? "force" : "off",
-          characterIds,
+          ...referenceRequest,
           language: selectedLanguage,
-          preserveCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          referenceAssetIds: [],
-          sceneReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
       });
@@ -24075,8 +24660,8 @@ export function WorkspacePage({
       return;
     }
     const characterIds = [...selectedSegmentReferenceCharacterIds];
+    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
     const sceneReferenceOption = selectedSegmentReferenceScene;
-    const preserveCharacters = characterIds.length > 0;
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -24103,7 +24688,13 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+      const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+      });
 
       const requestImageEditJob = async (request: WorkspaceSegmentImageEditRequest) => {
         const response = await fetch("/api/studio/segment-image-edit/jobs", {
@@ -24136,16 +24727,12 @@ export function WorkspacePage({
       let primaryRequest: WorkspaceSegmentImageEditRequest;
       if (inlineImageDataUrl) {
         primaryRequest = {
-          characterContinuityMode: preserveCharacters ? "force" : "off",
-          characterIds,
+          ...referenceRequest,
           imageDataUrl: inlineImageDataUrl,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
-          preserveCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
-          referenceAssetIds: [],
-          sceneReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         };
       } else {
@@ -24175,16 +24762,12 @@ export function WorkspacePage({
         }
 
         primaryRequest = {
-          characterContinuityMode: preserveCharacters ? "force" : "off",
-          characterIds,
+          ...referenceRequest,
           imageAssetId,
           imageFileName: imageEditSource.fileName,
           language: selectedLanguage,
-          preserveCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
-          referenceAssetIds: [],
-          sceneReferenceAssetIds,
           segmentIndex: visualJobBinding.segmentIndex,
         };
       }
@@ -24199,16 +24782,12 @@ export function WorkspacePage({
         const imageDataUrl = inlineImageDataUrl || await resolveStudioCustomAssetDataUrl(imageEditSource.asset);
         if (imageDataUrl) {
           ({ response, payload } = await requestImageEditJob({
-            characterContinuityMode: preserveCharacters ? "force" : "off",
-            characterIds,
+            ...referenceRequest,
             imageDataUrl,
             imageFileName: imageEditSource.fileName,
             language: selectedLanguage,
-            preserveCharacters,
             projectId: visualJobBinding.projectId,
             prompt: normalizedPrompt,
-            referenceAssetIds: [],
-            sceneReferenceAssetIds,
             segmentIndex: visualJobBinding.segmentIndex,
           }));
         }
@@ -24282,8 +24861,8 @@ export function WorkspacePage({
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
+    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
     const sceneReferenceOption = selectedSegmentReferenceScene;
-    const preserveCharacters = characterIds.length > 0;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
       return;
@@ -24312,7 +24891,13 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+      const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
+        characterIds,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+      });
 
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
@@ -24324,16 +24909,12 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          characterContinuityMode: preserveCharacters ? "force" : "off",
-          characterIds,
           durationSeconds,
           language: selectedLanguage,
-          preserveCharacters,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
           quality: generationQuality,
-          referenceAssetIds: [],
-          sceneReferenceAssetIds,
+          ...referenceRequest,
           segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
       });
@@ -30564,32 +31145,40 @@ export function WorkspacePage({
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const canPromptUseVisualReferences = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
   const selectedSegmentReferenceCount =
-    selectedSegmentReferenceCharacters.length + (selectedSegmentReferenceScene ? 1 : 0);
+    (selectedSegmentReferenceCharacterOption ? 1 : 0) + (selectedSegmentReferenceScene ? 1 : 0);
   const segmentReferenceSummary = [
-    selectedSegmentReferenceCharacters.length > 0
+    selectedSegmentReferenceCharacterOption
       ? workspaceText(
           locale,
-          `Персонажи: ${selectedSegmentReferenceCharacters.map((character) => character.label).slice(0, 2).join(", ")}${
-            selectedSegmentReferenceCharacters.length > 2 ? ` +${selectedSegmentReferenceCharacters.length - 2}` : ""
-          }`,
-          `Characters: ${selectedSegmentReferenceCharacters.map((character) => character.label).slice(0, 2).join(", ")}${
-            selectedSegmentReferenceCharacters.length > 2 ? ` +${selectedSegmentReferenceCharacters.length - 2}` : ""
-          }`,
+          `Персонаж: ${selectedSegmentReferenceCharacterOption.label}`,
+          `Character: ${selectedSegmentReferenceCharacterOption.label}`,
         )
-      : workspaceText(locale, "Персонажи: нет", "Characters: none"),
+      : workspaceText(locale, "Персонаж: не выбран", "Character: not selected"),
     selectedSegmentReferenceScene
-      ? workspaceText(locale, `Сцена: ${selectedSegmentReferenceScene.displayNumber}`, `Scene: ${selectedSegmentReferenceScene.displayNumber}`)
-      : workspaceText(locale, "Сцена: нет", "Scene: none"),
+      ? workspaceText(locale, `Сцена: ${selectedSegmentReferenceScene.label}`, `Scene: ${selectedSegmentReferenceScene.label}`)
+      : workspaceText(locale, "Сцена: не выбрана", "Scene: not selected"),
   ].join(" · ");
-  const toggleSegmentReferenceCharacter = (characterId: number) => {
-    setSelectedSegmentReferenceCharacterIds((current) =>
-      current.includes(characterId)
-        ? current.filter((currentId) => currentId !== characterId)
-        : [...current, characterId],
-    );
+  const selectSegmentReferenceOption = (option: WorkspaceReferenceVisualOption) => {
+    if (option.kind === "character") {
+      if (option.source === "project-character") {
+        const characterId = Number(option.key.replace(/^project-character:/, ""));
+        setSelectedSegmentReferenceCharacterIds((current) =>
+          current.includes(characterId) ? [] : [characterId],
+        );
+        setSelectedSegmentReferenceCharacterAssetKey(null);
+        return;
+      }
+
+      setSelectedSegmentReferenceCharacterIds([]);
+      setSelectedSegmentReferenceCharacterAssetKey((current) => (current === option.key ? null : option.key));
+      return;
+    }
+
+    setSelectedSegmentReferenceSceneKey((current) => (current === option.key ? null : option.key));
   };
   const clearSegmentVisualReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
+    setSelectedSegmentReferenceCharacterAssetKey(null);
     setSelectedSegmentReferenceSceneKey(null);
   };
   const renderSegmentReferencePreview = (
@@ -30617,82 +31206,1151 @@ export function WorkspacePage({
       </span>
     );
   };
-  const handleCreateSegmentReferenceCharacter = async (
-    option: (typeof segmentReferenceSceneOptions)[number],
-  ) => {
-    if (!segmentEditorDraft?.projectId || (!option.assetId && !option.videoReferenceUrl)) {
-      setSegmentEditorVideoError(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
+  const renderSegmentReferenceOptionPreview = (option: WorkspaceReferenceVisualOption, keyPrefix: string) => {
+    if (option.segment) {
+      return renderSegmentReferencePreview(option.segment, keyPrefix);
+    }
+
+    if (option.assetId) {
+      return (
+        <span className="studio-segment-references__media">
+          <img
+            src={buildWorkspaceMediaAssetProxyUrl(option.assetId)}
+            alt=""
+            loading="lazy"
+          />
+        </span>
+      );
+    }
+
+    return <span className="studio-segment-references__media is-empty" aria-hidden="true"></span>;
+  };
+  const saveWorkspaceReference = async (options: {
+    assetId: number;
+    description?: string | null;
+    kind: WorkspaceReferenceKind;
+    name?: string;
+    sourceProjectId?: number | null;
+    sourceSegmentIndex?: number | null;
+  }) => {
+    if (isGuest) {
+      onAuthRequired?.();
+      throw new Error(workspaceText(locale, "Войдите, чтобы сохранять персонажей и сцены.", "Sign in to save characters and scenes."));
+    }
+
+    const response = await fetch("/api/workspace/references", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+    });
+    const payload = (await response.json().catch(() => null)) as WorkspaceReferenceCreateResponse | null;
+    if (!response.ok || !payload?.data?.reference) {
+      throw new Error(payload?.error ?? "Не удалось сохранить референс.");
+    }
+
+    const reference = normalizeWorkspaceSavedReference(payload.data.reference);
+    if (!reference) {
+      throw new Error("Сервер вернул некорректный референс.");
+    }
+
+    setSavedWorkspaceReferences((current) => [reference, ...current.filter((item) => item.id !== reference.id)]);
+    setMediaLibraryReloadToken((current) => current + 1);
+    return reference;
+  };
+
+  const selectSavedWorkspaceReference = (reference: WorkspaceSavedReference) => {
+    if (reference.kind === "character") {
+      setSelectedSegmentReferenceCharacterIds([]);
+      setSelectedSegmentReferenceCharacterAssetKey(`saved:${reference.id}`);
       return;
     }
 
-    const label = newSegmentCharacterName.trim() ||
-      workspaceText(locale, `Персонаж сцены ${option.displayNumber}`, `Scene ${option.displayNumber} character`);
-    const createKey = `segment:${option.segment.index}`;
-    setCreatingSegmentCharacterKey(createKey);
-    setSegmentEditorVideoError(null);
-    setSegmentProjectCharactersError(null);
+    setSelectedSegmentReferenceSceneKey(`saved:${reference.id}`);
+  };
 
-    try {
-      const referenceAssetId = await resolveSegmentReferenceAssetId(option, "character");
-      if (!referenceAssetId) {
-        throw new Error(workspaceText(locale, "У этой сцены нет доступного фото или видео для референса.", "This scene has no available photo or video reference."));
+  const resetWorkspaceReferenceCreationForm = (kind: WorkspaceReferenceKind = segmentReferencePanelTab) => {
+    setReferenceCreationSource("ai");
+    setReferenceCreationPrompt(
+      kind === "character"
+        ? WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.description
+        : WORKSPACE_REFERENCE_SCENE_DEFAULTS.description,
+    );
+    setReferenceCreationUploadFile(null);
+    setReferenceCreationProjectKey(null);
+    setReferenceCreationCharacterGender(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
+    setReferenceCreationCharacterAgeRange(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.ageRange);
+    setReferenceCreationCharacterStyle(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.style);
+    setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
+    setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
+    setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
+    referenceCreationExtraFilesRef.current.forEach((file) => {
+      if (file.objectUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(file.objectUrl);
       }
-
-      const response = await fetch(`/api/studio/projects/${encodeURIComponent(String(segmentEditorDraft.projectId))}/characters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label,
-          referenceAssetIds: [referenceAssetId],
-          segmentIndex: option.segment.index,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as WorkspaceProjectCharactersResponse | null;
-      if (!response.ok || !payload?.data) {
-        throw new Error(payload?.error ?? "Не удалось создать персонажа.");
-      }
-      const nextCharacters = (payload.data.characters ?? [])
-        .map(normalizeWorkspaceProjectCharacter)
-        .filter(Boolean) as WorkspaceProjectCharacter[];
-      setSegmentProjectCharacters((current) => {
-        const merged = [...current];
-        for (const character of nextCharacters) {
-          const existingIndex = merged.findIndex((item) => item.characterId === character.characterId);
-          if (existingIndex >= 0) {
-            merged[existingIndex] = character;
-          } else {
-            merged.unshift(character);
-          }
-        }
-        return merged;
-      });
-      setSelectedSegmentReferenceCharacterIds((current) => {
-        const nextIds = [...current];
-        for (const character of nextCharacters) {
-          if (!nextIds.includes(character.characterId)) {
-            nextIds.push(character.characterId);
-          }
-        }
-        return nextIds;
-      });
-      setNewSegmentCharacterName("");
-      setSegmentReferencePanelTab("characters");
-    } catch (error) {
-      setSegmentProjectCharactersError(error instanceof Error ? error.message : "Не удалось создать персонажа.");
-    } finally {
-      setCreatingSegmentCharacterKey(null);
+    });
+    referenceCreationExtraFilesRef.current = [];
+    setReferenceCreationExtraFiles([]);
+    if (referenceCreationFileInputRef.current) {
+      referenceCreationFileInputRef.current.value = "";
+    }
+    if (referenceCreationExtraFileInputRef.current) {
+      referenceCreationExtraFileInputRef.current.value = "";
     }
   };
+
+  const closeWorkspaceReferenceCreator = () => {
+    setIsWorkspaceReferenceCreatorOpen(false);
+    resetWorkspaceReferenceCreationForm();
+  };
+
+  const closeSegmentReferencesModal = () => {
+    setIsSegmentReferencesModalOpen(false);
+    setEditingReferenceId(null);
+    setEditingReferenceName("");
+    closeWorkspaceReferenceCreator();
+  };
+
+  const openWorkspaceReferenceCreator = (kind: WorkspaceReferenceKind) => {
+    if (isGuest) {
+      onAuthRequired?.();
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
+      return;
+    }
+
+    setSegmentReferencePanelTab(kind);
+    setReferenceCreationName(getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind));
+    setSavedWorkspaceReferencesError(null);
+    resetWorkspaceReferenceCreationForm(kind);
+    setIsWorkspaceReferenceCreatorOpen(true);
+  };
+
+  const handleDeleteSavedReference = async (reference: WorkspaceSavedReference) => {
+    if (isGuest) {
+      onAuthRequired?.();
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы удалять персонажей и сцены.", "Sign in to delete characters and scenes."));
+      return;
+    }
+
+    setDeletingReferenceId(reference.id);
+    setSavedWorkspaceReferencesError(null);
+
+    try {
+      const response = await fetch(`/api/workspace/references/${encodeURIComponent(reference.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceReferenceDeleteResponse | null;
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error ?? "Не удалось удалить референс.");
+      }
+
+      setSavedWorkspaceReferences((current) => current.filter((item) => item.id !== reference.id));
+      if (selectedSegmentReferenceCharacterAssetKey === `saved:${reference.id}`) {
+        setSelectedSegmentReferenceCharacterAssetKey(null);
+      }
+      if (selectedSegmentReferenceSceneKey === `saved:${reference.id}`) {
+        setSelectedSegmentReferenceSceneKey(null);
+      }
+      setMediaLibraryReloadToken((current) => current + 1);
+      if (editingReferenceId === reference.id) {
+        setEditingReferenceId(null);
+        setEditingReferenceName("");
+      }
+    } catch (error) {
+      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось удалить референс.");
+    } finally {
+      setDeletingReferenceId(null);
+    }
+  };
+
+  const startEditingSavedReferenceName = (reference: WorkspaceSavedReference) => {
+    if (isGuest) {
+      onAuthRequired?.();
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы переименовывать персонажей и сцены.", "Sign in to rename characters and scenes."));
+      return;
+    }
+
+    setEditingReferenceId(reference.id);
+    setEditingReferenceName(reference.name);
+    setSavedWorkspaceReferencesError(null);
+  };
+
+  const finishEditingSavedReferenceName = async (reference: WorkspaceSavedReference) => {
+    const nextName = editingReferenceName.trim();
+    if (!nextName || nextName === reference.name) {
+      setEditingReferenceId(null);
+      setEditingReferenceName("");
+      return;
+    }
+
+    setSavingReferenceNameId(reference.id);
+    setSavedWorkspaceReferencesError(null);
+
+    try {
+      const response = await fetch(`/api/workspace/references/${encodeURIComponent(reference.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: reference.description,
+          name: nextName,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceReferenceUpdateResponse | null;
+      if (!response.ok || !payload?.data?.reference) {
+        throw new Error(payload?.error ?? "Не удалось переименовать референс.");
+      }
+
+      const updatedReference = normalizeWorkspaceSavedReference(payload.data.reference);
+      if (!updatedReference) {
+        throw new Error("Сервер вернул некорректный референс.");
+      }
+
+      setSavedWorkspaceReferences((current) =>
+        current.map((item) => (item.id === updatedReference.id ? updatedReference : item)),
+      );
+      setMediaLibraryReloadToken((current) => current + 1);
+      setEditingReferenceId(null);
+      setEditingReferenceName("");
+    } catch (error) {
+      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось переименовать референс.");
+    } finally {
+      setSavingReferenceNameId(null);
+    }
+  };
+
+  const handleReferenceCreationUploadFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+    setSavedWorkspaceReferencesError(null);
+
+    if (!file) {
+      return;
+    }
+
+    const isImageFile = file.type.startsWith("image/") || isWorkspaceSegmentImageFile(file.name);
+    if (!isImageFile) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Загрузите изображение JPG, PNG, WEBP или AVIF.", "Upload a JPG, PNG, WEBP, or AVIF image."));
+      return;
+    }
+
+    if (file.size > STUDIO_CUSTOM_IMAGE_MAX_BYTES) {
+      setSavedWorkspaceReferencesError(getStudioCustomVisualTooLargeMessage(file.name));
+      return;
+    }
+
+    setReferenceCreationUploadFile({
+      file,
+      fileName: file.name || "reference-image.jpg",
+      fileSize: file.size,
+      mimeType: getWorkspaceSegmentCustomVisualMimeType(file),
+      objectUrl: createStudioObjectUrl(file),
+      source: "upload",
+    });
+  };
+
+  const handleReferenceCreationExtraFilesSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    setSavedWorkspaceReferencesError(null);
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const availableSlots = Math.max(0, WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT - referenceCreationExtraFiles.length);
+    if (availableSlots <= 0) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Можно добавить до 5 референсов.", "You can add up to 5 references."));
+      return;
+    }
+
+    const nextFiles: StudioCustomVideoFile[] = [];
+    for (const file of files.slice(0, availableSlots)) {
+      const isImageFile = file.type.startsWith("image/") || isWorkspaceSegmentImageFile(file.name);
+      if (!isImageFile) {
+        nextFiles.forEach((createdFile) => {
+          if (createdFile.objectUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(createdFile.objectUrl);
+          }
+        });
+        setSavedWorkspaceReferencesError(workspaceText(locale, "Дополнительные референсы должны быть изображениями.", "Extra references must be images."));
+        return;
+      }
+      if (file.size > STUDIO_CUSTOM_IMAGE_MAX_BYTES) {
+        nextFiles.forEach((createdFile) => {
+          if (createdFile.objectUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(createdFile.objectUrl);
+          }
+        });
+        setSavedWorkspaceReferencesError(getStudioCustomVisualTooLargeMessage(file.name));
+        return;
+      }
+
+      nextFiles.push({
+        file,
+        fileName: file.name || "reference-image.jpg",
+        fileSize: file.size,
+        mimeType: getWorkspaceSegmentCustomVisualMimeType(file),
+        objectUrl: createStudioObjectUrl(file),
+        source: "upload",
+      });
+    }
+
+    setReferenceCreationExtraFiles((current) => [...current, ...nextFiles].slice(0, WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT));
+  };
+
+  const removeReferenceCreationExtraFile = (index: number) => {
+    setReferenceCreationExtraFiles((current) => {
+      const target = current[index];
+      if (target?.objectUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(target.objectUrl);
+      }
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+  };
+
+  const pollWorkspaceReferenceAiPhotoJob = async (jobId: string, initialStatus = "queued") => {
+    const safeJobId = jobId.trim();
+    let latestStatus = initialStatus;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
+      const response = await fetch(`/api/studio/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`);
+      const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
+
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error ?? "Не удалось получить статус генерации.");
+      }
+
+      latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
+      applyWorkspaceProfile(payload.data.profile);
+
+      if (payload.data.asset) {
+        return payload.data.asset;
+      }
+
+      if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+        throw new Error(payload.data.error ?? "Не удалось сгенерировать фото.");
+      }
+
+      if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+        throw new Error(payload.data.error ?? "Сгенерированное фото недоступно.");
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2000));
+    }
+
+    throw new Error("Генерация занимает слишком много времени. Попробуйте ещё раз.");
+  };
+
+  const handleCreateWorkspaceReference = async (kind: WorkspaceReferenceKind) => {
+    if (isGuest) {
+      onAuthRequired?.();
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
+      return;
+    }
+
+    const name = referenceCreationName.trim() || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind);
+    const prompt = normalizeWorkspaceSegmentAiPhotoPrompt(buildWorkspaceReferenceAiPrompt({
+      character: {
+        ageRange: referenceCreationCharacterAgeRange,
+        description: referenceCreationPrompt,
+        gender: referenceCreationCharacterGender,
+        style: referenceCreationCharacterStyle,
+      },
+      kind,
+      scene: {
+        description: referenceCreationPrompt,
+        lightingMood: referenceCreationSceneLightingMood,
+        placeType: referenceCreationScenePlaceType,
+        style: referenceCreationSceneStyle,
+      },
+    }));
+    const projectOptions = kind === "character" ? projectCharacterReferenceOptions : projectSceneReferenceOptions;
+    const selectedProjectOption = referenceCreationProjectKey
+      ? projectOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
+      : null;
+
+    if (referenceCreationSource === "ai" && !prompt) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Введите описание.", "Enter a description."));
+      return;
+    }
+
+    if (referenceCreationSource === "upload" && !referenceCreationUploadFile) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Загрузите фото.", "Upload a photo."));
+      return;
+    }
+
+    if (referenceCreationSource === "project" && !selectedProjectOption) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Выберите визуал из проекта.", "Select a project visual."));
+      return;
+    }
+
+    if (
+      referenceCreationSource === "ai" &&
+      workspaceBalance !== null &&
+      workspaceBalance < STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST
+    ) {
+      openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
+      return;
+    }
+
+    setGeneratingReferenceKind(kind);
+    setSavedWorkspaceReferencesError(null);
+
+    try {
+      let assetId: number | null = null;
+      let description: string | null = null;
+      let sourceProjectId = segmentEditorDraft?.projectId ?? null;
+      let sourceSegmentIndex = activeSegment?.index ?? null;
+
+      if (referenceCreationSource === "ai") {
+        const referenceAssetIds: number[] = [];
+        for (const extraFile of referenceCreationExtraFiles) {
+          const referenceAssetId = await ensureStudioUploadedAssetId(extraFile, {
+            fallbackFileName: extraFile.fileName || `${kind}-reference-input.jpg`,
+            fallbackMimeType: extraFile.mimeType || "image/jpeg",
+            kind: "workspace_reference",
+            language: selectedLanguage,
+            mediaType: "photo",
+            projectId: sourceProjectId,
+            role: kind === "character" ? "character_reference_input" : "scene_reference_input",
+            segmentIndex: sourceSegmentIndex,
+          });
+          if (!referenceAssetId) {
+            throw new Error(workspaceText(locale, "Не удалось загрузить дополнительный референс.", "Could not upload an extra reference."));
+          }
+          referenceAssetIds.push(referenceAssetId);
+        }
+
+        const response = await fetch("/api/studio/segment-ai-photo/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            language: selectedLanguage,
+            projectId: segmentEditorDraft?.projectId,
+            prompt,
+            purpose: "workspace_reference",
+            quality: "standard",
+            referenceAssetIds,
+            referenceKind: kind,
+            segmentIndex: activeSegment?.index,
+          } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
+
+        if (response.status === 402) {
+          openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
+          return;
+        }
+
+        if (!response.ok || !payload?.data?.jobId) {
+          throw new Error(payload?.error ?? "Не удалось запустить генерацию.");
+        }
+
+        applyWorkspaceProfile(payload.data.profile);
+        const asset = await pollWorkspaceReferenceAiPhotoJob(payload.data.jobId, payload.data.status);
+        assetId = getPositiveWorkspaceMediaAssetId(asset.assetId);
+        description = prompt;
+      } else if (referenceCreationSource === "upload" && referenceCreationUploadFile) {
+        assetId = await ensureStudioUploadedAssetId(referenceCreationUploadFile, {
+          fallbackFileName: referenceCreationUploadFile.fileName || `${kind}-reference.jpg`,
+          fallbackMimeType: referenceCreationUploadFile.mimeType || "image/jpeg",
+          kind: "workspace_reference",
+          language: selectedLanguage,
+          mediaType: "photo",
+          projectId: sourceProjectId,
+          role: kind === "character" ? "character_reference" : "scene_reference",
+          segmentIndex: sourceSegmentIndex,
+        });
+        description = referenceCreationUploadFile.fileName;
+      } else if (referenceCreationSource === "project" && selectedProjectOption) {
+        assetId = await resolveSegmentReferenceAssetId(selectedProjectOption, kind);
+        description = selectedProjectOption.label;
+        sourceProjectId = selectedProjectOption.sourceProjectId;
+        sourceSegmentIndex = selectedProjectOption.sourceSegmentIndex;
+      }
+
+      if (!assetId) {
+        throw new Error(workspaceText(locale, "Не удалось подготовить фото для референса.", "Could not prepare a photo for the reference."));
+      }
+
+      const reference = await saveWorkspaceReference({
+        assetId,
+        description,
+        kind,
+        name,
+        sourceProjectId,
+        sourceSegmentIndex,
+      });
+
+      selectSavedWorkspaceReference(reference);
+      setReferenceCreationName(getNextWorkspaceReferenceDefaultName([reference, ...savedWorkspaceReferences], kind));
+      closeWorkspaceReferenceCreator();
+    } catch (error) {
+      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось создать референс.");
+    } finally {
+      setGeneratingReferenceKind(null);
+    }
+  };
+  const renderSegmentReferenceOptionCard = (
+    option: WorkspaceReferenceVisualOption,
+    config?: {
+      allowDelete?: boolean;
+      onSelect?: () => void;
+      selectedKey?: string | null;
+    },
+  ) => {
+    const isSelected =
+      Object.prototype.hasOwnProperty.call(config ?? {}, "selectedKey")
+        ? config?.selectedKey === option.key
+        : option.kind === "character"
+          ? selectedSegmentReferenceCharacterOption?.key === option.key
+          : selectedSegmentReferenceScene?.key === option.key;
+    const canUseReference = Boolean(option.assetId || option.videoReferenceUrl || option.source === "project-character");
+    const isDeleting = option.savedReference && deletingReferenceId === option.savedReference.id;
+    const isSavedReferenceCard = Boolean(config?.allowDelete && option.savedReference);
+    const isEditingName = Boolean(option.savedReference && editingReferenceId === option.savedReference.id);
+    const isSavingName = Boolean(option.savedReference && savingReferenceNameId === option.savedReference.id);
+
+    if (isSavedReferenceCard && option.savedReference) {
+      return (
+        <div
+          key={`segment-reference-option:${option.kind}:${option.key}`}
+          className={`studio-segment-references__option studio-segment-references__option--saved${isSelected ? " is-selected" : ""}`}
+        >
+          <div className={`studio-segment-references__card studio-segment-references__card--saved${isSelected ? " is-selected" : ""}`}>
+            <button
+              className="studio-segment-references__card-select"
+              type="button"
+              aria-label={option.label}
+              aria-pressed={isSelected}
+              disabled={!canUseReference || isSavingName}
+              onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
+            >
+              {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
+              {option.previewKind === "video" && option.videoReferenceUrl ? (
+                <span className="studio-segment-references__badge">{workspaceText(locale, "Кадр", "Frame")}</span>
+              ) : null}
+            </button>
+            <button
+              className="studio-segment-references__delete-icon"
+              type="button"
+              aria-label={workspaceText(locale, "Удалить", "Delete")}
+              disabled={Boolean(deletingReferenceId) || isSavingName}
+              onClick={() => {
+                void handleDeleteSavedReference(option.savedReference!);
+              }}
+            >
+              {isDeleting ? (
+                <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 4h6m-9 4h12m-10 0 .7 11h6.6L16 8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+            <span className="studio-segment-references__card-copy studio-segment-references__card-copy--editable">
+              {isEditingName ? (
+                <input
+                  className="studio-segment-references__name-input"
+                  type="text"
+                  value={editingReferenceName}
+                  disabled={isSavingName}
+                  autoFocus
+                  onChange={(event) => setEditingReferenceName(event.currentTarget.value)}
+                  onBlur={() => {
+                    void finishEditingSavedReferenceName(option.savedReference!);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setEditingReferenceId(null);
+                      setEditingReferenceName("");
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  className="studio-segment-references__name-button"
+                  type="button"
+                  onClick={() => startEditingSavedReferenceName(option.savedReference!)}
+                >
+                  {option.label}
+                </button>
+              )}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={`segment-reference-option:${option.kind}:${option.key}`}
+        className={`studio-segment-references__option${isSelected ? " is-selected" : ""}`}
+      >
+        <button
+          className="studio-segment-references__card"
+          type="button"
+          aria-pressed={isSelected}
+          disabled={!canUseReference}
+          onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
+        >
+          {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
+          {option.previewKind === "video" && option.videoReferenceUrl ? (
+            <span className="studio-segment-references__badge">{workspaceText(locale, "Кадр", "Frame")}</span>
+          ) : null}
+          <span className="studio-segment-references__card-copy">
+            <strong>{option.label}</strong>
+            <small>{option.subtitle}</small>
+          </span>
+        </button>
+        {config?.allowDelete && option.savedReference ? (
+          <div className="studio-segment-references__option-actions">
+            <button
+              type="button"
+              disabled={Boolean(deletingReferenceId)}
+              onClick={() => {
+                if (option.savedReference) {
+                  void handleDeleteSavedReference(option.savedReference);
+                }
+              }}
+            >
+              {isDeleting ? workspaceText(locale, "Удаляем...", "Deleting...") : workspaceText(locale, "Удалить", "Delete")}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+  const renderSegmentReferencesModal = () => {
+    const isCreatingCharacter = segmentReferencePanelTab === "character";
+    const currentOptions = isCreatingCharacter ? projectCharacterReferenceOptions : projectSceneReferenceOptions;
+    const generationKind: WorkspaceReferenceKind = isCreatingCharacter ? "character" : "scene";
+    const isCreatingReference = generatingReferenceKind === generationKind;
+    const selectedCreationProjectOption = referenceCreationProjectKey
+      ? currentOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
+      : null;
+    const referenceCreationNameValue = referenceCreationName || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind);
+    const referenceCreationAiPrompt = buildWorkspaceReferenceAiPrompt({
+      character: {
+        ageRange: referenceCreationCharacterAgeRange,
+        description: referenceCreationPrompt,
+        gender: referenceCreationCharacterGender,
+        style: referenceCreationCharacterStyle,
+      },
+      kind: generationKind,
+      scene: {
+        description: referenceCreationPrompt,
+        lightingMood: referenceCreationSceneLightingMood,
+        placeType: referenceCreationScenePlaceType,
+        style: referenceCreationSceneStyle,
+      },
+    });
+    const isReferenceCreateDisabled =
+      Boolean(generatingReferenceKind) ||
+      (referenceCreationSource === "ai" && !referenceCreationAiPrompt.trim()) ||
+      (referenceCreationSource === "upload" && !referenceCreationUploadFile) ||
+      (referenceCreationSource === "project" && !selectedCreationProjectOption);
+    const creationTitle = isCreatingCharacter
+      ? workspaceText(locale, "Создание персонажа", "Create character")
+      : workspaceText(locale, "Создание сцены", "Create scene");
+    const selectionSubmitLabel =
+      selectedSegmentReferenceCharacterOption && selectedSegmentReferenceScene
+        ? workspaceText(locale, "Выбрать персонажа и сцену", "Choose character and scene")
+        : selectedSegmentReferenceCharacterOption
+          ? workspaceText(locale, "Выбрать персонажа", "Choose character")
+          : selectedSegmentReferenceScene
+            ? workspaceText(locale, "Выбрать сцену", "Choose scene")
+            : workspaceText(locale, "Выберите персонажа или сцену", "Choose a character or scene");
+    const renderSavedReferenceSection = (
+      kind: WorkspaceReferenceKind,
+      title: string,
+      options: WorkspaceReferenceVisualOption[],
+      createLabel: string,
+    ) => (
+      <section className="studio-reference-modal__saved-section">
+        <div className="studio-reference-modal__section-title">
+          <div>
+            <strong>{title}</strong>
+          </div>
+        </div>
+        {isSavedWorkspaceReferencesLoading ? (
+          <div className="studio-segment-references__empty">{workspaceText(locale, "Загружаем", "Loading")}</div>
+        ) : (
+          <div className="studio-segment-references__grid studio-segment-references__grid--saved">
+            {options.map((option) => renderSegmentReferenceOptionCard(option, { allowDelete: true }))}
+            <button
+              className="studio-reference-modal__add-card"
+              type="button"
+              onClick={() => openWorkspaceReferenceCreator(kind)}
+            >
+              <span>+</span>
+              <strong>{createLabel}</strong>
+            </button>
+          </div>
+        )}
+      </section>
+    );
+    const renderSelectedReferenceCard = (
+      title: string,
+      option: WorkspaceReferenceVisualOption | null,
+      emptyLabel: string,
+    ) => (
+      <div className={`studio-reference-modal__selected-card${option ? "" : " is-empty"}`}>
+        {option ? renderSegmentReferenceOptionPreview(option, `selected-reference:${option.key}`) : null}
+        <span>
+          <small>{title}</small>
+          <strong>{option?.label ?? emptyLabel}</strong>
+        </span>
+      </div>
+    );
+    const renderWorkspaceReferenceCreatorDialog = () => (
+      <div
+        className="studio-reference-create-backdrop"
+        role="presentation"
+        onMouseDown={(event) => {
+          event.stopPropagation();
+          if (!generatingReferenceKind) {
+            closeWorkspaceReferenceCreator();
+          }
+        }}
+      >
+        <section
+          className="studio-reference-create-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={creationTitle}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header className="studio-reference-create-modal__titlebar">
+            <span className="studio-reference-create-modal__traffic" aria-hidden="true">
+              <i></i>
+              <i></i>
+              <i></i>
+            </span>
+            <strong>{creationTitle}</strong>
+            <button
+              className="studio-reference-modal__close"
+              type="button"
+              aria-label={workspaceText(locale, "Закрыть", "Close")}
+              disabled={Boolean(generatingReferenceKind)}
+              onClick={closeWorkspaceReferenceCreator}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </header>
+
+          <div className="studio-reference-create-modal__body">
+            <aside className="studio-reference-create-modal__preview">
+              <span className="studio-reference-create-modal__preview-label">
+                {workspaceText(locale, isCreatingCharacter ? "Предпросмотр персонажа" : "Предпросмотр сцены", isCreatingCharacter ? "Character preview" : "Scene preview")}
+              </span>
+              <div className="studio-reference-create-modal__preview-stage">
+                {referenceCreationSource === "upload" && referenceCreationUploadFile?.objectUrl ? (
+                  <img src={referenceCreationUploadFile.objectUrl} alt="" />
+                ) : referenceCreationSource === "project" && selectedCreationProjectOption ? (
+                  renderSegmentReferenceOptionPreview(selectedCreationProjectOption, `creator-preview:${selectedCreationProjectOption.key}`)
+                ) : (
+                  <div className="studio-reference-create-modal__preview-placeholder">
+                    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 3l1.2 3.2L16 7.4l-2.8 1.1L12 12l-1.2-3.5L8 7.4l2.8-1.2L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                      <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM17.5 12l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    </svg>
+                    <strong>{referenceCreationNameValue}</strong>
+                    <span>
+                      {isCreatingCharacter
+                        ? `${getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender)}, ${referenceCreationCharacterAgeRange}, ${referenceCreationCharacterStyle}`
+                        : `${referenceCreationScenePlaceType}, ${referenceCreationSceneStyle}, ${referenceCreationSceneLightingMood}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="studio-reference-create-modal__preview-note">
+                <span className="studio-reference-create-modal__preview-icon" aria-hidden="true">✦</span>
+                <div>
+                  <strong>{workspaceText(locale, "Это предварительный образ", "This is a preview")}</strong>
+                  <span>{workspaceText(locale, "Итоговый результат может отличаться в зависимости от настроек и референсов.", "The final result may vary depending on settings and references.")}</span>
+                </div>
+              </div>
+            </aside>
+
+            <div className="studio-reference-create-modal__form">
+              <label className="studio-reference-create-modal__field">
+                <span>
+                  {workspaceText(locale, isCreatingCharacter ? "Имя персонажа" : "Имя сцены", isCreatingCharacter ? "Character name" : "Scene name")}
+                  <small>{referenceCreationNameValue.length} / 50</small>
+                </span>
+                <div className="studio-reference-create-modal__input-row">
+                  <input
+                    type="text"
+                    maxLength={50}
+                    value={referenceCreationNameValue}
+                    onChange={(event) => setReferenceCreationName(event.currentTarget.value)}
+                    placeholder={getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind)}
+                    aria-label={workspaceText(locale, "Имя нового референса", "New reference name")}
+                  />
+                  <button type="button" onClick={() => setReferenceCreationName("")} aria-label={workspaceText(locale, "Очистить имя", "Clear name")}>
+                    ×
+                  </button>
+                </div>
+              </label>
+
+              <div className="studio-reference-create-modal__method-group">
+                <span className="studio-reference-create-modal__field-title">{workspaceText(locale, "Способ создания", "Creation method")}</span>
+                <div className="studio-reference-create-modal__method-cards" role="tablist" aria-label={workspaceText(locale, "Источник", "Source")}>
+                  <button
+                    className={referenceCreationSource === "ai" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "ai"}
+                    onClick={() => setReferenceCreationSource("ai")}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 3l1.2 3.2L16 7.4l-2.8 1.1L12 12l-1.2-3.5L8 7.4l2.8-1.2L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                      <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Создать AI фото", "Create AI photo")}</strong>
+                    <small>{workspaceText(locale, "Основной способ · 2 кредита", "Primary method · 2 credits")}</small>
+                  </button>
+                  <button
+                    className={referenceCreationSource === "upload" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "upload"}
+                    onClick={() => setReferenceCreationSource("upload")}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9A2.5 2.5 0 0 0 19 17.5V14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Загрузить свое фото", "Upload photo")}</strong>
+                    <small>{workspaceText(locale, "Сохранить как есть", "Save as is")}</small>
+                  </button>
+                  <button
+                    className={referenceCreationSource === "project" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "project"}
+                    onClick={() => setReferenceCreationSource("project")}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                      <path d="M7.5 13.5h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Выбрать из проекта", "From project")}</strong>
+                    <small>{workspaceText(locale, "Использовать готовый визуал", "Use an existing visual")}</small>
+                  </button>
+                </div>
+              </div>
+
+              {referenceCreationSource === "ai" ? (
+                <>
+                  {isCreatingCharacter ? (
+                    <div className="studio-reference-create-modal__split-row">
+                      <label className="studio-reference-create-modal__field">
+                        <span>{workspaceText(locale, "Пол", "Gender")}</span>
+                        <div className="studio-reference-create-modal__segmented">
+                          <button
+                            className={referenceCreationCharacterGender === "male" ? "is-active" : ""}
+                            type="button"
+                            onClick={() => setReferenceCreationCharacterGender("male")}
+                          >
+                            ♂ {workspaceText(locale, "Мужской", "Male")}
+                          </button>
+                          <button
+                            className={referenceCreationCharacterGender === "female" ? "is-active" : ""}
+                            type="button"
+                            onClick={() => setReferenceCreationCharacterGender("female")}
+                          >
+                            ♀ {workspaceText(locale, "Женский", "Female")}
+                          </button>
+                        </div>
+                      </label>
+                      <label className="studio-reference-create-modal__field">
+                        <span>{workspaceText(locale, "Возраст", "Age")}</span>
+                        <select value={referenceCreationCharacterAgeRange} onChange={(event) => setReferenceCreationCharacterAgeRange(event.currentTarget.value)}>
+                          {WORKSPACE_REFERENCE_CHARACTER_AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="studio-reference-create-modal__split-row">
+                      <label className="studio-reference-create-modal__field">
+                        <span>{workspaceText(locale, "Тип сцены", "Scene type")}</span>
+                        <select value={referenceCreationScenePlaceType} onChange={(event) => setReferenceCreationScenePlaceType(event.currentTarget.value)}>
+                          {WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                      <label className="studio-reference-create-modal__field">
+                        <span>{workspaceText(locale, "Свет / атмосфера", "Light / mood")}</span>
+                        <select value={referenceCreationSceneLightingMood} onChange={(event) => setReferenceCreationSceneLightingMood(event.currentTarget.value)}>
+                          {WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+
+                  <label className="studio-reference-create-modal__field">
+                    <span>{workspaceText(locale, "Стиль", "Style")}</span>
+                    <select
+                      value={isCreatingCharacter ? referenceCreationCharacterStyle : referenceCreationSceneStyle}
+                      onChange={(event) => {
+                        if (isCreatingCharacter) {
+                          setReferenceCreationCharacterStyle(event.currentTarget.value);
+                        } else {
+                          setReferenceCreationSceneStyle(event.currentTarget.value);
+                        }
+                      }}
+                    >
+                      {(isCreatingCharacter ? WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS : WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS).map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="studio-reference-create-modal__field">
+                    <span>
+                      {workspaceText(locale, isCreatingCharacter ? "Внешность / описание" : "Описание сцены", isCreatingCharacter ? "Appearance / description" : "Scene description")}
+                      <small>{referenceCreationPrompt.length} / 500</small>
+                    </span>
+                    <textarea
+                      value={referenceCreationPrompt}
+                      maxLength={500}
+                      onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
+                      placeholder={
+                        isCreatingCharacter
+                          ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
+                          : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
+                      }
+                      rows={4}
+                      aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
+                    />
+                  </label>
+
+                  <div className="studio-reference-create-modal__refs">
+                    <div>
+                      <strong>{workspaceText(locale, "Дополнительно", "Additional")}</strong>
+                      <span>{workspaceText(locale, "Загрузите референсы (необязательно)", "Upload references (optional)")}</span>
+                      <small>{referenceCreationExtraFiles.length} / {WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT}</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={referenceCreationExtraFiles.length >= WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT || Boolean(generatingReferenceKind)}
+                      onClick={() => referenceCreationExtraFileInputRef.current?.click()}
+                    >
+                      {workspaceText(locale, "Добавить файлы", "Add files")}
+                    </button>
+                    {referenceCreationExtraFiles.length > 0 ? (
+                      <div className="studio-reference-create-modal__ref-thumbs">
+                        {referenceCreationExtraFiles.map((file, index) => (
+                          <button key={`${file.fileName}:${file.fileSize}:${index}`} type="button" onClick={() => removeReferenceCreationExtraFile(index)}>
+                            {file.objectUrl ? <img src={file.objectUrl} alt="" /> : null}
+                            <span>×</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+
+              {referenceCreationSource === "upload" ? (
+                <div className={`studio-reference-create-modal__upload${referenceCreationUploadFile ? " is-active" : ""}`}>
+                  <strong>{referenceCreationUploadFile?.fileName ?? workspaceText(locale, "Файл не выбран", "No file selected")}</strong>
+                  <span>{workspaceText(locale, "Фото будет сохранено как референс без списания кредитов.", "The photo will be saved as a reference without spending credits.")}</span>
+                  <button
+                    type="button"
+                    disabled={Boolean(generatingReferenceKind)}
+                    onClick={() => referenceCreationFileInputRef.current?.click()}
+                  >
+                    {referenceCreationUploadFile
+                      ? workspaceText(locale, "Заменить фото", "Replace photo")
+                      : workspaceText(locale, "Выбрать фото", "Choose photo")}
+                  </button>
+                </div>
+              ) : null}
+
+              {referenceCreationSource === "project" ? (
+                isSegmentProjectCharactersLoading && isCreatingCharacter ? (
+                  <div className="studio-segment-references__empty">{workspaceText(locale, "Загружаем персонажей", "Loading characters")}</div>
+                ) : currentOptions.length > 0 ? (
+                  <div className="studio-segment-references__grid studio-segment-references__grid--creation">
+                    {currentOptions.map((option) =>
+                      renderSegmentReferenceOptionCard(option, {
+                        onSelect: () => setReferenceCreationProjectKey((current) => (current === option.key ? null : option.key)),
+                        selectedKey: referenceCreationProjectKey,
+                      }),
+                    )}
+                  </div>
+                ) : (
+                  <div className="studio-segment-references__empty">{workspaceText(locale, "Нет визуалов проекта", "No project visuals")}</div>
+                )
+              ) : null}
+
+              {segmentProjectCharactersError || savedWorkspaceReferencesError ? (
+                <div className="studio-segment-references__error" role="alert">
+                  {segmentProjectCharactersError || savedWorkspaceReferencesError}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <footer className="studio-reference-create-modal__footer">
+            <button className="studio-reference-modal__footer-cancel" type="button" disabled={Boolean(generatingReferenceKind)} onClick={closeWorkspaceReferenceCreator}>
+              {workspaceText(locale, "Отмена", "Cancel")}
+            </button>
+            <button
+              className="studio-reference-modal__footer-submit"
+              type="button"
+              disabled={isReferenceCreateDisabled}
+              onClick={() => {
+                void handleCreateWorkspaceReference(generationKind);
+              }}
+            >
+              {isCreatingReference ? (
+                <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+              ) : (
+                workspaceText(locale, isCreatingCharacter ? "Создать персонажа" : "Создать сцену", isCreatingCharacter ? "Create character" : "Create scene")
+              )}
+            </button>
+          </footer>
+        </section>
+      </div>
+    );
+
+    return (
+      <div className="studio-reference-modal-backdrop" role="presentation" onMouseDown={closeSegmentReferencesModal}>
+        <div
+          className="studio-reference-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={workspaceText(locale, "Персонажи и сцены", "Characters and scenes")}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <header className="studio-reference-modal__head">
+            <div>
+              <strong>{workspaceText(locale, "Персонажи и сцены", "Characters and scenes")}</strong>
+              <span>{workspaceText(locale, "Выберите персонажа и сцену или создайте новые.", "Choose a character and scene or create new ones.")}</span>
+            </div>
+            <div className="studio-reference-modal__head-actions">
+              <button
+                className="studio-reference-modal__ghost"
+                type="button"
+                disabled={selectedSegmentReferenceCount === 0}
+                onClick={clearSegmentVisualReferences}
+              >
+                {workspaceText(locale, "Очистить", "Clear")}
+              </button>
+              <button
+                className="studio-reference-modal__close"
+                type="button"
+                aria-label={workspaceText(locale, "Закрыть", "Close")}
+                onClick={closeSegmentReferencesModal}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <div className="studio-reference-modal__layout studio-reference-modal__layout--library-only">
+            <div className="studio-reference-modal__catalog">
+              {renderSavedReferenceSection(
+                "character",
+                workspaceText(locale, "1. Мои персонажи", "1. My characters"),
+                savedCharacterReferenceOptions,
+                workspaceText(locale, "Создать персонажа", "Create character"),
+              )}
+
+              {renderSavedReferenceSection(
+                "scene",
+                workspaceText(locale, "2. Мои сцены", "2. My scenes"),
+                savedSceneReferenceOptions,
+                workspaceText(locale, "Создать сцену", "Create scene"),
+              )}
+
+              <section className="studio-reference-modal__selected">
+                <div className="studio-reference-modal__section-title">
+                  <div>
+                    <strong>{workspaceText(locale, "Выбрано", "Selected")}</strong>
+                    <span>{segmentReferenceSummary}</span>
+                  </div>
+                </div>
+                <div className="studio-reference-modal__selected-grid">
+                  {renderSelectedReferenceCard(
+                    workspaceText(locale, "Персонаж", "Character"),
+                    selectedSegmentReferenceCharacterOption,
+                    workspaceText(locale, "Не выбран", "Not selected"),
+                  )}
+                  {renderSelectedReferenceCard(
+                    workspaceText(locale, "Сцена", "Scene"),
+                    selectedSegmentReferenceScene,
+                    workspaceText(locale, "Не выбрана", "Not selected"),
+                  )}
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <input
+            ref={referenceCreationFileInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={handleReferenceCreationUploadFileSelect}
+          />
+          <input
+            ref={referenceCreationExtraFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={handleReferenceCreationExtraFilesSelect}
+          />
+
+          {!isWorkspaceReferenceCreatorOpen && (segmentProjectCharactersError || savedWorkspaceReferencesError) ? (
+            <div className="studio-segment-references__error" role="alert">
+              {segmentProjectCharactersError || savedWorkspaceReferencesError}
+            </div>
+          ) : null}
+
+          <footer className="studio-reference-modal__footer">
+            <button className="studio-reference-modal__footer-cancel" type="button" onClick={closeSegmentReferencesModal}>
+              {workspaceText(locale, "Отмена", "Cancel")}
+            </button>
+            <button
+              className="studio-reference-modal__footer-submit"
+              type="button"
+              disabled={selectedSegmentReferenceCount === 0}
+              onClick={closeSegmentReferencesModal}
+            >
+              {selectionSubmitLabel}
+            </button>
+          </footer>
+
+          {isWorkspaceReferenceCreatorOpen ? renderWorkspaceReferenceCreatorDialog() : null}
+        </div>
+      </div>
+    );
+  };
   const renderSegmentVisualReferencesPanel = (variant: "editor" | "modal" = "editor") => (
-    <section className={`studio-segment-references studio-segment-references--${variant}${segmentReferencePanelOpen ? " is-open" : ""}`}>
+    <section className={`studio-segment-references studio-segment-references--${variant}`}>
       <button
         className="studio-segment-references__summary"
         type="button"
-        aria-expanded={segmentReferencePanelOpen}
-        onClick={() => setSegmentReferencePanelOpen((current) => !current)}
+        aria-haspopup="dialog"
+        aria-expanded={isSegmentReferencesModalOpen}
+        onClick={() => setIsSegmentReferencesModalOpen(true)}
       >
         <span>
-          <strong>{workspaceText(locale, "Референсы", "References")}</strong>
+          <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
           <small>{segmentReferenceSummary}</small>
         </span>
         <em>
@@ -30701,173 +32359,11 @@ export function WorkspacePage({
             : workspaceText(locale, "С нуля", "From scratch")}
         </em>
       </button>
-      {segmentReferencePanelOpen ? (
-        <div className="studio-segment-references__panel">
-          <div className="studio-segment-references__tabs" role="tablist" aria-label={workspaceText(locale, "Тип референса", "Reference type")}>
-            <button
-              className={segmentReferencePanelTab === "characters" ? "is-active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={segmentReferencePanelTab === "characters"}
-              onClick={() => setSegmentReferencePanelTab("characters")}
-            >
-              {workspaceText(locale, "Персонажи", "Characters")}
-            </button>
-            <button
-              className={segmentReferencePanelTab === "scene" ? "is-active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={segmentReferencePanelTab === "scene"}
-              onClick={() => setSegmentReferencePanelTab("scene")}
-            >
-              {workspaceText(locale, "Сцена", "Scene")}
-            </button>
-            <button
-              className="studio-segment-references__clear"
-              type="button"
-              disabled={selectedSegmentReferenceCount === 0}
-              onClick={clearSegmentVisualReferences}
-            >
-              {workspaceText(locale, "Очистить", "Clear")}
-            </button>
-          </div>
-
-          {segmentReferencePanelTab === "characters" ? (
-            <div className="studio-segment-references__body">
-              {isSegmentProjectCharactersLoading ? (
-                <div className="studio-segment-references__empty">{workspaceText(locale, "Загружаем персонажей", "Loading characters")}</div>
-              ) : segmentProjectCharacters.length > 0 ? (
-                <div className="studio-segment-references__grid studio-segment-references__grid--characters">
-                  {segmentProjectCharacters.map((character) => {
-                    const isSelected = selectedSegmentReferenceCharacterIds.includes(character.characterId);
-                    const sourceSegment = segmentEditorDraft?.segments.find((segment) =>
-                      character.sourceSegmentIds.includes(segment.index),
-                    ) ?? null;
-                    const sourceLabel = sourceSegment && segmentEditorDraft
-                      ? workspaceText(
-                          locale,
-                          `Сцена ${getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, sourceSegment.index)}`,
-                          `Scene ${getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, sourceSegment.index)}`,
-                        )
-                      : workspaceText(locale, "Персонаж проекта", "Project character");
-                    return (
-                      <button
-                        key={`character-reference:${character.characterId}`}
-                        className={`studio-segment-references__card${isSelected ? " is-selected" : ""}`}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => toggleSegmentReferenceCharacter(character.characterId)}
-                      >
-                        {sourceSegment ? renderSegmentReferencePreview(sourceSegment, `character-reference:${character.characterId}`) : null}
-                        <span className="studio-segment-references__card-copy">
-                          <strong>{character.label}</strong>
-                          <small>{sourceLabel}</small>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="studio-segment-references__empty">{workspaceText(locale, "Персонажей пока нет", "No characters yet")}</div>
-              )}
-
-              <div className="studio-segment-references__create">
-                <input
-                  type="text"
-                  value={newSegmentCharacterName}
-                  onChange={(event) => setNewSegmentCharacterName(event.currentTarget.value)}
-                  placeholder={workspaceText(locale, "Имя нового персонажа", "New character name")}
-                  aria-label={workspaceText(locale, "Имя нового персонажа", "New character name")}
-                />
-                <div className="studio-segment-references__grid">
-                  {segmentReferenceSceneOptions.map((option) => {
-                    const createKey = `segment:${option.segment.index}`;
-                    const isBusy = creatingSegmentCharacterKey === createKey;
-                    const createsFromVideoFrame = option.previewKind === "video" && Boolean(option.videoReferenceUrl);
-                    const canCreateCharacter = Boolean(option.assetId || option.videoReferenceUrl);
-                    return (
-                      <button
-                        key={`create-character:${option.segment.index}`}
-                        className="studio-segment-references__card studio-segment-references__card--create"
-                        type="button"
-                        disabled={!canCreateCharacter || Boolean(creatingSegmentCharacterKey)}
-                        onClick={() => {
-                          void handleCreateSegmentReferenceCharacter(option);
-                        }}
-                      >
-                        {renderSegmentReferencePreview(option.segment, `create-character:${option.segment.index}`)}
-                        {createsFromVideoFrame ? (
-                          <span className="studio-segment-references__badge">
-                            {workspaceText(locale, "Кадр", "Frame")}
-                          </span>
-                        ) : null}
-                        <span className="studio-segment-references__card-copy">
-                          <strong>{workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`)}</strong>
-                          <small>
-                            {isBusy
-                              ? createsFromVideoFrame
-                                ? workspaceText(locale, "Готовим кадр...", "Preparing frame...")
-                                : workspaceText(locale, "Создаем...", "Creating...")
-                              : createsFromVideoFrame
-                                ? workspaceText(locale, "Создать из кадра", "Create from frame")
-                                : option.assetId
-                                ? workspaceText(locale, "Создать персонажа", "Create character")
-                                : workspaceText(locale, "Нет визуала", "No visual")}
-                          </small>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {segmentProjectCharactersError ? (
-                <div className="studio-segment-references__error" role="alert">{segmentProjectCharactersError}</div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="studio-segment-references__body">
-              <div className="studio-segment-references__grid">
-                {segmentReferenceSceneOptions.map((option) => {
-                  const isSelected = option.referenceKey === selectedSegmentReferenceSceneKey;
-                  const usesVideoFrame = option.previewKind === "video" && Boolean(option.videoReferenceUrl);
-                  const canUseScene = Boolean(option.assetId || option.videoReferenceUrl);
-                  return (
-                    <button
-                      key={`scene-reference:${option.segment.index}`}
-                      className={`studio-segment-references__card${isSelected ? " is-selected" : ""}`}
-                      type="button"
-                      aria-pressed={isSelected}
-                      disabled={!canUseScene}
-                      onClick={() => setSelectedSegmentReferenceSceneKey(isSelected ? null : option.referenceKey)}
-                    >
-                      {renderSegmentReferencePreview(option.segment, `scene-reference:${option.segment.index}`)}
-                      {usesVideoFrame ? (
-                        <span className="studio-segment-references__badge">
-                          {workspaceText(locale, "Кадр", "Frame")}
-                        </span>
-                      ) : null}
-                      <span className="studio-segment-references__card-copy">
-                        <strong>{workspaceText(locale, `Сцена ${option.displayNumber}`, `Scene ${option.displayNumber}`)}</strong>
-                        <small>
-                          {canUseScene
-                            ? isSelected
-                              ? usesVideoFrame
-                                ? workspaceText(locale, "Кадр видео выбран", "Video frame selected")
-                                : workspaceText(locale, "Выбрана", "Selected")
-                              : usesVideoFrame
-                                ? workspaceText(locale, "Использовать кадр видео", "Use video frame")
-                                : workspaceText(locale, "Использовать сцену", "Use scene")
-                            : workspaceText(locale, "Нет визуала", "No visual")}
-                        </small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
+      {isSegmentReferencesModalOpen &&
+      typeof document !== "undefined" &&
+      (!isSegmentAiPhotoModalOpen || variant === "modal")
+        ? createPortal(renderSegmentReferencesModal(), document.body)
+        : null}
     </section>
   );
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
@@ -31682,7 +33178,7 @@ export function WorkspacePage({
                           </button>
                         </div>
                       ) : null}
-                      <div className="studio-segment-editor__prompt-library-body">
+                      <div ref={segmentAiPhotoModalLibraryBodyRef} className="studio-segment-editor__prompt-library-body">
                         {!shouldRenderSegmentAiPhotoModalLibraryGrid && segmentAiPhotoModalLibraryItems.length > 0 ? (
                           <div className="studio-segment-editor__prompt-info-card" role="status" aria-live="polite">
                             <strong>{workspaceText(locale, "Открываем медиатеку", "Opening media library")}</strong>
@@ -31736,8 +33232,9 @@ export function WorkspacePage({
                             </button>
                           </div>
                         ) : (
-                          <div className="studio-segment-editor__prompt-library-grid">
-                            {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
+                          <>
+                            <div className="studio-segment-editor__prompt-library-grid">
+                              {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
                               const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
                               const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                               const isSelectedLibraryItem = itemKey === segmentAiPhotoModalSelectedLibraryItemKey;
@@ -31789,8 +33286,16 @@ export function WorkspacePage({
                                   </span>
                                 </button>
                               );
-                            })}
-                          </div>
+                              })}
+                            </div>
+                            {shouldShowSegmentAiPhotoModalLibraryLoadMoreSentinel ? (
+                              <div
+                                ref={segmentAiPhotoModalLibraryLoadMoreSentinelRef}
+                                className="studio-segment-editor__prompt-library-load-more"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </div>
@@ -33133,6 +34638,22 @@ export function WorkspacePage({
                       >
                         {workspaceText(locale, "ИИ видео", "AI videos")}: {visibleAiVideoGroupMediaItemsCount}
                       </button>
+                      <button
+                        className={`studio-media-library__pill${mediaLibraryFilter === "characters" ? " is-active" : ""}`}
+                        type="button"
+                        aria-pressed={mediaLibraryFilter === "characters"}
+                        onClick={() => setMediaLibraryFilter((current) => (current === "characters" ? "all" : "characters"))}
+                      >
+                        {workspaceText(locale, "Персонажи", "Characters")}: {visibleCharacterReferenceMediaItemsCount}
+                      </button>
+                      <button
+                        className={`studio-media-library__pill${mediaLibraryFilter === "scenes" ? " is-active" : ""}`}
+                        type="button"
+                        aria-pressed={mediaLibraryFilter === "scenes"}
+                        onClick={() => setMediaLibraryFilter((current) => (current === "scenes" ? "all" : "scenes"))}
+                      >
+                        {workspaceText(locale, "Сцены", "Scenes")}: {visibleSceneReferenceMediaItemsCount}
+                      </button>
                     </div>
                   </div>
 
@@ -33258,12 +34779,20 @@ export function WorkspacePage({
                       <strong>
                         {mediaLibraryFilter === "photo"
                           ? workspaceText(locale, "Нет ИИ фото", "No AI photos")
-                          : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
+                          : mediaLibraryFilter === "characters"
+                            ? workspaceText(locale, "Нет персонажей", "No characters")
+                            : mediaLibraryFilter === "scenes"
+                              ? workspaceText(locale, "Нет сцен", "No scenes")
+                              : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
                       </strong>
                       <p>
                         {mediaLibraryFilter === "photo"
                           ? workspaceText(locale, "В медиатеке сейчас нет доступных фото для этого фильтра.", "No photos are available for this filter right now.")
-                          : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
+                          : mediaLibraryFilter === "characters"
+                            ? workspaceText(locale, "Сохраненные персонажи появятся здесь после создания или сохранения.", "Saved characters will appear here after creation or saving.")
+                            : mediaLibraryFilter === "scenes"
+                              ? workspaceText(locale, "Сохраненные сцены появятся здесь после создания или сохранения.", "Saved scenes will appear here after creation or saving.")
+                              : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
                       </p>
                       <button
                         className="studio-projects__retry"
@@ -34599,7 +36128,7 @@ export function WorkspacePage({
                             </div>
                           ) : null}
 
-                          <div className="studio-ai-photo-modal__library-body">
+                          <div ref={segmentAiPhotoModalLibraryBodyRef} className="studio-ai-photo-modal__library-body">
                             {!shouldRenderSegmentAiPhotoModalLibraryGrid && segmentAiPhotoModalLibraryItems.length > 0 ? (
                               <div className="studio-ai-photo-modal__library-state" role="status" aria-live="polite">
                                 <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
@@ -34668,8 +36197,9 @@ export function WorkspacePage({
                                 </button>
                               </div>
                             ) : (
-                              <div className="studio-ai-photo-modal__library-grid">
-                                {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
+                              <>
+                                <div className="studio-ai-photo-modal__library-grid">
+                                  {visibleSegmentAiPhotoModalLibraryItems.map((item) => {
                                 const itemKey = getWorkspaceMediaLibraryItemStorageKey(item);
                                 const rawItemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                                 const itemKindLabel = rawItemKindLabel;
@@ -34721,8 +36251,16 @@ export function WorkspacePage({
                                     </span>
                                   </button>
                                 );
-                                })}
-                              </div>
+                                  })}
+                                </div>
+                                {shouldShowSegmentAiPhotoModalLibraryLoadMoreSentinel ? (
+                                  <div
+                                    ref={segmentAiPhotoModalLibraryLoadMoreSentinelRef}
+                                    className="studio-segment-editor__prompt-library-load-more"
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+                              </>
                             )}
                           </div>
                         </div>

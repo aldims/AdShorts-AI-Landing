@@ -1,17 +1,40 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   buildWorkspaceDurableMediaLibraryItem,
   buildWorkspacePersistedMediaLibraryItems,
+  buildWorkspaceReferenceMediaLibraryItems,
   dedupeWorkspaceMediaLibraryPageItems,
   getWorkspaceMediaLibraryKindFromDurableAsset,
   getWorkspaceMediaLibraryNextCursorForPage,
   getWorkspaceMediaLibrarySegmentPreviewUrl,
 } from "./media-library.js";
 import { buildWorkspaceMediaAssetRef } from "./media-assets.js";
+import {
+  clearWorkspaceSavedReferences,
+  createWorkspaceSavedReference,
+  type WorkspaceReferenceUser,
+} from "./workspace-references.js";
 import { createWorkspaceMediaLibraryItem } from "../src/lib/workspaceMediaLibrary.js";
 import type { WorkspaceProject } from "./projects.js";
 import type { WorkspaceSegmentEditorSegment, WorkspaceSegmentEditorSession } from "./segment-editor.js";
+
+const referenceTestUsers: WorkspaceReferenceUser[] = [];
+
+const createReferenceTestUser = (): WorkspaceReferenceUser => {
+  const user = {
+    email: `media-library-reference-${randomUUID()}@example.test`,
+    id: `media-library-reference-${randomUUID()}`,
+  };
+  referenceTestUsers.push(user);
+  return user;
+};
+
+afterEach(async () => {
+  await Promise.all(referenceTestUsers.splice(0).map((user) => clearWorkspaceSavedReferences(user)));
+});
 
 const createPhotoSegment = (): WorkspaceSegmentEditorSegment => ({
   currentAsset: {
@@ -668,5 +691,83 @@ describe("media library dedupe", () => {
     });
 
     expect(dedupeWorkspaceMediaLibraryPageItems([durableVideo, animation])).toEqual([animation]);
+  });
+
+  it("keeps saved references separate from generated visuals with the same asset id", () => {
+    const generatedPhoto = createWorkspaceMediaLibraryItem({
+      assetId: 901,
+      createdAt: "2026-04-09T00:00:00.000Z",
+      downloadName: "photo.jpg",
+      downloadUrl: "/api/workspace/media-assets/901",
+      kind: "ai_photo",
+      previewKind: "image",
+      previewPosterUrl: null,
+      previewUrl: "/api/workspace/media-assets/901",
+      projectId: 42,
+      projectTitle: "Project",
+      segmentIndex: 0,
+      segmentListIndex: 0,
+      source: "persisted",
+    });
+    const characterReference = createWorkspaceMediaLibraryItem({
+      assetId: 901,
+      createdAt: "2026-04-09T00:01:00.000Z",
+      downloadName: "hero.jpg",
+      downloadUrl: "/api/workspace/media-assets/901",
+      kind: "character_reference",
+      previewKind: "image",
+      previewPosterUrl: null,
+      previewUrl: "/api/workspace/media-assets/901",
+      projectId: 42,
+      projectTitle: "Персонажи",
+      referenceId: "reference-901",
+      segmentIndex: 0,
+      segmentListIndex: 0,
+      source: "persisted",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryPageItems([generatedPhoto, characterReference]).map((item) => item.kind).sort()).toEqual([
+      "ai_photo",
+      "character_reference",
+    ]);
+  });
+});
+
+describe("media library saved references", () => {
+  it("exposes saved characters and scenes as separate image media kinds", async () => {
+    const user = createReferenceTestUser();
+    const character = await createWorkspaceSavedReference(user, {
+      assetId: 1001,
+      kind: "character",
+      name: "Hero",
+      sourceProjectId: 77,
+      sourceSegmentIndex: 2,
+    });
+    const scene = await createWorkspaceSavedReference(user, {
+      assetId: 1002,
+      kind: "scene",
+      name: "Kitchen",
+      sourceProjectId: 77,
+      sourceSegmentIndex: 3,
+    });
+
+    const items = await buildWorkspaceReferenceMediaLibraryItems(user);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          assetId: 1001,
+          kind: "character_reference",
+          previewKind: "image",
+          referenceId: character.id,
+        }),
+        expect.objectContaining({
+          assetId: 1002,
+          kind: "scene_reference",
+          previewKind: "image",
+          referenceId: scene.id,
+        }),
+      ]),
+    );
   });
 });

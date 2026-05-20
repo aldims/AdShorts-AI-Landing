@@ -3563,6 +3563,8 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
     const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
+    const normalizedPurpose = normalizeGenerationText(options?.purpose);
+    const normalizedReferenceKind = normalizeGenerationText(options?.referenceKind);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
@@ -3577,6 +3579,10 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         preserve_characters: preserveCharacters,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
+        generation_purpose: normalizedPurpose || undefined,
+        library_kind: normalizedPurpose === "workspace_reference" && normalizedReferenceKind
+            ? `${normalizedReferenceKind}_reference`
+            : undefined,
         reference_asset_ids: referenceAssetIds,
         scene_reference_asset_ids: sceneReferenceAssetIds,
         segment_index: normalizedSegmentIndex,

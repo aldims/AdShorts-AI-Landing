@@ -5,6 +5,7 @@ import { buildExternalUserId, resolveExternalUserIdentity } from "./external-use
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspacePreviewImage, getWorkspacePreviewImageCacheKey, } from "./preview-images.js";
 import { getWorkspaceProjects } from "./projects.js";
+import { listWorkspaceSavedReferences } from "./workspace-references.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, getWorkspaceSegmentEditorSession, getWorkspaceSegmentEditorSessionForAccessibleProject, } from "./segment-editor.js";
 import { clearWorkspaceMediaIndex, getWorkspaceMediaIndexProjectEntry, listWorkspaceMediaIndexProjectEntries, pruneWorkspaceMediaIndexProjects, upsertWorkspaceMediaIndexProjectEntry, } from "./workspace-media-index.js";
 import { postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
@@ -48,7 +49,9 @@ const isWorkspaceMediaLibraryItemKind = (value) => value === "ai_photo" ||
     value === "ai_video" ||
     value === "photo_animation" ||
     value === "talking_photo" ||
-    value === "image_edit";
+    value === "image_edit" ||
+    value === "character_reference" ||
+    value === "scene_reference";
 const isWorkspaceSegmentEditorVideoSource = (value) => value === "current" || value === "original";
 const isWorkspaceSegmentEditorVideoDelivery = (value) => value === "preview" || value === "playback";
 const getWorkspaceMediaLibraryCacheKey = (user) => {
@@ -377,6 +380,9 @@ const buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem = (assetId, item) 
     return `${posterUrl.pathname}${posterUrl.search}`;
 };
 const getWorkspaceMediaLibraryItemSpecificityRank = (item) => {
+    if (item.kind === "character_reference" || item.kind === "scene_reference") {
+        return 4;
+    }
     if (item.kind === "photo_animation" || item.kind === "talking_photo" || item.kind === "image_edit") {
         return 3;
     }
@@ -393,7 +399,7 @@ export const dedupeWorkspaceMediaLibraryPageItems = (items) => {
         const assetId = typeof item.assetId === "number" && item.assetId > 0
             ? item.assetId
             : null;
-        if (!assetId) {
+        if (!assetId || item.kind === "character_reference" || item.kind === "scene_reference") {
             result.push(item);
             continue;
         }
@@ -461,6 +467,36 @@ export const buildWorkspaceDurableMediaLibraryItem = (rawAsset) => {
         segmentIndex,
         segmentListIndex,
         source: "persisted",
+    });
+};
+export const buildWorkspaceReferenceMediaLibraryItems = async (user) => {
+    const references = await listWorkspaceSavedReferences(user);
+    return references.map((reference) => {
+        const projectId = reference.sourceProjectId ?? 0;
+        const segmentIndex = reference.sourceSegmentIndex ?? 0;
+        const kind = reference.kind === "character" ? "character_reference" : "scene_reference";
+        const previewUrl = buildWorkspaceDurableMediaAssetPreviewUrl(reference.assetId, "image");
+        const projectTitle = reference.kind === "character" ? "Персонажи" : "Сцены";
+        return createWorkspaceMediaLibraryItem({
+            assetExpiresAt: null,
+            assetId: reference.assetId,
+            assetKind: kind,
+            assetLifecycle: "ready",
+            assetMediaType: "photo",
+            createdAt: reference.updatedAt || reference.createdAt,
+            downloadName: getWorkspaceImageDownloadName(reference.name),
+            downloadUrl: buildWorkspaceDurableMediaAssetProxyUrl(reference.assetId),
+            kind,
+            previewKind: "image",
+            previewPosterUrl: null,
+            previewUrl,
+            projectId,
+            projectTitle,
+            referenceId: reference.id,
+            segmentIndex,
+            segmentListIndex: Math.max(0, segmentIndex),
+            source: "persisted",
+        });
     });
 };
 const fetchWorkspaceDurableMediaLibraryItems = async (user, options) => {
@@ -1076,9 +1112,11 @@ export const getWorkspaceMediaLibraryItems = async (user, options) => {
             maxWaitMs: WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS,
             offset,
         });
+        const referenceItems = await buildWorkspaceReferenceMediaLibraryItems(user);
         const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(dedupeWorkspaceMediaLibraryPageItems([
             ...hydratedIndexItems,
             ...durableMedia.items,
+            ...referenceItems,
         ]));
         const pageItems = allItems.slice(offset, offset + limit);
         const hasAdditionalItems = offset + pageItems.length < allItems.length ||
