@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { join } from "node:path";
 import { env } from "./env.js";
 const WAVESPEED_API_BASE_URL = "https://api.wavespeed.ai/api/v3/";
+export const WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL = "openai/gpt-image-2/text-to-image";
 export const WAVESPEED_KLING_V2_6_STD_IMAGE_TO_VIDEO_MODEL = "kwaivgi/kling-v2.6-std/image-to-video";
 const WAVESPEED_PREVIEW_CACHE_DIR = join(env.dataDir, "voice-previews", "wavespeed");
 const WAVESPEED_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -176,6 +177,40 @@ export async function getWaveSpeedPredictionOutputUrl(predictionId) {
         throw new Error(status.error || "WaveSpeed prediction failed.");
     }
     return status.outputUrl;
+}
+export async function createWaveSpeedGptImage2TextToImageJob(options) {
+    const normalizedPrompt = normalizeText(options.prompt);
+    if (!normalizedPrompt) {
+        throw new Error("WaveSpeed GPT Image 2 prompt is required.");
+    }
+    const response = await fetchWaveSpeed(`/${WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL}`, {
+        body: JSON.stringify({
+            aspect_ratio: options.aspectRatio ?? "1:1",
+            output_format: options.outputFormat ?? "png",
+            prompt: normalizedPrompt,
+            quality: options.quality ?? "low",
+            resolution: options.resolution ?? "1k",
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
+        method: "POST",
+    }, 60_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedErrorMessage(payload, `WaveSpeed GPT Image 2 request failed (${response.status}).`));
+    }
+    const predictionId = normalizeText(payload?.data?.id);
+    if (!predictionId) {
+        throw new Error("WaveSpeed did not return a GPT Image 2 prediction id.");
+    }
+    const outputUrl = extractWaveSpeedOutputUrl(payload);
+    return {
+        error: normalizeText(payload?.data?.error) || undefined,
+        id: predictionId,
+        outputUrl: outputUrl ? assertValidWaveSpeedHttpUrl(outputUrl, "WaveSpeed prediction returned an invalid output URL.") : null,
+        status: normalizeText(payload?.data?.status).toLowerCase() || "created",
+    };
 }
 export async function createWaveSpeedKlingImageToVideoJob(options) {
     const normalizedPrompt = normalizeText(options.prompt);

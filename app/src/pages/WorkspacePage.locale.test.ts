@@ -397,28 +397,33 @@ describe("WorkspacePage reference creation defaults", () => {
   });
 
   it("builds character prompts from structured creation fields", () => {
-    expect(
-      buildWorkspaceReferenceAiPrompt({
-        character: {
-          ageRange: "25-35 лет",
-          description: "Темные волосы, студийный портрет.",
-          gender: "male",
-          style: "Реалистичный",
-        },
-        kind: "character",
-      }),
-    ).toContain("Пол персонажа: мужской");
-    expect(
-      buildWorkspaceReferenceAiPrompt({
-        character: {
-          ageRange: "25-35 лет",
-          description: "Темные волосы, студийный портрет.",
-          gender: "male",
-          style: "Реалистичный",
-        },
-        kind: "character",
-      }),
-    ).toContain("Темные волосы");
+    const prompt = buildWorkspaceReferenceAiPrompt({
+      character: {
+        ageRange: "1",
+        description: "Темные волосы, студийный портрет.",
+        gender: "male",
+        style: "Реалистичный",
+      },
+      kind: "character",
+    });
+
+    expect(prompt).toContain("Создай референс персонажа: Темные волосы");
+    expect(prompt).toContain("Пол персонажа: мужской");
+    expect(prompt).toContain("Возраст: 1 год");
+  });
+
+  it("does not add human defaults to free-form character prompts", () => {
+    const prompt = buildWorkspaceReferenceAiPrompt({
+      character: {
+        description: "катенок качок",
+      },
+      kind: "character",
+    });
+
+    expect(prompt).toContain("катенок качок");
+    expect(prompt).not.toContain("мужской");
+    expect(prompt).not.toContain("25");
+    expect(prompt).not.toContain("Темные волосы");
   });
 
   it("builds scene prompts from structured creation fields", () => {

@@ -1,4 +1,4 @@
-import { Fragment, memo, type CSSProperties, type ChangeEvent, type FocusEvent as ReactFocusEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type CSSProperties, type ChangeEvent, type ClipboardEvent as ReactClipboardEvent, type FocusEvent as ReactFocusEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
@@ -110,7 +110,7 @@ type WorkspaceReferenceCharacterGender = "male" | "female";
 type WorkspaceReferenceCharacterPromptFields = {
   ageRange: string;
   description: string;
-  gender: WorkspaceReferenceCharacterGender;
+  gender: WorkspaceReferenceCharacterGender | "";
   style: string;
 };
 
@@ -3677,10 +3677,12 @@ const WORKSPACE_VIDEO_FILE_NAME_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
 const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
   Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
+const WORKSPACE_REFERENCE_CHARACTER_MIN_AGE = 1;
+
 const WORKSPACE_REFERENCE_CHARACTER_DEFAULTS: WorkspaceReferenceCharacterPromptFields = {
-  ageRange: "25-35 лет",
-  description: "Темные волосы, легкая небритость, карие глаза, уверенный и дружелюбный взгляд. Нейтральный фон, студийный портрет.",
-  gender: "male",
+  ageRange: "",
+  description: "",
+  gender: "",
   style: "Реалистичный (фотографический)",
 };
 
@@ -3694,17 +3696,12 @@ const WORKSPACE_REFERENCE_SCENE_DEFAULTS: WorkspaceReferenceScenePromptFields = 
 const WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS = [
   "Реалистичный (фотографический)",
   "Кинематографичный",
-  "Fashion/editorial",
-  "3D портрет",
-  "Аниме",
-] as const;
-
-const WORKSPACE_REFERENCE_CHARACTER_AGE_OPTIONS = [
-  "18-24 года",
-  "25-35 лет",
-  "36-45 лет",
-  "46-60 лет",
-  "60+ лет",
+  "Журнальный портрет",
+  "Студийный портрет",
+  "Деловой портрет",
+  "Повседневный портрет",
+  "Рекламный премиальный стиль",
+  "Документальный стиль",
 ] as const;
 
 const WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS = [
@@ -3720,7 +3717,7 @@ const WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS = [
   "Кинематографичная",
   "Документальная",
   "Рекламная",
-  "Фэнтези / sci-fi",
+  "Фэнтези и научная фантастика",
 ] as const;
 
 const WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS = [
@@ -3730,10 +3727,61 @@ const WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS = [
   "Холодный неоновый свет",
   "Студийное освещение",
 ] as const;
-const WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT = 5;
 
-const getWorkspaceReferenceGenderLabel = (gender: WorkspaceReferenceCharacterGender) =>
-  gender === "female" ? "женский" : "мужской";
+const getWorkspaceReferenceGenderLabel = (gender: WorkspaceReferenceCharacterGender | "") =>
+  gender === "female" ? "женский" : gender === "male" ? "мужской" : "";
+
+const getWorkspaceReferenceAgeUnit = (age: number) => {
+  const lastTwoDigits = age % 100;
+  const lastDigit = age % 10;
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return "лет";
+  }
+
+  if (lastDigit === 1) {
+    return "год";
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return "года";
+  }
+
+  return "лет";
+};
+
+const parseWorkspaceReferenceCharacterAge = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const age = Number.parseInt(normalized, 10);
+  return Number.isFinite(age) && age >= WORKSPACE_REFERENCE_CHARACTER_MIN_AGE ? age : null;
+};
+
+const normalizeWorkspaceReferenceCharacterAgeInput = (value: string) => {
+  const parsedAge = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsedAge)) {
+    return "";
+  }
+
+  return String(Math.max(WORKSPACE_REFERENCE_CHARACTER_MIN_AGE, parsedAge));
+};
+
+const isValidWorkspaceReferenceCharacterAge = (value: unknown) => {
+  const normalized = normalizeWorkspaceReferencePromptPart(value);
+  return !normalized || parseWorkspaceReferenceCharacterAge(normalized) !== null;
+};
+
+const formatWorkspaceReferenceCharacterAge = (value: unknown) => {
+  const age = parseWorkspaceReferenceCharacterAge(value);
+  if (age === null) {
+    return normalizeWorkspaceReferencePromptPart(value);
+  }
+
+  return `${age} ${getWorkspaceReferenceAgeUnit(age)}`;
+};
 
 const normalizeWorkspaceReferencePromptPart = (value: unknown) =>
   String(value ?? "").replace(/\s+/g, " ").trim();
@@ -3760,11 +3808,13 @@ export const buildWorkspaceReferenceAiPrompt = (options: {
     ...WORKSPACE_REFERENCE_CHARACTER_DEFAULTS,
     ...(options.character ?? {}),
   };
+  const characterAgeLabel = formatWorkspaceReferenceCharacterAge(character.ageRange);
+  const characterGenderLabel = getWorkspaceReferenceGenderLabel(character.gender);
   return [
-    `Пол персонажа: ${getWorkspaceReferenceGenderLabel(character.gender)}`,
-    `Возраст: ${character.ageRange}`,
-    `Стиль: ${character.style}`,
-    character.description,
+    character.description ? `Создай референс персонажа: ${character.description}` : "",
+    characterGenderLabel ? `Пол персонажа: ${characterGenderLabel}` : "",
+    characterAgeLabel ? `Возраст: ${characterAgeLabel}` : "",
+    character.style ? `Стиль: ${character.style}` : "",
   ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
 };
 
@@ -4374,6 +4424,7 @@ const ensureStudioUploadedAssetId = async (
 
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE = "image/jpeg";
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_QUALITY = 0.92;
+const WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT = 3;
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE = 1280;
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS = 0.25;
 
@@ -4776,6 +4827,305 @@ const getReferencedStudioObjectUrls = (options: {
 };
 
 const normalizeWorkspaceSegmentAiPhotoPrompt = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
+const escapeWorkspacePromptRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+type WorkspacePromptCharacterMentionToken =
+  | { text: string; type: "text" }
+  | { option: WorkspaceReferenceVisualOption; text: string; type: "mention" };
+type WorkspacePromptCharacterMentionMatch = {
+  end: number;
+  option: WorkspaceReferenceVisualOption;
+  start: number;
+  text: string;
+};
+
+const findNextWorkspacePromptCharacterMention = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+  startIndex: number,
+): WorkspacePromptCharacterMentionMatch | null => {
+  let nextMatch: WorkspacePromptCharacterMentionMatch | null = null;
+
+  options.forEach((option) => {
+    const label = option.label.trim();
+    if (!label) {
+      return;
+    }
+
+    const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])(${escapeWorkspacePromptRegExp(label)})(?=$|[^\\p{L}\\p{N}_])`, "giu");
+    let match = pattern.exec(value);
+    while (match) {
+      const prefix = match[1] ?? "";
+      const mentionText = match[2] ?? "";
+      const mentionStart = match.index + prefix.length;
+      const mentionEnd = mentionStart + mentionText.length;
+
+      if (
+        mentionStart >= startIndex &&
+        (!nextMatch || mentionStart < nextMatch.start || (mentionStart === nextMatch.start && mentionEnd > nextMatch.end))
+      ) {
+        nextMatch = {
+          end: mentionEnd,
+          option,
+          start: mentionStart,
+          text: mentionText,
+        };
+      }
+
+      match = pattern.exec(value);
+    }
+  });
+
+  return nextMatch;
+};
+
+const buildWorkspacePromptCharacterMentionTokens = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+) => {
+  const tokens: WorkspacePromptCharacterMentionToken[] = [];
+  const orderedOptions = [...options].sort((left, right) => right.label.length - left.label.length);
+  let cursor = 0;
+
+  while (cursor < value.length) {
+    const match = findNextWorkspacePromptCharacterMention(value, orderedOptions, cursor);
+    if (!match) {
+      tokens.push({ text: value.slice(cursor), type: "text" });
+      break;
+    }
+
+    if (match.start > cursor) {
+      tokens.push({ text: value.slice(cursor, match.start), type: "text" });
+    }
+    tokens.push({ option: match.option, text: match.text, type: "mention" });
+    cursor = match.end;
+  }
+
+  return tokens;
+};
+
+const getWorkspacePromptCharacterMentionTokenSignature = (tokens: WorkspacePromptCharacterMentionToken[]) =>
+  tokens
+    .filter((token) => token.type === "mention")
+    .map((token) => `${token.option.key}:${token.text}`)
+    .join("|");
+
+const getWorkspacePromptRichEditorDomMentionSignature = (root: HTMLElement | null) =>
+  Array.from(root?.querySelectorAll<HTMLElement>("[data-prompt-character-key]") ?? [])
+    .map((element) => `${element.dataset.promptCharacterKey ?? ""}:${element.dataset.promptCharacterLabel ?? ""}`)
+    .join("|");
+
+const escapeWorkspacePromptRichEditorHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const getWorkspacePromptRichEditorTextHtml = (value: string) =>
+  escapeWorkspacePromptRichEditorHtml(value).replace(/\n/g, "<br>");
+
+const getWorkspacePromptRichEditorNodeText = (node: Node): string => {
+  if (node.nodeType === 3) {
+    return node.textContent ?? "";
+  }
+
+  if (node.nodeType !== 1) {
+    return "";
+  }
+
+  const element = node as HTMLElement;
+  const mentionLabel = element.dataset.promptCharacterLabel;
+  if (mentionLabel) {
+    return mentionLabel;
+  }
+  if (element.tagName === "BR") {
+    return "\n";
+  }
+
+  return Array.from(element.childNodes).map(getWorkspacePromptRichEditorNodeText).join("");
+};
+
+const normalizeWorkspacePromptRichEditorValue = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]*(?:\r\n?|\n)+[ \t]*/g, " ")
+    .replace(/[ \t]{2,}/g, " ");
+
+const getWorkspacePromptRichEditorText = (root: HTMLElement | null) =>
+  normalizeWorkspacePromptRichEditorValue(root ? getWorkspacePromptRichEditorNodeText(root) : "");
+
+const getWorkspacePromptRichEditorNodeTextLength = (node: Node): number => {
+  if (node.nodeType === 3) {
+    return node.textContent?.length ?? 0;
+  }
+
+  if (node.nodeType !== 1) {
+    return 0;
+  }
+
+  const element = node as HTMLElement;
+  const mentionLabel = element.dataset.promptCharacterLabel;
+  if (mentionLabel) {
+    return mentionLabel.length;
+  }
+  if (element.tagName === "BR") {
+    return 1;
+  }
+
+  return Array.from(element.childNodes).reduce(
+    (length, childNode) => length + getWorkspacePromptRichEditorNodeTextLength(childNode),
+    0,
+  );
+};
+
+const getWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null) => {
+  if (!root || typeof window === "undefined") {
+    return 0;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return getWorkspacePromptRichEditorText(root).length;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) {
+    return getWorkspacePromptRichEditorText(root).length;
+  }
+
+  let offset = 0;
+  let hasFoundStart = false;
+  const visit = (node: Node): boolean => {
+    if (node === range.startContainer) {
+      if (node.nodeType === 3) {
+        offset += range.startOffset;
+      } else {
+        const children = Array.from(node.childNodes).slice(0, range.startOffset);
+        offset += children.reduce(
+          (length, childNode) => length + getWorkspacePromptRichEditorNodeTextLength(childNode),
+          0,
+        );
+      }
+      hasFoundStart = true;
+      return true;
+    }
+
+    if (node.nodeType === 1 && (node as HTMLElement).dataset.promptCharacterLabel) {
+      offset += getWorkspacePromptRichEditorNodeTextLength(node);
+      return false;
+    }
+
+    for (const childNode of Array.from(node.childNodes)) {
+      if (visit(childNode)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  visit(root);
+  return hasFoundStart ? offset : getWorkspacePromptRichEditorText(root).length;
+};
+
+const setWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null, targetOffset: number) => {
+  if (!root || typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const normalizedTargetOffset = Math.max(0, targetOffset);
+  let offset = 0;
+  let target: { node: Node; offset: number } | null = null;
+
+  const visit = (node: Node): boolean => {
+    if (node.nodeType === 3) {
+      const textLength = node.textContent?.length ?? 0;
+      if (offset + textLength >= normalizedTargetOffset) {
+        target = {
+          node,
+          offset: Math.max(0, Math.min(textLength, normalizedTargetOffset - offset)),
+        };
+        return true;
+      }
+      offset += textLength;
+      return false;
+    }
+
+    if (node.nodeType === 1 && (node as HTMLElement).dataset.promptCharacterLabel) {
+      const mentionLength = getWorkspacePromptRichEditorNodeTextLength(node);
+      if (offset + mentionLength >= normalizedTargetOffset) {
+        const parentNode = node.parentNode;
+        if (parentNode) {
+          target = {
+            node: parentNode,
+            offset: Array.from(parentNode.childNodes).indexOf(node as ChildNode) + 1,
+          };
+          return true;
+        }
+      }
+      offset += mentionLength;
+      return false;
+    }
+
+    for (const childNode of Array.from(node.childNodes)) {
+      if (visit(childNode)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  visit(root);
+  if (!target) {
+    target = {
+      node: root,
+      offset: root.childNodes.length,
+    };
+  }
+
+  const range = document.createRange();
+  range.setStart(target.node, target.offset);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+};
+
+const insertWorkspacePromptCharacterMentionText = (value: string, label: string, offset: number) => {
+  const normalizedOffset = Math.max(0, Math.min(value.length, offset));
+  const before = value.slice(0, normalizedOffset);
+  const after = value.slice(normalizedOffset);
+  const leadingSpace = before && !/\s$/.test(before) ? " " : "";
+  const trailingSpace = !after || !/^[\s,.!?;:]/.test(after) ? " " : "";
+
+  return `${before}${leadingSpace}${label}${trailingSpace}${after}`;
+};
+
+const buildWorkspacePromptRichEditorHtml = (
+  tokens: WorkspacePromptCharacterMentionToken[],
+  getAvatarUrl: (option: WorkspaceReferenceVisualOption) => string | null,
+) =>
+  tokens.map((token) => {
+    if (token.type === "text") {
+      return getWorkspacePromptRichEditorTextHtml(token.text);
+    }
+
+    const avatarUrl = getAvatarUrl(token.option);
+    const avatarHtml = avatarUrl
+      ? `<img src="${escapeWorkspacePromptRichEditorHtml(avatarUrl)}" alt="">`
+      : "";
+    const escapedKey = escapeWorkspacePromptRichEditorHtml(token.option.key);
+    const escapedLabel = escapeWorkspacePromptRichEditorHtml(token.option.label);
+
+    return [
+      `<span class="studio-segment-editor__prompt-inline-mention" contenteditable="false" data-prompt-character-key="${escapedKey}" data-prompt-character-label="${escapedLabel}" title="${escapedLabel}">`,
+      `<span class="studio-segment-editor__prompt-inline-mention-avatar">${avatarHtml}</span>`,
+      `<span class="studio-segment-editor__prompt-inline-mention-label">${escapedLabel}</span>`,
+      "</span>",
+    ].join("");
+  }).join("");
 const normalizeWorkspaceSegmentMediaType = (value: unknown): WorkspaceSegmentMediaType =>
   String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
 
@@ -15211,7 +15561,7 @@ export function WorkspacePage({
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
-  const [selectedSegmentReferenceCharacterAssetKey, setSelectedSegmentReferenceCharacterAssetKey] = useState<string | null>(null);
+  const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<WorkspaceReferenceKind>("character");
@@ -15228,7 +15578,7 @@ export function WorkspacePage({
   const [referenceCreationUploadFile, setReferenceCreationUploadFile] = useState<StudioCustomVideoFile | null>(null);
   const [referenceCreationProjectKey, setReferenceCreationProjectKey] = useState<string | null>(null);
   const [referenceCreationCharacterGender, setReferenceCreationCharacterGender] =
-    useState<WorkspaceReferenceCharacterGender>(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
+    useState<WorkspaceReferenceCharacterGender | "">(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
   const [referenceCreationCharacterAgeRange, setReferenceCreationCharacterAgeRange] =
     useState(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.ageRange);
   const [referenceCreationCharacterStyle, setReferenceCreationCharacterStyle] =
@@ -15239,7 +15589,6 @@ export function WorkspacePage({
     useState(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
   const [referenceCreationSceneLightingMood, setReferenceCreationSceneLightingMood] =
     useState(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
-  const [referenceCreationExtraFiles, setReferenceCreationExtraFiles] = useState<StudioCustomVideoFile[]>([]);
   const [generatingReferenceKind, setGeneratingReferenceKind] = useState<WorkspaceReferenceKind | null>(null);
   const [deletingReferenceId, setDeletingReferenceId] = useState<string | null>(null);
   const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
@@ -15247,8 +15596,6 @@ export function WorkspacePage({
   const [savingReferenceNameId, setSavingReferenceNameId] = useState<string | null>(null);
   const segmentReferenceFrameAssetIdsRef = useRef<Map<string, number>>(new Map());
   const referenceCreationFileInputRef = useRef<HTMLInputElement | null>(null);
-  const referenceCreationExtraFileInputRef = useRef<HTMLInputElement | null>(null);
-  const referenceCreationExtraFilesRef = useRef<StudioCustomVideoFile[]>([]);
   const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] = useState<{
     id: string;
     left: number;
@@ -15455,7 +15802,7 @@ export function WorkspacePage({
   const [mediaLibraryNextCursor, setMediaLibraryNextCursor] = useState<string | null>(null);
   const [mediaLibraryTotal, setMediaLibraryTotal] = useState<number | null>(null);
   const [loadedMediaLibraryFingerprint, setLoadedMediaLibraryFingerprint] = useState<string | null>(null);
-  const [loadedMediaLibraryReloadToken, setLoadedMediaLibraryReloadToken] = useState(-1);
+  const [loadedMediaLibraryReloadToken, setLoadedMediaLibraryReloadToken] = useState(0);
   const [mediaLibraryError, setMediaLibraryError] = useState<string | null>(null);
   const [isMediaLibraryLoading, setIsMediaLibraryLoading] = useState(false);
   const [isMediaLibraryLoadingMore, setIsMediaLibraryLoadingMore] = useState(false);
@@ -15523,6 +15870,8 @@ export function WorkspacePage({
   const segmentAiPhotoModalLibraryBodyRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalLibraryLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const segmentPromptRichEditorRef = useRef<HTMLDivElement | null>(null);
+  const segmentPromptRichEditorSelectionFrameRef = useRef<number | null>(null);
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
   const segmentAiPhotoPromptImproveRunRef = useRef(0);
@@ -16760,7 +17109,7 @@ export function WorkspacePage({
     setMediaLibraryNextCursor(null);
     setMediaLibraryTotal(null);
     setLoadedMediaLibraryFingerprint(null);
-    setLoadedMediaLibraryReloadToken(-1);
+    setLoadedMediaLibraryReloadToken(0);
     setMediaLibraryError(null);
     setIsMediaLibraryLoading(false);
     setIsMediaLibraryLoadingMore(false);
@@ -16799,7 +17148,7 @@ export function WorkspacePage({
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
-      setSelectedSegmentReferenceCharacterAssetKey(null);
+      setSelectedSegmentReferenceCharacterAssetKeys([]);
       setSelectedSegmentReferenceSceneKey(null);
       setIsSegmentReferencesModalOpen(false);
       setIsWorkspaceReferenceCreatorOpen(false);
@@ -18870,23 +19219,23 @@ export function WorkspacePage({
         })),
     [locale, savedWorkspaceReferences],
   );
-  const selectedSegmentReferenceCharacterOption = useMemo(
+  const selectedSegmentReferenceCharacterOptions = useMemo(
     () => {
-      const projectCharacterId = selectedSegmentReferenceCharacterIds[0] ?? null;
-      if (projectCharacterId) {
-        return projectCharacterReferenceOptions.find((option) => option.key === `project-character:${projectCharacterId}`) ?? null;
-      }
+      const allCharacterOptions = [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions];
+      const selectedKeys = [
+        ...selectedSegmentReferenceCharacterIds.map((characterId) => `project-character:${characterId}`),
+        ...selectedSegmentReferenceCharacterAssetKeys,
+      ];
 
-      return selectedSegmentReferenceCharacterAssetKey
-        ? [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions].find(
-            (option) => option.key === selectedSegmentReferenceCharacterAssetKey,
-          ) ?? null
-        : null;
+      return selectedKeys
+        .map((key) => allCharacterOptions.find((option) => option.key === key) ?? null)
+        .filter(Boolean)
+        .slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) as WorkspaceReferenceVisualOption[];
     },
     [
       projectCharacterReferenceOptions,
       savedCharacterReferenceOptions,
-      selectedSegmentReferenceCharacterAssetKey,
+      selectedSegmentReferenceCharacterAssetKeys,
       selectedSegmentReferenceCharacterIds,
     ],
   );
@@ -18982,18 +19331,22 @@ export function WorkspacePage({
     return [assetId];
   };
   const resolveSegmentReferenceCharacterAssetIds = async (
-    option: WorkspaceReferenceVisualOption | null,
+    options: WorkspaceReferenceVisualOption[],
   ) => {
-    if (!option || option.source === "project-character") {
-      return [];
+    const assetIds: number[] = [];
+    for (const option of options) {
+      if (option.source === "project-character") {
+        continue;
+      }
+
+      const assetId = await resolveSegmentReferenceAssetId(option, "character");
+      if (!assetId) {
+        throw new Error(workspaceText(locale, "У персонажа нет доступного фото для референса.", "This character has no available image reference."));
+      }
+      assetIds.push(assetId);
     }
 
-    const assetId = await resolveSegmentReferenceAssetId(option, "character");
-    if (!assetId) {
-      throw new Error(workspaceText(locale, "У персонажа нет доступного фото для референса.", "This character has no available image reference."));
-    }
-
-    return [assetId];
+    return assetIds;
   };
   const segmentEditorPendingDeleteSegment =
     typeof segmentEditorPendingDeleteIndex === "number"
@@ -19016,7 +19369,7 @@ export function WorkspacePage({
   }, [segmentEditorDraft?.projectId]);
   useEffect(() => {
     setSelectedSegmentReferenceCharacterIds([]);
-    setSelectedSegmentReferenceCharacterAssetKey(null);
+    setSelectedSegmentReferenceCharacterAssetKeys([]);
     setSelectedSegmentReferenceSceneKey(null);
     setIsSegmentReferencesModalOpen(false);
     setIsWorkspaceReferenceCreatorOpen(false);
@@ -19030,13 +19383,6 @@ export function WorkspacePage({
     setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
-    referenceCreationExtraFilesRef.current.forEach((file) => {
-      if (file.objectUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(file.objectUrl);
-      }
-    });
-    referenceCreationExtraFilesRef.current = [];
-    setReferenceCreationExtraFiles([]);
     setSegmentReferencePanelTab("character");
   }, [activeSegment?.index, segmentEditorDraft?.projectId]);
   useEffect(() => {
@@ -19047,20 +19393,6 @@ export function WorkspacePage({
       }
     };
   }, [referenceCreationUploadFile?.objectUrl]);
-  useEffect(() => {
-    referenceCreationExtraFilesRef.current = referenceCreationExtraFiles;
-  }, [referenceCreationExtraFiles]);
-  useEffect(
-    () => () => {
-      referenceCreationExtraFilesRef.current.forEach((file) => {
-        if (file.objectUrl?.startsWith("blob:")) {
-          URL.revokeObjectURL(file.objectUrl);
-        }
-      });
-      referenceCreationExtraFilesRef.current = [];
-    },
-    [],
-  );
   useEffect(() => {
     const projectId = segmentEditorDraft?.projectId;
     if (!projectId) {
@@ -19152,15 +19484,25 @@ export function WorkspacePage({
     };
   }, [isGuest, session.email]);
   useEffect(() => {
-    if (
-      selectedSegmentReferenceCharacterAssetKey &&
-      ![...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions].some(
-        (option) => option.key === selectedSegmentReferenceCharacterAssetKey,
-      )
-    ) {
-      setSelectedSegmentReferenceCharacterAssetKey(null);
+    const allCharacterOptions = [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions];
+    const validCharacterKeys = new Set(allCharacterOptions.map((option) => option.key));
+    const nextCharacterIds = selectedSegmentReferenceCharacterIds.filter((characterId) =>
+      validCharacterKeys.has(`project-character:${characterId}`),
+    );
+    const nextAssetKeys = selectedSegmentReferenceCharacterAssetKeys.filter((key) => validCharacterKeys.has(key));
+
+    if (nextCharacterIds.length !== selectedSegmentReferenceCharacterIds.length) {
+      setSelectedSegmentReferenceCharacterIds(nextCharacterIds);
     }
-  }, [projectCharacterReferenceOptions, savedCharacterReferenceOptions, selectedSegmentReferenceCharacterAssetKey]);
+    if (nextAssetKeys.length !== selectedSegmentReferenceCharacterAssetKeys.length) {
+      setSelectedSegmentReferenceCharacterAssetKeys(nextAssetKeys);
+    }
+  }, [
+    projectCharacterReferenceOptions,
+    savedCharacterReferenceOptions,
+    selectedSegmentReferenceCharacterAssetKeys,
+    selectedSegmentReferenceCharacterIds,
+  ]);
   useEffect(() => {
     if (
       selectedSegmentReferenceSceneKey &&
@@ -20187,13 +20529,19 @@ export function WorkspacePage({
 
     const frameId = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const textarea = segmentAiPhotoModalTextareaRef.current;
-        if (!textarea) {
+        const shouldFocusRichPrompt =
+          segmentEditorPromptToolTab === "ai_photo" ||
+          segmentEditorPromptToolTab === "ai_video" ||
+          segmentEditorPromptToolTab === "image_edit";
+        const promptInput = shouldFocusRichPrompt
+          ? segmentPromptRichEditorRef.current
+          : segmentAiPhotoModalTextareaRef.current;
+        if (!promptInput) {
           return;
         }
 
-        textarea.scrollIntoView({ block: "nearest", inline: "nearest" });
-        textarea.focus();
+        promptInput.scrollIntoView({ block: "nearest", inline: "nearest" });
+        promptInput.focus();
       });
     });
 
@@ -20205,6 +20553,15 @@ export function WorkspacePage({
     segmentEditorPromptToolTab,
     segmentTimelinePromptFocusRequest,
   ]);
+  useEffect(
+    () => () => {
+      if (segmentPromptRichEditorSelectionFrameRef.current !== null) {
+        window.cancelAnimationFrame(segmentPromptRichEditorSelectionFrameRef.current);
+        segmentPromptRichEditorSelectionFrameRef.current = null;
+      }
+    },
+    [],
+  );
   const scrollSegmentThumbStripForPointer = (clientX: number) => {
     const stripElement = segmentThumbStripRef.current;
     if (!stripElement) {
@@ -24525,7 +24882,7 @@ export function WorkspacePage({
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
+    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
     const sceneReferenceOption = selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
@@ -24554,7 +24911,7 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -24660,7 +25017,7 @@ export function WorkspacePage({
       return;
     }
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
+    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
     const sceneReferenceOption = selectedSegmentReferenceScene;
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -24688,7 +25045,7 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -24861,7 +25218,7 @@ export function WorkspacePage({
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
     const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOption = selectedSegmentReferenceCharacterOption;
+    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
     const sceneReferenceOption = selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
@@ -24891,7 +25248,7 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOption);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -30782,85 +31139,6 @@ export function WorkspacePage({
           </div>
         </div>
 
-        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--music">
-          <button
-            className="studio-segment-editor__timeline-label"
-            type="button"
-            aria-label={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
-            title={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
-            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
-            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
-          >
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>{workspaceText(locale, "Музыка", "Music")}</span>
-          </button>
-          <div className="studio-segment-editor__timeline-track">
-            {segmentEditorTimelineMusicRow?.spans.map((span) => {
-              const musicHistoryKey = getWorkspaceSegmentTimelineHistoryKey("music");
-              const canForwardMusic = Boolean(segmentTimelineRedoSnapshots[musicHistoryKey]);
-
-              return (
-                <div
-                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio studio-segment-editor__timeline-cell-shell--global-audio"
-                  key={span.key}
-                  style={getSegmentEditorTimelineSpanStyle(span)}
-                >
-                  <button
-                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--music studio-segment-editor__timeline-cell--has-play${
-                      span.isEdited || canForwardMusic ? " studio-segment-editor__timeline-cell--has-history" : ""
-                    }${
-                      span.isEdited ? " is-edited" : ""
-                    }`}
-                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
-                    type="button"
-                    aria-label={workspaceText(locale, "Изменить музыку", "Change music")}
-                    onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
-                    onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
-                  >
-                  <span className="studio-segment-editor__timeline-waveform" aria-hidden="true">
-                    <svg viewBox="0 0 720 48" preserveAspectRatio="none" focusable="false">
-                      <path
-                        className="studio-segment-editor__timeline-waveform-fill"
-                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24 L706 31 L694 27 L682 35 L670 30 L658 38 L646 28 L634 34 L622 25 L610 32 L598 27 L586 37 L574 31 L562 40 L550 28 L538 33 L526 26 L514 35 L502 29 L490 39 L478 27 L466 32 L454 25 L442 36 L430 30 L418 41 L406 28 L394 34 L382 26 L370 38 L358 31 L346 40 L334 29 L322 36 L310 25 L298 33 L286 27 L274 37 L262 31 L250 42 L238 28 L226 35 L214 26 L202 32 L190 39 L178 29 L166 37 L156 27 L146 34 L136 25 L126 30 L116 40 L106 28 L96 36 L86 26 L76 33 L66 28 L58 41 L50 30 L42 38 L34 27 L26 34 L18 25 L10 31 L0 24 Z"
-                      />
-                      <path
-                        className="studio-segment-editor__timeline-waveform-ridge"
-                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24"
-                      />
-                      <path
-                        className="studio-segment-editor__timeline-waveform-ridge studio-segment-editor__timeline-waveform-ridge--low"
-                        d="M0 24 L10 31 L18 25 L26 34 L34 27 L42 38 L50 30 L58 41 L66 28 L76 33 L86 26 L96 36 L106 28 L116 40 L126 30 L136 25 L146 34 L156 27 L166 37 L178 29 L190 39 L202 32 L214 26 L226 35 L238 28 L250 42 L262 31 L274 37 L286 27 L298 33 L310 25 L322 36 L334 29 L346 40 L358 31 L370 38 L382 26 L394 34 L406 28 L418 41 L430 30 L442 36 L454 25 L466 32 L478 27 L490 39 L502 29 L514 35 L526 26 L538 33 L550 28 L562 40 L574 31 L586 37 L598 27 L610 32 L622 25 L634 34 L646 28 L658 38 L670 30 L682 35 L694 27 L706 31 L720 24"
-                      />
-                    </svg>
-                  </span>
-                  <span className="studio-segment-editor__timeline-cell-copy">
-                    <strong>{segmentTimelineMusicLabel}</strong>
-                    <small>{span.isEdited ? workspaceText(locale, "Музыка изменена", "Music changed") : workspaceText(locale, "Фоновая дорожка", "Background track")}</small>
-                  </span>
-                </button>
-                {renderSegmentTimelineHistoryButtons({
-                  canBack: span.isEdited,
-                  canForward: canForwardMusic,
-                  kind: "music",
-                  label: workspaceText(locale, "Музыка", "Music"),
-                  withPlay: true,
-                })}
-                {renderSegmentTimelineAudioButton({
-                  audioKey: segmentTimelineMusicAudioKey,
-                  disabledReason: segmentTimelineMusicPreviewDisabledReason,
-                  label: segmentTimelineMusicLabel,
-                  url: segmentTimelineMusicPreviewUrl,
-                })}
-              </div>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--voice">
           <button
             className="studio-segment-editor__timeline-label"
@@ -30966,6 +31244,69 @@ export function WorkspacePage({
           </div>
         </div>
 
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--text">
+          <button
+            className="studio-segment-editor__timeline-label"
+            type="button"
+            aria-label={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
+            title={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
+            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event)}
+            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event)}
+          >
+            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>{workspaceText(locale, "Текст", "Text")}</span>
+          </button>
+          <div className="studio-segment-editor__timeline-track">
+            {segmentEditorTimelineTextRow?.spans.map((span) => {
+              const index = span.arrayIndex ?? 0;
+              const segment = segmentEditorDraft.segments[index];
+              if (!segment) {
+                return null;
+              }
+              const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
+              const canForwardText = Boolean(segmentTimelineRedoSnapshots[textHistoryKey]);
+
+              return (
+                <div
+                  className="studio-segment-editor__timeline-cell-shell"
+                  key={span.key}
+                  style={getSegmentEditorTimelineSpanStyle(span)}
+                >
+                  <button
+                    ref={setSegmentTimelineTextButtonRef(segment.index)}
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--text${
+                      span.isEdited || canForwardText ? " studio-segment-editor__timeline-cell--has-history" : ""
+                    }${
+                      span.isActive ? " is-active" : ""
+                    }${segmentTimelineTextMenuSegmentIndex === segment.index ? " is-menu-open" : ""}${
+                      span.isEdited ? " is-edited" : ""
+                    }${span.isEmpty ? " is-empty" : ""}`}
+                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
+                    type="button"
+                    aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
+                    onClick={(event) => handleSegmentEditorTimelineTextClick(index, event)}
+                  >
+                    <span className="studio-segment-editor__timeline-cell-copy">
+                      <strong>{getSegmentTimelineTextLabel(segment)}</strong>
+                    </span>
+                  </button>
+                  {renderSegmentTimelineHistoryButtons({
+                    canBack: span.isEdited,
+                    canForward: canForwardText,
+                    kind: "text",
+                    label: workspaceText(locale, `Текст сцены ${index + 1}`, `Scene ${index + 1} text`),
+                    segmentIndex: segment.index,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--sound">
           <div className="studio-segment-editor__timeline-label">
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
@@ -31047,64 +31388,80 @@ export function WorkspacePage({
           </div>
         </div>
 
-        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--text">
+        <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--music">
           <button
             className="studio-segment-editor__timeline-label"
             type="button"
-            aria-label={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
-            title={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
-            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event)}
-            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event)}
+            aria-label={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
+            title={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
+            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
+            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
           >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span>{workspaceText(locale, "Текст", "Text")}</span>
+            <span>{workspaceText(locale, "Музыка", "Music")}</span>
           </button>
           <div className="studio-segment-editor__timeline-track">
-            {segmentEditorTimelineTextRow?.spans.map((span) => {
-              const index = span.arrayIndex ?? 0;
-              const segment = segmentEditorDraft.segments[index];
-              if (!segment) {
-                return null;
-              }
-              const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
-              const canForwardText = Boolean(segmentTimelineRedoSnapshots[textHistoryKey]);
+            {segmentEditorTimelineMusicRow?.spans.map((span) => {
+              const musicHistoryKey = getWorkspaceSegmentTimelineHistoryKey("music");
+              const canForwardMusic = Boolean(segmentTimelineRedoSnapshots[musicHistoryKey]);
 
               return (
                 <div
-                  className="studio-segment-editor__timeline-cell-shell"
+                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio studio-segment-editor__timeline-cell-shell--global-audio"
                   key={span.key}
                   style={getSegmentEditorTimelineSpanStyle(span)}
                 >
                   <button
-                    ref={setSegmentTimelineTextButtonRef(segment.index)}
-                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--text${
-                      span.isEdited || canForwardText ? " studio-segment-editor__timeline-cell--has-history" : ""
+                    className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--music studio-segment-editor__timeline-cell--has-play${
+                      span.isEdited || canForwardMusic ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
-                      span.isActive ? " is-active" : ""
-                    }${segmentTimelineTextMenuSegmentIndex === segment.index ? " is-menu-open" : ""}${
                       span.isEdited ? " is-edited" : ""
-                    }${span.isEmpty ? " is-empty" : ""}`}
+                    }`}
                     data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
-                    aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
-                    onClick={(event) => handleSegmentEditorTimelineTextClick(index, event)}
+                    aria-label={workspaceText(locale, "Изменить музыку", "Change music")}
+                    onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
+                    onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
                   >
-                    <span className="studio-segment-editor__timeline-cell-copy">
-                      <strong>{getSegmentTimelineTextLabel(segment)}</strong>
-                    </span>
-                  </button>
-                  {renderSegmentTimelineHistoryButtons({
-                    canBack: span.isEdited,
-                    canForward: canForwardText,
-                    kind: "text",
-                    label: workspaceText(locale, `Текст сцены ${index + 1}`, `Scene ${index + 1} text`),
-                    segmentIndex: segment.index,
-                  })}
-                </div>
+                  <span className="studio-segment-editor__timeline-waveform" aria-hidden="true">
+                    <svg viewBox="0 0 720 48" preserveAspectRatio="none" focusable="false">
+                      <path
+                        className="studio-segment-editor__timeline-waveform-fill"
+                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24 L706 31 L694 27 L682 35 L670 30 L658 38 L646 28 L634 34 L622 25 L610 32 L598 27 L586 37 L574 31 L562 40 L550 28 L538 33 L526 26 L514 35 L502 29 L490 39 L478 27 L466 32 L454 25 L442 36 L430 30 L418 41 L406 28 L394 34 L382 26 L370 38 L358 31 L346 40 L334 29 L322 36 L310 25 L298 33 L286 27 L274 37 L262 31 L250 42 L238 28 L226 35 L214 26 L202 32 L190 39 L178 29 L166 37 L156 27 L146 34 L136 25 L126 30 L116 40 L106 28 L96 36 L86 26 L76 33 L66 28 L58 41 L50 30 L42 38 L34 27 L26 34 L18 25 L10 31 L0 24 Z"
+                      />
+                      <path
+                        className="studio-segment-editor__timeline-waveform-ridge"
+                        d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24"
+                      />
+                      <path
+                        className="studio-segment-editor__timeline-waveform-ridge studio-segment-editor__timeline-waveform-ridge--low"
+                        d="M0 24 L10 31 L18 25 L26 34 L34 27 L42 38 L50 30 L58 41 L66 28 L76 33 L86 26 L96 36 L106 28 L116 40 L126 30 L136 25 L146 34 L156 27 L166 37 L178 29 L190 39 L202 32 L214 26 L226 35 L238 28 L250 42 L262 31 L274 37 L286 27 L298 33 L310 25 L322 36 L334 29 L346 40 L358 31 L370 38 L382 26 L394 34 L406 28 L418 41 L430 30 L442 36 L454 25 L466 32 L478 27 L490 39 L502 29 L514 35 L526 26 L538 33 L550 28 L562 40 L574 31 L586 37 L598 27 L610 32 L622 25 L634 34 L646 28 L658 38 L670 30 L682 35 L694 27 L706 31 L720 24"
+                      />
+                    </svg>
+                  </span>
+                  <span className="studio-segment-editor__timeline-cell-copy">
+                    <strong>{segmentTimelineMusicLabel}</strong>
+                    <small>{span.isEdited ? workspaceText(locale, "Музыка изменена", "Music changed") : workspaceText(locale, "Фоновая дорожка", "Background track")}</small>
+                  </span>
+                </button>
+                {renderSegmentTimelineHistoryButtons({
+                  canBack: span.isEdited,
+                  canForward: canForwardMusic,
+                  kind: "music",
+                  label: workspaceText(locale, "Музыка", "Music"),
+                  withPlay: true,
+                })}
+                {renderSegmentTimelineAudioButton({
+                  audioKey: segmentTimelineMusicAudioKey,
+                  disabledReason: segmentTimelineMusicPreviewDisabledReason,
+                  label: segmentTimelineMusicLabel,
+                  url: segmentTimelineMusicPreviewUrl,
+                })}
+              </div>
               );
             })}
           </div>
@@ -31144,16 +31501,21 @@ export function WorkspacePage({
   const isPromptLibraryMode = segmentEditorPromptToolTab === "library";
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const canPromptUseVisualReferences = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
+  const selectedSegmentReferenceCharacterCount = selectedSegmentReferenceCharacterOptions.length;
   const selectedSegmentReferenceCount =
-    (selectedSegmentReferenceCharacterOption ? 1 : 0) + (selectedSegmentReferenceScene ? 1 : 0);
+    selectedSegmentReferenceCharacterCount + (selectedSegmentReferenceScene ? 1 : 0);
+  const selectedSegmentReferenceCharacterSummary =
+    selectedSegmentReferenceCharacterCount > 0
+      ? selectedSegmentReferenceCharacterOptions.map((option) => option.label).join(", ")
+      : "";
   const segmentReferenceSummary = [
-    selectedSegmentReferenceCharacterOption
+    selectedSegmentReferenceCharacterCount > 0
       ? workspaceText(
           locale,
-          `Персонаж: ${selectedSegmentReferenceCharacterOption.label}`,
-          `Character: ${selectedSegmentReferenceCharacterOption.label}`,
+          `${selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж"}: ${selectedSegmentReferenceCharacterSummary}`,
+          `${selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"}: ${selectedSegmentReferenceCharacterSummary}`,
         )
-      : workspaceText(locale, "Персонаж: не выбран", "Character: not selected"),
+      : workspaceText(locale, "Персонажи: не выбраны", "Characters: not selected"),
     selectedSegmentReferenceScene
       ? workspaceText(locale, `Сцена: ${selectedSegmentReferenceScene.label}`, `Scene: ${selectedSegmentReferenceScene.label}`)
       : workspaceText(locale, "Сцена: не выбрана", "Scene: not selected"),
@@ -31162,15 +31524,29 @@ export function WorkspacePage({
     if (option.kind === "character") {
       if (option.source === "project-character") {
         const characterId = Number(option.key.replace(/^project-character:/, ""));
-        setSelectedSegmentReferenceCharacterIds((current) =>
-          current.includes(characterId) ? [] : [characterId],
-        );
-        setSelectedSegmentReferenceCharacterAssetKey(null);
+        setSelectedSegmentReferenceCharacterIds((current) => {
+          if (current.includes(characterId)) {
+            return current.filter((id) => id !== characterId);
+          }
+          const selectedTotal = current.length + selectedSegmentReferenceCharacterAssetKeys.length;
+          if (selectedTotal >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) {
+            return current;
+          }
+          return [...current, characterId];
+        });
         return;
       }
 
-      setSelectedSegmentReferenceCharacterIds([]);
-      setSelectedSegmentReferenceCharacterAssetKey((current) => (current === option.key ? null : option.key));
+      setSelectedSegmentReferenceCharacterAssetKeys((current) => {
+        if (current.includes(option.key)) {
+          return current.filter((key) => key !== option.key);
+        }
+        const selectedTotal = selectedSegmentReferenceCharacterIds.length + current.length;
+        if (selectedTotal >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) {
+          return current;
+        }
+        return [...current, option.key];
+      });
       return;
     }
 
@@ -31178,7 +31554,7 @@ export function WorkspacePage({
   };
   const clearSegmentVisualReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
-    setSelectedSegmentReferenceCharacterAssetKey(null);
+    setSelectedSegmentReferenceCharacterAssetKeys([]);
     setSelectedSegmentReferenceSceneKey(null);
   };
   const renderSegmentReferencePreview = (
@@ -31225,6 +31601,17 @@ export function WorkspacePage({
 
     return <span className="studio-segment-references__media is-empty" aria-hidden="true"></span>;
   };
+  const getSegmentReferenceOptionPromptAvatarUrl = (option: WorkspaceReferenceVisualOption) => {
+    if (option.assetId) {
+      return buildWorkspaceMediaAssetProxyUrl(option.assetId);
+    }
+    if (option.segment) {
+      const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(option.segment, "segment-modal-library-tile");
+      return mediaSurface.posterUrl ?? mediaSurface.displayUrl ?? null;
+    }
+
+    return null;
+  };
   const saveWorkspaceReference = async (options: {
     assetId: number;
     description?: string | null;
@@ -31260,8 +31647,11 @@ export function WorkspacePage({
 
   const selectSavedWorkspaceReference = (reference: WorkspaceSavedReference) => {
     if (reference.kind === "character") {
+      const referenceKey = `saved:${reference.id}`;
       setSelectedSegmentReferenceCharacterIds([]);
-      setSelectedSegmentReferenceCharacterAssetKey(`saved:${reference.id}`);
+      setSelectedSegmentReferenceCharacterAssetKeys((current) =>
+        [referenceKey, ...current.filter((key) => key !== referenceKey)].slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT),
+      );
       return;
     }
 
@@ -31283,18 +31673,8 @@ export function WorkspacePage({
     setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
-    referenceCreationExtraFilesRef.current.forEach((file) => {
-      if (file.objectUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(file.objectUrl);
-      }
-    });
-    referenceCreationExtraFilesRef.current = [];
-    setReferenceCreationExtraFiles([]);
     if (referenceCreationFileInputRef.current) {
       referenceCreationFileInputRef.current.value = "";
-    }
-    if (referenceCreationExtraFileInputRef.current) {
-      referenceCreationExtraFileInputRef.current.value = "";
     }
   };
 
@@ -31344,8 +31724,8 @@ export function WorkspacePage({
       }
 
       setSavedWorkspaceReferences((current) => current.filter((item) => item.id !== reference.id));
-      if (selectedSegmentReferenceCharacterAssetKey === `saved:${reference.id}`) {
-        setSelectedSegmentReferenceCharacterAssetKey(null);
+      if (reference.kind === "character") {
+        setSelectedSegmentReferenceCharacterAssetKeys((current) => current.filter((key) => key !== `saved:${reference.id}`));
       }
       if (selectedSegmentReferenceSceneKey === `saved:${reference.id}`) {
         setSelectedSegmentReferenceSceneKey(null);
@@ -31447,66 +31827,6 @@ export function WorkspacePage({
     });
   };
 
-  const handleReferenceCreationExtraFilesSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = "";
-    setSavedWorkspaceReferencesError(null);
-
-    if (files.length === 0) {
-      return;
-    }
-
-    const availableSlots = Math.max(0, WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT - referenceCreationExtraFiles.length);
-    if (availableSlots <= 0) {
-      setSavedWorkspaceReferencesError(workspaceText(locale, "Можно добавить до 5 референсов.", "You can add up to 5 references."));
-      return;
-    }
-
-    const nextFiles: StudioCustomVideoFile[] = [];
-    for (const file of files.slice(0, availableSlots)) {
-      const isImageFile = file.type.startsWith("image/") || isWorkspaceSegmentImageFile(file.name);
-      if (!isImageFile) {
-        nextFiles.forEach((createdFile) => {
-          if (createdFile.objectUrl?.startsWith("blob:")) {
-            URL.revokeObjectURL(createdFile.objectUrl);
-          }
-        });
-        setSavedWorkspaceReferencesError(workspaceText(locale, "Дополнительные референсы должны быть изображениями.", "Extra references must be images."));
-        return;
-      }
-      if (file.size > STUDIO_CUSTOM_IMAGE_MAX_BYTES) {
-        nextFiles.forEach((createdFile) => {
-          if (createdFile.objectUrl?.startsWith("blob:")) {
-            URL.revokeObjectURL(createdFile.objectUrl);
-          }
-        });
-        setSavedWorkspaceReferencesError(getStudioCustomVisualTooLargeMessage(file.name));
-        return;
-      }
-
-      nextFiles.push({
-        file,
-        fileName: file.name || "reference-image.jpg",
-        fileSize: file.size,
-        mimeType: getWorkspaceSegmentCustomVisualMimeType(file),
-        objectUrl: createStudioObjectUrl(file),
-        source: "upload",
-      });
-    }
-
-    setReferenceCreationExtraFiles((current) => [...current, ...nextFiles].slice(0, WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT));
-  };
-
-  const removeReferenceCreationExtraFile = (index: number) => {
-    setReferenceCreationExtraFiles((current) => {
-      const target = current[index];
-      if (target?.objectUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(target.objectUrl);
-      }
-      return current.filter((_, itemIndex) => itemIndex !== index);
-    });
-  };
-
   const pollWorkspaceReferenceAiPhotoJob = async (jobId: string, initialStatus = "queued") => {
     const safeJobId = jobId.trim();
     let latestStatus = initialStatus;
@@ -31541,13 +31861,23 @@ export function WorkspacePage({
     throw new Error("Генерация занимает слишком много времени. Попробуйте ещё раз.");
   };
 
-  const handleCreateWorkspaceReference = async (kind: WorkspaceReferenceKind) => {
+  const handleCreateWorkspaceReference = async (
+    kind: WorkspaceReferenceKind,
+    options?: { quality?: StudioSegmentVisualQuality },
+  ) => {
     if (isGuest) {
       onAuthRequired?.();
       setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
       return;
     }
 
+    if (kind === "character" && referenceCreationSource === "ai" && !isValidWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange)) {
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Введите возраст от 1 года.", "Enter an age from 1 year."));
+      return;
+    }
+
+    const generationQuality = options?.quality ?? "standard";
+    const generationCreditCost = getSegmentAiPhotoCreditCost(generationQuality);
     const name = referenceCreationName.trim() || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind);
     const prompt = normalizeWorkspaceSegmentAiPhotoPrompt(buildWorkspaceReferenceAiPrompt({
       character: {
@@ -31587,9 +31917,9 @@ export function WorkspacePage({
     if (
       referenceCreationSource === "ai" &&
       workspaceBalance !== null &&
-      workspaceBalance < STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST
+      workspaceBalance < generationCreditCost
     ) {
-      openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
+      openInsufficientCreditsModal("ai_photo", generationCreditCost);
       return;
     }
 
@@ -31603,24 +31933,6 @@ export function WorkspacePage({
       let sourceSegmentIndex = activeSegment?.index ?? null;
 
       if (referenceCreationSource === "ai") {
-        const referenceAssetIds: number[] = [];
-        for (const extraFile of referenceCreationExtraFiles) {
-          const referenceAssetId = await ensureStudioUploadedAssetId(extraFile, {
-            fallbackFileName: extraFile.fileName || `${kind}-reference-input.jpg`,
-            fallbackMimeType: extraFile.mimeType || "image/jpeg",
-            kind: "workspace_reference",
-            language: selectedLanguage,
-            mediaType: "photo",
-            projectId: sourceProjectId,
-            role: kind === "character" ? "character_reference_input" : "scene_reference_input",
-            segmentIndex: sourceSegmentIndex,
-          });
-          if (!referenceAssetId) {
-            throw new Error(workspaceText(locale, "Не удалось загрузить дополнительный референс.", "Could not upload an extra reference."));
-          }
-          referenceAssetIds.push(referenceAssetId);
-        }
-
         const response = await fetch("/api/studio/segment-ai-photo/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -31629,8 +31941,8 @@ export function WorkspacePage({
             projectId: segmentEditorDraft?.projectId,
             prompt,
             purpose: "workspace_reference",
-            quality: "standard",
-            referenceAssetIds,
+            quality: generationQuality,
+            referenceAssetIds: [],
             referenceKind: kind,
             segmentIndex: activeSegment?.index,
           } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
@@ -31638,7 +31950,7 @@ export function WorkspacePage({
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
 
         if (response.status === 402) {
-          openInsufficientCreditsModal("ai_photo", STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST);
+          openInsufficientCreditsModal("ai_photo", generationCreditCost);
           return;
         }
 
@@ -31699,12 +32011,18 @@ export function WorkspacePage({
       selectedKey?: string | null;
     },
   ) => {
+    const usesControlledSelectedKey = Object.prototype.hasOwnProperty.call(config ?? {}, "selectedKey");
     const isSelected =
-      Object.prototype.hasOwnProperty.call(config ?? {}, "selectedKey")
+      usesControlledSelectedKey
         ? config?.selectedKey === option.key
         : option.kind === "character"
-          ? selectedSegmentReferenceCharacterOption?.key === option.key
+          ? selectedSegmentReferenceCharacterOptions.some((selectedOption) => selectedOption.key === option.key)
           : selectedSegmentReferenceScene?.key === option.key;
+    const isCharacterLimitReached =
+      !usesControlledSelectedKey &&
+      option.kind === "character" &&
+      !isSelected &&
+      selectedSegmentReferenceCharacterCount >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT;
     const canUseReference = Boolean(option.assetId || option.videoReferenceUrl || option.source === "project-character");
     const isDeleting = option.savedReference && deletingReferenceId === option.savedReference.id;
     const isSavedReferenceCard = Boolean(config?.allowDelete && option.savedReference);
@@ -31723,7 +32041,7 @@ export function WorkspacePage({
               type="button"
               aria-label={option.label}
               aria-pressed={isSelected}
-              disabled={!canUseReference || isSavingName}
+              disabled={!canUseReference || isSavingName || isCharacterLimitReached}
               onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
             >
               {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
@@ -31796,7 +32114,7 @@ export function WorkspacePage({
           className="studio-segment-references__card"
           type="button"
           aria-pressed={isSelected}
-          disabled={!canUseReference}
+          disabled={!canUseReference || isCharacterLimitReached}
           onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
         >
           {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
@@ -31850,19 +32168,30 @@ export function WorkspacePage({
         style: referenceCreationSceneStyle,
       },
     });
+    const referenceCreationCharacterAgeLabel = formatWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange);
+    const isReferenceCharacterAgeInvalid =
+      isCreatingCharacter &&
+      referenceCreationSource === "ai" &&
+      !isValidWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange);
     const isReferenceCreateDisabled =
       Boolean(generatingReferenceKind) ||
+      isReferenceCharacterAgeInvalid ||
       (referenceCreationSource === "ai" && !referenceCreationAiPrompt.trim()) ||
       (referenceCreationSource === "upload" && !referenceCreationUploadFile) ||
       (referenceCreationSource === "project" && !selectedCreationProjectOption);
+    const referenceCreationPremiumCreditCost = getSegmentAiPhotoCreditCost("premium");
     const creationTitle = isCreatingCharacter
       ? workspaceText(locale, "Создание персонажа", "Create character")
       : workspaceText(locale, "Создание сцены", "Create scene");
     const selectionSubmitLabel =
-      selectedSegmentReferenceCharacterOption && selectedSegmentReferenceScene
-        ? workspaceText(locale, "Выбрать персонажа и сцену", "Choose character and scene")
-        : selectedSegmentReferenceCharacterOption
-          ? workspaceText(locale, "Выбрать персонажа", "Choose character")
+      selectedSegmentReferenceCharacterCount > 0 && selectedSegmentReferenceScene
+        ? selectedSegmentReferenceCharacterCount > 1
+          ? workspaceText(locale, "Выбрать персонажей и сцену", "Choose characters and scene")
+          : workspaceText(locale, "Выбрать персонажа и сцену", "Choose character and scene")
+        : selectedSegmentReferenceCharacterCount > 0
+          ? selectedSegmentReferenceCharacterCount > 1
+            ? workspaceText(locale, "Выбрать персонажей", "Choose characters")
+            : workspaceText(locale, "Выбрать персонажа", "Choose character")
           : selectedSegmentReferenceScene
             ? workspaceText(locale, "Выбрать сцену", "Choose scene")
             : workspaceText(locale, "Выберите персонажа или сцену", "Choose a character or scene");
@@ -31897,17 +32226,35 @@ export function WorkspacePage({
     );
     const renderSelectedReferenceCard = (
       title: string,
-      option: WorkspaceReferenceVisualOption | null,
+      options: WorkspaceReferenceVisualOption[],
       emptyLabel: string,
-    ) => (
-      <div className={`studio-reference-modal__selected-card${option ? "" : " is-empty"}`}>
-        {option ? renderSegmentReferenceOptionPreview(option, `selected-reference:${option.key}`) : null}
-        <span>
-          <small>{title}</small>
-          <strong>{option?.label ?? emptyLabel}</strong>
-        </span>
-      </div>
-    );
+    ) => {
+      const visibleOptions = options.slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT);
+      const selectedLabel = visibleOptions.length > 0
+        ? visibleOptions.map((option) => option.label).join(", ")
+        : emptyLabel;
+
+      return (
+        <div className={`studio-reference-modal__selected-card${visibleOptions.length > 0 ? "" : " is-empty"}${visibleOptions.length > 1 ? " has-multiple" : ""}`}>
+          {visibleOptions.length > 0 ? (
+            <span className="studio-reference-modal__selected-media-stack">
+              {visibleOptions.map((option) => (
+                <span key={`selected-reference-stack:${option.key}`} className="studio-reference-modal__selected-media-item">
+                  {renderSegmentReferenceOptionPreview(option, `selected-reference:${option.key}`)}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <span>
+            <small>{title}</small>
+            <strong>{selectedLabel}</strong>
+            {visibleOptions.length > 1 ? (
+              <em>{workspaceText(locale, `${visibleOptions.length} персонажа`, `${visibleOptions.length} characters`)}</em>
+            ) : null}
+          </span>
+        </div>
+      );
+    };
     const renderWorkspaceReferenceCreatorDialog = () => (
       <div
         className="studio-reference-create-backdrop"
@@ -31927,11 +32274,6 @@ export function WorkspacePage({
           onMouseDown={(event) => event.stopPropagation()}
         >
           <header className="studio-reference-create-modal__titlebar">
-            <span className="studio-reference-create-modal__traffic" aria-hidden="true">
-              <i></i>
-              <i></i>
-              <i></i>
-            </span>
             <strong>{creationTitle}</strong>
             <button
               className="studio-reference-modal__close"
@@ -31965,7 +32307,7 @@ export function WorkspacePage({
                     <strong>{referenceCreationNameValue}</strong>
                     <span>
                       {isCreatingCharacter
-                        ? `${getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender)}, ${referenceCreationCharacterAgeRange}, ${referenceCreationCharacterStyle}`
+                        ? [getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterStyle].filter(Boolean).join(", ")
                         : `${referenceCreationScenePlaceType}, ${referenceCreationSceneStyle}, ${referenceCreationSceneLightingMood}`}
                     </span>
                   </div>
@@ -32016,7 +32358,7 @@ export function WorkspacePage({
                       <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                     </svg>
                     <strong>{workspaceText(locale, "Создать AI фото", "Create AI photo")}</strong>
-                    <small>{workspaceText(locale, "Основной способ · 2 кредита", "Primary method · 2 credits")}</small>
+                    <small>{workspaceText(locale, "Image 2 Low · 1K · 2 кредита", "Image 2 Low · 1K · 2 credits")}</small>
                   </button>
                   <button
                     className={referenceCreationSource === "upload" ? "is-active" : ""}
@@ -32057,6 +32399,13 @@ export function WorkspacePage({
                         <span>{workspaceText(locale, "Пол", "Gender")}</span>
                         <div className="studio-reference-create-modal__segmented">
                           <button
+                            className={referenceCreationCharacterGender === "" ? "is-active" : ""}
+                            type="button"
+                            onClick={() => setReferenceCreationCharacterGender("")}
+                          >
+                            {workspaceText(locale, "Не задан", "Unset")}
+                          </button>
+                          <button
                             className={referenceCreationCharacterGender === "male" ? "is-active" : ""}
                             type="button"
                             onClick={() => setReferenceCreationCharacterGender("male")}
@@ -32074,9 +32423,22 @@ export function WorkspacePage({
                       </label>
                       <label className="studio-reference-create-modal__field">
                         <span>{workspaceText(locale, "Возраст", "Age")}</span>
-                        <select value={referenceCreationCharacterAgeRange} onChange={(event) => setReferenceCreationCharacterAgeRange(event.currentTarget.value)}>
-                          {WORKSPACE_REFERENCE_CHARACTER_AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
+                        <input
+                          aria-label={workspaceText(locale, "Возраст персонажа", "Character age")}
+                          inputMode="numeric"
+                          min={WORKSPACE_REFERENCE_CHARACTER_MIN_AGE}
+                          onBlur={() => setReferenceCreationCharacterAgeRange((current) => normalizeWorkspaceReferenceCharacterAgeInput(current))}
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget.value.trim();
+                            if (nextValue === "" || /^\d+$/.test(nextValue)) {
+                              setReferenceCreationCharacterAgeRange(nextValue);
+                            }
+                          }}
+                          placeholder={workspaceText(locale, "Не задан", "Unset")}
+                          step={1}
+                          type="number"
+                          value={referenceCreationCharacterAgeRange}
+                        />
                       </label>
                     </div>
                   ) : (
@@ -32131,32 +32493,31 @@ export function WorkspacePage({
                       rows={4}
                       aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
                     />
-                  </label>
-
-                  <div className="studio-reference-create-modal__refs">
-                    <div>
-                      <strong>{workspaceText(locale, "Дополнительно", "Additional")}</strong>
-                      <span>{workspaceText(locale, "Загрузите референсы (необязательно)", "Upload references (optional)")}</span>
-                      <small>{referenceCreationExtraFiles.length} / {WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT}</small>
+                    <div className="studio-reference-create-modal__prompt-actions">
+                      <button
+                        className="studio-reference-create-modal__generate"
+                        type="button"
+                        aria-label={workspaceText(
+                          locale,
+                          `Сгенерировать за ${referenceCreationPremiumCreditCost} кредита`,
+                          `Generate for ${referenceCreationPremiumCreditCost} credits`,
+                        )}
+                        disabled={isReferenceCreateDisabled}
+                        onClick={() => {
+                          void handleCreateWorkspaceReference(generationKind, { quality: "premium" });
+                        }}
+                      >
+                        {isCreatingReference ? (
+                          <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+                        ) : (
+                          <>
+                            <span>{workspaceText(locale, "Сгенерировать", "Generate")}</span>
+                            <small>{workspaceText(locale, `${referenceCreationPremiumCreditCost} кредита`, `${referenceCreationPremiumCreditCost} credits`)}</small>
+                          </>
+                        )}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={referenceCreationExtraFiles.length >= WORKSPACE_REFERENCE_EXTRA_FILE_LIMIT || Boolean(generatingReferenceKind)}
-                      onClick={() => referenceCreationExtraFileInputRef.current?.click()}
-                    >
-                      {workspaceText(locale, "Добавить файлы", "Add files")}
-                    </button>
-                    {referenceCreationExtraFiles.length > 0 ? (
-                      <div className="studio-reference-create-modal__ref-thumbs">
-                        {referenceCreationExtraFiles.map((file, index) => (
-                          <button key={`${file.fileName}:${file.fileSize}:${index}`} type="button" onClick={() => removeReferenceCreationExtraFile(index)}>
-                            {file.objectUrl ? <img src={file.objectUrl} alt="" /> : null}
-                            <span>×</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                  </label>
                 </>
               ) : null}
 
@@ -32285,13 +32646,19 @@ export function WorkspacePage({
                 </div>
                 <div className="studio-reference-modal__selected-grid">
                   {renderSelectedReferenceCard(
-                    workspaceText(locale, "Персонаж", "Character"),
-                    selectedSegmentReferenceCharacterOption,
+                    workspaceText(locale, selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж", selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"),
+                    selectedSegmentReferenceCharacterOptions,
                     workspaceText(locale, "Не выбран", "Not selected"),
                   )}
+                  <span className="studio-reference-modal__selected-link" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M10 13.5a4 4 0 0 0 5.7.1l2.4-2.4a4 4 0 0 0-5.7-5.7l-1.4 1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M14 10.5a4 4 0 0 0-5.7-.1l-2.4 2.4a4 4 0 0 0 5.7 5.7l1.4-1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
                   {renderSelectedReferenceCard(
                     workspaceText(locale, "Сцена", "Scene"),
-                    selectedSegmentReferenceScene,
+                    selectedSegmentReferenceScene ? [selectedSegmentReferenceScene] : [],
                     workspaceText(locale, "Не выбрана", "Not selected"),
                   )}
                 </div>
@@ -32305,14 +32672,6 @@ export function WorkspacePage({
             accept="image/*"
             hidden
             onChange={handleReferenceCreationUploadFileSelect}
-          />
-          <input
-            ref={referenceCreationExtraFileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={handleReferenceCreationExtraFilesSelect}
           />
 
           {!isWorkspaceReferenceCreatorOpen && (segmentProjectCharactersError || savedWorkspaceReferencesError) ? (
@@ -32359,6 +32718,37 @@ export function WorkspacePage({
             : workspaceText(locale, "С нуля", "From scratch")}
         </em>
       </button>
+      {variant === "editor" && selectedSegmentReferenceCharacterOptions.length > 0 ? (
+        <div
+          className="studio-segment-references__mention-icons"
+          aria-label={workspaceText(locale, "Персонажи для описания", "Characters for prompt")}
+        >
+          {selectedSegmentReferenceCharacterOptions.map((option) => {
+            const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
+            return (
+              <button
+                key={`segment-reference-mention-icon:${option.key}`}
+                className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
+                type="button"
+                aria-pressed={isInserted}
+                aria-label={workspaceText(
+                  locale,
+                  `Добавить ${option.label} в описание`,
+                  `Add ${option.label} to prompt`,
+                )}
+                title={workspaceText(locale, `Добавить ${option.label} в описание`, `Add ${option.label} to prompt`)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleInsertSegmentPromptCharacterMention(option)}
+              >
+                <span className="studio-segment-references__mention-icon-media">
+                  {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {isSegmentReferencesModalOpen &&
       typeof document !== "undefined" &&
       (!isSegmentAiPhotoModalOpen || variant === "modal")
@@ -32380,6 +32770,39 @@ export function WorkspacePage({
     : isPromptAiPhotoMode
       ? segmentAiPhotoModalPrompt
       : segmentAiVideoModalPrompt;
+  const promptVisualRichEditorValue = canPromptUseVisualReferences
+    ? normalizeWorkspacePromptRichEditorValue(promptVisualTextareaValue)
+    : promptVisualTextareaValue;
+  const segmentPromptCharacterMentionTokens = useMemo(
+    () =>
+      canPromptUseVisualReferences
+        ? buildWorkspacePromptCharacterMentionTokens(promptVisualRichEditorValue, selectedSegmentReferenceCharacterOptions)
+        : [],
+    [canPromptUseVisualReferences, promptVisualRichEditorValue, selectedSegmentReferenceCharacterOptions],
+  );
+  const segmentPromptMentionCharacterOptions = useMemo(
+    () => {
+      const mentionOptions: WorkspaceReferenceVisualOption[] = [];
+      const mentionKeys = new Set<string>();
+      segmentPromptCharacterMentionTokens.forEach((token) => {
+        if (token.type === "mention" && !mentionKeys.has(token.option.key)) {
+          mentionKeys.add(token.option.key);
+          mentionOptions.push(token.option);
+        }
+      });
+      return mentionOptions;
+    },
+    [segmentPromptCharacterMentionTokens],
+  );
+  const segmentPromptMentionCharacterKeys = useMemo(
+    () => segmentPromptMentionCharacterOptions.map((option) => option.key),
+    [segmentPromptMentionCharacterOptions],
+  );
+  const segmentPromptCharacterMentionSignature = useMemo(
+    () => getWorkspacePromptCharacterMentionTokenSignature(segmentPromptCharacterMentionTokens),
+    [segmentPromptCharacterMentionTokens],
+  );
+  const promptVisualPromptForAction = promptVisualRichEditorValue;
   const isPromptVisualPromptRequired =
     isPromptAiPhotoMode ||
     isPromptAiVideoMode ||
@@ -32388,7 +32811,7 @@ export function WorkspacePage({
     isPromptImageEditMode ||
     isPromptSceneSoundMode;
   const isPromptVisualPromptEmpty =
-    isPromptVisualPromptRequired && !normalizeWorkspaceSegmentAiPhotoPrompt(promptVisualTextareaValue);
+    isPromptVisualPromptRequired && !normalizeWorkspaceSegmentAiPhotoPrompt(promptVisualPromptForAction);
   const isSegmentAiPhotoModalAiPhotoPromptEmpty =
     !normalizeWorkspaceSegmentAiPhotoPrompt(segmentAiPhotoModalPrompt);
   const isSegmentAiPhotoModalAiVideoPromptEmpty =
@@ -32454,6 +32877,113 @@ export function WorkspacePage({
           ? "ai_video"
           : null;
   const promptImprovementSegmentIndex = activeSegment?.index ?? segmentAiPhotoModalSegment?.index ?? null;
+  const applyPromptVisualRichEditorValue = (nextValue: string, nextCaretOffset?: number) => {
+    if (!promptVisualImproveMode) {
+      return;
+    }
+
+    if (segmentPromptRichEditorSelectionFrameRef.current !== null) {
+      window.cancelAnimationFrame(segmentPromptRichEditorSelectionFrameRef.current);
+      segmentPromptRichEditorSelectionFrameRef.current = null;
+    }
+
+    const commitValue = () => {
+      setSegmentEditorVideoError(null);
+      setIsSegmentAiPhotoPromptImproved(false);
+      setSegmentAiPhotoPromptImprovementSnapshot(null);
+      setIsSegmentAiPhotoPromptHighlighted(false);
+      applySegmentPromptValueForImproveMode(promptVisualImproveMode, nextValue, promptImprovementSegmentIndex);
+    };
+
+    if (typeof nextCaretOffset !== "number") {
+      commitValue();
+      return;
+    }
+
+    flushSync(commitValue);
+    segmentPromptRichEditorRef.current?.focus();
+    setWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current, nextCaretOffset);
+  };
+  const handleInsertSegmentPromptCharacterMention = (option: WorkspaceReferenceVisualOption) => {
+    if (!canPromptUseVisualReferences || !promptVisualImproveMode) {
+      return;
+    }
+
+    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current);
+    const promptBeforeCaret = promptVisualRichEditorValue.slice(0, caretOffset);
+    const promptAfterCaret = promptVisualRichEditorValue.slice(caretOffset);
+    const leadingSpaceLength = promptBeforeCaret && !/\s$/.test(promptBeforeCaret) ? 1 : 0;
+    const trailingSpaceLength = !promptAfterCaret || !/^[\s,.!?;:]/.test(promptAfterCaret) ? 1 : 0;
+    const nextPromptValue = insertWorkspacePromptCharacterMentionText(promptVisualRichEditorValue, option.label, caretOffset);
+    const nextCaretOffset =
+      caretOffset +
+      leadingSpaceLength +
+      option.label.length +
+      trailingSpaceLength;
+
+    applyPromptVisualRichEditorValue(nextPromptValue, nextCaretOffset);
+  };
+  const handlePromptVisualRichEditorInput = (event: ReactFormEvent<HTMLDivElement>) => {
+    if (!promptVisualImproveMode) {
+      return;
+    }
+
+    const nextValue = getWorkspacePromptRichEditorText(event.currentTarget);
+    applyPromptVisualRichEditorValue(nextValue);
+  };
+  const handlePromptVisualRichEditorPaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    if (!promptVisualImproveMode) {
+      return;
+    }
+
+    event.preventDefault();
+    const pastedText = event.clipboardData.getData("text/plain");
+    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current);
+    const normalizedPastedText = normalizeWorkspacePromptRichEditorValue(pastedText);
+    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)}${normalizedPastedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
+    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + normalizedPastedText.length);
+  };
+  useLayoutEffect(() => {
+    if (!canPromptUseVisualReferences) {
+      return;
+    }
+
+    const editor = segmentPromptRichEditorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    const currentRawValue = getWorkspacePromptRichEditorNodeText(editor);
+    const currentValue = normalizeWorkspacePromptRichEditorValue(currentRawValue);
+    const currentSignature = getWorkspacePromptRichEditorDomMentionSignature(editor);
+    const shouldSync =
+      currentValue !== promptVisualRichEditorValue ||
+      currentRawValue !== promptVisualRichEditorValue ||
+      currentSignature !== segmentPromptCharacterMentionSignature;
+
+    if (!shouldSync) {
+      return;
+    }
+
+    const wasFocused = document.activeElement === editor;
+    const caretOffset = wasFocused
+      ? getWorkspacePromptRichEditorSelectionOffset(editor)
+      : promptVisualRichEditorValue.length;
+
+    editor.innerHTML = buildWorkspacePromptRichEditorHtml(
+      segmentPromptCharacterMentionTokens,
+      getSegmentReferenceOptionPromptAvatarUrl,
+    );
+
+    if (wasFocused) {
+      setWorkspacePromptRichEditorSelectionOffset(editor, Math.min(caretOffset, promptVisualRichEditorValue.length));
+    }
+  }, [
+    canPromptUseVisualReferences,
+    promptVisualRichEditorValue,
+    segmentPromptCharacterMentionSignature,
+    segmentPromptCharacterMentionTokens,
+  ]);
   const isPromptImprovementResetVisible = Boolean(
     isSegmentAiPhotoPromptImproved &&
       !isSegmentAiPhotoPromptImproving &&
@@ -32483,12 +33013,12 @@ export function WorkspacePage({
       return;
     }
     if (isPromptAiPhotoMode) {
-      void handleSegmentAiPhotoModalGenerateScene({ prompt: segmentAiPhotoModalPrompt, segmentIndex: activeSegment.index });
+      void handleSegmentAiPhotoModalGenerateScene({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
     } else if (isPromptAiVideoMode) {
-      void handleSegmentAiVideoModalGenerate({ prompt: segmentAiVideoModalPrompt, segmentIndex: activeSegment.index });
+      void handleSegmentAiVideoModalGenerate({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
     } else if (isPromptPhotoAnimationMode) {
       void handleSegmentPhotoAnimationModalGenerate({
-        prompt: segmentAiVideoModalPrompt,
+        prompt: promptVisualPromptForAction,
         quality: selectedSegmentPhotoAnimationQuality,
         segmentIndex: activeSegment.index,
       });
@@ -32498,7 +33028,7 @@ export function WorkspacePage({
         segmentIndex: activeSegment.index,
       });
     } else if (isPromptImageEditMode) {
-      void handleSegmentImageEditModalGenerate({ prompt: segmentImageEditModalPrompt, segmentIndex: activeSegment.index });
+      void handleSegmentImageEditModalGenerate({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
     } else if (isPromptUpscaleMode) {
       void handleSegmentAiPhotoModalUpscaleImage({ segmentIndex: activeSegment.index });
     } else if (isPromptSceneSoundMode) {
@@ -33370,24 +33900,43 @@ export function WorkspacePage({
                     </div>
                   ) : (
                     <>
-                      <div className={`studio-segment-editor__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
-                        <textarea
-                          key={`segment-editor-prompt:${activeSegment?.index ?? "none"}:${segmentEditorPromptToolTab}`}
-                          ref={segmentAiPhotoModalTextareaRef}
-                          className="studio-segment-editor__prompt-textarea"
-                          autoFocus={
-                            Boolean(
-                              segmentTimelinePromptFocusRequest &&
-                                activeSegment &&
-                                activeSegment.index === segmentTimelinePromptFocusRequest.segmentIndex &&
-                                segmentEditorPromptToolTab === segmentTimelinePromptFocusRequest.tab,
-                            )
-                          }
-                          value={promptVisualTextareaValue}
-                          onChange={handlePromptVisualTextareaChange}
-                          rows={6}
-                          placeholder={promptVisualPlaceholder}
-                        />
+                      <div
+                        className={`studio-segment-editor__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}${canPromptUseVisualReferences ? " has-rich-prompt" : ""}`}
+                      >
+                        {canPromptUseVisualReferences ? (
+                          <div
+                            key={`segment-editor-rich-prompt:${activeSegment?.index ?? "none"}:${segmentEditorPromptToolTab}`}
+                            ref={segmentPromptRichEditorRef}
+                            className="studio-segment-editor__prompt-rich-editor studio-segment-editor__prompt-textarea"
+                            contentEditable
+                            data-placeholder={promptVisualPlaceholder}
+                            role="textbox"
+                            aria-label={promptVisualPlaceholder}
+                            aria-multiline="true"
+                            suppressContentEditableWarning
+                            tabIndex={0}
+                            onInput={handlePromptVisualRichEditorInput}
+                            onPaste={handlePromptVisualRichEditorPaste}
+                          />
+                        ) : (
+                          <textarea
+                            key={`segment-editor-prompt:${activeSegment?.index ?? "none"}:${segmentEditorPromptToolTab}`}
+                            ref={segmentAiPhotoModalTextareaRef}
+                            className="studio-segment-editor__prompt-textarea"
+                            autoFocus={
+                              Boolean(
+                                segmentTimelinePromptFocusRequest &&
+                                  activeSegment &&
+                                  activeSegment.index === segmentTimelinePromptFocusRequest.segmentIndex &&
+                                  segmentEditorPromptToolTab === segmentTimelinePromptFocusRequest.tab,
+                              )
+                            }
+                            value={promptVisualTextareaValue}
+                            onChange={handlePromptVisualTextareaChange}
+                            rows={6}
+                            placeholder={promptVisualPlaceholder}
+                          />
+                        )}
                         <button
                           className="studio-segment-editor__prompt-improve"
                           type="button"

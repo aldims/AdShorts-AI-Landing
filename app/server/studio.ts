@@ -60,6 +60,7 @@ import {
   getCurrentAdsflowWebSignalHeaders,
 } from "./web-device.js";
 import {
+  createWaveSpeedGptImage2TextToImageJob,
   getWaveSpeedPredictionOutputUrl,
   getWaveSpeedPredictionStatus,
 } from "./wavespeed-worker.js";
@@ -861,6 +862,19 @@ const buildStudioSegmentVisualQualityPayload = (quality: StudioSegmentVisualQual
     : {};
 
 const WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX = "wavespeed:";
+const WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX = "wavespeed-image:";
+type WaveSpeedSegmentAiPhotoJobContext = {
+  asset?: StudioGeneratedImageAsset;
+  consumed: WorkspaceCreditConsumption;
+  language: "en" | "ru";
+  ownerExternalUserId: string;
+  profile: WorkspaceProfile;
+  projectId?: number | null;
+  refunded?: boolean;
+  referenceKind?: string;
+  segmentIndex?: number | null;
+};
+
 const studioWaveSpeedSegmentAiVideoJobContexts = new Map<
   string,
   {
@@ -868,6 +882,7 @@ const studioWaveSpeedSegmentAiVideoJobContexts = new Map<
     profile: WorkspaceProfile;
   }
 >();
+const studioWaveSpeedSegmentAiPhotoJobContexts = new Map<string, WaveSpeedSegmentAiPhotoJobContext>();
 
 const parseWaveSpeedSegmentAiVideoPredictionId = (jobId: string | null | undefined) => {
   const normalizedJobId = normalizeGenerationText(jobId);
@@ -877,6 +892,22 @@ const parseWaveSpeedSegmentAiVideoPredictionId = (jobId: string | null | undefin
 
   const predictionId = normalizeGenerationText(normalizedJobId.slice(WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX.length));
   return predictionId || null;
+};
+
+const parseWaveSpeedSegmentAiPhotoPredictionId = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId.startsWith(WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX)) {
+    return null;
+  }
+
+  const predictionId = normalizeGenerationText(normalizedJobId.slice(WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX.length));
+  return predictionId || null;
+};
+
+const normalizeWaveSpeedSegmentAiPhotoFileName = (jobId: string, referenceKind?: string) => {
+  const normalizedKind = normalizeGenerationText(referenceKind).replace(/[^a-z0-9_-]+/gi, "-") || "reference";
+  const normalizedJobId = normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed";
+  return `${normalizedKind}-image-${normalizedJobId}.png`;
 };
 
 const normalizeWaveSpeedSegmentAiVideoFileName = (jobId: string) =>
@@ -5160,9 +5191,6 @@ export async function createStudioSegmentAiPhotoJob(
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
   const requiredCredits = getStudioSegmentAiPhotoCreditCost(normalizedQuality);
-  const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
-    sourceLanguage: normalizedLanguage,
-  });
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const preserveCharacters = Boolean(options?.preserveCharacters);
@@ -5173,6 +5201,52 @@ export async function createStudioSegmentAiPhotoJob(
   const normalizedPurpose = normalizeGenerationText(options?.purpose);
   const normalizedReferenceKind = normalizeGenerationText(options?.referenceKind);
   const externalUserId = await resolveStudioExternalUserId(user);
+  if (normalizedPurpose === "workspace_reference") {
+    const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
+    let jobCreated = false;
+
+    try {
+      const prediction = await createWaveSpeedGptImage2TextToImageJob({
+        aspectRatio: "1:1",
+        outputFormat: "png",
+        prompt: normalizedPrompt,
+        quality: "low",
+        resolution: "1k",
+      });
+      const jobId = `${WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX}${prediction.id}`;
+      const profile = { ...creditReservation.profile };
+      studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, {
+        consumed: creditReservation.consumed,
+        language: normalizedLanguage,
+        ownerExternalUserId: externalUserId,
+        profile,
+        projectId: normalizedProjectId,
+        referenceKind: normalizedReferenceKind,
+        segmentIndex: normalizedSegmentIndex,
+      });
+      jobCreated = true;
+
+      return {
+        jobId,
+        profile,
+        status: prediction.status || "created",
+      };
+    } catch (error) {
+      if (!jobCreated) {
+        try {
+          await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+        } catch (refundError) {
+          console.error("[studio] Failed to refund WaveSpeed GPT Image 2 credits", refundError);
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
+    sourceLanguage: normalizedLanguage,
+  });
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-ai-photo/jobs", {
     admin_token: env.adsflowAdminToken,
@@ -5574,15 +5648,22 @@ export async function getStudioSegmentAiPhotoJobStatus(
   jobId: string,
   user: StudioUser,
 ): Promise<StudioSegmentAiPhotoJobStatus> {
+  const safeJobId = String(jobId ?? "").trim();
+  const waveSpeedPredictionId = parseWaveSpeedSegmentAiPhotoPredictionId(safeJobId);
+
+  if (waveSpeedPredictionId) {
+    return getWaveSpeedSegmentAiPhotoJobStatus(safeJobId, waveSpeedPredictionId, user);
+  }
+
   const payload = await fetchAdsflowSegmentAiPhotoJobStatus(jobId, user);
   const status = String(payload.status ?? "queued").trim() || "queued";
-  const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const resolvedJobId = String(payload.job_id ?? jobId).trim() || safeJobId;
   const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
 
   return {
     asset,
     error: normalizeGenerationText(payload.error) || undefined,
-    jobId: safeJobId,
+    jobId: resolvedJobId,
     profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
       rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
     }),
@@ -5978,6 +6059,144 @@ const getCachedWorkspaceProfileForUser = async (user: StudioUser): Promise<Works
   const externalUserId = await resolveStudioExternalUserId(user);
   const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
   return getCachedWorkspaceBootstrap(cacheKey)?.profile ?? buildWorkspaceProfile();
+};
+
+const getWaveSpeedSegmentAiPhotoJobContext = async (
+  jobId: string,
+  user: StudioUser,
+): Promise<WaveSpeedSegmentAiPhotoJobContext | null> => {
+  const context = studioWaveSpeedSegmentAiPhotoJobContexts.get(jobId);
+  if (!context) {
+    return null;
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  if (context.ownerExternalUserId !== externalUserId) {
+    throw new Error("WaveSpeed segment AI photo job is not available for this user.");
+  }
+
+  return context;
+};
+
+const refundWaveSpeedSegmentAiPhotoJobCredits = async (
+  jobId: string,
+  user: StudioUser,
+  context: WaveSpeedSegmentAiPhotoJobContext,
+) => {
+  if (context.refunded) {
+    return { ...context.profile };
+  }
+
+  context.refunded = true;
+  try {
+    context.profile = await refundWorkspaceGenerationCredit(user, context.consumed, context.language);
+  } catch (error) {
+    console.error("[studio] Failed to refund WaveSpeed GPT Image 2 credits", error);
+  }
+  studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
+  return { ...context.profile };
+};
+
+const uploadWaveSpeedSegmentAiPhotoAsset = async (
+  jobId: string,
+  outputUrl: string,
+  user: StudioUser,
+  context: WaveSpeedSegmentAiPhotoJobContext,
+): Promise<StudioGeneratedImageAsset> => {
+  const downloaded = await fetchRemoteStudioGeneratedImage(new URL(outputUrl));
+  if (!downloaded.bytes.length) {
+    throw new Error("WaveSpeed GPT Image 2 returned an empty image.");
+  }
+
+  const mimeType = inferStudioGeneratedImageMimeType(downloaded.mimeType, null, outputUrl);
+  const fileName = normalizeWaveSpeedSegmentAiPhotoFileName(jobId, context.referenceKind);
+  const assetId = await uploadStudioMediaAsset(user, {
+    dataUrl: buildDataUrlFromBytes(downloaded.bytes, mimeType),
+    externalUserId: context.ownerExternalUserId,
+    fileName,
+    kind: "workspace_reference",
+    language: context.language,
+    mediaType: "photo",
+    mimeType,
+    projectId: context.projectId,
+    role: context.referenceKind === "scene" ? "scene_reference" : "character_reference",
+    segmentIndex: context.segmentIndex,
+  });
+
+  return {
+    assetId,
+    fileName,
+    fileSize: downloaded.bytes.length,
+    mimeType,
+    remoteUrl: `/api/workspace/media-assets/${assetId}`,
+  };
+};
+
+const getWaveSpeedSegmentAiPhotoJobStatus = async (
+  jobId: string,
+  predictionId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiPhotoJobStatus> => {
+  const context = await getWaveSpeedSegmentAiPhotoJobContext(jobId, user);
+  const profile = context ? { ...context.profile } : await getCachedWorkspaceProfileForUser(user);
+
+  if (!context) {
+    return {
+      error: "WaveSpeed segment AI photo job is not available.",
+      jobId,
+      profile,
+      status: "failed",
+    };
+  }
+
+  if (context.asset) {
+    return {
+      asset: context.asset,
+      jobId,
+      profile,
+      status: "completed",
+    };
+  }
+
+  const prediction = await getWaveSpeedPredictionStatus(predictionId);
+  const status = prediction.status || "processing";
+
+  if (status === "failed") {
+    return {
+      error: prediction.error || "WaveSpeed GPT Image 2 generation failed.",
+      jobId,
+      profile: await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context),
+      status,
+    };
+  }
+
+  if (prediction.outputUrl) {
+    try {
+      context.asset = await uploadWaveSpeedSegmentAiPhotoAsset(jobId, prediction.outputUrl, user, context);
+      studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
+      return {
+        asset: context.asset,
+        jobId,
+        profile: { ...context.profile },
+        status: "completed",
+      };
+    } catch (error) {
+      const refundedProfile = await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context);
+      return {
+        error: error instanceof Error ? error.message : "Failed to save WaveSpeed GPT Image 2 result.",
+        jobId,
+        profile: refundedProfile,
+        status: "failed",
+      };
+    }
+  }
+
+  return {
+    error: prediction.error || undefined,
+    jobId,
+    profile,
+    status,
+  };
 };
 
 const getWaveSpeedSegmentAiVideoJobProfile = async (jobId: string, user: StudioUser): Promise<WorkspaceProfile> => {
