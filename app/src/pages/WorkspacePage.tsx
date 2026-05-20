@@ -4903,6 +4903,76 @@ const buildWorkspacePromptCharacterMentionTokens = (
   return tokens;
 };
 
+const isWorkspacePromptWordStart = (value: string) => /^[\p{L}\p{N}_]/u.test(value);
+
+const isWorkspacePromptCharacterMentionEndOffset = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+  offset: number,
+) => {
+  if (offset <= 0 || offset > value.length) {
+    return false;
+  }
+
+  let cursor = 0;
+  return buildWorkspacePromptCharacterMentionTokens(value, options).some((token) => {
+    cursor += token.text.length;
+    return token.type === "mention" && cursor === offset;
+  });
+};
+
+const shouldInsertWorkspacePromptMentionBoundarySpace = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+  offset: number,
+  insertedText: string,
+) => {
+  if (!insertedText || !isWorkspacePromptWordStart(insertedText)) {
+    return false;
+  }
+
+  const beforeCaret = value.slice(0, offset);
+  const afterCaret = value.slice(offset);
+  return (
+    Boolean(beforeCaret) &&
+    !/\s$/.test(beforeCaret) &&
+    !/^\s/.test(afterCaret) &&
+    isWorkspacePromptCharacterMentionEndOffset(value, options, offset)
+  );
+};
+
+const repairWorkspacePromptMentionBoundaryInput = (
+  previousValue: string,
+  nextValue: string,
+  options: WorkspaceReferenceVisualOption[],
+  nextCaretOffset: number,
+) => {
+  const insertedLength = nextValue.length - previousValue.length;
+  if (insertedLength <= 0 || nextCaretOffset < insertedLength) {
+    return null;
+  }
+
+  const insertionStart = nextCaretOffset - insertedLength;
+  const insertedText = nextValue.slice(insertionStart, nextCaretOffset);
+  if (
+    !shouldInsertWorkspacePromptMentionBoundarySpace(
+      previousValue,
+      options,
+      insertionStart,
+      insertedText,
+    ) ||
+    nextValue.slice(0, insertionStart) !== previousValue.slice(0, insertionStart) ||
+    nextValue.slice(nextCaretOffset) !== previousValue.slice(insertionStart)
+  ) {
+    return null;
+  }
+
+  return {
+    caretOffset: nextCaretOffset + 1,
+    value: `${previousValue.slice(0, insertionStart)} ${insertedText}${previousValue.slice(insertionStart)}`,
+  };
+};
+
 const getWorkspacePromptCharacterMentionTokenSignature = (tokens: WorkspacePromptCharacterMentionToken[]) =>
   tokens
     .filter((token) => token.type === "mention")
@@ -32923,12 +32993,52 @@ export function WorkspacePage({
 
     applyPromptVisualRichEditorValue(nextPromptValue, nextCaretOffset);
   };
+  const handlePromptVisualRichEditorBeforeInput = (event: ReactFormEvent<HTMLDivElement>) => {
+    if (!promptVisualImproveMode) {
+      return;
+    }
+
+    const nativeEvent = event.nativeEvent as InputEvent;
+    const insertedText = nativeEvent.inputType === "insertText" ? nativeEvent.data ?? "" : "";
+    if (!insertedText) {
+      return;
+    }
+
+    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(event.currentTarget);
+    if (
+      !shouldInsertWorkspacePromptMentionBoundarySpace(
+        promptVisualRichEditorValue,
+        selectedSegmentReferenceCharacterOptions,
+        caretOffset,
+        insertedText,
+      )
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)} ${insertedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
+    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + insertedText.length + 1);
+  };
   const handlePromptVisualRichEditorInput = (event: ReactFormEvent<HTMLDivElement>) => {
     if (!promptVisualImproveMode) {
       return;
     }
 
     const nextValue = getWorkspacePromptRichEditorText(event.currentTarget);
+    const nextCaretOffset = getWorkspacePromptRichEditorSelectionOffset(event.currentTarget);
+    const repairedInput = repairWorkspacePromptMentionBoundaryInput(
+      promptVisualRichEditorValue,
+      nextValue,
+      selectedSegmentReferenceCharacterOptions,
+      nextCaretOffset,
+    );
+
+    if (repairedInput) {
+      applyPromptVisualRichEditorValue(repairedInput.value, repairedInput.caretOffset);
+      return;
+    }
+
     applyPromptVisualRichEditorValue(nextValue);
   };
   const handlePromptVisualRichEditorPaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -32940,8 +33050,16 @@ export function WorkspacePage({
     const pastedText = event.clipboardData.getData("text/plain");
     const caretOffset = getWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current);
     const normalizedPastedText = normalizeWorkspacePromptRichEditorValue(pastedText);
-    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)}${normalizedPastedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
-    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + normalizedPastedText.length);
+    const mentionBoundarySpace = shouldInsertWorkspacePromptMentionBoundarySpace(
+      promptVisualRichEditorValue,
+      selectedSegmentReferenceCharacterOptions,
+      caretOffset,
+      normalizedPastedText,
+    )
+      ? " "
+      : "";
+    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)}${mentionBoundarySpace}${normalizedPastedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
+    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + mentionBoundarySpace.length + normalizedPastedText.length);
   };
   useLayoutEffect(() => {
     if (!canPromptUseVisualReferences) {
@@ -33915,6 +34033,7 @@ export function WorkspacePage({
                             aria-multiline="true"
                             suppressContentEditableWarning
                             tabIndex={0}
+                            onBeforeInput={handlePromptVisualRichEditorBeforeInput}
                             onInput={handlePromptVisualRichEditorInput}
                             onPaste={handlePromptVisualRichEditorPaste}
                           />
