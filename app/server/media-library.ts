@@ -72,6 +72,7 @@ type AdsflowWebMediaLibraryAssetPayload = AdsflowMediaAssetPayload & {
 };
 
 const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
+const WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS = 3_500;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
@@ -718,6 +719,7 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
   options?: {
     existingItems?: WorkspaceMediaLibraryItem[];
     limit?: number;
+    maxWaitMs?: number;
     offset?: number;
   },
 ): Promise<{ hasMore: boolean; items: WorkspaceMediaLibraryItem[] }> => {
@@ -740,71 +742,104 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
   const existingItems = options?.existingItems ?? [];
   const collectedItems: WorkspaceMediaLibraryItem[] = [];
   const visitedCursors = new Set<number>();
+  const maxWaitMs =
+    typeof options?.maxWaitMs === "number" && Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0
+      ? Math.trunc(options.maxWaitMs)
+      : null;
+  const deadlineController = maxWaitMs ? new AbortController() : null;
+  let didReachDeadline = false;
+  const deadlineTimeoutId =
+    deadlineController && maxWaitMs
+      ? setTimeout(() => {
+          didReachDeadline = true;
+          deadlineController.abort("media-library-durable-timeout");
+        }, maxWaitMs)
+      : null;
   let nextCursor = 0;
   let hasMore = false;
 
-  while (!visitedCursors.has(nextCursor)) {
-    visitedCursors.add(nextCursor);
-    const payload = await postAdsflowJson<AdsflowWebMediaLibraryResponse>(
-      "/api/web/media-library",
-      {
-        admin_token: env.adsflowAdminToken,
-        external_user_id: externalUserId,
-        user_email: user.email ?? undefined,
-        user_name: user.name ?? undefined,
-        limit: requestPageSize,
-        cursor: nextCursor,
-        status: "ready",
-      },
-      upstreamPolicies.adsflowMetadata,
-      {
-        assetKind: "media-library",
-        endpoint: "web.media-library",
-      },
-    ).catch((error) => {
-      console.warn("[workspace] Failed to load durable media library", {
-        error: error instanceof Error ? error.message : "Unknown durable media library error.",
+  try {
+    while (!visitedCursors.has(nextCursor)) {
+      if (deadlineController?.signal.aborted) {
+        didReachDeadline = true;
+        hasMore = true;
+        break;
+      }
+
+      visitedCursors.add(nextCursor);
+      const payload = await postAdsflowJson<AdsflowWebMediaLibraryResponse>(
+        "/api/web/media-library",
+        {
+          admin_token: env.adsflowAdminToken,
+          external_user_id: externalUserId,
+          user_email: user.email ?? undefined,
+          user_name: user.name ?? undefined,
+          limit: requestPageSize,
+          cursor: nextCursor,
+          status: "ready",
+        },
+        upstreamPolicies.adsflowMetadata,
+        {
+          assetKind: "media-library",
+          endpoint: "web.media-library",
+        },
+        {
+          signal: deadlineController?.signal,
+        },
+      ).catch((error) => {
+        if (deadlineController?.signal.aborted) {
+          didReachDeadline = true;
+        }
+
+        console.warn("[workspace] Failed to load durable media library", {
+          error: error instanceof Error ? error.message : "Unknown durable media library error.",
+          timedOut: Boolean(deadlineController?.signal.aborted),
+        });
+        return null;
       });
-      return null;
-    });
 
-    if (!Array.isArray(payload?.assets)) {
-      return {
-        hasMore: false,
-        items: collectedItems,
-      };
+      if (!Array.isArray(payload?.assets)) {
+        return {
+          hasMore: didReachDeadline,
+          items: collectedItems,
+        };
+      }
+
+      collectedItems.push(
+        ...payload.assets
+          .map((item) =>
+            isAdsflowMediaAssetPayload(item)
+              ? buildWorkspaceDurableMediaLibraryItem(item as AdsflowWebMediaLibraryAssetPayload)
+              : null,
+          )
+          .filter((item): item is WorkspaceMediaLibraryItem => Boolean(item)),
+      );
+
+      const dedupedVisibleCount = dedupeWorkspaceMediaLibraryPageItems([
+        ...existingItems,
+        ...collectedItems,
+      ]).length;
+      const payloadNextCursor = normalizeInteger(payload.next_cursor);
+      if (payloadNextCursor === null) {
+        hasMore = false;
+        break;
+      }
+
+      if (dedupedVisibleCount >= targetItemCount) {
+        hasMore = true;
+        break;
+      }
+
+      nextCursor = payloadNextCursor;
     }
-
-    collectedItems.push(
-      ...payload.assets
-        .map((item) =>
-          isAdsflowMediaAssetPayload(item)
-            ? buildWorkspaceDurableMediaLibraryItem(item as AdsflowWebMediaLibraryAssetPayload)
-            : null,
-        )
-        .filter((item): item is WorkspaceMediaLibraryItem => Boolean(item)),
-    );
-
-    const dedupedVisibleCount = dedupeWorkspaceMediaLibraryPageItems([
-      ...existingItems,
-      ...collectedItems,
-    ]).length;
-    const payloadNextCursor = normalizeInteger(payload.next_cursor);
-    if (payloadNextCursor === null) {
-      hasMore = false;
-      break;
+  } finally {
+    if (deadlineTimeoutId) {
+      clearTimeout(deadlineTimeoutId);
     }
-
-    if (dedupedVisibleCount >= targetItemCount) {
-      hasMore = true;
-      break;
-    }
-
-    nextCursor = payloadNextCursor;
   }
 
   return {
-    hasMore,
+    hasMore: hasMore || didReachDeadline,
     items: collectedItems,
   };
 };
@@ -1538,13 +1573,18 @@ export const getWorkspaceMediaLibraryItems = async (
     }
   }
 
-  const request = loadWorkspaceMediaLibraryIndexEntries(user, options).then(async (entries) => {
+  const request = loadWorkspaceMediaLibraryIndexEntries(user, {
+    bypassCache: shouldBypassCache,
+    limit,
+    offset,
+  }).then(async (entries) => {
     const hydratedIndexItems = entries.records.flatMap(({ entry, project }) =>
       hydrateWorkspaceMediaLibraryIndexEntry(project, entry),
     );
     const durableMedia = await fetchWorkspaceDurableMediaLibraryItems(user, {
       existingItems: hydratedIndexItems,
       limit,
+      maxWaitMs: WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS,
       offset,
     });
     const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(

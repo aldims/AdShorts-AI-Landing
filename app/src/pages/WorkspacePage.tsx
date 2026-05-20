@@ -17452,10 +17452,11 @@ export function WorkspacePage({
     }
   }, [isMediaLibraryLoading, mediaLibraryNextCursor]);
 
+  const canAutoLoadMoreMediaLibrary = isMediaLibraryStudioView || shouldLoadSegmentModalMediaLibrary;
+
   const maybeLoadMoreMediaLibrary = useCallback(() => {
     if (
-      activeTab !== "studio" ||
-      studioView !== "media" ||
+      !canAutoLoadMoreMediaLibrary ||
       !mediaLibraryNextCursor ||
       isMediaLibraryLoading ||
       mediaLibraryError
@@ -17487,18 +17488,16 @@ export function WorkspacePage({
       void handleLoadMoreMediaLibrary();
     }
   }, [
-    activeTab,
+    canAutoLoadMoreMediaLibrary,
     handleLoadMoreMediaLibrary,
     isMediaLibraryLoading,
     mediaLibraryError,
     mediaLibraryNextCursor,
-    studioView,
   ]);
 
   useEffect(() => {
     if (
-      activeTab !== "studio" ||
-      studioView !== "media" ||
+      !canAutoLoadMoreMediaLibrary ||
       !mediaLibraryNextCursor ||
       isMediaLibraryLoading ||
       mediaLibraryError
@@ -17540,20 +17539,18 @@ export function WorkspacePage({
       document.removeEventListener("scroll", scheduleCheck, { capture: true });
     };
   }, [
-    activeTab,
+    canAutoLoadMoreMediaLibrary,
     hiddenMediaLibraryItemKeys.length,
     isMediaLibraryLoading,
     mediaLibraryError,
     mediaLibraryItems.length,
     mediaLibraryNextCursor,
     maybeLoadMoreMediaLibrary,
-    studioView,
   ]);
 
   useEffect(() => {
     if (
-      activeTab !== "studio" ||
-      studioView !== "media" ||
+      !canAutoLoadMoreMediaLibrary ||
       !mediaLibraryNextCursor ||
       isMediaLibraryLoading ||
       mediaLibraryError
@@ -17586,12 +17583,11 @@ export function WorkspacePage({
       observer.disconnect();
     };
   }, [
-    activeTab,
+    canAutoLoadMoreMediaLibrary,
     handleLoadMoreMediaLibrary,
     isMediaLibraryLoading,
     mediaLibraryError,
     mediaLibraryNextCursor,
-    studioView,
   ]);
 
   useEffect(() => {

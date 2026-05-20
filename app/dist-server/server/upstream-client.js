@@ -305,6 +305,7 @@ export const postAdsflowJson = async (path, body, policy, context, options) => {
                 ...(options?.headers ?? {}),
             },
             method: "POST",
+            signal: options?.signal,
         },
         path,
         policy,

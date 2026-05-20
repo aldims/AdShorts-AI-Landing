@@ -65,6 +65,7 @@ type AdsflowRequestOptions = {
 
 type AdsflowPostOptions = {
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 };
 
 const DEFAULT_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -443,6 +444,7 @@ export const postAdsflowJson = async <T>(
         ...(options?.headers ?? {}),
       },
       method: "POST",
+      signal: options?.signal,
     },
     path,
     policy,
