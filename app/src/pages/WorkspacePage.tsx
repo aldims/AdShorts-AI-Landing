@@ -102,6 +102,8 @@ import type {
   WorkspaceSavedReferencesPayload,
 } from "../../shared/workspace-references";
 
+const characterPickerIconUrl = "/character.png";
+
 type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 type WorkspaceMediaLibraryFilter = "all" | "photo" | "video" | "characters" | "scenes";
 type WorkspaceReferenceCreationSource = "ai" | "upload" | "project";
@@ -4837,6 +4839,10 @@ type WorkspacePromptCharacterMentionMatch = {
   start: number;
   text: string;
 };
+type WorkspacePromptRichEditorSelectionRange = {
+  end: number;
+  start: number;
+};
 
 const findNextWorkspacePromptCharacterMention = (
   value: string,
@@ -4878,7 +4884,7 @@ const findNextWorkspacePromptCharacterMention = (
   return nextMatch;
 };
 
-const buildWorkspacePromptCharacterMentionTokens = (
+export const buildWorkspacePromptCharacterMentionTokens = (
   value: string,
   options: WorkspaceReferenceVisualOption[],
 ) => {
@@ -4903,6 +4909,23 @@ const buildWorkspacePromptCharacterMentionTokens = (
   return tokens;
 };
 
+export const resolveWorkspacePromptMentionedCharacterOptions = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+) => {
+  const mentionedOptions: WorkspaceReferenceVisualOption[] = [];
+  const mentionedKeys = new Set<string>();
+
+  buildWorkspacePromptCharacterMentionTokens(value, options).forEach((token) => {
+    if (token.type === "mention" && !mentionedKeys.has(token.option.key)) {
+      mentionedKeys.add(token.option.key);
+      mentionedOptions.push(token.option);
+    }
+  });
+
+  return mentionedOptions;
+};
+
 const isWorkspacePromptWordStart = (value: string) => /^[\p{L}\p{N}_]/u.test(value);
 
 const isWorkspacePromptCharacterMentionEndOffset = (
@@ -4921,6 +4944,25 @@ const isWorkspacePromptCharacterMentionEndOffset = (
   });
 };
 
+const getWorkspacePromptCharacterMentionRanges = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+) => {
+  const ranges: Array<{ end: number; start: number }> = [];
+  let cursor = 0;
+
+  buildWorkspacePromptCharacterMentionTokens(value, options).forEach((token) => {
+    const start = cursor;
+    const end = start + token.text.length;
+    if (token.type === "mention") {
+      ranges.push({ end, start });
+    }
+    cursor = end;
+  });
+
+  return ranges;
+};
+
 const shouldInsertWorkspacePromptMentionBoundarySpace = (
   value: string,
   options: WorkspaceReferenceVisualOption[],
@@ -4933,10 +4975,11 @@ const shouldInsertWorkspacePromptMentionBoundarySpace = (
 
   const beforeCaret = value.slice(0, offset);
   const afterCaret = value.slice(offset);
+  const isAtTrailingWhitespace = afterCaret.length > 0 && /^\s+$/.test(afterCaret);
   return (
     Boolean(beforeCaret) &&
     !/\s$/.test(beforeCaret) &&
-    !/^\s/.test(afterCaret) &&
+    (!/^\s/.test(afterCaret) || isAtTrailingWhitespace) &&
     isWorkspacePromptCharacterMentionEndOffset(value, options, offset)
   );
 };
@@ -5049,36 +5092,32 @@ const getWorkspacePromptRichEditorNodeTextLength = (node: Node): number => {
   );
 };
 
-const getWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null) => {
-  if (!root || typeof window === "undefined") {
-    return 0;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return getWorkspacePromptRichEditorText(root).length;
-  }
-
-  const range = selection.getRangeAt(0);
-  if (!root.contains(range.startContainer)) {
-    return getWorkspacePromptRichEditorText(root).length;
-  }
-
+const getWorkspacePromptRichEditorBoundaryOffset = (
+  root: HTMLElement,
+  container: Node,
+  containerOffset: number,
+) => {
   let offset = 0;
-  let hasFoundStart = false;
+  let hasFoundBoundary = false;
+
   const visit = (node: Node): boolean => {
-    if (node === range.startContainer) {
+    if (node === container) {
       if (node.nodeType === 3) {
-        offset += range.startOffset;
+        offset += Math.max(0, Math.min(node.textContent?.length ?? 0, containerOffset));
       } else {
-        const children = Array.from(node.childNodes).slice(0, range.startOffset);
+        const children = Array.from(node.childNodes).slice(0, containerOffset);
         offset += children.reduce(
           (length, childNode) => length + getWorkspacePromptRichEditorNodeTextLength(childNode),
           0,
         );
       }
-      hasFoundStart = true;
+      hasFoundBoundary = true;
       return true;
+    }
+
+    if (node.nodeType === 3) {
+      offset += node.textContent?.length ?? 0;
+      return false;
     }
 
     if (node.nodeType === 1 && (node as HTMLElement).dataset.promptCharacterLabel) {
@@ -5096,7 +5135,44 @@ const getWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null) =
   };
 
   visit(root);
-  return hasFoundStart ? offset : getWorkspacePromptRichEditorText(root).length;
+  return hasFoundBoundary ? offset : getWorkspacePromptRichEditorText(root).length;
+};
+
+const clampWorkspacePromptRichEditorSelectionRange = (
+  value: string,
+  range: WorkspacePromptRichEditorSelectionRange,
+): WorkspacePromptRichEditorSelectionRange => {
+  const start = Math.max(0, Math.min(value.length, range.start));
+  const end = Math.max(0, Math.min(value.length, range.end));
+  return start <= end ? { end, start } : { end: start, start: end };
+};
+
+export const getWorkspacePromptRichEditorSelectionRange = (
+  root: HTMLElement | null,
+): WorkspacePromptRichEditorSelectionRange | null => {
+  if (!root || typeof window === "undefined") {
+    return null;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+    return null;
+  }
+
+  return clampWorkspacePromptRichEditorSelectionRange(getWorkspacePromptRichEditorText(root), {
+    end: getWorkspacePromptRichEditorBoundaryOffset(root, range.endContainer, range.endOffset),
+    start: getWorkspacePromptRichEditorBoundaryOffset(root, range.startContainer, range.startOffset),
+  });
+};
+
+const getWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null) => {
+  const selectionRange = getWorkspacePromptRichEditorSelectionRange(root);
+  return selectionRange?.end ?? getWorkspacePromptRichEditorText(root).length;
 };
 
 const setWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null, targetOffset: number) => {
@@ -5124,6 +5200,16 @@ const setWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null, t
 
     if (node.nodeType === 1 && (node as HTMLElement).dataset.promptCharacterLabel) {
       const mentionLength = getWorkspacePromptRichEditorNodeTextLength(node);
+      if (normalizedTargetOffset <= offset) {
+        const parentNode = node.parentNode;
+        if (parentNode) {
+          target = {
+            node: parentNode,
+            offset: Array.from(parentNode.childNodes).indexOf(node as ChildNode),
+          };
+          return true;
+        }
+      }
       if (offset + mentionLength >= normalizedTargetOffset) {
         const parentNode = node.parentNode;
         if (parentNode) {
@@ -5163,17 +5249,79 @@ const setWorkspacePromptRichEditorSelectionOffset = (root: HTMLElement | null, t
   selection?.addRange(range);
 };
 
-const insertWorkspacePromptCharacterMentionText = (value: string, label: string, offset: number) => {
+const replaceWorkspacePromptRichEditorTextRange = (
+  value: string,
+  range: WorkspacePromptRichEditorSelectionRange,
+  insertedText: string,
+) => {
+  const normalizedRange = clampWorkspacePromptRichEditorSelectionRange(value, range);
+  const nextValue = `${value.slice(0, normalizedRange.start)}${insertedText}${value.slice(normalizedRange.end)}`;
+  return {
+    caretOffset: normalizedRange.start + insertedText.length,
+    value: nextValue,
+  };
+};
+
+const getWorkspacePromptPreviousTextOffset = (value: string, offset: number) => {
+  const before = value.slice(0, Math.max(0, Math.min(value.length, offset)));
+  const characters = Array.from(before);
+  const previousCharacter = characters[characters.length - 1];
+  return previousCharacter ? before.length - previousCharacter.length : before.length;
+};
+
+const getWorkspacePromptNextTextOffset = (value: string, offset: number) => {
   const normalizedOffset = Math.max(0, Math.min(value.length, offset));
-  const before = value.slice(0, normalizedOffset);
-  const after = value.slice(normalizedOffset);
+  const nextCharacter = Array.from(value.slice(normalizedOffset))[0];
+  return nextCharacter ? normalizedOffset + nextCharacter.length : normalizedOffset;
+};
+
+const getWorkspacePromptRichEditorDeletionRange = (
+  value: string,
+  options: WorkspaceReferenceVisualOption[],
+  range: WorkspacePromptRichEditorSelectionRange,
+  direction: "backward" | "forward",
+): WorkspacePromptRichEditorSelectionRange => {
+  const normalizedRange = clampWorkspacePromptRichEditorSelectionRange(value, range);
+  if (normalizedRange.start !== normalizedRange.end) {
+    return normalizedRange;
+  }
+
+  const caretOffset = normalizedRange.start;
+  const mentionRanges = getWorkspacePromptCharacterMentionRanges(value, options);
+  if (direction === "backward") {
+    const mentionRange = mentionRanges.find(({ end, start }) => start < caretOffset && caretOffset <= end);
+    return mentionRange ?? {
+      end: caretOffset,
+      start: getWorkspacePromptPreviousTextOffset(value, caretOffset),
+    };
+  }
+
+  const mentionRange = mentionRanges.find(({ end, start }) => start <= caretOffset && caretOffset < end);
+  return mentionRange ?? {
+    end: getWorkspacePromptNextTextOffset(value, caretOffset),
+    start: caretOffset,
+  };
+};
+
+export const insertWorkspacePromptCharacterMentionText = (
+  value: string,
+  label: string,
+  offsetOrRange: number | WorkspacePromptRichEditorSelectionRange,
+) => {
+  const range =
+    typeof offsetOrRange === "number"
+      ? { end: offsetOrRange, start: offsetOrRange }
+      : offsetOrRange;
+  const normalizedRange = clampWorkspacePromptRichEditorSelectionRange(value, range);
+  const before = value.slice(0, normalizedRange.start);
+  const after = value.slice(normalizedRange.end);
   const leadingSpace = before && !/\s$/.test(before) ? " " : "";
-  const trailingSpace = !after || !/^[\s,.!?;:]/.test(after) ? " " : "";
+  const trailingSpace = after && !/^[\s,.!?;:]/.test(after) ? " " : "";
 
   return `${before}${leadingSpace}${label}${trailingSpace}${after}`;
 };
 
-const buildWorkspacePromptRichEditorHtml = (
+export const buildWorkspacePromptRichEditorHtml = (
   tokens: WorkspacePromptCharacterMentionToken[],
   getAvatarUrl: (option: WorkspaceReferenceVisualOption) => string | null,
 ) =>
@@ -15942,6 +16090,7 @@ export function WorkspacePage({
   const segmentAiPhotoModalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentPromptRichEditorRef = useRef<HTMLDivElement | null>(null);
   const segmentPromptRichEditorSelectionFrameRef = useRef<number | null>(null);
+  const segmentPromptRichEditorSelectionRef = useRef<WorkspacePromptRichEditorSelectionRange>({ end: 0, start: 0 });
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
   const segmentAiPhotoPromptImproveRunRef = useRef(0);
@@ -19402,6 +19551,7 @@ export function WorkspacePage({
   };
   const resolveSegmentReferenceCharacterAssetIds = async (
     options: WorkspaceReferenceVisualOption[],
+    resolveOptions: { allowMissing?: boolean } = {},
   ) => {
     const assetIds: number[] = [];
     for (const option of options) {
@@ -19409,14 +19559,61 @@ export function WorkspacePage({
         continue;
       }
 
-      const assetId = await resolveSegmentReferenceAssetId(option, "character");
+      let assetId: number | null = null;
+      try {
+        assetId = await resolveSegmentReferenceAssetId(option, "character");
+      } catch (error) {
+        if (!resolveOptions.allowMissing) {
+          throw error;
+        }
+
+        console.warn("[workspace] Skipping unavailable character reference asset.", {
+          error,
+          key: option.key,
+          label: option.label,
+        });
+        continue;
+      }
       if (!assetId) {
+        if (resolveOptions.allowMissing) {
+          console.warn("[workspace] Skipping character reference without an available image.", {
+            key: option.key,
+            label: option.label,
+          });
+          continue;
+        }
         throw new Error(workspaceText(locale, "У персонажа нет доступного фото для референса.", "This character has no available image reference."));
       }
       assetIds.push(assetId);
     }
 
     return assetIds;
+  };
+  const resolvePromptScopedSegmentReferenceCharacters = (promptValue: string) => {
+    const mentionedOptions = resolveWorkspacePromptMentionedCharacterOptions(
+      promptValue,
+      selectedSegmentReferenceCharacterOptions,
+    );
+    const characterReferenceOptions =
+      mentionedOptions.length > 0
+        ? mentionedOptions
+        : selectedSegmentReferenceCharacterOptions;
+    const characterIds = characterReferenceOptions
+      .map((option) => {
+        if (option.source !== "project-character") {
+          return null;
+        }
+
+        const match = option.key.match(/^project-character:(\d+)$/);
+        return match ? getPositiveWorkspaceMediaAssetId(match[1]) : null;
+      })
+      .filter((characterId): characterId is number => typeof characterId === "number" && characterId > 0);
+
+    return {
+      characterIds,
+      characterReferenceOptions,
+      isPromptScoped: mentionedOptions.length > 0,
+    };
   };
   const segmentEditorPendingDeleteSegment =
     typeof segmentEditorPendingDeleteIndex === "number"
@@ -24951,8 +25148,7 @@ export function WorkspacePage({
     const generationQuality = options?.quality ?? selectedSegmentAiPhotoQuality;
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
-    const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
+    const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
     const sceneReferenceOption = selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
@@ -24981,7 +25177,9 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions, {
+        allowMissing: isPromptScoped,
+      });
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -25086,8 +25284,7 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Выберите фото для дорисовки.");
       return;
     }
-    const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
+    const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
     const sceneReferenceOption = selectedSegmentReferenceScene;
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -25115,7 +25312,9 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions, {
+        allowMissing: isPromptScoped,
+      });
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -25287,8 +25486,7 @@ export function WorkspacePage({
     const generationQuality = options?.quality ?? selectedSegmentAiVideoQuality;
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
-    const characterIds = [...selectedSegmentReferenceCharacterIds];
-    const characterReferenceOptions = selectedSegmentReferenceCharacterOptions;
+    const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
     const sceneReferenceOption = selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
@@ -25318,7 +25516,9 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions);
+      const referenceAssetIds = await resolveSegmentReferenceCharacterAssetIds(characterReferenceOptions, {
+        allowMissing: isPromptScoped,
+      });
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
@@ -30129,12 +30329,12 @@ export function WorkspacePage({
   };
   const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
     if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
-      return workspaceText(locale, "Без озвучки", "No voiceover");
+      return workspaceText(locale, "Добавить озвучку", "Add voiceover");
     }
 
     const voiceOverrideId = getWorkspaceSegmentVoiceOverrideForLanguage(segment, selectedLanguage);
     if (!studioSidebarVoiceEnabled && !voiceOverrideId) {
-      return workspaceText(locale, "Без озвучки", "No voiceover");
+      return workspaceText(locale, "Добавить озвучку", "Add voiceover");
     }
 
     const voiceId = voiceOverrideId
@@ -32771,54 +32971,80 @@ export function WorkspacePage({
   };
   const renderSegmentVisualReferencesPanel = (variant: "editor" | "modal" = "editor") => (
     <section className={`studio-segment-references studio-segment-references--${variant}`}>
-      <button
-        className="studio-segment-references__summary"
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={isSegmentReferencesModalOpen}
-        onClick={() => setIsSegmentReferencesModalOpen(true)}
-      >
-        <span>
-          <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
-          <small>{segmentReferenceSummary}</small>
-        </span>
-        <em>
-          {selectedSegmentReferenceCount > 0
-            ? workspaceText(locale, `${selectedSegmentReferenceCount} выбрано`, `${selectedSegmentReferenceCount} selected`)
-            : workspaceText(locale, "С нуля", "From scratch")}
-        </em>
-      </button>
-      {variant === "editor" && selectedSegmentReferenceCharacterOptions.length > 0 ? (
+      {variant === "editor" ? (
         <div
-          className="studio-segment-references__mention-icons"
+          className="studio-segment-references__compact-row"
           aria-label={workspaceText(locale, "Персонажи для описания", "Characters for prompt")}
         >
-          {selectedSegmentReferenceCharacterOptions.map((option) => {
-            const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
-            return (
-              <button
-                key={`segment-reference-mention-icon:${option.key}`}
-                className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
-                type="button"
-                aria-pressed={isInserted}
-                aria-label={workspaceText(
-                  locale,
-                  `Добавить ${option.label} в описание`,
-                  `Add ${option.label} to prompt`,
-                )}
-                title={workspaceText(locale, `Добавить ${option.label} в описание`, `Add ${option.label} to prompt`)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => handleInsertSegmentPromptCharacterMention(option)}
-              >
-                <span className="studio-segment-references__mention-icon-media">
-                  {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
-                </span>
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
+          <button
+            className="studio-segment-references__compact-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={isSegmentReferencesModalOpen}
+            aria-label={workspaceText(locale, "Выбрать персонажей", "Choose characters")}
+            title={workspaceText(locale, "Выбрать персонажей", "Choose characters")}
+            onClick={() => setIsSegmentReferencesModalOpen(true)}
+          >
+            <img
+              className="studio-segment-references__compact-icon"
+              src={characterPickerIconUrl}
+              alt=""
+              width="34"
+              height="34"
+              decoding="async"
+              draggable={false}
+              aria-hidden="true"
+            />
+            <span>{workspaceText(locale, "Персонажи", "Characters")}</span>
+          </button>
+          {selectedSegmentReferenceCharacterOptions.length > 0 ? (
+            <div className="studio-segment-references__mention-icons">
+              {selectedSegmentReferenceCharacterOptions.map((option) => {
+                const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
+                return (
+                  <button
+                    key={`segment-reference-mention-icon:${option.key}`}
+                    className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
+                    type="button"
+                    aria-pressed={isInserted}
+                    aria-label={workspaceText(
+                      locale,
+                      `Добавить ${option.label} в описание`,
+                      `Add ${option.label} to prompt`,
+                    )}
+                    title={workspaceText(locale, `Добавить ${option.label} в описание`, `Add ${option.label} to prompt`)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleInsertSegmentPromptCharacterMention(option)}
+                  >
+                    <span className="studio-segment-references__mention-icon-media">
+                      {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
+                    </span>
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      ) : (
+        <button
+          className="studio-segment-references__summary"
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={isSegmentReferencesModalOpen}
+          onClick={() => setIsSegmentReferencesModalOpen(true)}
+        >
+          <span>
+            <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
+            <small>{segmentReferenceSummary}</small>
+          </span>
+          <em>
+            {selectedSegmentReferenceCount > 0
+              ? workspaceText(locale, `${selectedSegmentReferenceCount} выбрано`, `${selectedSegmentReferenceCount} selected`)
+              : workspaceText(locale, "С нуля", "From scratch")}
+          </em>
+        </button>
+      )}
       {isSegmentReferencesModalOpen &&
       typeof document !== "undefined" &&
       (!isSegmentAiPhotoModalOpen || variant === "modal")
@@ -32947,6 +33173,29 @@ export function WorkspacePage({
           ? "ai_video"
           : null;
   const promptImprovementSegmentIndex = activeSegment?.index ?? segmentAiPhotoModalSegment?.index ?? null;
+  const getSegmentPromptRichEditorSelectionRange = (root = segmentPromptRichEditorRef.current) => {
+    const editor = root ?? segmentPromptRichEditorRef.current;
+    const currentSelectionRange = getWorkspacePromptRichEditorSelectionRange(editor);
+    const nextSelectionRange = clampWorkspacePromptRichEditorSelectionRange(
+      promptVisualRichEditorValue,
+      currentSelectionRange ?? segmentPromptRichEditorSelectionRef.current,
+    );
+    segmentPromptRichEditorSelectionRef.current = nextSelectionRange;
+    return nextSelectionRange;
+  };
+  const setSegmentPromptRichEditorSelectionRange = (
+    value: string,
+    range: WorkspacePromptRichEditorSelectionRange,
+  ) => {
+    segmentPromptRichEditorSelectionRef.current = clampWorkspacePromptRichEditorSelectionRange(value, range);
+  };
+  const handlePromptVisualRichEditorSelectionUpdate = (event: ReactSyntheticEvent<HTMLDivElement>) => {
+    if (!promptVisualImproveMode) {
+      return;
+    }
+
+    getSegmentPromptRichEditorSelectionRange(event.currentTarget);
+  };
   const applyPromptVisualRichEditorValue = (nextValue: string, nextCaretOffset?: number) => {
     if (!promptVisualImproveMode) {
       return;
@@ -32970,6 +33219,10 @@ export function WorkspacePage({
       return;
     }
 
+    setSegmentPromptRichEditorSelectionRange(nextValue, {
+      end: nextCaretOffset,
+      start: nextCaretOffset,
+    });
     flushSync(commitValue);
     segmentPromptRichEditorRef.current?.focus();
     setWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current, nextCaretOffset);
@@ -32979,14 +33232,14 @@ export function WorkspacePage({
       return;
     }
 
-    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current);
-    const promptBeforeCaret = promptVisualRichEditorValue.slice(0, caretOffset);
-    const promptAfterCaret = promptVisualRichEditorValue.slice(caretOffset);
-    const leadingSpaceLength = promptBeforeCaret && !/\s$/.test(promptBeforeCaret) ? 1 : 0;
-    const trailingSpaceLength = !promptAfterCaret || !/^[\s,.!?;:]/.test(promptAfterCaret) ? 1 : 0;
-    const nextPromptValue = insertWorkspacePromptCharacterMentionText(promptVisualRichEditorValue, option.label, caretOffset);
+    const selectionRange = getSegmentPromptRichEditorSelectionRange();
+    const promptBeforeMention = promptVisualRichEditorValue.slice(0, selectionRange.start);
+    const promptAfterMention = promptVisualRichEditorValue.slice(selectionRange.end);
+    const leadingSpaceLength = promptBeforeMention && !/\s$/.test(promptBeforeMention) ? 1 : 0;
+    const trailingSpaceLength = promptAfterMention && !/^[\s,.!?;:]/.test(promptAfterMention) ? 1 : 0;
+    const nextPromptValue = insertWorkspacePromptCharacterMentionText(promptVisualRichEditorValue, option.label, selectionRange);
     const nextCaretOffset =
-      caretOffset +
+      selectionRange.start +
       leadingSpaceLength +
       option.label.length +
       trailingSpaceLength;
@@ -32999,26 +33252,50 @@ export function WorkspacePage({
     }
 
     const nativeEvent = event.nativeEvent as InputEvent;
-    const insertedText = nativeEvent.inputType === "insertText" ? nativeEvent.data ?? "" : "";
-    if (!insertedText) {
+    if (nativeEvent.isComposing || nativeEvent.inputType === "insertCompositionText") {
       return;
     }
 
-    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(event.currentTarget);
-    if (
-      !shouldInsertWorkspacePromptMentionBoundarySpace(
+    const selectionRange = getSegmentPromptRichEditorSelectionRange(event.currentTarget);
+    const inputType = nativeEvent.inputType;
+
+    if (inputType === "insertText" || inputType === "insertLineBreak" || inputType === "insertParagraph") {
+      const insertedText = inputType === "insertText" ? nativeEvent.data ?? "" : " ";
+      if (!insertedText) {
+        return;
+      }
+
+      event.preventDefault();
+      const mentionBoundarySpace =
+        selectionRange.start === selectionRange.end &&
+        shouldInsertWorkspacePromptMentionBoundarySpace(
+          promptVisualRichEditorValue,
+          selectedSegmentReferenceCharacterOptions,
+          selectionRange.start,
+          insertedText,
+        )
+          ? " "
+          : "";
+      const nextInput = replaceWorkspacePromptRichEditorTextRange(
+        promptVisualRichEditorValue,
+        selectionRange,
+        mentionBoundarySpace + insertedText,
+      );
+      applyPromptVisualRichEditorValue(nextInput.value, nextInput.caretOffset);
+      return;
+    }
+
+    if (inputType.startsWith("delete")) {
+      event.preventDefault();
+      const deletionRange = getWorkspacePromptRichEditorDeletionRange(
         promptVisualRichEditorValue,
         selectedSegmentReferenceCharacterOptions,
-        caretOffset,
-        insertedText,
-      )
-    ) {
-      return;
+        selectionRange,
+        inputType.includes("Forward") ? "forward" : "backward",
+      );
+      const nextInput = replaceWorkspacePromptRichEditorTextRange(promptVisualRichEditorValue, deletionRange, "");
+      applyPromptVisualRichEditorValue(nextInput.value, nextInput.caretOffset);
     }
-
-    event.preventDefault();
-    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)} ${insertedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
-    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + insertedText.length + 1);
   };
   const handlePromptVisualRichEditorInput = (event: ReactFormEvent<HTMLDivElement>) => {
     if (!promptVisualImproveMode) {
@@ -33026,7 +33303,11 @@ export function WorkspacePage({
     }
 
     const nextValue = getWorkspacePromptRichEditorText(event.currentTarget);
-    const nextCaretOffset = getWorkspacePromptRichEditorSelectionOffset(event.currentTarget);
+    const nextSelectionRange =
+      getWorkspacePromptRichEditorSelectionRange(event.currentTarget) ??
+      clampWorkspacePromptRichEditorSelectionRange(nextValue, segmentPromptRichEditorSelectionRef.current);
+    const nextCaretOffset = nextSelectionRange.end;
+    setSegmentPromptRichEditorSelectionRange(nextValue, nextSelectionRange);
     const repairedInput = repairWorkspacePromptMentionBoundaryInput(
       promptVisualRichEditorValue,
       nextValue,
@@ -33039,7 +33320,7 @@ export function WorkspacePage({
       return;
     }
 
-    applyPromptVisualRichEditorValue(nextValue);
+    applyPromptVisualRichEditorValue(nextValue, nextCaretOffset);
   };
   const handlePromptVisualRichEditorPaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
     if (!promptVisualImproveMode) {
@@ -33048,18 +33329,24 @@ export function WorkspacePage({
 
     event.preventDefault();
     const pastedText = event.clipboardData.getData("text/plain");
-    const caretOffset = getWorkspacePromptRichEditorSelectionOffset(segmentPromptRichEditorRef.current);
+    const selectionRange = getSegmentPromptRichEditorSelectionRange();
     const normalizedPastedText = normalizeWorkspacePromptRichEditorValue(pastedText);
-    const mentionBoundarySpace = shouldInsertWorkspacePromptMentionBoundarySpace(
+    const mentionBoundarySpace =
+      selectionRange.start === selectionRange.end &&
+      shouldInsertWorkspacePromptMentionBoundarySpace(
+        promptVisualRichEditorValue,
+        selectedSegmentReferenceCharacterOptions,
+        selectionRange.start,
+        normalizedPastedText,
+      )
+        ? " "
+        : "";
+    const nextInput = replaceWorkspacePromptRichEditorTextRange(
       promptVisualRichEditorValue,
-      selectedSegmentReferenceCharacterOptions,
-      caretOffset,
-      normalizedPastedText,
-    )
-      ? " "
-      : "";
-    const nextPromptValue = `${promptVisualRichEditorValue.slice(0, caretOffset)}${mentionBoundarySpace}${normalizedPastedText}${promptVisualRichEditorValue.slice(caretOffset)}`;
-    applyPromptVisualRichEditorValue(nextPromptValue, caretOffset + mentionBoundarySpace.length + normalizedPastedText.length);
+      selectionRange,
+      mentionBoundarySpace + normalizedPastedText,
+    );
+    applyPromptVisualRichEditorValue(nextInput.value, nextInput.caretOffset);
   };
   useLayoutEffect(() => {
     if (!canPromptUseVisualReferences) {
@@ -33095,6 +33382,15 @@ export function WorkspacePage({
 
     if (wasFocused) {
       setWorkspacePromptRichEditorSelectionOffset(editor, Math.min(caretOffset, promptVisualRichEditorValue.length));
+      setSegmentPromptRichEditorSelectionRange(promptVisualRichEditorValue, {
+        end: Math.min(caretOffset, promptVisualRichEditorValue.length),
+        start: Math.min(caretOffset, promptVisualRichEditorValue.length),
+      });
+    } else {
+      setSegmentPromptRichEditorSelectionRange(promptVisualRichEditorValue, {
+        end: promptVisualRichEditorValue.length,
+        start: promptVisualRichEditorValue.length,
+      });
     }
   }, [
     canPromptUseVisualReferences,
@@ -34034,8 +34330,13 @@ export function WorkspacePage({
                             suppressContentEditableWarning
                             tabIndex={0}
                             onBeforeInput={handlePromptVisualRichEditorBeforeInput}
+                            onClick={handlePromptVisualRichEditorSelectionUpdate}
+                            onFocus={handlePromptVisualRichEditorSelectionUpdate}
                             onInput={handlePromptVisualRichEditorInput}
+                            onKeyUp={handlePromptVisualRichEditorSelectionUpdate}
+                            onMouseUp={handlePromptVisualRichEditorSelectionUpdate}
                             onPaste={handlePromptVisualRichEditorPaste}
+                            onSelect={handlePromptVisualRichEditorSelectionUpdate}
                           />
                         ) : (
                           <textarea

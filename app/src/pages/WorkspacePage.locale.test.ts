@@ -9,12 +9,17 @@ import {
   buildWorkspaceSegmentVisualReferenceRequest,
   createStudioCustomVideoFileFromMediaLibraryItem,
   buildWorkspaceReferenceAiPrompt,
+  buildWorkspacePromptCharacterMentionTokens,
+  buildWorkspacePromptRichEditorHtml,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
+  getWorkspacePromptRichEditorSelectionRange,
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
   getNextWorkspaceReferenceDefaultName,
+  insertWorkspacePromptCharacterMentionText,
+  resolveWorkspacePromptMentionedCharacterOptions,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
@@ -380,6 +385,73 @@ describe("WorkspacePage segment visual references payload", () => {
       referenceAssetIds: [501],
       sceneReferenceAssetIds: [901],
     });
+  });
+});
+
+describe("WorkspacePage prompt character mentions", () => {
+  type PromptMentionOption = Parameters<typeof buildWorkspacePromptCharacterMentionTokens>[1][number];
+
+  const createMentionOption = (key: string, label: string): PromptMentionOption => ({
+    assetId: null,
+    key,
+    kind: "character" as const,
+    label,
+    previewKind: "image" as const,
+    source: "saved" as const,
+    sourceProjectId: null,
+    sourceSegmentIndex: null,
+    subtitle: "",
+  } as PromptMentionOption);
+
+  it("maps the caret to the end of text after multiple inline character chips", () => {
+    const options = [
+      createMentionOption("henry", "Генри"),
+      createMentionOption("barsik", "Барсик"),
+    ];
+    const value = "Генри и Барсик идут по лесу смеясь и смотря друг на друга";
+    const root = document.createElement("div");
+    root.innerHTML = buildWorkspacePromptRichEditorHtml(
+      buildWorkspacePromptCharacterMentionTokens(value, options),
+      () => null,
+    );
+    document.body.append(root);
+
+    const trailingTextNode = root.lastChild;
+    expect(trailingTextNode?.nodeType).toBe(Node.TEXT_NODE);
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(trailingTextNode as Text, trailingTextNode?.textContent?.length ?? 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const editorSelectionRange = getWorkspacePromptRichEditorSelectionRange(root);
+    const nextValue = insertWorkspacePromptCharacterMentionText(
+      value,
+      "Серан",
+      editorSelectionRange ?? { end: value.length, start: value.length },
+    );
+
+    expect(editorSelectionRange).toEqual({ end: value.length, start: value.length });
+    expect(nextValue).toBe(`${value} Серан`);
+
+    root.remove();
+  });
+
+  it("uses only prompt-mentioned characters when selected characters include extras", () => {
+    const options = [
+      createMentionOption("henry", "Генри"),
+      createMentionOption("barsik", "Барсик"),
+      createMentionOption("seran", "Серан"),
+    ];
+
+    const mentionedOptions = resolveWorkspacePromptMentionedCharacterOptions(
+      "Генри и Барсик идут по лесу смеясь и смотря друг на друга",
+      options,
+    );
+
+    expect(mentionedOptions.map((option) => option.label)).toEqual(["Генри", "Барсик"]);
   });
 });
 
