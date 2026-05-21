@@ -165,6 +165,7 @@ const workspaceBootstrapCache = new Map();
 const workspaceSubscriptionExpiryCache = new Map();
 const workspaceSubscriptionExpiryInFlight = new Map();
 const OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS = 30_000;
+const OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS = 4_000;
 const OPENROUTER_STUDIO_PROMPT_HTTP_REFERER = "https://adshorts.ai";
 const OPENROUTER_STUDIO_PROMPT_TITLE = "AdShorts Studio Prompt Enhancer";
 const OPENROUTER_STUDIO_PROMPT_ENHANCEMENT_PRIMARY_MODEL = "google/gemini-3-flash-preview";
@@ -1554,7 +1555,7 @@ const requestStudioSegmentPromptEnhancement = async (prompt, language, mode, mod
     }
     return improvedPrompt;
 };
-const requestStudioVisualPromptEnglishTranslation = async (prompt, sourceLanguage, model) => {
+const requestStudioVisualPromptEnglishTranslation = async (prompt, sourceLanguage, model, options) => {
     const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
@@ -1579,7 +1580,7 @@ const requestStudioVisualPromptEnglishTranslation = async (prompt, sourceLanguag
             temperature: 0.1,
             max_tokens: 260,
         }),
-        signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(options?.timeoutMs ?? OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
     });
     const payload = (await response.json().catch(() => null));
     if (!response.ok) {
@@ -1668,10 +1669,20 @@ const translateStudioGenerationPromptToEnglish = async (prompt, options) => {
     }
     const modelCandidates = getStudioOpenRouterModelCandidates();
     let lastError = null;
+    const timeoutBudgetMs = options?.timeoutMs;
+    const timeoutStartedAt = typeof timeoutBudgetMs === "number" ? Date.now() : null;
     if (env.openrouterApiKey && modelCandidates.length > 0) {
         for (const model of modelCandidates) {
+            const remainingTimeoutMs = typeof timeoutBudgetMs === "number" && timeoutStartedAt !== null
+                ? timeoutBudgetMs - (Date.now() - timeoutStartedAt)
+                : undefined;
+            if (typeof remainingTimeoutMs === "number" && remainingTimeoutMs <= 0) {
+                break;
+            }
             try {
-                return await requestStudioVisualPromptEnglishTranslation(normalizedPrompt, sourceLanguage, model);
+                return await requestStudioVisualPromptEnglishTranslation(normalizedPrompt, sourceLanguage, model, {
+                    timeoutMs: remainingTimeoutMs,
+                });
             }
             catch (error) {
                 lastError = error instanceof Error ? error : new Error("OpenRouter visual prompt translation failed.");
@@ -3209,6 +3220,7 @@ export async function generateStudioSegmentAiPhoto(prompt, user, options) {
     const requiredCredits = getStudioSegmentAiPhotoCreditCost(normalizedQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
@@ -3277,6 +3289,7 @@ export async function createStudioSegmentImageEditJob(prompt, imageDataUrl, user
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
@@ -3619,10 +3632,38 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
             throw error;
         }
     }
+    console.info(JSON.stringify({
+        characterIds,
+        event: "server.segment-ai-photo.prepare",
+        language: normalizedLanguage,
+        preserveCharacters,
+        promptLength: normalizedPrompt.length,
+        projectId: normalizedProjectId,
+        quality: normalizedQuality,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+        segmentIndex: normalizedSegmentIndex,
+    }));
+    const translationStartedAt = Date.now();
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
+    console.info(JSON.stringify({
+        elapsedMs: Date.now() - translationStartedAt,
+        event: "server.segment-ai-photo.translation",
+        promptLength: normalizedPrompt.length,
+        translated: upstreamPrompt !== normalizedPrompt,
+    }));
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    console.info(JSON.stringify({
+        characterIds,
+        event: "server.segment-ai-photo.upstream.request",
+        projectId: normalizedProjectId,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+        segmentIndex: normalizedSegmentIndex,
+    }));
     const payload = await postAdsflowJson("/api/web/segment-ai-photo/jobs", {
         admin_token: env.adsflowAdminToken,
         credit_cost: requiredCredits,
@@ -3649,6 +3690,11 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     if (!jobId) {
         throw new Error("AdsFlow did not return a segment AI photo job id.");
     }
+    console.info(JSON.stringify({
+        event: "server.segment-ai-photo.upstream.response",
+        jobId,
+        status: String(payload.status ?? "queued"),
+    }));
     return {
         jobId,
         profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
@@ -3667,6 +3713,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
@@ -3718,6 +3765,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     const requiredCredits = getStudioSegmentPhotoAnimationCreditCost(normalizedQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
@@ -3791,6 +3839,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     const normalizedPrompt = normalizePrompt(String(options?.prompt ?? "")) || "natural talking avatar, stable camera, realistic lip sync";
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
@@ -3863,6 +3912,7 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
+        timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
     });
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);

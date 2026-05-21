@@ -4388,6 +4388,7 @@ const ensureStudioUploadedAssetId = async (
   options: {
     fallbackFileName: string;
     fallbackMimeType?: string | null;
+    forceUpload?: boolean;
     kind: string;
     language: StudioLanguage;
     mediaType: "audio" | "photo" | "video";
@@ -4400,7 +4401,7 @@ const ensureStudioUploadedAssetId = async (
     asset && Number.isFinite(Number(asset.assetId)) && Number(asset.assetId) > 0
       ? Math.trunc(Number(asset.assetId))
       : null;
-  if (existingAssetId) {
+  if (existingAssetId && !options.forceUpload) {
     return existingAssetId;
   }
 
@@ -19471,6 +19472,43 @@ export function WorkspacePage({
     option: WorkspaceReferenceVisualOption,
     referenceKind: "character" | "scene",
   ) => {
+    const shouldCopySavedCharacterReference =
+      referenceKind === "character" &&
+      option.source === "saved" &&
+      option.previewKind !== "video" &&
+      Boolean(option.assetId && segmentEditorDraft?.projectId);
+    if (shouldCopySavedCharacterReference && option.assetId && segmentEditorDraft?.projectId) {
+      const cacheKey = `project:${segmentEditorDraft.projectId}:saved-character:${option.key}:${option.assetId}`;
+      const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
+      if (cachedAssetId) {
+        return cachedAssetId;
+      }
+
+      const copiedAssetId = await ensureStudioUploadedAssetId(
+        {
+          assetId: option.assetId,
+          fileName: `character-reference-${option.assetId}.jpg`,
+          mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+          remoteUrl: buildWorkspaceMediaAssetProxyUrl(option.assetId),
+        },
+        {
+          fallbackFileName: `character-reference-${option.assetId}.jpg`,
+          fallbackMimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+          forceUpload: true,
+          kind: "segment_source",
+          language: selectedLanguage,
+          mediaType: "photo",
+          projectId: segmentEditorDraft.projectId,
+          role: "segment_source",
+          segmentIndex: option.sourceSegmentIndex,
+        },
+      );
+      if (copiedAssetId) {
+        segmentReferenceFrameAssetIdsRef.current.set(cacheKey, copiedAssetId);
+        return copiedAssetId;
+      }
+    }
+
     if (option.assetId && option.previewKind !== "video") {
       return option.assetId;
     }
@@ -25120,6 +25158,7 @@ export function WorkspacePage({
 
   const handleSegmentEditorAiPhotoGenerate = async (
     options?: {
+      includeSceneReference?: boolean;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
       segmentIndex?: number;
@@ -25149,7 +25188,8 @@ export function WorkspacePage({
     const requiredCredits = getSegmentAiPhotoCreditCost(generationQuality);
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
-    const sceneReferenceOption = selectedSegmentReferenceScene;
+    const includeSceneReference = options?.includeSceneReference !== false;
+    const sceneReferenceOption = includeSceneReference ? selectedSegmentReferenceScene : null;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -25185,6 +25225,18 @@ export function WorkspacePage({
         characterIds,
         referenceAssetIds,
         sceneReferenceAssetIds,
+      });
+      logSegmentEditorDiagnostics("client.segment-editor.ai-photo.request", {
+        characterIds,
+        characterLabels: characterReferenceOptions.map((option) => option.label),
+        includeSceneReference,
+        isPromptScoped,
+        promptLength: normalizedPrompt.length,
+        referenceAssetIds,
+        sceneReferenceAssetIds,
+        segmentIndex: targetSegmentIndex,
+        visualJobProjectId: visualJobBinding.projectId,
+        visualJobSegmentIndex: visualJobBinding.segmentIndex,
       });
 
       if (options?.shouldCloseModal) {
@@ -25234,6 +25286,16 @@ export function WorkspacePage({
       if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
         return;
       }
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.ai-photo.failed",
+        {
+          error,
+          includeSceneReference,
+          isPromptScoped,
+          segmentIndex: targetSegmentIndex,
+        },
+        { level: "error" },
+      );
       setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать ИИ фото.");
     } finally {
       if (!pollStarted && isSegmentVisualRunCurrent(segmentAiPhotoRunRef, targetSegmentIndex, runId)) {
@@ -25244,6 +25306,7 @@ export function WorkspacePage({
 
   const handleSegmentEditorImageEditGenerate = async (
     options?: {
+      includeSceneReference?: boolean;
       prompt?: string;
       segmentIndex?: number;
       shouldCloseModal?: boolean;
@@ -25285,7 +25348,7 @@ export function WorkspacePage({
       return;
     }
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
-    const sceneReferenceOption = selectedSegmentReferenceScene;
+    const sceneReferenceOption = options?.includeSceneReference === false ? null : selectedSegmentReferenceScene;
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -25456,6 +25519,7 @@ export function WorkspacePage({
 
   const handleSegmentEditorAiVideoGenerate = async (
     options?: {
+      includeSceneReference?: boolean;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
       segmentIndex?: number;
@@ -25487,7 +25551,7 @@ export function WorkspacePage({
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = getSegmentAiVideoCreditCost(generationQuality);
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
-    const sceneReferenceOption = selectedSegmentReferenceScene;
+    const sceneReferenceOption = options?.includeSceneReference === false ? null : selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
       return;
@@ -26366,7 +26430,9 @@ export function WorkspacePage({
     }
   };
 
-  const handleSegmentAiPhotoModalGenerateScene = async (options?: { prompt?: string; segmentIndex?: number | null }) => {
+  const handleSegmentAiPhotoModalGenerateScene = async (
+    options?: { includeSceneReference?: boolean; prompt?: string; segmentIndex?: number | null },
+  ) => {
     const targetSegmentIndex = options?.segmentIndex ?? segmentAiPhotoModalSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
       return;
@@ -26374,13 +26440,16 @@ export function WorkspacePage({
 
     setSegmentAiPhotoModalTab("ai_photo");
     await handleSegmentEditorAiPhotoGenerate({
+      includeSceneReference: options?.includeSceneReference,
       prompt: options?.prompt ?? segmentAiPhotoModalPrompt,
       segmentIndex: targetSegmentIndex,
       shouldCloseModal: options?.segmentIndex === undefined,
     });
   };
 
-  const handleSegmentAiVideoModalGenerate = async (options?: { prompt?: string; segmentIndex?: number | null }) => {
+  const handleSegmentAiVideoModalGenerate = async (
+    options?: { includeSceneReference?: boolean; prompt?: string; segmentIndex?: number | null },
+  ) => {
     const targetSegmentIndex = options?.segmentIndex ?? segmentAiPhotoModalSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
       return;
@@ -26389,13 +26458,16 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("ai_video");
     await handleSegmentEditorAiVideoGenerate({
+      includeSceneReference: options?.includeSceneReference,
       prompt: options?.prompt ?? segmentAiVideoModalPrompt,
       segmentIndex: targetSegmentIndex,
       shouldCloseModal: options?.segmentIndex === undefined,
     });
   };
 
-  const handleSegmentImageEditModalGenerate = async (options?: { prompt?: string; segmentIndex?: number | null }) => {
+  const handleSegmentImageEditModalGenerate = async (
+    options?: { includeSceneReference?: boolean; prompt?: string; segmentIndex?: number | null },
+  ) => {
     const targetSegmentIndex = options?.segmentIndex ?? segmentAiPhotoModalSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
       return;
@@ -26404,6 +26476,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("image_edit");
     await handleSegmentEditorImageEditGenerate({
+      includeSceneReference: options?.includeSceneReference,
       prompt: options?.prompt ?? segmentImageEditModalPrompt,
       segmentIndex: targetSegmentIndex,
       shouldCloseModal: options?.segmentIndex === undefined,
@@ -33427,9 +33500,17 @@ export function WorkspacePage({
       return;
     }
     if (isPromptAiPhotoMode) {
-      void handleSegmentAiPhotoModalGenerateScene({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
+      void handleSegmentAiPhotoModalGenerateScene({
+        includeSceneReference: false,
+        prompt: promptVisualPromptForAction,
+        segmentIndex: activeSegment.index,
+      });
     } else if (isPromptAiVideoMode) {
-      void handleSegmentAiVideoModalGenerate({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
+      void handleSegmentAiVideoModalGenerate({
+        includeSceneReference: false,
+        prompt: promptVisualPromptForAction,
+        segmentIndex: activeSegment.index,
+      });
     } else if (isPromptPhotoAnimationMode) {
       void handleSegmentPhotoAnimationModalGenerate({
         prompt: promptVisualPromptForAction,
@@ -33442,7 +33523,11 @@ export function WorkspacePage({
         segmentIndex: activeSegment.index,
       });
     } else if (isPromptImageEditMode) {
-      void handleSegmentImageEditModalGenerate({ prompt: promptVisualPromptForAction, segmentIndex: activeSegment.index });
+      void handleSegmentImageEditModalGenerate({
+        includeSceneReference: false,
+        prompt: promptVisualPromptForAction,
+        segmentIndex: activeSegment.index,
+      });
     } else if (isPromptUpscaleMode) {
       void handleSegmentAiPhotoModalUpscaleImage({ segmentIndex: activeSegment.index });
     } else if (isPromptSceneSoundMode) {

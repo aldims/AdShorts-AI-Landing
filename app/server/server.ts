@@ -3701,6 +3701,15 @@ app.post("/api/studio/projects/:projectId/characters", async (req, res) => {
 });
 
 app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
+  console.info(
+    JSON.stringify({
+      event: "server.segment-ai-photo.route.received",
+      promptLength: typeof req.body?.prompt === "string" ? req.body.prompt.trim().length : 0,
+      projectId: Number(req.body?.projectId ?? 0),
+      segmentIndex: Number(req.body?.segmentIndex ?? -1),
+    }),
+  );
+
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -3727,6 +3736,19 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     res.status(400).json({ error: "Prompt is required." });
     return;
   }
+
+  console.info(
+    JSON.stringify({
+      characterIds,
+      event: "server.segment-ai-photo.route.request",
+      promptLength: prompt.length,
+      projectId,
+      referenceAssetIds,
+      sceneReferenceAssetIds,
+      segmentIndex,
+      userEmail: session.user.email ?? null,
+    }),
+  );
 
   try {
     const job = await createStudioSegmentAiPhotoJob(prompt, session.user, {
