@@ -3114,6 +3114,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     }
 });
 app.get("/api/studio/segment-ai-photo/jobs/:jobId", async (req, res) => {
+    const jobId = String(req.params.jobId ?? "").trim();
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
     });
@@ -3122,7 +3123,20 @@ app.get("/api/studio/segment-ai-photo/jobs/:jobId", async (req, res) => {
         return;
     }
     try {
-        const status = await getStudioSegmentAiPhotoJobStatus(req.params.jobId, session.user);
+        console.info(JSON.stringify({
+            event: "server.segment-ai-photo.status.request",
+            jobId,
+            userEmail: session.user.email ?? null,
+        }));
+        const status = await getStudioSegmentAiPhotoJobStatus(jobId, session.user);
+        console.info(JSON.stringify({
+            assetId: status.asset?.assetId ?? null,
+            event: "server.segment-ai-photo.status.response",
+            hasAsset: Boolean(status.asset),
+            jobId: status.jobId || jobId,
+            status: status.status,
+            userEmail: session.user.email ?? null,
+        }));
         if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
             await invalidateWorkspaceSegmentVisualCaches(session.user);
         }
@@ -3393,6 +3407,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     const voiceType = typeof req.body?.voiceType === "string" ? req.body.voiceType.trim() : "";
     const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
     const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
+    const customVideoMediaType = req.body?.customVideoMediaType === "video" ? "video" : req.body?.customVideoMediaType === "photo" ? "photo" : undefined;
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
@@ -3403,13 +3418,14 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
         return;
     }
     if (!customVideoAssetId && !customVideoFileDataUrl) {
-        res.status(400).json({ error: "Photo source asset id or image data URL is required." });
+        res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
         return;
     }
     try {
         const job = await createStudioSegmentTalkingPhotoJob(script, session.user, {
             customVideoAssetId,
             customVideoFileDataUrl: customVideoFileDataUrl || undefined,
+            customVideoMediaType,
             customVideoFileMimeType: customVideoFileMimeType || undefined,
             customVideoFileName: customVideoFileName || undefined,
             durationSeconds,
@@ -3422,10 +3438,10 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
         res.json({ data: job });
     }
     catch (error) {
-        console.error("[studio] Failed to create segment talking photo job", error);
+        console.error("[studio] Failed to create segment talking character job", error);
         const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
         res.status(statusCode).json({
-            error: error instanceof Error ? error.message : "Failed to create segment talking photo job.",
+            error: error instanceof Error ? error.message : "Failed to create segment talking character job.",
         });
     }
 });
@@ -3445,9 +3461,9 @@ app.get("/api/studio/segment-talking-photo/jobs/:jobId", async (req, res) => {
         res.json({ data: status });
     }
     catch (error) {
-        console.error("[studio] Failed to fetch segment talking photo job status", error);
+        console.error("[studio] Failed to fetch segment talking character job status", error);
         res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to fetch segment talking photo job status.",
+            error: error instanceof Error ? error.message : "Failed to fetch segment talking character job status.",
         });
     }
 });
@@ -3467,12 +3483,12 @@ app.get("/api/studio/segment-talking-photo/jobs/:jobId/video", async (req, res) 
         res.sendFile(asset.absolutePath);
     }
     catch (error) {
-        console.error("[studio] Failed to load segment talking photo playback", {
-            error: getServerErrorMessage(error, "Failed to load generated segment talking photo."),
+        console.error("[studio] Failed to load segment talking character playback", {
+            error: getServerErrorMessage(error, "Failed to load generated segment talking character."),
             jobId: req.params.jobId,
         });
         res.status(502).json({
-            error: error instanceof Error ? error.message : "Failed to load generated segment talking photo.",
+            error: error instanceof Error ? error.message : "Failed to load generated segment talking character.",
         });
     }
 });
@@ -3491,12 +3507,12 @@ app.get("/api/studio/segment-talking-photo/jobs/:jobId/poster", async (req, res)
         res.sendFile(posterPath);
     }
     catch (error) {
-        console.error("[studio] Failed to load generated segment talking photo poster", {
-            error: getServerErrorMessage(error, "Failed to load generated segment talking photo poster."),
+        console.error("[studio] Failed to load generated segment talking character poster", {
+            error: getServerErrorMessage(error, "Failed to load generated segment talking character poster."),
             jobId: req.params.jobId,
         });
         res.status(502).json({
-            error: error instanceof Error ? error.message : "Failed to load generated segment talking photo poster.",
+            error: error instanceof Error ? error.message : "Failed to load generated segment talking character poster.",
         });
     }
 });

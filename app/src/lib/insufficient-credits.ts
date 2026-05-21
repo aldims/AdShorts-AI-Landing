@@ -59,7 +59,7 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
       case "photo_animation":
         return "AI photo animation";
       case "talking_photo":
-        return "Talking photo";
+        return "Talking character";
       case "image_edit":
         return "Image edit";
       case "image_upscale":
@@ -80,7 +80,7 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
     case "photo_animation":
       return "ИИ анимация фото";
     case "talking_photo":
-      return "Говорящее фото";
+      return "Говорящий персонаж";
     case "image_edit":
       return "Дорисовать";
     case "image_upscale":

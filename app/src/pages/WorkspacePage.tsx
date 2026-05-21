@@ -87,6 +87,7 @@ import {
   STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
+  STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
   STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
@@ -1233,6 +1234,7 @@ type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiVideoJob
 type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
+  customVideoMediaType?: "photo" | "video";
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
   durationSeconds?: number;
@@ -1263,6 +1265,15 @@ type StoredWorkspaceSegmentPhotoAnimationJob = {
   prompt: string;
   segmentIndex: number;
   sourceAsset: StudioCustomVideoFile | null;
+  status: string;
+};
+
+type StoredWorkspaceSegmentAiPhotoJob = {
+  createdAt: number;
+  jobId: string;
+  projectId: number;
+  prompt: string;
+  segmentIndex: number;
   status: string;
 };
 
@@ -2736,7 +2747,7 @@ const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegment
   }
 
   if (latestVisualAction === "talking_photo") {
-    return "добавлено говорящее фото";
+    return "добавлен говорящий персонаж";
   }
 
   if (latestVisualAction === "custom") {
@@ -3832,6 +3843,30 @@ export const buildWorkspaceReferenceAiPrompt = (options: {
     characterGenderLabel ? `Пол персонажа: ${characterGenderLabel}` : "",
     characterAgeLabel ? `Возраст: ${characterAgeLabel}` : "",
     characterStyle ? `Стиль: ${characterStyle}` : "",
+  ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
+};
+
+const buildWorkspaceReferencePromptFromVisualSource = (options: {
+  basePrompt: string;
+  kind: WorkspaceReferenceKind;
+  source: Exclude<WorkspaceReferenceCreationSource, "ai">;
+  sourceLabel?: string | null;
+}) => {
+  const basePrompt = normalizeWorkspaceReferencePromptPart(options.basePrompt);
+  const sourceLabel = normalizeWorkspaceReferencePromptPart(options.sourceLabel);
+  const sourceDescription =
+    options.source === "upload"
+      ? "загруженного фото"
+      : "выбранного визуала проекта";
+  const goal =
+    options.kind === "character"
+      ? `Создай AI-фото персонажа на основе ${sourceDescription}. Сохрани узнаваемые черты, пропорции и характер образа из референса, сделай чистый цельный референс персонажа.`
+      : `Создай AI-фото сцены на основе ${sourceDescription}. Сохрани ключевую композицию и атмосферу референса, сделай чистый цельный референс сцены.`;
+
+  return [
+    goal,
+    basePrompt ? `Уточнения: ${basePrompt}` : "",
+    sourceLabel ? `Источник: ${sourceLabel}` : "",
   ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
 };
 
@@ -5672,6 +5707,70 @@ const getWorkspaceSegmentPhotoAnimationSourceAsset = (segment: WorkspaceSegmentE
   return getWorkspaceSegmentLatestEditablePhotoAsset(segment);
 };
 
+const getWorkspaceSegmentCurrentVideoSourceAsset = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): StudioCustomVideoFile | null => {
+  const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
+  if (getWorkspaceSegmentCustomPreviewKind(draftVisualAsset) === "video" && draftVisualAsset) {
+    return draftVisualAsset;
+  }
+
+  const currentAssetId = getPositiveWorkspaceMediaAssetId(segment.currentAsset?.assetId);
+  if (currentAssetId && isWorkspaceVideoMediaAsset(segment.currentAsset)) {
+    return {
+      assetId: currentAssetId,
+      fileName: `segment-video-${segment.index + 1}.mp4`,
+      fileSize: 0,
+      mimeType: segment.currentAsset?.mimeType || "video/mp4",
+      remoteUrl:
+        getWorkspaceMediaAssetDurablePreviewUrl({
+          assetId: currentAssetId,
+          mimeType: segment.currentAsset?.mimeType || "video/mp4",
+          remoteUrl: segment.currentAsset?.playbackUrl || segment.currentAsset?.downloadUrl,
+        }) ?? undefined,
+    };
+  }
+
+  const originalAssetId = getPositiveWorkspaceMediaAssetId(segment.originalAsset?.assetId);
+  if (originalAssetId && isWorkspaceVideoMediaAsset(segment.originalAsset)) {
+    return {
+      assetId: originalAssetId,
+      fileName: `segment-video-${segment.index + 1}.mp4`,
+      fileSize: 0,
+      mimeType: segment.originalAsset?.mimeType || "video/mp4",
+      remoteUrl:
+        getWorkspaceMediaAssetDurablePreviewUrl({
+          assetId: originalAssetId,
+          mimeType: segment.originalAsset?.mimeType || "video/mp4",
+          remoteUrl: segment.originalAsset?.playbackUrl || segment.originalAsset?.downloadUrl,
+        }) ?? undefined,
+    };
+  }
+
+  const remoteUrl =
+    segment.currentExternalPlaybackUrl ??
+    segment.currentPlaybackUrl ??
+    segment.originalExternalPlaybackUrl ??
+    segment.originalPlaybackUrl ??
+    "";
+  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video" || !remoteUrl) {
+    return null;
+  }
+
+  return {
+    fileName: `segment-video-${segment.index + 1}.mp4`,
+    fileSize: 0,
+    mimeType: "video/mp4",
+    remoteUrl,
+  };
+};
+
+const getWorkspaceSegmentTalkingCharacterSourceAsset = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): StudioCustomVideoFile | null => {
+  return getWorkspaceSegmentCurrentVideoSourceAsset(segment) ?? getWorkspaceSegmentPhotoAnimationSourceAsset(segment);
+};
+
 const getWorkspaceSegmentSceneReferenceAssetId = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) => {
@@ -5939,7 +6038,7 @@ const canWorkspaceSegmentAnimatePhoto = (segment: WorkspaceSegmentEditorDraftSeg
   Boolean(segment && canWorkspaceSegmentUsePhotoEditingTools(segment) && getWorkspaceSegmentPhotoAnimationSourceAsset(segment));
 
 const canWorkspaceSegmentCreateTalkingPhoto = (segment: WorkspaceSegmentEditorDraftSegment | null | undefined) =>
-  Boolean(segment && canWorkspaceSegmentUsePhotoEditingTools(segment) && getWorkspaceSegmentPhotoAnimationSourceAsset(segment));
+  Boolean(segment && getWorkspaceSegmentTalkingCharacterSourceAsset(segment));
 
 const canWorkspaceSegmentEditPhoto = (segment: WorkspaceSegmentEditorDraftSegment | null | undefined) =>
   Boolean(segment && canWorkspaceSegmentUsePhotoEditingTools(segment) && getWorkspaceSegmentImageEditSource(segment));
@@ -6693,6 +6792,14 @@ const getWorkspaceSegmentEditorGenerationRequiredCredits = (
 const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 
+const getWorkspaceReferenceGenerationCreditCost = (
+  kind: WorkspaceReferenceKind,
+  quality: StudioSegmentVisualQuality,
+) =>
+  kind === "character"
+    ? STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST
+    : getSegmentAiPhotoCreditCost(quality);
+
 const getSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
 
@@ -7073,6 +7180,29 @@ const hasWorkspaceSegmentOriginalVisualReference = (segment: WorkspaceSegmentEdi
       segment.originalPreviewUrl ||
       segment.originalExternalPlaybackUrl ||
       segment.originalExternalPreviewUrl,
+  );
+
+export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  Boolean(
+    segment &&
+      !normalizeWorkspaceSegmentEditorTextForCompare(segment.text) &&
+      !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
+      !segment.photoAnimationSourceAsset &&
+      !segment.sceneSoundAsset &&
+      !segment.currentAsset &&
+      !segment.currentPlaybackUrl &&
+      !segment.currentPreviewUrl &&
+      !segment.currentPosterUrl &&
+      !segment.currentExternalPlaybackUrl &&
+      !segment.currentExternalPreviewUrl &&
+      !segment.originalAsset &&
+      !segment.originalPlaybackUrl &&
+      !segment.originalPreviewUrl &&
+      !segment.originalPosterUrl &&
+      !segment.originalExternalPlaybackUrl &&
+      !segment.originalExternalPreviewUrl,
   );
 
 const getWorkspaceSegmentOriginalMediaType = (
@@ -7649,11 +7779,19 @@ const createWorkspaceSegmentEditorDraftSession = (
 };
 
 const getWorkspaceSegmentEditorMusicStateKey = (
-  session: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
+  session: Pick<
+    WorkspaceSegmentEditorSession,
+    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
+  >,
 ) => {
   const musicType = normalizeWorkspaceSegmentEditorSetting(session.musicType) ?? "ai";
+  const musicAssetId =
+    Number.isFinite(Number(session.musicAssetId)) && Number(session.musicAssetId) > 0
+      ? String(Math.trunc(Number(session.musicAssetId)))
+      : "";
+  const musicName = String(session.musicName ?? "").replace(/\s+/g, " ").trim();
   if (musicType !== "custom") {
-    return `${musicType}:`;
+    return `${musicType}:${musicAssetId}:${musicName}`;
   }
 
   const customMusicAssetId =
@@ -7662,12 +7800,18 @@ const getWorkspaceSegmentEditorMusicStateKey = (
       : "";
   const customMusicFileName = String(session.customMusicFileName ?? "").replace(/\s+/g, " ").trim();
 
-  return `${musicType}:${customMusicAssetId}:${customMusicFileName}`;
+  return `${musicType}:${musicAssetId}:${musicName}:${customMusicAssetId}:${customMusicFileName}`;
 };
 
 const areWorkspaceSegmentEditorMusicStatesEqual = (
-  left: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
-  right: Pick<WorkspaceSegmentEditorSession, "customMusicAssetId" | "customMusicFileName" | "musicType">,
+  left: Pick<
+    WorkspaceSegmentEditorSession,
+    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
+  >,
+  right: Pick<
+    WorkspaceSegmentEditorSession,
+    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
+  >,
 ) => getWorkspaceSegmentEditorMusicStateKey(left) === getWorkspaceSegmentEditorMusicStateKey(right);
 
 const shouldPromoteFreshServerVideoToPhotoAnimation = (
@@ -7808,6 +7952,10 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   fallbackLanguage: StudioLanguage = "ru",
 ): WorkspaceSegmentEditorDraftSegment => {
   const normalizedFreshSegment = normalizeWorkspaceSegmentEditorSegmentUrls(freshSegment);
+  if (isWorkspaceSegmentEditorDraftSegmentEmpty(liveSegment)) {
+    return cloneWorkspaceSegmentEditorDraftSegment(liveSegment, fallbackLanguage);
+  }
+
   const shouldUseFreshServerVideo = shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, normalizedFreshSegment);
   const shouldUseFreshServerAiVideo = shouldPromoteFreshServerVideoToAiVideo(liveSegment, normalizedFreshSegment);
   const freshServerVideoMode: WorkspaceSegmentAiVideoMode =
@@ -7957,6 +8105,8 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     customMusicFileName: nextMusicState.customMusicFileName ?? null,
     description: liveDraft.description,
     language: liveDraft.language,
+    musicAssetId: nextMusicState.musicAssetId ?? null,
+    musicName: nextMusicState.musicName ?? null,
     musicType: nextMusicState.musicType,
     segments: mergedSegments,
     subtitleColor: liveDraft.subtitleColor,
@@ -7967,8 +8117,27 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   });
 };
 
-const getWorkspaceSegmentEditorNextSegmentIndex = (segments: WorkspaceSegmentEditorDraftSegment[]) =>
-  segments.reduce((maxIndex, segment) => Math.max(maxIndex, segment.index), -1) + 1;
+const getWorkspaceSegmentEditorNextSegmentIndex = (
+  segments: WorkspaceSegmentEditorDraftSegment[],
+  reservedSegmentIndexes: readonly number[] = [],
+) => {
+  const maxExistingIndex = [...segments.map((segment) => segment.index), ...reservedSegmentIndexes]
+    .filter((segmentIndex) => Number.isInteger(segmentIndex) && segmentIndex >= 0)
+    .reduce((maxIndex, segmentIndex) => Math.max(maxIndex, segmentIndex), -1);
+
+  return maxExistingIndex + 1;
+};
+
+const getWorkspaceSegmentEditorReservedSegmentIndexes = (
+  ...sessions: Array<Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined>
+) =>
+  Array.from(
+    new Set(
+      sessions
+        .flatMap((session) => session?.segments.map((segment) => segment.index) ?? [])
+        .filter((segmentIndex) => Number.isInteger(segmentIndex) && segmentIndex >= 0),
+    ),
+  );
 
 const getWorkspaceSegmentEditorInsertedSegmentTiming = (
   segments: WorkspaceSegmentEditorDraftSegment[],
@@ -7991,13 +8160,14 @@ const getWorkspaceSegmentEditorInsertedSegmentTiming = (
   };
 };
 
-const createWorkspaceSegmentEditorInsertedSegment = (options: {
+export const createWorkspaceSegmentEditorInsertedSegment = (options: {
   draft: WorkspaceSegmentEditorDraftSession;
   insertAt: number;
+  reservedSegmentIndexes?: readonly number[];
   sourceSegment?: WorkspaceSegmentEditorDraftSegment | null;
 }): WorkspaceSegmentEditorDraftSegment => {
   const { draft, insertAt } = options;
-  const nextIndex = getWorkspaceSegmentEditorNextSegmentIndex(draft.segments);
+  const nextIndex = getWorkspaceSegmentEditorNextSegmentIndex(draft.segments, options.reservedSegmentIndexes);
   const baseText = "";
   const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
   const textByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, baseText, fallbackLanguage);
@@ -8055,6 +8225,155 @@ const createWorkspaceSegmentEditorInsertedSegment = (options: {
     videoAction: "original",
     visualReset: false,
   };
+};
+
+export const resolveWorkspaceSegmentEditorSegmentsAfterDelete = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  targetSegmentIndex: number,
+  options?: { reservedSegmentIndexes?: readonly number[] },
+): WorkspaceSegmentEditorDraftSegment[] => {
+  const targetSegment = draft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+  if (!targetSegment) {
+    return draft.segments;
+  }
+
+  if (draft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+    if (isWorkspaceSegmentEditorDraftSegmentEmpty(targetSegment)) {
+      return draft.segments;
+    }
+
+    return [
+      createWorkspaceSegmentEditorInsertedSegment({
+        draft,
+        insertAt: 0,
+        reservedSegmentIndexes: options?.reservedSegmentIndexes,
+      }),
+    ];
+  }
+
+  return draft.segments.filter((segment) => segment.index !== targetSegmentIndex);
+};
+
+export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
+  draft: WorkspaceSegmentEditorDraftSession,
+): WorkspaceSegmentEditorDraftSession => {
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
+  const emptyTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, "", fallbackLanguage);
+
+  return {
+    ...draft,
+    customMusicAssetId: null,
+    customMusicFileName: null,
+    musicAssetId: null,
+    musicName: null,
+    musicType: "none",
+    segments: draft.segments.map((segment) => ({
+      ...segment,
+      originalText: "",
+      originalTextByLanguage: { ...emptyTextByLanguage },
+      sceneSoundAsset: null,
+      sceneSoundGeneratedFromPrompt: null,
+      sceneSoundPrompt: "",
+      sceneSoundPromptInitialized: false,
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      text: "",
+      textByLanguage: { ...emptyTextByLanguage },
+      voiceType: null,
+    })),
+    subtitleColor: fallbackStudioSubtitleColorOption.id,
+    subtitleStyle: fallbackStudioSubtitleStyleOption.id,
+    subtitleType: "none",
+    ttsAssetId: null,
+    voiceType: "none",
+  };
+};
+
+type WorkspaceSegmentEditorCarouselSlot =
+  | {
+      kind: "segment";
+      offset: -1 | 0 | 1;
+      segmentArrayIndex: number;
+    }
+  | {
+      kind: "add";
+      offset: 1;
+      segmentArrayIndex: number;
+    }
+  | {
+      kind: "empty";
+      offset: -1 | 0 | 1;
+      segmentArrayIndex: number;
+    };
+
+const normalizeWorkspaceSegmentEditorCarouselSegmentCount = (segmentCount: number) =>
+  Number.isFinite(segmentCount) ? Math.max(0, Math.trunc(segmentCount)) : 0;
+
+const normalizeWorkspaceSegmentEditorCarouselActiveIndex = (
+  activeSegmentIndex: number,
+  segmentCount: number,
+) => {
+  const safeSegmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(segmentCount);
+  const safeActiveSegmentIndex = Number.isFinite(activeSegmentIndex) ? Math.trunc(activeSegmentIndex) : 0;
+
+  return safeSegmentCount > 0
+    ? Math.max(0, Math.min(safeActiveSegmentIndex, safeSegmentCount - 1))
+    : 0;
+};
+
+export const getWorkspaceSegmentEditorCarouselNavigation = (options: {
+  activeSegmentIndex: number;
+  segmentCount: number;
+}) => {
+  const segmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(options.segmentCount);
+  const activeSegmentIndex = normalizeWorkspaceSegmentEditorCarouselActiveIndex(
+    options.activeSegmentIndex,
+    segmentCount,
+  );
+
+  return {
+    canNavigateNext: segmentCount > 0 && activeSegmentIndex < segmentCount - 1,
+    canNavigatePrevious: segmentCount > 0 && activeSegmentIndex > 0,
+  };
+};
+
+export const getWorkspaceSegmentEditorCarouselSlots = (options: {
+  activeSegmentIndex: number;
+  canAddSegment: boolean;
+  segmentCount: number;
+}): WorkspaceSegmentEditorCarouselSlot[] => {
+  const segmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(options.segmentCount);
+  const activeSegmentIndex = normalizeWorkspaceSegmentEditorCarouselActiveIndex(
+    options.activeSegmentIndex,
+    segmentCount,
+  );
+
+  return ([-1, 0, 1] as const).map((offset) => {
+    const segmentArrayIndex = activeSegmentIndex + offset;
+    if (segmentArrayIndex >= 0 && segmentArrayIndex < segmentCount) {
+      return {
+        kind: "segment",
+        offset,
+        segmentArrayIndex,
+      };
+    }
+
+    if (offset > 0 && options.canAddSegment && segmentArrayIndex === segmentCount) {
+      return {
+        kind: "add",
+        offset: 1,
+        segmentArrayIndex,
+      };
+    }
+
+    return {
+      kind: "empty",
+      offset,
+      segmentArrayIndex,
+    };
+  });
 };
 
 const normalizeWorkspaceSegmentEditorSession = (
@@ -8312,6 +8631,8 @@ const removeStoredWorkspaceSegmentEditorSession = (
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
+const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-ai-photo-pending:";
+const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -8330,6 +8651,9 @@ const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: numb
 
 const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const getWorkspaceSegmentAiPhotoPendingStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceSegmentPhotoAnimationPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX}${email}`;
@@ -8439,6 +8763,146 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
       sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
     })),
   });
+};
+
+const isStoredWorkspaceSegmentAiPhotoJob = (value: unknown): value is StoredWorkspaceSegmentAiPhotoJob => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Partial<StoredWorkspaceSegmentAiPhotoJob>;
+  return (
+    typeof payload.jobId === "string" &&
+    payload.jobId.trim().length > 0 &&
+    Number.isInteger(Number(payload.projectId)) &&
+    Number(payload.projectId) > 0 &&
+    Number.isInteger(Number(payload.segmentIndex)) &&
+    Number(payload.segmentIndex) >= 0
+  );
+};
+
+const normalizeStoredWorkspaceSegmentAiPhotoJob = (
+  value: StoredWorkspaceSegmentAiPhotoJob,
+): StoredWorkspaceSegmentAiPhotoJob => ({
+  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  jobId: String(value.jobId ?? "").trim(),
+  projectId: Math.trunc(Number(value.projectId)),
+  prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
+  segmentIndex: Math.trunc(Number(value.segmentIndex)),
+  status: String(value.status ?? "queued").trim() || "queued",
+});
+
+const readStoredWorkspaceSegmentAiPhotoJobs = (
+  email: string | null | undefined,
+): StoredWorkspaceSegmentAiPhotoJob[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const storageKey = getWorkspaceSegmentAiPhotoPendingStorageKey(normalizedEmail);
+  const candidate = readWorkspaceSegmentEditorStorageCandidates(storageKey)[0];
+  if (!candidate) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+    const rawJobs = Array.isArray(parsedValue) ? parsedValue : [];
+    const now = Date.now();
+    const jobs = rawJobs
+      .filter(isStoredWorkspaceSegmentAiPhotoJob)
+      .map(normalizeStoredWorkspaceSegmentAiPhotoJob)
+      .filter((job) => now - job.createdAt <= WORKSPACE_SEGMENT_AI_PHOTO_PENDING_TTL_MS);
+
+    if (jobs.length !== rawJobs.length || candidate.storageName === "sessionStorage") {
+      writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(jobs));
+    }
+
+    return jobs;
+  } catch {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return [];
+  }
+};
+
+const writeStoredWorkspaceSegmentAiPhotoJobs = (
+  email: string | null | undefined,
+  jobs: StoredWorkspaceSegmentAiPhotoJob[],
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  const storageKey = getWorkspaceSegmentAiPhotoPendingStorageKey(normalizedEmail);
+  const normalizedJobs = jobs
+    .filter(isStoredWorkspaceSegmentAiPhotoJob)
+    .map(normalizeStoredWorkspaceSegmentAiPhotoJob)
+    .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_AI_PHOTO_PENDING_TTL_MS);
+
+  if (!normalizedJobs.length) {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedJobs));
+};
+
+const upsertStoredWorkspaceSegmentAiPhotoJob = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentAiPhotoJob,
+) => {
+  const normalizedJob = normalizeStoredWorkspaceSegmentAiPhotoJob(job);
+  const jobs = readStoredWorkspaceSegmentAiPhotoJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
+  writeStoredWorkspaceSegmentAiPhotoJobs(email, [normalizedJob, ...jobs]);
+};
+
+const removeStoredWorkspaceSegmentAiPhotoJob = (
+  email: string | null | undefined,
+  jobId: string | null | undefined,
+) => {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentAiPhotoJobs(email).filter((job) => job.jobId !== safeJobId);
+  writeStoredWorkspaceSegmentAiPhotoJobs(email, jobs);
+};
+
+const removeStoredWorkspaceSegmentAiPhotoJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId <= 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentAiPhotoJobs(email).filter(
+    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+  );
+  writeStoredWorkspaceSegmentAiPhotoJobs(email, jobs);
 };
 
 const isStoredWorkspaceSegmentPhotoAnimationJob = (value: unknown): value is StoredWorkspaceSegmentPhotoAnimationJob => {
@@ -10081,7 +10545,7 @@ const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraf
   }
 
   if (latestVisualAction === "talking_photo") {
-    return "Говорящее фото";
+    return "Говорящий персонаж";
   }
 
   if (latestVisualAction === "ai") {
@@ -10118,8 +10582,8 @@ const getWorkspaceSegmentDraftSourceDisplayLabel = (sourceLabel: string, locale:
       return "Image edit";
     case "ИИ анимация":
       return "AI animation";
-    case "Говорящее фото":
-      return "Talking photo";
+    case "Говорящий персонаж":
+      return "Talking character";
     case "ИИ видео":
       return "AI video";
     default:
@@ -10451,7 +10915,7 @@ const getWorkspaceMediaLibraryItemKindLabel = (
   }
 
   if (kind === "talking_photo") {
-    return workspaceText(locale, "Говорящее фото", "Talking photo");
+    return workspaceText(locale, "Говорящий персонаж", "Talking character");
   }
 
   if (kind === "ai_video") {
@@ -10633,6 +11097,10 @@ const shouldHydrateWorkspaceGeneratedMediaLibraryItem = (
     aiVideoMode?: WorkspaceSegmentAiVideoMode;
   },
 ) => {
+  if (isWorkspaceSegmentEditorDraftSegmentEmpty(segment)) {
+    return false;
+  }
+
   if (segment.visualReset) {
     return false;
   }
@@ -15805,11 +16273,13 @@ export function WorkspacePage({
   const [savedWorkspaceReferences, setSavedWorkspaceReferences] = useState<WorkspaceSavedReference[]>([]);
   const [isSavedWorkspaceReferencesLoading, setIsSavedWorkspaceReferencesLoading] = useState(false);
   const [savedWorkspaceReferencesError, setSavedWorkspaceReferencesError] = useState<string | null>(null);
+  const [savedWorkspaceReferencesNotice, setSavedWorkspaceReferencesNotice] = useState<string | null>(null);
   const [isWorkspaceReferenceCreatorOpen, setIsWorkspaceReferenceCreatorOpen] = useState(false);
   const [referenceCreationSource, setReferenceCreationSource] = useState<WorkspaceReferenceCreationSource>("ai");
   const [referenceCreationPrompt, setReferenceCreationPrompt] = useState("");
   const [referenceCreationName, setReferenceCreationName] = useState("");
   const [referenceCreationUploadFile, setReferenceCreationUploadFile] = useState<StudioCustomVideoFile | null>(null);
+  const [referenceCreationPreviewReference, setReferenceCreationPreviewReference] = useState<WorkspaceSavedReference | null>(null);
   const [referenceCreationProjectKey, setReferenceCreationProjectKey] = useState<string | null>(null);
   const [referenceCreationCharacterGender, setReferenceCreationCharacterGender] =
     useState<WorkspaceReferenceCharacterGender | "">(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
@@ -16118,6 +16588,7 @@ export function WorkspacePage({
   const hasDisplayedGeneratedVideoActionsRef = useRef(false);
   const studioToastTimerRef = useRef<number | null>(null);
   const segmentAiPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentAiPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -16290,6 +16761,7 @@ export function WorkspacePage({
     clearRunRef(segmentImageEditRunRef);
     clearRunRef(segmentImageUpscaleRunRef);
     clearRunRef(segmentSceneSoundRunRef);
+    segmentAiPhotoActiveJobIdsRef.current.clear();
     segmentPhotoAnimationActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
     setSegmentEditorGeneratingAiVideoRunIds({});
@@ -16462,7 +16934,7 @@ export function WorkspacePage({
       if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segmentIndex)) {
         return variant === "compact"
           ? workspaceText(locale, "Говорит", "Talking")
-          : workspaceText(locale, "Создаем говорящее фото", "Creating talking photo");
+          : workspaceText(locale, "Создаем говорящего персонажа", "Creating talking character");
       }
       if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex)) {
         return variant === "compact"
@@ -17390,6 +17862,7 @@ export function WorkspacePage({
       setReferenceCreationSource("ai");
       setReferenceCreationPrompt("");
       setReferenceCreationUploadFile(null);
+      setReferenceCreationPreviewReference(null);
       setReferenceCreationProjectKey(null);
       setSegmentReferencePanelTab("character");
       setSelectedCustomVideo(null);
@@ -17669,7 +18142,15 @@ export function WorkspacePage({
   }, [activeSegmentIndex, createMode, segmentEditorDraft]);
 
   const handleSegmentCarouselWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    if (!segmentEditorDraft || segmentEditorDraft.segments.length <= 1) {
+    if (!segmentEditorDraft) {
+      return;
+    }
+
+    const carouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
+      activeSegmentIndex,
+      segmentCount: segmentEditorDraft.segments.length,
+    });
+    if (!carouselNavigation.canNavigatePrevious && !carouselNavigation.canNavigateNext) {
       return;
     }
 
@@ -17706,6 +18187,13 @@ export function WorkspacePage({
     }
 
     const direction = segmentCarouselWheelDeltaRef.current > 0 ? 1 : -1;
+    const canNavigateInDirection =
+      direction > 0 ? carouselNavigation.canNavigateNext : carouselNavigation.canNavigatePrevious;
+    if (!canNavigateInDirection) {
+      segmentCarouselWheelDeltaRef.current = 0;
+      return;
+    }
+
     segmentCarouselLastWheelStepAtRef.current = now;
     segmentCarouselWheelDeltaRef.current = 0;
     setSegmentCarouselDragProgress(0);
@@ -17717,7 +18205,15 @@ export function WorkspacePage({
   const isSegmentCarouselClickSuppressed = () => window.performance.now() < segmentCarouselSuppressClickUntilRef.current;
 
   const handleSegmentCarouselPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!segmentEditorDraft || segmentEditorDraft.segments.length <= 1) {
+    if (!segmentEditorDraft) {
+      return;
+    }
+
+    const carouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
+      activeSegmentIndex,
+      segmentCount: segmentEditorDraft.segments.length,
+    });
+    if (!carouselNavigation.canNavigatePrevious && !carouselNavigation.canNavigateNext) {
       return;
     }
 
@@ -17781,6 +18277,17 @@ export function WorkspacePage({
 
     const deltaX = event.clientX - dragState.startX;
     const deltaY = event.clientY - dragState.startY;
+    const targetDirection = deltaX < 0 ? 1 : -1;
+    const carouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
+      activeSegmentIndex,
+      segmentCount: segmentEditorDraft?.segments.length ?? 0,
+    });
+    const canNavigateInDirection =
+      targetDirection > 0 ? carouselNavigation.canNavigateNext : carouselNavigation.canNavigatePrevious;
+    if (!canNavigateInDirection) {
+      setSegmentCarouselDragProgress(0);
+      return;
+    }
 
     if (!dragState.dragDetected) {
       if (Math.abs(deltaX) < 14 || Math.abs(deltaX) <= Math.abs(deltaY)) {
@@ -17810,11 +18317,18 @@ export function WorkspacePage({
     const deltaX = event.clientX - dragState.startX;
     const targetDirection = deltaX < 0 ? 1 : -1;
     const targetSegmentIndex = activeSegmentIndex + targetDirection;
+    const carouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
+      activeSegmentIndex,
+      segmentCount: segmentEditorDraft?.segments.length ?? 0,
+    });
+    const canNavigateInDirection =
+      targetDirection > 0 ? carouselNavigation.canNavigateNext : carouselNavigation.canNavigatePrevious;
     const shouldNavigate =
       !options?.cancelled &&
       dragState.dragDetected &&
       Math.abs(deltaX) >= 56 &&
       Boolean(segmentEditorDraft) &&
+      canNavigateInDirection &&
       targetSegmentIndex >= 0 &&
       targetSegmentIndex < (segmentEditorDraft?.segments.length ?? 0);
 
@@ -19045,6 +19559,16 @@ export function WorkspacePage({
     [segmentEditorLoadedSession, segmentEditorProjectId],
   );
   const segmentEditorChecklistBaseSession = segmentEditorAppliedBaseSession ?? segmentEditorLoadedBaseDraft;
+  const segmentEditorReservedSegmentIndexes = useMemo(
+    () =>
+      getWorkspaceSegmentEditorReservedSegmentIndexes(
+        segmentEditorDraft,
+        segmentEditorChecklistBaseSession,
+        segmentEditorLoadedBaseDraft,
+        segmentEditorAppliedBaseSession,
+      ),
+    [segmentEditorAppliedBaseSession, segmentEditorChecklistBaseSession, segmentEditorDraft, segmentEditorLoadedBaseDraft],
+  );
   const currentDraftMediaLibraryProject = useMemo(() => {
     if (!segmentEditorDraft) {
       return null;
@@ -19696,6 +20220,7 @@ export function WorkspacePage({
     setReferenceCreationSource("ai");
     setReferenceCreationPrompt(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.description);
     setReferenceCreationUploadFile(null);
+    setReferenceCreationPreviewReference(null);
     setReferenceCreationProjectKey(null);
     setReferenceCreationCharacterGender(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.gender);
     setReferenceCreationCharacterAgeRange(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.ageRange);
@@ -19703,6 +20228,7 @@ export function WorkspacePage({
     setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
+    setSavedWorkspaceReferencesNotice(null);
     setSegmentReferencePanelTab("character");
   }, [activeSegment?.index, segmentEditorDraft?.projectId]);
   useEffect(() => {
@@ -19886,7 +20412,19 @@ export function WorkspacePage({
     segmentEditorChangeChecklist.length + segmentEditorPendingInsertedSegmentCount;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
-  const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS;
+  const isOnlyEmptySegmentEditorSegment =
+    segmentEditorSegmentCount === WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS &&
+    isWorkspaceSegmentEditorDraftSegmentEmpty(segmentEditorDraft?.segments[0]);
+  const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > 0 && !isOnlyEmptySegmentEditorSegment;
+  const segmentEditorCarouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
+    activeSegmentIndex,
+    segmentCount: segmentEditorSegmentCount,
+  });
+  const segmentEditorCarouselSlots = getWorkspaceSegmentEditorCarouselSlots({
+    activeSegmentIndex,
+    canAddSegment: canAddSegmentEditorSegment,
+    segmentCount: segmentEditorSegmentCount,
+  });
   const isAnySegmentEditorVisualJobBusy =
     isSegmentEditorGeneratingAiPhoto ||
     isSegmentEditorGeneratingAiVideo ||
@@ -20313,6 +20851,8 @@ export function WorkspacePage({
       ? segmentEditorDraft?.customMusicFileName ||
         selectedCustomMusic?.fileName ||
         workspaceText(locale, "Своя музыка", "Custom music")
+      : studioSidebarMusicType === "none"
+        ? workspaceText(locale, "Добавить музыку", "Add music")
       : getStudioMusicOptionCopy(
           studioMusicOptions.find((option) => option.id === studioSidebarMusicType) ?? studioMusicOptions[0],
           locale,
@@ -22960,6 +23500,7 @@ export function WorkspacePage({
     const nextSegment = createWorkspaceSegmentEditorInsertedSegment({
       draft: segmentEditorDraft,
       insertAt,
+      reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
       sourceSegment: segmentEditorDraft.segments[segmentEditorDraft.segments.length - 1] ?? null,
     });
     const nextSegments = rebuildWorkspaceSegmentEditorDraftTimeline(
@@ -22993,11 +23534,6 @@ export function WorkspacePage({
       return;
     }
 
-    if (segmentEditorDraft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
-      setSegmentEditorVideoError(`В редакторе должен остаться минимум ${WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS} сегмент.`);
-      return;
-    }
-
     const targetSegmentArrayIndex = segmentEditorDraft.segments.findIndex((segment) => segment.index === targetSegmentIndex);
     if (targetSegmentArrayIndex < 0) {
       return;
@@ -23008,10 +23544,17 @@ export function WorkspacePage({
       return;
     }
 
+    const isDeletingOnlySegment = segmentEditorDraft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS;
+    if (isDeletingOnlySegment && isWorkspaceSegmentEditorDraftSegmentEmpty(targetSegment)) {
+      setSegmentEditorVideoError(null);
+      return;
+    }
+
     logSegmentEditorDiagnostics("client.segment-editor.structure.delete", {
       segmentCountBefore: segmentEditorDraft.segments.length,
       targetSegmentArrayIndex,
       targetSegmentIndex,
+      willCreateEmptyReplacement: isDeletingOnlySegment,
     }, { includeOrder: true });
 
     markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
@@ -23021,22 +23564,64 @@ export function WorkspacePage({
       closeSegmentAiPhotoModal();
     }
 
+    const resolvedNextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(segmentEditorDraft, targetSegment.index, {
+      reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
+    });
+    const nextDraftForRoute = isDeletingOnlySegment
+      ? resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+          ...segmentEditorDraft,
+          segments: resolvedNextSegments,
+        })
+      : {
+          ...segmentEditorDraft,
+          segments: resolvedNextSegments,
+        };
     const nextSegments = rebuildWorkspaceSegmentEditorDraftTimeline(
-      segmentEditorDraft.segments.filter((segment) => segment.index !== targetSegment.index),
-      segmentEditorDraft,
+      nextDraftForRoute.segments,
+      nextDraftForRoute,
     );
 
+    if (isDeletingOnlySegment) {
+      setSelectedMusicType("none");
+      setSelectedCustomMusic(null);
+      setMusicSelectionError(null);
+      setIsPreparingCustomMusic(false);
+      setAreSubtitlesEnabled(false);
+      setIsVoiceoverEnabled(false);
+      setSegmentTimelineRedoSnapshots({});
+      setSegmentTimelineGlobalControlOpen(null);
+      setSegmentTimelineGlobalControlAnchorRect(null);
+      setSegmentTimelineVisualMenuSegmentIndex(null);
+      setSegmentTimelineVoiceMenuSegmentIndex(null);
+      setSegmentTimelineSoundMenuSegmentIndex(null);
+      setSegmentTimelineTextMenuSegmentIndex(null);
+      setSegmentSceneSoundModalPrompt("");
+      setSegmentSubtitleBulkTextInput("");
+      setHasEditedSegmentSubtitleBulkTextInput(false);
+      setSegmentSubtitleBulkTextError(null);
+      setSelectedSubtitleStyleId(fallbackStudioSubtitleStyleOption.id);
+      setSelectedSubtitleColorId(fallbackStudioSubtitleColorOption.id);
+    }
+
     updateSegmentEditorDraft((currentDraft) => {
-      if (currentDraft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
+      const nextCurrentSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(currentDraft, targetSegment.index, {
+        reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
+      });
+      if (nextCurrentSegments === currentDraft.segments) {
         return currentDraft;
       }
 
-      return {
+      const nextDraft = {
         ...currentDraft,
-        segments: currentDraft.segments.filter((segment) => segment.index !== targetSegment.index),
+        segments: nextCurrentSegments,
       };
+      return isDeletingOnlySegment ? resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(nextDraft) : nextDraft;
     });
     const nextActiveSegmentArrayIndex = (() => {
+      if (isDeletingOnlySegment) {
+        return 0;
+      }
+
       const boundedCurrentIndex = Math.max(0, Math.min(activeSegmentIndex, segmentEditorDraft.segments.length - 1));
       if (boundedCurrentIndex > targetSegmentArrayIndex) {
         return boundedCurrentIndex - 1;
@@ -23610,6 +24195,9 @@ export function WorkspacePage({
   }, [segmentEditorPromptToolTab]);
 
   const cancelPendingSegmentAiPhotoRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentAiPhotoJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex)) {
       return;
     }
@@ -24404,7 +24992,9 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
       prompt: string;
+      projectId?: number;
       runId: number;
       segmentIndex: number;
     },
@@ -24416,20 +25006,61 @@ export function WorkspacePage({
     }
 
     let latestStatus = initialStatus;
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    segmentAiPhotoActiveJobIdsRef.current.add(safeJobId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
-        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
-          throw new Error("ИИ фото генерируется слишком долго. Попробуйте запустить ещё раз.");
+        let response: Response;
+        let payload: WorkspaceSegmentAiPhotoJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.ai-photo.status.transient-fetch-failed",
+            {
+              error:
+                error instanceof Error
+                  ? {
+                      message: error.message,
+                      name: error.name,
+                    }
+                  : String(error),
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+              targetSegmentIndex: options.segmentIndex,
+            },
+            { level: "warn" },
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 3500));
+          continue;
         }
-
-        const response = await fetch(`/api/studio/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`);
-        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
 
         if (!response.ok || !payload?.data) {
-          throw new Error(payload?.error ?? "Не удалось получить статус ИИ фото.");
+          const statusError = payload?.error ?? "Не удалось получить статус ИИ фото.";
+          if (response.status >= 500) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.ai-photo.status.transient-server-failed",
+              {
+                failures: transientStatusFailures,
+                jobId: safeJobId,
+                statusCode: response.status,
+                targetSegmentIndex: options.segmentIndex,
+              },
+              { level: "warn" },
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 3500));
+            continue;
+          }
+
+          removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
+          throw new Error(statusError);
         }
+        transientStatusFailures = 0;
 
         if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
           return;
@@ -24437,12 +25068,24 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
+        if (options.projectId) {
+          upsertStoredWorkspaceSegmentAiPhotoJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            prompt: options.prompt,
+            segmentIndex: options.segmentIndex,
+            status: latestStatus,
+          });
+        }
 
         if (payload.data.asset) {
+          const currentDraft = segmentEditorDraftRef.current;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
             aiPhotoAsset: payload.data!.asset!,
             aiPhotoGeneratedFromPrompt: options.prompt,
+            aiPhotoPrompt: options.prompt,
             aiPhotoPromptInitialized: true,
             visualReset: false,
             videoAction: "ai_photo",
@@ -24450,24 +25093,47 @@ export function WorkspacePage({
           upsertGeneratedMediaLibraryEntry({
             asset: payload.data.asset,
             kind: "ai_photo",
-            projectId: segmentEditorDraft?.projectId ?? 0,
+            projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
           });
+          removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
           return;
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Не удалось сгенерировать ИИ фото.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          if (options.projectId && options.projectId > 0) {
+            const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
+              bypassCache: true,
+              initialSegmentIndex: options.segmentIndex,
+              initialSegmentMode: "route",
+              openDraft: false,
+              syncRoute: false,
+            });
+            const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+            if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "ai_photo") {
+              removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
+              return;
+            }
+          }
+
+          removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированное ИИ фото недоступно.");
+        }
+
+        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS) {
+          throw new Error("ИИ фото генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2000));
       }
     } finally {
+      segmentAiPhotoActiveJobIdsRef.current.delete(safeJobId);
       if (isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, options.segmentIndex, options.runId);
       }
@@ -24911,7 +25577,7 @@ export function WorkspacePage({
     try {
       while (isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, options.segmentIndex, options.runId)) {
         if (Date.now() - startedAt >= WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS) {
-          throw new Error("Говорящее фото создается слишком долго. Попробуйте запустить ещё раз.");
+          throw new Error("Говорящий персонаж создается слишком долго. Попробуйте запустить ещё раз.");
         }
 
         let response: Response;
@@ -25017,11 +25683,11 @@ export function WorkspacePage({
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
-          throw new Error(payload.data.error ?? "Не удалось создать говорящее фото.");
+          throw new Error(payload.data.error ?? "Не удалось создать говорящего персонажа.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
-          throw new Error(payload.data.error ?? "Сгенерированное говорящее фото недоступно.");
+          throw new Error(payload.data.error ?? "Сгенерированный говорящий персонаж недоступен.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
@@ -25291,9 +25957,22 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      const pendingJobCreatedAt = Date.now();
+      if (visualJobBinding.projectId) {
+        upsertStoredWorkspaceSegmentAiPhotoJob(session.email, {
+          createdAt: pendingJobCreatedAt,
+          jobId: payload.data.jobId,
+          projectId: visualJobBinding.projectId,
+          prompt: normalizedPrompt,
+          segmentIndex: targetSegmentIndex,
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorAiPhotoJob(payload.data.jobId, payload.data.status, {
+        createdAt: pendingJobCreatedAt,
         prompt: normalizedPrompt,
+        projectId: visualJobBinding.projectId,
         runId,
         segmentIndex: targetSegmentIndex,
       });
@@ -25318,6 +25997,107 @@ export function WorkspacePage({
       }
     }
   };
+
+  const resumePendingSegmentAiPhotoJob = (job: StoredWorkspaceSegmentAiPhotoJob) => {
+    if (segmentAiPhotoActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+    if (!targetSegment) {
+      removeStoredWorkspaceSegmentAiPhotoJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (
+      targetSegment.aiPhotoGeneratedFromPrompt === job.prompt &&
+      getWorkspaceSegmentLatestVisualAction(targetSegment) === "ai_photo"
+    ) {
+      removeStoredWorkspaceSegmentAiPhotoJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(job.segmentIndex)) {
+      return false;
+    }
+
+    const runId = startSegmentVisualRun(segmentAiPhotoRunRef, setSegmentEditorGeneratingAiPhotoRunIds, job.segmentIndex);
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+      ...segment,
+      aiPhotoPrompt: job.prompt || segment.aiPhotoPrompt,
+      aiPhotoPromptInitialized: Boolean(job.prompt || segment.aiPhotoPrompt),
+      visualReset: false,
+    }));
+    logSegmentEditorDiagnostics("client.segment-editor.ai-photo.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      targetSegmentIndex: job.segmentIndex,
+    });
+
+    void pollSegmentEditorAiPhotoJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      prompt: job.prompt,
+      runId,
+      segmentIndex: job.segmentIndex,
+    }).catch((error) => {
+      if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, job.segmentIndex, runId)) {
+        return;
+      }
+
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать ИИ фото.");
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingAiPhoto = () => {
+      if (segmentAiPhotoActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentAiPhotoJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentAiPhotoJob(pendingJob);
+    };
+
+    tryResumePendingAiPhoto();
+    const intervalId = window.setInterval(tryResumePendingAiPhoto, 30_000);
+    const handleFocus = () => tryResumePendingAiPhoto();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingAiPhoto();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const handleSegmentEditorImageEditGenerate = async (
     options?: {
@@ -25953,27 +26733,24 @@ export function WorkspacePage({
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
-    if (targetSegment && !canWorkspaceSegmentUsePhotoEditingTools(targetSegment)) {
-      setSegmentEditorVideoError("Сначала выберите фото для сегмента.");
-      return;
-    }
-
-    const talkingPhotoSourceAsset = targetSegment ? getWorkspaceSegmentPhotoAnimationSourceAsset(targetSegment) : null;
+    const talkingPhotoSourceAsset = targetSegment ? getWorkspaceSegmentTalkingCharacterSourceAsset(targetSegment) : null;
     const talkingPhotoUploadSourceAsset = targetSegment
       ? getWorkspacePhotoAnimationUploadSourceAsset(targetSegment, talkingPhotoSourceAsset)
       : talkingPhotoSourceAsset;
+    const talkingPhotoSourceMediaType =
+      getWorkspaceSegmentCustomPreviewKind(talkingPhotoUploadSourceAsset) === "video" ? "video" : "photo";
     const script = normalizeWorkspaceSegmentAiPhotoPrompt(options?.prompt ?? targetSegment?.text ?? "");
     const visualPrompt = "natural talking avatar, stable camera, realistic lip sync";
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST;
 
     if (!script) {
-      setSegmentEditorVideoError("Введите текст сцены для говорящего фото.");
+      setSegmentEditorVideoError("Введите текст сцены для говорящего персонажа.");
       return;
     }
 
     if (!canWorkspaceSegmentCreateTalkingPhoto(targetSegment)) {
-      setSegmentEditorVideoError("Выберите фото для сегмента, чтобы создать говорящее фото.");
+      setSegmentEditorVideoError("Выберите фото или видео для сегмента, чтобы создать говорящего персонажа.");
       return;
     }
 
@@ -26013,11 +26790,15 @@ export function WorkspacePage({
     try {
       const customVideoAssetId = talkingPhotoUploadSourceAsset
         ? await ensureStudioUploadedAssetId(talkingPhotoUploadSourceAsset, {
-            fallbackFileName: talkingPhotoUploadSourceAsset.fileName || `segment-photo-${targetSegmentIndex + 1}.jpg`,
+            fallbackFileName:
+              talkingPhotoUploadSourceAsset.fileName ||
+              (talkingPhotoSourceMediaType === "video"
+                ? `segment-video-${targetSegmentIndex + 1}.mp4`
+                : `segment-photo-${targetSegmentIndex + 1}.jpg`),
             fallbackMimeType: talkingPhotoUploadSourceAsset.mimeType,
             kind: "segment_source",
             language: selectedLanguage,
-            mediaType: "photo",
+            mediaType: talkingPhotoSourceMediaType,
             projectId: visualJobBinding.projectId,
             role: "segment_source",
             segmentIndex: visualJobBinding.segmentIndex,
@@ -26025,7 +26806,7 @@ export function WorkspacePage({
         : null;
 
       if (talkingPhotoUploadSourceAsset && !customVideoAssetId) {
-        throw new Error("Не удалось подготовить выбранное фото для говорящего фото.");
+        throw new Error("Не удалось подготовить выбранное фото или видео для говорящего персонажа.");
       }
 
       if (options?.shouldCloseModal) {
@@ -26044,6 +26825,7 @@ export function WorkspacePage({
         },
         body: JSON.stringify({
           customVideoAssetId: customVideoAssetId ?? undefined,
+          customVideoMediaType: talkingPhotoSourceMediaType,
           customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
           customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
           durationSeconds,
@@ -26071,7 +26853,7 @@ export function WorkspacePage({
       }
 
       if (!response.ok || !payload?.data?.jobId) {
-        throw new Error(payload?.error ?? "Не удалось запустить говорящее фото.");
+        throw new Error(payload?.error ?? "Не удалось запустить говорящего персонажа.");
       }
 
       if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
@@ -26095,7 +26877,7 @@ export function WorkspacePage({
       if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
         return;
       }
-      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать говорящее фото.");
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать говорящего персонажа.");
     } finally {
       if (!pollStarted && isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
         clearSegmentVisualRun(
@@ -30685,7 +31467,7 @@ export function WorkspacePage({
               description: workspaceText(locale, "Фото говорит текстом сцены", "Photo speaks scene text"),
               icon: "TALK",
               tab: "talking_photo",
-              title: workspaceText(locale, "Говорящее фото", "Talking photo"),
+              title: workspaceText(locale, "Говорящий персонаж", "Talking character"),
             },
             {
               description: workspaceText(locale, "Изменить выбранное фото", "Edit selected photo"),
@@ -31382,6 +32164,9 @@ export function WorkspacePage({
               const baselineVisualSegment = segmentEditorChecklistBaseSession?.segments.find(
                 (baselineSegment) => baselineSegment.index === segment.index,
               );
+              const shouldShowSegmentDeleteButton =
+                segmentEditorDraft.segments.length > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS ||
+                !isWorkspaceSegmentEditorDraftSegmentEmpty(segment);
               const canBackVisual =
                 isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineVisualSegment) ||
                 isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
@@ -31466,23 +32251,25 @@ export function WorkspacePage({
                       label: workspaceText(locale, `Визуал сцены ${index + 1}`, `Scene ${index + 1} visual`),
                       segmentIndex: segment.index,
                     })}
-                    <button
-                      className="studio-segment-editor__timeline-delete studio-segment-editor__timeline-delete--visual"
-                      type="button"
-                      aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
-                      title={workspaceText(locale, "Удалить сцену", "Delete scene")}
-                      disabled={isSegmentEditorStructureActionBusy || !canDeleteSegmentEditorSegment}
-                      onPointerDown={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setSegmentEditorPendingDeleteIndex(segment.index);
-                      }}
-                    >
-                      ×
-                    </button>
+                    {shouldShowSegmentDeleteButton ? (
+                      <button
+                        className="studio-segment-editor__timeline-delete studio-segment-editor__timeline-delete--visual"
+                        type="button"
+                        aria-label={workspaceText(locale, `Удалить сцену ${index + 1}`, `Delete scene ${index + 1}`)}
+                        title={workspaceText(locale, "Удалить сцену", "Delete scene")}
+                        disabled={isSegmentEditorStructureActionBusy || !canDeleteSegmentEditorSegment}
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSegmentEditorPendingDeleteIndex(segment.index);
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
                   </div>
                   {visibleSegmentThumbInsertIndex === index + 1 ? (
                     <div
@@ -32016,7 +32803,10 @@ export function WorkspacePage({
     setSelectedSegmentReferenceSceneKey(`saved:${reference.id}`);
   };
 
-  const resetWorkspaceReferenceCreationForm = (kind: WorkspaceReferenceKind = segmentReferencePanelTab) => {
+  const resetWorkspaceReferenceCreationForm = (
+    kind: WorkspaceReferenceKind = segmentReferencePanelTab,
+    options: { clearPreview?: boolean } = {},
+  ) => {
     setReferenceCreationSource("ai");
     setReferenceCreationPrompt(
       kind === "character"
@@ -32031,6 +32821,9 @@ export function WorkspacePage({
     setReferenceCreationScenePlaceType(WORKSPACE_REFERENCE_SCENE_DEFAULTS.placeType);
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
+    if (options.clearPreview !== false) {
+      setReferenceCreationPreviewReference(null);
+    }
     if (referenceCreationFileInputRef.current) {
       referenceCreationFileInputRef.current.value = "";
     }
@@ -32038,6 +32831,7 @@ export function WorkspacePage({
 
   const closeWorkspaceReferenceCreator = () => {
     setIsWorkspaceReferenceCreatorOpen(false);
+    setSavedWorkspaceReferencesNotice(null);
     resetWorkspaceReferenceCreationForm();
   };
 
@@ -32058,6 +32852,7 @@ export function WorkspacePage({
     setSegmentReferencePanelTab(kind);
     setReferenceCreationName(getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind));
     setSavedWorkspaceReferencesError(null);
+    setSavedWorkspaceReferencesNotice(null);
     resetWorkspaceReferenceCreationForm(kind);
     setIsWorkspaceReferenceCreatorOpen(true);
   };
@@ -32159,6 +32954,7 @@ export function WorkspacePage({
     const file = event.currentTarget.files?.[0] ?? null;
     event.currentTarget.value = "";
     setSavedWorkspaceReferencesError(null);
+    setSavedWorkspaceReferencesNotice(null);
 
     if (!file) {
       return;
@@ -32175,6 +32971,7 @@ export function WorkspacePage({
       return;
     }
 
+    setReferenceCreationPreviewReference(null);
     setReferenceCreationUploadFile({
       file,
       fileName: file.name || "reference-image.jpg",
@@ -32223,6 +33020,8 @@ export function WorkspacePage({
     kind: WorkspaceReferenceKind,
     options?: { quality?: StudioSegmentVisualQuality },
   ) => {
+    setSavedWorkspaceReferencesNotice(null);
+
     if (isGuest) {
       onAuthRequired?.();
       setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
@@ -32235,10 +33034,21 @@ export function WorkspacePage({
     }
 
     const generationQuality = options?.quality ?? "standard";
-    const generationCreditCost = getSegmentAiPhotoCreditCost(generationQuality);
-    const name = referenceCreationName.trim() || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind);
+    const generationCreditCost = getWorkspaceReferenceGenerationCreditCost(kind, generationQuality);
+    const name = referenceCreationName.trim();
+    if (!name) {
+      setSavedWorkspaceReferencesError(
+        workspaceText(
+          locale,
+          kind === "character" ? "Введите имя персонажа." : "Введите имя сцены.",
+          kind === "character" ? "Enter a character name." : "Enter a scene name.",
+        ),
+      );
+      return;
+    }
+
     const referenceCreationCharacterStyleValue = normalizeWorkspaceReferenceCharacterStyleValue(referenceCreationCharacterStyle);
-    const prompt = normalizeWorkspaceSegmentAiPhotoPrompt(buildWorkspaceReferenceAiPrompt({
+    const basePrompt = buildWorkspaceReferenceAiPrompt({
       character: {
         ageRange: referenceCreationCharacterAgeRange,
         description: referenceCreationPrompt,
@@ -32252,13 +33062,26 @@ export function WorkspacePage({
         placeType: referenceCreationScenePlaceType,
         style: referenceCreationSceneStyle,
       },
-    }));
+    });
     const projectOptions = kind === "character" ? projectCharacterReferenceOptions : projectSceneReferenceOptions;
     const selectedProjectOption = referenceCreationProjectKey
       ? projectOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
       : null;
+    const shouldGenerateReferencePhoto = referenceCreationSource === "ai" || kind === "character";
+    const prompt =
+      referenceCreationSource === "ai"
+        ? normalizeWorkspaceSegmentAiPhotoPrompt(basePrompt)
+        : normalizeWorkspaceSegmentAiPhotoPrompt(buildWorkspaceReferencePromptFromVisualSource({
+            basePrompt,
+            kind,
+            source: referenceCreationSource,
+            sourceLabel:
+              referenceCreationSource === "upload"
+                ? referenceCreationUploadFile?.fileName ?? null
+                : selectedProjectOption?.label ?? null,
+          }));
 
-    if (referenceCreationSource === "ai" && !prompt) {
+    if (shouldGenerateReferencePhoto && !prompt) {
       setSavedWorkspaceReferencesError(workspaceText(locale, "Введите описание.", "Enter a description."));
       return;
     }
@@ -32274,7 +33097,7 @@ export function WorkspacePage({
     }
 
     if (
-      referenceCreationSource === "ai" &&
+      shouldGenerateReferencePhoto &&
       workspaceBalance !== null &&
       workspaceBalance < generationCreditCost
     ) {
@@ -32290,18 +33113,45 @@ export function WorkspacePage({
       let description: string | null = null;
       let sourceProjectId = segmentEditorDraft?.projectId ?? null;
       let sourceSegmentIndex = activeSegment?.index ?? null;
+      let sourceReferenceAssetId: number | null = null;
 
-      if (referenceCreationSource === "ai") {
+      if (referenceCreationSource === "upload" && referenceCreationUploadFile) {
+        sourceReferenceAssetId = await ensureStudioUploadedAssetId(referenceCreationUploadFile, {
+          fallbackFileName: referenceCreationUploadFile.fileName || `${kind}-reference.jpg`,
+          fallbackMimeType: referenceCreationUploadFile.mimeType || "image/jpeg",
+          kind: "workspace_reference_source",
+          language: selectedLanguage,
+          mediaType: "photo",
+          projectId: sourceProjectId,
+          role: kind === "character" ? "character_reference_source" : "scene_reference_source",
+          segmentIndex: sourceSegmentIndex,
+        });
+        description = referenceCreationUploadFile.fileName;
+      } else if (referenceCreationSource === "project" && selectedProjectOption) {
+        sourceReferenceAssetId = await resolveSegmentReferenceAssetId(selectedProjectOption, kind);
+        description = selectedProjectOption.label;
+        sourceProjectId = selectedProjectOption.sourceProjectId;
+        sourceSegmentIndex = selectedProjectOption.sourceSegmentIndex;
+      }
+
+      if (shouldGenerateReferencePhoto && referenceCreationSource !== "ai" && !sourceReferenceAssetId) {
+        throw new Error(workspaceText(locale, "Не удалось подготовить исходное фото для генерации.", "Could not prepare the source photo for generation."));
+      }
+
+      if (shouldGenerateReferencePhoto) {
+        const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
+          referenceAssetIds: sourceReferenceAssetId ? [sourceReferenceAssetId] : [],
+        });
         const response = await fetch("/api/studio/segment-ai-photo/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            ...referenceRequest,
             language: selectedLanguage,
             projectId: segmentEditorDraft?.projectId,
             prompt,
             purpose: "workspace_reference",
             quality: generationQuality,
-            referenceAssetIds: [],
             referenceKind: kind,
             segmentIndex: activeSegment?.index,
           } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
@@ -32321,23 +33171,8 @@ export function WorkspacePage({
         const asset = await pollWorkspaceReferenceAiPhotoJob(payload.data.jobId, payload.data.status);
         assetId = getPositiveWorkspaceMediaAssetId(asset.assetId);
         description = prompt;
-      } else if (referenceCreationSource === "upload" && referenceCreationUploadFile) {
-        assetId = await ensureStudioUploadedAssetId(referenceCreationUploadFile, {
-          fallbackFileName: referenceCreationUploadFile.fileName || `${kind}-reference.jpg`,
-          fallbackMimeType: referenceCreationUploadFile.mimeType || "image/jpeg",
-          kind: "workspace_reference",
-          language: selectedLanguage,
-          mediaType: "photo",
-          projectId: sourceProjectId,
-          role: kind === "character" ? "character_reference" : "scene_reference",
-          segmentIndex: sourceSegmentIndex,
-        });
-        description = referenceCreationUploadFile.fileName;
-      } else if (referenceCreationSource === "project" && selectedProjectOption) {
-        assetId = await resolveSegmentReferenceAssetId(selectedProjectOption, kind);
-        description = selectedProjectOption.label;
-        sourceProjectId = selectedProjectOption.sourceProjectId;
-        sourceSegmentIndex = selectedProjectOption.sourceSegmentIndex;
+      } else {
+        assetId = sourceReferenceAssetId;
       }
 
       if (!assetId) {
@@ -32354,8 +33189,21 @@ export function WorkspacePage({
       });
 
       selectSavedWorkspaceReference(reference);
-      setReferenceCreationName(getNextWorkspaceReferenceDefaultName([reference, ...savedWorkspaceReferences], kind));
-      closeWorkspaceReferenceCreator();
+      if (kind === "character") {
+        setReferenceCreationPreviewReference(reference);
+        resetWorkspaceReferenceCreationForm(kind, { clearPreview: false });
+        setReferenceCreationName(getNextWorkspaceReferenceDefaultName([reference, ...savedWorkspaceReferences], kind));
+        setSavedWorkspaceReferencesNotice(
+          workspaceText(
+            locale,
+            `Персонаж «${reference.name}» создан. Его можно выбрать в меню «Персонажи».`,
+            `Character "${reference.name}" has been created. You can select it from the Characters menu.`,
+          ),
+        );
+      } else {
+        setReferenceCreationName(getNextWorkspaceReferenceDefaultName([reference, ...savedWorkspaceReferences], kind));
+        closeWorkspaceReferenceCreator();
+      }
     } catch (error) {
       setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось создать референс.");
     } finally {
@@ -32511,9 +33359,13 @@ export function WorkspacePage({
     const selectedCreationProjectOption = referenceCreationProjectKey
       ? currentOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
       : null;
-    const referenceCreationNameValue = referenceCreationName || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind);
+    const referenceCreationDefaultName = getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind);
+    const referenceCreationNameValue = referenceCreationName;
+    const referenceCreationPreviewName = referenceCreationName.trim() || referenceCreationDefaultName;
     const referenceCreationCharacterStyleValue = normalizeWorkspaceReferenceCharacterStyleValue(referenceCreationCharacterStyle);
     const referenceCreationCharacterPreviewStyle = getWorkspaceReferencePromptStyle(referenceCreationCharacterStyleValue);
+    const referenceCreationPreviewReferenceForKind =
+      referenceCreationPreviewReference?.kind === generationKind ? referenceCreationPreviewReference : null;
     const referenceCreationAiPrompt = buildWorkspaceReferenceAiPrompt({
       character: {
         ageRange: referenceCreationCharacterAgeRange,
@@ -32536,11 +33388,12 @@ export function WorkspacePage({
       !isValidWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange);
     const isReferenceCreateDisabled =
       Boolean(generatingReferenceKind) ||
+      !referenceCreationName.trim() ||
       isReferenceCharacterAgeInvalid ||
       (referenceCreationSource === "ai" && !referenceCreationAiPrompt.trim()) ||
       (referenceCreationSource === "upload" && !referenceCreationUploadFile) ||
       (referenceCreationSource === "project" && !selectedCreationProjectOption);
-    const referenceCreationPremiumCreditCost = getSegmentAiPhotoCreditCost("premium");
+    const referenceCreationCharacterCreditCost = STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST;
     const creationTitle = isCreatingCharacter
       ? workspaceText(locale, "Создание персонажа", "Create character")
       : workspaceText(locale, "Создание сцены", "Create scene");
@@ -32651,11 +33504,15 @@ export function WorkspacePage({
 
           <div className="studio-reference-create-modal__body">
             <aside className="studio-reference-create-modal__preview">
-              <span className="studio-reference-create-modal__preview-label">
-                {workspaceText(locale, isCreatingCharacter ? "Предпросмотр персонажа" : "Предпросмотр сцены", isCreatingCharacter ? "Character preview" : "Scene preview")}
-              </span>
               <div className="studio-reference-create-modal__preview-stage">
-                {referenceCreationSource === "upload" && referenceCreationUploadFile?.objectUrl ? (
+                {isCreatingCharacter && isCreatingReference ? (
+                  <div className="studio-reference-create-modal__generation" role="status" aria-live="polite" aria-label={workspaceText(locale, "Создаём персонажа...", "Creating character...")}>
+                    <span className="studio-reference-create-modal__generation-spinner" aria-hidden="true"></span>
+                    <strong>{workspaceText(locale, "Создаём персонажа...", "Creating character...")}</strong>
+                  </div>
+                ) : referenceCreationPreviewReferenceForKind ? (
+                  <img src={buildWorkspaceMediaAssetProxyUrl(referenceCreationPreviewReferenceForKind.assetId)} alt="" />
+                ) : referenceCreationSource === "upload" && referenceCreationUploadFile?.objectUrl ? (
                   <img src={referenceCreationUploadFile.objectUrl} alt="" />
                 ) : referenceCreationSource === "project" && selectedCreationProjectOption ? (
                   renderSegmentReferenceOptionPreview(selectedCreationProjectOption, `creator-preview:${selectedCreationProjectOption.key}`)
@@ -32665,7 +33522,7 @@ export function WorkspacePage({
                       <path d="M12 3l1.2 3.2L16 7.4l-2.8 1.1L12 12l-1.2-3.5L8 7.4l2.8-1.2L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
                       <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM17.5 12l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                     </svg>
-                    <strong>{referenceCreationNameValue}</strong>
+                    <strong>{referenceCreationPreviewName}</strong>
                     <span>
                       {isCreatingCharacter
                         ? [getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterPreviewStyle].filter(Boolean).join(", ")
@@ -32674,16 +33531,66 @@ export function WorkspacePage({
                   </div>
                 )}
               </div>
-              <div className="studio-reference-create-modal__preview-note">
-                <span className="studio-reference-create-modal__preview-icon" aria-hidden="true">✦</span>
-                <div>
-                  <strong>{workspaceText(locale, "Это предварительный образ", "This is a preview")}</strong>
-                  <span>{workspaceText(locale, "Итоговый результат может отличаться в зависимости от настроек и референсов.", "The final result may vary depending on settings and references.")}</span>
-                </div>
-              </div>
             </aside>
 
             <div className="studio-reference-create-modal__form">
+              <div className="studio-reference-create-modal__method-group">
+                <span className="studio-reference-create-modal__field-title">{workspaceText(locale, "Способ создания", "Creation method")}</span>
+                <div className="studio-reference-create-modal__method-cards" role="tablist" aria-label={workspaceText(locale, "Источник", "Source")}>
+                  <button
+                    className={referenceCreationSource === "ai" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "ai"}
+                    onClick={() => {
+                      setReferenceCreationPreviewReference(null);
+                      setSavedWorkspaceReferencesNotice(null);
+                      setReferenceCreationSource("ai");
+                    }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 3l1.2 3.2L16 7.4l-2.8 1.1L12 12l-1.2-3.5L8 7.4l2.8-1.2L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                      <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Создать AI фото", "Create AI photo")}</strong>
+                  </button>
+                  <button
+                    className={referenceCreationSource === "upload" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "upload"}
+                    onClick={() => {
+                      setReferenceCreationPreviewReference(null);
+                      setSavedWorkspaceReferencesNotice(null);
+                      setReferenceCreationSource("upload");
+                    }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9A2.5 2.5 0 0 0 19 17.5V14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Загрузить свое фото", "Upload photo")}</strong>
+                  </button>
+                  <button
+                    className={referenceCreationSource === "project" ? "is-active" : ""}
+                    type="button"
+                    role="tab"
+                    aria-selected={referenceCreationSource === "project"}
+                    onClick={() => {
+                      setReferenceCreationPreviewReference(null);
+                      setSavedWorkspaceReferencesNotice(null);
+                      setReferenceCreationSource("project");
+                    }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                      <path d="M7.5 13.5h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <strong>{workspaceText(locale, "Выбрать из проекта", "From project")}</strong>
+                  </button>
+                </div>
+              </div>
+
               <label className="studio-reference-create-modal__field">
                 <span>
                   {workspaceText(locale, isCreatingCharacter ? "Имя персонажа" : "Имя сцены", isCreatingCharacter ? "Character name" : "Scene name")}
@@ -32694,68 +33601,34 @@ export function WorkspacePage({
                     type="text"
                     maxLength={50}
                     value={referenceCreationNameValue}
-                    onChange={(event) => setReferenceCreationName(event.currentTarget.value)}
-                    placeholder={getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind)}
+                    onChange={(event) => {
+                      setSavedWorkspaceReferencesNotice(null);
+                      setReferenceCreationName(event.currentTarget.value);
+                    }}
+                    placeholder={
+                      isCreatingCharacter
+                        ? workspaceText(locale, "Введите имя персонажа", "Enter character name")
+                        : referenceCreationDefaultName
+                    }
                     aria-label={workspaceText(locale, "Имя нового референса", "New reference name")}
                   />
-                  <button type="button" onClick={() => setReferenceCreationName("")} aria-label={workspaceText(locale, "Очистить имя", "Clear name")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedWorkspaceReferencesNotice(null);
+                      setReferenceCreationName("");
+                    }}
+                    aria-label={workspaceText(locale, "Очистить имя", "Clear name")}
+                  >
                     ×
                   </button>
                 </div>
               </label>
 
-              <div className="studio-reference-create-modal__method-group">
-                <span className="studio-reference-create-modal__field-title">{workspaceText(locale, "Способ создания", "Creation method")}</span>
-                <div className="studio-reference-create-modal__method-cards" role="tablist" aria-label={workspaceText(locale, "Источник", "Source")}>
-                  <button
-                    className={referenceCreationSource === "ai" ? "is-active" : ""}
-                    type="button"
-                    role="tab"
-                    aria-selected={referenceCreationSource === "ai"}
-                    onClick={() => setReferenceCreationSource("ai")}
-                  >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M12 3l1.2 3.2L16 7.4l-2.8 1.1L12 12l-1.2-3.5L8 7.4l2.8-1.2L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                      <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                    </svg>
-                    <strong>{workspaceText(locale, "Создать AI фото", "Create AI photo")}</strong>
-                    <small>{workspaceText(locale, "Image 2 Low · 1K · 2 кредита", "Image 2 Low · 1K · 2 credits")}</small>
-                  </button>
-                  <button
-                    className={referenceCreationSource === "upload" ? "is-active" : ""}
-                    type="button"
-                    role="tab"
-                    aria-selected={referenceCreationSource === "upload"}
-                    onClick={() => setReferenceCreationSource("upload")}
-                  >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9A2.5 2.5 0 0 0 19 17.5V14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                    <strong>{workspaceText(locale, "Загрузить свое фото", "Upload photo")}</strong>
-                    <small>{workspaceText(locale, "Сохранить как есть", "Save as is")}</small>
-                  </button>
-                  <button
-                    className={referenceCreationSource === "project" ? "is-active" : ""}
-                    type="button"
-                    role="tab"
-                    aria-selected={referenceCreationSource === "project"}
-                    onClick={() => setReferenceCreationSource("project")}
-                  >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                      <path d="M7.5 13.5h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                    <strong>{workspaceText(locale, "Выбрать из проекта", "From project")}</strong>
-                    <small>{workspaceText(locale, "Использовать готовый визуал", "Use an existing visual")}</small>
-                  </button>
-                </div>
-              </div>
-
               {referenceCreationSource === "ai" ? (
                 <>
                   {isCreatingCharacter ? (
-                    <div className="studio-reference-create-modal__split-row">
+                    <div className="studio-reference-create-modal__character-fields">
                       <label className="studio-reference-create-modal__field">
                         <span>{workspaceText(locale, "Пол", "Gender")}</span>
                         <div className="studio-reference-create-modal__segmented">
@@ -32796,6 +33669,17 @@ export function WorkspacePage({
                           value={referenceCreationCharacterAgeRange}
                         />
                       </label>
+                      <label className="studio-reference-create-modal__field">
+                        <span>{workspaceText(locale, "Стиль", "Style")}</span>
+                        <select
+                          value={referenceCreationCharacterStyleValue}
+                          onChange={(event) => setReferenceCreationCharacterStyle(event.currentTarget.value)}
+                        >
+                          {WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   ) : (
                     <div className="studio-reference-create-modal__split-row">
@@ -32814,68 +33698,37 @@ export function WorkspacePage({
                     </div>
                   )}
 
-                  <label className="studio-reference-create-modal__field">
-                    <span>{workspaceText(locale, "Стиль", "Style")}</span>
-                    <select
-                      value={isCreatingCharacter ? referenceCreationCharacterStyleValue : referenceCreationSceneStyle}
-                      onChange={(event) => {
-                        if (isCreatingCharacter) {
-                          setReferenceCreationCharacterStyle(event.currentTarget.value);
-                        } else {
-                          setReferenceCreationSceneStyle(event.currentTarget.value);
-                        }
-                      }}
-                    >
-                      {(isCreatingCharacter ? WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS : WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS).map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  </label>
+                  {!isCreatingCharacter ? (
+                    <label className="studio-reference-create-modal__field">
+                      <span>{workspaceText(locale, "Стиль", "Style")}</span>
+                      <select
+                        value={referenceCreationSceneStyle}
+                        onChange={(event) => setReferenceCreationSceneStyle(event.currentTarget.value)}
+                      >
+                        {WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
 
                   <label className="studio-reference-create-modal__field">
                     <span>
                       {workspaceText(locale, isCreatingCharacter ? "Внешность / описание" : "Описание сцены", isCreatingCharacter ? "Appearance / description" : "Scene description")}
                       <small>{referenceCreationPrompt.length} / 500</small>
                     </span>
-                    <div className="studio-reference-create-modal__prompt-box">
-                      <textarea
-                        value={referenceCreationPrompt}
-                        maxLength={500}
-                        onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
-                        placeholder={
-                          isCreatingCharacter
-                            ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
-                            : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
-                        }
-                        rows={4}
-                        aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
-                      />
-                      <div className="studio-reference-create-modal__prompt-actions">
-                        <button
-                          className={`studio-reference-create-modal__generate${isCreatingReference ? " is-generating" : ""}`}
-                          type="button"
-                          aria-label={workspaceText(
-                            locale,
-                            `Сгенерировать за ${referenceCreationPremiumCreditCost} ⚡`,
-                            `Generate for ${referenceCreationPremiumCreditCost} ⚡`,
-                          )}
-                          disabled={isReferenceCreateDisabled}
-                          onClick={() => {
-                            void handleCreateWorkspaceReference(generationKind, { quality: "premium" });
-                          }}
-                        >
-                          {isCreatingReference ? (
-                            <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                          ) : (
-                            <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
-                              <span>{workspaceText(locale, "Сгенерировать", "Generate")}</span>
-                              <span className="studio-canvas-prompt__btn-cost">{referenceCreationPremiumCreditCost}</span>
-                              <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
-                            </span>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                    <textarea
+                      value={referenceCreationPrompt}
+                      maxLength={500}
+                      onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
+                      placeholder={
+                        isCreatingCharacter
+                          ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
+                          : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
+                      }
+                      rows={4}
+                      aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
+                    />
                   </label>
                 </>
               ) : null}
@@ -32883,7 +33736,11 @@ export function WorkspacePage({
               {referenceCreationSource === "upload" ? (
                 <div className={`studio-reference-create-modal__upload${referenceCreationUploadFile ? " is-active" : ""}`}>
                   <strong>{referenceCreationUploadFile?.fileName ?? workspaceText(locale, "Файл не выбран", "No file selected")}</strong>
-                  <span>{workspaceText(locale, "Фото будет сохранено как референс без списания кредитов.", "The photo will be saved as a reference without spending credits.")}</span>
+                  <span>
+                    {isCreatingCharacter
+                      ? workspaceText(locale, `Персонаж будет сгенерирован на основе загруженного фото за ${referenceCreationCharacterCreditCost} ⚡.`, `A character will be generated from the uploaded photo for ${referenceCreationCharacterCreditCost} ⚡.`)
+                      : workspaceText(locale, "Фото будет сохранено как референс без списания кредитов.", "The photo will be saved as a reference without spending credits.")}
+                  </span>
                   <button
                     type="button"
                     disabled={Boolean(generatingReferenceKind)}
@@ -32903,7 +33760,10 @@ export function WorkspacePage({
                   <div className="studio-segment-references__grid studio-segment-references__grid--creation">
                     {currentOptions.map((option) =>
                       renderSegmentReferenceOptionCard(option, {
-                        onSelect: () => setReferenceCreationProjectKey((current) => (current === option.key ? null : option.key)),
+                        onSelect: () => {
+                          setReferenceCreationPreviewReference(null);
+                          setReferenceCreationProjectKey((current) => (current === option.key ? null : option.key));
+                        },
                         selectedKey: referenceCreationProjectKey,
                       }),
                     )}
@@ -32918,6 +33778,11 @@ export function WorkspacePage({
                   {segmentProjectCharactersError || savedWorkspaceReferencesError}
                 </div>
               ) : null}
+              {!segmentProjectCharactersError && !savedWorkspaceReferencesError && savedWorkspaceReferencesNotice ? (
+                <div className="studio-segment-references__success" role="status" aria-live="polite">
+                  {savedWorkspaceReferencesNotice}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -32930,13 +33795,19 @@ export function WorkspacePage({
               type="button"
               disabled={isReferenceCreateDisabled}
               onClick={() => {
-                void handleCreateWorkspaceReference(generationKind);
+                void handleCreateWorkspaceReference(generationKind, isCreatingCharacter ? { quality: "premium" } : undefined);
               }}
             >
               {isCreatingReference ? (
                 <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+              ) : isCreatingCharacter ? (
+                <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
+                  <span>{workspaceText(locale, "Создать персонажа", "Create character")}</span>
+                  <span className="studio-canvas-prompt__btn-cost">{referenceCreationCharacterCreditCost}</span>
+                  <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
+                </span>
               ) : (
-                workspaceText(locale, isCreatingCharacter ? "Создать персонажа" : "Создать сцену", isCreatingCharacter ? "Create character" : "Create scene")
+                workspaceText(locale, "Создать сцену", "Create scene")
               )}
             </button>
           </footer>
@@ -33565,7 +34436,7 @@ export function WorkspacePage({
       : isPromptPhotoAnimationMode
         ? workspaceText(locale, "Анимировать кадр", "Animate shot")
       : isPromptTalkingPhotoMode
-        ? workspaceText(locale, "Создать говорящее фото", "Create talking photo")
+        ? workspaceText(locale, "Создать говорящего персонажа", "Create talking character")
         : isPromptImageEditMode
           ? workspaceText(locale, "Применить правку", "Apply edit")
           : isPromptUpscaleMode
@@ -33611,7 +34482,7 @@ export function WorkspacePage({
       : isPromptPhotoAnimationMode
         ? workspaceText(locale, "Движение текущего кадра", "Motion for this shot")
       : isPromptTalkingPhotoMode
-        ? workspaceText(locale, "Говорящее фото", "Talking photo")
+        ? workspaceText(locale, "Говорящий персонаж", "Talking character")
         : isPromptImageEditMode
           ? workspaceText(locale, "Точная правка кадра", "Precise shot edit")
           : isPromptUpscaleMode
@@ -33999,7 +34870,7 @@ export function WorkspacePage({
                     className="studio-segment-editor__scene-nav-button"
                     type="button"
                     aria-label={workspaceText(locale, "Предыдущая сцена", "Previous scene")}
-                    disabled={activeSegmentIndex <= 0}
+                    disabled={!segmentEditorCarouselNavigation.canNavigatePrevious}
                     onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex - 1)}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -34010,7 +34881,7 @@ export function WorkspacePage({
                     className="studio-segment-editor__scene-nav-button"
                     type="button"
                     aria-label={workspaceText(locale, "Следующая сцена", "Next scene")}
-                    disabled={!segmentEditorDraft || activeSegmentIndex >= segmentEditorDraft.segments.length - 1}
+                    disabled={!segmentEditorCarouselNavigation.canNavigateNext}
                     onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + 1)}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -34138,9 +35009,9 @@ export function WorkspacePage({
                   <button
                     className={getSegmentEditorPromptVisualToolButtonClass("talking_photo")}
                     type="button"
-                    aria-label={workspaceText(locale, "Говорящее фото", "Talking photo")}
+                    aria-label={workspaceText(locale, "Говорящий персонаж", "Talking character")}
                     disabled={!canSelectSegmentEditorPromptVisualTool("talking_photo")}
-                    title={workspaceText(locale, "Говорящее фото", "Talking photo")}
+                    title={workspaceText(locale, "Говорящий персонаж", "Talking character")}
                     onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("talking_photo")}
                     onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("talking_photo")}
                     onClick={(event) => {
@@ -34149,7 +35020,7 @@ export function WorkspacePage({
                   >
                     {renderSegmentEditorPromptToolButtonContent(
                       "talking_photo",
-                      workspaceText(locale, "Говорящее фото", "Talking photo"),
+                      workspaceText(locale, "Говорящий персонаж", "Talking character"),
                       workspaceText(locale, "Оживить фото голосом", "Animate with voice"),
                     )}
                   </button>
@@ -34350,7 +35221,7 @@ export function WorkspacePage({
                         <span>{workspaceText(locale, "Сейчас", "Current")}</span>
                         <strong>
                           {activeSegmentVoiceDisabled
-                            ? workspaceText(locale, "Без озвучки", "No voiceover")
+                            ? workspaceText(locale, "Добавить озвучку", "Add voiceover")
                             : activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбранный голос", "Selected voice")}
                         </strong>
                         <small>
@@ -34847,7 +35718,7 @@ export function WorkspacePage({
                               className="studio-segment-editor__arrow"
                               type="button"
                               aria-label={locale === "en" ? "Previous segment" : "Предыдущий сегмент"}
-                              disabled={activeSegmentIndex <= 0}
+                              disabled={!segmentEditorCarouselNavigation.canNavigatePrevious}
                               onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex - 1)}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -34856,21 +35727,20 @@ export function WorkspacePage({
                             </button>
 
                             <div className="studio-segment-editor__cards">
-                              {([-1, 0, 1] as const).map((offset) => {
-                                const nextSegmentArrayIndex = activeSegmentIndex + offset;
-                                const segment = segmentEditorDraft.segments[nextSegmentArrayIndex] ?? null;
+                              {segmentEditorCarouselSlots.map((slot) => {
+                                const { offset, segmentArrayIndex: nextSegmentArrayIndex } = slot;
+                                const segment =
+                                  slot.kind === "segment"
+                                    ? segmentEditorDraft.segments[nextSegmentArrayIndex] ?? null
+                                    : null;
                                 const slotClass =
                                   offset === 0 ? "is-active" : offset < 0 ? "is-side is-left" : "is-side is-right";
 
-                                if (!segment) {
-                                  if (
-                                    offset > 0 &&
-                                    nextSegmentArrayIndex === segmentEditorDraft.segments.length &&
-                                    canAddSegmentEditorSegment
-                                  ) {
+                                if (slot.kind !== "segment" || !segment) {
+                                  if (slot.kind === "add") {
                                     return (
                                       <button
-                                        key={`add:${offset}`}
+                                        key={`add:${nextSegmentArrayIndex}`}
                                         className={`studio-segment-editor__card studio-segment-editor__card--add ${slotClass}`}
                                         type="button"
                                         style={getSegmentCarouselCardStyle(offset, { isAddCard: true })}
@@ -34902,7 +35772,7 @@ export function WorkspacePage({
                                   return (
                                     <div
                                       className={`studio-segment-editor__card is-empty ${slotClass}`}
-                                      key={`empty:${offset}`}
+                                      key={`empty:${nextSegmentArrayIndex}:${offset}`}
                                       style={getSegmentCarouselCardStyle(offset)}
                                       aria-hidden="true"
                                     />
@@ -35230,7 +36100,7 @@ export function WorkspacePage({
                               className="studio-segment-editor__arrow"
                               type="button"
                               aria-label={workspaceText(locale, "Следующий сегмент", "Next segment")}
-                              disabled={activeSegmentIndex >= segmentEditorDraft.segments.length - 1}
+                              disabled={!segmentEditorCarouselNavigation.canNavigateNext}
                               onClick={() => activateSegmentEditorSegmentByArrayIndex(activeSegmentIndex + 1)}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -36497,11 +37367,11 @@ export function WorkspacePage({
                               },
                             })}
                             {renderSegmentAiPhotoModalSourceButton({
-                              title: workspaceText(locale, "Говорящее фото", "Talking photo"),
+                              title: workspaceText(locale, "Говорящий персонаж", "Talking character"),
                               description: workspaceText(locale, "Фото говорит текстом сцены", "Photo speaks the scene text"),
                               isActive: segmentAiPhotoModalTab === "talking_photo",
                               disabled: !canCreateSegmentTalkingPhoto,
-                              buttonTitle: !canCreateSegmentTalkingPhoto ? segmentPhotoToolUnavailableReason : workspaceText(locale, "Создать говорящее фото", "Create talking photo"),
+                              buttonTitle: !canCreateSegmentTalkingPhoto ? segmentPhotoToolUnavailableReason : workspaceText(locale, "Создать говорящего персонажа", "Create talking character"),
                               footer: canCreateSegmentTalkingPhoto ? (
                                 segmentAiPhotoModalTalkingPhotoStatus ? (
                                   <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalTalkingPhotoStatus.tone}`}>
@@ -36813,7 +37683,7 @@ export function WorkspacePage({
                       ) : segmentAiPhotoModalTab === "talking_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>{workspaceText(locale, "Говорящее фото", "Talking photo")}</strong>
+                            <strong>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</strong>
                             <p>{workspaceText(locale, "Фото произнесет текст текущей сцены выбранным голосом.", "The photo speaks this scene text with the selected voice.")}</p>
                           </div>
 
@@ -36841,7 +37711,7 @@ export function WorkspacePage({
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("talking_photo");
                               }}
-                              aria-label={workspaceText(locale, "Текст для говорящего фото", "Talking photo text")}
+                              aria-label={workspaceText(locale, "Текст для говорящего персонажа", "Talking character text")}
                               rows={6}
                               placeholder={promptTalkingPhotoPlaceholder}
                             />
@@ -36855,8 +37725,8 @@ export function WorkspacePage({
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={workspaceText(locale, `Создать говорящее фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
-                              title={workspaceText(locale, `Создать говорящее фото за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking photo for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
+                              aria-label={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
                               disabled={
                                 !canCreateSegmentTalkingPhoto ||
                                 isSegmentTalkingPhotoModalPromptEmpty ||
@@ -36872,7 +37742,7 @@ export function WorkspacePage({
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                workspaceText(locale, "Создать говорящее фото", "Create talking photo"),
+                                workspaceText(locale, "Создать говорящего персонажа", "Create talking character"),
                                 STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
                                 isSegmentTalkingPhotoModalGeneratingCurrentSegment,
                                 workspaceText(locale, "Создаем...", "Creating..."),

@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -10,7 +10,7 @@ import { getWorkspaceGenerationHistoryEntry, listWorkspaceDeletedProjects, listW
 import { resolveGenerationPresentation } from "./generation-metadata.js";
 import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "./upstream-client.js";
 import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
-import { createWaveSpeedGptImage2TextToImageJob, getWaveSpeedPredictionOutputUrl, getWaveSpeedPredictionStatus, } from "./wavespeed-worker.js";
+import { createWaveSpeedImageUpscaleJob, createWaveSpeedGptImage2EditJob, createWaveSpeedGptImage2TextToImageJob, getWaveSpeedPredictionOutputUrl, getWaveSpeedPredictionStatus, WAVESPEED_GPT_IMAGE_2_EDIT_MODEL, WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL, } from "./wavespeed-worker.js";
 import { normalizeWebReferralSource } from "./referral.js";
 const normalizeWorkspaceSubscriptionPlanCode = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
@@ -277,6 +277,8 @@ const buildStudioSegmentVisualQualityPayload = (quality) => quality === "premium
     : {};
 const WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX = "wavespeed:";
 const WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX = "wavespeed-image:";
+const WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY = "medium";
+const WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION = "2k";
 const studioWaveSpeedSegmentAiVideoJobContexts = new Map();
 const studioWaveSpeedSegmentAiPhotoJobContexts = new Map();
 const parseWaveSpeedSegmentAiVideoPredictionId = (jobId) => {
@@ -299,6 +301,21 @@ const normalizeWaveSpeedSegmentAiPhotoFileName = (jobId, referenceKind) => {
     const normalizedKind = normalizeGenerationText(referenceKind).replace(/[^a-z0-9_-]+/gi, "-") || "reference";
     const normalizedJobId = normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed";
     return `${normalizedKind}-image-${normalizedJobId}.png`;
+};
+const buildWorkspaceReferenceCharacterSheetPrompt = (prompt, options) => {
+    const normalizedPrompt = normalizePrompt(prompt);
+    const sourceInstruction = options?.sourceMode === "reference_image"
+        ? "Use the provided source image as the identity and styling reference. Preserve the recognizable face, hair, body type, age, outfit silhouette, color palette, and overall character feel unless the user description explicitly changes them."
+        : "Design the character from the user description only, with a coherent identity that stays identical across all views.";
+    return [
+        "Create one square 1:1 professional character reference sheet in a single image.",
+        sourceInstruction,
+        "Use one consistent visual style, one consistent character identity, one consistent outfit, and one consistent studio lighting setup across every panel.",
+        "Layout: a large full-body hero view on the left; on the right, a clean grid with front view, three-quarter view, side/profile view, back view, two dynamic action poses, and two close-up head/face portraits.",
+        "Use a dark neutral studio background with subtle panel dividers, high-detail production quality, sharp anatomy and clothing details.",
+        "No text labels, no captions, no watermarks, no logos, no extra characters, no duplicated faces with changed identity.",
+        normalizedPrompt ? `User character description: ${normalizedPrompt}` : "",
+    ].map(normalizeGenerationText).filter(Boolean).join("\n");
 };
 const normalizeWaveSpeedSegmentAiVideoFileName = (jobId) => `segment-ai-video-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
 const normalizeWaveSpeedSegmentPhotoAnimationFileName = (jobId) => `segment-photo-animation-${normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed"}.mp4`;
@@ -1856,6 +1873,32 @@ const fetchRemoteStudioGeneratedImage = async (url) => {
         mimeType: normalizeStudioGeneratedImageMimeType(response.headers.get("content-type")),
     };
 };
+const fetchStudioMediaAssetImage = async (assetId, externalUserId) => {
+    const normalizedAssetId = normalizePositiveInteger(assetId);
+    if (!normalizedAssetId) {
+        throw new Error("Source media asset id is required.");
+    }
+    const response = await fetch(buildAdsflowUrl(`/api/media/${normalizedAssetId}/download`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }), {
+        signal: AbortSignal.timeout(ADSFLOW_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+        throw new Error(`Failed to download source media asset (${response.status}).`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const mimeType = inferStudioGeneratedImageMimeType(response.headers.get("content-type"), null, `/api/media/${normalizedAssetId}/download`);
+    const bytes = Buffer.from(arrayBuffer);
+    if (!bytes.length) {
+        throw new Error("Source media asset is empty.");
+    }
+    return {
+        bytes,
+        fileName: `character-source-${normalizedAssetId}${getStudioGeneratedImageExtension(mimeType)}`,
+        mimeType,
+    };
+};
 const normalizeAdsflowSegmentAiPhotoAsset = async (payload, options) => {
     const assetId = normalizePositiveInteger(payload?.media_asset_id) ?? null;
     const inlineDataUrl = normalizeGenerationText(payload?.data_url);
@@ -1945,7 +1988,7 @@ const normalizeWaveSpeedSegmentPhotoAnimationAsset = (jobId) => {
 const normalizeWaveSpeedSegmentTalkingPhotoAsset = (jobId) => {
     const remoteUrl = buildStudioSegmentTalkingPhotoJobVideoProxyUrl(jobId);
     if (!remoteUrl) {
-        throw new Error("Generated talking photo is unavailable.");
+        throw new Error("Generated talking character is unavailable.");
     }
     return {
         assetId: null,
@@ -1973,7 +2016,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (jobId, payload) => {
 const normalizeAdsflowSegmentTalkingPhotoAsset = (jobId, payload) => {
     const remoteUrl = buildStudioSegmentTalkingPhotoJobVideoProxyUrl(jobId);
     if (!remoteUrl) {
-        throw new Error("Generated talking photo is unavailable.");
+        throw new Error("Generated talking character is unavailable.");
     }
     return {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
@@ -3580,7 +3623,6 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
-    const requiredCredits = getStudioSegmentAiPhotoCreditCost(normalizedQuality);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const preserveCharacters = Boolean(options?.preserveCharacters);
@@ -3591,16 +3633,31 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const normalizedPurpose = normalizeGenerationText(options?.purpose);
     const normalizedReferenceKind = normalizeGenerationText(options?.referenceKind);
     const externalUserId = await resolveStudioExternalUserId(user);
-    if (normalizedPurpose === "workspace_reference") {
+    const isWorkspaceCharacterReference = normalizedPurpose === "workspace_reference" &&
+        normalizedReferenceKind === "character";
+    const requiredCredits = isWorkspaceCharacterReference
+        ? STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST
+        : getStudioSegmentAiPhotoCreditCost(normalizedQuality);
+    const workspaceCharacterReferencePrompt = isWorkspaceCharacterReference
+        ? buildWorkspaceReferenceCharacterSheetPrompt(normalizedPrompt, {
+            sourceMode: referenceAssetIds.length > 0 ? "reference_image" : "text",
+        })
+        : normalizedPrompt;
+    if (isWorkspaceCharacterReference &&
+        referenceAssetIds.length > 0) {
+        const sourceImage = await fetchStudioMediaAssetImage(referenceAssetIds[0], externalUserId);
         const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
         let jobCreated = false;
         try {
-            const prediction = await createWaveSpeedGptImage2TextToImageJob({
+            const prediction = await createWaveSpeedGptImage2EditJob({
                 aspectRatio: "1:1",
+                image: sourceImage.bytes,
+                imageFileName: sourceImage.fileName,
+                imageMimeType: sourceImage.mimeType,
                 outputFormat: "png",
-                prompt: normalizedPrompt,
-                quality: "low",
-                resolution: "1k",
+                prompt: workspaceCharacterReferencePrompt,
+                quality: WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY,
+                resolution: WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION,
             });
             const jobId = `${WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX}${prediction.id}`;
             const profile = { ...creditReservation.profile };
@@ -3612,8 +3669,73 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
                 projectId: normalizedProjectId,
                 referenceKind: normalizedReferenceKind,
                 segmentIndex: normalizedSegmentIndex,
+                upscaleRequired: false,
             });
             jobCreated = true;
+            console.info(JSON.stringify({
+                event: "server.segment-ai-photo.wavespeed-edit.created",
+                jobId,
+                model: WAVESPEED_GPT_IMAGE_2_EDIT_MODEL,
+                projectId: normalizedProjectId,
+                quality: WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY,
+                referenceAssetId: referenceAssetIds[0],
+                resolution: WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION,
+                segmentIndex: normalizedSegmentIndex,
+            }));
+            return {
+                jobId,
+                profile,
+                status: prediction.status || "created",
+            };
+        }
+        catch (error) {
+            if (!jobCreated) {
+                try {
+                    await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+                }
+                catch (refundError) {
+                    console.error("[studio] Failed to refund WaveSpeed GPT Image 2 edit credits", refundError);
+                }
+            }
+            throw error;
+        }
+    }
+    if (normalizedPurpose === "workspace_reference" &&
+        referenceAssetIds.length === 0 &&
+        sceneReferenceAssetIds.length === 0) {
+        const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
+        let jobCreated = false;
+        try {
+            const prediction = await createWaveSpeedGptImage2TextToImageJob({
+                aspectRatio: "1:1",
+                outputFormat: "png",
+                prompt: isWorkspaceCharacterReference ? workspaceCharacterReferencePrompt : normalizedPrompt,
+                quality: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY : "low",
+                resolution: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION : "1k",
+            });
+            const jobId = `${WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX}${prediction.id}`;
+            const profile = { ...creditReservation.profile };
+            studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, {
+                consumed: creditReservation.consumed,
+                language: normalizedLanguage,
+                ownerExternalUserId: externalUserId,
+                profile,
+                projectId: normalizedProjectId,
+                referenceKind: normalizedReferenceKind,
+                segmentIndex: normalizedSegmentIndex,
+                upscaleRequired: false,
+            });
+            jobCreated = true;
+            console.info(JSON.stringify({
+                event: "server.segment-ai-photo.wavespeed-text-to-image.created",
+                jobId,
+                model: WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL,
+                projectId: normalizedProjectId,
+                quality: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY : "low",
+                referenceKind: normalizedReferenceKind,
+                resolution: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION : "1k",
+                segmentIndex: normalizedSegmentIndex,
+            }));
             return {
                 jobId,
                 profile,
@@ -3843,11 +3965,12 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     });
     const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+    const normalizedCustomVideoMediaType = options?.customVideoMediaType === "video" ? "video" : options?.customVideoMediaType === "photo" ? "photo" : undefined;
     const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
     const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
     const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
-        throw new Error("Photo source asset id or image data URL is required.");
+        throw new Error("Photo or video source asset id or data URL is required.");
     }
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
@@ -3863,7 +3986,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
                 fileName: normalizedCustomVideoFileName,
                 kind: "segment_source",
                 language: normalizedLanguage,
-                mediaType: inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+                mediaType: normalizedCustomVideoMediaType ?? inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
                 mimeType: normalizedCustomVideoFileMimeType,
                 projectId: normalizedProjectId,
                 role: "segment_source",
@@ -3875,6 +3998,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         credit_cost: STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
         custom_video_asset_id: customVideoAssetId,
         custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+        custom_video_media_type: normalizedCustomVideoMediaType,
         custom_video_mime_type: normalizedCustomVideoFileMimeType,
         custom_video_original_name: normalizedCustomVideoFileName,
         external_user_id: externalUserId,
@@ -3882,7 +4006,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         language: normalizedLanguage,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
-        resolution: "720p",
+        resolution: normalizedCustomVideoMediaType === "video" ? "480p" : "720p",
         script: normalizedScript,
         seed: -1,
         segment_index: normalizedSegmentIndex,
@@ -3895,7 +4019,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     });
     const jobId = String(payload.job_id ?? "").trim();
     if (!jobId) {
-        throw new Error("AdsFlow did not return a segment talking photo job id.");
+        throw new Error("AdsFlow did not return a segment talking character job id.");
     }
     return {
         jobId,
@@ -4122,12 +4246,12 @@ export async function getStudioSegmentTalkingPhotoJobStatus(jobId, user) {
     }
     catch (error) {
         if (isAdsflowHttpStatusError(error, 500)) {
-            console.warn("[studio] Segment talking photo status returned 500, probing file endpoint", {
+            console.warn("[studio] Segment talking character status returned 500, probing file endpoint", {
                 error: error instanceof Error ? error.message : "Unknown AdsFlow status error.",
                 jobId: safeJobId,
             });
             return recoverStudioSegmentGeneratedVideoJobStatus("segment-talking-photo", safeJobId, user, {
-                fallbackError: "Говорящее фото завершилось с ошибкой в AdsFlow. Попробуйте ещё раз.",
+                fallbackError: "Говорящий персонаж завершился с ошибкой в AdsFlow. Попробуйте ещё раз.",
             });
         }
         throw error;
@@ -4382,6 +4506,53 @@ const getWaveSpeedSegmentAiPhotoJobStatus = async (jobId, predictionId, user) =>
             status: "completed",
         };
     }
+    if (context.upscalePredictionId) {
+        const upscalePrediction = await getWaveSpeedPredictionStatus(context.upscalePredictionId);
+        const upscaleStatus = upscalePrediction.status || "processing";
+        if (upscaleStatus === "failed") {
+            return {
+                error: upscalePrediction.error || "WaveSpeed image upscale failed.",
+                jobId,
+                profile: await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context),
+                status: upscaleStatus,
+            };
+        }
+        if (upscalePrediction.outputUrl) {
+            try {
+                context.asset = await uploadWaveSpeedSegmentAiPhotoAsset(jobId, upscalePrediction.outputUrl, user, context);
+                studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
+                return {
+                    asset: context.asset,
+                    jobId,
+                    profile: { ...context.profile },
+                    status: "completed",
+                };
+            }
+            catch (error) {
+                const refundedProfile = await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context);
+                return {
+                    error: error instanceof Error ? error.message : "Failed to save upscaled WaveSpeed GPT Image 2 result.",
+                    jobId,
+                    profile: refundedProfile,
+                    status: "failed",
+                };
+            }
+        }
+        if (upscaleStatus === "completed") {
+            return {
+                error: "WaveSpeed image upscale did not return an output image.",
+                jobId,
+                profile: await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context),
+                status: "failed",
+            };
+        }
+        return {
+            error: upscalePrediction.error || undefined,
+            jobId,
+            profile,
+            status: upscaleStatus,
+        };
+    }
     const prediction = await getWaveSpeedPredictionStatus(predictionId);
     const status = prediction.status || "processing";
     if (status === "failed") {
@@ -4393,6 +4564,51 @@ const getWaveSpeedSegmentAiPhotoJobStatus = async (jobId, predictionId, user) =>
         };
     }
     if (prediction.outputUrl) {
+        if (context.upscaleRequired) {
+            try {
+                const upscalePrediction = await createWaveSpeedImageUpscaleJob({
+                    imageUrl: prediction.outputUrl,
+                    outputFormat: "png",
+                    targetResolution: "4k",
+                });
+                context.baseOutputUrl = prediction.outputUrl;
+                context.upscalePredictionId = upscalePrediction.id;
+                studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
+                console.info(JSON.stringify({
+                    basePredictionId: predictionId,
+                    event: "server.segment-ai-photo.wavespeed-upscale.created",
+                    jobId,
+                    model: "wavespeed-ai/image-upscaler",
+                    targetResolution: "4k",
+                    upscalePredictionId: upscalePrediction.id,
+                }));
+                if (upscalePrediction.outputUrl) {
+                    context.asset = await uploadWaveSpeedSegmentAiPhotoAsset(jobId, upscalePrediction.outputUrl, user, context);
+                    studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
+                    return {
+                        asset: context.asset,
+                        jobId,
+                        profile: { ...context.profile },
+                        status: "completed",
+                    };
+                }
+                return {
+                    error: upscalePrediction.error || undefined,
+                    jobId,
+                    profile,
+                    status: upscalePrediction.status || "processing",
+                };
+            }
+            catch (error) {
+                const refundedProfile = await refundWaveSpeedSegmentAiPhotoJobCredits(jobId, user, context);
+                return {
+                    error: error instanceof Error ? error.message : "Failed to upscale WaveSpeed GPT Image 2 result.",
+                    jobId,
+                    profile: refundedProfile,
+                    status: "failed",
+                };
+            }
+        }
         try {
             context.asset = await uploadWaveSpeedSegmentAiPhotoAsset(jobId, prediction.outputUrl, user, context);
             studioWaveSpeedSegmentAiPhotoJobContexts.set(jobId, context);
@@ -4526,7 +4742,7 @@ export async function getStudioSegmentTalkingPhotoJobFileProxyTarget(jobId, user
         await getWaveSpeedSegmentAiVideoJobProfile(safeJobId, user);
         const outputUrl = await getWaveSpeedPredictionOutputUrl(waveSpeedPredictionId);
         if (!outputUrl) {
-            throw new Error("WaveSpeed generated talking photo is not ready yet.");
+            throw new Error("WaveSpeed generated talking character is not ready yet.");
         }
         return new URL(outputUrl);
     }

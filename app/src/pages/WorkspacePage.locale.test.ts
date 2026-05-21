@@ -11,6 +11,7 @@ import {
   buildWorkspaceReferenceAiPrompt,
   buildWorkspacePromptCharacterMentionTokens,
   buildWorkspacePromptRichEditorHtml,
+  createWorkspaceSegmentEditorInsertedSegment,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspacePromptRichEditorSelectionRange,
@@ -27,18 +28,23 @@ import {
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
   getWorkspaceSegmentDraftVideoUrl,
+  getWorkspaceSegmentEditorCarouselNavigation,
+  getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorProjectOpenOptions,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
+  isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
+  resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
@@ -685,6 +691,244 @@ describe("WorkspacePage segment editor draft persistence", () => {
     };
 
     expect(shouldAllowWorkspaceSegmentEditorStructureChange(restoredDraft, restoredDraft)).toBe(true);
+  });
+
+  it("creates a blank segment instead of inheriting the source project visual", () => {
+    const sourceSegment = createDraftSegment({
+      currentAsset: createMediaAsset(101, { mediaType: "video" }),
+      currentPlaybackUrl: "/api/workspace/media-assets/101",
+      index: 0,
+      mediaType: "video",
+      originalAsset: createMediaAsset(100, { mediaType: "video" }),
+      originalPlaybackUrl: "/api/workspace/media-assets/100",
+      text: "Source segment",
+    });
+    const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: createDraftSession(sourceSegment),
+      insertAt: 1,
+      sourceSegment,
+    });
+
+    expect(insertedSegment.text).toBe("");
+    expect(insertedSegment.currentAsset).toBeNull();
+    expect(insertedSegment.originalAsset).toBeNull();
+    expect(getWorkspaceSegmentDraftPreviewUrl(insertedSegment)).toBeNull();
+    expect(getWorkspaceSegmentDraftVideoUrl(insertedSegment)).toBeNull();
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(insertedSegment)).toBe(true);
+  });
+
+  it("replaces the last deleted segment with one empty segment", () => {
+    const sourceSegment = createDraftSegment({
+      currentAsset: createMediaAsset(201, { mediaType: "video" }),
+      currentPlaybackUrl: "/api/workspace/media-assets/201",
+      index: 0,
+      mediaType: "video",
+      originalAsset: createMediaAsset(200, { mediaType: "video" }),
+      originalPlaybackUrl: "/api/workspace/media-assets/200",
+      text: "Only segment",
+    });
+    const nextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(createDraftSession(sourceSegment), sourceSegment.index);
+
+    expect(nextSegments).toHaveLength(1);
+    expect(nextSegments[0]?.index).toBe(1);
+    expect(nextSegments[0]?.text).toBe("");
+    expect(getWorkspaceSegmentDraftPreviewUrl(nextSegments[0]!)).toBeNull();
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(nextSegments[0])).toBe(true);
+  });
+
+  it("resets track settings when the last segment is replaced by a blank scene", () => {
+    const sourceSegment = createDraftSegment({
+      index: 0,
+      sceneSoundPrompt: "Door slam",
+      sceneSoundPromptInitialized: true,
+      text: "Only segment",
+      voiceType: "Boris",
+    });
+    const session = {
+      ...createDraftSession(sourceSegment),
+      customMusicAssetId: 501,
+      customMusicFileName: "custom-track.mp3",
+      musicAssetId: 502,
+      musicName: "custom-track",
+      musicType: "custom",
+      subtitleColor: "gold",
+      subtitleStyle: "impact",
+      subtitleType: "karaoke",
+      ttsAssetId: 503,
+      voiceType: "Boris",
+    };
+    const nextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(session, sourceSegment.index);
+    const resetDraft = resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+      ...session,
+      segments: nextSegments,
+    });
+
+    expect(resetDraft.musicType).toBe("none");
+    expect(resetDraft.customMusicAssetId).toBeNull();
+    expect(resetDraft.customMusicFileName).toBeNull();
+    expect(resetDraft.musicAssetId).toBeNull();
+    expect(resetDraft.musicName).toBeNull();
+    expect(resetDraft.voiceType).toBe("none");
+    expect(resetDraft.ttsAssetId).toBeNull();
+    expect(resetDraft.subtitleType).toBe("none");
+    expect(resetDraft.subtitleStyle).toBe("modern");
+    expect(resetDraft.subtitleColor).toBe("purple");
+    expect(resetDraft.segments[0]?.text).toBe("");
+    expect(resetDraft.segments[0]?.voiceType).toBeNull();
+    expect(resetDraft.segments[0]?.sceneSoundPrompt).toBe("");
+    expect(resetDraft.segments[0]?.speechWords).toEqual([]);
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(resetDraft.segments[0])).toBe(true);
+  });
+
+  it("keeps reset music assets empty when a fresh server session still has old generated music", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Only segment" });
+    const nextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(
+      createDraftSession(sourceSegment),
+      sourceSegment.index,
+    );
+    const resetDraft = resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+      ...createDraftSession(nextSegments[0]!),
+      musicAssetId: 701,
+      musicName: "seran-meridiany-muzyka.mp3",
+      segments: nextSegments,
+    });
+    const freshSessionWithOldMusic = {
+      ...createFreshSession(createDraftSegment({ index: nextSegments[0]!.index, text: "Fresh server segment" })),
+      musicAssetId: 701,
+      musicName: "seran-meridiany-muzyka.mp3",
+      musicType: "ai",
+    };
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      resetDraft,
+      freshSessionWithOldMusic,
+      {
+        baselineSession: freshSessionWithOldMusic,
+        preserveLiveStructure: true,
+      },
+    );
+
+    expect(refreshedDraft.musicType).toBe("none");
+    expect(refreshedDraft.musicAssetId).toBeNull();
+    expect(refreshedDraft.musicName).toBeNull();
+    expect(refreshedDraft.customMusicAssetId).toBeNull();
+    expect(refreshedDraft.customMusicFileName).toBeNull();
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(refreshedDraft.segments[0])).toBe(true);
+  });
+
+  it("keeps the add card as a non-navigable right carousel slot for one blank scene", () => {
+    const slots = getWorkspaceSegmentEditorCarouselSlots({
+      activeSegmentIndex: 0,
+      canAddSegment: true,
+      segmentCount: 1,
+    });
+    const navigation = getWorkspaceSegmentEditorCarouselNavigation({
+      activeSegmentIndex: 0,
+      segmentCount: 1,
+    });
+
+    expect(slots).toEqual([
+      { kind: "empty", offset: -1, segmentArrayIndex: -1 },
+      { kind: "segment", offset: 0, segmentArrayIndex: 0 },
+      { kind: "add", offset: 1, segmentArrayIndex: 1 },
+    ]);
+    expect(navigation.canNavigatePrevious).toBe(false);
+    expect(navigation.canNavigateNext).toBe(false);
+  });
+
+  it("keeps a single empty segment when delete is requested again", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: createDraftSession(sourceSegment),
+      insertAt: 0,
+    });
+    const draft = {
+      ...createDraftSession(emptySegment),
+      segments: [emptySegment],
+    };
+
+    expect(resolveWorkspaceSegmentEditorSegmentsAfterDelete(draft, emptySegment.index)).toBe(draft.segments);
+  });
+
+  it("allocates new blank segments outside reserved project segment indexes", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: createDraftSession(sourceSegment),
+      insertAt: 1,
+      reservedSegmentIndexes: [0, 1],
+    });
+
+    expect(insertedSegment.index).toBe(2);
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(insertedSegment)).toBe(true);
+  });
+
+  it("uses reserved project segment indexes when replacing the last segment", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Only segment" });
+    const nextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(
+      createDraftSession(sourceSegment),
+      sourceSegment.index,
+      { reservedSegmentIndexes: [0, 1] },
+    );
+
+    expect(nextSegments).toHaveLength(1);
+    expect(nextSegments[0]?.index).toBe(2);
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(nextSegments[0])).toBe(true);
+  });
+
+  it("does not hydrate a blank inserted segment from a generated media entry with the same index", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: createDraftSession(sourceSegment),
+      insertAt: 1,
+    });
+    const draft = {
+      ...createDraftSession(emptySegment),
+      segments: [emptySegment],
+    };
+
+    const hydratedDraft = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(
+      draft,
+      [createGeneratedMediaLibraryEntry(303, "ai_photo", { segmentIndex: emptySegment.index })],
+    );
+
+    expect(hydratedDraft?.segments[0]?.videoAction).toBe("original");
+    expect(hydratedDraft?.segments[0]?.aiPhotoAsset).toBeNull();
+    expect(getWorkspaceSegmentDraftPreviewUrl(hydratedDraft!.segments[0]!)).toBeNull();
+  });
+
+  it("does not merge server visual data back into a blank inserted segment during refresh", () => {
+    const sourceSegment = createDraftSegment({
+      currentAsset: createMediaAsset(401, { mediaType: "photo", sourceKind: "ai_generated" }),
+      currentPreviewUrl: "/api/workspace/media-assets/401",
+      currentSourceKind: "ai_generated",
+      index: 1,
+      mediaType: "photo",
+      originalAsset: createMediaAsset(401, { mediaType: "photo", sourceKind: "ai_generated" }),
+      originalPreviewUrl: "/api/workspace/media-assets/401",
+      originalSourceKind: "ai_generated",
+      text: "Fresh server segment",
+    });
+    const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: {
+        ...createDraftSession(createDraftSegment({ index: 0 })),
+        segments: [createDraftSegment({ index: 0 })],
+      },
+      insertAt: 1,
+    });
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(emptySegment),
+        segments: [emptySegment],
+      },
+      createFreshSessionFromDraftSegments([createDraftSegment({ index: 0 }), sourceSegment]),
+      { preserveLiveStructure: true },
+    );
+
+    expect(refreshedDraft.segments[0]?.index).toBe(emptySegment.index);
+    expect(refreshedDraft.segments[0]?.currentAsset).toBeNull();
+    expect(refreshedDraft.segments[0]?.originalAsset).toBeNull();
+    expect(getWorkspaceSegmentDraftPreviewUrl(refreshedDraft.segments[0]!)).toBeNull();
+    expect(isWorkspaceSegmentEditorDraftSegmentEmpty(refreshedDraft.segments[0])).toBe(true);
   });
 
   it("adds fresh tail segments to a stale stored draft when no baseline session exists", () => {

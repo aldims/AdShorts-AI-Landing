@@ -991,12 +991,12 @@
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
-    flex: 1 1 168px;
-    min-width: 0;
+    flex: 0 0 auto;
+    min-width: max-content;
     min-height: 44px;
     margin-left: 0;
     padding: 0 13px;
-    white-space: normal;
+    white-space: nowrap;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__footer {

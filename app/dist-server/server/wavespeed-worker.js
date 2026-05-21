@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { join } from "node:path";
 import { env } from "./env.js";
 const WAVESPEED_API_BASE_URL = "https://api.wavespeed.ai/api/v3/";
-export const WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL = "openai/gpt-image-2/text-to-image";
+export const WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL = "openai/gpt-image-2";
+export const WAVESPEED_GPT_IMAGE_2_EDIT_MODEL = "openai/gpt-image-2/edit";
+export const WAVESPEED_IMAGE_UPSCALER_MODEL = "wavespeed-ai/image-upscaler";
 export const WAVESPEED_KLING_V2_6_STD_IMAGE_TO_VIDEO_MODEL = "kwaivgi/kling-v2.6-std/image-to-video";
 const WAVESPEED_PREVIEW_CACHE_DIR = join(env.dataDir, "voice-previews", "wavespeed");
 const WAVESPEED_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -186,6 +188,8 @@ export async function createWaveSpeedGptImage2TextToImageJob(options) {
     const response = await fetchWaveSpeed(`/${WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL}`, {
         body: JSON.stringify({
             aspect_ratio: options.aspectRatio ?? "1:1",
+            enable_base64_output: false,
+            enable_sync_mode: false,
             output_format: options.outputFormat ?? "png",
             prompt: normalizedPrompt,
             quality: options.quality ?? "low",
@@ -203,6 +207,82 @@ export async function createWaveSpeedGptImage2TextToImageJob(options) {
     const predictionId = normalizeText(payload?.data?.id);
     if (!predictionId) {
         throw new Error("WaveSpeed did not return a GPT Image 2 prediction id.");
+    }
+    const outputUrl = extractWaveSpeedOutputUrl(payload);
+    return {
+        error: normalizeText(payload?.data?.error) || undefined,
+        id: predictionId,
+        outputUrl: outputUrl ? assertValidWaveSpeedHttpUrl(outputUrl, "WaveSpeed prediction returned an invalid output URL.") : null,
+        status: normalizeText(payload?.data?.status).toLowerCase() || "created",
+    };
+}
+export async function createWaveSpeedGptImage2EditJob(options) {
+    const normalizedPrompt = normalizeText(options.prompt);
+    if (!normalizedPrompt) {
+        throw new Error("WaveSpeed GPT Image 2 edit prompt is required.");
+    }
+    if (options.image.byteLength <= 0) {
+        throw new Error("WaveSpeed GPT Image 2 edit source image is empty.");
+    }
+    const imageUrl = await uploadWaveSpeedMedia({
+        bytes: options.image,
+        fileName: options.imageFileName || "character-source.png",
+        mimeType: options.imageMimeType || "image/png",
+    });
+    const response = await fetchWaveSpeed(`/${WAVESPEED_GPT_IMAGE_2_EDIT_MODEL}`, {
+        body: JSON.stringify({
+            aspect_ratio: options.aspectRatio ?? "1:1",
+            enable_base64_output: false,
+            enable_sync_mode: false,
+            images: [imageUrl],
+            output_format: options.outputFormat ?? "png",
+            prompt: normalizedPrompt,
+            quality: options.quality ?? "low",
+            resolution: options.resolution ?? "1k",
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
+        method: "POST",
+    }, 60_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedErrorMessage(payload, `WaveSpeed GPT Image 2 edit request failed (${response.status}).`));
+    }
+    const predictionId = normalizeText(payload?.data?.id);
+    if (!predictionId) {
+        throw new Error("WaveSpeed did not return a GPT Image 2 edit prediction id.");
+    }
+    const outputUrl = extractWaveSpeedOutputUrl(payload);
+    return {
+        error: normalizeText(payload?.data?.error) || undefined,
+        id: predictionId,
+        outputUrl: outputUrl ? assertValidWaveSpeedHttpUrl(outputUrl, "WaveSpeed prediction returned an invalid output URL.") : null,
+        status: normalizeText(payload?.data?.status).toLowerCase() || "created",
+    };
+}
+export async function createWaveSpeedImageUpscaleJob(options) {
+    const imageUrl = assertValidWaveSpeedHttpUrl(normalizeText(options.imageUrl), "WaveSpeed image upscaler source image URL is invalid.");
+    const response = await fetchWaveSpeed(`/${WAVESPEED_IMAGE_UPSCALER_MODEL}`, {
+        body: JSON.stringify({
+            enable_base64_output: false,
+            enable_sync_mode: false,
+            image: imageUrl,
+            output_format: options.outputFormat ?? "png",
+            target_resolution: options.targetResolution ?? "4k",
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
+        method: "POST",
+    }, 60_000);
+    const payload = await parseWaveSpeedJson(response);
+    if (!response.ok) {
+        throw new Error(getWaveSpeedErrorMessage(payload, `WaveSpeed image upscaler request failed (${response.status}).`));
+    }
+    const predictionId = normalizeText(payload?.data?.id);
+    if (!predictionId) {
+        throw new Error("WaveSpeed did not return an image upscaler prediction id.");
     }
     const outputUrl = extractWaveSpeedOutputUrl(payload);
     return {
