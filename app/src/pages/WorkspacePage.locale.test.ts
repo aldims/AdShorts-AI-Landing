@@ -496,6 +496,7 @@ describe("WorkspacePage reference creation defaults", () => {
     expect(prompt).not.toContain("мужской");
     expect(prompt).not.toContain("25");
     expect(prompt).not.toContain("Темные волосы");
+    expect(prompt).not.toContain("Стиль");
   });
 
   it("builds scene prompts from structured creation fields", () => {

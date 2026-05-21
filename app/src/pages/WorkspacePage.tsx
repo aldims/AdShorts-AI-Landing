@@ -3680,12 +3680,13 @@ const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
   Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
 const WORKSPACE_REFERENCE_CHARACTER_MIN_AGE = 1;
+const WORKSPACE_REFERENCE_STYLE_UNSET_OPTION = "Не задан";
 
 const WORKSPACE_REFERENCE_CHARACTER_DEFAULTS: WorkspaceReferenceCharacterPromptFields = {
   ageRange: "",
   description: "",
   gender: "",
-  style: "Реалистичный (фотографический)",
+  style: WORKSPACE_REFERENCE_STYLE_UNSET_OPTION,
 };
 
 const WORKSPACE_REFERENCE_SCENE_DEFAULTS: WorkspaceReferenceScenePromptFields = {
@@ -3696,14 +3697,15 @@ const WORKSPACE_REFERENCE_SCENE_DEFAULTS: WorkspaceReferenceScenePromptFields = 
 };
 
 const WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS = [
-  "Реалистичный (фотографический)",
-  "Кинематографичный",
-  "Журнальный портрет",
-  "Студийный портрет",
-  "Деловой портрет",
-  "Повседневный портрет",
-  "Рекламный премиальный стиль",
-  "Документальный стиль",
+  WORKSPACE_REFERENCE_STYLE_UNSET_OPTION,
+  "Реалистичный — естественное фото человека",
+  "Кинематографичный — дорогой свет и кино-качество",
+  "UGC — как живое фото с телефона",
+  "Студийный — чистый профессиональный портрет",
+  "Аниме — японский аниме-стиль",
+  "3D — мультяшный 3D-персонаж",
+  "Иллюстрация — рисованный стиль",
+  "Футуристичный — cyberpunk образ",
 ] as const;
 
 const WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS = [
@@ -3788,6 +3790,18 @@ const formatWorkspaceReferenceCharacterAge = (value: unknown) => {
 const normalizeWorkspaceReferencePromptPart = (value: unknown) =>
   String(value ?? "").replace(/\s+/g, " ").trim();
 
+const normalizeWorkspaceReferenceCharacterStyleValue = (value: unknown) => {
+  const normalized = normalizeWorkspaceReferencePromptPart(value);
+  return WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS.includes(normalized as typeof WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS[number])
+    ? normalized
+    : WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.style;
+};
+
+const getWorkspaceReferencePromptStyle = (value: unknown) => {
+  const normalized = normalizeWorkspaceReferencePromptPart(value);
+  return normalized === WORKSPACE_REFERENCE_STYLE_UNSET_OPTION ? "" : normalized;
+};
+
 export const buildWorkspaceReferenceAiPrompt = (options: {
   character?: Partial<WorkspaceReferenceCharacterPromptFields> | null;
   kind: WorkspaceReferenceKind;
@@ -3812,11 +3826,12 @@ export const buildWorkspaceReferenceAiPrompt = (options: {
   };
   const characterAgeLabel = formatWorkspaceReferenceCharacterAge(character.ageRange);
   const characterGenderLabel = getWorkspaceReferenceGenderLabel(character.gender);
+  const characterStyle = getWorkspaceReferencePromptStyle(character.style);
   return [
     character.description ? `Создай референс персонажа: ${character.description}` : "",
     characterGenderLabel ? `Пол персонажа: ${characterGenderLabel}` : "",
     characterAgeLabel ? `Возраст: ${characterAgeLabel}` : "",
-    character.style ? `Стиль: ${character.style}` : "",
+    characterStyle ? `Стиль: ${characterStyle}` : "",
   ].map(normalizeWorkspaceReferencePromptPart).filter(Boolean).join(". ");
 };
 
@@ -32222,12 +32237,13 @@ export function WorkspacePage({
     const generationQuality = options?.quality ?? "standard";
     const generationCreditCost = getSegmentAiPhotoCreditCost(generationQuality);
     const name = referenceCreationName.trim() || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind);
+    const referenceCreationCharacterStyleValue = normalizeWorkspaceReferenceCharacterStyleValue(referenceCreationCharacterStyle);
     const prompt = normalizeWorkspaceSegmentAiPhotoPrompt(buildWorkspaceReferenceAiPrompt({
       character: {
         ageRange: referenceCreationCharacterAgeRange,
         description: referenceCreationPrompt,
         gender: referenceCreationCharacterGender,
-        style: referenceCreationCharacterStyle,
+        style: referenceCreationCharacterStyleValue,
       },
       kind,
       scene: {
@@ -32496,12 +32512,14 @@ export function WorkspacePage({
       ? currentOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
       : null;
     const referenceCreationNameValue = referenceCreationName || getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, generationKind);
+    const referenceCreationCharacterStyleValue = normalizeWorkspaceReferenceCharacterStyleValue(referenceCreationCharacterStyle);
+    const referenceCreationCharacterPreviewStyle = getWorkspaceReferencePromptStyle(referenceCreationCharacterStyleValue);
     const referenceCreationAiPrompt = buildWorkspaceReferenceAiPrompt({
       character: {
         ageRange: referenceCreationCharacterAgeRange,
         description: referenceCreationPrompt,
         gender: referenceCreationCharacterGender,
-        style: referenceCreationCharacterStyle,
+        style: referenceCreationCharacterStyleValue,
       },
       kind: generationKind,
       scene: {
@@ -32650,7 +32668,7 @@ export function WorkspacePage({
                     <strong>{referenceCreationNameValue}</strong>
                     <span>
                       {isCreatingCharacter
-                        ? [getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterStyle].filter(Boolean).join(", ")
+                        ? [getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterPreviewStyle].filter(Boolean).join(", ")
                         : `${referenceCreationScenePlaceType}, ${referenceCreationSceneStyle}, ${referenceCreationSceneLightingMood}`}
                     </span>
                   </div>
@@ -32742,23 +32760,18 @@ export function WorkspacePage({
                         <span>{workspaceText(locale, "Пол", "Gender")}</span>
                         <div className="studio-reference-create-modal__segmented">
                           <button
-                            className={referenceCreationCharacterGender === "" ? "is-active" : ""}
-                            type="button"
-                            onClick={() => setReferenceCreationCharacterGender("")}
-                          >
-                            {workspaceText(locale, "Не задан", "Unset")}
-                          </button>
-                          <button
+                            aria-pressed={referenceCreationCharacterGender === "male"}
                             className={referenceCreationCharacterGender === "male" ? "is-active" : ""}
                             type="button"
-                            onClick={() => setReferenceCreationCharacterGender("male")}
+                            onClick={() => setReferenceCreationCharacterGender((current) => current === "male" ? "" : "male")}
                           >
                             ♂ {workspaceText(locale, "Мужской", "Male")}
                           </button>
                           <button
+                            aria-pressed={referenceCreationCharacterGender === "female"}
                             className={referenceCreationCharacterGender === "female" ? "is-active" : ""}
                             type="button"
-                            onClick={() => setReferenceCreationCharacterGender("female")}
+                            onClick={() => setReferenceCreationCharacterGender((current) => current === "female" ? "" : "female")}
                           >
                             ♀ {workspaceText(locale, "Женский", "Female")}
                           </button>
@@ -32804,7 +32817,7 @@ export function WorkspacePage({
                   <label className="studio-reference-create-modal__field">
                     <span>{workspaceText(locale, "Стиль", "Style")}</span>
                     <select
-                      value={isCreatingCharacter ? referenceCreationCharacterStyle : referenceCreationSceneStyle}
+                      value={isCreatingCharacter ? referenceCreationCharacterStyleValue : referenceCreationSceneStyle}
                       onChange={(event) => {
                         if (isCreatingCharacter) {
                           setReferenceCreationCharacterStyle(event.currentTarget.value);
@@ -32824,41 +32837,44 @@ export function WorkspacePage({
                       {workspaceText(locale, isCreatingCharacter ? "Внешность / описание" : "Описание сцены", isCreatingCharacter ? "Appearance / description" : "Scene description")}
                       <small>{referenceCreationPrompt.length} / 500</small>
                     </span>
-                    <textarea
-                      value={referenceCreationPrompt}
-                      maxLength={500}
-                      onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
-                      placeholder={
-                        isCreatingCharacter
-                          ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
-                          : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
-                      }
-                      rows={4}
-                      aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
-                    />
-                    <div className="studio-reference-create-modal__prompt-actions">
-                      <button
-                        className="studio-reference-create-modal__generate"
-                        type="button"
-                        aria-label={workspaceText(
-                          locale,
-                          `Сгенерировать за ${referenceCreationPremiumCreditCost} кредита`,
-                          `Generate for ${referenceCreationPremiumCreditCost} credits`,
-                        )}
-                        disabled={isReferenceCreateDisabled}
-                        onClick={() => {
-                          void handleCreateWorkspaceReference(generationKind, { quality: "premium" });
-                        }}
-                      >
-                        {isCreatingReference ? (
-                          <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-                        ) : (
-                          <>
-                            <span>{workspaceText(locale, "Сгенерировать", "Generate")}</span>
-                            <small>{workspaceText(locale, `${referenceCreationPremiumCreditCost} кредита`, `${referenceCreationPremiumCreditCost} credits`)}</small>
-                          </>
-                        )}
-                      </button>
+                    <div className="studio-reference-create-modal__prompt-box">
+                      <textarea
+                        value={referenceCreationPrompt}
+                        maxLength={500}
+                        onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
+                        placeholder={
+                          isCreatingCharacter
+                            ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
+                            : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
+                        }
+                        rows={4}
+                        aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
+                      />
+                      <div className="studio-reference-create-modal__prompt-actions">
+                        <button
+                          className={`studio-reference-create-modal__generate${isCreatingReference ? " is-generating" : ""}`}
+                          type="button"
+                          aria-label={workspaceText(
+                            locale,
+                            `Сгенерировать за ${referenceCreationPremiumCreditCost} ⚡`,
+                            `Generate for ${referenceCreationPremiumCreditCost} ⚡`,
+                          )}
+                          disabled={isReferenceCreateDisabled}
+                          onClick={() => {
+                            void handleCreateWorkspaceReference(generationKind, { quality: "premium" });
+                          }}
+                        >
+                          {isCreatingReference ? (
+                            <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
+                          ) : (
+                            <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
+                              <span>{workspaceText(locale, "Сгенерировать", "Generate")}</span>
+                              <span className="studio-canvas-prompt__btn-cost">{referenceCreationPremiumCreditCost}</span>
+                              <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
+                            </span>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </label>
                 </>
@@ -34784,27 +34800,27 @@ export function WorkspacePage({
               </div>
             ) : null}
 
-	            <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-	              {createMode === "default" && generateError && visibleGeneratedVideo ? (
-	                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-	                  {generateError}
-	                </div>
-	              ) : null}
-	              {segmentEditorError ? (
-	                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-	                  {segmentEditorError}
-	                </div>
-	              ) : null}
-	              {createMode === "segment-editor" && segmentEditorVideoError ? (
-	                <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-	                  {segmentEditorVideoError}
-	                </div>
-	              ) : null}
+              <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
+                {createMode === "default" && generateError && visibleGeneratedVideo ? (
+                  <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
+                    {generateError}
+                  </div>
+                ) : null}
+                {segmentEditorError ? (
+                  <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
+                    {segmentEditorError}
+                  </div>
+                ) : null}
+                {createMode === "segment-editor" && segmentEditorVideoError ? (
+                  <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
+                    {segmentEditorVideoError}
+                  </div>
+                ) : null}
                 <div className="studio-canvas-create-layout">
-	              <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-	                {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
-	                  <div className="studio-segment-editor">
-	                    <div
+                <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
+                  {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
+                    <div className="studio-segment-editor">
+                      <div
                         className={`studio-segment-editor__layout${
                           isSegmentEditorVisualPanelOpen ? " is-visual-panel-open" : " is-visual-panel-closed"
                         }`}
@@ -35232,7 +35248,7 @@ export function WorkspacePage({
                           </div>
                         </div>
 
-	                      </div>
+                        </div>
                         <div className="studio-segment-editor__timeline-submit-row">
                           {segmentEditorCreateShortsSubmitButton}
                         </div>
@@ -35241,9 +35257,9 @@ export function WorkspacePage({
                         {segmentTimelineVoiceMenu}
                         {segmentTimelineSoundMenu}
                         {segmentTimelineTextMenu}
-	                    </div>
-	                  </div>
-	                ) : createMode === "segment-editor" ? (
+                      </div>
+                    </div>
+                  ) : createMode === "segment-editor" ? (
                   <div
                     className={`studio-canvas-preview__placeholder studio-canvas-preview__placeholder--segment-editor${
                       isSegmentEditorLoading ? " is-loading" : ""
@@ -35326,24 +35342,24 @@ export function WorkspacePage({
                         <strong>{workspaceText(locale, "Создайте свой Shorts", "Create your Shorts")}</strong>
                         <p>{workspaceText(locale, "Введите тему и нажмите «Создать»", "Enter a topic and press Create")}</p>
                       </>
-	                    )}
-	                  </div>
-	                )}
-	              </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                   {contentPlanPanel}
                 </div>
-	            </div>
+              </div>
 
-	            {createMode !== "segment-editor" ? (
-	            <div className="studio-canvas-prompt">
-	              <div
+              {createMode !== "segment-editor" ? (
+              <div className="studio-canvas-prompt">
+                <div
                 ref={promptInnerRef}
-	                className={studioPromptInnerClassName}
-	                style={promptInnerStyle}
-	              >
-	                <div className="studio-canvas-prompt__editor-layout">
-	                  <div className="studio-canvas-prompt__editor-pane">
-	                    <>
+                  className={studioPromptInnerClassName}
+                  style={promptInnerStyle}
+                >
+                  <div className="studio-canvas-prompt__editor-layout">
+                    <div className="studio-canvas-prompt__editor-pane">
+                      <>
                           {composerSourceIdea ? (
                             <div className="studio-canvas-prompt__head">
                               <div className="studio-canvas-prompt__source">
@@ -35365,10 +35381,10 @@ export function WorkspacePage({
                               </div>
                             </div>
                           ) : null}
-	                        {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
-	                        {hasAppliedSegmentEditorSession ? (
-	                          <p className="studio-canvas-prompt__notice">
-	                            {workspaceText(
+                          {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
+                          {hasAppliedSegmentEditorSession ? (
+                            <p className="studio-canvas-prompt__notice">
+                              {workspaceText(
                                 locale,
                                 `Сегменты сохранены: ${currentAppliedSegmentEditorSession?.segments.length ?? 0}. Следующий запуск обновит текущий проект.`,
                                 `Segments saved: ${currentAppliedSegmentEditorSession?.segments.length ?? 0}. The next run will update the current project.`,
@@ -35383,7 +35399,7 @@ export function WorkspacePage({
                               value={topicInput}
                               onChange={(event) => setTopicInput(event.target.value)}
                               rows={1}
-	                            />
+                              />
                           </div>
                           {!composerSourceIdea ? (
                             <div className="studio-canvas-prompt__topbar">
@@ -35398,11 +35414,11 @@ export function WorkspacePage({
                             </div>
                           ) : null}
                         </div>
-		                        <div className="studio-canvas-prompt__footer" ref={promptFooterRef}>
-	                          <div className="studio-canvas-prompt__chips" ref={promptChipsRef}>
-		                            {studioPromptChips.map((chip) =>
-		                              chip === "Видео" ? (
-		                                <StudioVideoSelectorChip
+                            <div className="studio-canvas-prompt__footer" ref={promptFooterRef}>
+                            <div className="studio-canvas-prompt__chips" ref={promptChipsRef}>
+                                {studioPromptChips.map((chip) =>
+                                  chip === "Видео" ? (
+                                    <StudioVideoSelectorChip
                                   key={chip}
                                   brandLogoFile={selectedBrandLogo}
                                   brandText={brandText}
@@ -35460,15 +35476,15 @@ export function WorkspacePage({
                                   selectedLanguage={selectedLanguage}
                                   onSelect={setSelectedLanguage}
                                 />
-		                              ) : (
-		                                <span className="studio-canvas-prompt__chip" key={chip}>
-		                                  {chip}
-		                                </span>
-		                              ),
-		                            )}
-	                          </div>
+                                  ) : (
+                                    <span className="studio-canvas-prompt__chip" key={chip}>
+                                      {chip}
+                                    </span>
+                                  ),
+                                )}
+                            </div>
                             <div className="studio-canvas-prompt__submit" ref={promptSubmitRef}>
-	                            <button
+                              <button
                                 className={`studio-canvas-prompt__btn${isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
                                 type="button"
                                 aria-label={workspaceText(
@@ -35535,7 +35551,7 @@ export function WorkspacePage({
             ) : null}
           </div>
 
-	          {studioView === "projects" ? (
+            {studioView === "projects" ? (
               <div className="studio-projects">
               {projectDeleteError ? (
                 <p className="project-action-error" role="alert">
@@ -35608,22 +35624,22 @@ export function WorkspacePage({
 
                     if (isExpanded) {
                       return group.projects.map((project, index) => (
-	                    <WorkspaceProjectCard
-	                      key={project.id}
+                      <WorkspaceProjectCard
+                        key={project.id}
                           canUseLocalExamples={canManageLocalExamples}
                           isProjectActionBusy={isSegmentEditorLoading || isSavingLocalExample}
-	                      isPreviewing={activeProjectPreviewId === project.id}
+                        isPreviewing={activeProjectPreviewId === project.id}
                           isStackExpanded={index === 0}
                           onAddToExamples={handleOpenProjectLocalExampleModal}
-	                      onActivate={activateProjectPreview}
-	                      onBlur={handleProjectCardBlur(project.id)}
-	                      onDeactivate={deactivateProjectPreview}
+                        onActivate={activateProjectPreview}
+                        onBlur={handleProjectCardBlur(project.id)}
+                        onDeactivate={deactivateProjectPreview}
                         onDelete={requestProjectDelete}
                           onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
-	                      onOpenPreview={handleOpenProjectPreviewModal}
+                        onOpenPreview={handleOpenProjectPreviewModal}
                           onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
                           onToggleStack={index === 0 ? toggleStack : undefined}
-	                      project={project}
+                        project={project}
                           showStackCollapseHandle={index === 0}
                           stackBadgeLabel={null}
                         />
@@ -38173,14 +38189,14 @@ export function WorkspacePage({
                   </article>
                         ) : null}
 
-	                {!isProjectsLoading && !projectsError && projects.length ? (
-	                  <div className="account-library account-library--projects">
+                  {!isProjectsLoading && !projectsError && projects.length ? (
+                    <div className="account-library account-library--projects">
                       {projectDeleteError ? (
                         <p className="project-action-error" role="alert">
                           {projectDeleteError}
                         </p>
                       ) : null}
-	                    {accountProjectGroups.flatMap((group: WorkspaceProjectStackGroup<WorkspaceProject>) => {
+                      {accountProjectGroups.flatMap((group: WorkspaceProjectStackGroup<WorkspaceProject>) => {
                         if (!group.isStack) {
                           return [
                             <AccountProjectListCard
@@ -38226,7 +38242,7 @@ export function WorkspacePage({
                                 stackBadgeLabel={formatProjectVersionsLabel(group.projects.length, locale)}
                               />
                             </div>
-	                        </div>
+                          </div>
                         );
                       })}
                 </div>

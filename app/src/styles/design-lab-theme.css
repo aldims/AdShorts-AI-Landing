@@ -7576,46 +7576,133 @@ textarea {
   font-weight: 760;
 }
 
+.studio-reference-create-modal__prompt-box {
+  position: relative;
+  min-width: 0;
+}
+
+.studio-reference-modal .studio-reference-create-modal__prompt-box textarea {
+  min-height: 134px;
+  padding-bottom: 58px;
+  resize: none;
+}
+
 .studio-reference-create-modal__prompt-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
   display: flex;
   justify-content: flex-end;
+  pointer-events: none;
 }
 
 .studio-reference-create-modal__generate {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 42px;
-  min-width: 204px;
+  min-height: 40px;
+  min-width: 184px;
+  overflow: hidden;
   padding: 0 18px;
-  border: 1px solid rgba(192, 132, 252, 0.72);
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.92), rgba(79, 70, 229, 0.88));
-  color: rgba(250, 245, 255, 0.98);
+  clip-path: inset(0 round 999px);
+  border: 1px solid rgba(186, 230, 253, 0.22);
+  border-radius: 999px;
+  background-color: #081018;
+  background-image:
+    radial-gradient(ellipse 72% 130% at 22% 0%, rgba(236, 253, 255, 0.16), transparent 58%),
+    radial-gradient(ellipse 110% 92% at 88% 100%, rgba(14, 165, 233, 0.2), transparent 66%),
+    linear-gradient(180deg, rgba(25, 35, 46, 0.98), rgba(5, 10, 16, 1)),
+    #081018;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: rgba(245, 251, 255, 0.96);
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 860;
+  font-weight: 820;
+  letter-spacing: 0;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.78);
   cursor: pointer;
-  box-shadow: 0 12px 28px rgba(88, 28, 135, 0.28);
+  pointer-events: auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.62),
+    0 18px 34px -18px rgba(2, 6, 23, 1),
+    0 0 34px -12px rgba(56, 189, 248, 0.78);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.22s ease,
+    border-color 0.22s ease;
 }
 
-.studio-reference-create-modal__generate small {
+.studio-reference-create-modal__generate::before {
+  content: "";
+  position: absolute;
+  inset: 3px 5px 5px;
+  z-index: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 24%),
+    radial-gradient(ellipse 58% 80% at 50% 100%, rgba(0, 0, 0, 0.32), transparent 72%);
+  opacity: 0.74;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.studio-reference-create-modal__generate .studio-canvas-prompt__btn-label,
+.studio-reference-create-modal__generate .studio-ai-photo-modal__action-spinner {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-reference-create-modal__generate .studio-canvas-prompt__btn-label--premium {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.36);
-  color: rgba(250, 245, 255, 0.88);
-  font-size: 0.68rem;
-  font-weight: 860;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.studio-reference-create-modal__generate .studio-canvas-prompt__btn-cost {
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-reference-create-modal__generate .studio-canvas-prompt__btn-bolt {
+  color: rgba(186, 230, 253, 0.96);
+  font-size: 1.12em;
+  line-height: 1;
+  text-shadow:
+    0 0 10px rgba(56, 189, 248, 0.52),
+    0 0 18px rgba(125, 211, 252, 0.24);
+}
+
+.studio-reference-create-modal__generate:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(186, 230, 253, 0.32);
+  background-image:
+    radial-gradient(ellipse 72% 130% at 22% 0%, rgba(236, 253, 255, 0.22), transparent 60%),
+    radial-gradient(ellipse 110% 92% at 88% 100%, rgba(14, 165, 233, 0.26), transparent 68%),
+    linear-gradient(180deg, rgba(31, 45, 58, 0.99), rgba(6, 12, 20, 1)),
+    #09131d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.66),
+    0 20px 38px -18px rgba(2, 6, 23, 1),
+    0 0 40px -10px rgba(56, 189, 248, 0.92);
 }
 
 .studio-reference-create-modal__generate:disabled {
   cursor: not-allowed;
-  opacity: 0.56;
-  box-shadow: none;
+  filter: saturate(0.68) brightness(0.82);
+  opacity: 0.58;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 10px 22px rgba(0, 0, 0, 0.32);
 }
 
 .studio-reference-create-modal__input-row {
@@ -7694,7 +7781,7 @@ textarea {
 
 .studio-reference-create-modal__segmented {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 11px;
