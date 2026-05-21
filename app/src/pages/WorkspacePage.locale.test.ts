@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
+import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   buildWorkspaceSegmentEditorPayload,
   buildWorkspaceSegmentEditorChangeChecklist,
@@ -21,6 +22,7 @@ import {
   getNextWorkspaceReferenceDefaultName,
   insertWorkspacePromptCharacterMentionText,
   resolveWorkspacePromptMentionedCharacterOptions,
+  resolveWorkspaceTalkingSpeakerKey,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
@@ -34,6 +36,7 @@ import {
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
+  isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
@@ -52,6 +55,7 @@ import {
   resolveStudioVoiceIdForLanguage,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
+  shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
   shouldDeferSegmentEditorRouteRestore,
   shouldShowWorkspaceMediaLibraryLoadingState,
@@ -390,6 +394,30 @@ describe("WorkspacePage segment visual references payload", () => {
       preserveCharacters: true,
       referenceAssetIds: [501],
       sceneReferenceAssetIds: [901],
+    });
+  });
+});
+
+describe("WorkspacePage talking character speaker selection", () => {
+  it("auto-selects the only chosen character", () => {
+    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1"], null)).toEqual({
+      isMissing: false,
+      isRequired: false,
+      speakerKey: "project-character:1",
+    });
+  });
+
+  it("requires explicit speaker selection for multiple chosen characters", () => {
+    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1", "saved:two"], null)).toEqual({
+      isMissing: true,
+      isRequired: true,
+      speakerKey: null,
+    });
+
+    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1", "saved:two"], "saved:two")).toEqual({
+      isMissing: false,
+      isRequired: true,
+      speakerKey: "saved:two",
     });
   });
 });
@@ -778,6 +806,58 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(resetDraft.segments[0]?.sceneSoundPrompt).toBe("");
     expect(resetDraft.segments[0]?.speechWords).toEqual([]);
     expect(isWorkspaceSegmentEditorDraftSegmentEmpty(resetDraft.segments[0])).toBe(true);
+    expect(shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(resetDraft)).toBe(true);
+    expect(
+      buildWorkspaceSegmentEditorTracks(resetDraft.segments, resetDraft.segments, resetDraft, resetDraft).rows
+        .flatMap((row) => row.spans)
+        .some((span) => span.isEdited),
+    ).toBe(false);
+  });
+
+  it("keeps tracks unedited after adding another empty scene to a clean blank draft", () => {
+    const sourceSegment = createDraftSegment({
+      index: 0,
+      text: "Only segment",
+    });
+    const sourceSession = {
+      ...createDraftSession(sourceSegment),
+      customMusicAssetId: 601,
+      customMusicFileName: "old-track.mp3",
+      musicAssetId: 602,
+      musicName: "old-track",
+      musicType: "custom",
+      subtitleType: "karaoke",
+      ttsAssetId: 603,
+      voiceType: "Boris",
+    };
+    const resetDraft = resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+      ...sourceSession,
+      segments: resolveWorkspaceSegmentEditorSegmentsAfterDelete(sourceSession, sourceSegment.index),
+    });
+    const addedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: resetDraft,
+      insertAt: 1,
+      reservedSegmentIndexes: [sourceSegment.index, resetDraft.segments[0]!.index],
+    });
+    const draftWithAddedEmptyScene = {
+      ...resetDraft,
+      segments: [...resetDraft.segments, addedSegment],
+    };
+    const trackBaseline = isWorkspaceSegmentEditorCleanEmptyDraft(draftWithAddedEmptyScene)
+      ? draftWithAddedEmptyScene
+      : sourceSession;
+
+    expect(isWorkspaceSegmentEditorCleanEmptyDraft(draftWithAddedEmptyScene)).toBe(true);
+    expect(
+      buildWorkspaceSegmentEditorTracks(
+        draftWithAddedEmptyScene.segments,
+        trackBaseline.segments,
+        draftWithAddedEmptyScene,
+        trackBaseline,
+      ).rows
+        .flatMap((row) => row.spans)
+        .some((span) => span.isEdited),
+    ).toBe(false);
   });
 
   it("keeps reset music assets empty when a fresh server session still has old generated music", () => {

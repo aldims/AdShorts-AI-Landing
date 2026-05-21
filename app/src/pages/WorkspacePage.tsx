@@ -1243,6 +1243,9 @@ type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   prompt?: string;
   script: string;
   segmentIndex?: number;
+  speakerCharacterKey?: string;
+  speakerCharacterName?: string;
+  speakerReferenceAssetId?: number;
   voiceType?: string | null;
 };
 
@@ -3910,6 +3913,30 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
     preserveCharacters,
     referenceAssetIds,
     sceneReferenceAssetIds,
+  };
+};
+
+export const resolveWorkspaceTalkingSpeakerKey = (
+  characterKeys: readonly string[],
+  selectedSpeakerKey: string | null | undefined,
+) => {
+  const normalizedKeys = characterKeys
+    .map((key) => String(key ?? "").trim())
+    .filter(Boolean)
+    .slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT);
+  const selectedKey = String(selectedSpeakerKey ?? "").trim();
+  const isRequired = normalizedKeys.length > 1;
+  const speakerKey =
+    normalizedKeys.length === 1
+      ? normalizedKeys[0]
+      : selectedKey && normalizedKeys.includes(selectedKey)
+        ? selectedKey
+        : null;
+
+  return {
+    isMissing: isRequired && !speakerKey,
+    isRequired,
+    speakerKey,
   };
 };
 
@@ -8290,6 +8317,52 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
     voiceType: "none",
   };
 };
+
+export const shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
+  draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
+) => Boolean(draft?.segments.length === 1 && isWorkspaceSegmentEditorDraftSegmentEmpty(draft.segments[0]));
+
+export const isWorkspaceSegmentEditorCleanEmptyDraft = (
+  draft:
+    | Pick<
+        WorkspaceSegmentEditorDraftSession,
+        | "customMusicAssetId"
+        | "customMusicFileName"
+        | "musicAssetId"
+        | "musicName"
+        | "musicType"
+        | "segments"
+        | "subtitleType"
+        | "ttsAssetId"
+        | "voiceType"
+      >
+    | null
+    | undefined,
+) =>
+  Boolean(
+    draft &&
+      draft.segments.length > 0 &&
+      draft.segments.every(
+        (segment) =>
+          isWorkspaceSegmentEditorDraftSegmentEmpty(segment) &&
+          !getWorkspaceSegmentVoiceOverrideId(segment) &&
+          !normalizeWorkspaceSegmentEditorTextForCompare(segment.originalText) &&
+          !normalizeWorkspaceSegmentEditorTextForCompare(segment.sceneSoundPrompt) &&
+          !segment.sceneSoundPromptInitialized &&
+          !segment.speechDuration &&
+          !segment.speechEndTime &&
+          !segment.speechStartTime &&
+          segment.speechWords.length === 0,
+      ) &&
+      (normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "ai") === "none" &&
+      !getPositiveWorkspaceMediaAssetId(draft.customMusicAssetId) &&
+      !String(draft.customMusicFileName ?? "").trim() &&
+      !getPositiveWorkspaceMediaAssetId(draft.musicAssetId) &&
+      !String(draft.musicName ?? "").trim() &&
+      (normalizeWorkspaceSegmentEditorSetting(draft.subtitleType) ?? "none") === "none" &&
+      !getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) &&
+      normalizeWorkspaceSegmentEditorSetting(draft.voiceType) === "none",
+  );
 
 type WorkspaceSegmentEditorCarouselSlot =
   | {
@@ -16264,6 +16337,7 @@ export function WorkspacePage({
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
+  const [selectedSegmentTalkingSpeakerKey, setSelectedSegmentTalkingSpeakerKey] = useState<string | null>(null);
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<WorkspaceReferenceKind>("character");
@@ -17856,6 +17930,7 @@ export function WorkspacePage({
       setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
       setSelectedSegmentReferenceCharacterAssetKeys([]);
+      setSelectedSegmentTalkingSpeakerKey(null);
       setSelectedSegmentReferenceSceneKey(null);
       setIsSegmentReferencesModalOpen(false);
       setIsWorkspaceReferenceCreatorOpen(false);
@@ -19998,6 +20073,28 @@ export function WorkspacePage({
       selectedSegmentReferenceCharacterIds,
     ],
   );
+  const selectedSegmentReferenceCharacterKeys = useMemo(
+    () => selectedSegmentReferenceCharacterOptions.map((option) => option.key),
+    [selectedSegmentReferenceCharacterOptions],
+  );
+  const segmentTalkingSpeakerSelection = useMemo(
+    () => resolveWorkspaceTalkingSpeakerKey(selectedSegmentReferenceCharacterKeys, selectedSegmentTalkingSpeakerKey),
+    [selectedSegmentReferenceCharacterKeys, selectedSegmentTalkingSpeakerKey],
+  );
+  const selectedSegmentTalkingSpeakerOption = useMemo(
+    () =>
+      segmentTalkingSpeakerSelection.speakerKey
+        ? selectedSegmentReferenceCharacterOptions.find(
+            (option) => option.key === segmentTalkingSpeakerSelection.speakerKey,
+          ) ?? null
+        : null,
+    [segmentTalkingSpeakerSelection.speakerKey, selectedSegmentReferenceCharacterOptions],
+  );
+  useEffect(() => {
+    setSelectedSegmentTalkingSpeakerKey((current) =>
+      resolveWorkspaceTalkingSpeakerKey(selectedSegmentReferenceCharacterKeys, current).speakerKey,
+    );
+  }, [selectedSegmentReferenceCharacterKeys]);
   const selectedSegmentReferenceScene = useMemo(
     () =>
       selectedSegmentReferenceSceneKey
@@ -20214,6 +20311,7 @@ export function WorkspacePage({
   useEffect(() => {
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
+    setSelectedSegmentTalkingSpeakerKey(null);
     setSelectedSegmentReferenceSceneKey(null);
     setIsSegmentReferencesModalOpen(false);
     setIsWorkspaceReferenceCreatorOpen(false);
@@ -20412,9 +20510,10 @@ export function WorkspacePage({
     segmentEditorChangeChecklist.length + segmentEditorPendingInsertedSegmentCount;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
-  const isOnlyEmptySegmentEditorSegment =
-    segmentEditorSegmentCount === WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS &&
-    isWorkspaceSegmentEditorDraftSegmentEmpty(segmentEditorDraft?.segments[0]);
+  const isSegmentEditorBlankSceneDraft =
+    shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(segmentEditorDraft);
+  const isSegmentEditorCleanEmptyDraft = isWorkspaceSegmentEditorCleanEmptyDraft(segmentEditorDraft);
+  const isOnlyEmptySegmentEditorSegment = isSegmentEditorBlankSceneDraft;
   const canDeleteSegmentEditorSegment = segmentEditorSegmentCount > 0 && !isOnlyEmptySegmentEditorSegment;
   const segmentEditorCarouselNavigation = getWorkspaceSegmentEditorCarouselNavigation({
     activeSegmentIndex,
@@ -20800,7 +20899,8 @@ export function WorkspacePage({
     resolvedSelectedVoiceId;
   const studioSidebarVoiceEnabled = segmentEditorDraft ? !isCurrentDraftVoiceDisabled : isVoiceoverEnabled;
   const isSegmentTimelineGlobalVoiceEdited = Boolean(
-    segmentEditorDraft &&
+    !isSegmentEditorCleanEmptyDraft &&
+      segmentEditorDraft &&
       segmentEditorChecklistBaseSession &&
       normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.voiceType) !==
         normalizeWorkspaceSegmentEditorSetting(segmentEditorChecklistBaseSession.voiceType),
@@ -20821,20 +20921,24 @@ export function WorkspacePage({
   const studioSidebarMusicType = studioMusicOptions.some((option) => option.id === studioSidebarMusicTypeRaw)
     ? (studioSidebarMusicTypeRaw as StudioMusicType)
     : selectedMusicType;
+  const segmentEditorTrackBaselineSession = isSegmentEditorCleanEmptyDraft
+    ? segmentEditorDraft
+    : segmentEditorChecklistBaseSession;
   const segmentEditorTracks = segmentEditorDraft
     ? buildWorkspaceSegmentEditorTracks(
         segmentEditorDraft.segments,
-        segmentEditorChecklistBaseSession?.segments ?? [],
+        segmentEditorTrackBaselineSession?.segments ?? [],
         segmentEditorDraft,
-        segmentEditorChecklistBaseSession,
+        segmentEditorTrackBaselineSession,
         {
           activeArrayIndex: activeSegmentIndex,
-          isSoundEdited: isWorkspaceSegmentDraftSceneSoundEdited,
-          isTextEdited: (segment) => isWorkspaceSegmentDraftTextEdited(segment),
+          isSoundEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftSceneSoundEdited,
+          isTextEdited: isSegmentEditorCleanEmptyDraft ? () => false : (segment) => isWorkspaceSegmentDraftTextEdited(segment),
           isVisualEdited: (segment, baselineSegment) =>
-            isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ||
-            isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment),
-          isVoiceEdited: isWorkspaceSegmentDraftVoiceEdited,
+            !isSegmentEditorCleanEmptyDraft &&
+            (isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ||
+              isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)),
+          isVoiceEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftVoiceEdited,
         },
       )
     : null;
@@ -23567,21 +23671,23 @@ export function WorkspacePage({
     const resolvedNextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(segmentEditorDraft, targetSegment.index, {
       reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
     });
-    const nextDraftForRoute = isDeletingOnlySegment
+    const nextDraftBeforeTrackReset = {
+      ...segmentEditorDraft,
+      segments: resolvedNextSegments,
+    };
+    const shouldResetTrackSettingsAfterDelete =
+      shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(nextDraftBeforeTrackReset);
+    const nextDraftForRoute = shouldResetTrackSettingsAfterDelete
       ? resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
-          ...segmentEditorDraft,
-          segments: resolvedNextSegments,
+          ...nextDraftBeforeTrackReset,
         })
-      : {
-          ...segmentEditorDraft,
-          segments: resolvedNextSegments,
-        };
+      : nextDraftBeforeTrackReset;
     const nextSegments = rebuildWorkspaceSegmentEditorDraftTimeline(
       nextDraftForRoute.segments,
       nextDraftForRoute,
     );
 
-    if (isDeletingOnlySegment) {
+    if (shouldResetTrackSettingsAfterDelete) {
       setSelectedMusicType("none");
       setSelectedCustomMusic(null);
       setMusicSelectionError(null);
@@ -23603,20 +23709,26 @@ export function WorkspacePage({
       setSelectedSubtitleColorId(fallbackStudioSubtitleColorOption.id);
     }
 
-    updateSegmentEditorDraft((currentDraft) => {
-      const nextCurrentSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(currentDraft, targetSegment.index, {
-        reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
-      });
-      if (nextCurrentSegments === currentDraft.segments) {
-        return currentDraft;
-      }
+    if (shouldResetTrackSettingsAfterDelete) {
+      updateSegmentEditorDraft(() => nextDraftForRoute);
+    } else {
+      updateSegmentEditorDraft((currentDraft) => {
+        const nextCurrentSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(currentDraft, targetSegment.index, {
+          reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
+        });
+        if (nextCurrentSegments === currentDraft.segments) {
+          return currentDraft;
+        }
 
-      const nextDraft = {
-        ...currentDraft,
-        segments: nextCurrentSegments,
-      };
-      return isDeletingOnlySegment ? resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(nextDraft) : nextDraft;
-    });
+        const nextDraft = {
+          ...currentDraft,
+          segments: nextCurrentSegments,
+        };
+        return shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(nextDraft)
+          ? resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(nextDraft)
+          : nextDraft;
+      });
+    }
     const nextActiveSegmentArrayIndex = (() => {
       if (isDeletingOnlySegment) {
         return 0;
@@ -26754,6 +26866,13 @@ export function WorkspacePage({
       return;
     }
 
+    if (isSegmentTalkingSpeakerSelectionMissing) {
+      setSegmentEditorVideoError("Выберите, кто будет говорить.");
+      return;
+    }
+
+    const speakerReferenceAssetId = getPositiveWorkspaceMediaAssetId(selectedSegmentTalkingSpeakerOption?.assetId);
+
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       aiVideoPrompt: script,
@@ -26834,6 +26953,9 @@ export function WorkspacePage({
           prompt: visualPrompt,
           script,
           segmentIndex: visualJobBinding.segmentIndex,
+          speakerCharacterKey: selectedSegmentTalkingSpeakerOption?.key,
+          speakerCharacterName: selectedSegmentTalkingSpeakerOption?.label,
+          speakerReferenceAssetId: speakerReferenceAssetId ?? undefined,
           voiceType,
         } satisfies WorkspaceSegmentTalkingPhotoJobCreateRequest),
       });
@@ -32647,6 +32769,8 @@ export function WorkspacePage({
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const canPromptUseVisualReferences = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
   const selectedSegmentReferenceCharacterCount = selectedSegmentReferenceCharacterOptions.length;
+  const isSegmentTalkingSpeakerSelectionRequired = segmentTalkingSpeakerSelection.isRequired;
+  const isSegmentTalkingSpeakerSelectionMissing = segmentTalkingSpeakerSelection.isMissing;
   const selectedSegmentReferenceCount =
     selectedSegmentReferenceCharacterCount + (selectedSegmentReferenceScene ? 1 : 0);
   const selectedSegmentReferenceCharacterSummary =
@@ -32700,6 +32824,7 @@ export function WorkspacePage({
   const clearSegmentVisualReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
+    setSelectedSegmentTalkingSpeakerKey(null);
     setSelectedSegmentReferenceSceneKey(null);
   };
   const renderSegmentReferencePreview = (
@@ -33960,21 +34085,41 @@ export function WorkspacePage({
           {selectedSegmentReferenceCharacterOptions.length > 0 ? (
             <div className="studio-segment-references__mention-icons">
               {selectedSegmentReferenceCharacterOptions.map((option) => {
-                const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
+                const isSpeaker = selectedSegmentTalkingSpeakerOption?.key === option.key;
+                const isInserted = !isPromptTalkingPhotoMode && segmentPromptMentionCharacterKeys.includes(option.key);
                 return (
                   <button
                     key={`segment-reference-mention-icon:${option.key}`}
-                    className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
+                    className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}${isSpeaker ? " is-speaking" : ""}`}
                     type="button"
-                    aria-pressed={isInserted}
+                    aria-pressed={isPromptTalkingPhotoMode ? isSpeaker : isInserted}
                     aria-label={workspaceText(
                       locale,
-                      `Добавить ${option.label} в описание`,
-                      `Add ${option.label} to prompt`,
+                      isPromptTalkingPhotoMode
+                        ? `Выбрать ${option.label} говорящим персонажем`
+                        : `Добавить ${option.label} в описание`,
+                      isPromptTalkingPhotoMode
+                        ? `Select ${option.label} as the speaking character`
+                        : `Add ${option.label} to prompt`,
                     )}
-                    title={workspaceText(locale, `Добавить ${option.label} в описание`, `Add ${option.label} to prompt`)}
+                    title={workspaceText(
+                      locale,
+                      isPromptTalkingPhotoMode
+                        ? `Выбрать ${option.label} говорящим персонажем`
+                        : `Добавить ${option.label} в описание`,
+                      isPromptTalkingPhotoMode
+                        ? `Select ${option.label} as the speaking character`
+                        : `Add ${option.label} to prompt`,
+                    )}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleInsertSegmentPromptCharacterMention(option)}
+                    onClick={() => {
+                      if (isPromptTalkingPhotoMode) {
+                        setSelectedSegmentTalkingSpeakerKey(option.key);
+                        return;
+                      }
+
+                      handleInsertSegmentPromptCharacterMention(option);
+                    }}
                   >
                     <span className="studio-segment-references__mention-icon-media">
                       {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
@@ -34010,6 +34155,58 @@ export function WorkspacePage({
       (!isSegmentAiPhotoModalOpen || variant === "modal")
         ? createPortal(renderSegmentReferencesModal(), document.body)
         : null}
+    </section>
+  );
+  const renderSegmentTalkingSpeakerPanel = (variant: "editor" | "modal" = "editor") => (
+    <section className={`studio-segment-talking-speaker studio-segment-talking-speaker--${variant}`}>
+      <div className="studio-segment-talking-speaker__head">
+        <strong>{workspaceText(locale, "Кто говорит", "Who speaks")}</strong>
+        <span>
+          {workspaceText(
+            locale,
+            "Для лучшего результата лицо и рот говорящего должны быть хорошо видны.",
+            "For best results, the speaker's face and mouth should be clearly visible.",
+          )}
+        </span>
+      </div>
+      {selectedSegmentReferenceCharacterOptions.length > 0 ? (
+        <div className="studio-segment-talking-speaker__options" role="group" aria-label={workspaceText(locale, "Говорящий персонаж", "Speaking character")}>
+          {selectedSegmentReferenceCharacterOptions.map((option) => {
+            const isSpeaker = selectedSegmentTalkingSpeakerOption?.key === option.key;
+            return (
+              <button
+                key={`talking-speaker:${variant}:${option.key}`}
+                className={`studio-segment-talking-speaker__option${isSpeaker ? " is-selected" : ""}`}
+                type="button"
+                aria-pressed={isSpeaker}
+                onClick={() => setSelectedSegmentTalkingSpeakerKey(option.key)}
+              >
+                <span className="studio-segment-talking-speaker__avatar">
+                  {renderSegmentReferenceOptionPreview(option, `talking-speaker:${variant}:${option.key}`)}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <button
+          className="studio-segment-talking-speaker__empty"
+          type="button"
+          onClick={() => setIsSegmentReferencesModalOpen(true)}
+        >
+          {workspaceText(
+            locale,
+            "Если в кадре несколько персонажей, выберите их в меню «Персонажи».",
+            "If the shot has multiple characters, select them in the Characters menu.",
+          )}
+        </button>
+      )}
+      {isSegmentTalkingSpeakerSelectionRequired && !selectedSegmentTalkingSpeakerOption ? (
+        <p className="studio-segment-talking-speaker__warning" role="alert">
+          {workspaceText(locale, "Выберите, кто будет говорить.", "Select who will speak.")}
+        </p>
+      ) : null}
     </section>
   );
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
@@ -34113,7 +34310,8 @@ export function WorkspacePage({
     (isPromptUpscaleMode && !canUpscaleSegmentImage);
   const isPromptVisualActionDisabled =
     isPromptVisualBaseDisabled ||
-    isPromptVisualPromptEmpty;
+    isPromptVisualPromptEmpty ||
+    (isPromptTalkingPhotoMode && isSegmentTalkingSpeakerSelectionMissing);
   const canImprovePromptVisual =
     isPromptImageEditMode
       ? canImproveSegmentImageEditPrompt
@@ -35354,8 +35552,8 @@ export function WorkspacePage({
                             </svg>
                           )}
                         </button>
-                        {isPromptImprovementResetVisible ? (
-                          <button
+	                        {isPromptImprovementResetVisible ? (
+	                          <button
                             className="studio-segment-editor__prompt-reset"
                             type="button"
                             aria-label={workspaceText(locale, "Сбросить улучшенное описание", "Reset improved prompt")}
@@ -35378,10 +35576,11 @@ export function WorkspacePage({
                                 strokeWidth="2.2"
                               />
                             </svg>
-                          </button>
-                        ) : null}
-                      </div>
-                      {isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent ? (
+	                          </button>
+	                        ) : null}
+	                      </div>
+                      {isPromptTalkingPhotoMode ? renderSegmentTalkingSpeakerPanel("editor") : null}
+	                      {isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent ? (
                         <div className="studio-segment-editor__prompt-info-card is-processing" role="status" aria-live="polite">
                           <strong>{workspaceText(locale, "Генерируем звук сцены", "Generating scene sound")}</strong>
                           <span>
@@ -35405,7 +35604,9 @@ export function WorkspacePage({
                   ) : null}
                   {!isPromptLibraryMode && !isPromptVoiceoverMode ? (
                     <div className="studio-segment-editor__prompt-action-row">
-                      {canPromptUseVisualReferences ? renderSegmentVisualReferencesPanel("editor") : null}
+                      {canPromptUseVisualReferences || isPromptTalkingPhotoMode
+                        ? renderSegmentVisualReferencesPanel("editor")
+                        : null}
                       {isPromptAiPhotoMode
                         ? renderSegmentVisualQualitySwitch({
                             ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
@@ -37682,12 +37883,13 @@ export function WorkspacePage({
                         </div>
                       ) : segmentAiPhotoModalTab === "talking_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
-                          <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</strong>
-                            <p>{workspaceText(locale, "Фото произнесет текст текущей сцены выбранным голосом.", "The photo speaks this scene text with the selected voice.")}</p>
-                          </div>
+	                          <div className="studio-ai-photo-modal__tab-panel-head">
+	                            <strong>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</strong>
+	                            <p>{workspaceText(locale, "Фото или видео произнесет текст текущей сцены выбранным голосом.", "The photo or video speaks this scene text with the selected voice.")}</p>
+	                          </div>
+                          {renderSegmentTalkingSpeakerPanel("modal")}
 
-                          <div className="studio-ai-photo-modal__prompt-field">
+	                          <div className="studio-ai-photo-modal__prompt-field">
                             <textarea
                               className="studio-ai-photo-modal__textarea"
                               value={segmentAiPhotoModalSegment?.text ?? ""}
@@ -37727,12 +37929,13 @@ export function WorkspacePage({
                               type="button"
                               aria-label={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
                               title={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
-                              disabled={
-                                !canCreateSegmentTalkingPhoto ||
-                                isSegmentTalkingPhotoModalPromptEmpty ||
-                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo
-                              }
+	                              disabled={
+	                                !canCreateSegmentTalkingPhoto ||
+	                                isSegmentTalkingPhotoModalPromptEmpty ||
+                                  isSegmentTalkingSpeakerSelectionMissing ||
+	                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+	                                isSegmentEditorPreparingCustomVideo
+	                              }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
                                   handleSegmentTalkingPhotoModalGenerate({

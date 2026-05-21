@@ -3974,6 +3974,9 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     }
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const normalizedSpeakerCharacterKey = normalizeGenerationText(options?.speakerCharacterKey) || undefined;
+    const normalizedSpeakerCharacterName = normalizeGenerationText(options?.speakerCharacterName) || undefined;
+    const normalizedSpeakerReferenceAssetId = normalizePositiveInteger(options?.speakerReferenceAssetId);
     const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -4010,6 +4013,9 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         script: normalizedScript,
         seed: -1,
         segment_index: normalizedSegmentIndex,
+        speaker_character_key: normalizedSpeakerCharacterKey,
+        speaker_character_name: normalizedSpeakerCharacterName,
+        speaker_reference_asset_id: normalizedSpeakerReferenceAssetId,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
         voice_type: normalizedVoiceType,
