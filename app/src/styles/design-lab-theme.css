@@ -8211,6 +8211,10 @@ textarea {
   padding: 0;
 }
 
+.studio-reference-modal__selected-grid--characters-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .studio-reference-modal__selected-card {
   position: relative;
   display: grid;
@@ -8236,6 +8240,12 @@ textarea {
 
 .studio-reference-modal__selected-card:last-child {
   padding-left: 34px;
+}
+
+.studio-reference-modal__selected-grid--characters-only .studio-reference-modal__selected-card:first-child,
+.studio-reference-modal__selected-grid--characters-only .studio-reference-modal__selected-card:last-child {
+  padding-right: 12px;
+  padding-left: 12px;
 }
 
 .studio-reference-modal__selected-link {

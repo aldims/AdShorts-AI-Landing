@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
+const organicSprintLastmod = "2026-05-23";
+const commercialGrowthLastmod = "2026-05-23";
 
 const errors = [];
 
@@ -66,6 +68,29 @@ const organicSprintPages = [
   "en/youtube-shorts-getting-0-views/index.html",
   "en/youtube-shorts-wont-upload/index.html",
   "en/how-to-increase-retention-in-shorts/index.html",
+  "en/youtube-shorts-not-showing-on-channel/index.html",
+  "en/youtube-shorts-description-what-to-write/index.html",
+  "en/youtube-shorts-from-photos/index.html",
+  "en/how-to-upload-youtube-shorts/index.html",
+  "en/youtube-shorts-not-converting-to-subscribers/index.html",
+  "en/youtube-shorts-no-sound/index.html",
+  "en/youtube-shorts-black-bars/index.html",
+  "en/youtube-shorts-not-getting-views/index.html",
+  "en/youtube-shorts-resolution/index.html",
+  "en/copyright-free-music-for-shorts/index.html",
+  "en/youtube-shorts-copyright/index.html",
+  "en/background-for-youtube-shorts/index.html",
+  "en/how-often-to-post-youtube-shorts/index.html",
+  "en/ctr-in-youtube-shorts/index.html",
+  "razreshenie-dlya-shorts/index.html",
+  "nizkoe-uderzhanie-v-youtube-shorts/index.html",
+  "monetizaciya-youtube-shorts/index.html",
+  "avtorskie-prava-v-shorts/index.html",
+  "opisanie-dlya-shorts-chto-pisat/index.html",
+  "shorts-iz-foto/index.html",
+  "kak-zagruzit-shorts/index.html",
+  "shorts-ne-otobrazhayutsya-na-kanale/index.html",
+  "shorts-net-zvuka/index.html",
 ];
 
 const commercialGrowthPages = [
@@ -78,6 +103,13 @@ const commercialGrowthPages = [
   "generator-video-dlya-tiktok/index.html",
   "generator-reels-instagram/index.html",
   "ai-generator-video-dlya-socsetey/index.html",
+  "luchshiy-ai-generator-shorts/index.html",
+  "luchshiy-generator-shorts-bez-lica/index.html",
+  "kak-vybrat-ai-generator-shorts/index.html",
+  "ai-generator-shorts-dlya-malogo-biznesa/index.html",
+  "ai-generator-shorts-dlya-avtorov-youtube/index.html",
+  "ai-video-maker-dlya-reels-tiktok-i-shorts/index.html",
+  "generator-video-bez-lica-dlya-youtube-shorts/index.html",
   "en/youtube-shorts-generator/index.html",
   "en/ai-shorts-generator/index.html",
   "en/faceless-youtube-shorts-generator/index.html",
@@ -87,6 +119,13 @@ const commercialGrowthPages = [
   "en/tiktok-video-generator/index.html",
   "en/instagram-reels-generator/index.html",
   "en/ai-video-generator-for-social-media/index.html",
+  "en/best-ai-shorts-generator/index.html",
+  "en/best-faceless-youtube-shorts-generator/index.html",
+  "en/how-to-choose-an-ai-shorts-generator/index.html",
+  "en/ai-shorts-generator-for-small-business/index.html",
+  "en/ai-shorts-generator-for-youtube-creators/index.html",
+  "en/ai-video-maker-for-reels-tiktok-and-shorts/index.html",
+  "en/faceless-video-generator-for-youtube-shorts/index.html",
 ];
 
 const legalPages = [
@@ -123,7 +162,7 @@ for (const pagePath of organicSprintPages) {
   assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing organic sprint title`);
   assert(/<meta\s+name="description"\s+content="[^"]{80,}"/i.test(html), `${pagePath}: missing organic sprint description`);
   assert(/<link\s+rel="canonical"\s+href="https:\/\/adshortsai\.com\/[^"]*"/i.test(html), `${pagePath}: missing canonical`);
-  assert(/"dateModified"\s*:\s*"2026-05-22"/i.test(html), `${pagePath}: missing current dateModified`);
+  assert(new RegExp(`"dateModified"\\s*:\\s*"${organicSprintLastmod}"`, "i").test(html), `${pagePath}: missing current dateModified`);
   assert(/"author"\s*:\s*\{\s*"@type"\s*:\s*"Organization"\s*,\s*"name"\s*:\s*"AdShorts AI"/i.test(html), `${pagePath}: missing Article author`);
   assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
@@ -141,7 +180,7 @@ for (const pagePath of commercialGrowthPages) {
   assert(/<link\s+rel="alternate"\s+hreflang="x-default"\s+href="https:\/\/adshortsai\.com\/[^"]+\/"/i.test(html), `${pagePath}: missing x-default hreflang`);
   assert(/"@type"\s*:\s*"SoftwareApplication"/i.test(html), `${pagePath}: missing SoftwareApplication`);
   assert(/"@type"\s*:\s*"WebPage"/i.test(html), `${pagePath}: missing WebPage`);
-  assert(/"dateModified"\s*:\s*"2026-05-23"/i.test(html), `${pagePath}: missing commercial growth dateModified`);
+  assert(new RegExp(`"dateModified"\\s*:\\s*"${commercialGrowthLastmod}"`, "i").test(html), `${pagePath}: missing commercial growth dateModified`);
   assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
   assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
@@ -218,7 +257,7 @@ for (const url of sitemapUrls) {
 for (const pagePath of commercialGrowthPages) {
   const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
   assert(
-    new RegExp(`<loc>${commercialUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>2026-05-23<\\/lastmod>`).test(sitemap),
+    new RegExp(`<loc>${commercialUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${commercialGrowthLastmod}<\\/lastmod>`).test(sitemap),
     `sitemap.xml: commercial growth URL must use current lastmod ${commercialUrl}`,
   );
 }
@@ -237,17 +276,17 @@ for (const url of sitemapUrls) {
 for (const pagePath of organicSprintPages) {
   const sprintUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
   assert(
-    new RegExp(`<loc>${sprintUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>2026-05-22<\\/lastmod>`).test(sitemap),
+    new RegExp(`<loc>${sprintUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${organicSprintLastmod}<\\/lastmod>`).test(sitemap),
     `sitemap.xml: organic sprint URL must use current lastmod ${sprintUrl}`,
   );
   const record = metadata.urls.find((entry) => entry.url === sprintUrl);
-  assert(record?.lastmod === "2026-05-22", `seo-url-metadata.json: organic sprint URL must use current lastmod ${sprintUrl}`);
+  assert(record?.lastmod === organicSprintLastmod, `seo-url-metadata.json: organic sprint URL must use current lastmod ${sprintUrl}`);
 }
 
 for (const pagePath of commercialGrowthPages) {
   const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
   const record = metadata.urls.find((entry) => entry.url === commercialUrl);
-  assert(record?.lastmod === "2026-05-23", `seo-url-metadata.json: commercial growth URL must use current lastmod ${commercialUrl}`);
+  assert(record?.lastmod === commercialGrowthLastmod, `seo-url-metadata.json: commercial growth URL must use current lastmod ${commercialUrl}`);
   assert(record?.intent === "commercial", `seo-url-metadata.json: commercial growth URL should be classified as commercial ${commercialUrl}`);
 }
 

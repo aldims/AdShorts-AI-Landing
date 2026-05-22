@@ -4,7 +4,7 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-05-22";
+const dateModified = "2026-05-23";
 
 const priorityRoutes = [
   "/en/faceless-youtube-shorts/",
@@ -30,18 +30,41 @@ const priorityRoutes = [
   "/en/youtube-shorts-getting-0-views/",
   "/en/youtube-shorts-wont-upload/",
   "/en/how-to-increase-retention-in-shorts/",
+  "/en/youtube-shorts-not-showing-on-channel/",
+  "/en/youtube-shorts-description-what-to-write/",
+  "/en/youtube-shorts-from-photos/",
+  "/en/how-to-upload-youtube-shorts/",
+  "/en/youtube-shorts-not-converting-to-subscribers/",
+  "/en/youtube-shorts-no-sound/",
+  "/en/youtube-shorts-black-bars/",
+  "/en/youtube-shorts-not-getting-views/",
+  "/en/youtube-shorts-resolution/",
+  "/en/copyright-free-music-for-shorts/",
+  "/en/youtube-shorts-copyright/",
+  "/en/background-for-youtube-shorts/",
+  "/en/how-often-to-post-youtube-shorts/",
+  "/en/ctr-in-youtube-shorts/",
+  "/razreshenie-dlya-shorts/",
+  "/nizkoe-uderzhanie-v-youtube-shorts/",
+  "/monetizaciya-youtube-shorts/",
+  "/avtorskie-prava-v-shorts/",
+  "/opisanie-dlya-shorts-chto-pisat/",
+  "/shorts-iz-foto/",
+  "/kak-zagruzit-shorts/",
+  "/shorts-ne-otobrazhayutsya-na-kanale/",
+  "/shorts-net-zvuka/",
 ];
 
 const metaOverrides = {
   "/en/low-retention-on-youtube-shorts/": {
-    title: "Low Retention on YouTube Shorts: Fix First 3 Seconds",
+    title: "YouTube Shorts Retention: Fix the First 3 Seconds",
     description:
-      "Diagnose low retention on YouTube Shorts: first-second drops, pacing, text and audio issues, plus hook tests to run before your next upload.",
+      "Fix YouTube Shorts retention in the first seconds: diagnose early drops, weak hooks, pacing, text, audio and what to test before the next upload.",
   },
   "/en/youtube-shorts-getting-0-views/": {
-    title: "Shorts Getting 0 Views: Checks Before You Reupload",
+    title: "YouTube Shorts Getting 0 Views? Checks Before Reuploading",
     description:
-      "Shorts getting 0 views? Check visibility, format, moderation, first frame and retention signals before deleting, reuploading or changing strategy.",
+      "YouTube Shorts getting 0 views? Check visibility, format, moderation, first frame and retention signals before deleting or reuploading.",
   },
   "/en/youtube-shorts-swipe-away-rate/": {
     title: "YouTube Shorts Swipe Away Rate: Fix the First 3 Seconds",
@@ -62,6 +85,121 @@ const metaOverrides = {
     title: "YouTube Shorts Won't Upload: Format, File and App Checks",
     description:
       "YouTube Shorts won't upload? Check file format, aspect ratio, length, app errors, copyright blocks and export settings before re-rendering.",
+  },
+  "/en/youtube-shorts-not-showing-on-channel/": {
+    title: "YouTube Shorts Not Showing on Channel? 10 Checks to Fix It",
+    description:
+      "YouTube Shorts not showing on your channel? Check visibility, Shorts recognition, cache, restrictions, processing and channel display settings.",
+  },
+  "/en/youtube-shorts-description-what-to-write/": {
+    title: "YouTube Shorts Description: Length, Examples and Best Practices",
+    description:
+      "What to write in a YouTube Shorts description: ideal length, first line, hashtags, examples and common mistakes that make descriptions look spammy.",
+  },
+  "/en/youtube-shorts-from-photos/": {
+    title: "Can YouTube Shorts Be Made From Photos? Slideshow Guide",
+    description:
+      "Can YouTube Shorts be made from photos? Build a watchable slideshow with pacing, transitions, on-screen text and a clean 20-30 second structure.",
+  },
+  "/en/how-to-upload-youtube-shorts/": {
+    title: "How to Upload YouTube Shorts: Format, Length and Checklist",
+    description:
+      "How to upload YouTube Shorts from phone or desktop: format, length, title, description, visibility checks and common publishing issues.",
+  },
+  "/en/youtube-shorts-not-converting-to-subscribers/": {
+    title: "YouTube Shorts Not Converting to Subscribers? Fix the CTA",
+    description:
+      "If YouTube Shorts get views but no subscribers, fix the promise, CTA, ending, channel fit and next-step path before changing the whole topic.",
+  },
+  "/en/youtube-shorts-no-sound/": {
+    title: "YouTube Shorts No Sound? Audio Fix Checklist",
+    description:
+      "YouTube Shorts have no sound? Check export audio, muted tracks, music restrictions, codecs, device playback and what to fix before reuploading.",
+  },
+  "/en/youtube-shorts-black-bars/": {
+    title: "YouTube Shorts Black Bars? Fix 9:16 Format and Export",
+    description:
+      "Remove black bars from YouTube Shorts: check 9:16 format, 1080x1920 resolution, crop, background fill and export settings before upload.",
+  },
+  "/en/youtube-shorts-not-getting-views/": {
+    title: "YouTube Shorts Not Getting Views? Reasons and Fixes",
+    description:
+      "YouTube Shorts not getting views? Diagnose first-frame clarity, topic fit, format, visibility, retention, posting consistency and testing mistakes.",
+  },
+  "/en/youtube-shorts-resolution/": {
+    title: "YouTube Shorts Resolution: 1080x1920, 9:16 and Export Settings",
+    description:
+      "Best YouTube Shorts resolution and export settings: 1080x1920, 9:16, FPS, bitrate and checks to avoid blur, black bars and tiny text.",
+  },
+  "/en/copyright-free-music-for-shorts/": {
+    title: "Copyright-Free Music for YouTube Shorts: Safe Use Checklist",
+    description:
+      "Choose copyright-free music for YouTube Shorts safely: licenses, platform libraries, attribution, monetization risks and audio checks before upload.",
+  },
+  "/en/youtube-shorts-copyright/": {
+    title: "YouTube Shorts Copyright: Music, Clips and Monetization Checks",
+    description:
+      "YouTube Shorts copyright guide: music, reused clips, claims, restrictions, monetization risk and what to check before publishing.",
+  },
+  "/en/background-for-youtube-shorts/": {
+    title: "Background for YouTube Shorts: Visual Ideas That Keep Attention",
+    description:
+      "Choose a background for YouTube Shorts that supports retention: readable text, movement, contrast, topic fit and faceless video formats.",
+  },
+  "/en/how-often-to-post-youtube-shorts/": {
+    title: "How Often to Post YouTube Shorts: Consistent Schedule Guide",
+    description:
+      "How often to post YouTube Shorts: practical publishing cadence, testing rhythm, topic batching and what to measure before increasing volume.",
+  },
+  "/en/ctr-in-youtube-shorts/": {
+    title: "CTR in YouTube Shorts: Titles, First Frame and Packaging",
+    description:
+      "Improve CTR in YouTube Shorts with clearer titles, first frames, topic promises and packaging tests that match viewer intent.",
+  },
+  "/razreshenie-dlya-shorts/": {
+    title: "Разрешение для Shorts: 1080x1920, 9:16 и настройки экспорта",
+    description:
+      "Какое разрешение выбрать для YouTube Shorts: 1080x1920, вертикальный формат 9:16, FPS, битрейт и проверки против мыла и черных полос.",
+  },
+  "/nizkoe-uderzhanie-v-youtube-shorts/": {
+    title: "Низкое удержание в YouTube Shorts: как исправить первые секунды",
+    description:
+      "Что делать, если в YouTube Shorts низкое удержание: проверьте первый кадр, хук, темп, текст, звук и тесты перед следующим роликом.",
+  },
+  "/monetizaciya-youtube-shorts/": {
+    title: "Монетизация YouTube Shorts: условия, ошибки и что проверять",
+    description:
+      "Как работает монетизация YouTube Shorts: условия, просмотры, авторские права, повторяющийся контент и что проверить перед масштабированием канала.",
+  },
+  "/avtorskie-prava-v-shorts/": {
+    title: "Авторские права в Shorts: музыка, фрагменты и монетизация",
+    description:
+      "Авторские права в YouTube Shorts: музыка, чужие фрагменты, claims, ограничения, монетизация и безопасные проверки перед публикацией.",
+  },
+  "/opisanie-dlya-shorts-chto-pisat/": {
+    title: "Описание для Shorts: длина, примеры и частые ошибки",
+    description:
+      "Что писать в описании YouTube Shorts: оптимальная длина, первая строка, хэштеги, примеры и ошибки, из-за которых описание выглядит спамом.",
+  },
+  "/shorts-iz-foto/": {
+    title: "Shorts из фото: как сделать слайдшоу, которое досматривают",
+    description:
+      "Как сделать YouTube Shorts из фото: структура слайдшоу, темп, переходы, крупный текст и проверка перед публикацией.",
+  },
+  "/kak-zagruzit-shorts/": {
+    title: "Как загрузить Shorts: формат, длина и чеклист публикации",
+    description:
+      "Как загрузить YouTube Shorts с телефона или компьютера: формат, длина, название, описание, видимость и частые проблемы публикации.",
+  },
+  "/shorts-ne-otobrazhayutsya-na-kanale/": {
+    title: "Shorts не отображаются на канале: что проверить и как исправить",
+    description:
+      "Shorts не отображаются на канале? Проверьте видимость, распознавание Shorts, кэш, ограничения, обработку и настройки канала.",
+  },
+  "/shorts-net-zvuka/": {
+    title: "Нет звука в YouTube Shorts: быстрый чеклист исправления",
+    description:
+      "Что делать, если в YouTube Shorts нет звука: экспорт, дорожки, ограничения музыки, кодек, проверка на телефоне и повторная загрузка.",
   },
 };
 

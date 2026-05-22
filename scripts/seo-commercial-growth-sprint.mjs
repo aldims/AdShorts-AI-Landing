@@ -556,9 +556,437 @@ const ruCommercialPages = [
   },
 ];
 
+const enBuyerGuidePages = [
+  {
+    slug: "best-ai-shorts-generator",
+    ruSlug: "luchshiy-ai-generator-shorts",
+    targetQuery: "best ai shorts generator",
+    title: "Best AI Shorts Generator: What to Check Before Choosing",
+    description:
+      "How to choose the best AI Shorts generator for your workflow: scripts, voiceover, subtitles, editing control, speed and repeatable output.",
+    h1: "Best AI Shorts Generator",
+    lead:
+      "The best AI Shorts generator is the one that turns ideas into repeatable, editable short-form videos without hiding the parts that affect retention.",
+    ctaSource: "seo_en_best_ai_shorts_generator",
+    useCases: ["Creators choosing a repeatable production workflow", "Small teams comparing content tools by practical output", "Founders who need Shorts without hiring an editor first"],
+    workflow: ["Check the script and hook quality", "Review voiceover and subtitle control", "Test how easy edits are after generation", "Compare whether output can become a weekly series"],
+    differentiators: [
+      "AdShorts AI combines script, voice, subtitles and visuals in one workflow.",
+      "The generated draft stays editable, so you can improve the hook, CTA and pacing.",
+      "It is designed for recurring Shorts production rather than a one-off demo.",
+    ],
+    related: [
+      ["../ai-shorts-generator/", "AI Shorts generator"],
+      ["../youtube-shorts-generator/", "YouTube Shorts generator"],
+      ["../how-to-choose-an-ai-shorts-generator/", "how to choose a generator"],
+      ["../pricing/", "AdShorts AI pricing"],
+    ],
+    faq: [
+      ["What should the best AI Shorts generator include?", "At minimum it should help with script, hook, voiceover, subtitles, visuals and simple editing after the first draft."],
+      ["Is speed the only thing that matters?", "No. Speed helps, but repeatable quality, editable output and retention-focused structure matter more for organic growth."],
+      ["How should I test a generator?", "Create several videos around the same topic cluster, then compare retention, first-frame clarity and whether production becomes easier."],
+    ],
+  },
+  {
+    slug: "best-faceless-youtube-shorts-generator",
+    ruSlug: "luchshiy-generator-shorts-bez-lica",
+    targetQuery: "best faceless youtube shorts generator",
+    title: "Best Faceless YouTube Shorts Generator: No-Camera Checklist",
+    description:
+      "Choose a faceless YouTube Shorts generator by checking scripts, voiceover, captions, visual rhythm, format consistency and editing control.",
+    h1: "Best Faceless YouTube Shorts Generator",
+    lead:
+      "A strong faceless Shorts workflow replaces camera recording with clear narration, readable subtitles and visual progress that keeps the viewer oriented.",
+    ctaSource: "seo_en_best_faceless_youtube_shorts_generator",
+    useCases: ["Faceless niche channels", "Educational clips without on-camera recording", "Business videos where the idea matters more than the presenter"],
+    workflow: ["Pick a topic that works without a face", "Generate a voice-led structure", "Use subtitles and visual progress", "Edit the first seconds before publishing"],
+    differentiators: [
+      "AdShorts AI supports faceless videos with voiceover, subtitles and background visuals.",
+      "The workflow is useful for repeatable formats: facts, mini-guides, checklists and explainers.",
+      "Editable output helps avoid static slideshow videos with no progression.",
+    ],
+    related: [
+      ["../faceless-youtube-shorts-generator/", "faceless Shorts generator"],
+      ["../faceless-youtube-shorts/", "faceless Shorts formats"],
+      ["../youtube-shorts-from-photos/", "Shorts from photos"],
+      ["../voiceover-for-shorts-how-to-choose-a-voice/", "voiceover for Shorts"],
+    ],
+    faq: [
+      ["Can faceless Shorts work without a presenter?", "Yes, if the video has a clear hook, useful narration, readable captions and visual progress."],
+      ["What should I avoid?", "Avoid long static slides, tiny text and generic background loops that do not help the viewer follow the idea."],
+      ["What format should I test first?", "Start with mini-guides, numbered lists, before-after explanations or simple product walkthroughs."],
+    ],
+  },
+  {
+    slug: "how-to-choose-an-ai-shorts-generator",
+    ruSlug: "kak-vybrat-ai-generator-shorts",
+    targetQuery: "how to choose an ai shorts generator",
+    title: "How to Choose an AI Shorts Generator: 9 Practical Checks",
+    description:
+      "How to choose an AI Shorts generator: evaluate script quality, captions, voice, visuals, editing control, publishing workflow and cost per test.",
+    h1: "How to Choose an AI Shorts Generator",
+    lead:
+      "Choose an AI Shorts generator by testing the whole workflow, not a single impressive sample. The result should be fast, editable and usable for a content system.",
+    ctaSource: "seo_en_how_to_choose_ai_shorts_generator",
+    useCases: ["Teams comparing tools before a content sprint", "Creators who need consistent output quality", "Businesses trying short-form video for lead generation"],
+    workflow: ["Define one topic cluster", "Generate three video drafts", "Edit hook, captions and CTA", "Measure time saved and publishing readiness"],
+    differentiators: [
+      "AdShorts AI keeps the production parts connected instead of splitting script, voice and video into separate tasks.",
+      "The workflow makes it easier to test several hooks without starting over each time.",
+      "Commercial pages, examples and pricing are linked so evaluation can happen in one place.",
+    ],
+    related: [
+      ["../best-ai-shorts-generator/", "best AI Shorts generator checklist"],
+      ["../youtube-shorts-script-generator/", "Shorts script generator"],
+      ["../shorts-video-maker/", "Shorts video maker"],
+      ["../examples/", "Shorts examples"],
+    ],
+    faq: [
+      ["What is the most important check?", "Editable output. If you cannot adjust hook, subtitles, pacing and CTA, the first draft becomes a bottleneck."],
+      ["Should I compare only video quality?", "No. Also compare speed, consistency, caption readability, voice quality and whether the workflow supports a series."],
+      ["How many tests are enough?", "Three to five drafts around one topic cluster usually reveal whether the workflow is practical."],
+    ],
+  },
+  {
+    slug: "ai-shorts-generator-for-small-business",
+    ruSlug: "ai-generator-shorts-dlya-malogo-biznesa",
+    targetQuery: "ai shorts generator for small business",
+    title: "AI Shorts Generator for Small Business: Faster Video Tests",
+    description:
+      "AI Shorts generator for small business: turn offers, FAQs and customer problems into short videos with script, voiceover, subtitles and CTA.",
+    h1: "AI Shorts Generator for Small Business",
+    lead:
+      "Small businesses need short videos that explain one problem, one proof point and one next action without creating a full production process every time.",
+    ctaSource: "seo_en_ai_shorts_generator_small_business",
+    useCases: ["Local services testing offers", "Online stores explaining products", "Founders turning FAQs into short videos"],
+    workflow: ["Choose one customer problem", "Generate a short script and video draft", "Add a clear CTA", "Publish and compare clicks or inquiries"],
+    differentiators: [
+      "AdShorts AI helps turn product knowledge into repeatable short-form content.",
+      "The workflow is faster than briefing a new video from scratch for every idea.",
+      "It supports simple educational, product and offer-led formats.",
+    ],
+    related: [
+      ["../youtube-shorts-for-business/", "YouTube Shorts for business"],
+      ["../how-to-sell-with-youtube-shorts/", "how to sell with Shorts"],
+      ["../shorts-video-maker/", "Shorts video maker"],
+      ["../pricing/", "pricing"],
+    ],
+    faq: [
+      ["What should a small business publish first?", "Start with customer questions, simple myths, before-after explanations and one offer-focused video."],
+      ["Do I need a big content team?", "No. A repeatable AI workflow can cover scripts, drafts, subtitles and simple visual structure."],
+      ["What should I measure?", "Measure profile clicks, website clicks, inquiries and whether videos are getting watched past the first seconds."],
+    ],
+  },
+  {
+    slug: "ai-shorts-generator-for-youtube-creators",
+    ruSlug: "ai-generator-shorts-dlya-avtorov-youtube",
+    targetQuery: "ai shorts generator for youtube creators",
+    title: "AI Shorts Generator for YouTube Creators: Build More Tests",
+    description:
+      "AI Shorts generator for YouTube creators: create more hook, script and video variants while keeping subtitles, voiceover and pacing editable.",
+    h1: "AI Shorts Generator for YouTube Creators",
+    lead:
+      "Creators grow faster when they can test more ideas without lowering quality. Use AI to build drafts, then make the creative decision yourself.",
+    ctaSource: "seo_en_ai_shorts_generator_youtube_creators",
+    useCases: ["Creators testing several hooks per topic", "Channels turning long videos into Shorts ideas", "Faceless or voice-led YouTube channels"],
+    workflow: ["Pick a proven topic or long-form segment", "Generate several Shorts angles", "Edit the strongest first seconds", "Publish and compare retention"],
+    differentiators: [
+      "AdShorts AI helps create repeatable drafts without removing creator control.",
+      "The output is suited for retention testing, not only quick visual generation.",
+      "It connects production with guides on hooks, retention and Shorts analytics.",
+    ],
+    related: [
+      ["../youtube-shorts-generator/", "YouTube Shorts generator"],
+      ["../how-to-create-a-hook-in-shorts/", "how to create a hook"],
+      ["../how-to-analyze-retention-in-shorts/", "analyze Shorts retention"],
+      ["../youtube-shorts-analytics-how-to-read/", "Shorts analytics"],
+    ],
+    faq: [
+      ["Will AI replace creator judgment?", "No. It speeds up drafts, but the creator should still choose the angle, verify claims and edit the hook."],
+      ["What content works best?", "Strong topics with a clear viewer promise: one problem, one payoff and one reason to keep watching."],
+      ["Can it help with faceless channels?", "Yes. Use voiceover, subtitles and background visuals instead of on-camera recording."],
+    ],
+  },
+  {
+    slug: "ai-video-maker-for-reels-tiktok-and-shorts",
+    ruSlug: "ai-video-maker-dlya-reels-tiktok-i-shorts",
+    targetQuery: "ai video maker for reels tiktok shorts",
+    title: "AI Video Maker for Reels, TikTok and Shorts",
+    description:
+      "AI video maker for Reels, TikTok and Shorts: create vertical videos with script, voiceover, subtitles, visuals and platform-ready structure.",
+    h1: "AI Video Maker for Reels, TikTok and Shorts",
+    lead:
+      "One vertical video workflow can support multiple short-form platforms when the idea, hook, subtitles and CTA are easy to adapt.",
+    ctaSource: "seo_en_ai_video_maker_reels_tiktok_shorts",
+    useCases: ["Teams repurposing one idea across platforms", "Creators building a short-form content calendar", "Businesses testing vertical video offers"],
+    workflow: ["Start with a platform-neutral idea", "Generate a vertical draft", "Adjust hook and CTA for each channel", "Track which angle performs best"],
+    differentiators: [
+      "AdShorts AI focuses on 9:16 short-form production from the first prompt.",
+      "Script, voice, subtitles and visuals are generated together for faster testing.",
+      "The same draft can be adapted instead of rebuilding each platform version from scratch.",
+    ],
+    related: [
+      ["../shorts-video-maker/", "Shorts video maker"],
+      ["../tiktok-video-generator/", "TikTok video generator"],
+      ["../instagram-reels-generator/", "Instagram Reels generator"],
+      ["../ai-video-generator-for-social-media/", "AI video generator for social media"],
+    ],
+    faq: [
+      ["Can one video work everywhere?", "Sometimes, but the hook, caption and CTA usually need small changes for each platform."],
+      ["What format should I export?", "Use a clean vertical 9:16 video with readable subtitles and safe margins for platform UI."],
+      ["What should I test first?", "Test the first line and first frame because they influence whether viewers stay long enough to see the message."],
+    ],
+  },
+  {
+    slug: "faceless-video-generator-for-youtube-shorts",
+    ruSlug: "generator-video-bez-lica-dlya-youtube-shorts",
+    targetQuery: "faceless video generator for youtube shorts",
+    title: "Faceless Video Generator for YouTube Shorts",
+    description:
+      "Faceless video generator for YouTube Shorts: create voice-led videos with subtitles, background visuals, structure and editable drafts.",
+    h1: "Faceless Video Generator for YouTube Shorts",
+    lead:
+      "Make Shorts without filming yourself by combining a clear script, voiceover, captions and visuals that show progress from the first seconds.",
+    ctaSource: "seo_en_faceless_video_generator_youtube_shorts",
+    useCases: ["Faceless educational channels", "Topic explainers without camera recording", "Businesses that need simple voice-led Shorts"],
+    workflow: ["Write one clear topic", "Generate script, voice and visual draft", "Make subtitles readable", "Publish one version and measure retention"],
+    differentiators: [
+      "AdShorts AI makes faceless video production faster without relying on empty background loops.",
+      "The draft can be edited before publishing, which is critical for pacing and clarity.",
+      "It pairs well with guides on subtitles, voiceover and Shorts from photos.",
+    ],
+    related: [
+      ["../faceless-youtube-shorts-generator/", "faceless YouTube Shorts generator"],
+      ["../automatic-subtitles-for-youtube-shorts/", "automatic subtitles"],
+      ["../youtube-shorts-from-photos/", "Shorts from photos"],
+      ["../background-for-youtube-shorts/", "background for Shorts"],
+    ],
+    faq: [
+      ["What makes a faceless video work?", "A specific topic, clear narration, readable subtitles and visuals that move the idea forward."],
+      ["Can I use photos?", "Yes. Photos work best when they are paced like a story or checklist, not left as a slow slideshow."],
+      ["Should every faceless Short have voiceover?", "Usually yes, because voiceover gives pace and context while captions support silent viewing."],
+    ],
+  },
+];
+
+const ruBuyerGuidePages = [
+  {
+    slug: "luchshiy-ai-generator-shorts",
+    enSlug: "best-ai-shorts-generator",
+    targetQuery: "лучший ai генератор shorts",
+    title: "Лучший AI-генератор Shorts: что проверить перед выбором",
+    description:
+      "Как выбрать лучший AI-генератор Shorts: сценарий, озвучка, субтитры, визуал, редактирование, скорость и повторяемый результат.",
+    h1: "Лучший AI-генератор Shorts",
+    lead:
+      "Лучший AI-генератор Shorts помогает не только быстро создать ролик, но и повторять workflow: идея, хук, голос, субтитры, визуал и правки.",
+    ctaSource: "seo_ru_luchshiy_ai_generator_shorts",
+    useCases: ["Авторы, которым нужна регулярная публикация", "Команды, выбирающие практичный video workflow", "Фаундеры, которые хотят тестировать идеи без отдельного монтажа"],
+    workflow: ["Проверьте качество сценария и хука", "Оцените озвучку и субтитры", "Посмотрите, насколько легко править черновик", "Сравните, получится ли делать серию роликов"],
+    differentiators: [
+      "AdShorts AI объединяет сценарий, голос, субтитры и визуал в одном процессе.",
+      "Черновик можно доработать, а не принимать первый результат как финальный.",
+      "Workflow подходит для регулярного производства Shorts, а не только для одного теста.",
+    ],
+    related: [
+      ["../ai-generator-shorts/", "AI-генератор Shorts"],
+      ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
+      ["../kak-vybrat-ai-generator-shorts/", "как выбрать AI-генератор"],
+      ["../pricing/", "тарифы"],
+    ],
+    faq: [
+      ["Что должен уметь хороший AI-генератор Shorts?", "Минимум: помогать со сценарием, хуком, озвучкой, субтитрами, визуалом и правками после генерации."],
+      ["Достаточно ли быстрой генерации?", "Нет. Для органического роста важнее повторяемое качество, редактируемый результат и структура, которая держит внимание."],
+      ["Как протестировать инструмент?", "Сделайте несколько роликов вокруг одного кластера тем и сравните удержание, первый кадр и скорость подготовки."],
+    ],
+  },
+  {
+    slug: "luchshiy-generator-shorts-bez-lica",
+    enSlug: "best-faceless-youtube-shorts-generator",
+    targetQuery: "лучший генератор shorts без лица",
+    title: "Лучший генератор Shorts без лица: чеклист выбора",
+    description:
+      "Как выбрать генератор Shorts без лица: сценарии, озвучка, субтитры, визуальный темп, единый формат и контроль правок.",
+    h1: "Лучший генератор Shorts без лица",
+    lead:
+      "Сильный faceless workflow заменяет съемку на понятную озвучку, крупные субтитры и визуальный прогресс, который удерживает внимание.",
+    ctaSource: "seo_ru_luchshiy_generator_shorts_bez_lica",
+    useCases: ["Faceless-каналы", "Обучающие ролики без съемки себя", "Бизнес-видео, где важнее идея, а не ведущий"],
+    workflow: ["Выберите тему, которая работает без лица", "Сгенерируйте структуру с голосом", "Добавьте читаемые субтитры", "Доработайте первые секунды перед публикацией"],
+    differentiators: [
+      "AdShorts AI поддерживает faceless-видео с озвучкой, субтитрами и визуальным фоном.",
+      "Workflow подходит для фактов, мини-гайдов, чеклистов и объяснений.",
+      "Редактируемый черновик помогает избежать статичного слайдшоу без развития.",
+    ],
+    related: [
+      ["../generator-shorts-bez-lica/", "генератор Shorts без лица"],
+      ["../shorts-bez-lica/", "форматы Shorts без лица"],
+      ["../shorts-iz-foto/", "Shorts из фото"],
+      ["../ozvuchka-dlya-shorts-kak-vybrat-golos/", "озвучка для Shorts"],
+    ],
+    faq: [
+      ["Могут ли Shorts без лица работать?", "Да, если есть сильный хук, полезная озвучка, читаемые субтитры и визуальный прогресс."],
+      ["Чего избегать?", "Длинных статичных слайдов, мелкого текста и фона, который не помогает понять идею."],
+      ["С какого формата начать?", "С мини-гайдов, списков, объяснений до/после или простого product walkthrough."],
+    ],
+  },
+  {
+    slug: "kak-vybrat-ai-generator-shorts",
+    enSlug: "how-to-choose-an-ai-shorts-generator",
+    targetQuery: "как выбрать ai генератор shorts",
+    title: "Как выбрать AI-генератор Shorts: 9 практических проверок",
+    description:
+      "Как выбрать AI-генератор Shorts: проверьте сценарий, субтитры, голос, визуал, редактирование, workflow публикации и цену одного теста.",
+    h1: "Как выбрать AI-генератор Shorts",
+    lead:
+      "Выбирайте AI-генератор Shorts по полному workflow, а не по одному красивому примеру. Результат должен быть быстрым, редактируемым и пригодным для серии.",
+    ctaSource: "seo_ru_kak_vybrat_ai_generator_shorts",
+    useCases: ["Команды перед контент-спринтом", "Авторы, которым нужна стабильность качества", "Бизнес, который тестирует короткие видео для заявок"],
+    workflow: ["Определите один кластер тем", "Сгенерируйте три черновика", "Отредактируйте хук, субтитры и CTA", "Сравните экономию времени и готовность к публикации"],
+    differentiators: [
+      "AdShorts AI соединяет сценарий, голос и видео, а не разносит их по отдельным задачам.",
+      "Проще тестировать несколько хуков без полного пересоздания ролика.",
+      "Примеры, тарифы и гайды связаны в одну систему оценки.",
+    ],
+    related: [
+      ["../luchshiy-ai-generator-shorts/", "лучший AI-генератор Shorts"],
+      ["../generator-scenariev-youtube-shorts/", "генератор сценариев Shorts"],
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+      ["../examples/", "примеры Shorts"],
+    ],
+    faq: [
+      ["Самая важная проверка?", "Редактируемость результата. Если нельзя поправить хук, субтитры, темп и CTA, черновик становится узким местом."],
+      ["Сравнивать только качество видео?", "Нет. Сравните скорость, стабильность, читаемость субтитров, голос и возможность делать серию."],
+      ["Сколько тестов достаточно?", "Три-пять черновиков вокруг одного кластера тем обычно быстро показывают, подходит ли workflow."],
+    ],
+  },
+  {
+    slug: "ai-generator-shorts-dlya-malogo-biznesa",
+    enSlug: "ai-shorts-generator-for-small-business",
+    targetQuery: "ai генератор shorts для малого бизнеса",
+    title: "AI-генератор Shorts для малого бизнеса: быстрые video-тесты",
+    description:
+      "AI-генератор Shorts для малого бизнеса: превращайте офферы, FAQ и боли клиентов в видео со сценарием, озвучкой, субтитрами и CTA.",
+    h1: "AI-генератор Shorts для малого бизнеса",
+    lead:
+      "Малому бизнесу нужны короткие видео про одну проблему, один аргумент и один следующий шаг без запуска отдельного production-процесса каждый раз.",
+    ctaSource: "seo_ru_ai_generator_shorts_malogo_biznesa",
+    useCases: ["Локальные услуги и офферы", "Интернет-магазины и карточки продуктов", "Фаундеры, которые превращают FAQ в короткие видео"],
+    workflow: ["Выберите одну проблему клиента", "Сгенерируйте сценарий и черновик видео", "Добавьте понятный CTA", "Опубликуйте и сравните клики или заявки"],
+    differentiators: [
+      "AdShorts AI помогает превращать продуктовые знания в регулярный short-form контент.",
+      "Workflow быстрее, чем каждый раз заново брифовать ролик.",
+      "Подходит для обучающих, продуктовых и offer-led форматов.",
+    ],
+    related: [
+      ["../shorts-dlya-biznesa/", "Shorts для бизнеса"],
+      ["../kak-prodavat-cherez-shorts/", "как продавать через Shorts"],
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+      ["../pricing/", "тарифы"],
+    ],
+    faq: [
+      ["Что бизнесу публиковать первым?", "Вопросы клиентов, мифы, объяснения до/после и один ролик с конкретным оффером."],
+      ["Нужна ли большая команда?", "Нет. AI workflow может закрыть сценарии, черновики, субтитры и простую визуальную структуру."],
+      ["Что измерять?", "Клики, заявки, переходы в профиль и удержание в первые секунды."],
+    ],
+  },
+  {
+    slug: "ai-generator-shorts-dlya-avtorov-youtube",
+    enSlug: "ai-shorts-generator-for-youtube-creators",
+    targetQuery: "ai генератор shorts для авторов youtube",
+    title: "AI-генератор Shorts для авторов YouTube: больше тестов",
+    description:
+      "AI-генератор Shorts для авторов YouTube: создавайте больше вариантов хуков, сценариев и видео, сохраняя контроль над субтитрами и темпом.",
+    h1: "AI-генератор Shorts для авторов YouTube",
+    lead:
+      "Авторы растут быстрее, когда могут тестировать больше идей без просадки качества. AI ускоряет черновики, а творческое решение остается за вами.",
+    ctaSource: "seo_ru_ai_generator_shorts_avtorov_youtube",
+    useCases: ["Авторы, тестирующие несколько хуков на одну тему", "Каналы, превращающие длинные видео в Shorts", "Faceless- и voice-led YouTube-каналы"],
+    workflow: ["Выберите проверенную тему или фрагмент", "Сгенерируйте несколько углов подачи", "Доработайте первые секунды", "Опубликуйте и сравните удержание"],
+    differentiators: [
+      "AdShorts AI ускоряет черновики, не забирая у автора контроль.",
+      "Результат подходит для retention-тестов, а не только для быстрой генерации визуала.",
+      "Workflow связан с гайдами по хукам, удержанию и аналитике Shorts.",
+    ],
+    related: [
+      ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
+      ["../kak-sdelat-huk-v-shorts/", "как сделать хук"],
+      ["../kak-analizirovat-uderzhanie-v-shorts/", "анализ удержания"],
+      ["../analitika-youtube-shorts-kak-chitat/", "аналитика Shorts"],
+    ],
+    faq: [
+      ["AI заменяет автора?", "Нет. Он ускоряет черновики, но автор выбирает угол, проверяет факты и правит хук."],
+      ["Какие темы подходят?", "Темы с понятным обещанием: одна проблема, один результат и причина досмотреть."],
+      ["Подходит ли для faceless-каналов?", "Да. Используйте озвучку, субтитры и визуальный фон вместо съемки себя."],
+    ],
+  },
+  {
+    slug: "ai-video-maker-dlya-reels-tiktok-i-shorts",
+    enSlug: "ai-video-maker-for-reels-tiktok-and-shorts",
+    targetQuery: "ai video maker для reels tiktok shorts",
+    title: "AI video maker для Reels, TikTok и Shorts",
+    description:
+      "AI video maker для Reels, TikTok и Shorts: создавайте вертикальные видео со сценарием, озвучкой, субтитрами, визуалом и CTA.",
+    h1: "AI video maker для Reels, TikTok и Shorts",
+    lead:
+      "Один vertical video workflow может поддерживать несколько short-form платформ, если идею, хук, субтитры и CTA легко адаптировать.",
+    ctaSource: "seo_ru_ai_video_maker_reels_tiktok_shorts",
+    useCases: ["Команды, адаптирующие одну идею под несколько платформ", "Авторы с short-form контент-планом", "Бизнес, тестирующий вертикальные видео"],
+    workflow: ["Начните с идеи без привязки к платформе", "Сгенерируйте вертикальный черновик", "Адаптируйте хук и CTA", "Сравните, какой угол сработал лучше"],
+    differentiators: [
+      "AdShorts AI строит 9:16 short-form workflow с первого промпта.",
+      "Сценарий, голос, субтитры и визуал создаются вместе для быстрых тестов.",
+      "Черновик можно адаптировать, а не собирать каждую версию с нуля.",
+    ],
+    related: [
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+      ["../generator-video-dlya-tiktok/", "генератор TikTok-видео"],
+      ["../generator-reels-instagram/", "генератор Reels"],
+      ["../ai-generator-video-dlya-socsetey/", "AI-генератор видео для соцсетей"],
+    ],
+    faq: [
+      ["Один ролик подойдет везде?", "Иногда, но хук, подпись и CTA обычно лучше слегка адаптировать под платформу."],
+      ["В каком формате экспортировать?", "Чистое вертикальное 9:16 видео с читаемыми субтитрами и безопасными полями под интерфейс платформы."],
+      ["Что тестировать первым?", "Первую фразу и первый кадр: они сильнее всего влияют на досмотр до основной идеи."],
+    ],
+  },
+  {
+    slug: "generator-video-bez-lica-dlya-youtube-shorts",
+    enSlug: "faceless-video-generator-for-youtube-shorts",
+    targetQuery: "генератор видео без лица для youtube shorts",
+    title: "Генератор видео без лица для YouTube Shorts",
+    description:
+      "Генератор видео без лица для YouTube Shorts: создавайте ролики с озвучкой, субтитрами, визуальным фоном, структурой и правками.",
+    h1: "Генератор видео без лица для YouTube Shorts",
+    lead:
+      "Создавайте Shorts без съемки себя: понятный сценарий, озвучка, субтитры и визуал, который показывает прогресс с первых секунд.",
+    ctaSource: "seo_ru_generator_video_bez_lica_youtube_shorts",
+    useCases: ["Faceless-обучающие каналы", "Объяснения тем без камеры", "Бизнесу нужны простые voice-led Shorts"],
+    workflow: ["Напишите одну конкретную тему", "Сгенерируйте сценарий, голос и видео", "Сделайте субтитры читаемыми", "Опубликуйте версию и измерьте удержание"],
+    differentiators: [
+      "AdShorts AI ускоряет faceless production без пустых фоновых лупов.",
+      "Черновик можно редактировать до публикации, что важно для темпа и ясности.",
+      "Workflow хорошо сочетается с гайдами по субтитрам, озвучке и Shorts из фото.",
+    ],
+    related: [
+      ["../generator-shorts-bez-lica/", "генератор Shorts без лица"],
+      ["../subtitry-dlya-shorts-avtomatom/", "автоматические субтитры"],
+      ["../shorts-iz-foto/", "Shorts из фото"],
+      ["../fon-dlya-shorts/", "фон для Shorts"],
+    ],
+    faq: [
+      ["Что делает faceless-видео сильным?", "Конкретная тема, понятная озвучка, читаемые субтитры и визуал, который двигает идею вперед."],
+      ["Можно использовать фото?", "Да. Фото работают лучше, если они собраны как история или чеклист, а не медленное слайдшоу."],
+      ["Нужна ли озвучка?", "Обычно да: голос задает темп и контекст, а субтитры помогают смотреть без звука."],
+    ],
+  },
+];
+
 const allCommercialPages = [
   ...commercialPages.map((page) => ({ ...page, locale: "en", alternateSlug: page.ruSlug })),
+  ...enBuyerGuidePages.map((page) => ({ ...page, locale: "en", alternateSlug: page.ruSlug })),
   ...ruCommercialPages.map((page) => ({ ...page, locale: "ru", alternateSlug: page.enSlug })),
+  ...ruBuyerGuidePages.map((page) => ({ ...page, locale: "ru", alternateSlug: page.enSlug })),
 ];
 
 const escapeHtml = (value) =>
@@ -913,11 +1341,11 @@ ${renderRelated(page.related)}
 };
 
 const renderGuidesBlock = (locale) => {
-  const pages = locale === "en" ? commercialPages : ruCommercialPages;
+  const pages = locale === "en" ? [...commercialPages, ...enBuyerGuidePages] : [...ruCommercialPages, ...ruBuyerGuidePages];
   const title = locale === "en" ? "AI generators" : "AI-генераторы";
   const intro = locale === "en"
-    ? "High-intent pages for users who are already looking for a Shorts, Reels or TikTok creation tool."
-    : "Коммерческие страницы для пользователей, которые уже ищут инструмент для создания Shorts, Reels или TikTok.";
+    ? "High-intent generator, buyer-guide and use-case pages for users who are already looking for a short-form video workflow."
+    : "Коммерческие страницы, buyer-guide материалы и use case страницы для пользователей, которые уже ищут workflow создания short-form видео.";
 
   return `          <!-- seo-commercial-growth:start -->
           <div class="section-header guide-section" id="ai-generators">

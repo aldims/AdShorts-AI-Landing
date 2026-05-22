@@ -16576,7 +16576,6 @@ export function WorkspacePage({
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
-  const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<WorkspaceReferenceKind>("character");
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
   const [isSegmentProjectCharactersLoading, setIsSegmentProjectCharactersLoading] = useState(false);
   const [segmentProjectCharactersError, setSegmentProjectCharactersError] = useState<string | null>(null);
@@ -18178,7 +18177,6 @@ export function WorkspacePage({
       setReferenceCreationUploadFile(null);
       setReferenceCreationPreviewReference(null);
       setReferenceCreationProjectKey(null);
-      setSegmentReferencePanelTab("character");
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
       setIsPreparingCustomVideo(false);
@@ -20545,7 +20543,6 @@ export function WorkspacePage({
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
     setSavedWorkspaceReferencesNotice(null);
-    setSegmentReferencePanelTab("character");
   }, [activeSegment?.index, segmentEditorDraft?.projectId]);
   useEffect(() => {
     const objectUrl = referenceCreationUploadFile?.objectUrl;
@@ -26032,6 +26029,14 @@ export function WorkspacePage({
             projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
+          });
+          setSegmentTalkingCharacterTargets((current) => {
+            if (!current[options.segmentIndex]) {
+              return current;
+            }
+            const next = { ...current };
+            delete next[options.segmentIndex];
+            return next;
           });
           return;
         }
@@ -33145,24 +33150,19 @@ export function WorkspacePage({
       ? segmentTalkingCharacterTargets[segmentAiPhotoModalSegment.index] ?? null
       : null;
   const isSegmentTalkingTargetMissing = isPromptTalkingPhotoMode && !activeSegmentTalkingCharacterTarget;
-  const selectedSegmentReferenceCount =
-    selectedSegmentReferenceCharacterCount + (selectedSegmentReferenceScene ? 1 : 0);
+  const selectedSegmentReferenceCount = selectedSegmentReferenceCharacterCount;
   const selectedSegmentReferenceCharacterSummary =
     selectedSegmentReferenceCharacterCount > 0
       ? selectedSegmentReferenceCharacterOptions.map((option) => option.label).join(", ")
       : "";
-  const segmentReferenceSummary = [
+  const segmentReferenceSummary =
     selectedSegmentReferenceCharacterCount > 0
       ? workspaceText(
           locale,
           `${selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж"}: ${selectedSegmentReferenceCharacterSummary}`,
           `${selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"}: ${selectedSegmentReferenceCharacterSummary}`,
         )
-      : workspaceText(locale, "Персонажи: не выбраны", "Characters: not selected"),
-    selectedSegmentReferenceScene
-      ? workspaceText(locale, `Сцена: ${selectedSegmentReferenceScene.label}`, `Scene: ${selectedSegmentReferenceScene.label}`)
-      : workspaceText(locale, "Сцена: не выбрана", "Scene: not selected"),
-  ].join(" · ");
+      : workspaceText(locale, "Персонажи: не выбраны", "Characters: not selected");
   const selectSegmentReferenceOption = (option: WorkspaceReferenceVisualOption) => {
     if (option.kind === "character") {
       if (option.source === "project-character") {
@@ -33302,7 +33302,7 @@ export function WorkspacePage({
   };
 
   const resetWorkspaceReferenceCreationForm = (
-    kind: WorkspaceReferenceKind = segmentReferencePanelTab,
+    kind: WorkspaceReferenceKind = "character",
     options: { clearPreview?: boolean } = {},
   ) => {
     setReferenceCreationSource("ai");
@@ -33330,7 +33330,7 @@ export function WorkspacePage({
   const closeWorkspaceReferenceCreator = () => {
     setIsWorkspaceReferenceCreatorOpen(false);
     setSavedWorkspaceReferencesNotice(null);
-    resetWorkspaceReferenceCreationForm();
+    resetWorkspaceReferenceCreationForm("character");
   };
 
   const closeSegmentReferencesModal = () => {
@@ -33340,14 +33340,14 @@ export function WorkspacePage({
     closeWorkspaceReferenceCreator();
   };
 
-  const openWorkspaceReferenceCreator = (kind: WorkspaceReferenceKind) => {
+  const openWorkspaceReferenceCreator = () => {
     if (isGuest) {
       onAuthRequired?.();
-      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей.", "Sign in to create characters."));
       return;
     }
 
-    setSegmentReferencePanelTab(kind);
+    const kind: WorkspaceReferenceKind = "character";
     setReferenceCreationName(getNextWorkspaceReferenceDefaultName(savedWorkspaceReferences, kind));
     setSavedWorkspaceReferencesError(null);
     setSavedWorkspaceReferencesNotice(null);
@@ -33850,9 +33850,8 @@ export function WorkspacePage({
     );
   };
   const renderSegmentReferencesModal = () => {
-    const isCreatingCharacter = segmentReferencePanelTab === "character";
-    const currentOptions = isCreatingCharacter ? projectCharacterReferenceOptions : projectSceneReferenceOptions;
-    const generationKind: WorkspaceReferenceKind = isCreatingCharacter ? "character" : "scene";
+    const currentOptions = projectCharacterReferenceOptions;
+    const generationKind: WorkspaceReferenceKind = "character";
     const isCreatingReference = generatingReferenceKind === generationKind;
     const selectedCreationProjectOption = referenceCreationProjectKey
       ? currentOptions.find((option) => option.key === referenceCreationProjectKey) ?? null
@@ -33872,16 +33871,9 @@ export function WorkspacePage({
         style: referenceCreationCharacterStyleValue,
       },
       kind: generationKind,
-      scene: {
-        description: referenceCreationPrompt,
-        lightingMood: referenceCreationSceneLightingMood,
-        placeType: referenceCreationScenePlaceType,
-        style: referenceCreationSceneStyle,
-      },
     });
     const referenceCreationCharacterAgeLabel = formatWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange);
     const isReferenceCharacterAgeInvalid =
-      isCreatingCharacter &&
       referenceCreationSource === "ai" &&
       !isValidWorkspaceReferenceCharacterAge(referenceCreationCharacterAgeRange);
     const isReferenceCreateDisabled =
@@ -33892,23 +33884,14 @@ export function WorkspacePage({
       (referenceCreationSource === "upload" && !referenceCreationUploadFile) ||
       (referenceCreationSource === "project" && !selectedCreationProjectOption);
     const referenceCreationCharacterCreditCost = STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST;
-    const creationTitle = isCreatingCharacter
-      ? workspaceText(locale, "Создание персонажа", "Create character")
-      : workspaceText(locale, "Создание сцены", "Create scene");
+    const creationTitle = workspaceText(locale, "Создание персонажа", "Create character");
     const selectionSubmitLabel =
-      selectedSegmentReferenceCharacterCount > 0 && selectedSegmentReferenceScene
+      selectedSegmentReferenceCharacterCount > 0
         ? selectedSegmentReferenceCharacterCount > 1
-          ? workspaceText(locale, "Выбрать персонажей и сцену", "Choose characters and scene")
-          : workspaceText(locale, "Выбрать персонажа и сцену", "Choose character and scene")
-        : selectedSegmentReferenceCharacterCount > 0
-          ? selectedSegmentReferenceCharacterCount > 1
-            ? workspaceText(locale, "Выбрать персонажей", "Choose characters")
-            : workspaceText(locale, "Выбрать персонажа", "Choose character")
-          : selectedSegmentReferenceScene
-            ? workspaceText(locale, "Выбрать сцену", "Choose scene")
-            : workspaceText(locale, "Выберите персонажа или сцену", "Choose a character or scene");
+          ? workspaceText(locale, "Выбрать персонажей", "Choose characters")
+          : workspaceText(locale, "Выбрать персонажа", "Choose character")
+        : workspaceText(locale, "Выберите персонажа", "Choose a character");
     const renderSavedReferenceSection = (
-      kind: WorkspaceReferenceKind,
       title: string,
       options: WorkspaceReferenceVisualOption[],
       createLabel: string,
@@ -33927,7 +33910,7 @@ export function WorkspacePage({
             <button
               className="studio-reference-modal__add-card"
               type="button"
-              onClick={() => openWorkspaceReferenceCreator(kind)}
+              onClick={openWorkspaceReferenceCreator}
             >
               <span>+</span>
               <strong>{createLabel}</strong>
@@ -34003,7 +33986,7 @@ export function WorkspacePage({
           <div className="studio-reference-create-modal__body">
             <aside className="studio-reference-create-modal__preview">
               <div className="studio-reference-create-modal__preview-stage">
-                {isCreatingCharacter && isCreatingReference ? (
+                {isCreatingReference ? (
                   <div className="studio-reference-create-modal__generation" role="status" aria-live="polite" aria-label={workspaceText(locale, "Создаём персонажа...", "Creating character...")}>
                     <span className="studio-reference-create-modal__generation-spinner" aria-hidden="true"></span>
                     <strong>{workspaceText(locale, "Создаём персонажа...", "Creating character...")}</strong>
@@ -34021,11 +34004,7 @@ export function WorkspacePage({
                       <path d="M6.5 11l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2ZM17.5 12l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                     </svg>
                     <strong>{referenceCreationPreviewName}</strong>
-                    <span>
-                      {isCreatingCharacter
-                        ? [getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterPreviewStyle].filter(Boolean).join(", ")
-                        : `${referenceCreationScenePlaceType}, ${referenceCreationSceneStyle}, ${referenceCreationSceneLightingMood}`}
-                    </span>
+                    <span>{[getWorkspaceReferenceGenderLabel(referenceCreationCharacterGender), referenceCreationCharacterAgeLabel, referenceCreationCharacterPreviewStyle].filter(Boolean).join(", ")}</span>
                   </div>
                 )}
               </div>
@@ -34091,7 +34070,7 @@ export function WorkspacePage({
 
               <label className="studio-reference-create-modal__field">
                 <span>
-                  {workspaceText(locale, isCreatingCharacter ? "Имя персонажа" : "Имя сцены", isCreatingCharacter ? "Character name" : "Scene name")}
+                  {workspaceText(locale, "Имя персонажа", "Character name")}
                   <small>{referenceCreationNameValue.length} / 50</small>
                 </span>
                 <div className="studio-reference-create-modal__input-row">
@@ -34103,11 +34082,7 @@ export function WorkspacePage({
                       setSavedWorkspaceReferencesNotice(null);
                       setReferenceCreationName(event.currentTarget.value);
                     }}
-                    placeholder={
-                      isCreatingCharacter
-                        ? workspaceText(locale, "Введите имя персонажа", "Enter character name")
-                        : referenceCreationDefaultName
-                    }
+                    placeholder={workspaceText(locale, "Введите имя персонажа", "Enter character name")}
                     aria-label={workspaceText(locale, "Имя нового референса", "New reference name")}
                   />
                   <button
@@ -34319,13 +34294,13 @@ export function WorkspacePage({
           className="studio-reference-modal"
           role="dialog"
           aria-modal="true"
-          aria-label={workspaceText(locale, "Персонажи и сцены", "Characters and scenes")}
+          aria-label={workspaceText(locale, "Персонажи", "Characters")}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <header className="studio-reference-modal__head">
             <div>
-              <strong>{workspaceText(locale, "Персонажи и сцены", "Characters and scenes")}</strong>
-              <span>{workspaceText(locale, "Выберите персонажа и сцену или создайте новые.", "Choose a character and scene or create new ones.")}</span>
+              <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
+              <span>{workspaceText(locale, "Выберите персонажей или создайте новых.", "Choose characters or create new ones.")}</span>
             </div>
             <div className="studio-reference-modal__head-actions">
               <button
@@ -34352,17 +34327,9 @@ export function WorkspacePage({
           <div className="studio-reference-modal__layout studio-reference-modal__layout--library-only">
             <div className="studio-reference-modal__catalog">
               {renderSavedReferenceSection(
-                "character",
-                workspaceText(locale, "1. Мои персонажи", "1. My characters"),
+                workspaceText(locale, "Мои персонажи", "My characters"),
                 savedCharacterReferenceOptions,
                 workspaceText(locale, "Создать персонажа", "Create character"),
-              )}
-
-              {renderSavedReferenceSection(
-                "scene",
-                workspaceText(locale, "2. Мои сцены", "2. My scenes"),
-                savedSceneReferenceOptions,
-                workspaceText(locale, "Создать сцену", "Create scene"),
               )}
 
               <section className="studio-reference-modal__selected">
@@ -34372,22 +34339,11 @@ export function WorkspacePage({
                     <span>{segmentReferenceSummary}</span>
                   </div>
                 </div>
-                <div className="studio-reference-modal__selected-grid">
+                <div className="studio-reference-modal__selected-grid studio-reference-modal__selected-grid--characters-only">
                   {renderSelectedReferenceCard(
                     workspaceText(locale, selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж", selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"),
                     selectedSegmentReferenceCharacterOptions,
                     workspaceText(locale, "Не выбран", "Not selected"),
-                  )}
-                  <span className="studio-reference-modal__selected-link" aria-hidden="true">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                      <path d="M10 13.5a4 4 0 0 0 5.7.1l2.4-2.4a4 4 0 0 0-5.7-5.7l-1.4 1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M14 10.5a4 4 0 0 0-5.7-.1l-2.4 2.4a4 4 0 0 0 5.7 5.7l1.4-1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                  {renderSelectedReferenceCard(
-                    workspaceText(locale, "Сцена", "Scene"),
-                    selectedSegmentReferenceScene ? [selectedSegmentReferenceScene] : [],
-                    workspaceText(locale, "Не выбрана", "Not selected"),
                   )}
                 </div>
               </section>

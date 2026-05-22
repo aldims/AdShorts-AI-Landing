@@ -168,8 +168,8 @@ describe("LandingPage guides section", () => {
     expect(guideCards).toHaveLength(3);
     expect(guideCards.map((guide) => guide.getAttribute("href"))).toEqual([
       "/shorts-guides/",
-      "/kak-sdelat-huk-v-shorts/",
-      "/subtitry-dlya-shorts-avtomatom/",
+      "/shorts-ne-nabirayut-prosmotry/",
+      "/nizkoe-uderzhanie-v-youtube-shorts/",
     ]);
 
     guideCards.forEach((guide) => {
@@ -195,8 +195,8 @@ describe("LandingPage guides section", () => {
 
     expect(guideCards.map((guide) => guide.getAttribute("href"))).toEqual([
       "/en/shorts-guides/",
-      "/en/how-to-create-a-hook-in-shorts/",
-      "/en/automatic-subtitles-for-youtube-shorts/",
+      "/en/youtube-shorts-not-showing-on-channel/",
+      "/en/low-retention-on-youtube-shorts/",
     ]);
 
     const ctaLink = within(guidesSection).getByRole("link", { name: "All guides" });
