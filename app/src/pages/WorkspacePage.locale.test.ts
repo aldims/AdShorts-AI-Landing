@@ -22,6 +22,7 @@ import {
   getNextWorkspaceReferenceDefaultName,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   insertWorkspacePromptCharacterMentionText,
+  mapWorkspaceTalkingCharacterTargetToSourceFrame,
   resolveWorkspacePromptMentionedCharacterOptions,
   createWorkspaceTalkingCharacterTargetFromPoints,
   normalizeWorkspaceTalkingCharacterTarget,
@@ -425,6 +426,46 @@ describe("WorkspacePage talking character target selection", () => {
       width: 0.5,
       x: 0.5,
       y: 0,
+    });
+  });
+
+  it("maps a visible cover-cropped target back to source-frame coordinates", () => {
+    expect(
+      mapWorkspaceTalkingCharacterTargetToSourceFrame(
+        { height: 0.5, width: 0.5, x: 0.25, y: 0.25 },
+        {
+          containerHeight: 200,
+          containerWidth: 200,
+          fit: "cover",
+          sourceHeight: 200,
+          sourceWidth: 400,
+        },
+      ),
+    ).toEqual({
+      height: 0.5,
+      width: 0.25,
+      x: 0.375,
+      y: 0.25,
+    });
+  });
+
+  it("maps portrait source coordinates when the card crops top and bottom", () => {
+    expect(
+      mapWorkspaceTalkingCharacterTargetToSourceFrame(
+        { height: 0.5, width: 0.5, x: 0.25, y: 0.25 },
+        {
+          containerHeight: 200,
+          containerWidth: 200,
+          fit: "cover",
+          sourceHeight: 400,
+          sourceWidth: 200,
+        },
+      ),
+    ).toEqual({
+      height: 0.25,
+      width: 0.5,
+      x: 0.25,
+      y: 0.375,
     });
   });
 });

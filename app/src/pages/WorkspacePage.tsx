@@ -3974,6 +3974,58 @@ export const normalizeWorkspaceTalkingCharacterTarget = (
   };
 };
 
+export const mapWorkspaceTalkingCharacterTargetToSourceFrame = (
+  target: Partial<WorkspaceTalkingCharacterTarget> | null | undefined,
+  frame: {
+    containerHeight: number;
+    containerWidth: number;
+    fit?: "contain" | "cover";
+    sourceHeight: number;
+    sourceWidth: number;
+  },
+): WorkspaceTalkingCharacterTarget | null => {
+  const normalizedTarget = normalizeWorkspaceTalkingCharacterTarget(target);
+  const containerWidth = Number(frame.containerWidth);
+  const containerHeight = Number(frame.containerHeight);
+  const sourceWidth = Number(frame.sourceWidth);
+  const sourceHeight = Number(frame.sourceHeight);
+  if (
+    !normalizedTarget ||
+    ![containerWidth, containerHeight, sourceWidth, sourceHeight].every(Number.isFinite) ||
+    containerWidth <= 0 ||
+    containerHeight <= 0 ||
+    sourceWidth <= 0 ||
+    sourceHeight <= 0
+  ) {
+    return normalizedTarget;
+  }
+
+  const scale =
+    frame.fit === "contain"
+      ? Math.min(containerWidth / sourceWidth, containerHeight / sourceHeight)
+      : Math.max(containerWidth / sourceWidth, containerHeight / sourceHeight);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return normalizedTarget;
+  }
+
+  const renderedWidth = sourceWidth * scale;
+  const renderedHeight = sourceHeight * scale;
+  const offsetX = (containerWidth - renderedWidth) / 2;
+  const offsetY = (containerHeight - renderedHeight) / 2;
+
+  const targetLeft = normalizedTarget.x * containerWidth;
+  const targetTop = normalizedTarget.y * containerHeight;
+  const targetRight = (normalizedTarget.x + normalizedTarget.width) * containerWidth;
+  const targetBottom = (normalizedTarget.y + normalizedTarget.height) * containerHeight;
+
+  return createWorkspaceTalkingCharacterTargetFromEdges(
+    (targetLeft - offsetX) / renderedWidth,
+    (targetTop - offsetY) / renderedHeight,
+    (targetRight - offsetX) / renderedWidth,
+    (targetBottom - offsetY) / renderedHeight,
+  );
+};
+
 const createWorkspaceTalkingCharacterTargetFromEdges = (
   left: number,
   top: number,
@@ -26959,6 +27011,65 @@ export function WorkspacePage({
     }
   };
 
+  const resolveSegmentTalkingCharacterTargetForSourceFrame = (
+    segmentIndex: number,
+    target: WorkspaceTalkingCharacterTarget,
+  ): WorkspaceTalkingCharacterTarget => {
+    const normalizedTarget = normalizeWorkspaceTalkingCharacterTarget(target);
+    if (!normalizedTarget || typeof document === "undefined" || typeof window === "undefined") {
+      return normalizedTarget ?? target;
+    }
+
+    const overlay = document.querySelector(
+      `[data-talking-target-segment-index="${segmentIndex}"]`,
+    ) as HTMLElement | null;
+    const frameElement = (overlay?.closest(".studio-segment-editor__card-media") as HTMLElement | null) ?? overlay;
+    if (!overlay || !frameElement) {
+      return normalizedTarget;
+    }
+
+    const frameRect = overlay.getBoundingClientRect();
+    if (frameRect.width <= 0 || frameRect.height <= 0) {
+      return normalizedTarget;
+    }
+
+    const mediaElements = Array.from(frameElement.querySelectorAll("video,img"));
+    const resolveMediaFrame = (element: Element) => {
+      if (element instanceof HTMLVideoElement && element.videoWidth > 0 && element.videoHeight > 0) {
+        return {
+          element,
+          sourceHeight: element.videoHeight,
+          sourceWidth: element.videoWidth,
+        };
+      }
+
+      if (element instanceof HTMLImageElement && element.naturalWidth > 0 && element.naturalHeight > 0) {
+        return {
+          element,
+          sourceHeight: element.naturalHeight,
+          sourceWidth: element.naturalWidth,
+        };
+      }
+
+      return null;
+    };
+    const mediaFrame =
+      mediaElements.map(resolveMediaFrame).find((value): value is NonNullable<ReturnType<typeof resolveMediaFrame>> => Boolean(value)) ??
+      null;
+    if (!mediaFrame) {
+      return normalizedTarget;
+    }
+
+    const objectFit = window.getComputedStyle(mediaFrame.element).objectFit;
+    return mapWorkspaceTalkingCharacterTargetToSourceFrame(normalizedTarget, {
+      containerHeight: frameRect.height,
+      containerWidth: frameRect.width,
+      fit: objectFit === "contain" ? "contain" : "cover",
+      sourceHeight: mediaFrame.sourceHeight,
+      sourceWidth: mediaFrame.sourceWidth,
+    }) ?? normalizedTarget;
+  };
+
   const handleSegmentEditorTalkingPhotoGenerate = async (
     options?: {
       prompt?: string;
@@ -27015,6 +27126,22 @@ export function WorkspacePage({
     if (!speakerTarget) {
       setSegmentEditorVideoError("Выберите говорящего персонажа на карточке сцены в карусели.");
       return;
+    }
+    const speakerTargetForSourceFrame = resolveSegmentTalkingCharacterTargetForSourceFrame(
+      targetSegmentIndex,
+      speakerTarget,
+    );
+    if (
+      Math.abs(speakerTargetForSourceFrame.x - speakerTarget.x) > 0.001 ||
+      Math.abs(speakerTargetForSourceFrame.y - speakerTarget.y) > 0.001 ||
+      Math.abs(speakerTargetForSourceFrame.width - speakerTarget.width) > 0.001 ||
+      Math.abs(speakerTargetForSourceFrame.height - speakerTarget.height) > 0.001
+    ) {
+      logSegmentEditorDiagnostics("client.segment-editor.talking-photo.target-source-frame", {
+        displayTarget: speakerTarget,
+        sourceTarget: speakerTargetForSourceFrame,
+        targetSegmentIndex,
+      });
     }
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -27097,7 +27224,7 @@ export function WorkspacePage({
           prompt: visualPrompt,
           script,
           segmentIndex: visualJobBinding.segmentIndex,
-          speakerTarget,
+          speakerTarget: speakerTargetForSourceFrame,
           voiceType,
         } satisfies WorkspaceSegmentTalkingPhotoJobCreateRequest),
       });
@@ -34494,6 +34621,7 @@ export function WorkspacePage({
     return (
       <div
         className={`studio-segment-talking-target-overlay${target ? " has-target" : ""}`}
+        data-talking-target-segment-index={segment.index}
         role="application"
         aria-label={workspaceText(locale, "Выбор говорящего персонажа на сцене", "Speaking character selection on scene")}
         onClick={(event) => {
@@ -34521,6 +34649,24 @@ export function WorkspacePage({
                 aria-hidden="true"
               />
             ))}
+            <button
+              className="studio-segment-talking-target-overlay__reset"
+              type="button"
+              aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+              title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setSegmentTalkingCharacterTarget(segment.index, null);
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </button>
           </span>
         ) : null}
         <span className="studio-segment-talking-target-overlay__label">
@@ -34528,26 +34674,6 @@ export function WorkspacePage({
             ? workspaceText(locale, "Говорящий", "Speaker")
             : workspaceText(locale, "Выберите говорящего", "Select speaker")}
         </span>
-        {target ? (
-          <button
-            className="studio-segment-talking-target-overlay__reset"
-            type="button"
-            aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-            title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setSegmentTalkingCharacterTarget(segment.index, null);
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </button>
-        ) : null}
       </div>
     );
   };
