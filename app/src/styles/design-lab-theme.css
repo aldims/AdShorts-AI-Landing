@@ -26057,7 +26057,7 @@ textarea {
   justify-self: stretch;
   width: 100%;
   max-width: 100%;
-  padding: 0 24px 8px 0;
+  padding: 0 24px 0 0;
   box-sizing: border-box;
 }
 
@@ -37622,7 +37622,7 @@ html, body {
   align-self: end;
   justify-self: stretch;
   z-index: 12;
-  padding: 0 clamp(18px, 2.2vw, 30px) 8px 0;
+  padding: 0 clamp(18px, 2.2vw, 30px) 0 0;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__stage {
@@ -38198,7 +38198,7 @@ html, body {
     grid-column: 1;
     grid-row: 2;
     order: 2;
-    padding: 0 16px 8px;
+    padding: 0 16px;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__stage {
@@ -38991,7 +38991,7 @@ html, body {
     grid-column: 1;
     grid-row: 2;
     order: 2;
-    padding: 0 12px 8px;
+    padding: 0 12px;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__stage {
@@ -40305,7 +40305,7 @@ html, body {
   z-index: 12 !important;
   width: 100% !important;
   max-width: 100% !important;
-  padding: 0 clamp(18px, 2.2vw, 30px) 8px 0 !important;
+  padding: 0 clamp(18px, 2.2vw, 30px) 0 0 !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__prompt-submit {

@@ -17244,8 +17244,8 @@ export function WorkspacePage({
       }
       if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segmentIndex)) {
         return variant === "compact"
-          ? workspaceText(locale, "Говорит", "Talking")
-          : workspaceText(locale, "Создаем говорящего персонажа", "Creating talking character");
+          ? workspaceText(locale, "Генерируем видео с говорящим персонажем", "Talking")
+          : workspaceText(locale, "Генерируем видео с говорящим персонажем", "Creating talking character");
       }
       if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex)) {
         return variant === "compact"
