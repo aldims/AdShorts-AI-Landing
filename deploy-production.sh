@@ -63,6 +63,7 @@ echo "[production] check static pages"
 cd "$RELEASE_DIR"
 node scripts/generate-static-landing.mjs
 node scripts/generate-static-bofu-pages.mjs
+node scripts/seo-commercial-growth-sprint.mjs
 node scripts/seo-organic-growth-sprint.mjs
 node scripts/export-seo-url-metadata.mjs
 node scripts/generate-static-landing.mjs --check

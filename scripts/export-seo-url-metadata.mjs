@@ -35,6 +35,7 @@ const normalizeSlug = (url) => {
 const resolveCluster = (slug, h1) => {
   const haystack = `${slug} ${h1}`.toLowerCase();
   if (/(pricing|тариф|цена|стоит|cost|price)/.test(haystack)) return "pricing";
+  if (/(generator|automation|video-maker|shorts-maker|reels-generator|tiktok-video-generator|создат|sozdat|генератор|автоматизац)/.test(haystack)) return "commercial";
   if (/(examples|пример|template|шаблон)/.test(haystack)) return "examples";
   if (/(guides|гайд)/.test(haystack)) return "hub";
   if (/(view|prosmotr|просмотр|0-|shadow|moderac|copyright|загру|звук|quality|kachestv|black|polos|restriction|ban|ошиб|problem|views-dropped|ne-)/.test(haystack)) return "problems";
@@ -49,6 +50,7 @@ const resolveCluster = (slug, h1) => {
 const resolveIntent = (slug, h1) => {
   const haystack = `${slug} ${h1}`.toLowerCase();
   if (/(pricing|тариф|цена|cost|price)/.test(haystack)) return "commercial";
+  if (/(generator|automation|video-maker|shorts-maker|reels-generator|tiktok-video-generator|создат|sozdat|генератор|автоматизац)/.test(haystack)) return "commercial";
   if (/(examples|пример|template|шаблон)/.test(haystack)) return "template";
   if (/(how|kak|как)/.test(haystack)) return "how-to";
   if (/(ne-|нет|not|wont|низк|low|problem|ошиб|ban|copyright|moderac|0-views|0 просмотров)/.test(haystack)) return "problem-solution";

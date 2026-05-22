@@ -214,6 +214,8 @@ const linkSets = {
   en: {
     base: [
       ["https://adshortsai.com/en/shorts-guides/", "all YouTube Shorts guides"],
+      ["https://adshortsai.com/en/youtube-shorts-generator/", "YouTube Shorts generator"],
+      ["https://adshortsai.com/en/faceless-youtube-shorts-generator/", "faceless Shorts generator"],
       ["https://adshortsai.com/en/examples/", "Shorts examples"],
       ["https://adshortsai.com/en/pricing/", "AdShorts AI pricing"],
     ],

@@ -40337,6 +40337,7 @@ html, body {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
     grid-row: 1 !important;
     pointer-events: none;
+    transform: translateY(14px) !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__prompt-submit {

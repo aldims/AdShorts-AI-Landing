@@ -68,6 +68,27 @@ const organicSprintPages = [
   "en/how-to-increase-retention-in-shorts/index.html",
 ];
 
+const commercialGrowthPages = [
+  "generator-youtube-shorts/index.html",
+  "ai-generator-shorts/index.html",
+  "generator-shorts-bez-lica/index.html",
+  "generator-scenariev-youtube-shorts/index.html",
+  "sozdat-shorts-video/index.html",
+  "avtomatizaciya-youtube-shorts/index.html",
+  "generator-video-dlya-tiktok/index.html",
+  "generator-reels-instagram/index.html",
+  "ai-generator-video-dlya-socsetey/index.html",
+  "en/youtube-shorts-generator/index.html",
+  "en/ai-shorts-generator/index.html",
+  "en/faceless-youtube-shorts-generator/index.html",
+  "en/youtube-shorts-script-generator/index.html",
+  "en/shorts-video-maker/index.html",
+  "en/youtube-shorts-automation/index.html",
+  "en/tiktok-video-generator/index.html",
+  "en/instagram-reels-generator/index.html",
+  "en/ai-video-generator-for-social-media/index.html",
+];
+
 const legalPages = [
   "privacy/index.html",
   "terms/index.html",
@@ -108,6 +129,23 @@ for (const pagePath of organicSprintPages) {
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
   assert(/<!-- seo-index-boost:start -->/i.test(html), `${pagePath}: missing index boost block`);
   assert(/<!-- seo-sprint-faq:start -->/i.test(html), `${pagePath}: missing visible sprint FAQ`);
+}
+
+for (const pagePath of commercialGrowthPages) {
+  const html = await readRootFile(pagePath);
+  assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing commercial growth title`);
+  assert(/<meta\s+name="description"\s+content="[^"]{80,}"/i.test(html), `${pagePath}: missing commercial growth description`);
+  assert(/<link\s+rel="canonical"\s+href="https:\/\/adshortsai\.com\/(?:en\/)?[^"]+\/"/i.test(html), `${pagePath}: missing commercial growth canonical`);
+  assert(/<link\s+rel="alternate"\s+hreflang="ru"\s+href="https:\/\/adshortsai\.com\/[^"]+\/"/i.test(html), `${pagePath}: missing ru hreflang`);
+  assert(/<link\s+rel="alternate"\s+hreflang="en"\s+href="https:\/\/adshortsai\.com\/en\/[^"]+\/"/i.test(html), `${pagePath}: missing en hreflang`);
+  assert(/<link\s+rel="alternate"\s+hreflang="x-default"\s+href="https:\/\/adshortsai\.com\/[^"]+\/"/i.test(html), `${pagePath}: missing x-default hreflang`);
+  assert(/"@type"\s*:\s*"SoftwareApplication"/i.test(html), `${pagePath}: missing SoftwareApplication`);
+  assert(/"@type"\s*:\s*"WebPage"/i.test(html), `${pagePath}: missing WebPage`);
+  assert(/"dateModified"\s*:\s*"2026-05-23"/i.test(html), `${pagePath}: missing commercial growth dateModified`);
+  assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
+  assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
+  assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
+  assert(/href="\.\.\/shorts-guides\/#ai-generators"/i.test(html), `${pagePath}: missing commercial guides backlink`);
 }
 
 const appShell = await readRootFile("app/index.html");
@@ -177,6 +215,14 @@ for (const url of sitemapUrls) {
   assert(await exists(localPath), `sitemap.xml: ${url} points to missing ${localPath}`);
 }
 
+for (const pagePath of commercialGrowthPages) {
+  const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
+  assert(
+    new RegExp(`<loc>${commercialUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>2026-05-23<\\/lastmod>`).test(sitemap),
+    `sitemap.xml: commercial growth URL must use current lastmod ${commercialUrl}`,
+  );
+}
+
 const metadata = JSON.parse(await readRootFile("seo-url-metadata.json"));
 assert(Array.isArray(metadata.urls), "seo-url-metadata.json: missing urls array");
 assert(metadata.urls.length === sitemapUrls.length, "seo-url-metadata.json: URL count must match sitemap");
@@ -198,7 +244,22 @@ for (const pagePath of organicSprintPages) {
   assert(record?.lastmod === "2026-05-22", `seo-url-metadata.json: organic sprint URL must use current lastmod ${sprintUrl}`);
 }
 
+for (const pagePath of commercialGrowthPages) {
+  const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
+  const record = metadata.urls.find((entry) => entry.url === commercialUrl);
+  assert(record?.lastmod === "2026-05-23", `seo-url-metadata.json: commercial growth URL must use current lastmod ${commercialUrl}`);
+  assert(record?.intent === "commercial", `seo-url-metadata.json: commercial growth URL should be classified as commercial ${commercialUrl}`);
+}
+
+const englishGuides = await readRootFile("en/shorts-guides/index.html");
+assert(/href="#ai-generators"/i.test(englishGuides), "en/shorts-guides/index.html: missing AI generators nav link");
+assert(/<!-- seo-commercial-growth:start -->/i.test(englishGuides), "en/shorts-guides/index.html: missing commercial growth section");
+const russianGuides = await readRootFile("shorts-guides/index.html");
+assert(/href="#ai-generators"/i.test(russianGuides), "shorts-guides/index.html: missing AI generators nav link");
+assert(/<!-- seo-commercial-growth:start -->/i.test(russianGuides), "shorts-guides/index.html: missing commercial growth section");
+
 const deployProduction = await readRootFile("deploy-production.sh");
+assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
 assert(/node scripts\/seo-organic-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run organic growth sprint before SEO metadata export");
 assert(
   /@app_routes path \/ \/en\/ \/app\* \/en\/app\* \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),

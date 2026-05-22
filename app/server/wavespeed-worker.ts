@@ -88,7 +88,7 @@ type WaveSpeedSpeechPreviewResult = {
 };
 
 const WAVESPEED_API_BASE_URL = "https://api.wavespeed.ai/api/v3/";
-export const WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL = "openai/gpt-image-2";
+export const WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL = "openai/gpt-image-2/text-to-image";
 export const WAVESPEED_GPT_IMAGE_2_EDIT_MODEL = "openai/gpt-image-2/edit";
 export const WAVESPEED_IMAGE_UPSCALER_MODEL = "wavespeed-ai/image-upscaler";
 export const WAVESPEED_KLING_V2_6_STD_IMAGE_TO_VIDEO_MODEL = "kwaivgi/kling-v2.6-std/image-to-video";
