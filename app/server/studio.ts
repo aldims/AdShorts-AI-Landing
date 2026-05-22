@@ -1113,6 +1113,37 @@ export const buildStudioSegmentVisualDurationPayload = (durationSeconds: unknown
   return normalizedDurationSeconds ? { duration: normalizedDurationSeconds } : {};
 };
 
+type StudioTalkingCharacterTarget = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+const normalizeStudioTalkingCharacterTarget = (value: unknown): StudioTalkingCharacterTarget | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const x = Number(source.x);
+  const y = Number(source.y);
+  const width = Number(source.width);
+  const height = Number(source.height);
+  if (![x, y, width, height].every(Number.isFinite)) {
+    return undefined;
+  }
+
+  const normalizedWidth = Math.min(1, Math.max(0.06, width));
+  const normalizedHeight = Math.min(1, Math.max(0.06, height));
+  return {
+    height: normalizedHeight,
+    width: normalizedWidth,
+    x: Math.min(1 - normalizedWidth, Math.max(0, x)),
+    y: Math.min(1 - normalizedHeight, Math.max(0, y)),
+  };
+};
+
 const normalizeStudioSegmentVideoAction = (value: unknown): StudioSegmentEditorVideoAction => {
   const normalized = String(value ?? "").trim().toLowerCase();
   return studioSupportedSegmentVideoActions.has(normalized) ? (normalized as StudioSegmentEditorVideoAction) : "original";
@@ -5707,9 +5738,7 @@ export async function createStudioSegmentTalkingPhotoJob(
     projectId?: number;
     prompt?: string;
     segmentIndex?: number;
-    speakerCharacterKey?: string;
-    speakerCharacterName?: string;
-    speakerReferenceAssetId?: number;
+    speakerTarget?: StudioTalkingCharacterTarget;
     voiceType?: string | null;
   },
 ): Promise<StudioSegmentAiVideoJob> {
@@ -5739,9 +5768,7 @@ export async function createStudioSegmentTalkingPhotoJob(
 
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
-  const normalizedSpeakerCharacterKey = normalizeGenerationText(options?.speakerCharacterKey) || undefined;
-  const normalizedSpeakerCharacterName = normalizeGenerationText(options?.speakerCharacterName) || undefined;
-  const normalizedSpeakerReferenceAssetId = normalizePositiveInteger(options?.speakerReferenceAssetId);
+  const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
   const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -5780,9 +5807,7 @@ export async function createStudioSegmentTalkingPhotoJob(
     script: normalizedScript,
     seed: -1,
     segment_index: normalizedSegmentIndex,
-    speaker_character_key: normalizedSpeakerCharacterKey,
-    speaker_character_name: normalizedSpeakerCharacterName,
-    speaker_reference_asset_id: normalizedSpeakerReferenceAssetId,
+    speaker_target: normalizedSpeakerTarget,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
     voice_type: normalizedVoiceType,

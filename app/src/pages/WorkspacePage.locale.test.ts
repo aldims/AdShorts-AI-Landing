@@ -20,9 +20,11 @@ import {
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
   getNextWorkspaceReferenceDefaultName,
+  getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   insertWorkspacePromptCharacterMentionText,
   resolveWorkspacePromptMentionedCharacterOptions,
-  resolveWorkspaceTalkingSpeakerKey,
+  createWorkspaceTalkingCharacterTargetFromPoints,
+  normalizeWorkspaceTalkingCharacterTarget,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
@@ -398,26 +400,31 @@ describe("WorkspacePage segment visual references payload", () => {
   });
 });
 
-describe("WorkspacePage talking character speaker selection", () => {
-  it("auto-selects the only chosen character", () => {
-    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1"], null)).toEqual({
-      isMissing: false,
-      isRequired: false,
-      speakerKey: "project-character:1",
+describe("WorkspacePage talking character target selection", () => {
+  it("creates a draggable normalized target area", () => {
+    expect(createWorkspaceTalkingCharacterTargetFromPoints({ x: 0.2, y: 0.3 }, { x: 0.5, y: 0.7 })).toEqual({
+      height: 0.39999999999999997,
+      width: 0.3,
+      x: 0.2,
+      y: 0.3,
     });
   });
 
-  it("requires explicit speaker selection for multiple chosen characters", () => {
-    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1", "saved:two"], null)).toEqual({
-      isMissing: true,
-      isRequired: true,
-      speakerKey: null,
+  it("uses a face-sized default box for click selection", () => {
+    expect(createWorkspaceTalkingCharacterTargetFromPoints({ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 })).toEqual({
+      height: 0.34,
+      width: 0.28,
+      x: 0.36,
+      y: 0.32999999999999996,
     });
+  });
 
-    expect(resolveWorkspaceTalkingSpeakerKey(["project-character:1", "saved:two"], "saved:two")).toEqual({
-      isMissing: false,
-      isRequired: true,
-      speakerKey: "saved:two",
+  it("clamps target areas to the frame", () => {
+    expect(normalizeWorkspaceTalkingCharacterTarget({ height: 0.5, width: 0.5, x: 0.9, y: -0.2 })).toEqual({
+      height: 0.5,
+      width: 0.5,
+      x: 0.5,
+      y: 0,
     });
   });
 });
@@ -858,6 +865,29 @@ describe("WorkspacePage segment editor draft persistence", () => {
         .flatMap((row) => row.spans)
         .some((span) => span.isEdited),
     ).toBe(false);
+  });
+
+  it("uses modern subtitles as the default selection for a clean blank draft", () => {
+    const resetDraft = resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+      ...createDraftSession(createDraftSegment({ index: 0, text: "Only segment" })),
+      segments: [createDraftSegment({ index: 0, text: "" })],
+    });
+    const blankDraftWithStaleSubtitleSelection = {
+      ...resetDraft,
+      subtitleColor: "gold",
+      subtitleStyle: "impact",
+    };
+
+    expect(isWorkspaceSegmentEditorCleanEmptyDraft(blankDraftWithStaleSubtitleSelection)).toBe(true);
+    expect(
+      getWorkspaceSegmentEditorEffectiveSubtitleSelection(blankDraftWithStaleSubtitleSelection, {
+        subtitleColorId: "gold",
+        subtitleStyleId: "impact",
+      }),
+    ).toEqual({
+      subtitleColorId: "purple",
+      subtitleStyleId: "modern",
+    });
   });
 
   it("keeps reset music assets empty when a fresh server session still has old generated music", () => {

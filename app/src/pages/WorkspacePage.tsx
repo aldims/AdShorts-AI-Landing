@@ -1231,6 +1231,13 @@ type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiVideoJob
   customVideoFileName?: string;
 };
 
+type WorkspaceTalkingCharacterTarget = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
 type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
@@ -1243,9 +1250,7 @@ type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   prompt?: string;
   script: string;
   segmentIndex?: number;
-  speakerCharacterKey?: string;
-  speakerCharacterName?: string;
-  speakerReferenceAssetId?: number;
+  speakerTarget?: WorkspaceTalkingCharacterTarget;
   voiceType?: string | null;
 };
 
@@ -3916,28 +3921,66 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
   };
 };
 
-export const resolveWorkspaceTalkingSpeakerKey = (
-  characterKeys: readonly string[],
-  selectedSpeakerKey: string | null | undefined,
-) => {
-  const normalizedKeys = characterKeys
-    .map((key) => String(key ?? "").trim())
-    .filter(Boolean)
-    .slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT);
-  const selectedKey = String(selectedSpeakerKey ?? "").trim();
-  const isRequired = normalizedKeys.length > 1;
-  const speakerKey =
-    normalizedKeys.length === 1
-      ? normalizedKeys[0]
-      : selectedKey && normalizedKeys.includes(selectedKey)
-        ? selectedKey
-        : null;
+const WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE = 0.06;
+const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_WIDTH = 0.28;
+const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_HEIGHT = 0.34;
 
+const clampWorkspaceUnitValue = (value: number) => Math.min(1, Math.max(0, value));
+
+export const normalizeWorkspaceTalkingCharacterTarget = (
+  value: Partial<WorkspaceTalkingCharacterTarget> | null | undefined,
+): WorkspaceTalkingCharacterTarget | null => {
+  const x = Number(value?.x);
+  const y = Number(value?.y);
+  const width = Number(value?.width);
+  const height = Number(value?.height);
+  if (![x, y, width, height].every(Number.isFinite)) {
+    return null;
+  }
+
+  const normalizedWidth = Math.min(1, Math.max(WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE, width));
+  const normalizedHeight = Math.min(1, Math.max(WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE, height));
   return {
-    isMissing: isRequired && !speakerKey,
-    isRequired,
-    speakerKey,
+    height: normalizedHeight,
+    width: normalizedWidth,
+    x: Math.min(1 - normalizedWidth, Math.max(0, x)),
+    y: Math.min(1 - normalizedHeight, Math.max(0, y)),
   };
+};
+
+export const createWorkspaceTalkingCharacterTargetFromPoints = (
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): WorkspaceTalkingCharacterTarget => {
+  const startX = clampWorkspaceUnitValue(start.x);
+  const startY = clampWorkspaceUnitValue(start.y);
+  const endX = clampWorkspaceUnitValue(end.x);
+  const endY = clampWorkspaceUnitValue(end.y);
+  const left = Math.min(startX, endX);
+  const top = Math.min(startY, endY);
+  const width = Math.abs(endX - startX);
+  const height = Math.abs(endY - startY);
+  const isDragSelection =
+    width >= WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE &&
+    height >= WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE;
+
+  if (isDragSelection) {
+    return normalizeWorkspaceTalkingCharacterTarget({
+      height,
+      width,
+      x: left,
+      y: top,
+    }) as WorkspaceTalkingCharacterTarget;
+  }
+
+  const defaultWidth = WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_WIDTH;
+  const defaultHeight = WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_HEIGHT;
+  return normalizeWorkspaceTalkingCharacterTarget({
+    height: defaultHeight,
+    width: defaultWidth,
+    x: endX - defaultWidth / 2,
+    y: endY - defaultHeight / 2,
+  }) as WorkspaceTalkingCharacterTarget;
 };
 
 const getWorkspaceMediaAssetResolvedPreviewUrl = (
@@ -8322,22 +8365,21 @@ export const shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = 
   draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
 ) => Boolean(draft?.segments.length === 1 && isWorkspaceSegmentEditorDraftSegmentEmpty(draft.segments[0]));
 
+type WorkspaceSegmentEditorCleanEmptyDraftCandidate = Pick<
+  WorkspaceSegmentEditorDraftSession,
+  | "customMusicAssetId"
+  | "customMusicFileName"
+  | "musicAssetId"
+  | "musicName"
+  | "musicType"
+  | "segments"
+  | "subtitleType"
+  | "ttsAssetId"
+  | "voiceType"
+>;
+
 export const isWorkspaceSegmentEditorCleanEmptyDraft = (
-  draft:
-    | Pick<
-        WorkspaceSegmentEditorDraftSession,
-        | "customMusicAssetId"
-        | "customMusicFileName"
-        | "musicAssetId"
-        | "musicName"
-        | "musicType"
-        | "segments"
-        | "subtitleType"
-        | "ttsAssetId"
-        | "voiceType"
-      >
-    | null
-    | undefined,
+  draft: WorkspaceSegmentEditorCleanEmptyDraftCandidate | null | undefined,
 ) =>
   Boolean(
     draft &&
@@ -8363,6 +8405,36 @@ export const isWorkspaceSegmentEditorCleanEmptyDraft = (
       !getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) &&
       normalizeWorkspaceSegmentEditorSetting(draft.voiceType) === "none",
   );
+
+export const getWorkspaceSegmentEditorEffectiveSubtitleSelection = (
+  draft:
+    | (WorkspaceSegmentEditorCleanEmptyDraftCandidate &
+        Pick<WorkspaceSegmentEditorDraftSession, "subtitleColor" | "subtitleStyle">)
+    | null
+    | undefined,
+  fallbackSelection: {
+    subtitleColorId: string;
+    subtitleStyleId: string;
+  },
+) => {
+  if (isWorkspaceSegmentEditorCleanEmptyDraft(draft)) {
+    return {
+      subtitleColorId: fallbackStudioSubtitleColorOption.id,
+      subtitleStyleId: fallbackStudioSubtitleStyleOption.id,
+    };
+  }
+
+  return {
+    subtitleColorId:
+      normalizeWorkspaceSegmentEditorSetting(draft?.subtitleColor) ??
+      normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleColorId) ??
+      fallbackStudioSubtitleColorOption.id,
+    subtitleStyleId:
+      normalizeWorkspaceSegmentEditorSetting(draft?.subtitleStyle) ??
+      normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleStyleId) ??
+      fallbackStudioSubtitleStyleOption.id,
+  };
+};
 
 type WorkspaceSegmentEditorCarouselSlot =
   | {
@@ -16337,7 +16409,7 @@ export function WorkspacePage({
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
-  const [selectedSegmentTalkingSpeakerKey, setSelectedSegmentTalkingSpeakerKey] = useState<string | null>(null);
+  const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentReferencePanelTab, setSegmentReferencePanelTab] = useState<WorkspaceReferenceKind>("character");
@@ -16666,6 +16738,11 @@ export function WorkspacePage({
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentTalkingTargetDragRef = useRef<{
+    segmentIndex: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const segmentPhotoAnimationActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -17040,10 +17117,12 @@ export function WorkspacePage({
     ],
   );
   const getSegmentVisualPlaceholderLabel = useCallback(
-    (segmentIndex: number) =>
+    (segmentIndex: number, options?: { action?: boolean }) =>
       isSegmentVisualGenerationPending(segmentIndex)
         ? workspaceText(locale, "Генерация...", "Generating...")
-        : workspaceText(locale, "Нет превью", "No preview"),
+        : options?.action
+          ? workspaceText(locale, "Добавить визуал", "Add visual")
+          : workspaceText(locale, "Нет превью", "No preview"),
     [isSegmentVisualGenerationPending, locale],
   );
   const syncStorageBackedMediaLibraryState = useCallback(() => {
@@ -17930,7 +18009,7 @@ export function WorkspacePage({
       setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
       setSelectedSegmentReferenceCharacterAssetKeys([]);
-      setSelectedSegmentTalkingSpeakerKey(null);
+      setSegmentTalkingCharacterTargets({});
       setSelectedSegmentReferenceSceneKey(null);
       setIsSegmentReferencesModalOpen(false);
       setIsWorkspaceReferenceCreatorOpen(false);
@@ -18437,6 +18516,7 @@ export function WorkspacePage({
         dragState.clickTarget.segmentArrayIndex,
         dragState.clickTarget.segmentPlaybackIndex,
         dragState.clickTarget.previewKind,
+        shouldOpenSegmentEditorVisualPanelForCard(dragState.clickTarget.segmentArrayIndex),
       );
     } else {
       segmentCarouselPointerPlaybackIntentRef.current = null;
@@ -20073,28 +20153,6 @@ export function WorkspacePage({
       selectedSegmentReferenceCharacterIds,
     ],
   );
-  const selectedSegmentReferenceCharacterKeys = useMemo(
-    () => selectedSegmentReferenceCharacterOptions.map((option) => option.key),
-    [selectedSegmentReferenceCharacterOptions],
-  );
-  const segmentTalkingSpeakerSelection = useMemo(
-    () => resolveWorkspaceTalkingSpeakerKey(selectedSegmentReferenceCharacterKeys, selectedSegmentTalkingSpeakerKey),
-    [selectedSegmentReferenceCharacterKeys, selectedSegmentTalkingSpeakerKey],
-  );
-  const selectedSegmentTalkingSpeakerOption = useMemo(
-    () =>
-      segmentTalkingSpeakerSelection.speakerKey
-        ? selectedSegmentReferenceCharacterOptions.find(
-            (option) => option.key === segmentTalkingSpeakerSelection.speakerKey,
-          ) ?? null
-        : null,
-    [segmentTalkingSpeakerSelection.speakerKey, selectedSegmentReferenceCharacterOptions],
-  );
-  useEffect(() => {
-    setSelectedSegmentTalkingSpeakerKey((current) =>
-      resolveWorkspaceTalkingSpeakerKey(selectedSegmentReferenceCharacterKeys, current).speakerKey,
-    );
-  }, [selectedSegmentReferenceCharacterKeys]);
   const selectedSegmentReferenceScene = useMemo(
     () =>
       selectedSegmentReferenceSceneKey
@@ -20311,7 +20369,7 @@ export function WorkspacePage({
   useEffect(() => {
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
-    setSelectedSegmentTalkingSpeakerKey(null);
+    setSegmentTalkingCharacterTargets({});
     setSelectedSegmentReferenceSceneKey(null);
     setIsSegmentReferencesModalOpen(false);
     setIsWorkspaceReferenceCreatorOpen(false);
@@ -20889,10 +20947,12 @@ export function WorkspacePage({
         }
       : undefined;
   const shouldShowStudioSidebar = false;
-  const studioSidebarSubtitleStyleId =
-    normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleStyle) ?? selectedSubtitleStyleId;
-  const studioSidebarSubtitleColorId =
-    normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleColor) ?? selectedSubtitleColorId;
+  const studioSidebarSubtitleSelection = getWorkspaceSegmentEditorEffectiveSubtitleSelection(segmentEditorDraft, {
+    subtitleColorId: selectedSubtitleColorId,
+    subtitleStyleId: selectedSubtitleStyleId,
+  });
+  const studioSidebarSubtitleStyleId = studioSidebarSubtitleSelection.subtitleStyleId;
+  const studioSidebarSubtitleColorId = studioSidebarSubtitleSelection.subtitleColorId;
   const studioSidebarSubtitlesEnabled = segmentEditorDraft ? !isCurrentDraftSubtitleDisabled : areSubtitlesEnabled;
   const studioSidebarVoiceId =
     selectedVoiceOptions.find((voice) => voice.id === normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType))?.id ??
@@ -22688,6 +22748,10 @@ export function WorkspacePage({
         ? draftSubtitleColorId
         : null) ??
       (typeof projectSettings?.subtitleColorId === "string" ? projectSettings.subtitleColorId.trim() : "");
+    const nextSubtitleSelection = getWorkspaceSegmentEditorEffectiveSubtitleSelection(draft, {
+      subtitleColorId: nextSubtitleColorId || selectedSubtitleColorId,
+      subtitleStyleId: nextSubtitleStyleId || selectedSubtitleStyleId,
+    });
 
     setSelectedLanguage(nextLanguage);
 
@@ -22710,13 +22774,8 @@ export function WorkspacePage({
 
     setAreSubtitlesEnabled(draftSubtitleType !== "none");
 
-    if (nextSubtitleStyleId) {
-      setSelectedSubtitleStyleId(nextSubtitleStyleId);
-    }
-
-    if (nextSubtitleColorId) {
-      setSelectedSubtitleColorId(nextSubtitleColorId);
-    }
+    setSelectedSubtitleStyleId(nextSubtitleSelection.subtitleStyleId);
+    setSelectedSubtitleColorId(nextSubtitleSelection.subtitleColorId);
 
     setIsVoiceoverEnabled(draftVoiceId !== "none");
 
@@ -23840,14 +23899,20 @@ export function WorkspacePage({
   };
 
   const handleSegmentEditorSubtitleToggle = (enabled: boolean) => {
-    updateSegmentEditorDraft((currentDraft) => ({
-      ...currentDraft,
-      subtitleType: enabled
-        ? normalizeWorkspaceSegmentEditorSetting(currentDraft.subtitleType) === "none"
-          ? "default"
-          : currentDraft.subtitleType || "default"
-        : "none",
-    }));
+    updateSegmentEditorDraft((currentDraft) => {
+      const shouldUseBlankSubtitleDefaults = isWorkspaceSegmentEditorCleanEmptyDraft(currentDraft);
+
+      return {
+        ...currentDraft,
+        subtitleColor: shouldUseBlankSubtitleDefaults ? fallbackStudioSubtitleColorOption.id : currentDraft.subtitleColor,
+        subtitleStyle: shouldUseBlankSubtitleDefaults ? fallbackStudioSubtitleStyleOption.id : currentDraft.subtitleStyle,
+        subtitleType: enabled
+          ? normalizeWorkspaceSegmentEditorSetting(currentDraft.subtitleType) === "none"
+            ? "default"
+            : currentDraft.subtitleType || "default"
+          : "none",
+      };
+    });
   };
 
   const handleSegmentEditorSubtitleStyleSelect = (styleId: StudioSubtitleStyleOption["id"]) => {
@@ -26866,12 +26931,11 @@ export function WorkspacePage({
       return;
     }
 
-    if (isSegmentTalkingSpeakerSelectionMissing) {
-      setSegmentEditorVideoError("Выберите, кто будет говорить.");
+    const speakerTarget = segmentTalkingCharacterTargets[targetSegmentIndex] ?? null;
+    if (!speakerTarget) {
+      setSegmentEditorVideoError("Выберите говорящего персонажа на карточке сцены в карусели.");
       return;
     }
-
-    const speakerReferenceAssetId = getPositiveWorkspaceMediaAssetId(selectedSegmentTalkingSpeakerOption?.assetId);
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -26953,9 +27017,7 @@ export function WorkspacePage({
           prompt: visualPrompt,
           script,
           segmentIndex: visualJobBinding.segmentIndex,
-          speakerCharacterKey: selectedSegmentTalkingSpeakerOption?.key,
-          speakerCharacterName: selectedSegmentTalkingSpeakerOption?.label,
-          speakerReferenceAssetId: speakerReferenceAssetId ?? undefined,
+          speakerTarget,
           voiceType,
         } satisfies WorkspaceSegmentTalkingPhotoJobCreateRequest),
       });
@@ -29892,11 +29954,63 @@ export function WorkspacePage({
       setSegmentEditorPreviewTime(segmentIndex, currentTime);
     };
 
+  const openSegmentEditorVisualPanelFromCard = (
+    segmentArrayIndex: number,
+    segment: WorkspaceSegmentEditorDraftSegment,
+  ) => {
+    logSegmentEditorDiagnostics("client.segment-editor.card.open-visual-panel", {
+      activeSegmentIndex,
+      segmentArrayIndex,
+      segmentIndex: segment.index,
+    });
+    resetSegmentEditorPreviewPlaybackState();
+    setSegmentTimelineVoiceMenuSegmentIndex(null);
+    setSegmentTimelineSoundMenuSegmentIndex(null);
+    setSegmentTimelineTextMenuSegmentIndex(null);
+    setSegmentTimelineVisualMenuSegmentIndex(null);
+    setSegmentEditorVideoError(null);
+    activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex, {
+      pendingPlaybackIndex: null,
+    });
+    syncSegmentAiPhotoModalForSegment(segment, {
+      preserveTab: false,
+      resetLibraryFilter: true,
+    });
+    setIsSegmentEditorVisualPanelOpen(true);
+    setSegmentEditorPromptSceneMode("create");
+    setSegmentEditorPromptToolTab("ai_photo");
+    setSegmentAiPhotoModalTab("ai_photo");
+  };
+
+  const shouldOpenSegmentEditorVisualPanelForCard = (segmentArrayIndex: number) => {
+    const segment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!segment || isSegmentVisualGenerationPending(segment.index)) {
+      return false;
+    }
+
+    return !getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: false,
+    }).displayUrl;
+  };
+
   const handleSegmentEditorCardClick = async (
     segmentArrayIndex: number,
     segmentPlaybackIndex: number,
     previewKind: WorkspaceSegmentPreviewKind,
+    shouldOpenVisualPanel: boolean,
   ) => {
+    const segment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
+    if (!segment) {
+      queuedSegmentEditorPlaybackIndexRef.current = null;
+      setQueuedSegmentEditorPlaybackIndex(null);
+      return;
+    }
+
+    if (shouldOpenVisualPanel) {
+      openSegmentEditorVisualPanelFromCard(segmentArrayIndex, segment);
+      return;
+    }
+
     if (segmentArrayIndex !== activeSegmentIndex) {
       const pendingPlaybackIndex = segmentPlaybackIndex;
       logSegmentEditorDiagnostics("client.segment-editor.card.click.switch-active", {
@@ -29909,13 +30023,6 @@ export function WorkspacePage({
       activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex, {
         pendingPlaybackIndex,
       });
-      return;
-    }
-
-    const segment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
-    if (!segment) {
-      queuedSegmentEditorPlaybackIndexRef.current = null;
-      setQueuedSegmentEditorPlaybackIndex(null);
       return;
     }
 
@@ -30041,7 +30148,12 @@ export function WorkspacePage({
   };
 
   const handleActiveSegmentEditorCardClick =
-    (segmentArrayIndex: number, segmentPlaybackIndex: number, previewKind: WorkspaceSegmentPreviewKind) =>
+    (
+      segmentArrayIndex: number,
+      segmentPlaybackIndex: number,
+      previewKind: WorkspaceSegmentPreviewKind,
+      shouldOpenVisualPanel: boolean,
+    ) =>
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       if (isSegmentCarouselClickSuppressed()) {
         event.preventDefault();
@@ -30051,11 +30163,16 @@ export function WorkspacePage({
 
       event.preventDefault();
       event.stopPropagation();
-      void handleSegmentEditorCardClick(segmentArrayIndex, segmentPlaybackIndex, previewKind);
+      void handleSegmentEditorCardClick(segmentArrayIndex, segmentPlaybackIndex, previewKind, shouldOpenVisualPanel);
     };
 
   const handleSideSegmentEditorCardClick =
-    (segmentArrayIndex: number, segmentPlaybackIndex: number, previewKind: WorkspaceSegmentPreviewKind) =>
+    (
+      segmentArrayIndex: number,
+      segmentPlaybackIndex: number,
+      previewKind: WorkspaceSegmentPreviewKind,
+      shouldOpenVisualPanel: boolean,
+    ) =>
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       if (isSegmentCarouselClickSuppressed()) {
         event.preventDefault();
@@ -30065,7 +30182,7 @@ export function WorkspacePage({
 
       event.preventDefault();
       event.stopPropagation();
-      void handleSegmentEditorCardClick(segmentArrayIndex, segmentPlaybackIndex, previewKind);
+      void handleSegmentEditorCardClick(segmentArrayIndex, segmentPlaybackIndex, previewKind, shouldOpenVisualPanel);
     };
 
   const getSegmentCarouselCardStyle = (offset: number, options?: { isAddCard?: boolean }): CSSProperties => {
@@ -32769,8 +32886,13 @@ export function WorkspacePage({
   const isPromptUploadMode = segmentEditorPromptToolTab === "upload";
   const canPromptUseVisualReferences = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
   const selectedSegmentReferenceCharacterCount = selectedSegmentReferenceCharacterOptions.length;
-  const isSegmentTalkingSpeakerSelectionRequired = segmentTalkingSpeakerSelection.isRequired;
-  const isSegmentTalkingSpeakerSelectionMissing = segmentTalkingSpeakerSelection.isMissing;
+  const activeSegmentTalkingCharacterTarget =
+    typeof activeSegment?.index === "number" ? segmentTalkingCharacterTargets[activeSegment.index] ?? null : null;
+  const modalSegmentTalkingCharacterTarget =
+    typeof segmentAiPhotoModalSegment?.index === "number"
+      ? segmentTalkingCharacterTargets[segmentAiPhotoModalSegment.index] ?? null
+      : null;
+  const isSegmentTalkingTargetMissing = isPromptTalkingPhotoMode && !activeSegmentTalkingCharacterTarget;
   const selectedSegmentReferenceCount =
     selectedSegmentReferenceCharacterCount + (selectedSegmentReferenceScene ? 1 : 0);
   const selectedSegmentReferenceCharacterSummary =
@@ -32824,7 +32946,6 @@ export function WorkspacePage({
   const clearSegmentVisualReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
-    setSelectedSegmentTalkingSpeakerKey(null);
     setSelectedSegmentReferenceSceneKey(null);
   };
   const renderSegmentReferencePreview = (
@@ -34085,41 +34206,25 @@ export function WorkspacePage({
           {selectedSegmentReferenceCharacterOptions.length > 0 ? (
             <div className="studio-segment-references__mention-icons">
               {selectedSegmentReferenceCharacterOptions.map((option) => {
-                const isSpeaker = selectedSegmentTalkingSpeakerOption?.key === option.key;
-                const isInserted = !isPromptTalkingPhotoMode && segmentPromptMentionCharacterKeys.includes(option.key);
+                const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
                 return (
                   <button
                     key={`segment-reference-mention-icon:${option.key}`}
-                    className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}${isSpeaker ? " is-speaking" : ""}`}
+                    className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
                     type="button"
-                    aria-pressed={isPromptTalkingPhotoMode ? isSpeaker : isInserted}
+                    aria-pressed={isInserted}
                     aria-label={workspaceText(
                       locale,
-                      isPromptTalkingPhotoMode
-                        ? `Выбрать ${option.label} говорящим персонажем`
-                        : `Добавить ${option.label} в описание`,
-                      isPromptTalkingPhotoMode
-                        ? `Select ${option.label} as the speaking character`
-                        : `Add ${option.label} to prompt`,
+                      `Добавить ${option.label} в описание`,
+                      `Add ${option.label} to prompt`,
                     )}
                     title={workspaceText(
                       locale,
-                      isPromptTalkingPhotoMode
-                        ? `Выбрать ${option.label} говорящим персонажем`
-                        : `Добавить ${option.label} в описание`,
-                      isPromptTalkingPhotoMode
-                        ? `Select ${option.label} as the speaking character`
-                        : `Add ${option.label} to prompt`,
+                      `Добавить ${option.label} в описание`,
+                      `Add ${option.label} to prompt`,
                     )}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      if (isPromptTalkingPhotoMode) {
-                        setSelectedSegmentTalkingSpeakerKey(option.key);
-                        return;
-                      }
-
-                      handleInsertSegmentPromptCharacterMention(option);
-                    }}
+                    onClick={() => handleInsertSegmentPromptCharacterMention(option)}
                   >
                     <span className="studio-segment-references__mention-icon-media">
                       {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
@@ -34157,58 +34262,141 @@ export function WorkspacePage({
         : null}
     </section>
   );
-  const renderSegmentTalkingSpeakerPanel = (variant: "editor" | "modal" = "editor") => (
-    <section className={`studio-segment-talking-speaker studio-segment-talking-speaker--${variant}`}>
-      <div className="studio-segment-talking-speaker__head">
-        <strong>{workspaceText(locale, "Кто говорит", "Who speaks")}</strong>
-        <span>
-          {workspaceText(
-            locale,
-            "Для лучшего результата лицо и рот говорящего должны быть хорошо видны.",
-            "For best results, the speaker's face and mouth should be clearly visible.",
-          )}
+  const getSegmentTalkingTargetPoint = (
+    event: ReactPointerEvent<HTMLElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    return {
+      x: clampWorkspaceUnitValue((event.clientX - rect.left) / width),
+      y: clampWorkspaceUnitValue((event.clientY - rect.top) / height),
+    };
+  };
+  const setSegmentTalkingCharacterTarget = (segmentIndex: number, target: WorkspaceTalkingCharacterTarget | null) => {
+    setSegmentTalkingCharacterTargets((current) => {
+      if (!target) {
+        const next = { ...current };
+        delete next[segmentIndex];
+        return next;
+      }
+
+      const normalizedTarget = normalizeWorkspaceTalkingCharacterTarget(target);
+      return normalizedTarget ? { ...current, [segmentIndex]: normalizedTarget } : current;
+    });
+  };
+  const getSegmentTalkingTargetStyle = (target: WorkspaceTalkingCharacterTarget | null | undefined) =>
+    target
+      ? ({
+          height: `${target.height * 100}%`,
+          left: `${target.x * 100}%`,
+          top: `${target.y * 100}%`,
+          width: `${target.width * 100}%`,
+        } satisfies CSSProperties)
+      : undefined;
+  const beginSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getSegmentTalkingTargetPoint(event);
+    segmentTalkingTargetDragRef.current = {
+      segmentIndex,
+      startX: point.x,
+      startY: point.y,
+    };
+    setSegmentTalkingCharacterTarget(segmentIndex, createWorkspaceTalkingCharacterTargetFromPoints(point, point));
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const updateSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
+    const drag = segmentTalkingTargetDragRef.current;
+    if (!drag || drag.segmentIndex !== segmentIndex) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const point = getSegmentTalkingTargetPoint(event);
+    setSegmentTalkingCharacterTarget(
+      drag.segmentIndex,
+      createWorkspaceTalkingCharacterTargetFromPoints(
+        { x: drag.startX, y: drag.startY },
+        point,
+      ),
+    );
+  };
+  const finishSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
+    const drag = segmentTalkingTargetDragRef.current;
+    event.preventDefault();
+    event.stopPropagation();
+    if (drag && drag.segmentIndex === segmentIndex) {
+      const point = getSegmentTalkingTargetPoint(event);
+      setSegmentTalkingCharacterTarget(
+        drag.segmentIndex,
+        createWorkspaceTalkingCharacterTargetFromPoints(
+          { x: drag.startX, y: drag.startY },
+          point,
+        ),
+      );
+    }
+    segmentTalkingTargetDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+  const cancelSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    segmentTalkingTargetDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+  const renderSegmentTalkingTargetOverlay = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    const target = segmentTalkingCharacterTargets[segment.index] ?? null;
+    const targetStyle = getSegmentTalkingTargetStyle(target);
+
+    return (
+      <div
+        className={`studio-segment-talking-target-overlay${target ? " has-target" : ""}`}
+        role="application"
+        aria-label={workspaceText(locale, "Выбор говорящего персонажа на сцене", "Speaking character selection on scene")}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerCancel={cancelSegmentTalkingTargetSelection}
+        onPointerDown={(event) => beginSegmentTalkingTargetSelection(event, segment.index)}
+        onPointerMove={(event) => updateSegmentTalkingTargetSelection(event, segment.index)}
+        onPointerUp={(event) => finishSegmentTalkingTargetSelection(event, segment.index)}
+      >
+        {targetStyle ? <span className="studio-segment-talking-target-overlay__box" style={targetStyle} /> : null}
+        <span className="studio-segment-talking-target-overlay__label">
+          {target
+            ? workspaceText(locale, "Говорящий выбран", "Speaker selected")
+            : workspaceText(locale, "Обведите говорящего", "Select the speaker")}
         </span>
+        {target ? (
+          <button
+            className="studio-segment-talking-target-overlay__reset"
+            type="button"
+            aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+            title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSegmentTalkingCharacterTarget(segment.index, null);
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        ) : null}
       </div>
-      {selectedSegmentReferenceCharacterOptions.length > 0 ? (
-        <div className="studio-segment-talking-speaker__options" role="group" aria-label={workspaceText(locale, "Говорящий персонаж", "Speaking character")}>
-          {selectedSegmentReferenceCharacterOptions.map((option) => {
-            const isSpeaker = selectedSegmentTalkingSpeakerOption?.key === option.key;
-            return (
-              <button
-                key={`talking-speaker:${variant}:${option.key}`}
-                className={`studio-segment-talking-speaker__option${isSpeaker ? " is-selected" : ""}`}
-                type="button"
-                aria-pressed={isSpeaker}
-                onClick={() => setSelectedSegmentTalkingSpeakerKey(option.key)}
-              >
-                <span className="studio-segment-talking-speaker__avatar">
-                  {renderSegmentReferenceOptionPreview(option, `talking-speaker:${variant}:${option.key}`)}
-                </span>
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <button
-          className="studio-segment-talking-speaker__empty"
-          type="button"
-          onClick={() => setIsSegmentReferencesModalOpen(true)}
-        >
-          {workspaceText(
-            locale,
-            "Если в кадре несколько персонажей, выберите их в меню «Персонажи».",
-            "If the shot has multiple characters, select them in the Characters menu.",
-          )}
-        </button>
-      )}
-      {isSegmentTalkingSpeakerSelectionRequired && !selectedSegmentTalkingSpeakerOption ? (
-        <p className="studio-segment-talking-speaker__warning" role="alert">
-          {workspaceText(locale, "Выберите, кто будет говорить.", "Select who will speak.")}
-        </p>
-      ) : null}
-    </section>
-  );
+    );
+  };
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
   const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(selectedSegmentAiVideoQuality);
   const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(selectedSegmentPhotoAnimationQuality);
@@ -34311,7 +34499,7 @@ export function WorkspacePage({
   const isPromptVisualActionDisabled =
     isPromptVisualBaseDisabled ||
     isPromptVisualPromptEmpty ||
-    (isPromptTalkingPhotoMode && isSegmentTalkingSpeakerSelectionMissing);
+    isSegmentTalkingTargetMissing;
   const canImprovePromptVisual =
     isPromptImageEditMode
       ? canImproveSegmentImageEditPrompt
@@ -35576,11 +35764,10 @@ export function WorkspacePage({
                                 strokeWidth="2.2"
                               />
                             </svg>
-	                          </button>
-	                        ) : null}
-	                      </div>
-                      {isPromptTalkingPhotoMode ? renderSegmentTalkingSpeakerPanel("editor") : null}
-	                      {isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent ? (
+                          </button>
+                        ) : null}
+                      </div>
+                      {isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent ? (
                         <div className="studio-segment-editor__prompt-info-card is-processing" role="status" aria-live="polite">
                           <strong>{workspaceText(locale, "Генерируем звук сцены", "Generating scene sound")}</strong>
                           <span>
@@ -35604,7 +35791,7 @@ export function WorkspacePage({
                   ) : null}
                   {!isPromptLibraryMode && !isPromptVoiceoverMode ? (
                     <div className="studio-segment-editor__prompt-action-row">
-                      {canPromptUseVisualReferences || isPromptTalkingPhotoMode
+                      {canPromptUseVisualReferences
                         ? renderSegmentVisualReferencesPanel("editor")
                         : null}
                       {isPromptAiPhotoMode
@@ -36029,6 +36216,7 @@ export function WorkspacePage({
                                 );
                                 const mediaKind = segmentMediaSurface.previewKind;
                                 const mediaUrl = segmentMediaSurface.displayUrl;
+                                const shouldOpenVisualPanelFromCard = !mediaUrl && !isVisualGenerationPending;
                                 const mediaKey = mediaUrl
                                   ? `slot:${nextSegmentArrayIndex}|${getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface)}`
                                   : "";
@@ -36060,7 +36248,7 @@ export function WorkspacePage({
                                     key={`segment-card:${nextSegmentArrayIndex}:${segment.index}:${mediaKey}`}
                                     className={`studio-segment-editor__card ${slotClass}${isVisualGenerationPending ? " is-pending" : ""}${
                                       isSegmentVisualChanged ? " is-visual-edited" : ""
-                                    }`}
+                                    }${shouldOpenVisualPanelFromCard ? " has-empty-visual" : ""}`}
                                     style={getSegmentCarouselCardStyle(offset)}
                                     aria-current={offset === 0 ? "true" : undefined}
                                     aria-busy={isVisualGenerationPending ? true : undefined}
@@ -36130,8 +36318,14 @@ export function WorkspacePage({
                                           }}
                                         />
                                       ) : (
-                                        <div className="studio-segment-editor__card-placeholder">
-                                          {getSegmentVisualPlaceholderLabel(segment.index)}
+                                        <div
+                                          className={`studio-segment-editor__card-placeholder${
+                                            shouldOpenVisualPanelFromCard ? " is-action" : ""
+                                          }`}
+                                        >
+                                          {getSegmentVisualPlaceholderLabel(segment.index, {
+                                            action: shouldOpenVisualPanelFromCard,
+                                          })}
                                         </div>
                                       )}
                                       {!isActiveCard ? (
@@ -36143,13 +36337,18 @@ export function WorkspacePage({
                                           data-segment-playback-index={segmentPlaybackIndex}
                                           aria-label={workspaceText(
                                             locale,
-                                            `Переключиться и воспроизвести сцену ${segmentNumber}`,
-                                            `Switch to and play scene ${segmentNumber}`,
+                                            shouldOpenVisualPanelFromCard
+                                              ? `Открыть сцену ${segmentNumber} и добавить визуал`
+                                              : `Переключиться и воспроизвести сцену ${segmentNumber}`,
+                                            shouldOpenVisualPanelFromCard
+                                              ? `Open scene ${segmentNumber} and add visual`
+                                              : `Switch to and play scene ${segmentNumber}`,
                                           )}
                                           onClick={handleSideSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
                                             segmentPlaybackIndex,
                                             mediaKind,
+                                            shouldOpenVisualPanelFromCard,
                                           )}
                                         />
                                       ) : null}
@@ -36162,17 +36361,28 @@ export function WorkspacePage({
                                           data-segment-playback-index={segmentPlaybackIndex}
                                           disabled={isVisualGenerationPending}
                                           aria-label={
-                                            mediaKind === "video" || studioSidebarSubtitlesEnabled
+                                            shouldOpenVisualPanelFromCard
+                                              ? workspaceText(
+                                                  locale,
+                                                  `Добавить визуал в сцену ${segmentNumber}`,
+                                                  `Add visual to scene ${segmentNumber}`,
+                                                )
+                                            : mediaKind === "video" || studioSidebarSubtitlesEnabled
                                               ? isSegmentPlaying
                                                 ? workspaceText(locale, `Остановить сцену ${segmentNumber}`, `Stop scene ${segmentNumber}`)
                                                 : workspaceText(locale, `Воспроизвести сцену ${segmentNumber}`, `Play scene ${segmentNumber}`)
                                               : workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)
                                           }
-                                          aria-pressed={mediaKind === "video" || studioSidebarSubtitlesEnabled ? isSegmentPlaying : undefined}
+                                          aria-pressed={
+                                            !shouldOpenVisualPanelFromCard && (mediaKind === "video" || studioSidebarSubtitlesEnabled)
+                                              ? isSegmentPlaying
+                                              : undefined
+                                          }
                                           onClick={handleActiveSegmentEditorCardClick(
                                             nextSegmentArrayIndex,
                                             segmentPlaybackIndex,
                                             mediaKind,
+                                            shouldOpenVisualPanelFromCard,
                                           )}
                                         />
                                       ) : null}
@@ -36186,13 +36396,20 @@ export function WorkspacePage({
                                           onTextChange={handleSegmentEditorTextChange}
                                           segment={segment}
                                           segmentNumber={segmentNumber}
-                                          subtitleColorId={segmentEditorDraft.subtitleColor || selectedSubtitleColorId}
+                                          subtitleColorId={studioSidebarSubtitleColorId}
                                           subtitleColorOptions={subtitleColorOptions}
-                                          subtitleStyleId={segmentEditorDraft.subtitleStyle || selectedSubtitleStyleId}
+                                          subtitleStyleId={studioSidebarSubtitleStyleId}
                                           subtitleStyleOptions={subtitleStyleOptions}
                                         />
                                       ) : null}
                                       {renderSegmentEditorBrandOverlay("card")}
+                                      {isActiveCard &&
+                                      isPromptTalkingPhotoMode &&
+                                      mediaUrl &&
+                                      canWorkspaceSegmentCreateTalkingPhoto(segment) &&
+                                      !isVisualGenerationPending
+                                        ? renderSegmentTalkingTargetOverlay(segment)
+                                        : null}
                                       {isVisualGenerationPending ? (
                                         <div className="studio-segment-editor__card-loader" role="status" aria-live="polite">
                                           <span className="studio-segment-editor__card-loader-spinner" aria-hidden="true"></span>
@@ -37883,11 +38100,10 @@ export function WorkspacePage({
                         </div>
                       ) : segmentAiPhotoModalTab === "talking_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
-	                          <div className="studio-ai-photo-modal__tab-panel-head">
-	                            <strong>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</strong>
-	                            <p>{workspaceText(locale, "Фото или видео произнесет текст текущей сцены выбранным голосом.", "The photo or video speaks this scene text with the selected voice.")}</p>
-	                          </div>
-                          {renderSegmentTalkingSpeakerPanel("modal")}
+                          <div className="studio-ai-photo-modal__tab-panel-head">
+                            <strong>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</strong>
+                            <p>{workspaceText(locale, "Выберите говорящего на карточке сцены в карусели, затем запустите генерацию.", "Select the speaker on the scene card in the carousel, then start generation.")}</p>
+                          </div>
 
 	                          <div className="studio-ai-photo-modal__prompt-field">
                             <textarea
@@ -37929,13 +38145,13 @@ export function WorkspacePage({
                               type="button"
                               aria-label={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
                               title={workspaceText(locale, `Создать говорящего персонажа за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`, `Create talking character for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST)}`)}
-	                              disabled={
-	                                !canCreateSegmentTalkingPhoto ||
-	                                isSegmentTalkingPhotoModalPromptEmpty ||
-                                  isSegmentTalkingSpeakerSelectionMissing ||
-	                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
-	                                isSegmentEditorPreparingCustomVideo
-	                              }
+                              disabled={
+                                !canCreateSegmentTalkingPhoto ||
+                                isSegmentTalkingPhotoModalPromptEmpty ||
+                                  !modalSegmentTalkingCharacterTarget ||
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentEditorPreparingCustomVideo
+                              }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
                                   handleSegmentTalkingPhotoModalGenerate({

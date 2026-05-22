@@ -446,6 +446,27 @@ export const buildStudioSegmentVisualDurationPayload = (durationSeconds) => {
     const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(durationSeconds);
     return normalizedDurationSeconds ? { duration: normalizedDurationSeconds } : {};
 };
+const normalizeStudioTalkingCharacterTarget = (value) => {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const source = value;
+    const x = Number(source.x);
+    const y = Number(source.y);
+    const width = Number(source.width);
+    const height = Number(source.height);
+    if (![x, y, width, height].every(Number.isFinite)) {
+        return undefined;
+    }
+    const normalizedWidth = Math.min(1, Math.max(0.06, width));
+    const normalizedHeight = Math.min(1, Math.max(0.06, height));
+    return {
+        height: normalizedHeight,
+        width: normalizedWidth,
+        x: Math.min(1 - normalizedWidth, Math.max(0, x)),
+        y: Math.min(1 - normalizedHeight, Math.max(0, y)),
+    };
+};
 const normalizeStudioSegmentVideoAction = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedSegmentVideoActions.has(normalized) ? normalized : "original";
@@ -3974,9 +3995,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     }
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
-    const normalizedSpeakerCharacterKey = normalizeGenerationText(options?.speakerCharacterKey) || undefined;
-    const normalizedSpeakerCharacterName = normalizeGenerationText(options?.speakerCharacterName) || undefined;
-    const normalizedSpeakerReferenceAssetId = normalizePositiveInteger(options?.speakerReferenceAssetId);
+    const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
     const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -4013,9 +4032,7 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         script: normalizedScript,
         seed: -1,
         segment_index: normalizedSegmentIndex,
-        speaker_character_key: normalizedSpeakerCharacterKey,
-        speaker_character_name: normalizedSpeakerCharacterName,
-        speaker_reference_asset_id: normalizedSpeakerReferenceAssetId,
+        speaker_target: normalizedSpeakerTarget,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
         voice_type: normalizedVoiceType,

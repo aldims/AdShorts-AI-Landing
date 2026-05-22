@@ -389,6 +389,27 @@ const normalizeRequestDurationSeconds = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) && numeric >= 1 ? Number(numeric.toFixed(3)) : undefined;
 };
+const normalizeRequestTalkingCharacterTarget = (value) => {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const source = value;
+    const x = Number(source.x);
+    const y = Number(source.y);
+    const width = Number(source.width);
+    const height = Number(source.height);
+    if (![x, y, width, height].every(Number.isFinite)) {
+        return undefined;
+    }
+    const normalizedWidth = Math.min(1, Math.max(0.06, width));
+    const normalizedHeight = Math.min(1, Math.max(0.06, height));
+    return {
+        height: normalizedHeight,
+        width: normalizedWidth,
+        x: Math.min(1 - normalizedWidth, Math.max(0, x)),
+        y: Math.min(1 - normalizedHeight, Math.max(0, y)),
+    };
+};
 const isStudioSegmentVisualJobReadyStatus = (value) => {
     const status = String(value ?? "").trim().toLowerCase();
     return ["completed", "done", "ready", "success", "succeeded"].includes(status);
@@ -3410,9 +3431,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     const customVideoMediaType = req.body?.customVideoMediaType === "video" ? "video" : req.body?.customVideoMediaType === "photo" ? "photo" : undefined;
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
-    const speakerCharacterKey = typeof req.body?.speakerCharacterKey === "string" ? req.body.speakerCharacterKey.trim() : "";
-    const speakerCharacterName = typeof req.body?.speakerCharacterName === "string" ? req.body.speakerCharacterName.trim() : "";
-    const speakerReferenceAssetId = normalizeRequestPositiveInteger(req.body?.speakerReferenceAssetId);
+    const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
@@ -3436,9 +3455,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             prompt: prompt || undefined,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
-            speakerCharacterKey: speakerCharacterKey || undefined,
-            speakerCharacterName: speakerCharacterName || undefined,
-            speakerReferenceAssetId,
+            speakerTarget,
             voiceType: voiceType || undefined,
         });
         res.json({ data: job });
