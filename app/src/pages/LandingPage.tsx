@@ -48,11 +48,11 @@ const landingMessages = defineMessages({
   guidesAll: { ru: "Все материалы", en: "All guides" },
   heroAlt: { ru: "Интерфейс AdShorts AI", en: "AdShorts AI interface" },
   heroAria: {
-    ru: "Shorts / Reels / TikTok за 1 минуту. В один клик.",
+    ru: "Shorts / Reels / TikTok От идеи до готового видео за минуты",
     en: "Shorts / Reels / TikTok in 1 minute. In one click.",
   },
   heroCta: { ru: "Создать Shorts бесплатно", en: "Create Shorts for free" },
-  heroLine2: { ru: "за\u00a01\u00a0минуту. В один клик.", en: "in\u00a01\u00a0minute. In one click." },
+  heroLine2: { ru: "От идеи до готового видео за минуты", en: "in\u00a01\u00a0minute. In one click." },
   heroPreview: { ru: "Превью студии", en: "Studio preview" },
   heroPrompt: {
     ru: "Как нейросети меняют маркетинг в 2026",

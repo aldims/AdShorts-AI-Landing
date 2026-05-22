@@ -2407,6 +2407,39 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
   border-color: var(--neon-cyan);
 }
 
+.article-index-boost,
+.article-faq {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.08), rgba(139, 92, 246, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+  padding: 26px 28px;
+  margin: 44px 0;
+}
+
+.article-index-boost h2,
+.article-faq h2 {
+  margin-top: 0;
+}
+
+.article-index-boost p:last-child,
+.article-faq p:last-child {
+  margin-bottom: 0;
+}
+
+.article-index-boost ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.article-index-boost li {
+  margin: 0;
+}
+
+.article-faq h3 {
+  margin-top: 22px;
+}
+
 /* Highlight box for checklist */
 .article ul:has(li:first-child strong:first-child) {
   background: var(--card);
@@ -2504,6 +2537,15 @@ main a:not(.btn):not(.logo):not(.card--link):hover {
 
   .article .cta {
     padding: 24px 20px;
+  }
+
+  .article-index-boost,
+  .article-faq {
+    padding: 22px 20px;
+  }
+
+  .article-index-boost ul {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -17,7 +17,7 @@ const routeShells = [
       "AdShorts AI создаёт YouTube Shorts, Reels и TikTok за минуту: AI-сценарий, озвучка, субтитры, фон и публикация без ручного монтажа.",
     ogTitle: "AdShorts AI — Shorts/Reels/TikTok за 1 минуту",
     ogDescription: "Введите идею — получите готовый Shorts с озвучкой, субтитрами и визуалом.",
-    h1: "Shorts / Reels / TikTok за 1 минуту. В один клик.",
+    h1: "Shorts / Reels / TikTok От идеи до готового видео за минуты",
     lead:
       "AdShorts AI собирает вертикальные ролики из идеи: сценарий, озвучка, субтитры, визуальный ряд и подготовка к публикации.",
     ctas: [
@@ -148,6 +148,39 @@ const routeShells = [
   },
 ];
 
+const routeAlternates = {
+  "index.html": {
+    ru: `${siteOrigin}/`,
+    en: `${siteOrigin}/en/`,
+    xDefault: `${siteOrigin}/`,
+  },
+  "en/index.html": {
+    ru: `${siteOrigin}/`,
+    en: `${siteOrigin}/en/`,
+    xDefault: `${siteOrigin}/`,
+  },
+  "pricing/index.html": {
+    ru: `${siteOrigin}/pricing/`,
+    en: `${siteOrigin}/en/pricing/`,
+    xDefault: `${siteOrigin}/pricing/`,
+  },
+  "en/pricing/index.html": {
+    ru: `${siteOrigin}/pricing/`,
+    en: `${siteOrigin}/en/pricing/`,
+    xDefault: `${siteOrigin}/pricing/`,
+  },
+  "examples/index.html": {
+    ru: `${siteOrigin}/examples/`,
+    en: `${siteOrigin}/en/examples/`,
+    xDefault: `${siteOrigin}/examples/`,
+  },
+  "en/examples/index.html": {
+    ru: `${siteOrigin}/examples/`,
+    en: `${siteOrigin}/en/examples/`,
+    xDefault: `${siteOrigin}/examples/`,
+  },
+};
+
 const escapeAttr = (value) =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -185,6 +218,20 @@ const setPropertyMeta = (html, property, content) => {
   );
 };
 
+const renderCanonicalAndAlternates = (route) => {
+  const alternates = routeAlternates[route.outputPath];
+  if (!alternates) {
+    throw new Error(`Missing hreflang alternates for ${route.outputPath}`);
+  }
+
+  return [
+    `<link rel="canonical" href="${route.canonical}" />`,
+    `<link rel="alternate" hreflang="ru" href="${alternates.ru}" />`,
+    `<link rel="alternate" hreflang="en" href="${alternates.en}" />`,
+    `<link rel="alternate" hreflang="x-default" href="${alternates.xDefault}" />`,
+  ].join("\n    ");
+};
+
 const renderFallbackList = (items) => items.map((item) => `<li>${escapeAttr(item)}</li>`).join("");
 
 const renderSeoFallback = (route) => `\n      <main class="seo-fallback" data-seo-fallback="true">\n        <section class="seo-fallback__hero">\n          <p class="seo-fallback__brand">AdShorts AI</p>\n          <h1>${escapeAttr(route.h1)}</h1>\n          <p>${escapeAttr(route.lead)}</p>\n          <nav aria-label="${route.lang === "ru" ? "Основные действия" : "Primary actions"}">\n            ${route.ctas.map(([label, href]) => `<a href="${escapeAttr(href)}">${escapeAttr(label)}</a>`).join("\n            ")}\n          </nav>\n        </section>\n        ${route.sections
@@ -202,7 +249,7 @@ const renderRouteShell = (sourceHtml, route) => {
   html = replaceTag(
     html,
     /<link\s+[^>]*rel="canonical"[^>]*>/i,
-    `<link rel="canonical" href="${route.canonical}" />`,
+    renderCanonicalAndAlternates(route),
     "canonical",
   );
   html = setPropertyMeta(html, "og:type", "website");
@@ -211,7 +258,7 @@ const renderRouteShell = (sourceHtml, route) => {
   html = setPropertyMeta(html, "og:description", route.ogDescription);
   html = replaceTag(
     html,
-    /<div id="app"><\/div>/i,
+    /<div id="app">[\s\S]*?<\/div>\s*(?=(?:<script\b|\s*<\/body>))/i,
     `<div id="app">${renderSeoFallback(route)}</div>`,
     "app root",
   );

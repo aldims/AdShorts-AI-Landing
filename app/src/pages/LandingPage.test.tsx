@@ -58,7 +58,7 @@ describe("LandingPage guides section", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /Shorts \/ Reels \/ TikTok за\s*1\s*минуту\. В один клик\./,
+        name: /Shorts \/ Reels \/ TikTok От идеи до готового видео за минуты/,
       }),
     ).toBeTruthy();
     expect(screen.getByText("Введите идею — получите готовый Shorts с озвучкой, субтитрами и визуалом")).toBeTruthy();

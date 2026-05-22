@@ -104,7 +104,7 @@ export const staticLandingContent = {
     navStudio: { ru: "Студия", en: "Studio" },
     navSignin: { ru: "Войти", en: "Sign in" },
     navFaq: { ru: "FAQ", en: "FAQ" },
-    heroSuffix: { ru: "за 1 минуту. В один клик.", en: "in 1 Minute. In one click." },
+    heroSuffix: { ru: "От идеи до готового видео за минуты", en: "in 1 Minute. In one click." },
     heroLead: {
       ru: "Введите тему — получите готовый вертикальный ролик с озвучкой, субтитрами, музыкой и видеофоном.",
       en: "Enter a topic — get a ready vertical video with voiceover, subtitles, music, and video background.",
