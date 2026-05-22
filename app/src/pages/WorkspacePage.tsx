@@ -1238,6 +1238,17 @@ type WorkspaceTalkingCharacterTarget = {
   y: number;
 };
 
+type WorkspaceTalkingTargetResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+
+type WorkspaceTalkingTargetDragState = {
+  mode: "create" | "move" | "resize";
+  originTarget?: WorkspaceTalkingCharacterTarget;
+  resizeHandle?: WorkspaceTalkingTargetResizeHandle;
+  segmentIndex: number;
+  startX: number;
+  startY: number;
+};
+
 type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
@@ -3924,8 +3935,23 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
 const WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE = 0.06;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_WIDTH = 0.28;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_HEIGHT = 0.34;
+const WORKSPACE_TALKING_TARGET_RESIZE_HANDLES: readonly WorkspaceTalkingTargetResizeHandle[] = [
+  "nw",
+  "n",
+  "ne",
+  "e",
+  "se",
+  "s",
+  "sw",
+  "w",
+];
 
 const clampWorkspaceUnitValue = (value: number) => Math.min(1, Math.max(0, value));
+
+const isWorkspaceTalkingTargetResizeHandle = (
+  value: string | null | undefined,
+): value is WorkspaceTalkingTargetResizeHandle =>
+  !!value && WORKSPACE_TALKING_TARGET_RESIZE_HANDLES.includes(value as WorkspaceTalkingTargetResizeHandle);
 
 export const normalizeWorkspaceTalkingCharacterTarget = (
   value: Partial<WorkspaceTalkingCharacterTarget> | null | undefined,
@@ -3946,6 +3972,27 @@ export const normalizeWorkspaceTalkingCharacterTarget = (
     x: Math.min(1 - normalizedWidth, Math.max(0, x)),
     y: Math.min(1 - normalizedHeight, Math.max(0, y)),
   };
+};
+
+const createWorkspaceTalkingCharacterTargetFromEdges = (
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): WorkspaceTalkingCharacterTarget => {
+  const clampedLeft = clampWorkspaceUnitValue(left);
+  const clampedTop = clampWorkspaceUnitValue(top);
+  const clampedRight = clampWorkspaceUnitValue(right);
+  const clampedBottom = clampWorkspaceUnitValue(bottom);
+  const x = Math.min(clampedLeft, clampedRight);
+  const y = Math.min(clampedTop, clampedBottom);
+
+  return normalizeWorkspaceTalkingCharacterTarget({
+    height: Math.abs(clampedBottom - clampedTop),
+    width: Math.abs(clampedRight - clampedLeft),
+    x,
+    y,
+  }) as WorkspaceTalkingCharacterTarget;
 };
 
 export const createWorkspaceTalkingCharacterTargetFromPoints = (
@@ -3981,6 +4028,43 @@ export const createWorkspaceTalkingCharacterTargetFromPoints = (
     x: endX - defaultWidth / 2,
     y: endY - defaultHeight / 2,
   }) as WorkspaceTalkingCharacterTarget;
+};
+
+const moveWorkspaceTalkingCharacterTarget = (
+  target: WorkspaceTalkingCharacterTarget,
+  deltaX: number,
+  deltaY: number,
+): WorkspaceTalkingCharacterTarget =>
+  normalizeWorkspaceTalkingCharacterTarget({
+    ...target,
+    x: target.x + deltaX,
+    y: target.y + deltaY,
+  }) as WorkspaceTalkingCharacterTarget;
+
+const resizeWorkspaceTalkingCharacterTarget = (
+  target: WorkspaceTalkingCharacterTarget,
+  handle: WorkspaceTalkingTargetResizeHandle,
+  point: { x: number; y: number },
+): WorkspaceTalkingCharacterTarget => {
+  let left = target.x;
+  let top = target.y;
+  let right = target.x + target.width;
+  let bottom = target.y + target.height;
+
+  if (handle.includes("w")) {
+    left = point.x;
+  }
+  if (handle.includes("e")) {
+    right = point.x;
+  }
+  if (handle.includes("n")) {
+    top = point.y;
+  }
+  if (handle.includes("s")) {
+    bottom = point.y;
+  }
+
+  return createWorkspaceTalkingCharacterTargetFromEdges(left, top, right, bottom);
 };
 
 const getWorkspaceMediaAssetResolvedPreviewUrl = (
@@ -16738,11 +16822,7 @@ export function WorkspacePage({
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
-  const segmentTalkingTargetDragRef = useRef<{
-    segmentIndex: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
+  const segmentTalkingTargetDragRef = useRef<WorkspaceTalkingTargetDragState | null>(null);
   const segmentPhotoAnimationActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -34298,7 +34378,42 @@ export function WorkspacePage({
     event.preventDefault();
     event.stopPropagation();
     const point = getSegmentTalkingTargetPoint(event);
+    const target = segmentTalkingCharacterTargets[segmentIndex] ?? null;
+    const actionElement = event.target instanceof Element
+      ? event.target.closest("[data-talking-target-action]")
+      : null;
+    const action = actionElement instanceof HTMLElement ? actionElement.dataset.talkingTargetAction : null;
+
+    if (target && action === "move") {
+      segmentTalkingTargetDragRef.current = {
+        mode: "move",
+        originTarget: target,
+        segmentIndex,
+        startX: point.x,
+        startY: point.y,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    const resizeHandle = action?.startsWith("resize:")
+      ? action.replace("resize:", "")
+      : null;
+    if (target && isWorkspaceTalkingTargetResizeHandle(resizeHandle)) {
+      segmentTalkingTargetDragRef.current = {
+        mode: "resize",
+        originTarget: target,
+        resizeHandle,
+        segmentIndex,
+        startX: point.x,
+        startY: point.y,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
     segmentTalkingTargetDragRef.current = {
+      mode: "create",
       segmentIndex,
       startX: point.x,
       startY: point.y,
@@ -34315,12 +34430,25 @@ export function WorkspacePage({
     event.preventDefault();
     event.stopPropagation();
     const point = getSegmentTalkingTargetPoint(event);
+    if (drag.mode === "move" && drag.originTarget) {
+      setSegmentTalkingCharacterTarget(
+        drag.segmentIndex,
+        moveWorkspaceTalkingCharacterTarget(drag.originTarget, point.x - drag.startX, point.y - drag.startY),
+      );
+      return;
+    }
+
+    if (drag.mode === "resize" && drag.originTarget && drag.resizeHandle) {
+      setSegmentTalkingCharacterTarget(
+        drag.segmentIndex,
+        resizeWorkspaceTalkingCharacterTarget(drag.originTarget, drag.resizeHandle, point),
+      );
+      return;
+    }
+
     setSegmentTalkingCharacterTarget(
       drag.segmentIndex,
-      createWorkspaceTalkingCharacterTargetFromPoints(
-        { x: drag.startX, y: drag.startY },
-        point,
-      ),
+      createWorkspaceTalkingCharacterTargetFromPoints({ x: drag.startX, y: drag.startY }, point),
     );
   };
   const finishSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
@@ -34329,13 +34457,22 @@ export function WorkspacePage({
     event.stopPropagation();
     if (drag && drag.segmentIndex === segmentIndex) {
       const point = getSegmentTalkingTargetPoint(event);
-      setSegmentTalkingCharacterTarget(
-        drag.segmentIndex,
-        createWorkspaceTalkingCharacterTargetFromPoints(
-          { x: drag.startX, y: drag.startY },
-          point,
-        ),
-      );
+      if (drag.mode === "move" && drag.originTarget) {
+        setSegmentTalkingCharacterTarget(
+          drag.segmentIndex,
+          moveWorkspaceTalkingCharacterTarget(drag.originTarget, point.x - drag.startX, point.y - drag.startY),
+        );
+      } else if (drag.mode === "resize" && drag.originTarget && drag.resizeHandle) {
+        setSegmentTalkingCharacterTarget(
+          drag.segmentIndex,
+          resizeWorkspaceTalkingCharacterTarget(drag.originTarget, drag.resizeHandle, point),
+        );
+      } else {
+        setSegmentTalkingCharacterTarget(
+          drag.segmentIndex,
+          createWorkspaceTalkingCharacterTargetFromPoints({ x: drag.startX, y: drag.startY }, point),
+        );
+      }
     }
     segmentTalkingTargetDragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -34368,11 +34505,28 @@ export function WorkspacePage({
         onPointerMove={(event) => updateSegmentTalkingTargetSelection(event, segment.index)}
         onPointerUp={(event) => finishSegmentTalkingTargetSelection(event, segment.index)}
       >
-        {targetStyle ? <span className="studio-segment-talking-target-overlay__box" style={targetStyle} /> : null}
+        {targetStyle ? (
+          <span
+            className="studio-segment-talking-target-overlay__box"
+            style={targetStyle}
+            data-talking-target-action="move"
+          >
+            <span className="studio-segment-talking-target-overlay__box-grid" aria-hidden="true" />
+            <span className="studio-segment-talking-target-overlay__box-center" aria-hidden="true" />
+            {WORKSPACE_TALKING_TARGET_RESIZE_HANDLES.map((handle) => (
+              <span
+                key={handle}
+                className={`studio-segment-talking-target-overlay__handle studio-segment-talking-target-overlay__handle--${handle}`}
+                data-talking-target-action={`resize:${handle}`}
+                aria-hidden="true"
+              />
+            ))}
+          </span>
+        ) : null}
         <span className="studio-segment-talking-target-overlay__label">
           {target
-            ? workspaceText(locale, "Говорящий выбран", "Speaker selected")
-            : workspaceText(locale, "Обведите говорящего", "Select the speaker")}
+            ? workspaceText(locale, "Говорящий", "Speaker")
+            : workspaceText(locale, "Выберите говорящего", "Select speaker")}
         </span>
         {target ? (
           <button
