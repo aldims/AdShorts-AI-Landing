@@ -2545,6 +2545,17 @@ export const isWorkspaceSegmentDraftVisualChangedFromBaseline = (
   return getWorkspaceSegmentDraftVisualChangeIdentity(segment) !== getWorkspaceSegmentDraftVisualChangeIdentity(baselineSegment);
 };
 
+export const getWorkspaceSegmentDraftVisualStatus = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+): "changed" | "reset" | "none" => {
+  if (isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)) {
+    return "reset";
+  }
+
+  return isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ? "changed" : "none";
+};
+
 export const resolveWorkspaceSegmentActivationPlaybackIndex = (
   segments: Array<{ index: number }>,
   boundedSegmentArrayIndex: number,
@@ -8162,8 +8173,10 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     return cloneWorkspaceSegmentEditorDraftSegment(liveSegment, fallbackLanguage);
   }
 
-  const shouldUseFreshServerVideo = shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, normalizedFreshSegment);
-  const shouldUseFreshServerAiVideo = shouldPromoteFreshServerVideoToAiVideo(liveSegment, normalizedFreshSegment);
+  const shouldUseFreshServerVideo =
+    !liveSegment.visualReset && shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, normalizedFreshSegment);
+  const shouldUseFreshServerAiVideo =
+    !liveSegment.visualReset && shouldPromoteFreshServerVideoToAiVideo(liveSegment, normalizedFreshSegment);
   const freshServerVideoMode: WorkspaceSegmentAiVideoMode =
     liveSegment.videoAction === "talking_photo" ||
     liveSegment.aiVideoGeneratedMode === "talking_photo" ||
@@ -8179,6 +8192,7 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const freshSceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(normalizedFreshSegment, normalizedFreshSegment.index);
   const liveDurationMode = normalizeWorkspaceSegmentDurationMode(liveSegment.durationMode);
   const liveManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(liveSegment.manualDurationSeconds);
+  const currentVisualSegment = liveSegment.visualReset ? liveSegment : normalizedFreshSegment;
   const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
     ? liveSegment
     : normalizedFreshSegment;
@@ -8203,12 +8217,20 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     aiVideoPrompt: liveSegment.aiVideoPrompt,
     aiVideoPromptInitialized: shouldUseFreshServerVideo || shouldUseFreshServerAiVideo ? true : liveSegment.aiVideoPromptInitialized,
     customVideo: cloneStudioCustomVideoFile(liveSegment.customVideo),
+    currentAsset: cloneWorkspaceMediaAssetRef(currentVisualSegment.currentAsset),
+    currentExternalPlaybackUrl: currentVisualSegment.currentExternalPlaybackUrl,
+    currentExternalPreviewUrl: currentVisualSegment.currentExternalPreviewUrl,
+    currentPlaybackUrl: currentVisualSegment.currentPlaybackUrl,
+    currentPosterUrl: currentVisualSegment.currentPosterUrl,
+    currentPreviewUrl: currentVisualSegment.currentPreviewUrl,
+    currentSourceKind: currentVisualSegment.currentSourceKind,
     durationMode: liveDurationMode,
     imageEditAsset: cloneStudioCustomVideoFile(liveSegment.imageEditAsset),
     imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
     imageEditPrompt: liveSegment.imageEditPrompt,
     imageEditPromptInitialized: liveSegment.imageEditPromptInitialized,
     manualDurationSeconds: liveManualDurationSeconds,
+    mediaType: liveSegment.visualReset ? liveSegment.mediaType : normalizedFreshSegment.mediaType,
     originalText: liveSegment.originalText,
     originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
       liveSegment.originalTextByLanguage,
@@ -13410,6 +13432,7 @@ type StudioLanguageSelectorChipProps = {
 
 type StudioVoiceSelectorChipProps = {
   closeRequestId?: number;
+  disabledValueLabel?: string;
   isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
@@ -13420,6 +13443,7 @@ type StudioVoiceSelectorChipProps = {
   onToggleEnabled: (enabled: boolean) => void;
   selectedLanguage?: StudioLanguage;
   selectedVoiceId: StudioVoiceOption["id"];
+  triggerLabel?: string;
   voiceOptions: StudioVoiceOption[];
   variant?: "chip" | "sidebar";
 };
@@ -14030,6 +14054,7 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
 
 function StudioVoiceSelectorChip({
   closeRequestId = 0,
+  disabledValueLabel,
   isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
@@ -14040,6 +14065,7 @@ function StudioVoiceSelectorChip({
   onToggleEnabled,
   selectedLanguage,
   selectedVoiceId,
+  triggerLabel,
   voiceOptions,
   variant = "chip",
 }: StudioVoiceSelectorChipProps) {
@@ -14058,6 +14084,8 @@ function StudioVoiceSelectorChip({
   const selectedVoice = voiceOptions.find((voice) => voice.id === selectedVoiceId) ?? voiceOptions[0];
   const isSidebarVariant = variant === "sidebar";
   const hasLanguageSelector = Boolean(selectedLanguage && onSelectLanguage);
+  const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
+  const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
   const getVoiceLanguageLabel = (language: StudioLanguage) =>
     locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getVoiceLanguageDescription = (language: StudioLanguage) =>
@@ -14258,8 +14286,8 @@ function StudioVoiceSelectorChip({
               </svg>
             </span>
             <span className="studio-sidebar__item-copy">
-              <strong>{locale === "en" ? "Voiceover" : "Озвучка"}</strong>
-              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : locale === "en" ? "Off" : "Выкл"}</span>
+              <strong>{resolvedTriggerLabel}</strong>
+              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</span>
             </span>
             <svg className="studio-voice-selector__icon studio-voice-selector__icon--sidebar" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -14267,8 +14295,8 @@ function StudioVoiceSelectorChip({
           </>
         ) : (
           <>
-            <span className="studio-voice-selector__label">{locale === "en" ? "Voiceover" : "Озвучка"}</span>
-            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : locale === "en" ? "Off" : "Выкл"}</strong>
+            <span className="studio-voice-selector__label">{resolvedTriggerLabel}</span>
+            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</strong>
             <svg className="studio-voice-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -21128,8 +21156,7 @@ export function WorkspacePage({
           isTextEdited: isSegmentEditorCleanEmptyDraft ? () => false : (segment) => isWorkspaceSegmentDraftTextEdited(segment),
           isVisualEdited: (segment, baselineSegment) =>
             !isSegmentEditorCleanEmptyDraft &&
-            (isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ||
-              isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)),
+            getWorkspaceSegmentDraftVisualStatus(segment, baselineSegment) === "changed",
           isVoiceEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftVoiceEdited,
         },
       )
@@ -24296,8 +24323,26 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
       ...segment,
-      voiceType: nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
+      voiceType: studioSidebarVoiceEnabled && nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
     }));
+  };
+
+  const handleSegmentEditorSceneVoiceToggle = (enabled: boolean) => {
+    if (!activeSegment) {
+      return;
+    }
+
+    if (!enabled) {
+      handleSegmentEditorSceneVoiceUseGlobal();
+      return;
+    }
+
+    const nextVoiceId =
+      getSegmentTimelineVoiceOption(activeSegment)?.id ??
+      selectedVoiceOptions.find((voice) => voice.id === studioSidebarVoiceId)?.id ??
+      selectedVoiceOptions[0]?.id ??
+      getDefaultStudioVoiceId(selectedLanguage);
+    handleSegmentEditorSceneVoiceSelect(nextVoiceId);
   };
 
   const handleSegmentEditorMusicTypeSelect = (musicType: StudioMusicType) => {
@@ -31529,7 +31574,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
-      voiceType: nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
+      voiceType: studioSidebarVoiceEnabled && nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
     }));
     setSegmentTimelineVoiceMenuSegmentIndex(null);
   };
@@ -36033,8 +36078,8 @@ export function WorkspacePage({
                             </svg>
                           )}
                         </button>
-	                        {isPromptImprovementResetVisible ? (
-	                          <button
+                        {isPromptImprovementResetVisible ? (
+                          <button
                             className="studio-segment-editor__prompt-reset"
                             type="button"
                             aria-label={workspaceText(locale, "Сбросить улучшенное описание", "Reset improved prompt")}
@@ -36115,6 +36160,28 @@ export function WorkspacePage({
                                 value: selectedSegmentPhotoAnimationQuality,
                               })
                             : null}
+                      {isPromptTalkingPhotoMode && activeSegment ? (
+                        <div className="studio-segment-editor__prompt-voice-picker">
+                          <StudioVoiceSelectorChip
+                            disabledValueLabel={workspaceText(locale, "Добавить озвучку", "Add voiceover")}
+                            isEnabled={Boolean(getSegmentTimelineVoiceOption(activeSegment))}
+                            onSelect={handleSegmentEditorSceneVoiceSelect}
+                            onSelectLanguage={(language) => {
+                              void handleSegmentEditorLanguageSelect(language);
+                            }}
+                            onToggleEnabled={handleSegmentEditorSceneVoiceToggle}
+                            selectedLanguage={selectedLanguage}
+                            selectedVoiceId={
+                              getSegmentTimelineVoiceOption(activeSegment)?.id ??
+                              selectedVoiceOptions.find((voice) => voice.id === studioSidebarVoiceId)?.id ??
+                              selectedVoiceOptions[0]?.id ??
+                              getDefaultStudioVoiceId(selectedLanguage)
+                            }
+                            triggerLabel={workspaceText(locale, "Голос", "Voice")}
+                            voiceOptions={selectedVoiceOptions}
+                          />
+                        </div>
+                      ) : null}
                       <button
                         className="studio-segment-editor__prompt-action"
                         type="button"
@@ -36525,9 +36592,8 @@ export function WorkspacePage({
                                   (baselineSegment) => baselineSegment.index === segment.index,
                                 );
                                 const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
-                                const isSegmentVisualChanged =
-                                  isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineVisualSegment) ||
-                                  isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
+                                const segmentVisualStatus = getWorkspaceSegmentDraftVisualStatus(segment, baselineVisualSegment);
+                                const isSegmentVisualChanged = segmentVisualStatus === "changed";
                                 const segmentSubtitleEditRequestId =
                                   segmentTimelineTextEditRequest?.segmentIndex === segment.index
                                     ? segmentTimelineTextEditRequest.requestId

@@ -25,6 +25,7 @@ import {
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
   resolveWorkspacePromptMentionedCharacterOptions,
   createWorkspaceTalkingCharacterTargetFromPoints,
+  getWorkspaceSegmentDraftVisualStatus,
   normalizeWorkspaceTalkingCharacterTarget,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
@@ -1529,6 +1530,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(untouchedSavedSegment, untouchedSavedSegment)).toBe(false);
     expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(animatedSegment, photoSegment)).toBe(true);
+    expect(getWorkspaceSegmentDraftVisualStatus(animatedSegment, photoSegment)).toBe("changed");
     expect(
       isWorkspaceSegmentDraftVisualChangedFromBaseline(animatedSegment, {
         ...animatedSegment,
@@ -2604,6 +2606,8 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
     expect(isWorkspaceSegmentDraftVisualResettable(resetSegment)).toBe(false);
+    expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(resetSegment, appliedSegment)).toBe(false);
+    expect(getWorkspaceSegmentDraftVisualStatus(resetSegment, appliedSegment)).toBe("reset");
     expect(checklist).toEqual([
       expect.objectContaining({
         label: "Сегмент 1: сброшен визуал",
@@ -2612,6 +2616,43 @@ describe("WorkspacePage studio locale defaults", () => {
         segmentIndex: 0,
       }),
     ]);
+  });
+
+  it("keeps a reset visual after refreshing the live draft from the server", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const generatedAsset = createMediaAsset(303, {
+      kind: "source_ai_video",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const appliedSegment = createDraftSegment({
+      currentAsset: generatedAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/303/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(appliedSegment, 77);
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(resetSegment),
+      createFreshSession(appliedSegment),
+    );
+    const refreshedSegment = refreshedDraft.segments[0]!;
+
+    expect(refreshedSegment.visualReset).toBe(true);
+    expect(refreshedSegment.mediaType).toBe("photo");
+    expect(refreshedSegment.currentAsset?.assetId).toBe(101);
+    expect(refreshedSegment.currentPreviewUrl).toBe("/api/workspace/media-assets/101");
+    expect(getWorkspaceSegmentDraftPreviewUrl(refreshedSegment)).toBe("/api/workspace/media-assets/101");
+    expect(getWorkspaceSegmentDraftVisualStatus(refreshedSegment, appliedSegment)).toBe("reset");
   });
 
   it("does not keep a draft-only AI photo undo as a pending segment change", () => {
@@ -2647,6 +2688,8 @@ describe("WorkspacePage studio locale defaults", () => {
     );
 
     expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+    expect(isWorkspaceSegmentDraftVisualChangedFromBaseline(resetSegment, baselineSegment)).toBe(false);
+    expect(getWorkspaceSegmentDraftVisualStatus(resetSegment, baselineSegment)).toBe("none");
     expect(checklist).toEqual([]);
   });
 
