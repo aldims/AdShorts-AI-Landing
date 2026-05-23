@@ -12,6 +12,7 @@ import {
   buildWorkspaceReferenceAiPrompt,
   buildWorkspacePromptCharacterMentionTokens,
   buildWorkspacePromptRichEditorHtml,
+  clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   createWorkspaceSegmentEditorInsertedSegment,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
@@ -25,6 +26,7 @@ import {
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
   resolveWorkspacePromptMentionedCharacterOptions,
   createWorkspaceTalkingCharacterTargetFromPoints,
+  createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   normalizeWorkspaceTalkingCharacterTarget,
   getWorkspaceInitialStudioDefaults,
@@ -421,6 +423,16 @@ describe("WorkspacePage talking character target selection", () => {
     });
   });
 
+  it("draws a draft target from the pointer instead of showing the click default", () => {
+    expect(createWorkspaceTalkingCharacterDraftTargetFromPoints({ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 })).toBeNull();
+    expect(createWorkspaceTalkingCharacterDraftTargetFromPoints({ x: 0.5, y: 0.5 }, { x: 0.52, y: 0.53 })).toEqual({
+      height: 0.030000000000000027,
+      width: 0.020000000000000018,
+      x: 0.5,
+      y: 0.5,
+    });
+  });
+
   it("clamps target areas to the frame", () => {
     expect(normalizeWorkspaceTalkingCharacterTarget({ height: 0.5, width: 0.5, x: 0.9, y: -0.2 })).toEqual({
       height: 0.5,
@@ -684,6 +696,82 @@ describe("WorkspacePage segment editor draft persistence", () => {
       discardLocalDraft: true,
       forceRefresh: true,
     });
+  });
+
+  it("clears temporary editor state for other projects after a project is created", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    const localStorageMock = createMemoryStorage();
+    const sessionStorageMock = createMemoryStorage();
+    const email = "Draft-Reset@Example.test";
+    const storageEmail = "draft-reset@example.test";
+    const draft101Key = `adshorts.segment-editor-draft:${storageEmail}:101`;
+    const draft102Key = `adshorts.segment-editor-draft:${storageEmail}:102`;
+    const structure101Key = `adshorts.segment-editor-explicit-structure:${storageEmail}:101`;
+    const structure102Key = `adshorts.segment-editor-explicit-structure:${storageEmail}:102`;
+    const aiPhotoJobsKey = `adshorts.segment-ai-photo-pending:${storageEmail}`;
+    const animationJobsKey = `adshorts.segment-photo-animation-pending:${storageEmail}`;
+    const draft101 = { ...createDraftSession(createDraftSegment({ text: "Old draft" })), projectId: 101 };
+    const draft102 = { ...createDraftSession(createDraftSegment({ text: "Kept draft" })), projectId: 102 };
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+      Object.defineProperty(window, "sessionStorage", { configurable: true, value: sessionStorageMock });
+      window.localStorage.setItem(draft101Key, JSON.stringify(draft101));
+      window.sessionStorage.setItem(draft102Key, JSON.stringify(draft102));
+      window.localStorage.setItem(structure101Key, "1");
+      window.sessionStorage.setItem(structure102Key, "1");
+      window.localStorage.setItem(
+        aiPhotoJobsKey,
+        JSON.stringify([
+          { createdAt: Date.now(), jobId: "old-photo", projectId: 101, prompt: "old", segmentIndex: 0, status: "queued" },
+          { createdAt: Date.now(), jobId: "kept-photo", projectId: 102, prompt: "kept", segmentIndex: 0, status: "queued" },
+        ]),
+      );
+      window.localStorage.setItem(
+        animationJobsKey,
+        JSON.stringify([
+          { createdAt: Date.now(), jobId: "old-animation", projectId: 101, prompt: "old", segmentIndex: 0, sourceAsset: null, status: "queued" },
+          { createdAt: Date.now(), jobId: "kept-animation", projectId: 102, prompt: "kept", segmentIndex: 0, sourceAsset: null, status: "queued" },
+        ]),
+      );
+
+      expect(clearStoredWorkspaceSegmentEditorTemporaryStateExcept(email, [102])).toEqual([101]);
+      expect(window.localStorage.getItem(draft101Key)).toBeNull();
+      expect(window.localStorage.getItem(structure101Key)).toBeNull();
+      expect(window.sessionStorage.getItem(draft102Key)).not.toBeNull();
+      expect(window.sessionStorage.getItem(structure102Key)).toBe("1");
+      expect(JSON.parse(window.localStorage.getItem(aiPhotoJobsKey) ?? "[]")).toEqual([
+        expect.objectContaining({ jobId: "kept-photo", projectId: 102 }),
+      ]);
+      expect(JSON.parse(window.localStorage.getItem(animationJobsKey) ?? "[]")).toEqual([
+        expect.objectContaining({ jobId: "kept-animation", projectId: 102 }),
+      ]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+      if (originalSessionStorage) {
+        Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
   });
 
   it("allows saved draft segment structure changes during Shorts creation", () => {

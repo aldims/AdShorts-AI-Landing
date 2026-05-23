@@ -3920,6 +3920,7 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
 };
 
 const WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE = 0.06;
+const WORKSPACE_TALKING_CHARACTER_TARGET_DRAFT_MIN_SIZE = 0.004;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_WIDTH = 0.28;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_HEIGHT = 0.34;
 const WORKSPACE_TALKING_TARGET_RESIZE_HANDLES: readonly WorkspaceTalkingTargetResizeHandle[] = [
@@ -4067,6 +4068,30 @@ export const createWorkspaceTalkingCharacterTargetFromPoints = (
     x: endX - defaultWidth / 2,
     y: endY - defaultHeight / 2,
   }) as WorkspaceTalkingCharacterTarget;
+};
+
+export const createWorkspaceTalkingCharacterDraftTargetFromPoints = (
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): WorkspaceTalkingCharacterTarget | null => {
+  const startX = clampWorkspaceUnitValue(start.x);
+  const startY = clampWorkspaceUnitValue(start.y);
+  const endX = clampWorkspaceUnitValue(end.x);
+  const endY = clampWorkspaceUnitValue(end.y);
+  const width = Math.abs(endX - startX);
+  const height = Math.abs(endY - startY);
+  if (width <= 0 && height <= 0) {
+    return null;
+  }
+
+  const visibleWidth = Math.max(width, WORKSPACE_TALKING_CHARACTER_TARGET_DRAFT_MIN_SIZE);
+  const visibleHeight = Math.max(height, WORKSPACE_TALKING_CHARACTER_TARGET_DRAFT_MIN_SIZE);
+  return {
+    height: visibleHeight,
+    width: visibleWidth,
+    x: Math.min(1 - visibleWidth, Math.min(startX, endX)),
+    y: Math.min(1 - visibleHeight, Math.min(startY, endY)),
+  };
 };
 
 const moveWorkspaceTalkingCharacterTarget = (
@@ -9551,6 +9576,66 @@ const removeStoredWorkspaceSegmentEditorExplicitStructureChange = (
   removeWorkspaceSegmentEditorStorageValue(
     getWorkspaceSegmentEditorExplicitStructureStorageKey(normalizedEmail, normalizedProjectId),
   );
+};
+
+export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
+  email: string | null | undefined,
+  keepProjectIds: readonly (number | null | undefined)[] = [],
+) => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const keptProjectIds = new Set(
+    keepProjectIds
+      .map(getPositiveWorkspaceMediaAssetId)
+      .filter((projectId): projectId is number => projectId !== null),
+  );
+  const clearedProjectIds = new Set<number>();
+  const clearStoragePrefix = (storageKeyPrefix: string) => {
+    readWorkspaceSegmentEditorStorageEntries(storageKeyPrefix).forEach((entry) => {
+      const projectId = getPositiveWorkspaceMediaAssetId(entry.storageKey.slice(storageKeyPrefix.length));
+      if (!projectId) {
+        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
+        return;
+      }
+
+      if (keptProjectIds.has(projectId)) {
+        return;
+      }
+
+      removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
+      clearedProjectIds.add(projectId);
+    });
+  };
+
+  clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
+  clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
+
+  const nextAiPhotoJobs = readStoredWorkspaceSegmentAiPhotoJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentAiPhotoJobs(normalizedEmail, nextAiPhotoJobs);
+
+  const nextPhotoAnimationJobs = readStoredWorkspaceSegmentPhotoAnimationJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentPhotoAnimationJobs(normalizedEmail, nextPhotoAnimationJobs);
+
+  return Array.from(clearedProjectIds).sort((left, right) => left - right);
 };
 
 const moveArrayItemToInsertIndex = <T,>(items: T[], fromIndex: number, insertIndex: number) => {
@@ -16611,6 +16696,7 @@ export function WorkspacePage({
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
+  const [segmentTalkingCharacterDraftTargets, setSegmentTalkingCharacterDraftTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
@@ -28202,6 +28288,41 @@ export function WorkspacePage({
     }
   };
 
+  const clearTemporarySegmentEditorStateForOtherProjects = (keepProjectId: number | null | undefined) => {
+    const normalizedKeepProjectId = getPositiveWorkspaceMediaAssetId(keepProjectId);
+    const clearedProjectIds = clearStoredWorkspaceSegmentEditorTemporaryStateExcept(
+      session.email,
+      normalizedKeepProjectId ? [normalizedKeepProjectId] : [],
+    );
+    if (!clearedProjectIds.length) {
+      return;
+    }
+
+    const clearedProjectIdSet = new Set(clearedProjectIds);
+    setStoredSegmentEditorDrafts((currentDrafts) =>
+      currentDrafts.filter((draft) => !clearedProjectIdSet.has(draft.projectId)),
+    );
+    clearedProjectIds.forEach((projectId) => {
+      segmentEditorExplicitStructureChangeProjectIdsRef.current.delete(projectId);
+    });
+
+    if (
+      detachedSegmentEditorDraftRef.current &&
+      clearedProjectIdSet.has(detachedSegmentEditorDraftRef.current.draft.projectId)
+    ) {
+      detachedSegmentEditorDraftRef.current = null;
+    }
+    if (segmentEditorDraftRef.current && clearedProjectIdSet.has(segmentEditorDraftRef.current.projectId)) {
+      segmentEditorDraftRef.current = null;
+    }
+    setSegmentEditorDraft((currentDraft) =>
+      currentDraft && clearedProjectIdSet.has(currentDraft.projectId) ? null : currentDraft,
+    );
+    setSegmentEditorAppliedSession((currentSession) =>
+      currentSession && clearedProjectIdSet.has(currentSession.projectId) ? null : currentSession,
+    );
+  };
+
   const removeProjectFromLocalState = (targetProject: WorkspaceProject) => {
     setProjects((currentProjects) =>
       currentProjects.filter((project) => !doesWorkspaceProjectMatch(project, targetProject)),
@@ -28742,7 +28863,9 @@ export function WorkspacePage({
 
         if (statusPayload.data.generation) {
           doneWithoutPreviewAttempts = 0;
+          const generatedProjectId = getPositiveWorkspaceMediaAssetId(statusPayload.data.generation.adId);
           setGeneratedVideo(statusPayload.data.generation);
+          clearTemporarySegmentEditorStateForOtherProjects(generatedProjectId);
           setHasLoadedProjects(false);
           if (!createdVideoAnalyticsJobIdsRef.current.has(safeJobId)) {
             createdVideoAnalyticsJobIdsRef.current.add(safeJobId);
@@ -34504,6 +34627,21 @@ export function WorkspacePage({
       return normalizedTarget ? { ...current, [segmentIndex]: normalizedTarget } : current;
     });
   };
+  const setSegmentTalkingCharacterDraftTarget = (segmentIndex: number, target: WorkspaceTalkingCharacterTarget | null) => {
+    setSegmentTalkingCharacterDraftTargets((current) => {
+      if (!target) {
+        if (!current[segmentIndex]) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[segmentIndex];
+        return next;
+      }
+
+      return { ...current, [segmentIndex]: target };
+    });
+  };
   const getSegmentTalkingTargetStyle = (target: WorkspaceTalkingCharacterTarget | null | undefined) =>
     target
       ? ({
@@ -34557,7 +34695,7 @@ export function WorkspacePage({
       startX: point.x,
       startY: point.y,
     };
-    setSegmentTalkingCharacterTarget(segmentIndex, createWorkspaceTalkingCharacterTargetFromPoints(point, point));
+    setSegmentTalkingCharacterDraftTarget(segmentIndex, null);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const updateSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
@@ -34585,9 +34723,9 @@ export function WorkspacePage({
       return;
     }
 
-    setSegmentTalkingCharacterTarget(
+    setSegmentTalkingCharacterDraftTarget(
       drag.segmentIndex,
-      createWorkspaceTalkingCharacterTargetFromPoints({ x: drag.startX, y: drag.startY }, point),
+      createWorkspaceTalkingCharacterDraftTargetFromPoints({ x: drag.startX, y: drag.startY }, point),
     );
   };
   const finishSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
@@ -34607,6 +34745,7 @@ export function WorkspacePage({
           resizeWorkspaceTalkingCharacterTarget(drag.originTarget, drag.resizeHandle, point),
         );
       } else {
+        setSegmentTalkingCharacterDraftTarget(drag.segmentIndex, null);
         setSegmentTalkingCharacterTarget(
           drag.segmentIndex,
           createWorkspaceTalkingCharacterTargetFromPoints({ x: drag.startX, y: drag.startY }, point),
@@ -34621,6 +34760,9 @@ export function WorkspacePage({
   const cancelSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (segmentTalkingTargetDragRef.current) {
+      setSegmentTalkingCharacterDraftTarget(segmentTalkingTargetDragRef.current.segmentIndex, null);
+    }
     segmentTalkingTargetDragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -34628,11 +34770,14 @@ export function WorkspacePage({
   };
   const renderSegmentTalkingTargetOverlay = (segment: WorkspaceSegmentEditorDraftSegment) => {
     const target = segmentTalkingCharacterTargets[segment.index] ?? null;
-    const targetStyle = getSegmentTalkingTargetStyle(target);
+    const draftTarget = segmentTalkingCharacterDraftTargets[segment.index] ?? null;
+    const displayTarget = draftTarget ?? target;
+    const isDrawingTarget = Boolean(draftTarget);
+    const targetStyle = getSegmentTalkingTargetStyle(displayTarget);
 
     return (
       <div
-        className={`studio-segment-talking-target-overlay${target ? " has-target" : ""}`}
+        className={`studio-segment-talking-target-overlay${displayTarget ? " has-target" : ""}${isDrawingTarget ? " is-drawing" : ""}`}
         data-talking-target-segment-index={segment.index}
         role="application"
         aria-label={workspaceText(locale, "Выбор говорящего персонажа на сцене", "Speaking character selection on scene")}
@@ -34647,55 +34792,59 @@ export function WorkspacePage({
       >
         {targetStyle ? (
           <span
-            className="studio-segment-talking-target-overlay__box"
+            className={`studio-segment-talking-target-overlay__box${isDrawingTarget ? " is-drawing" : ""}`}
             style={targetStyle}
-            data-talking-target-action="move"
+            data-talking-target-action={isDrawingTarget ? undefined : "move"}
           >
-            <span className="studio-segment-talking-target-overlay__box-grid" aria-hidden="true" />
-            <span className="studio-segment-talking-target-overlay__box-center" aria-hidden="true" />
-            {WORKSPACE_TALKING_TARGET_RESIZE_HANDLES.map((handle) => (
-              <span
-                key={handle}
-                className={`studio-segment-talking-target-overlay__handle studio-segment-talking-target-overlay__handle--${handle}`}
-                data-talking-target-action={`resize:${handle}`}
-                aria-hidden="true"
-              />
-            ))}
-            <button
-              className="studio-segment-talking-target-overlay__reset"
-              type="button"
-              aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-              title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setSegmentTalkingCharacterTarget(segment.index, null);
-              }}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M20 4v4h-4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+            {isDrawingTarget ? null : (
+              <>
+                <span className="studio-segment-talking-target-overlay__box-grid" aria-hidden="true" />
+                <span className="studio-segment-talking-target-overlay__box-center" aria-hidden="true" />
+                {WORKSPACE_TALKING_TARGET_RESIZE_HANDLES.map((handle) => (
+                  <span
+                    key={handle}
+                    className={`studio-segment-talking-target-overlay__handle studio-segment-talking-target-overlay__handle--${handle}`}
+                    data-talking-target-action={`resize:${handle}`}
+                    aria-hidden="true"
+                  />
+                ))}
+                <button
+                  className="studio-segment-talking-target-overlay__reset"
+                  type="button"
+                  aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+                  title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSegmentTalkingCharacterTarget(segment.index, null);
+                  }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M20 4v4h-4"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </>
+            )}
           </span>
         ) : null}
         <span className="studio-segment-talking-target-overlay__label">
-          {target
+          {displayTarget
             ? workspaceText(locale, "Говорящий", "Speaker")
             : workspaceText(locale, "Выберите говорящего", "Select speaker")}
         </span>

@@ -2978,6 +2978,32 @@
       "target_query": "Генератор видео без лица для YouTube Shorts",
       "title": "Генератор видео без лица для YouTube Shorts",
       "url": "https://adshortsai.com/generator-video-bez-lica-dlya-youtube-shorts/"
+    },
+    {
+      "canonical": "https://adshortsai.com/press/",
+      "cluster": "other",
+      "cta_source": "seo_press",
+      "description": "Пресс-кит AdShorts AI: описание продукта, логотип, категории, факты, контакты и готовые тексты для каталогов, обзоров и публикаций.",
+      "h1": "Пресс-кит AdShorts AI",
+      "intent": "informational",
+      "lastmod": "2026-05-23",
+      "locale": "ru",
+      "target_query": "Пресс-кит AdShorts AI",
+      "title": "AdShorts AI: пресс-кит и описание продукта",
+      "url": "https://adshortsai.com/press/"
+    },
+    {
+      "canonical": "https://adshortsai.com/en/press/",
+      "cluster": "other",
+      "cta_source": "seo_en_press",
+      "description": "Press kit for AdShorts AI: product description, logo, categories, facts, contact details and ready-to-use copy for directories and reviews.",
+      "h1": "AdShorts AI Press Kit",
+      "intent": "informational",
+      "lastmod": "2026-05-23",
+      "locale": "en",
+      "target_query": "AdShorts AI Press Kit",
+      "title": "AdShorts AI Press Kit: AI Shorts Generator",
+      "url": "https://adshortsai.com/en/press/"
     }
   ]
 }

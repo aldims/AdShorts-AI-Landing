@@ -40,6 +40,8 @@ const criticalPages = [
   "en/pricing/index.html",
   "examples/index.html",
   "en/examples/index.html",
+  "press/index.html",
+  "en/press/index.html",
   "shorts-guides/index.html",
   "shorts-ne-nabirayut-prosmotry/index.html",
 ];
@@ -234,6 +236,8 @@ for (const requiredUrl of [
   `${siteOrigin}/en/pricing/`,
   `${siteOrigin}/examples/`,
   `${siteOrigin}/en/examples/`,
+  `${siteOrigin}/press/`,
+  `${siteOrigin}/en/press/`,
   `${siteOrigin}/shorts-guides/`,
   `${siteOrigin}/privacy/`,
   `${siteOrigin}/en/privacy/`,
@@ -300,6 +304,7 @@ assert(/<!-- seo-commercial-growth:start -->/i.test(russianGuides), "shorts-guid
 const deployProduction = await readRootFile("deploy-production.sh");
 assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
 assert(/node scripts\/seo-organic-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run organic growth sprint before SEO metadata export");
+assert(/node scripts\/generate-static-press-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate press pages before SEO metadata export");
 assert(
   /@app_routes path \/ \/en\/ \/app\* \/en\/app\* \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
   "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",

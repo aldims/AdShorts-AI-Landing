@@ -24700,6 +24700,16 @@ textarea {
   pointer-events: auto;
 }
 
+.studio-segment-talking-target-overlay__box.is-drawing {
+  border-radius: 10px;
+  background: rgba(14, 165, 233, 0.05);
+  box-shadow:
+    0 0 0 999px rgba(2, 6, 23, 0.32),
+    0 0 0 2px rgba(14, 165, 233, 0.16),
+    0 0 24px rgba(14, 165, 233, 0.36);
+  cursor: crosshair;
+}
+
 .studio-segment-talking-target-overlay__box:active {
   cursor: grabbing;
 }
@@ -24723,6 +24733,11 @@ textarea {
   box-shadow:
     inset 0 0 18px rgba(125, 211, 252, 0.18),
     0 0 0 1px rgba(15, 23, 42, 0.42);
+}
+
+.studio-segment-talking-target-overlay__box.is-drawing::before,
+.studio-segment-talking-target-overlay__box.is-drawing::after {
+  display: none;
 }
 
 .studio-segment-talking-target-overlay__box-grid {

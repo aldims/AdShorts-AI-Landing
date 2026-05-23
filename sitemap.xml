@@ -2061,4 +2061,22 @@
     <changefreq>weekly</changefreq>
     <priority>0.74</priority>
   </url>
+  <url>
+    <loc>https://adshortsai.com/press/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/press/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/press/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/press/" />
+    <lastmod>2026-05-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+  <url>
+    <loc>https://adshortsai.com/en/press/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://adshortsai.com/press/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://adshortsai.com/en/press/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://adshortsai.com/press/" />
+    <lastmod>2026-05-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
 </urlset>
