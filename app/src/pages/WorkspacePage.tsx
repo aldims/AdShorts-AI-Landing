@@ -7952,6 +7952,43 @@ const getWorkspaceSegmentManualDurationMinimum = (
       : 1,
   );
 
+export const resolveWorkspaceSegmentBoundaryTiming = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  requestedBoundaryTime: number,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+) => {
+  const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const currentBoundaryTime = Math.max(segmentStartTime, getWorkspaceSegmentEditorDisplayEndTime(segment));
+  const minimumDuration = getWorkspaceSegmentManualDurationMinimum(segment, session);
+  const minimumBoundaryTime = segmentStartTime + minimumDuration;
+
+  if (!Number.isFinite(requestedBoundaryTime) || requestedBoundaryTime < segmentStartTime) {
+    return {
+      boundaryTime: currentBoundaryTime,
+      duration: Math.max(0, currentBoundaryTime - segmentStartTime),
+      minimumBoundaryTime,
+      minimumDuration,
+      requestedDuration: requestedBoundaryTime - segmentStartTime,
+      segmentStartTime,
+      status: "invalid" as const,
+    };
+  }
+
+  const requestedDuration = requestedBoundaryTime - segmentStartTime;
+  const duration = Math.max(minimumDuration, requestedDuration);
+
+  return {
+    boundaryTime: segmentStartTime + duration,
+    clamped: duration > requestedDuration,
+    duration,
+    minimumBoundaryTime,
+    minimumDuration,
+    requestedDuration,
+    segmentStartTime,
+    status: "valid" as const,
+  };
+};
+
 export const getWorkspaceSegmentVisualGenerationDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) => {
@@ -31815,31 +31852,40 @@ export function WorkspacePage({
       "--studio-segment-editor-timeline-drop-left": getSegmentEditorTimelineScaledValue(leftRatio),
     } as CSSProperties;
   };
-  const applySegmentTimelineManualDuration = (segmentIndex: number, requestedDuration: number) => {
-    if (!Number.isFinite(requestedDuration) || requestedDuration < 0) {
-      return;
-    }
-
+  const applySegmentTimelineManualBoundaryTime = (segmentIndex: number, requestedBoundaryTime: number) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const currentSegment = currentDraft?.segments.find((segment) => segment.index === segmentIndex) ?? null;
-    const minimumDuration = currentSegment
-      ? getWorkspaceSegmentManualDurationMinimum(currentSegment, currentDraft)
-      : 1;
-    const nextDuration = Math.max(minimumDuration, requestedDuration);
+    if (!currentSegment) {
+      return null;
+    }
+
+    const timing = resolveWorkspaceSegmentBoundaryTiming(currentSegment, requestedBoundaryTime, currentDraft);
+    if (timing.status === "invalid") {
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          `Граница сцены не может быть раньше ${formatWorkspaceSegmentEditorTime(timing.segmentStartTime)}.`,
+          `Scene boundary cannot be earlier than ${formatWorkspaceSegmentEditorTime(timing.segmentStartTime)}.`,
+        ),
+      );
+      return timing;
+    }
+
     setSegmentEditorVideoError(
-      nextDuration > requestedDuration
+      timing.clamped
         ? workspaceText(
             locale,
-            `Минимум ${formatWorkspaceSegmentEditorTime(nextDuration, { roundUp: true })}: короче озвучки нельзя.`,
-            `Minimum ${formatWorkspaceSegmentEditorTime(nextDuration, { roundUp: true })}: cannot be shorter than voiceover.`,
+            `Минимум ${formatWorkspaceSegmentEditorTime(timing.minimumDuration, { roundUp: true })}: короче озвучки нельзя.`,
+            `Minimum ${formatWorkspaceSegmentEditorTime(timing.minimumDuration, { roundUp: true })}: cannot be shorter than voiceover.`,
           )
         : null,
     );
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
       durationMode: "manual",
-      manualDurationSeconds: nextDuration,
+      manualDurationSeconds: timing.duration,
     }));
+    return timing;
   };
   const handleSegmentTimelineBoundaryInputCommit = (
     event: ReactFocusEvent<HTMLInputElement>,
@@ -31864,8 +31910,13 @@ export function WorkspacePage({
       return;
     }
 
-    const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(currentSegment);
-    applySegmentTimelineManualDuration(options.segmentIndex, nextBoundaryTime - segmentStartTime);
+    const timing = applySegmentTimelineManualBoundaryTime(options.segmentIndex, nextBoundaryTime);
+    if (!timing) {
+      input.value = options.initialValue;
+      return;
+    }
+
+    input.value = formatWorkspaceSegmentEditorTime(timing.boundaryTime, { roundUp: true });
     setActiveSegmentIndex(Math.max(0, Math.min(options.segmentArrayIndex, (currentDraft?.segments.length ?? 1) - 1)));
   };
   const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -32604,9 +32655,30 @@ export function WorkspacePage({
     segmentEditorDraft && activeSegment
       ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, activeSegment.index)
       : activeSegmentIndex + 1;
+  const getSegmentTimelineDisplayRange = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    segmentArrayIndex?: number | null,
+  ) => {
+    const span =
+      segmentEditorTimelineVisualRow?.spans.find((item) =>
+        typeof segmentArrayIndex === "number"
+          ? item.arrayIndex === segmentArrayIndex
+          : item.segmentIndex === segment.index,
+      ) ??
+      segmentEditorTimelineVisualRow?.spans.find((item) => item.segmentIndex === segment.index) ??
+      null;
+
+    return {
+      endTime: span?.endTime ?? getWorkspaceSegmentEditorDisplayEndTime(segment),
+      startTime: span?.startTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment),
+    };
+  };
+  const activeSegmentTimeRange = activeSegment
+    ? getSegmentTimelineDisplayRange(activeSegment, activeSegmentIndex)
+    : null;
   const activeSegmentTimeRangeLabel = activeSegment
-    ? `${formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(activeSegment))} - ${formatWorkspaceSegmentEditorTime(
-        getWorkspaceSegmentEditorDisplayEndTime(activeSegment),
+    ? `${formatWorkspaceSegmentEditorTime(activeSegmentTimeRange?.startTime ?? 0)} - ${formatWorkspaceSegmentEditorTime(
+        activeSegmentTimeRange?.endTime ?? 0,
         { roundUp: true },
       )}`
     : "";
@@ -32701,8 +32773,9 @@ export function WorkspacePage({
               const isLastSpan = index === (segmentEditorTimelineVisualRow?.spans.length ?? 0) - 1;
               const segmentArrayIndex = span.arrayIndex ?? index;
               const segment = segmentEditorDraft.segments[segmentArrayIndex] ?? null;
-              const startBoundarySegment = index > 0 ? segmentEditorDraft.segments[index - 1] ?? null : null;
-              const endBoundarySegment = isLastSpan ? segmentEditorDraft.segments[index] ?? null : null;
+              const startBoundarySegment =
+                segmentArrayIndex > 0 ? segmentEditorDraft.segments[segmentArrayIndex - 1] ?? null : null;
+              const endBoundarySegment = isLastSpan ? segmentEditorDraft.segments[segmentArrayIndex] ?? null : null;
               const segmentDisplayNumber = segment
                 ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index)
                 : segmentArrayIndex + 1;
@@ -32718,7 +32791,7 @@ export function WorkspacePage({
                     renderSegmentTimelineBoundaryInput({
                       boundaryTime: span.startTime,
                       segment: startBoundarySegment,
-                      segmentArrayIndex: index - 1,
+                      segmentArrayIndex: segmentArrayIndex - 1,
                       segmentDisplayNumber: getWorkspaceSegmentEditorDisplayNumber(
                         segmentEditorDraft.segments,
                         startBoundarySegment.index,
@@ -36645,6 +36718,10 @@ export function WorkspacePage({
 
                                 const isActiveCard = offset === 0;
                                 const segmentNumber = nextSegmentArrayIndex + 1;
+                                const segmentTimelineRange = getSegmentTimelineDisplayRange(segment, nextSegmentArrayIndex);
+                                const segmentTimelineRangeLabel = `${formatWorkspaceSegmentEditorTime(
+                                  segmentTimelineRange.startTime,
+                                )} - ${formatWorkspaceSegmentEditorTime(segmentTimelineRange.endTime, { roundUp: true })}`;
                                 const isAiPhotoGenerationPending = hasWorkspaceSegmentVisualRun(
                                   segmentEditorGeneratingAiPhotoRunIds,
                                   segment.index,
@@ -36907,12 +36984,7 @@ export function WorkspacePage({
                                             <div className="studio-segment-editor__card-overlay-main">
                                               <div className="studio-segment-editor__card-copy">
                                                 <strong>{workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)}</strong>
-                                                <span>
-                                                  {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
-                                                  {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
-                                                    roundUp: true,
-                                                  })}
-                                                </span>
+                                                <span>{segmentTimelineRangeLabel}</span>
                                               </div>
                                             </div>
                                             <div className="studio-segment-editor__card-footer-actions">
@@ -36925,12 +36997,7 @@ export function WorkspacePage({
                                           <div className="studio-segment-editor__card-overlay-main">
                                             <div className="studio-segment-editor__card-copy">
                                               <strong>{workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)}</strong>
-                                              <span>
-                                                {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segment))} -{" "}
-                                                {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segment), {
-                                                  roundUp: true,
-                                                })}
-                                              </span>
+                                              <span>{segmentTimelineRangeLabel}</span>
                                             </div>
                                             {segmentSourceLabel !== "Сток" ? (
                                               <small className="studio-segment-editor__card-badge">{segmentSourceDisplayLabel}</small>

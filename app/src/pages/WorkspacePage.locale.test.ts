@@ -55,6 +55,7 @@ import {
   resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   resetWorkspaceSegmentDraftVisualToOriginal,
+  resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
@@ -1841,6 +1842,43 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(normalized.segments[0]?.duration).toBe(6.5);
     expect(normalized.segments[0]?.endTime).toBe(6.5);
     expect(normalized.segments[1]?.startTime).toBe(6.5);
+  });
+
+  it("rejects segment boundary timing before the edited segment start", () => {
+    const segment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      endTime: 9,
+      index: 1,
+      manualDurationSeconds: 4,
+      startTime: 5,
+    });
+
+    const resolved = resolveWorkspaceSegmentBoundaryTiming(segment, 3, createDraftSession(segment));
+
+    expect(resolved.status).toBe("invalid");
+    expect(resolved.boundaryTime).toBe(9);
+    expect(resolved.duration).toBe(4);
+    expect(resolved.segmentStartTime).toBe(5);
+  });
+
+  it("clamps segment boundary timing to the voice-informed minimum duration", () => {
+    const segment = createDraftSegment({
+      duration: 4,
+      endTime: 9,
+      index: 1,
+      speechDuration: 2.4,
+      startTime: 5,
+    });
+
+    const resolved = resolveWorkspaceSegmentBoundaryTiming(segment, 6, createDraftSession(segment));
+
+    expect(resolved.status).toBe("valid");
+    if (resolved.status === "valid") {
+      expect(resolved.clamped).toBe(true);
+    }
+    expect(resolved.duration).toBeCloseTo(2.4, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(7.4, 6);
   });
 
   it("updates track timings when a manual photo segment becomes a talking photo video", () => {
