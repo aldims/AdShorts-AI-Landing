@@ -142,4 +142,24 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
 
     expect(tracks.rows.find((row) => row.kind === "music")?.spans[0]?.isEdited).toBe(true);
   });
+
+  it("can suppress active and edited states for a clean empty draft", () => {
+    const tracks = buildWorkspaceSegmentEditorTracks(
+      [createSegment(1, { text: "" })],
+      [createSegment(1, { text: "Original" })],
+      { musicAssetId: null, musicName: null, musicType: "none" },
+      { musicAssetId: 11, musicName: "old.mp3", musicType: "upbeat" },
+      {
+        activeArrayIndex: 0,
+        isTextEdited: () => true,
+        isVisualEdited: () => true,
+        suppressActiveState: true,
+        suppressEditedState: true,
+      },
+    );
+
+    const allSpans = tracks.rows.flatMap((row) => row.spans);
+    expect(allSpans.some((span) => span.isActive)).toBe(false);
+    expect(allSpans.some((span) => span.isEdited)).toBe(false);
+  });
 });

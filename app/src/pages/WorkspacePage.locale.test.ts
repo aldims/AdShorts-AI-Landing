@@ -21,6 +21,7 @@ import {
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
   getNextWorkspaceReferenceDefaultName,
+  buildWorkspaceReferenceGenerationMediaScope,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   insertWorkspacePromptCharacterMentionText,
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
@@ -552,6 +553,13 @@ describe("WorkspacePage prompt character mentions", () => {
 });
 
 describe("WorkspacePage reference creation defaults", () => {
+  it("does not bind generated reference media to the active segment", () => {
+    const mediaScope = buildWorkspaceReferenceGenerationMediaScope(3439);
+
+    expect(mediaScope).toEqual({ projectId: 3439 });
+    expect("segmentIndex" in mediaScope).toBe(false);
+  });
+
   it("uses the next default character and scene names independently", () => {
     const references = [
       { kind: "character" as const, name: "Персонаж 1" },
@@ -936,7 +944,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(resetDraft.musicName).toBeNull();
     expect(resetDraft.voiceType).toBe("none");
     expect(resetDraft.ttsAssetId).toBeNull();
-    expect(resetDraft.subtitleType).toBe("none");
+    expect(resetDraft.subtitleType).toBe("default");
     expect(resetDraft.subtitleStyle).toBe("modern");
     expect(resetDraft.subtitleColor).toBe("purple");
     expect(resetDraft.segments[0]?.text).toBe("");
@@ -945,6 +953,11 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(resetDraft.segments[0]?.speechWords).toEqual([]);
     expect(isWorkspaceSegmentEditorDraftSegmentEmpty(resetDraft.segments[0])).toBe(true);
     expect(shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(resetDraft)).toBe(true);
+    expect(getWorkspaceSegmentEditorGenerationOverrides(resetDraft)).toMatchObject({
+      subtitleColorId: "purple",
+      subtitleEnabled: true,
+      subtitleStyleId: "modern",
+    });
     expect(
       buildWorkspaceSegmentEditorTracks(resetDraft.segments, resetDraft.segments, resetDraft, resetDraft).rows
         .flatMap((row) => row.spans)
@@ -1019,6 +1032,20 @@ describe("WorkspacePage segment editor draft persistence", () => {
       subtitleColorId: "purple",
       subtitleStyleId: "modern",
     });
+  });
+
+  it("treats a blank draft with omitted global settings as clean", () => {
+    const blankDraft = {
+      ...resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene({
+        ...createDraftSession(createDraftSegment({ index: 0, text: "Only segment" })),
+        segments: [createDraftSegment({ index: 0, originalText: "", text: "" })],
+      }),
+      musicType: undefined,
+      subtitleType: undefined,
+      voiceType: undefined,
+    };
+
+    expect(isWorkspaceSegmentEditorCleanEmptyDraft(blankDraft)).toBe(true);
   });
 
   it("keeps reset music assets empty when a fresh server session still has old generated music", () => {

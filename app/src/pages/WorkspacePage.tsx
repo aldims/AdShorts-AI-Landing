@@ -3919,6 +3919,15 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
   };
 };
 
+export const buildWorkspaceReferenceGenerationMediaScope = (projectId: unknown): { projectId?: number } => {
+  const numericProjectId = Number(projectId);
+  if (!Number.isFinite(numericProjectId) || numericProjectId <= 0) {
+    return {};
+  }
+
+  return { projectId: Math.trunc(numericProjectId) };
+};
+
 const WORKSPACE_TALKING_CHARACTER_TARGET_MIN_SIZE = 0.06;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DRAFT_MIN_SIZE = 0.004;
 const WORKSPACE_TALKING_CHARACTER_TARGET_DEFAULT_WIDTH = 0.28;
@@ -8603,7 +8612,7 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
     })),
     subtitleColor: fallbackStudioSubtitleColorOption.id,
     subtitleStyle: fallbackStudioSubtitleStyleOption.id,
-    subtitleType: "none",
+    subtitleType: "default",
     ttsAssetId: null,
     voiceType: "none",
   };
@@ -8613,18 +8622,20 @@ export const shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = 
   draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
 ) => Boolean(draft?.segments.length === 1 && isWorkspaceSegmentEditorDraftSegmentEmpty(draft.segments[0]));
 
-type WorkspaceSegmentEditorCleanEmptyDraftCandidate = Pick<
-  WorkspaceSegmentEditorDraftSession,
-  | "customMusicAssetId"
-  | "customMusicFileName"
-  | "musicAssetId"
-  | "musicName"
-  | "musicType"
-  | "segments"
-  | "subtitleType"
-  | "ttsAssetId"
-  | "voiceType"
->;
+type WorkspaceSegmentEditorCleanEmptyDraftCandidate = Pick<WorkspaceSegmentEditorDraftSession, "segments"> &
+  Partial<
+    Pick<
+      WorkspaceSegmentEditorDraftSession,
+      | "customMusicAssetId"
+      | "customMusicFileName"
+      | "musicAssetId"
+      | "musicName"
+      | "musicType"
+      | "subtitleType"
+      | "ttsAssetId"
+      | "voiceType"
+    >
+  >;
 
 export const isWorkspaceSegmentEditorCleanEmptyDraft = (
   draft: WorkspaceSegmentEditorCleanEmptyDraftCandidate | null | undefined,
@@ -8642,16 +8653,16 @@ export const isWorkspaceSegmentEditorCleanEmptyDraft = (
           !segment.speechDuration &&
           !segment.speechEndTime &&
           !segment.speechStartTime &&
-          segment.speechWords.length === 0,
+          (segment.speechWords ?? []).length === 0,
       ) &&
-      (normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "ai") === "none" &&
+      (normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "none") === "none" &&
       !getPositiveWorkspaceMediaAssetId(draft.customMusicAssetId) &&
       !String(draft.customMusicFileName ?? "").trim() &&
       !getPositiveWorkspaceMediaAssetId(draft.musicAssetId) &&
       !String(draft.musicName ?? "").trim() &&
-      (normalizeWorkspaceSegmentEditorSetting(draft.subtitleType) ?? "none") === "none" &&
+      ["default", "none"].includes(normalizeWorkspaceSegmentEditorSetting(draft.subtitleType) ?? "default") &&
       !getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) &&
-      normalizeWorkspaceSegmentEditorSetting(draft.voiceType) === "none",
+      (normalizeWorkspaceSegmentEditorSetting(draft.voiceType) ?? "none") === "none",
   );
 
 export const getWorkspaceSegmentEditorEffectiveSubtitleSelection = (
@@ -20483,6 +20494,12 @@ export function WorkspacePage({
   const resolveSegmentReferenceAssetId = async (
     option: WorkspaceReferenceVisualOption,
     referenceKind: "character" | "scene",
+    options?: {
+      uploadKind?: string;
+      uploadProjectId?: number | null;
+      uploadRole?: string;
+      uploadSegmentIndex?: number | null;
+    },
   ) => {
     const shouldCopySavedCharacterReference =
       referenceKind === "character" &&
@@ -20564,15 +20581,16 @@ export function WorkspacePage({
       };
     }
 
+    const hasUploadSegmentIndexOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadSegmentIndex");
     const assetId = await ensureStudioUploadedAssetId(frameAsset, {
       fallbackFileName: frameAsset.fileName,
       fallbackMimeType: frameAsset.mimeType,
-      kind: "segment_source",
+      kind: options?.uploadKind ?? "segment_source",
       language: selectedLanguage,
       mediaType: "photo",
-      projectId: segmentEditorDraft.projectId,
-      role: "segment_source",
-      segmentIndex: option.segment.index,
+      projectId: options?.uploadProjectId ?? segmentEditorDraft.projectId,
+      role: options?.uploadRole ?? "segment_source",
+      segmentIndex: hasUploadSegmentIndexOverride ? options?.uploadSegmentIndex : option.segment.index,
     });
     if (!assetId) {
       throw new Error(
@@ -21304,6 +21322,8 @@ export function WorkspacePage({
         segmentEditorTrackBaselineSession,
         {
           activeArrayIndex: activeSegmentIndex,
+          suppressActiveState: isSegmentEditorCleanEmptyDraft,
+          suppressEditedState: isSegmentEditorCleanEmptyDraft,
           isSoundEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftSceneSoundEdited,
           isTextEdited: isSegmentEditorCleanEmptyDraft ? () => false : (segment) => isWorkspaceSegmentDraftTextEdited(segment),
           isVisualEdited: (segment, baselineSegment) =>
@@ -24062,7 +24082,7 @@ export function WorkspacePage({
       setSelectedCustomMusic(null);
       setMusicSelectionError(null);
       setIsPreparingCustomMusic(false);
-      setAreSubtitlesEnabled(false);
+      setAreSubtitlesEnabled(true);
       setIsVoiceoverEnabled(false);
       setSegmentTimelineRedoSnapshots({});
       setSegmentTimelineGlobalControlOpen(null);
@@ -27434,6 +27454,7 @@ export function WorkspacePage({
         ? resolveStudioVoiceIdForLanguage(selectedLanguage, targetVoiceOverrideId, studioSidebarVoiceId)
         : studioSidebarVoiceId;
       const voiceType = resolvedTargetVoiceId || DEFAULT_STUDIO_VOICE_ID[selectedLanguage] || null;
+      const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
       const response = await fetch("/api/studio/segment-talking-photo/jobs", {
         method: "POST",
         headers: {
@@ -27444,6 +27465,7 @@ export function WorkspacePage({
           customVideoMediaType: talkingPhotoSourceMediaType,
           customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
           customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
+          durationSeconds,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: visualPrompt,
@@ -33857,9 +33879,10 @@ export function WorkspacePage({
     try {
       let assetId: number | null = null;
       let description: string | null = null;
-      let sourceProjectId = segmentEditorDraft?.projectId ?? null;
-      let sourceSegmentIndex = activeSegment?.index ?? null;
+      let sourceProjectId: number | null = null;
+      let sourceSegmentIndex: number | null = null;
       let sourceReferenceAssetId: number | null = null;
+      const referenceMediaScope = buildWorkspaceReferenceGenerationMediaScope(segmentEditorDraft?.projectId);
 
       if (referenceCreationSource === "upload" && referenceCreationUploadFile) {
         sourceReferenceAssetId = await ensureStudioUploadedAssetId(referenceCreationUploadFile, {
@@ -33868,13 +33891,17 @@ export function WorkspacePage({
           kind: "workspace_reference_source",
           language: selectedLanguage,
           mediaType: "photo",
-          projectId: sourceProjectId,
+          projectId: referenceMediaScope.projectId,
           role: kind === "character" ? "character_reference_source" : "scene_reference_source",
-          segmentIndex: sourceSegmentIndex,
         });
         description = referenceCreationUploadFile.fileName;
       } else if (referenceCreationSource === "project" && selectedProjectOption) {
-        sourceReferenceAssetId = await resolveSegmentReferenceAssetId(selectedProjectOption, kind);
+        sourceReferenceAssetId = await resolveSegmentReferenceAssetId(selectedProjectOption, kind, {
+          uploadKind: "workspace_reference_source",
+          uploadProjectId: referenceMediaScope.projectId,
+          uploadRole: kind === "character" ? "character_reference_source" : "scene_reference_source",
+          uploadSegmentIndex: null,
+        });
         description = selectedProjectOption.label;
         sourceProjectId = selectedProjectOption.sourceProjectId;
         sourceSegmentIndex = selectedProjectOption.sourceSegmentIndex;
@@ -33893,13 +33920,12 @@ export function WorkspacePage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...referenceRequest,
+            ...referenceMediaScope,
             language: selectedLanguage,
-            projectId: segmentEditorDraft?.projectId,
             prompt,
             purpose: "workspace_reference",
             quality: generationQuality,
             referenceKind: kind,
-            segmentIndex: activeSegment?.index,
           } satisfies WorkspaceSegmentAiPhotoJobCreateRequest),
         });
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
@@ -36770,6 +36796,8 @@ export function WorkspacePage({
                                 const mediaKind = segmentMediaSurface.previewKind;
                                 const mediaUrl = segmentMediaSurface.displayUrl;
                                 const shouldOpenVisualPanelFromCard = !mediaUrl && !isVisualGenerationPending;
+                                const shouldEmphasizeEmptyVisualCard =
+                                  shouldOpenVisualPanelFromCard && !isSegmentEditorCleanEmptyDraft;
                                 const mediaKey = mediaUrl
                                   ? `slot:${nextSegmentArrayIndex}|${getWorkspaceSegmentMediaIdentityKey(segment, segmentMediaSurface)}`
                                   : "";
@@ -36800,7 +36828,7 @@ export function WorkspacePage({
                                     key={`segment-card:${nextSegmentArrayIndex}:${segment.index}:${mediaKey}`}
                                     className={`studio-segment-editor__card ${slotClass}${isVisualGenerationPending ? " is-pending" : ""}${
                                       isSegmentVisualChanged ? " is-visual-edited" : ""
-                                    }${shouldOpenVisualPanelFromCard ? " has-empty-visual" : ""}`}
+                                    }${shouldEmphasizeEmptyVisualCard ? " has-empty-visual" : ""}`}
                                     style={getSegmentCarouselCardStyle(offset)}
                                     aria-current={offset === 0 ? "true" : undefined}
                                     aria-busy={isVisualGenerationPending ? true : undefined}

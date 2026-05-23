@@ -55,6 +55,8 @@ type WorkspaceSegmentEditorTracksBuildOptions<T extends WorkspaceSegmentEditorTr
   isTextEdited?: (segment: T, baselineSegment: T | null) => boolean;
   isVisualEdited?: (segment: T, baselineSegment: T | null) => boolean;
   isVoiceEdited?: (segment: T, baselineSegment: T | null) => boolean;
+  suppressActiveState?: boolean;
+  suppressEditedState?: boolean;
 };
 
 const normalizeTrackString = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
@@ -165,6 +167,8 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
   options: WorkspaceSegmentEditorTracksBuildOptions<T> = {},
 ): WorkspaceSegmentEditorTracks => {
   const baselineSegmentsByIndex = new Map(baselineSegments.map((segment) => [segment.index, segment] as const));
+  const shouldSuppressActiveState = Boolean(options.suppressActiveState);
+  const shouldSuppressEditedState = Boolean(options.suppressEditedState);
   const segmentCount = Math.max(1, segments.length);
   const segmentTimes = segments.map((segment) => {
     const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
@@ -185,8 +189,8 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
     return createTrackSpan({
       arrayIndex,
       duration: item.duration,
-      isActive: options.activeArrayIndex === arrayIndex,
-      isEdited: options.isVisualEdited?.(item.segment, baselineSegment) ?? false,
+      isActive: !shouldSuppressActiveState && options.activeArrayIndex === arrayIndex,
+      isEdited: !shouldSuppressEditedState && (options.isVisualEdited?.(item.segment, baselineSegment) ?? false),
       key: `visual:${item.segment.index}`,
       kind: "visual",
       leftRatio: ratios.leftRatio,
@@ -205,13 +209,13 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
     kind,
     spans: segmentTimes.map((item, arrayIndex) => {
       const baselineSegment = baselineSegmentsByIndex.get(item.segment.index) ?? null;
-      const isEdited = getEdited?.(item.segment, baselineSegment) ?? false;
+      const isEdited = !shouldSuppressEditedState && (getEdited?.(item.segment, baselineSegment) ?? false);
       const ratios = getEqualSegmentSpanRatios(arrayIndex, segmentCount);
 
       return createTrackSpan({
         arrayIndex,
         duration: item.duration,
-        isActive: options.activeArrayIndex === arrayIndex,
+        isActive: !shouldSuppressActiveState && options.activeArrayIndex === arrayIndex,
         isEdited,
         isEmpty: getEmpty(item.segment, baselineSegment, isEdited),
         key: `${kind}:${item.segment.index}`,
@@ -225,7 +229,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
     }),
   });
 
-  const musicEdited = buildMusicIdentity(draftSession) !== buildMusicIdentity(baselineSession);
+  const musicEdited = !shouldSuppressEditedState && buildMusicIdentity(draftSession) !== buildMusicIdentity(baselineSession);
   const musicRow: WorkspaceSegmentEditorTrackRow = {
     kind: "music",
     spans: [

@@ -125,6 +125,7 @@ import {
   invalidateWorkspaceBootstrapCacheByIdentityFragments,
   invalidateWorkspaceBootstrapCache,
   improveStudioSegmentAiPhotoPrompt,
+  normalizeStudioMediaSegmentIndexForScope,
   translateStudioTexts,
   WorkspaceCreditLimitError,
 } from "./studio.js";
@@ -3002,7 +3003,7 @@ app.post("/api/studio/media-upload/init", async (req, res) => {
   const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
-  const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+  const segmentIndex = normalizeStudioMediaSegmentIndexForScope(req.body?.segmentIndex, { kind, role });
   const sizeBytes = normalizeRequestPositiveInteger(req.body?.sizeBytes);
 
   if (!fileName || !kind || !mediaType) {
@@ -3058,7 +3059,7 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
   const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
-  const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+  const segmentIndex = normalizeStudioMediaSegmentIndexForScope(req.body?.segmentIndex, { role });
 
   if (!assetId) {
     res.status(400).json({ error: "assetId is required." });

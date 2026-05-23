@@ -3851,6 +3851,45 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const isAdsflowHttpStatusError = (error: unknown, ...statusCodes: number[]) =>
   error instanceof AdsflowHttpError && statusCodes.includes(error.statusCode);
 
+const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
+  "character_reference",
+  "character_reference_source",
+  "scene_reference",
+  "scene_reference_source",
+]);
+
+export const shouldUseProjectLevelWorkspaceReferenceMedia = (options?: {
+  kind?: unknown;
+  purpose?: unknown;
+  role?: unknown;
+}) => {
+  const kind = normalizeGenerationText(options?.kind);
+  const purpose = normalizeGenerationText(options?.purpose);
+  const role = normalizeGenerationText(options?.role);
+
+  return (
+    purpose === "workspace_reference" ||
+    kind === "workspace_reference" ||
+    kind === "workspace_reference_source" ||
+    WORKSPACE_REFERENCE_MEDIA_ROLES.has(role)
+  );
+};
+
+export const normalizeStudioMediaSegmentIndexForScope = (
+  segmentIndex: unknown,
+  options?: {
+    kind?: unknown;
+    purpose?: unknown;
+    role?: unknown;
+  },
+) => {
+  if (shouldUseProjectLevelWorkspaceReferenceMedia(options)) {
+    return undefined;
+  }
+
+  return normalizeNonNegativeInteger(segmentIndex) ?? undefined;
+};
+
 const describeAdsflowFetchFailure = (url: URL, error: unknown) => {
   const target = `${url.origin}${url.pathname}`;
   if (!(error instanceof Error)) {
@@ -4080,6 +4119,10 @@ const uploadStudioMediaAsset = async (
   const normalizedMimeType = normalizeGenerationText(options.mimeType) || decoded.mimeType || "application/octet-stream";
   const normalizedMediaType =
     options.mediaType || inferStudioUploadMediaType(normalizedMimeType, normalizedFileName);
+  const normalizedSegmentIndex = normalizeStudioMediaSegmentIndexForScope(options.segmentIndex, {
+    kind: options.kind,
+    role: options.role,
+  });
 
   const initPayload = await postAdsflowJson<AdsflowMediaUploadInitResponse>("/api/media/uploads/init", {
     admin_token: env.adsflowAdminToken,
@@ -4091,7 +4134,7 @@ const uploadStudioMediaAsset = async (
     mime_type: normalizedMimeType,
     project_id: options.projectId ?? undefined,
     role: options.role ?? undefined,
-    segment_index: options.segmentIndex ?? undefined,
+    segment_index: normalizedSegmentIndex,
     size_bytes: decoded.bytes.length,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
@@ -4137,7 +4180,7 @@ const uploadStudioMediaAsset = async (
     language: options.language,
     project_id: options.projectId ?? undefined,
     role: options.role ?? undefined,
-    segment_index: options.segmentIndex ?? undefined,
+    segment_index: normalizedSegmentIndex,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   }, {
@@ -5312,7 +5355,6 @@ export async function createStudioSegmentAiPhotoJob(
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const preserveCharacters = Boolean(options?.preserveCharacters);
   const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
   const characterIds = normalizePositiveIntegerList(options?.characterIds);
@@ -5320,6 +5362,9 @@ export async function createStudioSegmentAiPhotoJob(
   const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
   const normalizedPurpose = normalizeGenerationText(options?.purpose);
   const normalizedReferenceKind = normalizeGenerationText(options?.referenceKind);
+  const normalizedSegmentIndex = normalizeStudioMediaSegmentIndexForScope(options?.segmentIndex, {
+    purpose: normalizedPurpose,
+  });
   const externalUserId = await resolveStudioExternalUserId(user);
   const isWorkspaceCharacterReference =
     normalizedPurpose === "workspace_reference" &&
