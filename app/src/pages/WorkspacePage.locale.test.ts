@@ -22,6 +22,7 @@ import {
   getStudioVoiceCreditCost,
   getNextWorkspaceReferenceDefaultName,
   buildWorkspaceReferenceGenerationMediaScope,
+  formatWorkspaceSegmentEditorSegmentTimeRange,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   insertWorkspacePromptCharacterMentionText,
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
@@ -1812,6 +1813,11 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedDraft.segments[1]).toMatchObject({
       startTime: 6.5,
     });
+  });
+
+  it("formats adjacent fractional segment ranges with a shared displayed boundary", () => {
+    expect(formatWorkspaceSegmentEditorSegmentTimeRange(0, 6.5, { isFirstSegment: true })).toBe("00:00 - 00:07");
+    expect(formatWorkspaceSegmentEditorSegmentTimeRange(6.5, 15, { isFirstSegment: false })).toBe("00:07 - 00:15");
   });
 
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {

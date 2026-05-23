@@ -11078,6 +11078,21 @@ const formatWorkspaceSegmentEditorTime = (value: number, options?: { roundUp?: b
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
+export const formatWorkspaceSegmentEditorSegmentTimeRange = (
+  startTime: number,
+  endTime: number,
+  options?: {
+    isFirstSegment?: boolean;
+  },
+) => {
+  const startLabel = formatWorkspaceSegmentEditorTime(startTime, {
+    roundUp: options?.isFirstSegment !== true,
+  });
+  const endLabel = formatWorkspaceSegmentEditorTime(endTime, { roundUp: true });
+
+  return `${startLabel} - ${endLabel}`;
+};
+
 const parseWorkspaceSegmentEditorTimeInput = (value: string) => {
   const normalizedValue = value.trim().replace(",", ".");
   if (!normalizedValue) {
@@ -32489,10 +32504,11 @@ export function WorkspacePage({
                 </strong>
                 <small>
                   {segmentTimelineSoundMenuSpan
-                    ? `${formatWorkspaceSegmentEditorTime(segmentTimelineSoundMenuSpan.startTime)} - ${formatWorkspaceSegmentEditorTime(
+                    ? formatWorkspaceSegmentEditorSegmentTimeRange(
+                        segmentTimelineSoundMenuSpan.startTime,
                         segmentTimelineSoundMenuSpan.endTime,
-                        { roundUp: true },
-                      )}`
+                        { isFirstSegment: segmentTimelineSoundMenuArrayIndex === 0 },
+                      )
                     : workspaceText(locale, "Звуки сцены", "Scene sounds")}
                 </small>
               </span>
@@ -32621,10 +32637,11 @@ export function WorkspacePage({
                 </strong>
                 <small>
                   {segmentTimelineTextMenuSpan
-                    ? `${formatWorkspaceSegmentEditorTime(segmentTimelineTextMenuSpan.startTime)} - ${formatWorkspaceSegmentEditorTime(
+                    ? formatWorkspaceSegmentEditorSegmentTimeRange(
+                        segmentTimelineTextMenuSpan.startTime,
                         segmentTimelineTextMenuSpan.endTime,
-                        { roundUp: true },
-                      )}`
+                        { isFirstSegment: segmentTimelineTextMenuArrayIndex === 0 },
+                      )
                     : workspaceText(locale, "Редактирование субтитра", "Subtitle editing")}
                 </small>
               </span>
@@ -32699,10 +32716,11 @@ export function WorkspacePage({
     ? getSegmentTimelineDisplayRange(activeSegment, activeSegmentIndex)
     : null;
   const activeSegmentTimeRangeLabel = activeSegment
-    ? `${formatWorkspaceSegmentEditorTime(activeSegmentTimeRange?.startTime ?? 0)} - ${formatWorkspaceSegmentEditorTime(
+    ? formatWorkspaceSegmentEditorSegmentTimeRange(
+        activeSegmentTimeRange?.startTime ?? 0,
         activeSegmentTimeRange?.endTime ?? 0,
-        { roundUp: true },
-      )}`
+        { isFirstSegment: activeSegmentIndex === 0 },
+      )
     : "";
   const renderSegmentTimelineBoundaryInput = (options: {
     boundaryTime: number;
@@ -32994,8 +33012,9 @@ export function WorkspacePage({
                       <span className="studio-segment-editor__timeline-cell-copy">
                         <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
                         <small>
-                          {formatWorkspaceSegmentEditorTime(span.startTime)} -{" "}
-                          {formatWorkspaceSegmentEditorTime(span.endTime, { roundUp: true })}
+                          {formatWorkspaceSegmentEditorSegmentTimeRange(span.startTime, span.endTime, {
+                            isFirstSegment: index === 0,
+                          })}
                         </small>
                       </span>
                       {isThumbVisualEdited ? (
@@ -36745,9 +36764,11 @@ export function WorkspacePage({
                                 const isActiveCard = offset === 0;
                                 const segmentNumber = nextSegmentArrayIndex + 1;
                                 const segmentTimelineRange = getSegmentTimelineDisplayRange(segment, nextSegmentArrayIndex);
-                                const segmentTimelineRangeLabel = `${formatWorkspaceSegmentEditorTime(
+                                const segmentTimelineRangeLabel = formatWorkspaceSegmentEditorSegmentTimeRange(
                                   segmentTimelineRange.startTime,
-                                )} - ${formatWorkspaceSegmentEditorTime(segmentTimelineRange.endTime, { roundUp: true })}`;
+                                  segmentTimelineRange.endTime,
+                                  { isFirstSegment: nextSegmentArrayIndex === 0 },
+                                );
                                 const isAiPhotoGenerationPending = hasWorkspaceSegmentVisualRun(
                                   segmentEditorGeneratingAiPhotoRunIds,
                                   segment.index,
@@ -37875,10 +37896,11 @@ export function WorkspacePage({
                 <span className="studio-segment-editor__thumb-copy">
                   <strong>{workspaceText(locale, `Сцена ${segmentThumbDragState.draggedIndex + 1}`, `Scene ${segmentThumbDragState.draggedIndex + 1}`)}</strong>
                   <small>
-                    {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segmentThumbDragSegment))} -{" "}
-                    {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segmentThumbDragSegment), {
-                      roundUp: true,
-                    })}
+                    {formatWorkspaceSegmentEditorSegmentTimeRange(
+                      getWorkspaceSegmentEditorDisplayStartTime(segmentThumbDragSegment),
+                      getWorkspaceSegmentEditorDisplayEndTime(segmentThumbDragSegment),
+                      { isFirstSegment: segmentThumbDragState.draggedIndex === 0 },
+                    )}
                   </small>
                 </span>
               </div>,
@@ -38132,10 +38154,11 @@ export function WorkspacePage({
                       `Сцена ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
                       `Scene ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
                     )}{" "}
-                    · {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayStartTime(segmentEditorPendingDeleteSegment))} -{" "}
-                    {formatWorkspaceSegmentEditorTime(getWorkspaceSegmentEditorDisplayEndTime(segmentEditorPendingDeleteSegment), {
-                      roundUp: true,
-                    })}
+                    · {formatWorkspaceSegmentEditorSegmentTimeRange(
+                      getWorkspaceSegmentEditorDisplayStartTime(segmentEditorPendingDeleteSegment),
+                      getWorkspaceSegmentEditorDisplayEndTime(segmentEditorPendingDeleteSegment),
+                      { isFirstSegment: segmentEditorPendingDeleteDisplayNumber === 1 },
+                    )}
                   </p>
 
                   <div className="workspace-confirm-modal__actions">
