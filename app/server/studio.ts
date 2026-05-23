@@ -786,7 +786,7 @@ const sanitizeStudioContentPlanIdeaPrompt = (value: unknown) => {
   return normalized || fallbackPrompt;
 };
 
-const normalizeGenerationText = (value: string | null | undefined) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeGenerationText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
 const normalizeStudioMusicType = (value: string | null | undefined) => {
   const normalized = String(value ?? "").trim().toLowerCase();
