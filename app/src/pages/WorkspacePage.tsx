@@ -3749,30 +3749,6 @@ const WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS = [
   "Футуристичный — cyberpunk образ",
 ] as const;
 
-const WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS = [
-  "Интерьер",
-  "Городская сцена",
-  "Природа",
-  "Офис / студия",
-  "Фантастическое место",
-] as const;
-
-const WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS = [
-  "Фотореалистичная",
-  "Кинематографичная",
-  "Документальная",
-  "Рекламная",
-  "Фэнтези и научная фантастика",
-] as const;
-
-const WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS = [
-  "Естественное мягкое освещение",
-  "Драматичный контрастный свет",
-  "Теплый вечерний свет",
-  "Холодный неоновый свет",
-  "Студийное освещение",
-] as const;
-
 const getWorkspaceReferenceGenderLabel = (gender: WorkspaceReferenceCharacterGender | "") =>
   gender === "female" ? "женский" : gender === "male" ? "мужской" : "";
 
@@ -6909,6 +6885,10 @@ const getWorkspaceSegmentLatestVisualAction = (
   return segment.videoAction;
 };
 
+const doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+) => getWorkspaceSegmentLatestVisualAction(segment) === "talking_photo";
+
 const getStudioVideoChipValue = (
   videoMode: StudioVideoMode,
   customVideoFile: StudioCustomVideoFile | null,
@@ -7865,6 +7845,10 @@ const getWorkspaceSegmentEffectiveVoiceEnabled = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
 ) => {
+  if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return false;
+  }
+
   const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (voiceOverrideId === "none") {
     return false;
@@ -7886,6 +7870,50 @@ const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: WorkspaceSegment
   return getWorkspaceSegmentPreviewKind(segment) === "video"
     ? normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
     : null;
+};
+
+const syncWorkspaceSegmentEmbeddedVisualDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): WorkspaceSegmentEditorDraftSegment => {
+  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return segment;
+  }
+
+  const visualDuration = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
+  if (visualDuration === null) {
+    return segment;
+  }
+
+  if (
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
+    areWorkspaceSegmentDurationValuesEqual(
+      normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+      visualDuration,
+    )
+  ) {
+    return segment;
+  }
+
+  return {
+    ...segment,
+    durationMode: "manual",
+    manualDurationSeconds: visualDuration,
+  };
+};
+
+const syncWorkspaceSegmentsEmbeddedVisualDurations = (
+  segments: WorkspaceSegmentEditorDraftSegment[],
+): WorkspaceSegmentEditorDraftSegment[] => {
+  let hasChanges = false;
+  const nextSegments = segments.map((segment) => {
+    const nextSegment = syncWorkspaceSegmentEmbeddedVisualDuration(segment);
+    if (nextSegment !== segment) {
+      hasChanges = true;
+    }
+    return nextSegment;
+  });
+
+  return hasChanges ? nextSegments : segments;
 };
 
 const getWorkspaceSegmentManualDurationMinimum = (
@@ -7926,7 +7954,7 @@ const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   session?: Pick<WorkspaceSegmentEditorDraftSession, "subtitleType" | "voiceType"> | null,
 ) =>
-  rebuildWorkspaceSegmentEditorTimeline(segments, {
+  rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments), {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
     stillNoTextFallbackDuration: WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
     subtitleEnabled: normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none",
@@ -10004,11 +10032,15 @@ export const buildWorkspaceSegmentEditorPayload = async (
         ? segment.customVideo
         : exportAction === "image_edit"
           ? segment.imageEditAsset
-        : exportAction === "ai_photo"
-          ? segment.aiPhotoAsset
-          : selectedAiVideoAsset
-            ? selectedAiVideoAsset
-            : null;
+          : exportAction === "ai_photo"
+            ? segment.aiPhotoAsset
+            : selectedAiVideoAsset
+              ? selectedAiVideoAsset
+              : null;
+    const isTalkingPhotoExport = exportAction === "talking_photo" && Boolean(selectedAiVideoAsset);
+    const talkingPhotoDurationSeconds = isTalkingPhotoExport
+      ? getStudioCustomVideoFileDurationSeconds(selectedAiVideoAsset)
+      : null;
     const payloadVideoAction: WorkspaceSegmentEditorPayloadVideoAction =
       exportAction === "ai_photo" || exportAction === "image_edit" || Boolean(selectedAiVideoAsset)
         ? "custom"
@@ -10056,7 +10088,10 @@ export const buildWorkspaceSegmentEditorPayload = async (
       }
     }
 
-    const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+    const durationMode =
+      isTalkingPhotoExport && talkingPhotoDurationSeconds !== null
+        ? "manual"
+        : normalizeWorkspaceSegmentDurationMode(segment.durationMode);
     const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
     const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
     const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - startTime;
@@ -10066,9 +10101,11 @@ export const buildWorkspaceSegmentEditorPayload = async (
       (value): value is number => value !== null,
     );
     const resolvedManualDurationSeconds =
-      durationMode === "manual" && manualDurationCandidates.length > 0
-        ? Math.max(...manualDurationCandidates)
-        : null;
+      isTalkingPhotoExport && talkingPhotoDurationSeconds !== null
+        ? talkingPhotoDurationSeconds
+        : durationMode === "manual" && manualDurationCandidates.length > 0
+          ? Math.max(...manualDurationCandidates)
+          : null;
     const duration =
       durationMode === "manual" && resolvedManualDurationSeconds !== null
         ? resolvedManualDurationSeconds
@@ -10093,7 +10130,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       startTime,
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
-      voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
+      voiceType: isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
     });
   }
 
@@ -20663,15 +20700,10 @@ export function WorkspacePage({
     selectedSegmentReferenceCharacterIds,
   ]);
   useEffect(() => {
-    if (
-      selectedSegmentReferenceSceneKey &&
-      ![...projectSceneReferenceOptions, ...savedSceneReferenceOptions].some(
-        (option) => option.key === selectedSegmentReferenceSceneKey,
-      )
-    ) {
+    if (selectedSegmentReferenceSceneKey) {
       setSelectedSegmentReferenceSceneKey(null);
     }
-  }, [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey]);
+  }, [selectedSegmentReferenceSceneKey]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
@@ -25997,15 +26029,37 @@ export function WorkspacePage({
                 posterUrl: preferredPosterUrl,
               }
             : payload.data.asset;
+          const nextTalkingPhotoPreviewUrl = getStudioCustomAssetPreviewUrl(nextTalkingPhotoAsset);
           const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
+          const generatedDurationSeconds = nextTalkingPhotoAsset.durationSeconds
+            ? normalizeWorkspaceSegmentManualDurationSeconds(nextTalkingPhotoAsset.durationSeconds)
+            : nextTalkingPhotoPreviewUrl
+              ? normalizeWorkspaceSegmentManualDurationSeconds(await readWorkspaceVideoDurationSeconds(nextTalkingPhotoPreviewUrl))
+              : null;
+          if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, options.segmentIndex, options.runId)) {
+            return;
+          }
+
+          const nextTalkingPhotoAssetWithDuration = generatedDurationSeconds
+            ? {
+                ...nextTalkingPhotoAsset,
+                durationSeconds: generatedDurationSeconds,
+              }
+            : nextTalkingPhotoAsset;
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
-            aiVideoAsset: nextTalkingPhotoAsset,
+            aiVideoAsset: nextTalkingPhotoAssetWithDuration,
             aiVideoGeneratedMode: "talking_photo",
             aiVideoGeneratedFromPrompt: options.script,
             aiVideoPrompt: options.script,
             aiVideoPromptInitialized: true,
+            ...(generatedDurationSeconds !== null
+              ? {
+                  durationMode: "manual" as const,
+                  manualDurationSeconds: generatedDurationSeconds,
+                }
+              : {}),
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
             visualReset: false,
@@ -26014,7 +26068,7 @@ export function WorkspacePage({
           const didQueuePlayback = queueActiveSegmentEditorPlayback(segmentPlaybackIndex);
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
             segmentPlaybackIndex,
-            getStudioCustomAssetPreviewUrl(nextTalkingPhotoAsset),
+            nextTalkingPhotoPreviewUrl,
           );
           logSegmentEditorDiagnostics("client.segment-editor.talking-photo.warmup", {
             didQueuePlayback,
@@ -26024,7 +26078,7 @@ export function WorkspacePage({
             targetSegmentIndex: options.segmentIndex,
           });
           upsertGeneratedMediaLibraryEntry({
-            asset: nextTalkingPhotoAsset,
+            asset: nextTalkingPhotoAssetWithDuration,
             kind: "talking_photo",
             projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -27159,7 +27213,6 @@ export function WorkspacePage({
       getWorkspaceSegmentCustomPreviewKind(talkingPhotoUploadSourceAsset) === "video" ? "video" : "photo";
     const script = normalizeWorkspaceSegmentAiPhotoPrompt(options?.prompt ?? targetSegment?.text ?? "");
     const visualPrompt = "natural talking avatar, stable camera, realistic lip sync";
-    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const requiredCredits = STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST;
 
     if (!script) {
@@ -27268,7 +27321,6 @@ export function WorkspacePage({
           customVideoMediaType: talkingPhotoSourceMediaType,
           customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
           customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
-          durationSeconds,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: visualPrompt,
@@ -33265,7 +33317,7 @@ export function WorkspacePage({
   }) => {
     if (isGuest) {
       onAuthRequired?.();
-      throw new Error(workspaceText(locale, "Войдите, чтобы сохранять персонажей и сцены.", "Sign in to save characters and scenes."));
+      throw new Error(workspaceText(locale, "Войдите, чтобы сохранять персонажей.", "Sign in to save characters."));
     }
 
     const response = await fetch("/api/workspace/references", {
@@ -33358,7 +33410,7 @@ export function WorkspacePage({
   const handleDeleteSavedReference = async (reference: WorkspaceSavedReference) => {
     if (isGuest) {
       onAuthRequired?.();
-      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы удалять персонажей и сцены.", "Sign in to delete characters and scenes."));
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы удалять персонажей.", "Sign in to delete characters."));
       return;
     }
 
@@ -33396,7 +33448,7 @@ export function WorkspacePage({
   const startEditingSavedReferenceName = (reference: WorkspaceSavedReference) => {
     if (isGuest) {
       onAuthRequired?.();
-      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы переименовывать персонажей и сцены.", "Sign in to rename characters and scenes."));
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы переименовывать персонажей.", "Sign in to rename characters."));
       return;
     }
 
@@ -33522,7 +33574,7 @@ export function WorkspacePage({
 
     if (isGuest) {
       onAuthRequired?.();
-      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей и сцены.", "Sign in to create characters and scenes."));
+      setSavedWorkspaceReferencesError(workspaceText(locale, "Войдите, чтобы создавать персонажей.", "Sign in to create characters."));
       return;
     }
 
@@ -34100,105 +34152,70 @@ export function WorkspacePage({
 
               {referenceCreationSource === "ai" ? (
                 <>
-                  {isCreatingCharacter ? (
-                    <div className="studio-reference-create-modal__character-fields">
-                      <label className="studio-reference-create-modal__field">
-                        <span>{workspaceText(locale, "Пол", "Gender")}</span>
-                        <div className="studio-reference-create-modal__segmented">
-                          <button
-                            aria-pressed={referenceCreationCharacterGender === "male"}
-                            className={referenceCreationCharacterGender === "male" ? "is-active" : ""}
-                            type="button"
-                            onClick={() => setReferenceCreationCharacterGender((current) => current === "male" ? "" : "male")}
-                          >
-                            ♂ {workspaceText(locale, "Мужской", "Male")}
-                          </button>
-                          <button
-                            aria-pressed={referenceCreationCharacterGender === "female"}
-                            className={referenceCreationCharacterGender === "female" ? "is-active" : ""}
-                            type="button"
-                            onClick={() => setReferenceCreationCharacterGender((current) => current === "female" ? "" : "female")}
-                          >
-                            ♀ {workspaceText(locale, "Женский", "Female")}
-                          </button>
-                        </div>
-                      </label>
-                      <label className="studio-reference-create-modal__field">
-                        <span>{workspaceText(locale, "Возраст", "Age")}</span>
-                        <input
-                          aria-label={workspaceText(locale, "Возраст персонажа", "Character age")}
-                          inputMode="numeric"
-                          min={WORKSPACE_REFERENCE_CHARACTER_MIN_AGE}
-                          onBlur={() => setReferenceCreationCharacterAgeRange((current) => normalizeWorkspaceReferenceCharacterAgeInput(current))}
-                          onChange={(event) => {
-                            const nextValue = event.currentTarget.value.trim();
-                            if (nextValue === "" || /^\d+$/.test(nextValue)) {
-                              setReferenceCreationCharacterAgeRange(nextValue);
-                            }
-                          }}
-                          placeholder={workspaceText(locale, "Не задан", "Unset")}
-                          step={1}
-                          type="number"
-                          value={referenceCreationCharacterAgeRange}
-                        />
-                      </label>
-                      <label className="studio-reference-create-modal__field">
-                        <span>{workspaceText(locale, "Стиль", "Style")}</span>
-                        <select
-                          value={referenceCreationCharacterStyleValue}
-                          onChange={(event) => setReferenceCreationCharacterStyle(event.currentTarget.value)}
+                  <div className="studio-reference-create-modal__character-fields">
+                    <label className="studio-reference-create-modal__field">
+                      <span>{workspaceText(locale, "Пол", "Gender")}</span>
+                      <div className="studio-reference-create-modal__segmented">
+                        <button
+                          aria-pressed={referenceCreationCharacterGender === "male"}
+                          className={referenceCreationCharacterGender === "male" ? "is-active" : ""}
+                          type="button"
+                          onClick={() => setReferenceCreationCharacterGender((current) => current === "male" ? "" : "male")}
                         >
-                          {WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS.map((option) => (
-                            <option key={option} value={option}>{option}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="studio-reference-create-modal__split-row">
-                      <label className="studio-reference-create-modal__field">
-                        <span>{workspaceText(locale, "Тип сцены", "Scene type")}</span>
-                        <select value={referenceCreationScenePlaceType} onChange={(event) => setReferenceCreationScenePlaceType(event.currentTarget.value)}>
-                          {WORKSPACE_REFERENCE_SCENE_PLACE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                      <label className="studio-reference-create-modal__field">
-                        <span>{workspaceText(locale, "Свет / атмосфера", "Light / mood")}</span>
-                        <select value={referenceCreationSceneLightingMood} onChange={(event) => setReferenceCreationSceneLightingMood(event.currentTarget.value)}>
-                          {WORKSPACE_REFERENCE_SCENE_LIGHTING_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                  )}
-
-                  {!isCreatingCharacter ? (
+                          ♂ {workspaceText(locale, "Мужской", "Male")}
+                        </button>
+                        <button
+                          aria-pressed={referenceCreationCharacterGender === "female"}
+                          className={referenceCreationCharacterGender === "female" ? "is-active" : ""}
+                          type="button"
+                          onClick={() => setReferenceCreationCharacterGender((current) => current === "female" ? "" : "female")}
+                        >
+                          ♀ {workspaceText(locale, "Женский", "Female")}
+                        </button>
+                      </div>
+                    </label>
+                    <label className="studio-reference-create-modal__field">
+                      <span>{workspaceText(locale, "Возраст", "Age")}</span>
+                      <input
+                        aria-label={workspaceText(locale, "Возраст персонажа", "Character age")}
+                        inputMode="numeric"
+                        min={WORKSPACE_REFERENCE_CHARACTER_MIN_AGE}
+                        onBlur={() => setReferenceCreationCharacterAgeRange((current) => normalizeWorkspaceReferenceCharacterAgeInput(current))}
+                        onChange={(event) => {
+                          const nextValue = event.currentTarget.value.trim();
+                          if (nextValue === "" || /^\d+$/.test(nextValue)) {
+                            setReferenceCreationCharacterAgeRange(nextValue);
+                          }
+                        }}
+                        placeholder={workspaceText(locale, "Не задан", "Unset")}
+                        step={1}
+                        type="number"
+                        value={referenceCreationCharacterAgeRange}
+                      />
+                    </label>
                     <label className="studio-reference-create-modal__field">
                       <span>{workspaceText(locale, "Стиль", "Style")}</span>
                       <select
-                        value={referenceCreationSceneStyle}
-                        onChange={(event) => setReferenceCreationSceneStyle(event.currentTarget.value)}
+                        value={referenceCreationCharacterStyleValue}
+                        onChange={(event) => setReferenceCreationCharacterStyle(event.currentTarget.value)}
                       >
-                        {WORKSPACE_REFERENCE_SCENE_STYLE_OPTIONS.map((option) => (
+                        {WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS.map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
                       </select>
                     </label>
-                  ) : null}
+                  </div>
 
                   <label className="studio-reference-create-modal__field">
                     <span>
-                      {workspaceText(locale, isCreatingCharacter ? "Внешность / описание" : "Описание сцены", isCreatingCharacter ? "Appearance / description" : "Scene description")}
+                      {workspaceText(locale, "Внешность / описание", "Appearance / description")}
                       <small>{referenceCreationPrompt.length} / 500</small>
                     </span>
                     <textarea
                       value={referenceCreationPrompt}
                       maxLength={500}
                       onChange={(event) => setReferenceCreationPrompt(event.currentTarget.value)}
-                      placeholder={
-                        isCreatingCharacter
-                          ? workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")
-                          : workspaceText(locale, "Опишите место, композицию, детали, атмосферу и свет.", "Describe place, composition, details, mood, and light.")
-                      }
+                      placeholder={workspaceText(locale, "Опишите внешность, одежду, выражение лица, фон и свет.", "Describe appearance, clothes, expression, background, and light.")}
                       rows={4}
                       aria-label={workspaceText(locale, "Описание для генерации", "Generation description")}
                     />
@@ -34209,11 +34226,7 @@ export function WorkspacePage({
               {referenceCreationSource === "upload" ? (
                 <div className={`studio-reference-create-modal__upload${referenceCreationUploadFile ? " is-active" : ""}`}>
                   <strong>{referenceCreationUploadFile?.fileName ?? workspaceText(locale, "Файл не выбран", "No file selected")}</strong>
-                  <span>
-                    {isCreatingCharacter
-                      ? workspaceText(locale, `Персонаж будет сгенерирован на основе загруженного фото за ${referenceCreationCharacterCreditCost} ⚡.`, `A character will be generated from the uploaded photo for ${referenceCreationCharacterCreditCost} ⚡.`)
-                      : workspaceText(locale, "Фото будет сохранено как референс без списания кредитов.", "The photo will be saved as a reference without spending credits.")}
-                  </span>
+                  <span>{workspaceText(locale, `Персонаж будет сгенерирован на основе загруженного фото за ${referenceCreationCharacterCreditCost} ⚡.`, `A character will be generated from the uploaded photo for ${referenceCreationCharacterCreditCost} ⚡.`)}</span>
                   <button
                     type="button"
                     disabled={Boolean(generatingReferenceKind)}
@@ -34227,7 +34240,7 @@ export function WorkspacePage({
               ) : null}
 
               {referenceCreationSource === "project" ? (
-                isSegmentProjectCharactersLoading && isCreatingCharacter ? (
+                isSegmentProjectCharactersLoading ? (
                   <div className="studio-segment-references__empty">{workspaceText(locale, "Загружаем персонажей", "Loading characters")}</div>
                 ) : currentOptions.length > 0 ? (
                   <div className="studio-segment-references__grid studio-segment-references__grid--creation">
@@ -34268,19 +34281,17 @@ export function WorkspacePage({
               type="button"
               disabled={isReferenceCreateDisabled}
               onClick={() => {
-                void handleCreateWorkspaceReference(generationKind, isCreatingCharacter ? { quality: "premium" } : undefined);
+                void handleCreateWorkspaceReference(generationKind, { quality: "premium" });
               }}
             >
               {isCreatingReference ? (
                 <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-              ) : isCreatingCharacter ? (
+              ) : (
                 <span className="studio-canvas-prompt__btn-label studio-canvas-prompt__btn-label--premium">
                   <span>{workspaceText(locale, "Создать персонажа", "Create character")}</span>
                   <span className="studio-canvas-prompt__btn-cost">{referenceCreationCharacterCreditCost}</span>
                   <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
                 </span>
-              ) : (
-                workspaceText(locale, "Создать сцену", "Create scene")
               )}
             </button>
           </footer>
