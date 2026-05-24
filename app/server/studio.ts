@@ -291,6 +291,31 @@ type AdsflowSegmentAiVideoJobCreateResponse = {
   user?: AdsflowWebUserPayload | null;
 };
 
+type AdsflowSegmentTalkingPhotoPreviewOverlayPayload = {
+  box?: {
+    height?: number | null;
+    width?: number | null;
+    x?: number | null;
+    y?: number | null;
+  } | null;
+  data_url?: string | null;
+  height?: number | null;
+  mime_type?: string | null;
+  width?: number | null;
+};
+
+type AdsflowSegmentTalkingPhotoPreviewResponse = {
+  confirmation_token?: string | null;
+  expires_in_seconds?: number | null;
+  overlay?: AdsflowSegmentTalkingPhotoPreviewOverlayPayload | null;
+  project_id?: number | string | null;
+  segment_index?: number | string | null;
+  source_asset_id?: number | string | null;
+  source_media_type?: string | null;
+  speaker_target?: unknown;
+  user?: AdsflowWebUserPayload | null;
+};
+
 type AdsflowSegmentAiVideoJobStatusResponse = {
   asset?: AdsflowSegmentAiVideoAssetPayload | null;
   error?: string | null;
@@ -1122,6 +1147,32 @@ type StudioTalkingCharacterTarget = {
   y: number;
 };
 
+type StudioTalkingCharacterPixelBox = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type StudioSegmentTalkingPhotoSpeakerPreviewOverlay = {
+  box: StudioTalkingCharacterPixelBox | null;
+  dataUrl: string;
+  height: number | null;
+  mimeType: string;
+  width: number | null;
+};
+
+export type StudioSegmentTalkingPhotoSpeakerPreview = {
+  confirmationToken: string;
+  expiresInSeconds: number | null;
+  overlay: StudioSegmentTalkingPhotoSpeakerPreviewOverlay;
+  projectId: number | null;
+  segmentIndex: number | null;
+  sourceAssetId: number;
+  sourceMediaType: "photo" | "video";
+  speakerTarget: StudioTalkingCharacterTarget;
+};
+
 const normalizeStudioTalkingCharacterTarget = (value: unknown): StudioTalkingCharacterTarget | undefined => {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -1143,6 +1194,69 @@ const normalizeStudioTalkingCharacterTarget = (value: unknown): StudioTalkingCha
     width: normalizedWidth,
     x: Math.min(1 - normalizedWidth, Math.max(0, x)),
     y: Math.min(1 - normalizedHeight, Math.max(0, y)),
+  };
+};
+
+const normalizeStudioTalkingCharacterPixelBox = (
+  value: AdsflowSegmentTalkingPhotoPreviewOverlayPayload["box"],
+): StudioTalkingCharacterPixelBox | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const x = Math.trunc(Number(value.x));
+  const y = Math.trunc(Number(value.y));
+  const width = Math.trunc(Number(value.width));
+  const height = Math.trunc(Number(value.height));
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    height,
+    width,
+    x: Math.max(0, x),
+    y: Math.max(0, y),
+  };
+};
+
+const normalizeStudioSegmentTalkingPhotoSourceMediaType = (value: unknown): "photo" | "video" =>
+  normalizeGenerationText(value).toLowerCase() === "video" ? "video" : "photo";
+
+const normalizeAdsflowSegmentTalkingPhotoPreview = (
+  payload: AdsflowSegmentTalkingPhotoPreviewResponse,
+  fallbackSpeakerTarget: StudioTalkingCharacterTarget,
+): StudioSegmentTalkingPhotoSpeakerPreview => {
+  const confirmationToken = normalizeGenerationText(payload.confirmation_token);
+  if (!confirmationToken) {
+    throw new Error("AdsFlow did not return a talking character speaker confirmation token.");
+  }
+
+  const sourceAssetId = normalizePositiveInteger(payload.source_asset_id);
+  if (!sourceAssetId) {
+    throw new Error("AdsFlow did not return a talking character source asset id.");
+  }
+
+  const overlayDataUrl = normalizeGenerationText(payload.overlay?.data_url);
+  if (!overlayDataUrl) {
+    throw new Error("AdsFlow did not return a talking character speaker overlay.");
+  }
+
+  return {
+    confirmationToken,
+    expiresInSeconds: normalizePositiveInteger(payload.expires_in_seconds) ?? null,
+    overlay: {
+      box: normalizeStudioTalkingCharacterPixelBox(payload.overlay?.box ?? null),
+      dataUrl: overlayDataUrl,
+      height: normalizePositiveInteger(payload.overlay?.height) ?? null,
+      mimeType: normalizeGenerationText(payload.overlay?.mime_type) || "image/jpeg",
+      width: normalizePositiveInteger(payload.overlay?.width) ?? null,
+    },
+    projectId: normalizePositiveInteger(payload.project_id) ?? null,
+    segmentIndex: normalizeNonNegativeInteger(payload.segment_index) ?? null,
+    sourceAssetId,
+    sourceMediaType: normalizeStudioSegmentTalkingPhotoSourceMediaType(payload.source_media_type),
+    speakerTarget: normalizeStudioTalkingCharacterTarget(payload.speaker_target) ?? fallbackSpeakerTarget,
   };
 };
 
@@ -5808,6 +5922,81 @@ export async function createStudioSegmentPhotoAnimationJob(
   };
 }
 
+export async function previewStudioSegmentTalkingPhotoSpeaker(
+  user: StudioUser,
+  options?: {
+    customVideoAssetId?: number;
+    customVideoFileDataUrl?: string;
+    customVideoMediaType?: "photo" | "video";
+    customVideoFileMimeType?: string;
+    customVideoFileName?: string;
+    language?: string;
+    projectId?: number;
+    segmentIndex?: number;
+    speakerTarget?: StudioTalkingCharacterTarget;
+  },
+): Promise<StudioSegmentTalkingPhotoSpeakerPreview> {
+  assertAdsflowConfigured();
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
+  const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomVideoMediaType = options?.customVideoMediaType === "video" ? "video" : options?.customVideoMediaType === "photo" ? "photo" : undefined;
+  const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+  const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
+
+  if (!normalizedSpeakerTarget) {
+    throw new Error("Speaker target is required.");
+  }
+  if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
+    throw new Error("Photo or video source asset id or data URL is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const customVideoAssetId =
+    normalizedCustomVideoAssetId
+      ? normalizedCustomVideoAssetId
+      : normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
+      ? await uploadStudioMediaAsset(user, {
+          dataUrl: normalizedCustomVideoFileDataUrl,
+          externalUserId,
+          fileName: normalizedCustomVideoFileName,
+          kind: "segment_source",
+          language: normalizedLanguage,
+          mediaType: normalizedCustomVideoMediaType ?? inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+          mimeType: normalizedCustomVideoFileMimeType,
+          projectId: normalizedProjectId,
+          role: "segment_source",
+          segmentIndex: normalizedSegmentIndex,
+        })
+      : undefined;
+
+  const payload = await postAdsflowJson<AdsflowSegmentTalkingPhotoPreviewResponse>("/api/web/segment-talking-photo/preview", {
+    admin_token: env.adsflowAdminToken,
+    custom_video_asset_id: customVideoAssetId,
+    custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+    custom_video_media_type: normalizedCustomVideoMediaType,
+    custom_video_mime_type: normalizedCustomVideoFileMimeType,
+    custom_video_original_name: normalizedCustomVideoFileName,
+    external_user_id: externalUserId,
+    language: normalizedLanguage,
+    project_id: normalizedProjectId,
+    segment_index: normalizedSegmentIndex,
+    speaker_target: normalizedSpeakerTarget,
+    user_email: user.email ?? undefined,
+    user_email_verified: user.emailVerified ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
+
+  return normalizeAdsflowSegmentTalkingPhotoPreview(payload, normalizedSpeakerTarget);
+}
+
 export async function createStudioSegmentTalkingPhotoJob(
   script: string,
   user: StudioUser,
@@ -5822,6 +6011,7 @@ export async function createStudioSegmentTalkingPhotoJob(
     projectId?: number;
     prompt?: string;
     segmentIndex?: number;
+    speakerConfirmationToken?: string;
     speakerTarget?: StudioTalkingCharacterTarget;
     voiceType?: string | null;
   },
@@ -5853,7 +6043,11 @@ export async function createStudioSegmentTalkingPhotoJob(
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
+  if (!normalizedSpeakerTarget) {
+    throw new Error("Speaker target is required.");
+  }
   const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
+  const normalizedSpeakerConfirmationToken = normalizeGenerationText(options?.speakerConfirmationToken) || undefined;
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const customVideoAssetId =
@@ -5873,13 +6067,37 @@ export async function createStudioSegmentTalkingPhotoJob(
           segmentIndex: normalizedSegmentIndex,
         })
       : undefined;
+  const speakerPreview = normalizedSpeakerConfirmationToken
+    ? null
+    : await previewStudioSegmentTalkingPhotoSpeaker(user, {
+        customVideoAssetId,
+        customVideoFileDataUrl: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+        customVideoFileMimeType: normalizedCustomVideoFileMimeType,
+        customVideoFileName: normalizedCustomVideoFileName,
+        customVideoMediaType: normalizedCustomVideoMediaType,
+        language: normalizedLanguage,
+        projectId: normalizedProjectId ?? undefined,
+        segmentIndex: normalizedSegmentIndex ?? undefined,
+        speakerTarget: normalizedSpeakerTarget,
+      });
+  const confirmedSourceAssetId = speakerPreview?.sourceAssetId ?? customVideoAssetId;
+  const confirmedSourceMediaType = speakerPreview?.sourceMediaType ?? normalizedCustomVideoMediaType ?? "photo";
+  const confirmedSpeakerTarget = speakerPreview?.speakerTarget ?? normalizedSpeakerTarget;
+  const speakerConfirmationToken = speakerPreview?.confirmationToken ?? normalizedSpeakerConfirmationToken;
+
+  if (!confirmedSourceAssetId) {
+    throw new Error("Talking character source must be persisted before generation.");
+  }
+  if (!speakerConfirmationToken) {
+    throw new Error("Speaker confirmation token is required.");
+  }
 
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-talking-photo/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
-    custom_video_asset_id: customVideoAssetId,
-    custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
-    custom_video_media_type: normalizedCustomVideoMediaType,
+    custom_video_asset_id: confirmedSourceAssetId,
+    custom_video_data_url: undefined,
+    custom_video_media_type: confirmedSourceMediaType,
     custom_video_mime_type: normalizedCustomVideoFileMimeType,
     custom_video_original_name: normalizedCustomVideoFileName,
     external_user_id: externalUserId,
@@ -5887,12 +6105,14 @@ export async function createStudioSegmentTalkingPhotoJob(
     language: normalizedLanguage,
     project_id: normalizedProjectId,
     prompt: upstreamPrompt,
-    resolution: normalizedCustomVideoMediaType === "video" ? "480p" : "720p",
+    resolution: confirmedSourceMediaType === "video" ? "480p" : "720p",
     script: normalizedScript,
     seed: -1,
     segment_index: normalizedSegmentIndex,
-    speaker_target: normalizedSpeakerTarget,
+    speaker_confirmation_token: speakerConfirmationToken,
+    speaker_target: confirmedSpeakerTarget,
     user_email: user.email ?? undefined,
+    user_email_verified: user.emailVerified ?? undefined,
     user_name: user.name ?? undefined,
     voice_type: normalizedVoiceType,
   }, {

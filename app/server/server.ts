@@ -126,6 +126,7 @@ import {
   invalidateWorkspaceBootstrapCache,
   improveStudioSegmentAiPhotoPrompt,
   normalizeStudioMediaSegmentIndexForScope,
+  previewStudioSegmentTalkingPhotoSpeaker,
   translateStudioTexts,
   WorkspaceCreditLimitError,
 } from "./studio.js";
@@ -4112,6 +4113,61 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/poster", async (req, re
   }
 });
 
+app.post("/api/studio/segment-talking-photo/preview", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
+  const customVideoFileDataUrl =
+    typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
+  const customVideoMediaType =
+    req.body?.customVideoMediaType === "video" ? "video" : req.body?.customVideoMediaType === "photo" ? "photo" : undefined;
+  const customVideoFileMimeType =
+    typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
+  const customVideoFileName =
+    typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
+  const projectId = Number(req.body?.projectId ?? 0);
+  const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+
+  if (!customVideoAssetId && !customVideoFileDataUrl) {
+    res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
+    return;
+  }
+
+  if (!speakerTarget) {
+    res.status(400).json({ error: "Speaker target is required." });
+    return;
+  }
+
+  try {
+    const preview = await previewStudioSegmentTalkingPhotoSpeaker(session.user, {
+      customVideoAssetId,
+      customVideoFileDataUrl: customVideoFileDataUrl || undefined,
+      customVideoMediaType,
+      customVideoFileMimeType: customVideoFileMimeType || undefined,
+      customVideoFileName: customVideoFileName || undefined,
+      language,
+      projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+      segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+      speakerTarget,
+    });
+    res.json({ data: preview });
+  } catch (error) {
+    console.error("[studio] Failed to preview segment talking character speaker", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to preview segment talking character speaker.",
+    });
+  }
+});
+
 app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -4136,6 +4192,12 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
   const customVideoFileName =
     typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
   const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
+  const speakerConfirmationToken =
+    typeof req.body?.speakerConfirmationToken === "string"
+      ? req.body.speakerConfirmationToken.trim()
+      : typeof req.body?.speaker_confirmation_token === "string"
+        ? req.body.speaker_confirmation_token.trim()
+        : "";
   const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
@@ -4147,6 +4209,11 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
 
   if (!customVideoAssetId && !customVideoFileDataUrl) {
     res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
+    return;
+  }
+
+  if (!speakerTarget) {
+    res.status(400).json({ error: "Speaker target is required." });
     return;
   }
 
@@ -4162,6 +4229,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       prompt: prompt || undefined,
       segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+      speakerConfirmationToken: speakerConfirmationToken || undefined,
       speakerTarget,
       voiceType: voiceType || undefined,
     });

@@ -1262,8 +1262,43 @@ type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
   prompt?: string;
   script: string;
   segmentIndex?: number;
+  speakerConfirmationToken?: string;
   speakerTarget?: WorkspaceTalkingCharacterTarget;
   voiceType?: string | null;
+};
+
+type WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest = {
+  customVideoAssetId?: number;
+  customVideoFileDataUrl?: string;
+  customVideoMediaType?: "photo" | "video";
+  customVideoFileMimeType?: string;
+  customVideoFileName?: string;
+  language: StudioLanguage;
+  projectId?: number;
+  segmentIndex?: number;
+  speakerTarget: WorkspaceTalkingCharacterTarget;
+};
+
+type WorkspaceSegmentTalkingPhotoSpeakerPreview = {
+  confirmationToken: string;
+  expiresInSeconds: number | null;
+  overlay: {
+    box: {
+      height: number;
+      width: number;
+      x: number;
+      y: number;
+    } | null;
+    dataUrl: string;
+    height: number | null;
+    mimeType: string;
+    width: number | null;
+  };
+  projectId: number | null;
+  segmentIndex: number | null;
+  sourceAssetId: number;
+  sourceMediaType: "photo" | "video";
+  speakerTarget: WorkspaceTalkingCharacterTarget;
 };
 
 type WorkspaceSegmentSceneSoundJobCreateRequest = {
@@ -16819,6 +16854,9 @@ export function WorkspacePage({
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [segmentTalkingCharacterDraftTargets, setSegmentTalkingCharacterDraftTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
+  const [segmentTalkingSpeakerPreview, setSegmentTalkingSpeakerPreview] =
+    useState<WorkspaceSegmentTalkingPhotoSpeakerPreview | null>(null);
+  const segmentTalkingSpeakerPreviewResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
@@ -27424,6 +27462,52 @@ export function WorkspacePage({
     }) ?? normalizedTarget;
   };
 
+  const closeSegmentTalkingSpeakerPreview = (confirmed: boolean) => {
+    const resolver = segmentTalkingSpeakerPreviewResolverRef.current;
+    segmentTalkingSpeakerPreviewResolverRef.current = null;
+    setSegmentTalkingSpeakerPreview(null);
+    resolver?.(confirmed);
+  };
+
+  const requestSegmentTalkingSpeakerPreviewConfirmation = (
+    preview: WorkspaceSegmentTalkingPhotoSpeakerPreview,
+  ): Promise<boolean> =>
+    new Promise((resolve) => {
+      segmentTalkingSpeakerPreviewResolverRef.current?.(false);
+      segmentTalkingSpeakerPreviewResolverRef.current = resolve;
+      setSegmentTalkingSpeakerPreview(preview);
+    });
+
+  useEffect(
+    () => () => {
+      segmentTalkingSpeakerPreviewResolverRef.current?.(false);
+      segmentTalkingSpeakerPreviewResolverRef.current = null;
+    },
+    [],
+  );
+
+  const createSegmentTalkingSpeakerPreview = async (
+    request: WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest,
+  ): Promise<WorkspaceSegmentTalkingPhotoSpeakerPreview> => {
+    const response = await fetch("/api/studio/segment-talking-photo/preview", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      data?: WorkspaceSegmentTalkingPhotoSpeakerPreview;
+      error?: string;
+    } | null;
+
+    if (!response.ok || !payload?.data?.confirmationToken || !payload.data.overlay?.dataUrl) {
+      throw new Error(payload?.error ?? "Не удалось подтвердить выбранного говорящего персонажа.");
+    }
+
+    return payload.data;
+  };
+
   const handleSegmentEditorTalkingPhotoGenerate = async (
     options?: {
       prompt?: string;
@@ -27552,6 +27636,28 @@ export function WorkspacePage({
         throw new Error("Не удалось подготовить выбранное фото или видео для говорящего персонажа.");
       }
 
+      const speakerPreview = await createSegmentTalkingSpeakerPreview({
+        customVideoAssetId: customVideoAssetId ?? undefined,
+        customVideoMediaType: talkingPhotoSourceMediaType,
+        customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
+        customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
+        language: selectedLanguage,
+        projectId: visualJobBinding.projectId,
+        segmentIndex: visualJobBinding.segmentIndex,
+        speakerTarget: speakerTargetForSourceFrame,
+      });
+      if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
+        return;
+      }
+
+      const isSpeakerConfirmed = await requestSegmentTalkingSpeakerPreviewConfirmation(speakerPreview);
+      if (!isSpeakerConfirmed) {
+        return;
+      }
+      if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
+        return;
+      }
+
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
       }
@@ -27568,8 +27674,8 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          customVideoAssetId: customVideoAssetId ?? undefined,
-          customVideoMediaType: talkingPhotoSourceMediaType,
+          customVideoAssetId: speakerPreview.sourceAssetId,
+          customVideoMediaType: speakerPreview.sourceMediaType,
           customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
           customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
           durationSeconds,
@@ -27578,7 +27684,8 @@ export function WorkspacePage({
           prompt: visualPrompt,
           script,
           segmentIndex: visualJobBinding.segmentIndex,
-          speakerTarget: speakerTargetForSourceFrame,
+          speakerConfirmationToken: speakerPreview.confirmationToken,
+          speakerTarget: speakerPreview.speakerTarget,
           voiceType,
         } satisfies WorkspaceSegmentTalkingPhotoJobCreateRequest),
       });
@@ -38477,6 +38584,81 @@ export function WorkspacePage({
                       ) : (
                         workspaceText(locale, "Удалить", "Delete")
                       )}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {segmentTalkingSpeakerPreview && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="workspace-confirm-modal workspace-talking-speaker-preview"
+                role="dialog"
+                aria-modal="true"
+                aria-label={workspaceText(locale, "Подтверждение говорящего персонажа", "Speaker confirmation")}
+              >
+                <button
+                  className="workspace-confirm-modal__backdrop route-close"
+                  type="button"
+                  aria-label={workspaceText(locale, "Выбрать говорящего заново", "Choose speaker again")}
+                  onClick={() => closeSegmentTalkingSpeakerPreview(false)}
+                />
+                <div className="workspace-confirm-modal__panel workspace-talking-speaker-preview__panel" role="document">
+                  <button
+                    className="workspace-confirm-modal__close route-close"
+                    type="button"
+                    aria-label={workspaceText(locale, "Выбрать говорящего заново", "Choose speaker again")}
+                    onClick={() => closeSegmentTalkingSpeakerPreview(false)}
+                  >
+                    ×
+                  </button>
+
+                  <div className="workspace-confirm-modal__header">
+                    <div className="workspace-confirm-modal__icon workspace-talking-speaker-preview__icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 5h14v14H5z" stroke="currentColor" strokeWidth="1.8" />
+                        <path d="M9 12h6M12 9v6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+                      </svg>
+                    </div>
+                    <div className="workspace-confirm-modal__copy">
+                      <h2 className="workspace-confirm-modal__title">
+                        {workspaceText(locale, "Проверьте говорящего", "Check the speaker")}
+                      </h2>
+                      <p className="workspace-confirm-modal__message">
+                        {workspaceText(
+                          locale,
+                          "Генерация начнется только если красная рамка стоит на нужном персонаже.",
+                          "Generation starts only if the red box is on the intended character.",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="workspace-talking-speaker-preview__frame">
+                    <img
+                      src={segmentTalkingSpeakerPreview.overlay.dataUrl}
+                      alt={workspaceText(locale, "Выбранная область говорящего персонажа", "Selected speaker area")}
+                      draggable={false}
+                    />
+                  </div>
+
+                  <div className="workspace-confirm-modal__actions">
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+                      type="button"
+                      onClick={() => closeSegmentTalkingSpeakerPreview(false)}
+                    >
+                      {workspaceText(locale, "Выбрать заново", "Choose again")}
+                    </button>
+                    <button
+                      className="workspace-confirm-modal__action workspace-confirm-modal__action--primary"
+                      type="button"
+                      onClick={() => closeSegmentTalkingSpeakerPreview(true)}
+                    >
+                      {workspaceText(locale, "Запустить генерацию", "Start generation")}
                     </button>
                   </div>
                 </div>

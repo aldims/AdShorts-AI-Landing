@@ -19,7 +19,7 @@ import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -2431,7 +2431,7 @@ app.post("/api/studio/media-upload/init", async (req, res) => {
     const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
-    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+    const segmentIndex = normalizeStudioMediaSegmentIndexForScope(req.body?.segmentIndex, { kind, role });
     const sizeBytes = normalizeRequestPositiveInteger(req.body?.sizeBytes);
     if (!fileName || !kind || !mediaType) {
         res.status(400).json({ error: "fileName, kind and mediaType are required." });
@@ -2478,7 +2478,7 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
     const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const projectId = normalizeRequestPositiveInteger(req.body?.projectId);
-    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex);
+    const segmentIndex = normalizeStudioMediaSegmentIndexForScope(req.body?.segmentIndex, { role });
     if (!assetId) {
         res.status(400).json({ error: "assetId is required." });
         return;
@@ -3414,6 +3414,52 @@ app.get("/api/studio/segment-photo-animation/jobs/:jobId/poster", async (req, re
         });
     }
 });
+app.post("/api/studio/segment-talking-photo/preview", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const customVideoAssetId = normalizeRequestPositiveInteger(req.body?.customVideoAssetId);
+    const customVideoFileDataUrl = typeof req.body?.customVideoFileDataUrl === "string" ? req.body.customVideoFileDataUrl.trim() : "";
+    const customVideoMediaType = req.body?.customVideoMediaType === "video" ? "video" : req.body?.customVideoMediaType === "photo" ? "photo" : undefined;
+    const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
+    const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
+    const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
+    const projectId = Number(req.body?.projectId ?? 0);
+    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    if (!customVideoAssetId && !customVideoFileDataUrl) {
+        res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
+        return;
+    }
+    if (!speakerTarget) {
+        res.status(400).json({ error: "Speaker target is required." });
+        return;
+    }
+    try {
+        const preview = await previewStudioSegmentTalkingPhotoSpeaker(session.user, {
+            customVideoAssetId,
+            customVideoFileDataUrl: customVideoFileDataUrl || undefined,
+            customVideoMediaType,
+            customVideoFileMimeType: customVideoFileMimeType || undefined,
+            customVideoFileName: customVideoFileName || undefined,
+            language,
+            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
+            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            speakerTarget,
+        });
+        res.json({ data: preview });
+    }
+    catch (error) {
+        console.error("[studio] Failed to preview segment talking character speaker", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to preview segment talking character speaker.",
+        });
+    }
+});
 app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -3432,6 +3478,11 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
     const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
+    const speakerConfirmationToken = typeof req.body?.speakerConfirmationToken === "string"
+        ? req.body.speakerConfirmationToken.trim()
+        : typeof req.body?.speaker_confirmation_token === "string"
+            ? req.body.speaker_confirmation_token.trim()
+            : "";
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
@@ -3441,6 +3492,10 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     }
     if (!customVideoAssetId && !customVideoFileDataUrl) {
         res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
+        return;
+    }
+    if (!speakerTarget) {
+        res.status(400).json({ error: "Speaker target is required." });
         return;
     }
     try {
@@ -3455,6 +3510,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             prompt: prompt || undefined,
             segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            speakerConfirmationToken: speakerConfirmationToken || undefined,
             speakerTarget,
             voiceType: voiceType || undefined,
         });

@@ -438,6 +438,7 @@ const normalizeNumber = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 };
+const roundStudioTimelineSeconds = (value) => Number(value.toFixed(3));
 const normalizeStudioSegmentVisualDurationSeconds = (value) => {
     const normalized = normalizeNumber(value);
     return normalized !== null && normalized >= 1 ? Number(normalized.toFixed(3)) : undefined;
@@ -467,6 +468,55 @@ const normalizeStudioTalkingCharacterTarget = (value) => {
         y: Math.min(1 - normalizedHeight, Math.max(0, y)),
     };
 };
+const normalizeStudioTalkingCharacterPixelBox = (value) => {
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+    const x = Math.trunc(Number(value.x));
+    const y = Math.trunc(Number(value.y));
+    const width = Math.trunc(Number(value.width));
+    const height = Math.trunc(Number(value.height));
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+        return null;
+    }
+    return {
+        height,
+        width,
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+    };
+};
+const normalizeStudioSegmentTalkingPhotoSourceMediaType = (value) => normalizeGenerationText(value).toLowerCase() === "video" ? "video" : "photo";
+const normalizeAdsflowSegmentTalkingPhotoPreview = (payload, fallbackSpeakerTarget) => {
+    const confirmationToken = normalizeGenerationText(payload.confirmation_token);
+    if (!confirmationToken) {
+        throw new Error("AdsFlow did not return a talking character speaker confirmation token.");
+    }
+    const sourceAssetId = normalizePositiveInteger(payload.source_asset_id);
+    if (!sourceAssetId) {
+        throw new Error("AdsFlow did not return a talking character source asset id.");
+    }
+    const overlayDataUrl = normalizeGenerationText(payload.overlay?.data_url);
+    if (!overlayDataUrl) {
+        throw new Error("AdsFlow did not return a talking character speaker overlay.");
+    }
+    return {
+        confirmationToken,
+        expiresInSeconds: normalizePositiveInteger(payload.expires_in_seconds) ?? null,
+        overlay: {
+            box: normalizeStudioTalkingCharacterPixelBox(payload.overlay?.box ?? null),
+            dataUrl: overlayDataUrl,
+            height: normalizePositiveInteger(payload.overlay?.height) ?? null,
+            mimeType: normalizeGenerationText(payload.overlay?.mime_type) || "image/jpeg",
+            width: normalizePositiveInteger(payload.overlay?.width) ?? null,
+        },
+        projectId: normalizePositiveInteger(payload.project_id) ?? null,
+        segmentIndex: normalizeNonNegativeInteger(payload.segment_index) ?? null,
+        sourceAssetId,
+        sourceMediaType: normalizeStudioSegmentTalkingPhotoSourceMediaType(payload.source_media_type),
+        speakerTarget: normalizeStudioTalkingCharacterTarget(payload.speaker_target) ?? fallbackSpeakerTarget,
+    };
+};
 const normalizeStudioSegmentVideoAction = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedSegmentVideoActions.has(normalized) ? normalized : "original";
@@ -490,6 +540,8 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         return undefined;
     }
     const segments = [];
+    let timelineCursor = 0;
+    let hasTimingDrift = false;
     rawSegments.forEach((segment) => {
         if (!segment || typeof segment !== "object") {
             return;
@@ -516,11 +568,28 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             normalizeStudioSegmentManualDurationSeconds(timelineDuration) ??
             normalizeStudioSegmentManualDurationSeconds(rawDuration);
         const durationMode = manualDurationSeconds !== null ? "manual" : rawDurationMode;
-        const duration = manualDurationSeconds ?? rawDuration ?? undefined;
-        const startTime = rawStartTime ?? undefined;
-        const endTime = manualDurationSeconds !== null && rawStartTime !== null
-            ? Number((rawStartTime + manualDurationSeconds).toFixed(3))
-            : rawEndTime ?? undefined;
+        const duration = manualDurationSeconds !== null
+            ? roundStudioTimelineSeconds(manualDurationSeconds)
+            : rawDuration !== null
+                ? roundStudioTimelineSeconds(rawDuration)
+                : undefined;
+        const startTime = duration !== undefined ? roundStudioTimelineSeconds(timelineCursor) : rawStartTime ?? undefined;
+        const endTime = duration !== undefined && startTime !== undefined
+            ? roundStudioTimelineSeconds(startTime + duration)
+            : rawEndTime !== null
+                ? roundStudioTimelineSeconds(rawEndTime)
+                : undefined;
+        const normalizedManualDurationSeconds = manualDurationSeconds !== null ? roundStudioTimelineSeconds(manualDurationSeconds) : null;
+        if (duration !== undefined && startTime !== undefined && endTime !== undefined) {
+            const startDrift = rawStartTime !== null ? Math.abs(rawStartTime - startTime) : 0;
+            const endDrift = rawEndTime !== null ? Math.abs(rawEndTime - endTime) : 0;
+            const durationDrift = rawDuration !== null ? Math.abs(rawDuration - duration) : 0;
+            const manualDurationDrift = rawManualDurationSeconds !== null ? Math.abs(rawManualDurationSeconds - duration) : 0;
+            if (Math.max(startDrift, endDrift, durationDrift, manualDurationDrift) > 0.01) {
+                hasTimingDrift = true;
+            }
+            timelineCursor = endTime;
+        }
         const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
         const segmentVoiceType = segmentVoiceTypeRaw === null
             ? null
@@ -537,7 +606,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             durationMode,
             endTime,
             index,
-            manualDurationSeconds,
+            manualDurationSeconds: normalizedManualDurationSeconds,
             resetVisual: Boolean(segmentRecord.resetVisual),
             sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
             startTime,
@@ -554,6 +623,20 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
     }
     if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
         throw new Error(`Segment editor supports up to ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} segments.`);
+    }
+    if (hasTimingDrift) {
+        console.warn("[studio] segment-editor timing drift normalized", {
+            projectId,
+            segmentCount: segments.length,
+            segmentTimings: segments.map((segment) => ({
+                duration: segment.duration ?? null,
+                durationMode: segment.durationMode ?? null,
+                endTime: segment.endTime ?? null,
+                index: segment.index,
+                manualDurationSeconds: segment.manualDurationSeconds ?? null,
+                startTime: segment.startTime ?? null,
+            })),
+        });
     }
     return {
         allowStructureChange: Boolean(record.allowStructureChange),
@@ -2560,6 +2643,27 @@ class AdsflowHttpError extends Error {
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const isAdsflowHttpStatusError = (error, ...statusCodes) => error instanceof AdsflowHttpError && statusCodes.includes(error.statusCode);
+const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
+    "character_reference",
+    "character_reference_source",
+    "scene_reference",
+    "scene_reference_source",
+]);
+export const shouldUseProjectLevelWorkspaceReferenceMedia = (options) => {
+    const kind = normalizeGenerationText(options?.kind);
+    const purpose = normalizeGenerationText(options?.purpose);
+    const role = normalizeGenerationText(options?.role);
+    return (purpose === "workspace_reference" ||
+        kind === "workspace_reference" ||
+        kind === "workspace_reference_source" ||
+        WORKSPACE_REFERENCE_MEDIA_ROLES.has(role));
+};
+export const normalizeStudioMediaSegmentIndexForScope = (segmentIndex, options) => {
+    if (shouldUseProjectLevelWorkspaceReferenceMedia(options)) {
+        return undefined;
+    }
+    return normalizeNonNegativeInteger(segmentIndex) ?? undefined;
+};
 const describeAdsflowFetchFailure = (url, error) => {
     const target = `${url.origin}${url.pathname}`;
     if (!(error instanceof Error)) {
@@ -2709,6 +2813,10 @@ const uploadStudioMediaAsset = async (user, options) => {
     }
     const normalizedMimeType = normalizeGenerationText(options.mimeType) || decoded.mimeType || "application/octet-stream";
     const normalizedMediaType = options.mediaType || inferStudioUploadMediaType(normalizedMimeType, normalizedFileName);
+    const normalizedSegmentIndex = normalizeStudioMediaSegmentIndexForScope(options.segmentIndex, {
+        kind: options.kind,
+        role: options.role,
+    });
     const initPayload = await postAdsflowJson("/api/media/uploads/init", {
         admin_token: env.adsflowAdminToken,
         external_user_id: options.externalUserId,
@@ -2719,7 +2827,7 @@ const uploadStudioMediaAsset = async (user, options) => {
         mime_type: normalizedMimeType,
         project_id: options.projectId ?? undefined,
         role: options.role ?? undefined,
-        segment_index: options.segmentIndex ?? undefined,
+        segment_index: normalizedSegmentIndex,
         size_bytes: decoded.bytes.length,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
@@ -2760,7 +2868,7 @@ const uploadStudioMediaAsset = async (user, options) => {
         language: options.language,
         project_id: options.projectId ?? undefined,
         role: options.role ?? undefined,
-        segment_index: options.segmentIndex ?? undefined,
+        segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     }, {
@@ -3645,7 +3753,6 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const preserveCharacters = Boolean(options?.preserveCharacters);
     const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
@@ -3653,6 +3760,9 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
     const normalizedPurpose = normalizeGenerationText(options?.purpose);
     const normalizedReferenceKind = normalizeGenerationText(options?.referenceKind);
+    const normalizedSegmentIndex = normalizeStudioMediaSegmentIndexForScope(options?.segmentIndex, {
+        purpose: normalizedPurpose,
+    });
     const externalUserId = await resolveStudioExternalUserId(user);
     const isWorkspaceCharacterReference = normalizedPurpose === "workspace_reference" &&
         normalizedReferenceKind === "character";
@@ -3972,6 +4082,61 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
         status: String(payload.status ?? "queued"),
     };
 }
+export async function previewStudioSegmentTalkingPhotoSpeaker(user, options) {
+    assertAdsflowConfigured();
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId);
+    const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+    const normalizedCustomVideoMediaType = options?.customVideoMediaType === "video" ? "video" : options?.customVideoMediaType === "photo" ? "photo" : undefined;
+    const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+    const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
+    if (!normalizedSpeakerTarget) {
+        throw new Error("Speaker target is required.");
+    }
+    if (!normalizedCustomVideoAssetId && !normalizedCustomVideoFileDataUrl) {
+        throw new Error("Photo or video source asset id or data URL is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const customVideoAssetId = normalizedCustomVideoAssetId
+        ? normalizedCustomVideoAssetId
+        : normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName
+            ? await uploadStudioMediaAsset(user, {
+                dataUrl: normalizedCustomVideoFileDataUrl,
+                externalUserId,
+                fileName: normalizedCustomVideoFileName,
+                kind: "segment_source",
+                language: normalizedLanguage,
+                mediaType: normalizedCustomVideoMediaType ?? inferStudioUploadMediaType(normalizedCustomVideoFileMimeType, normalizedCustomVideoFileName),
+                mimeType: normalizedCustomVideoFileMimeType,
+                projectId: normalizedProjectId,
+                role: "segment_source",
+                segmentIndex: normalizedSegmentIndex,
+            })
+            : undefined;
+    const payload = await postAdsflowJson("/api/web/segment-talking-photo/preview", {
+        admin_token: env.adsflowAdminToken,
+        custom_video_asset_id: customVideoAssetId,
+        custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+        custom_video_media_type: normalizedCustomVideoMediaType,
+        custom_video_mime_type: normalizedCustomVideoFileMimeType,
+        custom_video_original_name: normalizedCustomVideoFileName,
+        external_user_id: externalUserId,
+        language: normalizedLanguage,
+        project_id: normalizedProjectId,
+        segment_index: normalizedSegmentIndex,
+        speaker_target: normalizedSpeakerTarget,
+        user_email: user.email ?? undefined,
+        user_email_verified: user.emailVerified ?? undefined,
+        user_name: user.name ?? undefined,
+    }, {
+        retryDelaysMs: [],
+        timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+    });
+    return normalizeAdsflowSegmentTalkingPhotoPreview(payload, normalizedSpeakerTarget);
+}
 export async function createStudioSegmentTalkingPhotoJob(script, user, options) {
     assertAdsflowConfigured();
     const normalizedScript = normalizeGenerationText(script);
@@ -3996,7 +4161,11 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const normalizedSpeakerTarget = normalizeStudioTalkingCharacterTarget(options?.speakerTarget);
+    if (!normalizedSpeakerTarget) {
+        throw new Error("Speaker target is required.");
+    }
     const normalizedVoiceType = normalizeGenerationText(options?.voiceType) || undefined;
+    const normalizedSpeakerConfirmationToken = normalizeGenerationText(options?.speakerConfirmationToken) || undefined;
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const customVideoAssetId = normalizedCustomVideoAssetId
@@ -4015,12 +4184,35 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
                 segmentIndex: normalizedSegmentIndex,
             })
             : undefined;
+    const speakerPreview = normalizedSpeakerConfirmationToken
+        ? null
+        : await previewStudioSegmentTalkingPhotoSpeaker(user, {
+            customVideoAssetId,
+            customVideoFileDataUrl: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
+            customVideoFileMimeType: normalizedCustomVideoFileMimeType,
+            customVideoFileName: normalizedCustomVideoFileName,
+            customVideoMediaType: normalizedCustomVideoMediaType,
+            language: normalizedLanguage,
+            projectId: normalizedProjectId ?? undefined,
+            segmentIndex: normalizedSegmentIndex ?? undefined,
+            speakerTarget: normalizedSpeakerTarget,
+        });
+    const confirmedSourceAssetId = speakerPreview?.sourceAssetId ?? customVideoAssetId;
+    const confirmedSourceMediaType = speakerPreview?.sourceMediaType ?? normalizedCustomVideoMediaType ?? "photo";
+    const confirmedSpeakerTarget = speakerPreview?.speakerTarget ?? normalizedSpeakerTarget;
+    const speakerConfirmationToken = speakerPreview?.confirmationToken ?? normalizedSpeakerConfirmationToken;
+    if (!confirmedSourceAssetId) {
+        throw new Error("Talking character source must be persisted before generation.");
+    }
+    if (!speakerConfirmationToken) {
+        throw new Error("Speaker confirmation token is required.");
+    }
     const payload = await postAdsflowJson("/api/web/segment-talking-photo/jobs", {
         admin_token: env.adsflowAdminToken,
         credit_cost: STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
-        custom_video_asset_id: customVideoAssetId,
-        custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
-        custom_video_media_type: normalizedCustomVideoMediaType,
+        custom_video_asset_id: confirmedSourceAssetId,
+        custom_video_data_url: undefined,
+        custom_video_media_type: confirmedSourceMediaType,
         custom_video_mime_type: normalizedCustomVideoFileMimeType,
         custom_video_original_name: normalizedCustomVideoFileName,
         external_user_id: externalUserId,
@@ -4028,12 +4220,14 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
         language: normalizedLanguage,
         project_id: normalizedProjectId,
         prompt: upstreamPrompt,
-        resolution: normalizedCustomVideoMediaType === "video" ? "480p" : "720p",
+        resolution: confirmedSourceMediaType === "video" ? "480p" : "720p",
         script: normalizedScript,
         seed: -1,
         segment_index: normalizedSegmentIndex,
-        speaker_target: normalizedSpeakerTarget,
+        speaker_confirmation_token: speakerConfirmationToken,
+        speaker_target: confirmedSpeakerTarget,
         user_email: user.email ?? undefined,
+        user_email_verified: user.emailVerified ?? undefined,
         user_name: user.name ?? undefined,
         voice_type: normalizedVoiceType,
     }, {
