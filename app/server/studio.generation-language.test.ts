@@ -161,6 +161,46 @@ describe("studio generation language resolution", () => {
     ]);
   });
 
+  it("keeps per-scene subtitle overrides in normalized segment editor payload", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 3,
+            index: 0,
+            subtitleType: "none",
+            text: "Disabled subtitles, voice text remains",
+            videoAction: "original",
+          },
+          {
+            duration: 3,
+            index: 1,
+            subtitle_color: "cyan",
+            subtitle_style: "impact",
+            text: "Styled subtitles",
+            videoAction: "original",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        subtitleType: "none",
+        text: "Disabled subtitles, voice text remains",
+      }),
+    );
+    expect(normalized?.segments[1]).toEqual(
+      expect.objectContaining({
+        subtitleColor: "cyan",
+        subtitleStyle: "impact",
+        text: "Styled subtitles",
+      }),
+    );
+  });
+
   it("forwards visual generation target duration with the upstream field name", () => {
     expect(buildStudioSegmentVisualDurationPayload(13)).toEqual({ duration: 13 });
     expect(buildStudioSegmentVisualDurationPayload(0.5)).toEqual({});

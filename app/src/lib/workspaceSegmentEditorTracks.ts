@@ -52,6 +52,7 @@ export type WorkspaceSegmentEditorTracks = {
 type WorkspaceSegmentEditorTracksBuildOptions<T extends WorkspaceSegmentEditorTrackSegment> = {
   activeArrayIndex?: number | null;
   isSoundEdited?: (segment: T, baselineSegment: T | null) => boolean;
+  isTextEmpty?: (segment: T, baselineSegment: T | null, isEdited: boolean) => boolean;
   isTextEdited?: (segment: T, baselineSegment: T | null) => boolean;
   isVisualEdited?: (segment: T, baselineSegment: T | null) => boolean;
   isVoiceEdited?: (segment: T, baselineSegment: T | null) => boolean;
@@ -257,7 +258,11 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
       createSegmentRow("sound", options.isSoundEdited, (segment, baselineSegment, isEdited) =>
         !isEdited && !getSegmentSoundPresence(segment) && !getSegmentSoundPresence(baselineSegment),
       ),
-      createSegmentRow("text", options.isTextEdited, (segment) => !normalizeTrackString(segment.text)),
+      createSegmentRow(
+        "text",
+        options.isTextEdited,
+        options.isTextEmpty ?? ((segment) => !normalizeTrackString(segment.text)),
+      ),
     ],
     segmentSpans,
     totalDuration,

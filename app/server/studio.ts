@@ -641,6 +641,9 @@ export type StudioSegmentEditorSegment = {
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
   startTime?: number;
+  subtitleColor?: string | null;
+  subtitleStyle?: string | null;
+  subtitleType?: string | null;
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
   voiceType?: string | null;
@@ -1320,6 +1323,12 @@ export const normalizeStudioSegmentEditorPayload = (
       resetVisual?: unknown;
       sceneSoundAssetId?: unknown;
       startTime?: unknown;
+      subtitleColor?: unknown;
+      subtitle_color?: unknown;
+      subtitleStyle?: unknown;
+      subtitle_style?: unknown;
+      subtitleType?: unknown;
+      subtitle_type?: unknown;
       text?: unknown;
       videoAction?: unknown;
       voiceType?: unknown;
@@ -1382,6 +1391,17 @@ export const normalizeStudioSegmentEditorPayload = (
       segmentVoiceTypeRaw === null
         ? null
         : normalizeStudioVoiceIdForLanguage(String(segmentVoiceTypeRaw ?? "").trim(), language) ?? null;
+    const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
+    const segmentSubtitleType = segmentSubtitleTypeRaw || null;
+    const segmentSubtitleStyleRaw = normalizeGenerationText(segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style);
+    const segmentSubtitleStyle = segmentSubtitleStyleRaw ? normalizeStudioSubtitleStyle(segmentSubtitleStyleRaw) : null;
+    const segmentSubtitleColorRaw = normalizeGenerationText(segmentRecord.subtitleColor ?? segmentRecord.subtitle_color);
+    const segmentSubtitleColor = segmentSubtitleColorRaw
+      ? normalizeStudioSubtitleColor(
+          segmentSubtitleColorRaw,
+          getDefaultStudioSubtitleColorForStyle(segmentSubtitleStyle ?? "modern"),
+        )
+      : null;
 
     if (videoAction === "custom" && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
       throw new Error(`Upload a custom video for segment ${index + 1} or choose a different source.`);
@@ -1400,6 +1420,9 @@ export const normalizeStudioSegmentEditorPayload = (
       resetVisual: Boolean(segmentRecord.resetVisual),
       sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
       startTime,
+      subtitleColor: segmentSubtitleColor,
+      subtitleStyle: segmentSubtitleStyle,
+      subtitleType: segmentSubtitleType,
       text: normalizeGenerationText(String(segmentRecord.text ?? "")),
       videoAction,
       voiceType: segmentVoiceType,
@@ -4869,6 +4892,9 @@ export async function createStudioGenerationJob(
                 reset_visual: Boolean(segment.resetVisual),
                 scene_sound_asset_id: segment.sceneSoundAssetId,
                 start_time: segment.startTime,
+                subtitle_color: segment.subtitleColor ?? null,
+                subtitle_style: segment.subtitleStyle ?? null,
+                subtitle_type: segment.subtitleType ?? null,
                 text: segment.text,
                 video_action: segment.videoAction,
                 voice_type: segment.voiceType ?? null,

@@ -551,9 +551,12 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     resetVisual: Boolean(segmentRecord.resetVisual),
                     sceneSoundAssetId: normalizeRequestPositiveInteger(segmentRecord.sceneSoundAssetId),
                     startTime: segmentRecord.startTime,
+                    subtitleColor: segmentRecord.subtitleColor ?? segmentRecord.subtitle_color ?? null,
+                    subtitleStyle: segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style ?? null,
+                    subtitleType: segmentRecord.subtitleType ?? segmentRecord.subtitle_type ?? null,
                     text: segmentRecord.text,
                     videoAction: segmentRecord.videoAction,
-                    voiceType: segmentRecord.voiceType ?? null,
+                    voiceType: segmentRecord.voiceType ?? segmentRecord.voice_type ?? null,
                 };
             })),
         }

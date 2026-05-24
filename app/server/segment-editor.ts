@@ -43,6 +43,9 @@ type AdsflowSegmentEditorSegmentPayload = {
   speech_start_time?: number | string | null;
   speech_words?: AdsflowSegmentEditorSpeechWordPayload[] | null;
   start_time?: number | string | null;
+  subtitle_color?: string | null;
+  subtitle_style?: string | null;
+  subtitle_type?: string | null;
   text?: string | null;
   voice_type?: string | null;
 };
@@ -174,6 +177,9 @@ export type WorkspaceSegmentEditorSegment = {
   speechStartTime: number | null;
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
+  subtitleColor: string | null;
+  subtitleStyle: string | null;
+  subtitleType: string | null;
   text: string;
   voiceType: string | null;
 };
@@ -557,6 +563,9 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         speech_start_time: normalizeNumber(record.speech_start_time),
         speech_words: Array.isArray(record.speech_words) ? record.speech_words as AdsflowSegmentEditorSpeechWordPayload[] : null,
         start_time: startTime,
+        subtitle_color: normalizeText(record.subtitle_color),
+        subtitle_style: normalizeText(record.subtitle_style),
+        subtitle_type: normalizeText(record.subtitle_type),
         text,
         voice_type: normalizeText(record.voice_type),
       } satisfies AdsflowSegmentEditorSegmentPayload;
@@ -1220,6 +1229,9 @@ export const buildWorkspaceSegmentEditorSegment = (
     speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
     speechWords,
     startTime,
+    subtitleColor: normalizeText(payload.subtitle_color) || null,
+    subtitleStyle: normalizeText(payload.subtitle_style) || null,
+    subtitleType: normalizeText(payload.subtitle_type) || null,
     text: normalizeText(payload.text),
     voiceType: normalizeText(payload.voice_type) || null,
   };

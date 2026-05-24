@@ -751,6 +751,12 @@ type WorkspaceSegmentEditorSegment = {
   speechStartTime: number | null;
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
+  subtitleColor?: string | null;
+  subtitle_color?: string | null;
+  subtitleStyle?: string | null;
+  subtitle_style?: string | null;
+  subtitleType?: string | null;
+  subtitle_type?: string | null;
   text: string;
   voiceType?: string | null;
   voice_type?: string | null;
@@ -789,6 +795,9 @@ type WorkspaceSegmentEditorPayloadSegment = {
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
   startTime?: number;
+  subtitleColor?: string | null;
+  subtitleStyle?: string | null;
+  subtitleType?: string | null;
   text: string;
   videoAction: WorkspaceSegmentEditorPayloadVideoAction;
   voiceType?: string | null;
@@ -833,7 +842,7 @@ type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "s
   segments: WorkspaceSegmentEditorDraftSegment[];
 };
 
-type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text";
+type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text" | "subtitle";
 
 type WorkspaceSegmentTimelineRedoSnapshot =
   | {
@@ -2495,6 +2504,88 @@ const isWorkspaceSegmentDraftTextEdited = (segment: WorkspaceSegmentEditorDraftS
   normalizeWorkspaceSegmentEditorTextForCompare(segment.text) !==
   normalizeWorkspaceSegmentEditorTextForCompare(segment.originalText);
 
+const getWorkspaceSegmentSubtitleTypeOverrideId = (
+  segment:
+    | Pick<WorkspaceSegmentEditorSegment, "subtitleType" | "subtitle_type">
+    | null
+    | undefined,
+) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleType ?? segment?.subtitle_type) ?? null;
+
+const getWorkspaceSegmentSubtitleStyleOverrideId = (
+  segment:
+    | Pick<WorkspaceSegmentEditorSegment, "subtitleStyle" | "subtitle_style">
+    | null
+    | undefined,
+) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleStyle ?? segment?.subtitle_style) ?? null;
+
+const getWorkspaceSegmentSubtitleColorOverrideId = (
+  segment:
+    | Pick<WorkspaceSegmentEditorSegment, "subtitleColor" | "subtitle_color">
+    | null
+    | undefined,
+) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleColor ?? segment?.subtitle_color) ?? null;
+
+const isWorkspaceSegmentDraftSubtitleEdited = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!baselineSegment) {
+    return Boolean(
+      getWorkspaceSegmentSubtitleTypeOverrideId(segment) ||
+        getWorkspaceSegmentSubtitleStyleOverrideId(segment) ||
+        getWorkspaceSegmentSubtitleColorOverrideId(segment),
+    );
+  }
+
+  return (
+    getWorkspaceSegmentSubtitleTypeOverrideId(segment) !== getWorkspaceSegmentSubtitleTypeOverrideId(baselineSegment) ||
+    getWorkspaceSegmentSubtitleStyleOverrideId(segment) !== getWorkspaceSegmentSubtitleStyleOverrideId(baselineSegment) ||
+    getWorkspaceSegmentSubtitleColorOverrideId(segment) !== getWorkspaceSegmentSubtitleColorOverrideId(baselineSegment)
+  );
+};
+
+const getWorkspaceSegmentEffectiveSubtitleSettings = (
+  session:
+    | Pick<WorkspaceSegmentEditorSession, "subtitleColor" | "subtitleStyle" | "subtitleType">
+    | null
+    | undefined,
+  segment:
+    | Pick<
+        WorkspaceSegmentEditorSegment,
+        "subtitleColor" | "subtitle_color" | "subtitleStyle" | "subtitle_style" | "subtitleType" | "subtitle_type"
+      >
+    | null
+    | undefined,
+  fallbackSelection: {
+    subtitleColorId: string;
+    subtitleStyleId: string;
+  },
+) => {
+  const globalType = normalizeWorkspaceSegmentEditorSetting(session?.subtitleType);
+  const globalEnabled = globalType !== "none";
+  const segmentType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
+  const segmentStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
+  const segmentColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
+  const subtitleStyleId =
+    segmentStyleId ??
+    normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ??
+    normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleStyleId) ??
+    fallbackStudioSubtitleStyleOption.id;
+  const subtitleColorId =
+    segmentColorId ??
+    normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ??
+    normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleColorId) ??
+    fallbackStudioSubtitleColorOption.id;
+
+  return {
+    globalEnabled,
+    isEnabled: globalEnabled && segmentType !== "none",
+    subtitleColorId,
+    subtitleStyleId,
+    subtitleType: segmentType ?? (globalType === "none" ? "none" : "default"),
+  };
+};
+
 const isWorkspaceSegmentDraftVisualEdited = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (isWorkspaceSegmentServerPhotoAnimationOverride(segment)) {
     return true;
@@ -2650,6 +2741,7 @@ const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
 
     if (
       !isWorkspaceSegmentDraftTextEdited(segment) &&
+      !isWorkspaceSegmentDraftSubtitleEdited(segment, null) &&
       !isWorkspaceSegmentDraftVisualEdited(segment) &&
       !isWorkspaceSegmentDraftDurationEdited(segment, null)
     ) {
@@ -2684,6 +2776,7 @@ type WorkspaceSegmentEditorChecklistItem =
       label: string;
       resetDuration: boolean;
       resetText: boolean;
+      resetSubtitle: boolean;
       resetSceneSound: boolean;
       resetVoice: boolean;
       resetVisual: boolean;
@@ -2927,6 +3020,34 @@ const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (segment: WorkspaceSeg
   return `озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId)}`;
 };
 
+const getWorkspaceSegmentEditorChecklistSceneSubtitleLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  options?: WorkspaceSegmentEditorChecklistBuildOptions,
+) => {
+  const subtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
+  const subtitleStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
+  const subtitleColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
+
+  if (subtitleType === "none") {
+    return "субтитры выключены";
+  }
+
+  const changes: string[] = [];
+  if (subtitleStyleId) {
+    changes.push(
+      `стиль ${getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(subtitleStyleId, options?.subtitleStyleOptions)}`,
+    );
+  }
+
+  if (subtitleColorId) {
+    changes.push(
+      `цвет ${getWorkspaceSegmentEditorChecklistSubtitleColorLabel(subtitleColorId, options?.subtitleColorOptions)}`,
+    );
+  }
+
+  return changes.length > 0 ? `субтитры: ${changes.join(", ")}` : "субтитры: глобальные настройки";
+};
+
 const getWorkspaceSegmentEditorChecklistDurationLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
   `длина: ${formatWorkspaceSegmentDurationInputValue(segment.manualDurationSeconds || segment.duration)} сек`;
 
@@ -3041,6 +3162,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     let resetVisual = false;
     let restoreVisual = false;
     let resetSceneSound = false;
+    let resetSubtitle = false;
     let resetVoice = false;
     const baselineSegment = baselineSegmentsByIndex.get(segment.index);
 
@@ -3067,6 +3189,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
       resetVoice = true;
     }
 
+    if (isWorkspaceSegmentDraftSubtitleEdited(segment, baselineSegment)) {
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneSubtitleLabel(segment, options));
+      resetSubtitle = true;
+    }
+
     if (isWorkspaceSegmentDraftDurationEdited(segment, baselineSegment)) {
       segmentChanges.push(getWorkspaceSegmentEditorChecklistDurationLabel(segment));
       resetDuration = true;
@@ -3079,6 +3206,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
         label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
         resetDuration,
         resetSceneSound,
+        resetSubtitle,
         resetText,
         resetVoice,
         resetVisual,
@@ -7128,6 +7256,15 @@ const restoreWorkspaceSegmentTimelineSnapshot = (
     };
   }
 
+  if (kind === "subtitle") {
+    return {
+      ...segment,
+      subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(snapshot),
+      subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(snapshot),
+      subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(snapshot),
+    };
+  }
+
   if (kind === "sound") {
     return {
       ...segment,
@@ -7291,6 +7428,9 @@ const cloneWorkspaceSegmentEditorDraftSegment = (
       : null,
   sceneSoundPrompt: typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "",
   sceneSoundPromptInitialized: Boolean(segment.sceneSoundPromptInitialized),
+  subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
+  subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
+  subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
   textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text, fallbackLanguage),
   voiceType: getWorkspaceSegmentVoiceOverrideForLanguage(segment, fallbackLanguage),
   visualReset: Boolean(segment.visualReset),
@@ -8140,6 +8280,9 @@ const createWorkspaceSegmentEditorDraftSession = (
           sceneSoundGeneratedFromPrompt: null,
           sceneSoundPrompt: "",
           sceneSoundPromptInitialized: Boolean(sceneSoundAsset),
+          subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
+          subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
+          subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
           textByLanguage: {
             [sourceLanguage]: segment.text,
           },
@@ -8407,6 +8550,9 @@ const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     sceneSoundGeneratedFromPrompt: liveSegment.sceneSoundGeneratedFromPrompt,
     sceneSoundPrompt: liveSegment.sceneSoundPrompt,
     sceneSoundPromptInitialized: freshSceneSoundAsset ? true : liveSegment.sceneSoundPromptInitialized,
+    subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(liveSegment),
+    subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(liveSegment),
+    subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(liveSegment),
     text: liveSegment.text,
     textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
       liveSegment.textByLanguage,
@@ -8606,6 +8752,9 @@ export const createWorkspaceSegmentEditorInsertedSegment = (options: {
     speechStartTime: null,
     speechWords: [],
     startTime,
+    subtitleColor: null,
+    subtitleStyle: null,
+    subtitleType: null,
     text: baseText,
     textByLanguage: { ...textByLanguage },
     videoAction: "original",
@@ -8665,6 +8814,9 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
       speechEndTime: null,
       speechStartTime: null,
       speechWords: [],
+      subtitleColor: null,
+      subtitleStyle: null,
+      subtitleType: null,
       text: "",
       textByLanguage: { ...emptyTextByLanguage },
       voiceType: null,
@@ -8712,6 +8864,9 @@ export const isWorkspaceSegmentEditorCleanEmptyDraft = (
           !segment.speechDuration &&
           !segment.speechEndTime &&
           !segment.speechStartTime &&
+          !getWorkspaceSegmentSubtitleTypeOverrideId(segment) &&
+          !getWorkspaceSegmentSubtitleStyleOverrideId(segment) &&
+          !getWorkspaceSegmentSubtitleColorOverrideId(segment) &&
           (segment.speechWords ?? []).length === 0,
       ) &&
       (normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "none") === "none" &&
@@ -9977,6 +10132,9 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       Boolean(normalizedSceneSoundPrompt) ||
       Boolean(normalizedSceneSoundGeneratedFromPrompt) ||
       Boolean(normalizedSceneSoundAsset);
+    const normalizedSubtitleColor = getWorkspaceSegmentSubtitleColorOverrideId(segment);
+    const normalizedSubtitleStyle = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
+    const normalizedSubtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
     const normalizedVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
     const normalizedMediaType = normalizeWorkspaceSegmentMediaType(segment.mediaType);
     const normalizedDurationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
@@ -10023,6 +10181,9 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedSceneSoundPrompt !== segment.sceneSoundPrompt ||
       normalizedSceneSoundGeneratedFromPrompt !== segment.sceneSoundGeneratedFromPrompt ||
       normalizedSceneSoundPromptInitialized !== segment.sceneSoundPromptInitialized ||
+      normalizedSubtitleColor !== (segment.subtitleColor ?? null) ||
+      normalizedSubtitleStyle !== (segment.subtitleStyle ?? null) ||
+      normalizedSubtitleType !== (segment.subtitleType ?? null) ||
       normalizedVoiceType !== getWorkspaceSegmentVoiceOverrideId(segment) ||
       normalizedVideoAction !== segment.videoAction ||
       normalizedMediaType !== segment.mediaType ||
@@ -10079,6 +10240,9 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         sceneSoundGeneratedFromPrompt: normalizedSceneSoundGeneratedFromPrompt,
         sceneSoundPrompt: normalizedSceneSoundPrompt,
         sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
+        subtitleColor: normalizedSubtitleColor,
+        subtitleStyle: normalizedSubtitleStyle,
+        subtitleType: normalizedSubtitleType,
         textByLanguage: normalizedTextByLanguage,
         videoAction: normalizedVideoAction,
         voiceType: normalizedVoiceType,
@@ -10112,6 +10276,9 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       sceneSoundGeneratedFromPrompt: normalizedSceneSoundGeneratedFromPrompt,
       sceneSoundPrompt: normalizedSceneSoundPrompt,
       sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
+      subtitleColor: normalizedSubtitleColor,
+      subtitleStyle: normalizedSubtitleStyle,
+      subtitleType: normalizedSubtitleType,
       textByLanguage: normalizedTextByLanguage,
       videoAction: "original" as const,
       voiceType: normalizedVoiceType,
@@ -10323,6 +10490,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
     if (typeof duration === "number") {
       timelineCursor = endTime;
     }
+    const segmentSubtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
+    const segmentSubtitleStyle = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
+    const segmentSubtitleColor = getWorkspaceSegmentSubtitleColorOverrideId(segment);
 
     segments.push({
       customVideoAssetId,
@@ -10340,6 +10510,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
       resetVisual: Boolean(segment.visualReset),
       sceneSoundAssetId,
       startTime: roundedStartTime,
+      ...(segmentSubtitleColor ? { subtitleColor: segmentSubtitleColor } : {}),
+      ...(segmentSubtitleStyle ? { subtitleStyle: segmentSubtitleStyle } : {}),
+      ...(segmentSubtitleType ? { subtitleType: segmentSubtitleType } : {}),
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
       voiceType: isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
@@ -13680,17 +13853,12 @@ const buildStudioRouteUrl = (
 };
 
 type StudioSubtitleSelectorChipProps = {
-  bulkTextError?: string | null;
-  bulkTextSegmentCount?: number;
-  bulkTextValue?: string;
   closeRequestId?: number;
   isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
   onOpenChange?: (isOpen: boolean) => void;
-  onApplyBulkText?: () => boolean | void;
-  onBulkTextChange?: (value: string) => void;
   onSelectColor: (colorId: StudioSubtitleColorOption["id"]) => void;
   onSelectExample: (exampleId: StudioSubtitleExampleOption["id"]) => void;
   onSelectStyle: (styleId: StudioSubtitleStyleOption["id"]) => void;
@@ -13710,12 +13878,17 @@ type StudioLanguageSelectorChipProps = {
 };
 
 type StudioVoiceSelectorChipProps = {
+  bulkTextError?: string | null;
+  bulkTextSegmentCount?: number;
+  bulkTextValue?: string;
   closeRequestId?: number;
   disabledValueLabel?: string;
   isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
+  onApplyBulkText?: () => boolean | void;
+  onBulkTextChange?: (value: string) => void;
   onOpenChange?: (isOpen: boolean) => void;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
   onSelectLanguage?: (language: StudioLanguage) => void;
@@ -13780,17 +13953,12 @@ type StudioBrandSelectorChipProps = {
 };
 
 function StudioSubtitleSelectorChip({
-  bulkTextError = null,
-  bulkTextSegmentCount,
-  bulkTextValue,
   closeRequestId = 0,
   isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
   onOpenChange,
-  onApplyBulkText,
-  onBulkTextChange,
   onSelectColor,
   onSelectExample,
   onSelectStyle,
@@ -13807,7 +13975,6 @@ function StudioSubtitleSelectorChip({
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const [requestAnchorRect, setRequestAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const menuId = useId();
-  const bulkTextAreaId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -13826,10 +13993,6 @@ function StudioSubtitleSelectorChip({
   const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle);
   const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle);
   const isSidebarVariant = variant === "sidebar";
-  const hasBulkTextEditor =
-    typeof bulkTextValue === "string" &&
-    typeof onBulkTextChange === "function" &&
-    typeof onApplyBulkText === "function";
 
   useEffect(() => {
     if (openRequestId <= 0 || lastHandledOpenRequestIdRef.current === openRequestId) {
@@ -14059,106 +14222,63 @@ function StudioSubtitleSelectorChip({
                 </div>
               </div>
 
-              {hasBulkTextEditor ? (
-                <div className="studio-subtitle-selector__section studio-subtitle-selector__section--bulk-text">
-                  <div className="studio-subtitle-selector__section-head">
-                    <span>{locale === "en" ? "Text" : "Текст"}</span>
-                    {typeof bulkTextSegmentCount === "number" ? (
-                      <small className="studio-subtitle-selector__section-count">
-                        {locale === "en" ? `${bulkTextSegmentCount} segments` : `${bulkTextSegmentCount} сегм.`}
-                      </small>
-                    ) : null}
-                  </div>
-                  <div className="studio-subtitle-selector__bulk-text">
-                    <label className="studio-subtitle-selector__bulk-text-label" htmlFor={bulkTextAreaId}>
-                      <span>{locale === "en" ? "Shorts subtitles" : "Субтитры Shorts"}</span>
-                    </label>
-                    <div className="studio-subtitle-selector__bulk-text-row">
-                      <textarea
-                        id={bulkTextAreaId}
-                        className="studio-subtitle-selector__bulk-textarea"
-                        value={bulkTextValue}
-                        onChange={(event) => {
-                          onBulkTextChange?.(event.target.value);
-                        }}
-                        rows={6}
-                        placeholder={locale === "en" ? "Enter the full Shorts text" : "Введите текст всего Shorts"}
-                      />
-                      <button
-                        className="studio-subtitle-selector__bulk-apply"
-                        type="button"
-                        onClick={() => {
-                          const applied = onApplyBulkText?.();
-                          if (applied !== false) {
-                            setIsOpen(false);
-                          }
-                        }}
-                      >
-                        {locale === "en" ? "Apply" : "Применить"}
-                      </button>
-                    </div>
-                    {bulkTextError ? <p className="studio-subtitle-selector__bulk-error">{bulkTextError}</p> : null}
-                  </div>
+              <div className="studio-subtitle-selector__section">
+                <div className="studio-subtitle-selector__section-head">
+                  <span>{locale === "en" ? "Examples" : "Примеры"}</span>
                 </div>
-              ) : (
-                <div className="studio-subtitle-selector__section">
-                  <div className="studio-subtitle-selector__section-head">
-                    <span>{locale === "en" ? "Examples" : "Примеры"}</span>
-                  </div>
-                  <div className="studio-subtitle-selector__examples">
-                    {studioSubtitleExampleOptions.map((example) => {
-                      const previewLines = buildStudioSubtitlePreviewLines(example, selectedStyle);
+                <div className="studio-subtitle-selector__examples">
+                  {studioSubtitleExampleOptions.map((example) => {
+                    const previewLines = buildStudioSubtitlePreviewLines(example, selectedStyle);
 
-                      return (
-                        <button
-                          key={example.id}
-                          className={`studio-subtitle-selector__example${example.id === selectedExampleId ? " is-selected" : ""}`}
-                          type="button"
-                          onClick={() => onSelectExample(example.id)}
+                    return (
+                      <button
+                        key={example.id}
+                        className={`studio-subtitle-selector__example${example.id === selectedExampleId ? " is-selected" : ""}`}
+                        type="button"
+                        onClick={() => onSelectExample(example.id)}
+                      >
+                        <span className="studio-subtitle-selector__example-label">{example.label}</span>
+                        <small className="studio-subtitle-selector__example-note">{example.note}</small>
+                        <div
+                          className="studio-subtitle-selector__example-stage"
+                          data-style={selectedStyle.id}
+                          data-uses-accent={studioSubtitleStyleUsesAccentColor(selectedStyle) ? "true" : "false"}
+                          style={previewStyle}
+                          aria-hidden="true"
                         >
-                          <span className="studio-subtitle-selector__example-label">{example.label}</span>
-                          <small className="studio-subtitle-selector__example-note">{example.note}</small>
+                          <div className="studio-subtitle-selector__example-video-meta">
+                            <span>{selectedStyle.label}</span>
+                            <span>{previewColorLabel}</span>
+                          </div>
                           <div
-                            className="studio-subtitle-selector__example-stage"
+                            className="studio-subtitle-selector__example-caption"
+                            data-logic={selectedStyle.logicMode}
                             data-style={selectedStyle.id}
-                            data-uses-accent={studioSubtitleStyleUsesAccentColor(selectedStyle) ? "true" : "false"}
-                            style={previewStyle}
-                            aria-hidden="true"
                           >
-                            <div className="studio-subtitle-selector__example-video-meta">
-                              <span>{selectedStyle.label}</span>
-                              <span>{previewColorLabel}</span>
-                            </div>
-                            <div
-                              className="studio-subtitle-selector__example-caption"
-                              data-logic={selectedStyle.logicMode}
-                              data-style={selectedStyle.id}
-                            >
-                              {previewLines.map((line, lineIndex) => (
-                                <span key={`${example.id}-line-${lineIndex}`} className="studio-subtitle-selector__example-line">
-                                  {line.map((word, wordIndex) => (
-                                    <span
-                                      key={`${example.id}-word-${lineIndex}-${wordIndex}`}
-                                      className={`studio-subtitle-selector__example-word is-${word.state}`}
-                                    >
-                                      {word.text}
-                                    </span>
-                                  ))}
-                                </span>
-                              ))}
-                            </div>
+                            {previewLines.map((line, lineIndex) => (
+                              <span key={`${example.id}-line-${lineIndex}`} className="studio-subtitle-selector__example-line">
+                                {line.map((word, wordIndex) => (
+                                  <span
+                                    key={`${example.id}-word-${lineIndex}-${wordIndex}`}
+                                    className={`studio-subtitle-selector__example-word is-${word.state}`}
+                                  >
+                                    {word.text}
+                                  </span>
+                                ))}
+                              </span>
+                            ))}
                           </div>
-                          <div className="studio-subtitle-selector__example-tags" aria-hidden="true">
-                            <span>{selectedStyle.fontFamily}</span>
-                            <span>{styleLogicLabel}</span>
-                            <span>{transitionLabel}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                        <div className="studio-subtitle-selector__example-tags" aria-hidden="true">
+                          <span>{selectedStyle.fontFamily}</span>
+                          <span>{styleLogicLabel}</span>
+                          <span>{transitionLabel}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>,
             document.body,
           )
@@ -14332,12 +14452,17 @@ function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant = "chi
 }
 
 function StudioVoiceSelectorChip({
+  bulkTextError = null,
+  bulkTextSegmentCount,
+  bulkTextValue,
   closeRequestId = 0,
   disabledValueLabel,
   isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
+  onApplyBulkText,
+  onBulkTextChange,
   onOpenChange,
   onSelect,
   onSelectLanguage,
@@ -14354,6 +14479,7 @@ function StudioVoiceSelectorChip({
   const [requestAnchorRect, setRequestAnchorRect] = useState<StudioMenuAnchorRect | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<StudioVoiceOption["id"] | null>(null);
   const menuId = useId();
+  const bulkTextAreaId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -14363,6 +14489,10 @@ function StudioVoiceSelectorChip({
   const selectedVoice = voiceOptions.find((voice) => voice.id === selectedVoiceId) ?? voiceOptions[0];
   const isSidebarVariant = variant === "sidebar";
   const hasLanguageSelector = Boolean(selectedLanguage && onSelectLanguage);
+  const hasBulkTextEditor =
+    typeof bulkTextValue === "string" &&
+    typeof onBulkTextChange === "function" &&
+    typeof onApplyBulkText === "function";
   const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
   const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
   const getVoiceLanguageLabel = (language: StudioLanguage) =>
@@ -14473,12 +14603,13 @@ function StudioVoiceSelectorChip({
 
       const estimatedMenuHeight = Math.min(
         window.innerHeight - 32,
-        48 + voiceOptions.length * 58 + (hasLanguageSelector ? 76 : 0),
+        (hasBulkTextEditor ? 270 : 48) + Math.ceil((voiceOptions.length + 1) / (hasBulkTextEditor ? 2 : 1)) * 58 + (hasLanguageSelector ? 76 : 0),
       );
       setMenuStyle(
         getStudioCompactMenuStyle({
           estimatedMenuHeight,
-          minWidth: 228,
+          minWidth: hasBulkTextEditor ? 540 : 228,
+          preferredWidth: hasBulkTextEditor ? 620 : undefined,
           triggerRect,
         }),
       );
@@ -14493,7 +14624,7 @@ function StudioVoiceSelectorChip({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [hasLanguageSelector, isOpen, requestAnchorRect, voiceOptions.length]);
+  }, [hasBulkTextEditor, hasLanguageSelector, isOpen, requestAnchorRect, voiceOptions.length]);
 
   const handlePreviewVoice = async (voice: StudioVoiceOption) => {
     if (typeof window === "undefined") {
@@ -14587,7 +14718,7 @@ function StudioVoiceSelectorChip({
         ? createPortal(
             <div
               ref={menuRef}
-              className="studio-voice-selector__menu"
+              className={`studio-voice-selector__menu${hasBulkTextEditor ? " studio-voice-selector__menu--with-text" : ""}`}
               id={menuId}
               role="menu"
               aria-label={locale === "en" ? "Voice selection" : "Выбор голоса"}
@@ -14625,83 +14756,130 @@ function StudioVoiceSelectorChip({
                 </div>
               ) : null}
               <span className="studio-voice-selector__menu-title">{locale === "en" ? "Choose voice" : "Выберите голос"}</span>
-              <div className={`studio-voice-selector__option${!isEnabled ? " is-selected" : ""}`}>
-                <button
-                  className="studio-voice-selector__option-main"
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={!isEnabled}
-                  onClick={() => {
-                    stopVoicePreview();
-                    onToggleEnabled(false);
-                    setIsOpen(false);
-                  }}
-                >
-                  <span>{locale === "en" ? "No voiceover" : "Без озвучки"}</span>
-                  <small>{locale === "en" ? "Keep the video without a voice track" : "Оставить ролик без голосовой дорожки"}</small>
-                </button>
-              </div>
-              {voiceOptions.map((voice) => (
-                (() => {
-                  const canPreviewVoice = Boolean(voice.previewSampleUrl);
-                  const isVoiceSelected = isEnabled && voice.id === selectedVoiceId;
+              <div className="studio-voice-selector__voice-grid">
+                <div className={`studio-voice-selector__option studio-voice-selector__option--no-voice${!isEnabled ? " is-selected" : ""}`}>
+                  <button
+                    className="studio-voice-selector__option-main"
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={!isEnabled}
+                    onClick={() => {
+                      stopVoicePreview();
+                      onToggleEnabled(false);
+                      if (!hasBulkTextEditor) {
+                        setIsOpen(false);
+                      }
+                    }}
+                  >
+                    <span>{locale === "en" ? "No voiceover" : "Без озвучки"}</span>
+                    <small>{locale === "en" ? "Keep the video without a voice track" : "Оставить ролик без голосовой дорожки"}</small>
+                  </button>
+                </div>
+                {voiceOptions.map((voice) => (
+                  (() => {
+                    const canPreviewVoice = Boolean(voice.previewSampleUrl);
+                    const isVoiceSelected = isEnabled && voice.id === selectedVoiceId;
 
-                  return (
-                    <div
-                      key={voice.id}
-                      className={`studio-voice-selector__option${isVoiceSelected ? " is-selected" : ""}`}
-                    >
-                      <button
-                        className="studio-voice-selector__option-main"
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={isVoiceSelected}
-                        onClick={() => {
-                          stopVoicePreview();
-                          onToggleEnabled(true);
-                          onSelect(voice.id);
+                    return (
+                      <div
+                        key={voice.id}
+                        className={`studio-voice-selector__option${isVoiceSelected ? " is-selected" : ""}`}
+                      >
+                        <button
+                          className="studio-voice-selector__option-main"
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={isVoiceSelected}
+                          onClick={() => {
+                            stopVoicePreview();
+                            onToggleEnabled(true);
+                            onSelect(voice.id);
+                            if (!hasBulkTextEditor) {
+                              setIsOpen(false);
+                            }
+                          }}
+                        >
+                          <span className="studio-voice-selector__option-title">
+                            <span>{voice.label}</span>
+                            {voice.badgeLabel ? (
+                              <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
+                            ) : null}
+                            {voice.creditCost ? (
+                              <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
+                            ) : null}
+                          </span>
+                          <small>{voice.description}</small>
+                        </button>
+                        <button
+                          className={`studio-voice-selector__preview${previewingVoiceId === voice.id ? " is-playing" : ""}`}
+                          type="button"
+                          aria-label={
+                            !canPreviewVoice
+                              ? `${locale === "en" ? "Preview unavailable" : "Превью недоступно"}: ${voice.label}`
+                              : previewingVoiceId === voice.id
+                                ? `${locale === "en" ? "Stop" : "Остановить"}: ${voice.label}`
+                                : `${locale === "en" ? "Listen" : "Прослушать"}: ${voice.label}`
+                          }
+                          title={!canPreviewVoice ? (locale === "en" ? "Preview unavailable" : "Превью недоступно") : previewingVoiceId === voice.id ? (locale === "en" ? "Stop" : "Остановить") : (locale === "en" ? "Listen" : "Прослушать")}
+                          disabled={!canPreviewVoice}
+                          onClick={() => void handlePreviewVoice(voice)}
+                        >
+                          {previewingVoiceId === voice.id ? (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                              <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.2" fill="currentColor" />
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                              <path d="M4.2 3.5v7l5.8-3.5-5.8-3.5Z" fill="currentColor" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })()
+                ))}
+              </div>
+              {hasBulkTextEditor && isEnabled ? (
+                <div className="studio-voice-selector__bulk-text">
+                  <div className="studio-voice-selector__bulk-head">
+                    <label htmlFor={bulkTextAreaId}>{locale === "en" ? "Voiceover text" : "Текст озвучки"}</label>
+                    {typeof bulkTextSegmentCount === "number" ? (
+                      <small>{locale === "en" ? `${bulkTextSegmentCount} segments` : `${bulkTextSegmentCount} сцен`}</small>
+                    ) : null}
+                  </div>
+                  <textarea
+                    id={bulkTextAreaId}
+                    className="studio-voice-selector__bulk-textarea"
+                    value={bulkTextValue}
+                    rows={6}
+                    placeholder={locale === "en" ? "Enter the full voiceover text" : "Введите полный текст озвучки"}
+                    onChange={(event) => onBulkTextChange?.(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                        event.preventDefault();
+                        const applied = onApplyBulkText?.();
+                        if (applied !== false) {
                           setIsOpen(false);
-                        }}
-                      >
-                        <span className="studio-voice-selector__option-title">
-                          <span>{voice.label}</span>
-                          {voice.badgeLabel ? (
-                            <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
-                          ) : null}
-                          {voice.creditCost ? (
-                            <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
-                          ) : null}
-                        </span>
-                        <small>{voice.description}</small>
-                      </button>
-                      <button
-                        className={`studio-voice-selector__preview${previewingVoiceId === voice.id ? " is-playing" : ""}`}
-                        type="button"
-                        aria-label={
-                          !canPreviewVoice
-                            ? `${locale === "en" ? "Preview unavailable" : "Превью недоступно"}: ${voice.label}`
-                            : previewingVoiceId === voice.id
-                              ? `${locale === "en" ? "Stop" : "Остановить"}: ${voice.label}`
-                              : `${locale === "en" ? "Listen" : "Прослушать"}: ${voice.label}`
                         }
-                        title={!canPreviewVoice ? (locale === "en" ? "Preview unavailable" : "Превью недоступно") : previewingVoiceId === voice.id ? (locale === "en" ? "Stop" : "Остановить") : (locale === "en" ? "Listen" : "Прослушать")}
-                        disabled={!canPreviewVoice}
-                        onClick={() => void handlePreviewVoice(voice)}
-                      >
-                        {previewingVoiceId === voice.id ? (
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                            <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.2" fill="currentColor" />
-                          </svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                            <path d="M4.2 3.5v7l5.8-3.5-5.8-3.5Z" fill="currentColor" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })()
-              ))}
+                      }
+                    }}
+                  />
+                  {bulkTextError ? <p className="studio-voice-selector__bulk-error">{bulkTextError}</p> : null}
+                  <div className="studio-voice-selector__bulk-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const applied = onApplyBulkText?.();
+                        if (applied !== false) {
+                          setIsOpen(false);
+                        }
+                      }}
+                    >
+                      {locale === "en" ? "Apply text" : "Применить текст"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>,
             document.body,
           )
@@ -16854,9 +17032,6 @@ export function WorkspacePage({
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [segmentTalkingCharacterDraftTargets, setSegmentTalkingCharacterDraftTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
-  const [segmentTalkingSpeakerPreview, setSegmentTalkingSpeakerPreview] =
-    useState<WorkspaceSegmentTalkingPhotoSpeakerPreview | null>(null);
-  const segmentTalkingSpeakerPreviewResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
@@ -17003,10 +17178,6 @@ export function WorkspacePage({
   const [segmentTimelineSoundMenuStyle, setSegmentTimelineSoundMenuStyle] = useState<CSSProperties | null>(null);
   const [segmentTimelineTextMenuSegmentIndex, setSegmentTimelineTextMenuSegmentIndex] = useState<number | null>(null);
   const [segmentTimelineTextMenuStyle, setSegmentTimelineTextMenuStyle] = useState<CSSProperties | null>(null);
-  const [segmentTimelineTextEditRequest, setSegmentTimelineTextEditRequest] = useState<{
-    requestId: number;
-    segmentIndex: number;
-  } | null>(null);
   const [segmentTimelinePromptFocusRequest, setSegmentTimelinePromptFocusRequest] = useState<{
     requestId: number;
     segmentIndex: number;
@@ -17255,7 +17426,6 @@ export function WorkspacePage({
   const segmentTimelineSoundMenuTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentTimelineTextButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineTextMenuRef = useRef<HTMLDivElement | null>(null);
-  const segmentTimelineTextMenuTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
   const segmentThumbPendingDragRef = useRef<{
     index: number;
@@ -17280,6 +17450,7 @@ export function WorkspacePage({
   const publishHashtagsFieldId = useId();
   const publishTimeFieldId = useId();
   const publishPlannerPopoverId = useId();
+  const segmentTimelineVoiceTextAreaId = useId();
   const showStudioToast = useCallback((message: string) => {
     if (studioToastTimerRef.current) {
       window.clearTimeout(studioToastTimerRef.current);
@@ -21472,7 +21643,14 @@ export function WorkspacePage({
           suppressActiveState: isSegmentEditorCleanEmptyDraft,
           suppressEditedState: isSegmentEditorCleanEmptyDraft,
           isSoundEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftSceneSoundEdited,
-          isTextEdited: isSegmentEditorCleanEmptyDraft ? () => false : (segment) => isWorkspaceSegmentDraftTextEdited(segment),
+          isTextEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftSubtitleEdited,
+          isTextEmpty: isSegmentEditorCleanEmptyDraft
+            ? () => false
+            : (segment) =>
+                !getWorkspaceSegmentEffectiveSubtitleSettings(segmentEditorDraft, segment, {
+                  subtitleColorId: studioSidebarSubtitleColorId,
+                  subtitleStyleId: studioSidebarSubtitleStyleId,
+                }).isEnabled,
           isVisualEdited: (segment, baselineSegment) =>
             !isSegmentEditorCleanEmptyDraft &&
             getWorkspaceSegmentDraftVisualStatus(segment, baselineSegment) === "changed",
@@ -21811,11 +21989,12 @@ export function WorkspacePage({
         return;
       }
 
+      const voiceGridRowCount = 1 + Math.ceil(selectedVoiceOptions.length / 2);
       setSegmentTimelineVoiceMenuStyle(
         getStudioCompactMenuStyle({
-          estimatedMenuHeight: Math.min(window.innerHeight - 32, 128 + selectedVoiceOptions.length * 58),
-          minWidth: 268,
-          preferredWidth: 320,
+          estimatedMenuHeight: Math.min(window.innerHeight - 32, 250 + voiceGridRowCount * 68),
+          minWidth: 540,
+          preferredWidth: 620,
           triggerRect,
         }),
       );
@@ -21975,9 +22154,9 @@ export function WorkspacePage({
 
       setSegmentTimelineTextMenuStyle(
         getStudioCompactMenuStyle({
-          estimatedMenuHeight: 244,
+          estimatedMenuHeight: 430,
           minWidth: 320,
-          preferredWidth: 420,
+          preferredWidth: 460,
           triggerRect,
         }),
       );
@@ -21992,28 +22171,6 @@ export function WorkspacePage({
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [segmentTimelineTextMenuSegmentIndex]);
-  useEffect(() => {
-    if (segmentTimelineTextMenuSegmentIndex === null) {
-      return undefined;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      const element = segmentTimelineTextMenuTextareaRef.current;
-      if (!element) {
-        return;
-      }
-
-      element.focus();
-      const textLength = element.value.length;
-      try {
-        element.setSelectionRange(textLength, textLength);
-      } catch {
-        // Ignore selection errors on unsupported inputs.
-      }
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
   }, [segmentTimelineTextMenuSegmentIndex]);
   useEffect(() => {
     if (
@@ -25320,17 +25477,6 @@ export function WorkspacePage({
     }
   };
 
-  const handleSegmentEditorTextReset = () => {
-    updateActiveSegmentDraft((segment) => ({
-      ...segment,
-      text: segment.originalText,
-      textByLanguage: {
-        ...segment.textByLanguage,
-        [selectedLanguage]: segment.originalText,
-      },
-    }));
-  };
-
   const resetSegmentEditorTextByIndex = (targetSegmentIndex: number) => {
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -25438,6 +25584,20 @@ export function WorkspacePage({
     }));
   };
 
+  const resetSegmentEditorSubtitleByIndex = (targetSegmentIndex: number) => {
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (segment) => segment.index === targetSegmentIndex,
+    );
+
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
+      ...segment,
+      subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(baselineSegment),
+      subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(baselineSegment),
+      subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(baselineSegment),
+    }));
+  };
+
   const createSegmentTimelineMusicRedoSnapshot = (
     draft: WorkspaceSegmentEditorDraftSession,
   ): Extract<WorkspaceSegmentTimelineRedoSnapshot, { kind: "music" }> => ({
@@ -25537,6 +25697,11 @@ export function WorkspacePage({
 
     if (kind === "voice") {
       resetSegmentEditorVoiceByIndex(safeSegmentIndex);
+      return;
+    }
+
+    if (kind === "subtitle") {
+      resetSegmentEditorSubtitleByIndex(safeSegmentIndex);
       return;
     }
 
@@ -25652,6 +25817,15 @@ export function WorkspacePage({
       if (activeSegment?.index === safeSegmentIndex || segmentAiPhotoModalSegmentIndex === safeSegmentIndex) {
         setSegmentSceneSoundModalPrompt("");
       }
+      return;
+    }
+
+    if (kind === "subtitle") {
+      updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) => ({
+        ...segment,
+        subtitleType: "none",
+      }));
+      setSegmentTimelineTextMenuSegmentIndex(null);
       return;
     }
 
@@ -27462,30 +27636,6 @@ export function WorkspacePage({
     }) ?? normalizedTarget;
   };
 
-  const closeSegmentTalkingSpeakerPreview = (confirmed: boolean) => {
-    const resolver = segmentTalkingSpeakerPreviewResolverRef.current;
-    segmentTalkingSpeakerPreviewResolverRef.current = null;
-    setSegmentTalkingSpeakerPreview(null);
-    resolver?.(confirmed);
-  };
-
-  const requestSegmentTalkingSpeakerPreviewConfirmation = (
-    preview: WorkspaceSegmentTalkingPhotoSpeakerPreview,
-  ): Promise<boolean> =>
-    new Promise((resolve) => {
-      segmentTalkingSpeakerPreviewResolverRef.current?.(false);
-      segmentTalkingSpeakerPreviewResolverRef.current = resolve;
-      setSegmentTalkingSpeakerPreview(preview);
-    });
-
-  useEffect(
-    () => () => {
-      segmentTalkingSpeakerPreviewResolverRef.current?.(false);
-      segmentTalkingSpeakerPreviewResolverRef.current = null;
-    },
-    [],
-  );
-
   const createSegmentTalkingSpeakerPreview = async (
     request: WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest,
   ): Promise<WorkspaceSegmentTalkingPhotoSpeakerPreview> => {
@@ -27501,7 +27651,7 @@ export function WorkspacePage({
       error?: string;
     } | null;
 
-    if (!response.ok || !payload?.data?.confirmationToken || !payload.data.overlay?.dataUrl) {
+    if (!response.ok || !payload?.data?.confirmationToken) {
       throw new Error(payload?.error ?? "Не удалось подтвердить выбранного говорящего персонажа.");
     }
 
@@ -27646,14 +27796,6 @@ export function WorkspacePage({
         segmentIndex: visualJobBinding.segmentIndex,
         speakerTarget: speakerTargetForSourceFrame,
       });
-      if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
-        return;
-      }
-
-      const isSpeakerConfirmed = await requestSegmentTalkingSpeakerPreviewConfirmation(speakerPreview);
-      if (!isSpeakerConfirmed) {
-        return;
-      }
       if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, targetSegmentIndex, runId)) {
         return;
       }
@@ -28561,11 +28703,10 @@ export function WorkspacePage({
     }
   };
 
-  const clearTemporarySegmentEditorStateForOtherProjects = (keepProjectId: number | null | undefined) => {
-    const normalizedKeepProjectId = getPositiveWorkspaceMediaAssetId(keepProjectId);
+  const clearTemporarySegmentEditorState = (keepProjectIds: readonly (number | null | undefined)[] = []) => {
     const clearedProjectIds = clearStoredWorkspaceSegmentEditorTemporaryStateExcept(
       session.email,
-      normalizedKeepProjectId ? [normalizedKeepProjectId] : [],
+      keepProjectIds,
     );
     if (!clearedProjectIds.length) {
       return;
@@ -29136,9 +29277,8 @@ export function WorkspacePage({
 
         if (statusPayload.data.generation) {
           doneWithoutPreviewAttempts = 0;
-          const generatedProjectId = getPositiveWorkspaceMediaAssetId(statusPayload.data.generation.adId);
           setGeneratedVideo(statusPayload.data.generation);
-          clearTemporarySegmentEditorStateForOtherProjects(generatedProjectId);
+          clearTemporarySegmentEditorState();
           setHasLoadedProjects(false);
           if (!createdVideoAnalyticsJobIdsRef.current.has(safeJobId)) {
             createdVideoAnalyticsJobIdsRef.current.add(safeJobId);
@@ -31674,6 +31814,10 @@ export function WorkspacePage({
                     resetSegmentEditorVoiceByIndex(item.segmentIndex);
                   }
 
+                  if (item.resetSubtitle) {
+                    resetSegmentEditorSubtitleByIndex(item.segmentIndex);
+                  }
+
                   if (item.resetDuration) {
                     resetSegmentEditorDurationByIndex(item.segmentIndex);
                   }
@@ -31744,7 +31888,7 @@ export function WorkspacePage({
   const openSegmentEditorTimelineTool = (
     segmentArrayIndex: number,
     tab: WorkspaceSegmentVisualModalTab,
-    options?: { focusPrompt?: boolean; focusText?: boolean; sceneMode?: "create" | "edit" },
+    options?: { focusPrompt?: boolean; sceneMode?: "create" | "edit" },
   ) => {
     const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
     if (!targetSegment) {
@@ -31765,12 +31909,6 @@ export function WorkspacePage({
     setSegmentEditorPromptToolTab(nextTab);
     setSegmentAiPhotoModalTab(nextTab);
 
-    if (options?.focusText) {
-      setSegmentTimelineTextEditRequest((current) => ({
-        requestId: (current?.requestId ?? 0) + 1,
-        segmentIndex: targetSegment.index,
-      }));
-    }
     if (options?.focusPrompt) {
       setSegmentTimelinePromptFocusRequest((current) => ({
         requestId: (current?.requestId ?? 0) + 1,
@@ -32014,13 +32152,68 @@ export function WorkspacePage({
       },
     }));
   };
+  const handleSegmentTimelineSubtitleDisable = (segmentIndex: number) => {
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+      ...segment,
+      subtitleType: "none",
+    }));
+  };
+  const handleSegmentTimelineSubtitleStyleSelect = (
+    segmentIndex: number,
+    styleId: StudioSubtitleStyleOption["id"],
+  ) => {
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraft((currentDraft) => {
+      const targetSegment = currentDraft.segments.find((segment) => segment.index === segmentIndex);
+      if (!targetSegment) {
+        return currentDraft;
+      }
+
+      const effectiveSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(currentDraft, targetSegment, {
+        subtitleColorId: studioSidebarSubtitleColorId,
+        subtitleStyleId: studioSidebarSubtitleStyleId,
+      });
+      const nextColorId = getStudioSubtitleColorAfterStyleChange({
+        currentColorId: effectiveSubtitleSettings.subtitleColorId,
+        currentStyleId: effectiveSubtitleSettings.subtitleStyleId,
+        nextStyleId: styleId,
+        subtitleColorOptions,
+        subtitleStyleOptions,
+      });
+
+      return {
+        ...currentDraft,
+        segments: currentDraft.segments.map((segment) =>
+          segment.index === segmentIndex
+            ? {
+                ...segment,
+                subtitleColor: nextColorId,
+                subtitleStyle: styleId,
+                subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment) === "none" ? "default" : segment.subtitleType ?? null,
+              }
+            : segment,
+        ),
+      };
+    });
+  };
+  const handleSegmentTimelineSubtitleColorSelect = (
+    segmentIndex: number,
+    colorId: StudioSubtitleColorOption["id"],
+  ) => {
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+      ...segment,
+      subtitleColor: colorId,
+      subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment) === "none" ? "default" : segment.subtitleType ?? null,
+    }));
+  };
   const handleSegmentTimelineVoiceUseGlobal = (segmentIndex: number) => {
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
       voiceType: "none",
     }));
-    setSegmentTimelineVoiceMenuSegmentIndex(null);
   };
   const handleSegmentTimelineVoiceSelect = (segmentIndex: number, voiceId: StudioVoiceOption["id"]) => {
     const nextVoiceId = resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
@@ -32029,7 +32222,6 @@ export function WorkspacePage({
       ...segment,
       voiceType: studioSidebarVoiceEnabled && nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
     }));
-    setSegmentTimelineVoiceMenuSegmentIndex(null);
   };
   const handleSegmentEditorPromptVisualToolButtonClick = (
     event: ReactMouseEvent<HTMLButtonElement>,
@@ -32385,8 +32577,38 @@ export function WorkspacePage({
       workspaceText(locale, "Звук сцены", "Scene sound")
     );
   };
-  const getSegmentTimelineTextLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
-    formatWorkspaceSegmentEditorChecklistPreview(segment.text, 38) || workspaceText(locale, "Добавить текст", "Add text");
+  const getSegmentTimelineVoiceTextPreview = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    formatWorkspaceSegmentEditorChecklistPreview(segment.text, 30) || workspaceText(locale, "Текст пуст", "No text");
+  const getSegmentTimelineVoiceDisplayLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    `${getSegmentTimelineVoiceLabel(segment)} · “${getSegmentTimelineVoiceTextPreview(segment)}”`;
+  const getSegmentTimelineSubtitleDisplay = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    const effectiveSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(segmentEditorDraft, segment, {
+      subtitleColorId: studioSidebarSubtitleColorId,
+      subtitleStyleId: studioSidebarSubtitleStyleId,
+    });
+
+    if (!effectiveSubtitleSettings.globalEnabled) {
+      const label = workspaceText(locale, "Глобально выключены", "Globally off");
+      return { colorAccent: null, label, title: label };
+    }
+
+    if (getWorkspaceSegmentSubtitleTypeOverrideId(segment) === "none") {
+      const label = workspaceText(locale, "Без субтитров", "No subtitles");
+      return { colorAccent: null, label, title: label };
+    }
+
+    const colorOption = subtitleColorOptions.find((color) => color.id === effectiveSubtitleSettings.subtitleColorId);
+    const styleLabel =
+      subtitleStyleOptions.find((style) => style.id === effectiveSubtitleSettings.subtitleStyleId)?.label ??
+      effectiveSubtitleSettings.subtitleStyleId;
+    const colorLabel = colorOption?.label ?? effectiveSubtitleSettings.subtitleColorId;
+
+    return {
+      colorAccent: colorOption?.accent ?? null,
+      label: styleLabel,
+      title: `${styleLabel}: ${colorLabel}`,
+    };
+  };
   const getSegmentTimelineVisualToolDisabledReason = (
     segment: WorkspaceSegmentEditorDraftSegment,
     tab: WorkspaceSegmentVisualModalTab,
@@ -32578,7 +32800,7 @@ export function WorkspacePage({
       ? createPortal(
           <div
             ref={segmentTimelineVoiceMenuRef}
-            className="studio-voice-selector__menu studio-segment-editor__timeline-voice-menu"
+            className="studio-voice-selector__menu studio-voice-selector__menu--with-text studio-segment-editor__timeline-voice-menu"
             role="menu"
             aria-label={workspaceText(
               locale,
@@ -32622,56 +32844,95 @@ export function WorkspacePage({
                 `Scene ${segmentTimelineVoiceMenuArrayIndex + 1} voice`,
               )}
             </span>
-            <div className={`studio-voice-selector__option${segmentTimelineVoiceMenuIsDisabled ? " is-selected" : ""}`}>
-              <button
-                className="studio-voice-selector__option-main"
-                type="button"
-                role="menuitemradio"
-                aria-checked={segmentTimelineVoiceMenuIsDisabled}
-                onClick={() => handleSegmentTimelineVoiceUseGlobal(segmentTimelineVoiceMenuSegment.index)}
-              >
-                <span className="studio-voice-selector__option-title">
-                  <span>{workspaceText(locale, "Без озвучки", "No voiceover")}</span>
-                </span>
+            <div className="studio-voice-selector__voice-grid">
+              <div className={`studio-voice-selector__option studio-voice-selector__option--no-voice${segmentTimelineVoiceMenuIsDisabled ? " is-selected" : ""}`}>
+                <button
+                  className="studio-voice-selector__option-main"
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={segmentTimelineVoiceMenuIsDisabled}
+                  onClick={() => handleSegmentTimelineVoiceUseGlobal(segmentTimelineVoiceMenuSegment.index)}
+                >
+                  <span className="studio-voice-selector__option-title">
+                    <span>{workspaceText(locale, "Без озвучки", "No voiceover")}</span>
+                  </span>
+                  <small>
+                    {workspaceText(
+                      locale,
+                      "Отключить голос только для этой сцены",
+                      "Turn voice off only for this scene",
+                    )}
+                  </small>
+                </button>
+              </div>
+              {selectedVoiceOptions.map((voice) => {
+                const isSelectedSceneVoice =
+                  !segmentTimelineVoiceMenuIsDisabled && segmentTimelineVoiceMenuEffectiveVoiceId === voice.id;
+
+                return (
+                  <div
+                    className={`studio-voice-selector__option${isSelectedSceneVoice ? " is-selected" : ""}`}
+                    key={`timeline-scene-voice:${voice.id}`}
+                  >
+                    <button
+                      className="studio-voice-selector__option-main"
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelectedSceneVoice}
+                      onClick={() => handleSegmentTimelineVoiceSelect(segmentTimelineVoiceMenuSegment.index, voice.id)}
+                    >
+                      <span className="studio-voice-selector__option-title">
+                        <span>{voice.label}</span>
+                        {voice.badgeLabel ? (
+                          <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
+                        ) : null}
+                        {voice.creditCost ? (
+                          <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
+                        ) : null}
+                      </span>
+                      <small>{voice.description}</small>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="studio-voice-selector__bulk-text studio-segment-editor__timeline-voice-text">
+              <div className="studio-voice-selector__bulk-head">
+                <label htmlFor={segmentTimelineVoiceTextAreaId}>
+                  {workspaceText(locale, "Текст озвучки", "Voiceover text")}
+                </label>
                 <small>
                   {workspaceText(
                     locale,
-                    "Отключить голос только для этой сцены",
-                    "Turn voice off only for this scene",
+                    `Сцена ${segmentTimelineVoiceMenuArrayIndex + 1}`,
+                    `Scene ${segmentTimelineVoiceMenuArrayIndex + 1}`,
                   )}
                 </small>
-              </button>
-            </div>
-            {selectedVoiceOptions.map((voice) => {
-              const isSelectedSceneVoice =
-                !segmentTimelineVoiceMenuIsDisabled && segmentTimelineVoiceMenuEffectiveVoiceId === voice.id;
-
-              return (
-                <div
-                  className={`studio-voice-selector__option${isSelectedSceneVoice ? " is-selected" : ""}`}
-                  key={`timeline-scene-voice:${voice.id}`}
+              </div>
+              <textarea
+                id={segmentTimelineVoiceTextAreaId}
+                className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"
+                value={segmentTimelineVoiceMenuSegment.text}
+                rows={5}
+                placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
+                onChange={(event) => handleSegmentTimelineTextChange(segmentTimelineVoiceMenuSegment.index, event)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    setSegmentTimelineVoiceMenuSegmentIndex(null);
+                  }
+                }}
+              />
+              <div className="studio-voice-selector__bulk-actions studio-segment-editor__timeline-voice-text-actions">
+                <button
+                  type="button"
+                  disabled={!isWorkspaceSegmentDraftTextEdited(segmentTimelineVoiceMenuSegment)}
+                  onClick={() => resetSegmentEditorTextByIndex(segmentTimelineVoiceMenuSegment.index)}
                 >
-                  <button
-                    className="studio-voice-selector__option-main"
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={isSelectedSceneVoice}
-                    onClick={() => handleSegmentTimelineVoiceSelect(segmentTimelineVoiceMenuSegment.index, voice.id)}
-                  >
-                    <span className="studio-voice-selector__option-title">
-                      <span>{voice.label}</span>
-                      {voice.badgeLabel ? (
-                        <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
-                      ) : null}
-                      {voice.creditCost ? (
-                        <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
-                      ) : null}
-                    </span>
-                    <small>{voice.description}</small>
-                  </button>
-                </div>
-              );
-            })}
+                  {workspaceText(locale, "Сбросить текст", "Reset text")}
+                </button>
+              </div>
+            </div>
           </div>,
           document.body,
         )
@@ -32849,21 +33110,29 @@ export function WorkspacePage({
       : -1;
   const segmentTimelineTextMenuSpan =
     segmentTimelineTextMenuArrayIndex >= 0 ? segmentEditorTimelineTextRow?.spans[segmentTimelineTextMenuArrayIndex] ?? null : null;
+  const segmentTimelineSubtitleMenuSettings = segmentTimelineTextMenuSegment
+    ? getWorkspaceSegmentEffectiveSubtitleSettings(segmentEditorDraft, segmentTimelineTextMenuSegment, {
+        subtitleColorId: studioSidebarSubtitleColorId,
+        subtitleStyleId: studioSidebarSubtitleStyleId,
+      })
+    : null;
+  const segmentTimelineSubtitleMenuType = getWorkspaceSegmentSubtitleTypeOverrideId(segmentTimelineTextMenuSegment);
   const segmentTimelineTextMenu =
     segmentTimelineTextMenuSegment &&
     segmentTimelineTextMenuArrayIndex >= 0 &&
+    segmentTimelineSubtitleMenuSettings &&
     segmentTimelineTextMenuStyle &&
     typeof document !== "undefined"
       ? createPortal(
           <div
             ref={segmentTimelineTextMenuRef}
-            className="studio-segment-editor__timeline-text-menu"
+            className="studio-segment-editor__timeline-text-menu studio-segment-editor__timeline-subtitle-menu"
             role="dialog"
             aria-modal="false"
             aria-label={workspaceText(
               locale,
-              `Текст сцены ${segmentTimelineTextMenuArrayIndex + 1}`,
-              `Scene ${segmentTimelineTextMenuArrayIndex + 1} text`,
+              `Субтитры сцены ${segmentTimelineTextMenuArrayIndex + 1}`,
+              `Scene ${segmentTimelineTextMenuArrayIndex + 1} subtitles`,
             )}
             style={segmentTimelineTextMenuStyle}
           >
@@ -32872,8 +33141,8 @@ export function WorkspacePage({
                 <strong>
                   {workspaceText(
                     locale,
-                    `Текст сцены ${segmentTimelineTextMenuArrayIndex + 1}`,
-                    `Scene ${segmentTimelineTextMenuArrayIndex + 1} text`,
+                    `Субтитры сцены ${segmentTimelineTextMenuArrayIndex + 1}`,
+                    `Scene ${segmentTimelineTextMenuArrayIndex + 1} subtitles`,
                   )}
                 </strong>
                 <small>
@@ -32883,13 +33152,13 @@ export function WorkspacePage({
                         segmentTimelineTextMenuSpan.endTime,
                         { isFirstSegment: segmentTimelineTextMenuArrayIndex === 0 },
                       )
-                    : workspaceText(locale, "Редактирование субтитра", "Subtitle editing")}
+                    : workspaceText(locale, "Настройки субтитров", "Subtitle settings")}
                 </small>
               </span>
               <button
                 className="studio-segment-editor__timeline-text-menu-close"
                 type="button"
-                aria-label={workspaceText(locale, "Закрыть редактор текста", "Close text editor")}
+                aria-label={workspaceText(locale, "Закрыть настройки субтитров", "Close subtitle settings")}
                 onClick={() => setSegmentTimelineTextMenuSegmentIndex(null)}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -32898,31 +33167,87 @@ export function WorkspacePage({
                 </svg>
               </button>
             </div>
-            <label className="studio-segment-editor__timeline-text-menu-field">
-              <span>{workspaceText(locale, "Текст сегмента", "Segment text")}</span>
-              <textarea
-                ref={segmentTimelineTextMenuTextareaRef}
-                className="studio-segment-editor__timeline-text-menu-textarea"
-                value={segmentTimelineTextMenuSegment.text}
-                rows={5}
-                placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
-                onChange={(event) => handleSegmentTimelineTextChange(segmentTimelineTextMenuSegment.index, event)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                    event.preventDefault();
-                    setSegmentTimelineTextMenuSegmentIndex(null);
-                  }
-                }}
-              />
-            </label>
+            {!segmentTimelineSubtitleMenuSettings.globalEnabled ? (
+              <div className="studio-segment-editor__timeline-subtitle-menu-status">
+                {workspaceText(
+                  locale,
+                  "Глобальные субтитры выключены. Локальные настройки сохранятся, но не появятся в превью и генерации.",
+                  "Global subtitles are off. Scene settings are saved but will not appear in preview or generation.",
+                )}
+              </div>
+            ) : null}
+            <div className="studio-segment-editor__timeline-subtitle-menu-section">
+              <span className="studio-segment-editor__timeline-subtitle-menu-title">
+                {workspaceText(locale, "Режим", "Mode")}
+              </span>
+              <div className="studio-subtitle-selector__styles">
+                <button
+                  className={`studio-subtitle-selector__style${
+                    segmentTimelineSubtitleMenuType === "none" ? " is-selected" : ""
+                  }`}
+                  type="button"
+                  aria-pressed={segmentTimelineSubtitleMenuType === "none"}
+                  onClick={() => handleSegmentTimelineSubtitleDisable(segmentTimelineTextMenuSegment.index)}
+                >
+                  <span>{workspaceText(locale, "Без субтитров", "No subtitles")}</span>
+                </button>
+              </div>
+            </div>
+            <div className="studio-segment-editor__timeline-subtitle-menu-section">
+              <span className="studio-segment-editor__timeline-subtitle-menu-title">
+                {workspaceText(locale, "Стиль", "Style")}
+              </span>
+              <div className="studio-subtitle-selector__styles">
+                {subtitleStyleOptions.map((style) => (
+                  <button
+                    key={`timeline-scene-subtitle-style:${style.id}`}
+                    className={`studio-subtitle-selector__style${
+                      style.id === segmentTimelineSubtitleMenuSettings.subtitleStyleId &&
+                      segmentTimelineSubtitleMenuType !== "none"
+                        ? " is-selected"
+                        : ""
+                    }`}
+                    type="button"
+                    aria-pressed={
+                      style.id === segmentTimelineSubtitleMenuSettings.subtitleStyleId &&
+                      segmentTimelineSubtitleMenuType !== "none"
+                    }
+                    onClick={() => handleSegmentTimelineSubtitleStyleSelect(segmentTimelineTextMenuSegment.index, style.id)}
+                  >
+                    <span>{style.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="studio-segment-editor__timeline-subtitle-menu-section">
+              <span className="studio-segment-editor__timeline-subtitle-menu-title">
+                {workspaceText(locale, "Цвет", "Color")}
+              </span>
+              <div className="studio-subtitle-selector__colors">
+                {subtitleColorOptions.map((color) => (
+                  <button
+                    key={`timeline-scene-subtitle-color:${color.id}`}
+                    className={`studio-subtitle-selector__color${
+                      color.id === segmentTimelineSubtitleMenuSettings.subtitleColorId &&
+                      segmentTimelineSubtitleMenuType !== "none"
+                        ? " is-selected"
+                        : ""
+                    }`}
+                    type="button"
+                    aria-label={color.label}
+                    aria-pressed={
+                      color.id === segmentTimelineSubtitleMenuSettings.subtitleColorId &&
+                      segmentTimelineSubtitleMenuType !== "none"
+                    }
+                    onClick={() => handleSegmentTimelineSubtitleColorSelect(segmentTimelineTextMenuSegment.index, color.id)}
+                  >
+                    <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
+                    <span>{color.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="studio-segment-editor__timeline-text-menu-actions">
-              <button
-                type="button"
-                disabled={!isWorkspaceSegmentDraftTextEdited(segmentTimelineTextMenuSegment)}
-                onClick={() => resetSegmentEditorTextByIndex(segmentTimelineTextMenuSegment.index)}
-              >
-                {workspaceText(locale, "Вернуть исходный", "Reset to original")}
-              </button>
               <button type="button" onClick={() => setSegmentTimelineTextMenuSegmentIndex(null)}>
                 {workspaceText(locale, "Готово", "Done")}
               </button>
@@ -33404,8 +33729,9 @@ export function WorkspacePage({
                 return null;
               }
               const voiceOption = getSegmentTimelineVoiceOption(segment);
+              const isVoiceTextEdited = isWorkspaceSegmentDraftTextEdited(segment);
               const isVoiceAudioStale =
-                isSegmentTimelineGlobalVoiceEdited || span.isEdited || isWorkspaceSegmentDraftTextEdited(segment);
+                isSegmentTimelineGlobalVoiceEdited || span.isEdited || isVoiceTextEdited;
               const voiceoverAudioVersion = [
                 segmentEditorDraft.ttsAssetId ?? "",
                 segment.startTime,
@@ -33427,8 +33753,8 @@ export function WorkspacePage({
               const voiceAudioKey = `timeline:voice:${segment.index}:${effectiveVoiceoverAudioUrl ?? "empty"}`;
               const voiceLabel = workspaceText(
                 locale,
-                `Озвучка сцены ${index + 1}: ${getSegmentTimelineVoiceLabel(segment)}`,
-                `Scene ${index + 1} voiceover: ${getSegmentTimelineVoiceLabel(segment)}`,
+                `Озвучка сцены ${index + 1}: ${getSegmentTimelineVoiceDisplayLabel(segment)}`,
+                `Scene ${index + 1} voiceover: ${getSegmentTimelineVoiceDisplayLabel(segment)}`,
               );
               const voiceDisabledReason = isVoiceAudioStale
                 ? workspaceText(locale, "Сначала примените изменения озвучки/текста", "Apply voice/text changes first")
@@ -33440,7 +33766,13 @@ export function WorkspacePage({
                       "Segment voiceover is not available as an isolated audio file yet",
                     );
               const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segment.index);
+              const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
               const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
+              const canForwardVoiceText = Boolean(segmentTimelineRedoSnapshots[voiceTextHistoryKey]);
+              const voiceTimelineHistoryKind =
+                isVoiceTextEdited || canForwardVoiceText ? "text" : ("voice" as WorkspaceSegmentTimelineHistoryKind);
+              const canBackVoiceTimeline = isVoiceTextEdited || span.isEdited;
+              const canForwardVoiceTimeline = voiceTimelineHistoryKind === "text" ? canForwardVoiceText : canForwardVoice;
 
               return (
                 <div
@@ -33451,11 +33783,11 @@ export function WorkspacePage({
                   <button
                     ref={setSegmentTimelineVoiceButtonRef(segment.index)}
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--voice studio-segment-editor__timeline-cell--has-play${
-                      span.isEdited || canForwardVoice ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      canBackVoiceTimeline || canForwardVoiceTimeline ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
                       span.isActive ? " is-active" : ""
-                    }${span.isEdited ? " is-edited" : ""}`}
-                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
+                    }${canBackVoiceTimeline ? " is-edited" : ""}`}
+                    data-edited-label={canBackVoiceTimeline ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`)}
                     onPointerDown={() => {
@@ -33464,13 +33796,13 @@ export function WorkspacePage({
                     onClick={(event) => handleSegmentEditorTimelineVoiceClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
-                      <strong>{getSegmentTimelineVoiceLabel(segment)}</strong>
+                      <strong>{getSegmentTimelineVoiceDisplayLabel(segment)}</strong>
                     </span>
                   </button>
                   {renderSegmentTimelineHistoryButtons({
-                    canBack: span.isEdited,
-                    canForward: canForwardVoice,
-                    kind: "voice",
+                    canBack: canBackVoiceTimeline,
+                    canForward: canForwardVoiceTimeline,
+                    kind: voiceTimelineHistoryKind,
                     label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
                     segmentIndex: segment.index,
                     withPlay: true,
@@ -33491,8 +33823,8 @@ export function WorkspacePage({
           <button
             className="studio-segment-editor__timeline-label"
             type="button"
-            aria-label={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
-            title={workspaceText(locale, "Настроить субтитры и текст всего видео", "Configure whole-video subtitles and text")}
+            aria-label={workspaceText(locale, "Настроить субтитры всего видео", "Configure whole-video subtitles")}
+            title={workspaceText(locale, "Настроить субтитры всего видео", "Configure whole-video subtitles")}
             onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event)}
             onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event)}
           >
@@ -33501,7 +33833,7 @@ export function WorkspacePage({
                 <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span>{workspaceText(locale, "Текст", "Text")}</span>
+            <span>{workspaceText(locale, "Субтитры", "Subtitles")}</span>
           </button>
           <div className="studio-segment-editor__timeline-track">
             {segmentEditorTimelineTextRow?.spans.map((span) => {
@@ -33510,8 +33842,9 @@ export function WorkspacePage({
               if (!segment) {
                 return null;
               }
-              const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
-              const canForwardText = Boolean(segmentTimelineRedoSnapshots[textHistoryKey]);
+              const subtitleHistoryKey = getWorkspaceSegmentTimelineHistoryKey("subtitle", segment.index);
+              const canForwardSubtitle = Boolean(segmentTimelineRedoSnapshots[subtitleHistoryKey]);
+              const subtitleDisplay = getSegmentTimelineSubtitleDisplay(segment);
 
               return (
                 <div
@@ -33522,7 +33855,7 @@ export function WorkspacePage({
                   <button
                     ref={setSegmentTimelineTextButtonRef(segment.index)}
                     className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--text${
-                      span.isEdited || canForwardText ? " studio-segment-editor__timeline-cell--has-history" : ""
+                      span.isEdited || canForwardSubtitle ? " studio-segment-editor__timeline-cell--has-history" : ""
                     }${
                       span.isActive ? " is-active" : ""
                     }${segmentTimelineTextMenuSegmentIndex === segment.index ? " is-menu-open" : ""}${
@@ -33530,21 +33863,33 @@ export function WorkspacePage({
                     }${span.isEmpty ? " is-empty" : ""}`}
                     data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
-                    aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
+                    aria-label={workspaceText(locale, `Настроить субтитры сцены ${index + 1}`, `Configure scene ${index + 1} subtitles`)}
+                    title={subtitleDisplay.title}
                     onPointerDown={() => {
                       previewSegmentTimelineActiveStateByArrayIndex(index);
                     }}
                     onClick={(event) => handleSegmentEditorTimelineTextClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
-                      <strong>{getSegmentTimelineTextLabel(segment)}</strong>
+                      {subtitleDisplay.colorAccent ? (
+                        <span className="studio-segment-editor__timeline-subtitle-value" aria-label={subtitleDisplay.title}>
+                          <span
+                            className="studio-segment-editor__timeline-subtitle-swatch"
+                            style={{ "--segment-subtitle-color": subtitleDisplay.colorAccent } as CSSProperties}
+                            aria-hidden="true"
+                          ></span>
+                          <strong>{subtitleDisplay.label}</strong>
+                        </span>
+                      ) : (
+                        <strong>{subtitleDisplay.label}</strong>
+                      )}
                     </span>
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited,
-                    canForward: canForwardText,
-                    kind: "text",
-                    label: workspaceText(locale, `Текст сцены ${index + 1}`, `Scene ${index + 1} text`),
+                    canForward: canForwardSubtitle,
+                    kind: "subtitle",
+                    label: workspaceText(locale, `Субтитры сцены ${index + 1}`, `Scene ${index + 1} subtitles`),
                     segmentIndex: segment.index,
                   })}
                 </div>
@@ -36761,17 +37106,12 @@ export function WorkspacePage({
               <div className="studio-segment-editor__prompt-controls">
                 <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
                   <StudioSubtitleSelectorChip
-                    bulkTextError={segmentSubtitleBulkTextError}
-                    bulkTextSegmentCount={segmentEditorSegmentCount}
-                    bulkTextValue={segmentSubtitleBulkTextValue}
                     closeRequestId={segmentTimelineSubtitleCloseRequestId}
                     isProgrammaticOnly
                     isEnabled={studioSidebarSubtitlesEnabled}
                     openAnchorRect={segmentTimelineGlobalControlAnchorRect}
                     openRequestId={segmentTimelineSubtitleOpenRequestId}
                     onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
-                    onApplyBulkText={handleApplySegmentSubtitleBulkText}
-                    onBulkTextChange={handleSegmentSubtitleBulkTextChange}
                     onToggleEnabled={handleSegmentEditorSubtitleToggle}
                     selectedColorId={studioSidebarSubtitleColorId}
                     selectedExampleId={selectedSubtitleExampleId}
@@ -36783,11 +37123,16 @@ export function WorkspacePage({
                     onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
                   />
                   <StudioVoiceSelectorChip
+                    bulkTextError={segmentSubtitleBulkTextError}
+                    bulkTextSegmentCount={segmentEditorSegmentCount}
+                    bulkTextValue={segmentSubtitleBulkTextValue}
                     closeRequestId={segmentTimelineVoiceCloseRequestId}
                     isProgrammaticOnly
                     isEnabled={studioSidebarVoiceEnabled}
                     openAnchorRect={segmentTimelineGlobalControlAnchorRect}
                     openRequestId={segmentTimelineVoiceOpenRequestId}
+                    onApplyBulkText={handleApplySegmentSubtitleBulkText}
+                    onBulkTextChange={handleSegmentSubtitleBulkTextChange}
                     onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
                     onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
                     onToggleEnabled={handleSegmentEditorVoiceToggle}
@@ -36853,13 +37198,8 @@ export function WorkspacePage({
 
       <div className="studio-sidebar__nav studio-sidebar__nav--settings" aria-label={workspaceText(locale, "Параметры видео", "Video settings")}>
         <StudioSubtitleSelectorChip
-          bulkTextError={segmentSubtitleBulkTextError}
-          bulkTextSegmentCount={segmentEditorSegmentCount}
-          bulkTextValue={segmentSubtitleBulkTextValue}
           isEnabled={studioSidebarSubtitlesEnabled}
           variant="sidebar"
-          onApplyBulkText={handleApplySegmentSubtitleBulkText}
-          onBulkTextChange={handleSegmentSubtitleBulkTextChange}
           onToggleEnabled={handleSegmentEditorSubtitleToggle}
           selectedColorId={studioSidebarSubtitleColorId}
           selectedExampleId={selectedSubtitleExampleId}
@@ -36871,8 +37211,13 @@ export function WorkspacePage({
           onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
         />
         <StudioVoiceSelectorChip
+          bulkTextError={segmentSubtitleBulkTextError}
+          bulkTextSegmentCount={segmentEditorSegmentCount}
+          bulkTextValue={segmentSubtitleBulkTextValue}
           isEnabled={studioSidebarVoiceEnabled}
           variant="sidebar"
+          onApplyBulkText={handleApplySegmentSubtitleBulkText}
+          onBulkTextChange={handleSegmentSubtitleBulkTextChange}
           onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
           onToggleEnabled={handleSegmentEditorVoiceToggle}
           selectedLanguage={selectedLanguage}
@@ -37155,13 +37500,16 @@ export function WorkspacePage({
                                 const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
                                 const segmentVisualStatus = getWorkspaceSegmentDraftVisualStatus(segment, baselineVisualSegment);
                                 const isSegmentVisualChanged = segmentVisualStatus === "changed";
-                                const segmentSubtitleEditRequestId =
-                                  segmentTimelineTextEditRequest?.segmentIndex === segment.index
-                                    ? segmentTimelineTextEditRequest.requestId
-                                    : 0;
+                                const segmentEffectiveSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(
+                                  segmentEditorDraft,
+                                  segment,
+                                  {
+                                    subtitleColorId: studioSidebarSubtitleColorId,
+                                    subtitleStyleId: studioSidebarSubtitleStyleId,
+                                  },
+                                );
                                 const shouldShowEditableSubtitleOverlay =
-                                  isActiveCard &&
-                                  (studioSidebarSubtitlesEnabled || segmentSubtitleEditRequestId > 0);
+                                  isActiveCard && segmentEffectiveSubtitleSettings.isEnabled;
 
                                 return (
                                   <div
@@ -37309,16 +37657,12 @@ export function WorkspacePage({
                                       {shouldShowEditableSubtitleOverlay ? (
                                         <WorkspaceSegmentSubtitleOverlay
                                           clipCurrentTime={subtitlePreviewTime}
-                                          editRequestId={segmentSubtitleEditRequestId}
-                                          isEditable
                                           isPlaying={isSegmentPlaying}
-                                          onResetText={handleSegmentEditorTextReset}
-                                          onTextChange={handleSegmentEditorTextChange}
                                           segment={segment}
                                           segmentNumber={segmentNumber}
-                                          subtitleColorId={studioSidebarSubtitleColorId}
+                                          subtitleColorId={segmentEffectiveSubtitleSettings.subtitleColorId}
                                           subtitleColorOptions={subtitleColorOptions}
-                                          subtitleStyleId={studioSidebarSubtitleStyleId}
+                                          subtitleStyleId={segmentEffectiveSubtitleSettings.subtitleStyleId}
                                           subtitleStyleOptions={subtitleStyleOptions}
                                         />
                                       ) : null}
@@ -38584,81 +38928,6 @@ export function WorkspacePage({
                       ) : (
                         workspaceText(locale, "Удалить", "Delete")
                       )}
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body,
-            )
-          : null}
-
-        {segmentTalkingSpeakerPreview && typeof document !== "undefined"
-          ? createPortal(
-              <div
-                className="workspace-confirm-modal workspace-talking-speaker-preview"
-                role="dialog"
-                aria-modal="true"
-                aria-label={workspaceText(locale, "Подтверждение говорящего персонажа", "Speaker confirmation")}
-              >
-                <button
-                  className="workspace-confirm-modal__backdrop route-close"
-                  type="button"
-                  aria-label={workspaceText(locale, "Выбрать говорящего заново", "Choose speaker again")}
-                  onClick={() => closeSegmentTalkingSpeakerPreview(false)}
-                />
-                <div className="workspace-confirm-modal__panel workspace-talking-speaker-preview__panel" role="document">
-                  <button
-                    className="workspace-confirm-modal__close route-close"
-                    type="button"
-                    aria-label={workspaceText(locale, "Выбрать говорящего заново", "Choose speaker again")}
-                    onClick={() => closeSegmentTalkingSpeakerPreview(false)}
-                  >
-                    ×
-                  </button>
-
-                  <div className="workspace-confirm-modal__header">
-                    <div className="workspace-confirm-modal__icon workspace-talking-speaker-preview__icon" aria-hidden="true">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                        <path d="M5 5h14v14H5z" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M9 12h6M12 9v6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-                      </svg>
-                    </div>
-                    <div className="workspace-confirm-modal__copy">
-                      <h2 className="workspace-confirm-modal__title">
-                        {workspaceText(locale, "Проверьте говорящего", "Check the speaker")}
-                      </h2>
-                      <p className="workspace-confirm-modal__message">
-                        {workspaceText(
-                          locale,
-                          "Генерация начнется только если красная рамка стоит на нужном персонаже.",
-                          "Generation starts only if the red box is on the intended character.",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="workspace-talking-speaker-preview__frame">
-                    <img
-                      src={segmentTalkingSpeakerPreview.overlay.dataUrl}
-                      alt={workspaceText(locale, "Выбранная область говорящего персонажа", "Selected speaker area")}
-                      draggable={false}
-                    />
-                  </div>
-
-                  <div className="workspace-confirm-modal__actions">
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
-                      type="button"
-                      onClick={() => closeSegmentTalkingSpeakerPreview(false)}
-                    >
-                      {workspaceText(locale, "Выбрать заново", "Choose again")}
-                    </button>
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--primary"
-                      type="button"
-                      onClick={() => closeSegmentTalkingSpeakerPreview(true)}
-                    >
-                      {workspaceText(locale, "Запустить генерацию", "Start generation")}
                     </button>
                   </div>
                 </div>

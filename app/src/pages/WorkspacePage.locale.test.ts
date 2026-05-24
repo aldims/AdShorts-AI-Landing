@@ -1989,6 +1989,60 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
+  it("includes per-scene subtitle disable override without changing the shared segment text", async () => {
+    const segment = createDraftSegment({
+      subtitleType: "none",
+      text: "Shared voice and subtitle text",
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        subtitleType: "none",
+        text: "Shared voice and subtitle text",
+        voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      }),
+    );
+  });
+
+  it("exports per-scene subtitle style and color only when a scene has overrides", async () => {
+    const firstSegment = createDraftSegment({
+      index: 0,
+      subtitleColor: "cyan",
+      subtitleStyle: "impact",
+      text: "Styled scene",
+    });
+    const secondSegment = createDraftSegment({
+      index: 1,
+      startTime: 4,
+      endTime: 8,
+      duration: 4,
+      text: "Inherited scene",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(
+      {
+        ...createDraftSession(firstSegment),
+        segments: [firstSegment, secondSegment],
+      },
+      { language: "ru" },
+    );
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        subtitleColor: "cyan",
+        subtitleStyle: "impact",
+        text: "Styled scene",
+      }),
+    );
+    expect(result.payload.segments[1]).not.toHaveProperty("subtitleColor");
+    expect(result.payload.segments[1]).not.toHaveProperty("subtitleStyle");
+    expect(result.payload.segments[1]).not.toHaveProperty("subtitleType");
+    expect(result.payload.segments[1]?.text).toBe("Inherited scene");
+  });
+
   it("uses current manual scene timing for segment visual generation jobs", () => {
     const segment = createDraftSegment({
       duration: 3,

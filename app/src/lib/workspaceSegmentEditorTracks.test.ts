@@ -143,6 +143,20 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
     expect(tracks.rows.find((row) => row.kind === "music")?.spans[0]?.isEdited).toBe(true);
   });
 
+  it("allows callers to decouple the text row empty state from segment text", () => {
+    const tracks = buildWorkspaceSegmentEditorTracks(
+      [createSegment(1, { text: "Shared voice and subtitle text" })],
+      [],
+      null,
+      null,
+      {
+        isTextEmpty: () => true,
+      },
+    );
+
+    expect(tracks.rows.find((row) => row.kind === "text")?.spans[0]?.isEmpty).toBe(true);
+  });
+
   it("can suppress active and edited states for a clean empty draft", () => {
     const tracks = buildWorkspaceSegmentEditorTracks(
       [createSegment(1, { text: "" })],
