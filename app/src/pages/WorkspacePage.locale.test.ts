@@ -1914,7 +1914,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolved.boundaryTime).toBeCloseTo(7.4, 6);
   });
 
-  it("updates track timings when a manual photo segment becomes a talking photo video", () => {
+  it("keeps slot timings when a manual photo segment becomes a talking photo video", () => {
     const talkingPhotoSegment = createDraftSegment({
       aiVideoAsset: {
         assetId: 909,
@@ -1956,15 +1956,16 @@ describe("WorkspacePage studio locale defaults", () => {
     );
 
     expect(normalized.segments[0]).toMatchObject({
-      duration: 3.2,
+      duration: 5,
       durationMode: "manual",
-      endTime: 3.2,
-      manualDurationSeconds: 3.2,
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     });
-    expect(normalized.segments[1]?.startTime).toBe(3.2);
-    expect(tracks.segmentSpans.map((span) => span.duration)).toEqual([3.2, 4]);
-    expect(tracks.totalDuration).toBe(7.2);
+    expect(normalized.segments[0]?.aiVideoAsset?.durationSeconds).toBe(3.2);
+    expect(normalized.segments[1]?.startTime).toBe(5);
+    expect(tracks.segmentSpans.map((span) => span.duration)).toEqual([5, 4]);
+    expect(tracks.totalDuration).toBe(9);
   });
 
   it("includes manual duration fields and resolved timeline duration in segment editor payload", async () => {
@@ -2001,7 +2002,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentVisualGenerationDurationSeconds(segment)).toBe(13);
   });
 
-  it("exports talking photo with embedded audio and generated video duration", async () => {
+  it("exports talking photo with embedded audio and canonical slot duration", async () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         assetId: 909,
@@ -2016,7 +2017,9 @@ describe("WorkspacePage studio locale defaults", () => {
       aiVideoPrompt: "Говорящий персонаж",
       aiVideoPromptInitialized: true,
       duration: 5,
+      durationMode: "manual",
       endTime: 5,
+      manualDurationSeconds: 5,
       speechDuration: 5,
       text: "Говорящий персонаж",
       videoAction: "talking_photo",
@@ -2027,12 +2030,102 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(result.payload.segments[0]).toMatchObject({
       customVideoAssetId: 909,
-      duration: 3.2,
+      duration: 5,
       durationMode: "manual",
-      manualDurationSeconds: 3.2,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      startTime: 0,
       videoAction: "custom",
       voiceType: "none",
     });
+  });
+
+  it("keeps the project timeline stable when a talking photo asset is shorter than the fourth segment slot", async () => {
+    const durations = [6.38, 8.22, 6.4, 6.48, 6.04, 5.24];
+    let cursor = 0;
+    const segments = durations.map((duration, index) => {
+      const startTime = cursor;
+      const endTime = Number((startTime + duration).toFixed(3));
+      cursor = endTime;
+
+      return createDraftSegment({
+        aiVideoAsset:
+          index === 3
+            ? {
+                assetId: 909,
+                durationSeconds: 6.455328798185941,
+                fileName: "segment-talking-photo.mp4",
+                fileSize: 0,
+                mimeType: "video/mp4",
+                remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+              }
+            : null,
+        aiVideoGeneratedMode: index === 3 ? "talking_photo" : null,
+        duration,
+        durationMode: "manual",
+        endTime,
+        index,
+        manualDurationSeconds: duration,
+        startTime,
+        text: `Segment ${index + 1}`,
+        videoAction: index === 3 ? "talking_photo" : "original",
+      });
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(
+      {
+        ...createDraftSession(segments[0]!),
+        segments,
+      },
+      { language: "ru" },
+    );
+
+    expect(result.payload.segments.map((segment) => ({
+      duration: segment.duration,
+      endTime: segment.endTime,
+      startTime: segment.startTime,
+    }))).toEqual([
+      { duration: 6.38, endTime: 6.38, startTime: 0 },
+      { duration: 8.22, endTime: 14.6, startTime: 6.38 },
+      { duration: 6.4, endTime: 21, startTime: 14.6 },
+      { duration: 6.48, endTime: 27.48, startTime: 21 },
+      { duration: 6.04, endTime: 33.52, startTime: 27.48 },
+      { duration: 5.24, endTime: 38.76, startTime: 33.52 },
+    ]);
+    expect(result.payload.segments[3]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 909,
+        duration: 6.48,
+        manualDurationSeconds: 6.48,
+        videoAction: "custom",
+        voiceType: "none",
+      }),
+    );
+  });
+
+  it("rejects talking photo export when the generated media is materially longer than the segment slot", async () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 6.7,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 6.48,
+      durationMode: "manual",
+      endTime: 6.48,
+      index: 0,
+      manualDurationSeconds: 6.48,
+      text: "Говорящий персонаж",
+      videoAction: "talking_photo",
+    });
+
+    await expect(buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" })).rejects.toThrow(
+      "Говорящий персонаж сегмента 1 длиннее таймлайна сцены",
+    );
   });
 
   it("restores a live generated AI photo when server state lost the draft video action", () => {

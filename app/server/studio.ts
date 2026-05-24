@@ -1103,6 +1103,8 @@ const normalizeNumber = (value: unknown) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const roundStudioTimelineSeconds = (value: number) => Number(value.toFixed(3));
+
 const normalizeStudioSegmentVisualDurationSeconds = (value: unknown) => {
   const normalized = normalizeNumber(value);
   return normalized !== null && normalized >= 1 ? Number(normalized.toFixed(3)) : undefined;
@@ -1181,6 +1183,8 @@ export const normalizeStudioSegmentEditorPayload = (
   }
 
   const segments: StudioSegmentEditorSegment[] = [];
+  let timelineCursor = 0;
+  let hasTimingDrift = false;
 
   rawSegments.forEach((segment) => {
     if (!segment || typeof segment !== "object") {
@@ -1233,12 +1237,32 @@ export const normalizeStudioSegmentEditorPayload = (
       normalizeStudioSegmentManualDurationSeconds(timelineDuration) ??
       normalizeStudioSegmentManualDurationSeconds(rawDuration);
     const durationMode = manualDurationSeconds !== null ? "manual" : rawDurationMode;
-    const duration = manualDurationSeconds ?? rawDuration ?? undefined;
-    const startTime = rawStartTime ?? undefined;
+    const duration =
+      manualDurationSeconds !== null
+        ? roundStudioTimelineSeconds(manualDurationSeconds)
+        : rawDuration !== null
+          ? roundStudioTimelineSeconds(rawDuration)
+          : undefined;
+    const startTime = duration !== undefined ? roundStudioTimelineSeconds(timelineCursor) : rawStartTime ?? undefined;
     const endTime =
-      manualDurationSeconds !== null && rawStartTime !== null
-        ? Number((rawStartTime + manualDurationSeconds).toFixed(3))
-        : rawEndTime ?? undefined;
+      duration !== undefined && startTime !== undefined
+        ? roundStudioTimelineSeconds(startTime + duration)
+        : rawEndTime !== null
+          ? roundStudioTimelineSeconds(rawEndTime)
+          : undefined;
+    const normalizedManualDurationSeconds =
+      manualDurationSeconds !== null ? roundStudioTimelineSeconds(manualDurationSeconds) : null;
+    if (duration !== undefined && startTime !== undefined && endTime !== undefined) {
+      const startDrift = rawStartTime !== null ? Math.abs(rawStartTime - startTime) : 0;
+      const endDrift = rawEndTime !== null ? Math.abs(rawEndTime - endTime) : 0;
+      const durationDrift = rawDuration !== null ? Math.abs(rawDuration - duration) : 0;
+      const manualDurationDrift =
+        rawManualDurationSeconds !== null ? Math.abs(rawManualDurationSeconds - duration) : 0;
+      if (Math.max(startDrift, endDrift, durationDrift, manualDurationDrift) > 0.01) {
+        hasTimingDrift = true;
+      }
+      timelineCursor = endTime;
+    }
     const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
     const segmentVoiceType =
       segmentVoiceTypeRaw === null
@@ -1258,7 +1282,7 @@ export const normalizeStudioSegmentEditorPayload = (
       durationMode,
       endTime,
       index,
-      manualDurationSeconds,
+      manualDurationSeconds: normalizedManualDurationSeconds,
       resetVisual: Boolean(segmentRecord.resetVisual),
       sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
       startTime,
@@ -1278,6 +1302,21 @@ export const normalizeStudioSegmentEditorPayload = (
 
   if (segments.length > WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
     throw new Error(`Segment editor supports up to ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} segments.`);
+  }
+
+  if (hasTimingDrift) {
+    console.warn("[studio] segment-editor timing drift normalized", {
+      projectId,
+      segmentCount: segments.length,
+      segmentTimings: segments.map((segment) => ({
+        duration: segment.duration ?? null,
+        durationMode: segment.durationMode ?? null,
+        endTime: segment.endTime ?? null,
+        index: segment.index,
+        manualDurationSeconds: segment.manualDurationSeconds ?? null,
+        startTime: segment.startTime ?? null,
+      })),
+    });
   }
 
   return {

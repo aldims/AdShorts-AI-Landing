@@ -118,6 +118,49 @@ describe("studio generation language resolution", () => {
     );
   });
 
+  it("normalizes segment editor timing drift before forwarding generation payload", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 6.455328798185941,
+            durationMode: "manual",
+            endTime: 27.455,
+            index: 3,
+            manualDurationSeconds: 6.455328798185941,
+            startTime: 21,
+            text: "Talking photo",
+            videoAction: "custom",
+            customVideoAssetId: 909,
+            voiceType: "none",
+          },
+          {
+            duration: 6.0396712018140555,
+            durationMode: "manual",
+            endTime: 33.495,
+            index: 4,
+            manualDurationSeconds: 6.0396712018140555,
+            startTime: 27.455328798185942,
+            text: "Next scene",
+            videoAction: "original",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments.map((segment) => ({
+      duration: segment.duration,
+      endTime: segment.endTime,
+      manualDurationSeconds: segment.manualDurationSeconds,
+      startTime: segment.startTime,
+    }))).toEqual([
+      { duration: 6.455, endTime: 6.455, manualDurationSeconds: 6.455, startTime: 0 },
+      { duration: 6.04, endTime: 12.495, manualDurationSeconds: 6.04, startTime: 6.455 },
+    ]);
+  });
+
   it("forwards visual generation target duration with the upstream field name", () => {
     expect(buildStudioSegmentVisualDurationPayload(13)).toEqual({ duration: 13 });
     expect(buildStudioSegmentVisualDurationPayload(0.5)).toEqual({});

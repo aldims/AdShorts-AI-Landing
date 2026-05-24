@@ -66,6 +66,7 @@ import {
   getWorkspaceSegmentEditorSpeechDuration,
   normalizeWorkspaceSegmentManualDurationSeconds,
   rebuildWorkspaceSegmentEditorTimeline,
+  roundWorkspaceSegmentTimelineSeconds,
   type WorkspaceSegmentDurationMode,
 } from "../lib/workspaceSegmentEditorTimeline";
 import {
@@ -7894,7 +7895,30 @@ const getWorkspaceSegmentEffectiveVoiceEnabled = (
 const getStudioCustomVideoFileDurationSeconds = (asset: StudioCustomVideoFile | null | undefined) =>
   normalizeWorkspaceSegmentManualDurationSeconds(asset?.durationSeconds);
 
+const getWorkspaceSegmentCanonicalSlotDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  if (manualDuration !== null) {
+    return manualDuration;
+  }
+
+  const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - startTime;
+  const normalizedTimelineDuration = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
+  if (normalizedTimelineDuration !== null) {
+    return normalizedTimelineDuration;
+  }
+
+  return normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+};
+
 const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return (
+      getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) ??
+      getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment))
+    );
+  }
+
   const visualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
   const visualAssetDuration = getStudioCustomVideoFileDurationSeconds(visualAsset);
   if (visualAssetDuration !== null) {
@@ -9035,6 +9059,7 @@ const removeStoredWorkspaceSegmentEditorSession = (
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
+const WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS = 0.1;
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-ai-photo-pending:";
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-photo-animation-pending:";
@@ -10143,6 +10168,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
   const segments: WorkspaceSegmentEditorPayloadSegment[] = [];
   const uploads: WorkspaceSegmentEditorUploadFile[] = [];
   const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session);
+  let timelineCursor = 0;
 
   for (const segment of normalizedSegments) {
     const exportAction = resolveWorkspaceSegmentExportVideoAction(segment);
@@ -10171,9 +10197,6 @@ export const buildWorkspaceSegmentEditorPayload = async (
               ? selectedAiVideoAsset
               : null;
     const isTalkingPhotoExport = exportAction === "talking_photo" && Boolean(selectedAiVideoAsset);
-    const talkingPhotoDurationSeconds = isTalkingPhotoExport
-      ? getStudioCustomVideoFileDurationSeconds(selectedAiVideoAsset)
-      : null;
     const payloadVideoAction: WorkspaceSegmentEditorPayloadVideoAction =
       exportAction === "ai_photo" || exportAction === "image_edit" || Boolean(selectedAiVideoAsset)
         ? "custom"
@@ -10222,28 +10245,49 @@ export const buildWorkspaceSegmentEditorPayload = async (
     }
 
     const durationMode =
-      isTalkingPhotoExport && talkingPhotoDurationSeconds !== null
+      isTalkingPhotoExport
         ? "manual"
         : normalizeWorkspaceSegmentDurationMode(segment.durationMode);
     const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-    const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
-    const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - startTime;
+    const startTime = timelineCursor;
+    const sourceStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+    const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - sourceStartTime;
     const normalizedTimelineDuration = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
     const normalizedSegmentDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
     const manualDurationCandidates = [manualDurationSeconds, normalizedTimelineDuration, normalizedSegmentDuration].filter(
       (value): value is number => value !== null,
     );
     const resolvedManualDurationSeconds =
-      isTalkingPhotoExport && talkingPhotoDurationSeconds !== null
-        ? talkingPhotoDurationSeconds
-        : durationMode === "manual" && manualDurationCandidates.length > 0
+      durationMode === "manual" && manualDurationCandidates.length > 0
           ? Math.max(...manualDurationCandidates)
           : null;
-    const duration =
+    const rawDuration =
       durationMode === "manual" && resolvedManualDurationSeconds !== null
         ? resolvedManualDurationSeconds
         : normalizedSegmentDuration ?? normalizedTimelineDuration ?? undefined;
-    const endTime = typeof duration === "number" ? Number((startTime + duration).toFixed(3)) : segment.endTime;
+    const duration = typeof rawDuration === "number" ? roundWorkspaceSegmentTimelineSeconds(rawDuration) : undefined;
+    const endTime = typeof duration === "number" ? roundWorkspaceSegmentTimelineSeconds(startTime + duration) : segment.endTime;
+    const roundedManualDurationSeconds =
+      durationMode === "manual" && resolvedManualDurationSeconds !== null
+        ? roundWorkspaceSegmentTimelineSeconds(resolvedManualDurationSeconds)
+        : null;
+    const talkingPhotoMediaDurationSeconds = isTalkingPhotoExport
+      ? getStudioCustomVideoFileDurationSeconds(selectedAiVideoAsset)
+      : null;
+    if (
+      isTalkingPhotoExport &&
+      typeof duration === "number" &&
+      talkingPhotoMediaDurationSeconds !== null &&
+      talkingPhotoMediaDurationSeconds > duration + WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS
+    ) {
+      throw new Error(
+        `Говорящий персонаж сегмента ${segment.index + 1} длиннее таймлайна сцены. Увеличьте длительность сегмента и попробуйте экспорт снова.`,
+      );
+    }
+    const roundedStartTime = roundWorkspaceSegmentTimelineSeconds(startTime);
+    if (typeof duration === "number") {
+      timelineCursor = endTime;
+    }
 
     segments.push({
       customVideoAssetId,
@@ -10257,10 +10301,10 @@ export const buildWorkspaceSegmentEditorPayload = async (
       endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
       index: segment.index,
-      manualDurationSeconds: durationMode === "manual" ? resolvedManualDurationSeconds : null,
+      manualDurationSeconds: roundedManualDurationSeconds,
       resetVisual: Boolean(segment.visualReset),
       sceneSoundAssetId,
-      startTime,
+      startTime: roundedStartTime,
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
       voiceType: isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideForLanguage(segment, options.language),
@@ -26212,12 +26256,6 @@ export function WorkspacePage({
             aiVideoGeneratedFromPrompt: options.script,
             aiVideoPrompt: options.script,
             aiVideoPromptInitialized: true,
-            ...(generatedDurationSeconds !== null
-              ? {
-                  durationMode: "manual" as const,
-                  manualDurationSeconds: generatedDurationSeconds,
-                }
-              : {}),
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
             visualReset: false,

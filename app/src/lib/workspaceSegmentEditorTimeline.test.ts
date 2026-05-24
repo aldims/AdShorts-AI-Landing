@@ -110,6 +110,32 @@ describe("workspace segment editor timeline", () => {
     expect(rebuilt[1]?.endTime).toBe(9);
   });
 
+  it("rounds rebuilt timeline boundaries to milliseconds and keeps adjacent segments aligned", () => {
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([
+      createSegment({
+        duration: 6.455328798185941,
+        durationMode: "manual",
+        manualDurationSeconds: 6.455328798185941,
+      }),
+      createSegment({
+        duration: 6.0396712018140555,
+        durationMode: "manual",
+        manualDurationSeconds: 6.0396712018140555,
+      }),
+    ]);
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 6.455,
+      endTime: 6.455,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 6.04,
+      endTime: 12.495,
+      startTime: 6.455,
+    }));
+  });
+
   it("clamps manual duration to speech length while voice is enabled", () => {
     const segment = createSegment({
       durationMode: "manual",

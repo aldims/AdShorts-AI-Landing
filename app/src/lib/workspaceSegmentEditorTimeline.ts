@@ -24,6 +24,8 @@ const WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS = 1.8;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD = 0.34;
 const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
 
+export const roundWorkspaceSegmentTimelineSeconds = (value: number) => Number(value.toFixed(3));
+
 const normalizeWorkspaceSegmentTimelineTimeValue = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -200,7 +202,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
   const nextSegments = segments.map((segment) => {
     const voiceEnabled =
       typeof options?.voiceEnabled === "function" ? options.voiceEnabled(segment) : options?.voiceEnabled;
-    const duration = resolveWorkspaceSegmentDuration(segment, {
+    const duration = roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
       fallbackDuration: segment.duration,
       preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
       stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
@@ -208,9 +210,9 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
       visualKind: options?.visualKind?.(segment) ?? null,
       voiceEnabled,
-    });
+    }));
     const startTime = cursor;
-    const endTime = startTime + duration;
+    const endTime = roundWorkspaceSegmentTimelineSeconds(startTime + duration);
     cursor = endTime;
 
     const currentDuration = normalizeWorkspaceSegmentTimelineTimeValue(segment.duration);
