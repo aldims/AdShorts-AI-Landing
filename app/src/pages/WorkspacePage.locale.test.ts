@@ -2007,6 +2007,17 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
+  it("exports a scene voice from another language without changing the project language", async () => {
+    const segment = createDraftSegment({
+      text: "Scene keeps its own voice language",
+      voiceType: DEFAULT_STUDIO_VOICE_ID.en,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]?.voiceType).toBe(DEFAULT_STUDIO_VOICE_ID.en);
+  });
+
   it("exports per-scene subtitle style and color only when a scene has overrides", async () => {
     const firstSegment = createDraftSegment({
       index: 0,

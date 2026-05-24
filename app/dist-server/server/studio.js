@@ -362,6 +362,13 @@ export const normalizeStudioVoiceIdForLanguage = (voiceId, language) => {
     const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
     return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
 };
+const normalizeStudioVoiceId = (voiceId) => {
+    const normalizedVoiceId = normalizeGenerationText(voiceId);
+    if (!normalizedVoiceId || normalizedVoiceId === "none") {
+        return undefined;
+    }
+    return getCanonicalStudioVoiceId(normalizedVoiceId) ?? undefined;
+};
 const normalizePositiveInteger = (value) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric))
@@ -591,9 +598,12 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             timelineCursor = endTime;
         }
         const segmentVoiceTypeRaw = segmentRecord.voiceType ?? segmentRecord.voice_type;
+        const segmentVoiceTypeText = normalizeGenerationText(segmentVoiceTypeRaw);
         const segmentVoiceType = segmentVoiceTypeRaw === null
             ? null
-            : normalizeStudioVoiceIdForLanguage(String(segmentVoiceTypeRaw ?? "").trim(), language) ?? null;
+            : segmentVoiceTypeText.toLowerCase() === "none"
+                ? "none"
+                : normalizeStudioVoiceId(segmentVoiceTypeText) ?? null;
         const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
         const segmentSubtitleType = segmentSubtitleTypeRaw || null;
         const segmentSubtitleStyleRaw = normalizeGenerationText(segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style);

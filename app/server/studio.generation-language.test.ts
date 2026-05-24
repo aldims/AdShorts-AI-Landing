@@ -201,6 +201,34 @@ describe("studio generation language resolution", () => {
     );
   });
 
+  it("keeps per-scene voice language overrides in normalized segment editor payload", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 3,
+            index: 0,
+            text: "English voice inside a Russian project",
+            videoAction: "original",
+            voiceType: "Aiden",
+          },
+          {
+            duration: 3,
+            index: 1,
+            text: "Muted scene",
+            videoAction: "original",
+            voiceType: "none",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments[0]?.voiceType).toBe("Aiden");
+    expect(normalized?.segments[1]?.voiceType).toBe("none");
+  });
+
   it("forwards visual generation target duration with the upstream field name", () => {
     expect(buildStudioSegmentVisualDurationPayload(13)).toEqual({ duration: 13 });
     expect(buildStudioSegmentVisualDurationPayload(0.5)).toEqual({});
