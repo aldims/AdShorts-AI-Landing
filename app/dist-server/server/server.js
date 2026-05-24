@@ -385,6 +385,19 @@ const normalizeRequestNonNegativeInteger = (value) => {
     const rounded = Math.trunc(numeric);
     return rounded >= 0 ? rounded : undefined;
 };
+const getRequestStudioRouteProjectId = (req) => {
+    const referer = String(req.get("referer") ?? "").trim();
+    if (!referer) {
+        return undefined;
+    }
+    try {
+        const refererUrl = new URL(referer, env.appUrl);
+        return normalizeRequestPositiveInteger(refererUrl.searchParams.get("projectId"));
+    }
+    catch {
+        return undefined;
+    }
+};
 const normalizeRequestDurationSeconds = (value) => {
     const numeric = Number(value);
     return Number.isFinite(numeric) && numeric >= 1 ? Number(numeric.toFixed(3)) : undefined;
@@ -3609,8 +3622,10 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const source = typeof req.body?.source === "string" ? req.body.source.trim() : "";
-    const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
+        normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
+        getRequestStudioRouteProjectId(req);
+    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const visualMediaAssetId = normalizeRequestPositiveInteger(req.body?.visualMediaAssetId ?? req.body?.visual_media_asset_id);
     const visualSourceJobId = typeof req.body?.visualSourceJobId === "string"
@@ -3627,11 +3642,15 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
         res.status(400).json({ error: "Prompt is required." });
         return;
     }
+    if (!projectId) {
+        res.status(400).json({ error: "Project id is required for scene sound generation." });
+        return;
+    }
     try {
         const job = await createStudioSegmentSceneSoundJob(prompt, session.user, {
             language,
-            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            projectId,
+            segmentIndex,
             durationSeconds,
             source,
             visualMediaAssetId,

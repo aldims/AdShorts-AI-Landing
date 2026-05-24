@@ -1,0 +1,104 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const loadStudioModule = async () => {
+  vi.resetModules();
+  vi.stubEnv("ADSFLOW_API_BASE_URL", "https://adsflow.test");
+  vi.stubEnv("ADSFLOW_ADMIN_TOKEN", "admin-token");
+  vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
+  return import("./studio.js");
+};
+
+const jsonResponse = (payload: unknown, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+
+describe("studio scene sound jobs", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("requires a project id before contacting AdsFlow", async () => {
+    const { createStudioSegmentSceneSoundJob } = await loadStudioModule();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createStudioSegmentSceneSoundJob("quiet kitchen ambience", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+        segmentIndex: 0,
+      }),
+    ).rejects.toThrow("Project id is required for scene sound generation.");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards project id and visual source data to AdsFlow", async () => {
+    const { createStudioSegmentSceneSoundJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-scene-sound/jobs") {
+          return jsonResponse({
+            job_id: "scene-sound-job-1",
+            status: "queued",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioSegmentSceneSoundJob("quiet kitchen ambience", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      durationSeconds: 2,
+      language: "en",
+      projectId: 3576,
+      segmentIndex: 0,
+      visualMediaAssetId: 909,
+      visualSourceJobId: "talking-job-1",
+      visualSourceKind: "segment-talking-photo",
+    });
+
+    expect(job).toEqual(expect.objectContaining({
+      jobId: "scene-sound-job-1",
+      status: "queued",
+    }));
+    expect(calls.find((call) => call.pathname === "/api/web/segment-scene-sound/jobs")?.body).toEqual(
+      expect.objectContaining({
+        project_id: 3576,
+        segment_index: 0,
+        visual_media_asset_id: 909,
+        visual_source_job_id: "talking-job-1",
+        visual_source_kind: "segment-talking-photo",
+      }),
+    );
+  });
+});

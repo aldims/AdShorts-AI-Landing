@@ -3259,6 +3259,8 @@ export async function createStudioGenerationJob(prompt, user, options) {
             ? {
                 allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
                 segments: await Promise.all(normalizedSegmentEditor.segments.map(async (segment) => {
+                    const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange ? undefined : normalizedProjectId;
+                    const uploadScopeSegmentIndex = normalizedSegmentEditor.allowStructureChange ? undefined : segment.index;
                     const segmentAssetId = segment.videoAction === "custom" && segment.customVideoAssetId
                         ? segment.customVideoAssetId
                         : segment.videoAction === "custom" && segment.customVideoFileDataUrl && segment.customVideoFileName
@@ -3270,9 +3272,9 @@ export async function createStudioGenerationJob(prompt, user, options) {
                                 language: normalizedLanguage,
                                 mediaType: inferStudioUploadMediaType(segment.customVideoFileMimeType, segment.customVideoFileName),
                                 mimeType: segment.customVideoFileMimeType,
-                                projectId: normalizedProjectId,
+                                projectId: uploadScopeProjectId,
                                 role: "segment_source",
-                                segmentIndex: segment.index,
+                                segmentIndex: uploadScopeSegmentIndex,
                             })
                             : undefined;
                     return {
@@ -4294,6 +4296,9 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
         normalizedVisualSourceKind === "segment-talking-photo"
         ? normalizedVisualSourceKind
         : undefined;
+    if (!normalizedProjectId) {
+        throw new Error("Project id is required for scene sound generation.");
+    }
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-scene-sound/jobs", {

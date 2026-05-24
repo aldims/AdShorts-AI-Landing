@@ -342,6 +342,7 @@ type WorkspaceGenerateOptions = {
   projectId?: number;
   segmentEditor?: WorkspaceSegmentEditorPayload;
   segmentEditorAllowStructureChange?: boolean;
+  segmentEditorPersistedSegmentIndexes?: readonly number[];
   segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null;
   subtitleEnabled?: boolean;
   subtitleColorId?: string;
@@ -844,6 +845,11 @@ type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "s
   segments: WorkspaceSegmentEditorDraftSegment[];
 };
 
+type WorkspaceSegmentEditorMediaUploadScope = {
+  projectId?: number;
+  segmentIndex?: number;
+};
+
 type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text" | "subtitle";
 
 type WorkspaceSegmentTimelineRedoSnapshot =
@@ -1316,8 +1322,10 @@ type WorkspaceSegmentSceneSoundJobCreateRequest = {
   durationSeconds?: number;
   language: StudioLanguage;
   projectId?: number;
+  project_id?: number;
   prompt: string;
   segmentIndex?: number;
+  segment_index?: number;
   source?: "current" | "original";
   visualMediaAssetId?: number;
   visualSourceJobId?: string;
@@ -7631,6 +7639,44 @@ const hasWorkspaceSegmentOriginalVisualReference = (segment: WorkspaceSegmentEdi
       segment.originalExternalPreviewUrl,
   );
 
+const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  Boolean(
+    segment.currentAsset ||
+      segment.originalAsset ||
+      segment.currentPlaybackUrl ||
+      segment.currentPosterUrl ||
+      segment.currentPreviewUrl ||
+      segment.currentExternalPlaybackUrl ||
+      segment.currentExternalPreviewUrl ||
+      segment.originalPlaybackUrl ||
+      segment.originalPosterUrl ||
+      segment.originalPreviewUrl ||
+      segment.originalExternalPlaybackUrl ||
+      segment.originalExternalPreviewUrl,
+  );
+
+export const resolveWorkspaceSegmentEditorMediaUploadScope = (
+  session: Pick<WorkspaceSegmentEditorDraftSession, "projectId">,
+  segment: WorkspaceSegmentEditorDraftSegment,
+  options?: {
+    allowStructureChange?: boolean;
+    persistedSegmentIndexes?: readonly number[];
+  },
+): WorkspaceSegmentEditorMediaUploadScope => {
+  const shouldScopeToProjectSegment =
+    !options?.allowStructureChange ||
+    (options.persistedSegmentIndexes
+      ? options.persistedSegmentIndexes.includes(segment.index)
+      : hasWorkspaceSegmentPersistedMediaReference(segment));
+
+  return shouldScopeToProjectSegment
+    ? {
+        projectId: session.projectId,
+        segmentIndex: segment.index,
+      }
+    : {};
+};
+
 export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) =>
@@ -8073,21 +8119,7 @@ const shouldPreferEstimatedDurationForDraftSegment = (segment: WorkspaceSegmentE
     return false;
   }
 
-  const hasPersistedMediaReference = Boolean(
-    segment.currentAsset ||
-      segment.originalAsset ||
-      segment.currentPlaybackUrl ||
-      segment.currentPosterUrl ||
-      segment.currentPreviewUrl ||
-      segment.currentExternalPlaybackUrl ||
-      segment.currentExternalPreviewUrl ||
-      segment.originalPlaybackUrl ||
-      segment.originalPosterUrl ||
-      segment.originalPreviewUrl ||
-      segment.originalExternalPlaybackUrl ||
-      segment.originalExternalPreviewUrl,
-  );
-  if (hasPersistedMediaReference) {
+  if (hasWorkspaceSegmentPersistedMediaReference(segment)) {
     return false;
   }
 
@@ -10260,6 +10292,20 @@ const normalizeWorkspaceSegmentEditorStructureBaselines = (
   );
 };
 
+const getWorkspaceSegmentEditorBaselineSegmentIndexes = (
+  baselineOrBaselines?:
+    | WorkspaceSegmentEditorStructureSnapshot
+    | readonly (WorkspaceSegmentEditorStructureSnapshot | null | undefined)[]
+    | null,
+) =>
+  Array.from(
+    new Set(
+      normalizeWorkspaceSegmentEditorStructureBaselines(baselineOrBaselines).flatMap((baseline) =>
+        baseline.segments.map((segment) => segment.index),
+      ),
+    ),
+  );
+
 const hasWorkspaceSegmentEditorNonCanonicalSourceOrder = (draft: WorkspaceSegmentEditorStructureSnapshot) =>
   draft.segments.some((segment, index) => segment.index !== index);
 
@@ -10649,6 +10695,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
   options: {
     allowStructureChange?: boolean;
     language: StudioLanguage;
+    persistedSegmentIndexes?: readonly number[];
   },
 ): Promise<{ payload: WorkspaceSegmentEditorPayload; uploads: WorkspaceSegmentEditorUploadFile[] }> => {
   const segments: WorkspaceSegmentEditorPayloadSegment[] = [];
@@ -10657,6 +10704,10 @@ export const buildWorkspaceSegmentEditorPayload = async (
   let timelineCursor = 0;
 
   for (const segment of normalizedSegments) {
+    const mediaUploadScope = resolveWorkspaceSegmentEditorMediaUploadScope(session, segment, {
+      allowStructureChange: options.allowStructureChange,
+      persistedSegmentIndexes: options.persistedSegmentIndexes,
+    });
     const exportAction = resolveWorkspaceSegmentExportVideoAction(segment);
     const selectedAiVideoAsset =
       exportAction === "ai"
@@ -10717,9 +10768,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
           kind: "segment_source",
           language: options.language,
           mediaType: getWorkspaceSegmentCustomPreviewKind(customVisualAsset) === "image" ? "photo" : "video",
-          projectId: session.projectId,
+          projectId: mediaUploadScope.projectId,
           role: "segment_source",
-          segmentIndex: segment.index,
+          segmentIndex: mediaUploadScope.segmentIndex,
         })) ?? undefined;
       }
 
@@ -18074,8 +18125,7 @@ export function WorkspacePage({
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segmentIndex) ||
-      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex) ||
-      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex),
+      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex),
     [
       segmentEditorGeneratingAiPhotoRunIds,
       segmentEditorGeneratingAiVideoRunIds,
@@ -18083,16 +18133,10 @@ export function WorkspacePage({
       segmentEditorGeneratingPhotoAnimationRunIds,
       segmentEditorGeneratingTalkingPhotoRunIds,
       segmentEditorUpscalingImageRunIds,
-      segmentEditorGeneratingSceneSoundRunIds,
     ],
   );
   const getSegmentVisualGenerationStatusLabel = useCallback(
     (segmentIndex: number, variant: "full" | "compact" = "full") => {
-      if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex)) {
-        return variant === "compact"
-          ? workspaceText(locale, "Звук", "Sound")
-          : workspaceText(locale, "Генерируем звук сцены", "Generating scene sound");
-      }
       if (hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex)) {
         return variant === "compact"
           ? workspaceText(locale, "Улучшение", "Upscale")
@@ -18134,7 +18178,6 @@ export function WorkspacePage({
       segmentEditorGeneratingPhotoAnimationRunIds,
       segmentEditorGeneratingTalkingPhotoRunIds,
       segmentEditorUpscalingImageRunIds,
-      segmentEditorGeneratingSceneSoundRunIds,
     ],
   );
   const getSegmentVisualPlaceholderLabel = useCallback(
@@ -21455,7 +21498,7 @@ export function WorkspacePage({
     setReferenceCreationSceneStyle(WORKSPACE_REFERENCE_SCENE_DEFAULTS.style);
     setReferenceCreationSceneLightingMood(WORKSPACE_REFERENCE_SCENE_DEFAULTS.lightingMood);
     setSavedWorkspaceReferencesNotice(null);
-  }, [activeSegment?.index, segmentEditorDraft?.projectId]);
+  }, [segmentEditorDraft?.projectId]);
   useEffect(() => {
     const objectUrl = referenceCreationUploadFile?.objectUrl;
     return () => {
@@ -25602,11 +25645,16 @@ export function WorkspacePage({
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const baselineSession = segmentEditorChecklistBaseSession;
 
-    if (!currentDraft || !baselineSession || baselineSession.projectId !== currentDraft.projectId) {
+    if (!currentDraft) {
       return false;
     }
 
-    return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
+    if (baselineSession && baselineSession.projectId === currentDraft.projectId) {
+      return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+    return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
   };
 
   const getSegmentEditorVisualJobBinding = (
@@ -25620,8 +25668,8 @@ export function WorkspacePage({
     const isPersisted = isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex);
     return {
       isPersisted,
-      projectId: currentDraft.projectId,
-      segmentIndex: targetSegmentIndex,
+      projectId: isPersisted ? currentDraft.projectId : undefined,
+      segmentIndex: isPersisted ? targetSegmentIndex : undefined,
     };
   };
 
@@ -28798,14 +28846,20 @@ export function WorkspacePage({
     }
 
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
-    if (!visualJobBinding.projectId || typeof visualJobBinding.segmentIndex !== "number") {
+    if (!visualJobBinding.isPersisted) {
+      setSegmentEditorVideoError("Звук сцены можно добавить после сохранения новой структуры сегментов.");
+      return;
+    }
+    const targetSegment =
+      segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
+      (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
+    const sceneSoundProjectId = getPositiveWorkspaceMediaAssetId(visualJobBinding.projectId);
+    const sceneSoundSegmentIndex = visualJobBinding.segmentIndex;
+    if (!sceneSoundProjectId || typeof sceneSoundSegmentIndex !== "number") {
       setSegmentEditorVideoError("Звук можно добавить только к сохраненному сегменту.");
       return;
     }
 
-    const targetSegment =
-      segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
-      (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const visualMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
     const visualJobSource = getWorkspaceSegmentSceneSoundVisualJobSource(targetSegment);
@@ -28843,9 +28897,11 @@ export function WorkspacePage({
         body: JSON.stringify({
           durationSeconds,
           language: selectedLanguage,
-          projectId: visualJobBinding.projectId,
+          projectId: sceneSoundProjectId,
+          project_id: sceneSoundProjectId,
           prompt: normalizedPrompt,
-          segmentIndex: visualJobBinding.segmentIndex,
+          segmentIndex: sceneSoundSegmentIndex,
+          segment_index: sceneSoundSegmentIndex,
           source: "current",
           visualMediaAssetId,
           visualSourceJobId: visualJobSource?.visualSourceJobId,
@@ -29291,6 +29347,7 @@ export function WorkspacePage({
       isExplicitStructureChange,
     });
     const allowSegmentStructureChange = structureChangePermission.allowStructureChange;
+    const segmentEditorPersistedSegmentIndexes = getWorkspaceSegmentEditorBaselineSegmentIndexes(structureBaselines);
     if (structureChangePermission.shouldBlockImplicitStructureChange) {
       logSegmentEditorDiagnostics(
         "client.segment-editor.create-shorts.implicit-structure-blocked",
@@ -29344,6 +29401,7 @@ export function WorkspacePage({
       brandLogoFile: appliedSegmentEditorBrandSnapshot.brandLogoFile,
       brandText: appliedSegmentEditorBrandSnapshot.brandText,
       segmentEditorAllowStructureChange: allowSegmentStructureChange,
+      segmentEditorPersistedSegmentIndexes,
     });
   };
 
@@ -30583,6 +30641,7 @@ export function WorkspacePage({
         ? await buildWorkspaceSegmentEditorPayload(options.segmentEditorSession, {
             allowStructureChange: Boolean(options.segmentEditorAllowStructureChange),
             language: effectiveLanguage,
+            persistedSegmentIndexes: options.segmentEditorPersistedSegmentIndexes,
           })
         : null;
       if (
@@ -33398,7 +33457,7 @@ export function WorkspacePage({
     options?: { isEmpty?: boolean; isPending?: boolean },
   ) => {
     if (options?.isPending) {
-      return getSegmentVisualGenerationStatusLabel(segment.index, "compact") || workspaceText(locale, "Генерация", "Generating");
+      return workspaceText(locale, "Звук", "Sound");
     }
 
     if (options?.isEmpty) {
@@ -35054,6 +35113,9 @@ export function WorkspacePage({
                     onClick={(event) => handleSegmentEditorTimelineSoundClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
+                      {isSoundGenerationPending ? (
+                        <span className="studio-segment-editor__timeline-sound-spinner" aria-hidden="true"></span>
+                      ) : null}
                       <strong>{soundLabel}</strong>
                     </span>
                   </button>
@@ -38545,18 +38607,13 @@ export function WorkspacePage({
                                   segmentEditorUpscalingImageRunIds,
                                   segment.index,
                                 );
-                                const isSceneSoundGenerationPending = hasWorkspaceSegmentVisualRun(
-                                  segmentEditorGeneratingSceneSoundRunIds,
-                                  segment.index,
-                                );
                                 const isVisualGenerationPending =
                                   isAiPhotoGenerationPending ||
                                   isImageEditGenerationPending ||
                                   isAiVideoGenerationPending ||
                                   isPhotoAnimationGenerationPending ||
                                   isTalkingPhotoGenerationPending ||
-                                  isImageUpscalePending ||
-                                  isSceneSoundGenerationPending;
+                                  isImageUpscalePending;
                                 const segmentPlaybackIndex = nextSegmentArrayIndex;
                                 const isSegmentPlaying = isActiveCard && playingSegmentEditorPreviewIndex === segmentPlaybackIndex;
                                 const isSegmentPlaybackRequested =

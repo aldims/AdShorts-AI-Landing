@@ -55,6 +55,7 @@ import {
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
+  resolveWorkspaceSegmentEditorMediaUploadScope,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
@@ -1592,6 +1593,41 @@ describe("WorkspacePage studio locale defaults", () => {
       hasStructureChange: true,
       shouldBlockImplicitStructureChange: false,
     });
+  });
+
+  it("does not bind inserted segment uploads to unsaved project segment indexes", () => {
+    const persistedSegment = createDraftSegment({
+      currentAsset: createMediaAsset(101),
+      index: 0,
+      originalAsset: createMediaAsset(101),
+    });
+    const insertedSegment = createDraftSegment({
+      currentAsset: null,
+      currentPreviewUrl: null,
+      currentSourceKind: "unknown",
+      index: 9,
+      originalAsset: null,
+      originalPreviewUrl: null,
+      originalSourceKind: "unknown",
+    });
+    const session = {
+      ...createDraftSession(persistedSegment),
+      projectId: 3439,
+      segments: [persistedSegment, insertedSegment],
+    };
+
+    expect(
+      resolveWorkspaceSegmentEditorMediaUploadScope(session, persistedSegment, {
+        allowStructureChange: true,
+        persistedSegmentIndexes: [0],
+      }),
+    ).toEqual({ projectId: 3439, segmentIndex: 0 });
+    expect(
+      resolveWorkspaceSegmentEditorMediaUploadScope(session, insertedSegment, {
+        allowStructureChange: true,
+        persistedSegmentIndexes: [0],
+      }),
+    ).toEqual({});
   });
 
   it("does not recover an implicit tail deletion as an explicit structure change", () => {

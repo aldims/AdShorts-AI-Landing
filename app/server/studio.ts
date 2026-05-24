@@ -4878,6 +4878,8 @@ export async function createStudioGenerationJob(
           allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
           segments: await Promise.all(
             normalizedSegmentEditor.segments.map(async (segment) => {
+              const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange ? undefined : normalizedProjectId;
+              const uploadScopeSegmentIndex = normalizedSegmentEditor.allowStructureChange ? undefined : segment.index;
               const segmentAssetId =
                 segment.videoAction === "custom" && segment.customVideoAssetId
                   ? segment.customVideoAssetId
@@ -4890,9 +4892,9 @@ export async function createStudioGenerationJob(
                       language: normalizedLanguage,
                       mediaType: inferStudioUploadMediaType(segment.customVideoFileMimeType, segment.customVideoFileName),
                       mimeType: segment.customVideoFileMimeType,
-                      projectId: normalizedProjectId,
+                      projectId: uploadScopeProjectId,
                       role: "segment_source",
-                      segmentIndex: segment.index,
+                      segmentIndex: uploadScopeSegmentIndex,
                     })
                   : undefined;
 
@@ -6217,6 +6219,11 @@ export async function createStudioSegmentSceneSoundJob(
     normalizedVisualSourceKind === "segment-talking-photo"
       ? normalizedVisualSourceKind
       : undefined;
+
+  if (!normalizedProjectId) {
+    throw new Error("Project id is required for scene sound generation.");
+  }
+
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
 
