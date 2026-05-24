@@ -4685,10 +4685,14 @@ export async function getWorkspaceBootstrap(user: StudioUser, options: Workspace
       warmStudioGenerationPlayback(latestGeneration.generation, user);
     }
 
+    if (!cachedBootstrap) {
+      throw error instanceof Error ? error : new Error("Workspace bootstrap failed and no cached profile is available.");
+    }
+
     return {
       latestGeneration,
-      profile: cachedBootstrap?.profile ?? buildWorkspaceProfile(),
-      studioOptions: cachedBootstrap?.studioOptions ?? fallbackWorkspaceStudioOptions,
+      profile: cachedBootstrap.profile,
+      studioOptions: cachedBootstrap.studioOptions,
     };
   }
 }

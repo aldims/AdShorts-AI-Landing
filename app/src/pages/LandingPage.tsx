@@ -25,6 +25,7 @@ type WorkspaceProfile = {
 } | null;
 
 type Props = {
+  isWorkspaceProfileVerified?: boolean;
   session: Session;
   workspaceProfile?: WorkspaceProfile;
   useLayeredHero?: boolean;
@@ -184,16 +185,26 @@ const landingGuideCards: Record<Locale, Array<{ label: string; title: string; de
     },
   ],
 };
-export function LandingPage({ session, workspaceProfile = null, useLayeredHero = false, onOpenSignup, onOpenSignin, onLogout, onOpenWorkspace }: Props) {
+export function LandingPage({
+  session,
+  workspaceProfile = null,
+  isWorkspaceProfileVerified = true,
+  useLayeredHero = false,
+  onOpenSignup,
+  onOpenSignin,
+  onLogout,
+  onOpenWorkspace,
+}: Props) {
   const { locale, localizePath, t } = useLocale();
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const revealRootRef = useRef<HTMLElement>(null);
   const revealTimersRef = useRef<number[]>([]);
   const statsObserverRef = useRef<IntersectionObserver | null>(null);
-  const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
-  const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
-  const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
+  const verifiedWorkspaceProfile = isWorkspaceProfileVerified ? workspaceProfile : null;
+  const accountPlanLabel = String(verifiedWorkspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+  const currentPlanLabel = String(verifiedWorkspaceProfile?.plan ?? "").trim().toUpperCase() || null;
+  const isStartPlanUsed = Boolean(verifiedWorkspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const refineProofs = landingRefineProofs[locale];
   const guideCards = landingGuideCards[locale];
   const guidesIndexHref = localizePath(landingGuidesIndexHref);
@@ -424,7 +435,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
 
     setActiveCheckoutProductId(productId);
     writePreCheckoutProfile(productId, {
-      balance: workspaceProfile?.balance ?? 0,
+      balance: verifiedWorkspaceProfile?.balance ?? 0,
       plan: currentPlanLabel ?? "FREE",
     });
     try {
@@ -525,7 +536,7 @@ export function LandingPage({ session, workspaceProfile = null, useLayeredHero =
             <LanguageSwitcher />
             {session ? (
               <>
-                <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+                <SiteHeaderWorkspaceStatus isProfileVerified={isWorkspaceProfileVerified} profile={workspaceProfile} />
                 <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
               </>
             ) : (

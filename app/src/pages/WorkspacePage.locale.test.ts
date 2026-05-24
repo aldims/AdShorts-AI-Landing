@@ -22,6 +22,7 @@ import {
   getStudioVoiceCreditCost,
   getNextWorkspaceReferenceDefaultName,
   buildWorkspaceReferenceGenerationMediaScope,
+  formatWorkspaceSegmentEditorSegmentDurationLabel,
   formatWorkspaceSegmentEditorSegmentTimeRange,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   insertWorkspacePromptCharacterMentionText,
@@ -30,6 +31,7 @@ import {
   createWorkspaceTalkingCharacterTargetFromPoints,
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
+  getWorkspaceSegmentDurationExtensionPlan,
   normalizeWorkspaceTalkingCharacterTarget,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
@@ -43,6 +45,7 @@ import {
   getWorkspaceSegmentEditorProjectOpenOptions,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
+  buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
@@ -65,6 +68,7 @@ import {
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
   shouldDeferSegmentEditorRouteRestore,
   shouldShowWorkspaceMediaLibraryLoadingState,
@@ -738,6 +742,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     const structure102Key = `adshorts.segment-editor-explicit-structure:${storageEmail}:102`;
     const aiPhotoJobsKey = `adshorts.segment-ai-photo-pending:${storageEmail}`;
     const animationJobsKey = `adshorts.segment-photo-animation-pending:${storageEmail}`;
+    const talkingPhotoJobsKey = `adshorts.segment-talking-photo-pending:${storageEmail}`;
     const draft101 = { ...createDraftSession(createDraftSegment({ text: "Old draft" })), projectId: 101 };
     const draft102 = { ...createDraftSession(createDraftSegment({ text: "Kept draft" })), projectId: 102 };
 
@@ -762,6 +767,13 @@ describe("WorkspacePage segment editor draft persistence", () => {
           { createdAt: Date.now(), jobId: "kept-animation", projectId: 102, prompt: "kept", segmentIndex: 0, sourceAsset: null, status: "queued" },
         ]),
       );
+      window.localStorage.setItem(
+        talkingPhotoJobsKey,
+        JSON.stringify([
+          { createdAt: Date.now(), jobId: "old-talking", projectId: 101, script: "old", segmentIndex: 0, sourceAsset: null, status: "queued" },
+          { createdAt: Date.now(), jobId: "kept-talking", projectId: 102, script: "kept", segmentIndex: 0, sourceAsset: null, status: "queued" },
+        ]),
+      );
 
       expect(clearStoredWorkspaceSegmentEditorTemporaryStateExcept(email, [102])).toEqual([101]);
       expect(window.localStorage.getItem(draft101Key)).toBeNull();
@@ -773,6 +785,9 @@ describe("WorkspacePage segment editor draft persistence", () => {
       ]);
       expect(JSON.parse(window.localStorage.getItem(animationJobsKey) ?? "[]")).toEqual([
         expect.objectContaining({ jobId: "kept-animation", projectId: 102 }),
+      ]);
+      expect(JSON.parse(window.localStorage.getItem(talkingPhotoJobsKey) ?? "[]")).toEqual([
+        expect.objectContaining({ jobId: "kept-talking", projectId: 102 }),
       ]);
     } finally {
       if (originalLocalStorage) {
@@ -964,6 +979,58 @@ describe("WorkspacePage segment editor draft persistence", () => {
         .flatMap((row) => row.spans)
         .some((span) => span.isEdited),
     ).toBe(false);
+  });
+
+  it("suppresses changed track states for a single blank scene with stale global settings", () => {
+    const blankSegment = createDraftSegment({
+      originalText: "Deleted scene",
+      originalTextByLanguage: { ru: "Deleted scene" },
+      text: "",
+      textByLanguage: { ru: "" },
+    });
+    const blankDraft = {
+      ...createDraftSession(blankSegment),
+      customMusicAssetId: 601,
+      customMusicFileName: "old-track.mp3",
+      musicAssetId: 602,
+      musicName: "old-track",
+      musicType: "custom",
+      subtitleType: "karaoke",
+      ttsAssetId: 603,
+      voiceType: "Boris",
+    };
+    const baseline = {
+      ...createDraftSession(createDraftSegment({ index: 0, text: "Source scene" })),
+      customMusicAssetId: null,
+      customMusicFileName: "",
+      musicAssetId: null,
+      musicName: null,
+      musicType: "ai",
+      subtitleType: "karaoke",
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(blankDraft)).toBe(true);
+    expect(isWorkspaceSegmentEditorCleanEmptyDraft(blankDraft)).toBe(false);
+    expect(shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges(blankDraft)).toBe(true);
+
+    const shouldSuppressEditedState = shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges(blankDraft);
+    const tracks = buildWorkspaceSegmentEditorTracks(
+      blankDraft.segments,
+      shouldSuppressEditedState ? blankDraft.segments : baseline.segments,
+      blankDraft,
+      shouldSuppressEditedState ? blankDraft : baseline,
+      {
+        isSoundEdited: () => true,
+        isTextEdited: () => true,
+        isVisualEdited: () => true,
+        isVoiceEdited: () => true,
+        suppressEditedState: shouldSuppressEditedState,
+      },
+    );
+
+    expect(tracks.rows.flatMap((row) => row.spans).some((span) => span.isEdited)).toBe(false);
   });
 
   it("keeps tracks unedited after adding another empty scene to a clean blank draft", () => {
@@ -1820,6 +1887,13 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(formatWorkspaceSegmentEditorSegmentTimeRange(6.5, 15, { isFirstSegment: false })).toBe("00:07 - 00:15");
   });
 
+  it("formats segment duration labels from the same displayed boundaries as the ruler", () => {
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "ru", { isFirstSegment: true })).toBe("3 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(2.4, 4.6, "ru", { isFirstSegment: false })).toBe("2 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "en", { isFirstSegment: true })).toBe("3s");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 3.2, "ru")).toBe("3 с");
+  });
+
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {
     const largeDataUrl = `data:image/png;base64,${"a".repeat(900_000)}`;
     const segment = createDraftSegment({
@@ -1875,6 +1949,117 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(normalized.segments[0]?.duration).toBe(6.5);
     expect(normalized.segments[0]?.endTime).toBe(6.5);
     expect(normalized.segments[1]?.startTime).toBe(6.5);
+  });
+
+  it("uses cinematic hold when a manual video segment is longer than its source visual", () => {
+    const baselineSegment = createDraftSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0",
+      currentPosterUrl: "/api/workspace/project-segment-poster?projectId=77&segmentIndex=0",
+      duration: 3.2,
+      endTime: 3.2,
+      mediaType: "video",
+    });
+    const extendedSegment = createDraftSegment({
+      ...baselineSegment,
+      duration: 5,
+      durationMode: "manual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(extendedSegment, baselineSegment)).toMatchObject({
+      canRequestAiExtension: true,
+      extraDurationSeconds: 1.8,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 5,
+      sourceDurationSeconds: 3.2,
+    });
+  });
+
+  it("keeps cinematic hold visible after a manual timeline rebuild stores the original visual length", () => {
+    const segment = createDraftSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0",
+      currentPosterUrl: "/api/workspace/project-segment-poster?projectId=77&segmentIndex=0",
+      duration: 50,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 50,
+      manualDurationSeconds: 50,
+      mediaType: "video",
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment)).toMatchObject({
+      canRequestAiExtension: true,
+      extraDurationSeconds: 45,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 50,
+      sourceDurationSeconds: 5,
+    });
+  });
+
+  it("shows cinematic hold for still-preview segments extended beyond their baseline slot", () => {
+    const baselineSegment = createDraftSegment({
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&delivery=preview",
+      duration: 5,
+      endTime: 5,
+      mediaType: "photo",
+    });
+    const segment = createDraftSegment({
+      ...baselineSegment,
+      duration: 50,
+      durationMode: "manual",
+      endTime: 50,
+      manualDurationSeconds: 50,
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment, baselineSegment)).toMatchObject({
+      canRequestAiExtension: true,
+      extraDurationSeconds: 45,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 50,
+      sourceDurationSeconds: 5,
+    });
+  });
+
+  it("does not keep cinematic hold after a generated video already matches the extended slot", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 50,
+        fileName: "extended-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/media/extended-scene.mp4",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0",
+      currentPosterUrl: "/api/workspace/project-segment-poster?projectId=77&segmentIndex=0",
+      duration: 50,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 50,
+      manualDurationSeconds: 50,
+      mediaType: "video",
+      videoAction: "photo_animation",
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment)).toBeNull();
+  });
+
+  it("does not show a duration extension plan when a segment stays within source length", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 4,
+      endTime: 4,
+      mediaType: "video",
+    });
+    const segment = createDraftSegment({
+      ...baselineSegment,
+      duration: 4,
+      durationMode: "manual",
+      endTime: 4,
+      manualDurationSeconds: 4,
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment, baselineSegment)).toBeNull();
   });
 
   it("rejects segment boundary timing before the edited segment start", () => {
@@ -2614,6 +2799,45 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedSegment?.aiVideoAsset?.assetId).toBe(707);
     expect(refreshedSegment?.aiVideoAsset?.remoteUrl).toBe("/api/workspace/media-assets/707/playback");
     expect(getWorkspaceSegmentDraftVideoUrl(refreshedSegment!)).toBe("/api/workspace/media-assets/707/playback");
+  });
+
+  it("hydrates a completed talking photo from persisted media library when the pending job was lost", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
+      aiVideoPrompt: "Эта история началась 1000 лет назад",
+      aiVideoPromptInitialized: true,
+      customVideo: null,
+      text: "Эта история началась 1000 лет назад",
+      videoAction: "custom",
+    });
+    const persistedTalkingPhotoItem = createMediaLibraryItem({
+      assetId: 909,
+      assetKind: "rendered_segment",
+      assetMediaType: "video",
+      createdAt: Date.now(),
+      downloadName: "segment-talking-photo.mp4",
+      itemKey: "persisted:talking-photo:909",
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/909/poster",
+      previewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&source=current&delivery=playback",
+      projectId: 77,
+      segmentIndex: 0,
+      source: "persisted",
+    });
+
+    const restoredDraft = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(
+      createDraftSession(segment),
+      buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems([persistedTalkingPhotoItem]),
+    );
+    const restoredSegment = restoredDraft?.segments[0];
+
+    expect(restoredSegment?.videoAction).toBe("talking_photo");
+    expect(restoredSegment?.aiVideoGeneratedMode).toBe("talking_photo");
+    expect(restoredSegment?.aiVideoAsset?.assetId).toBe(909);
+    expect(restoredSegment?.aiVideoAsset?.remoteUrl).toBe("/api/workspace/media-assets/909/playback");
+    expect(getWorkspaceSegmentDraftVideoUrl(restoredSegment!)).toBe("/api/workspace/media-assets/909/playback");
   });
 
   it("applies draft and live media-library items by the visible preview url instead of stale asset ids", () => {

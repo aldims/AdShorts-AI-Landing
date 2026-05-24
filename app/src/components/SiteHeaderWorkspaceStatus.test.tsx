@@ -15,11 +15,14 @@ const renderWorkspaceStatus = (
     plan: string;
     startPlanUsed: boolean;
   },
+  options?: {
+    isProfileVerified?: boolean;
+  },
 ) =>
   render(
     <MemoryRouter>
       <LocaleProvider locale={locale}>
-        <SiteHeaderWorkspaceStatus profile={profile} />
+        <SiteHeaderWorkspaceStatus isProfileVerified={options?.isProfileVerified} profile={profile} />
       </LocaleProvider>
     </MemoryRouter>,
   );
@@ -45,5 +48,21 @@ describe("SiteHeaderWorkspaceStatus", () => {
     });
 
     expect(screen.getByText("Тариф активен.")).toBeTruthy();
+  });
+
+  it("does not show cached balance until the profile is verified", () => {
+    renderWorkspaceStatus(
+      "ru",
+      {
+        balance: 0,
+        expiresAt: null,
+        plan: "FREE",
+        startPlanUsed: false,
+      },
+      { isProfileVerified: false },
+    );
+
+    expect(screen.queryByText("0")).toBeNull();
+    expect(screen.getAllByText("…").length).toBeGreaterThanOrEqual(2);
   });
 });

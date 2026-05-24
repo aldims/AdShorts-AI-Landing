@@ -41,6 +41,7 @@ type PricingRouteState = {
 } | null;
 
 type Props = {
+  isWorkspaceProfileVerified?: boolean;
   session: Session;
   workspaceProfile?: WorkspaceProfile;
   onOpenSignup: () => void;
@@ -397,6 +398,7 @@ const fetchWorkspaceProfile = async () => {
 export function PricingPage({
   session,
   workspaceProfile = null,
+  isWorkspaceProfileVerified = true,
   onOpenSignup,
   onOpenSignin,
   onLogout,
@@ -418,8 +420,10 @@ export function PricingPage({
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState | null>(null);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const paymentSuccessEventKeyRef = useRef<string | null>(null);
-  const currentPlanLabel = String(workspaceProfile?.plan ?? session?.plan ?? "").trim().toUpperCase() || null;
-  const isStartPlanUsed = Boolean(workspaceProfile?.startPlanUsed || currentPlanLabel === "START");
+  const verifiedWorkspaceProfile = isWorkspaceProfileVerified ? workspaceProfile : null;
+  const currentPlanLabel = String(verifiedWorkspaceProfile?.plan ?? "").trim().toUpperCase() || null;
+  const accountPlanLabel = currentPlanLabel ?? "…";
+  const isStartPlanUsed = Boolean(verifiedWorkspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
   const getPlanCheckoutRestriction = (productId: PlanCheckoutProductId): PlanCheckoutRestriction | null => {
     if (currentPlanLabel === "ULTRA" && productId === "ultra") {
@@ -500,7 +504,7 @@ export function PricingPage({
     setCheckoutError(null);
     setActiveCheckoutProductId(productId);
     writePreCheckoutProfile(productId, {
-      balance: workspaceProfile?.balance ?? 0,
+      balance: verifiedWorkspaceProfile?.balance ?? 0,
       plan: currentPlanLabel ?? "FREE",
     });
 
@@ -854,13 +858,13 @@ export function PricingPage({
             <LanguageSwitcher />
             {session ? (
               <>
-                <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+                <SiteHeaderWorkspaceStatus isProfileVerified={isWorkspaceProfileVerified} profile={workspaceProfile} />
                 <AccountMenuButton
                   displayEmail={session.displayEmail}
                   email={session.email}
                   name={session.name}
                   onLogout={onLogout}
-                  plan={currentPlanLabel ?? "FREE"}
+                  plan={accountPlanLabel}
                 />
               </>
             ) : (

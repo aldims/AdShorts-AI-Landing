@@ -25,6 +25,7 @@ type WorkspaceProfile = {
 } | null;
 
 type Props = {
+  isWorkspaceProfileVerified?: boolean;
   session: Session;
   workspaceProfile?: WorkspaceProfile;
   onOpenSignup: () => void;
@@ -603,6 +604,7 @@ function ExampleVideoPreview({
 export function ExamplesPage({
   session,
   workspaceProfile = null,
+  isWorkspaceProfileVerified = true,
   onOpenSignup,
   onOpenSignin,
   onLogout,
@@ -611,7 +613,8 @@ export function ExamplesPage({
   const { locale, localizePath, t } = useLocale();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const accountPlanLabel = String(workspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
+  const verifiedWorkspaceProfile = isWorkspaceProfileVerified ? workspaceProfile : null;
+  const accountPlanLabel = String(verifiedWorkspaceProfile?.plan ?? "").trim().toUpperCase() || "…";
   const initialFilter = (searchParams.get("filter") as ExampleFilter | null) ?? "all";
   const [activeFilter, setActiveFilter] = useState<ExampleFilter>(
     (["all", "ads", "growth", "expert"] as ExampleFilter[]).includes(initialFilter) ? initialFilter : "all"
@@ -764,7 +767,7 @@ export function ExamplesPage({
             <LanguageSwitcher />
             {session ? (
               <>
-                <SiteHeaderWorkspaceStatus profile={workspaceProfile} />
+                <SiteHeaderWorkspaceStatus isProfileVerified={isWorkspaceProfileVerified} profile={workspaceProfile} />
                 <AccountMenuButton displayEmail={session.displayEmail} email={session.email} name={session.name} onLogout={onLogout} plan={accountPlanLabel} />
               </>
             ) : (

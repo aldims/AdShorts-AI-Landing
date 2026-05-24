@@ -9,6 +9,7 @@ type WorkspaceProfile = {
 } | null;
 
 type Props = {
+  isProfileVerified?: boolean;
   profile?: WorkspaceProfile;
 };
 
@@ -77,10 +78,11 @@ const workspaceStatusMessages = defineMessages({
   },
 });
 
-export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
+export function SiteHeaderWorkspaceStatus({ isProfileVerified = true, profile = null }: Props) {
   const { locale, localizePath, t } = useLocale();
-  const normalizedPlan = normalizePlan(profile?.plan);
-  const expiryDate = normalizeExpiry(profile?.expiresAt);
+  const displayProfile = isProfileVerified ? profile : null;
+  const normalizedPlan = normalizePlan(displayProfile?.plan);
+  const expiryDate = normalizeExpiry(displayProfile?.expiresAt);
   const daysLeft = expiryDate ? getDaysLeft(expiryDate) : null;
   const hasPaidPlan = normalizedPlan !== "FREE" && normalizedPlan !== "…";
   const hasExpiringPlan = normalizedPlan === "PRO" || normalizedPlan === "ULTRA";
@@ -109,7 +111,7 @@ export function SiteHeaderWorkspaceStatus({ profile = null }: Props) {
       <Link className="site-header__credits" to={localizePath("/pricing/")} aria-label={t(workspaceStatusMessages.refillBalance)}>
         <span className="site-header__credits-label">{t(workspaceStatusMessages.balance)}</span>
         <span className="site-header__credits-value">
-          <strong>{normalizeBalance(profile?.balance)}</strong>
+          <strong>{normalizeBalance(displayProfile?.balance)}</strong>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M13 3v6h6l-8 12v-6H5l8-12z" />
           </svg>

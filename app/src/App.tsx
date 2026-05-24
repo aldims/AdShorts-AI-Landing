@@ -1,4 +1,4 @@
-import { type ReactNode, Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { authClient } from "./lib/auth-client";
@@ -557,6 +557,8 @@ export function App() {
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
   const [isWorkspaceProfilePending, setIsWorkspaceProfilePending] = useState(false);
+  const [isWorkspaceProfileVerified, setIsWorkspaceProfileVerified] = useState(false);
+  const workspaceProfileSessionEmailRef = useRef<string | null>(null);
   const [impersonation, setImpersonation] = useState<ImpersonationState | null>(() => readImpersonationState());
   const [accountDisplay, setAccountDisplay] = useState<AccountDisplayState | null>(null);
 
@@ -626,14 +628,21 @@ export function App() {
 
   useEffect(() => {
     if (!session?.email) {
+      workspaceProfileSessionEmailRef.current = null;
       setWorkspaceProfile(null);
+      setIsWorkspaceProfileVerified(false);
       setIsWorkspaceProfilePending(false);
       return;
     }
 
+    const isSessionEmailChange = workspaceProfileSessionEmailRef.current !== session.email;
+    workspaceProfileSessionEmailRef.current = session.email;
     const cachedProfile = readCachedWorkspaceProfile(session.email);
-    setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
-    setIsWorkspaceProfilePending(!cachedProfile);
+    if (isSessionEmailChange) {
+      setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
+      setIsWorkspaceProfileVerified(false);
+    }
+    setIsWorkspaceProfilePending(true);
 
     const controller = new AbortController();
     let isCancelled = false;
@@ -649,6 +658,7 @@ export function App() {
         if (response.status === 401 || response.status === 403) {
           if (isCancelled) return;
           setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
+          setIsWorkspaceProfileVerified(false);
           return;
         }
 
@@ -658,8 +668,13 @@ export function App() {
 
         if (isCancelled) return;
 
-        const nextProfile = payload.data?.profile ?? null;
+        const nextProfile = normalizeWorkspaceProfile(payload.data.profile);
+        if (!nextProfile) {
+          throw new Error("Workspace profile payload is invalid.");
+        }
+
         setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, nextProfile) ? current : nextProfile));
+        setIsWorkspaceProfileVerified(true);
         persistWorkspaceProfile(session.email, nextProfile);
       } catch (error) {
         if (isCancelled || controller.signal.aborted || isAbortLikeError(error)) return;
@@ -680,13 +695,20 @@ export function App() {
     };
   }, [location.search, session?.email]);
 
+  const handleWorkspaceProfileChange = useCallback((profile: WorkspaceProfile | null) => {
+    const nextProfile = normalizeWorkspaceProfile(profile);
+    setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, nextProfile) ? current : nextProfile));
+    setIsWorkspaceProfileVerified(Boolean(nextProfile));
+    setIsWorkspaceProfilePending(false);
+  }, []);
+
   useEffect(() => {
-    if (!session?.email || !workspaceProfile) {
+    if (!session?.email || !workspaceProfile || !isWorkspaceProfileVerified) {
       return;
     }
 
     persistWorkspaceProfile(session.email, workspaceProfile);
-  }, [session?.email, workspaceProfile]);
+  }, [isWorkspaceProfileVerified, session?.email, workspaceProfile]);
 
   useEffect(() => {
     if (!session?.email || !workspaceProfile?.userId) {
@@ -700,7 +722,7 @@ export function App() {
     setImpersonation(readImpersonationState());
   }, [location.key, session?.email]);
 
-  const shouldBlockWorkspaceRoute = Boolean(session && !workspaceProfile && isWorkspaceProfilePending);
+  const shouldBlockWorkspaceRoute = Boolean(session && !isWorkspaceProfileVerified && isWorkspaceProfilePending);
 
   useEffect(() => {
     if (hasExplicitLocalePrefix) {
@@ -776,7 +798,9 @@ export function App() {
         onSuccess: () => {
           clearImpersonationCookie();
           setImpersonation(null);
+          workspaceProfileSessionEmailRef.current = null;
           setWorkspaceProfile(null);
+          setIsWorkspaceProfileVerified(false);
           setIsWorkspaceProfilePending(false);
           closeAuth();
           navigate(localizePath("/"));
@@ -833,6 +857,7 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
@@ -849,6 +874,7 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
@@ -865,6 +891,7 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
@@ -881,6 +908,7 @@ export function App() {
               <LandingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 useLayeredHero
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
@@ -897,11 +925,12 @@ export function App() {
               <PricingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
                 onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
-                onWorkspaceProfileChange={setWorkspaceProfile}
+                onWorkspaceProfileChange={handleWorkspaceProfileChange}
               />
             </RouteSuspense>
           }
@@ -913,11 +942,12 @@ export function App() {
               <PricingPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
                 onOpenWorkspace={() => navigate(localizePath("/app/studio"))}
-                onWorkspaceProfileChange={setWorkspaceProfile}
+                onWorkspaceProfileChange={handleWorkspaceProfileChange}
               />
             </RouteSuspense>
           }
@@ -929,6 +959,7 @@ export function App() {
               <ExamplesPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
@@ -944,6 +975,7 @@ export function App() {
               <ExamplesPage
                 session={session}
                 workspaceProfile={workspaceProfile}
+                isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                 onOpenSignup={() => openAuth("signup")}
                 onOpenSignin={() => openAuth("signin")}
                 onLogout={handleLogout}
@@ -960,6 +992,7 @@ export function App() {
                 <LandingPage
                   session={session}
                   workspaceProfile={workspaceProfile}
+                  isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                   useLayeredHero
                   onOpenSignup={() => openAuth("signup")}
                   onOpenSignin={() => openAuth("signin")}
@@ -980,6 +1013,7 @@ export function App() {
                 <LandingPage
                   session={session}
                   workspaceProfile={workspaceProfile}
+                  isWorkspaceProfileVerified={isWorkspaceProfileVerified}
                   useLayeredHero
                   onOpenSignup={() => openAuth("signup")}
                   onOpenSignin={() => openAuth("signin")}
@@ -1004,8 +1038,9 @@ export function App() {
                 <WorkspacePage
                   defaultTab={workspaceEntryTab}
                   initialProfile={workspaceProfile}
+                  isProfileVerified={isWorkspaceProfileVerified}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
+                  onProfileChange={handleWorkspaceProfileChange}
                   session={session}
                 />
               </RouteSuspense>
@@ -1026,8 +1061,9 @@ export function App() {
                 <WorkspacePage
                   defaultTab={workspaceEntryTab}
                   initialProfile={workspaceProfile}
+                  isProfileVerified={isWorkspaceProfileVerified}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
+                  onProfileChange={handleWorkspaceProfileChange}
                   session={session}
                 />
               </RouteSuspense>
@@ -1048,10 +1084,11 @@ export function App() {
                 <WorkspacePage
                   defaultTab="studio"
                   initialProfile={session ? workspaceProfile : null}
+                  isProfileVerified={session ? isWorkspaceProfileVerified : true}
                   isGuest={!session}
                   onAuthRequired={() => openAuth("signup")}
                   onLogout={handleLogout}
-                  onProfileChange={session ? setWorkspaceProfile : undefined}
+                  onProfileChange={session ? handleWorkspaceProfileChange : undefined}
                   session={session ?? guestWorkspaceSession}
                 />
               </RouteSuspense>
@@ -1070,10 +1107,11 @@ export function App() {
                 <WorkspacePage
                   defaultTab="studio"
                   initialProfile={session ? workspaceProfile : null}
+                  isProfileVerified={session ? isWorkspaceProfileVerified : true}
                   isGuest={!session}
                   onAuthRequired={() => openAuth("signup")}
                   onLogout={handleLogout}
-                  onProfileChange={session ? setWorkspaceProfile : undefined}
+                  onProfileChange={session ? handleWorkspaceProfileChange : undefined}
                   session={session ?? guestWorkspaceSession}
                 />
               </RouteSuspense>
@@ -1092,8 +1130,9 @@ export function App() {
                 <WorkspacePage
                   defaultTab="generations"
                   initialProfile={workspaceProfile}
+                  isProfileVerified={isWorkspaceProfileVerified}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
+                  onProfileChange={handleWorkspaceProfileChange}
                   session={session}
                 />
               </RouteSuspense>
@@ -1114,8 +1153,9 @@ export function App() {
                 <WorkspacePage
                   defaultTab="generations"
                   initialProfile={workspaceProfile}
+                  isProfileVerified={isWorkspaceProfileVerified}
                   onLogout={handleLogout}
-                  onProfileChange={setWorkspaceProfile}
+                  onProfileChange={handleWorkspaceProfileChange}
                   session={session}
                 />
               </RouteSuspense>
