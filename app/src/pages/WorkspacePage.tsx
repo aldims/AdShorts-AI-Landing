@@ -11137,6 +11137,12 @@ export const formatWorkspaceSegmentEditorSegmentTimeRange = (
   return `${startLabel} - ${endLabel}`;
 };
 
+const formatWorkspaceSegmentEditorSegmentDurationLabel = (startTime: number, endTime: number, locale: Locale) => {
+  const durationSeconds = Math.max(1, Math.max(0, endTime - startTime));
+  const durationLabel = String(Math.max(1, Math.round(durationSeconds)));
+  return locale === "en" ? `${durationLabel}s` : `${durationLabel} с`;
+};
+
 const parseWorkspaceSegmentEditorTimeInput = (value: string) => {
   const normalizedValue = value.trim().replace(",", ".");
   if (!normalizedValue) {
@@ -11165,6 +11171,15 @@ const parseWorkspaceSegmentEditorTimeInput = (value: string) => {
 
   const [hours, minutes, seconds] = numbers;
   return hours * 3600 + minutes * 60 + seconds;
+};
+
+const parseWorkspaceSegmentEditorDurationInput = (value: string) => {
+  const normalizedValue = value
+    .trim()
+    .replace(/\s*(?:сек(?:\.|унд[аы]?)?|seconds?|secs?|s|с)$/iu, "")
+    .trim();
+
+  return parseWorkspaceSegmentEditorTimeInput(normalizedValue);
 };
 
 export const getWorkspaceSegmentEditorGenerationOverrides = (
@@ -16959,6 +16974,7 @@ export function WorkspacePage({
     segmentIndex: number;
     tab: WorkspaceSegmentVisualModalTab;
   } | null>(null);
+  const [segmentTimelineImmediateActiveIndex, setSegmentTimelineImmediateActiveIndex] = useState<number | null>(null);
   const [segmentTimelineAudioPlayback, setSegmentTimelineAudioPlayback] = useState<{
     key: string;
     status: "loading" | "playing";
@@ -17835,6 +17851,33 @@ export function WorkspacePage({
       });
     }
   };
+  const previewSegmentTimelineActiveStateByArrayIndex = (segmentArrayIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft || currentDraft.segments.length === 0) {
+      return;
+    }
+
+    setSegmentTimelineImmediateActiveIndex(Math.max(0, Math.min(segmentArrayIndex, currentDraft.segments.length - 1)));
+  };
+
+  useEffect(() => {
+    if (segmentTimelineImmediateActiveIndex === null) {
+      return;
+    }
+
+    if (segmentTimelineImmediateActiveIndex === activeSegmentIndex) {
+      setSegmentTimelineImmediateActiveIndex(null);
+      return;
+    }
+
+    const resetTimer = window.setTimeout(() => {
+      setSegmentTimelineImmediateActiveIndex(null);
+    }, 500);
+
+    return () => {
+      window.clearTimeout(resetTimer);
+    };
+  }, [activeSegmentIndex, segmentTimelineImmediateActiveIndex]);
 
   const logSegmentEditorDiagnostics = (
     event: string,
@@ -21299,6 +21342,13 @@ export function WorkspacePage({
   const isSegmentEditorTimelineStandardFit =
     segmentThumbVisibleSlotCount <= SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS;
   const segmentEditorTimelineAddGutterPx = 0;
+  const segmentEditorTimelineActiveArrayIndex =
+    segmentTimelineImmediateActiveIndex !== null &&
+    segmentEditorDraft &&
+    segmentTimelineImmediateActiveIndex >= 0 &&
+    segmentTimelineImmediateActiveIndex < segmentEditorDraft.segments.length
+      ? segmentTimelineImmediateActiveIndex
+      : activeSegmentIndex;
   const segmentThumbDragGhostStyle: CSSProperties | null = segmentThumbDragState
     ? {
         left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
@@ -21380,7 +21430,7 @@ export function WorkspacePage({
         segmentEditorDraft,
         segmentEditorTrackBaselineSession,
         {
-          activeArrayIndex: activeSegmentIndex,
+          activeArrayIndex: segmentEditorTimelineActiveArrayIndex,
           suppressActiveState: isSegmentEditorCleanEmptyDraft,
           suppressEditedState: isSegmentEditorCleanEmptyDraft,
           isSoundEdited: isSegmentEditorCleanEmptyDraft ? () => false : isWorkspaceSegmentDraftSceneSoundEdited,
@@ -21400,6 +21450,10 @@ export function WorkspacePage({
   const segmentEditorTimelineVoiceRow = segmentEditorTimelineRowsByKind.get("voice") ?? null;
   const segmentEditorTimelineSoundRow = segmentEditorTimelineRowsByKind.get("sound") ?? null;
   const segmentEditorTimelineTextRow = segmentEditorTimelineRowsByKind.get("text") ?? null;
+  const segmentEditorTimelineActiveSceneSpan =
+    !isSegmentEditorCleanEmptyDraft && segmentEditorTimelineActiveArrayIndex >= 0
+      ? segmentEditorTimelineVisualRow?.spans.find((span) => span.arrayIndex === segmentEditorTimelineActiveArrayIndex) ?? null
+      : null;
   const segmentTimelineMusicLabel =
     studioSidebarMusicType === "custom"
       ? segmentEditorDraft?.customMusicFileName ||
@@ -31962,6 +32016,16 @@ export function WorkspacePage({
     }));
     return timing;
   };
+  const applySegmentTimelineManualDuration = (segmentIndex: number, requestedDurationSeconds: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegment = currentDraft?.segments.find((segment) => segment.index === segmentIndex) ?? null;
+    if (!currentSegment || !Number.isFinite(requestedDurationSeconds)) {
+      return null;
+    }
+
+    const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(currentSegment);
+    return applySegmentTimelineManualBoundaryTime(segmentIndex, segmentStartTime + Math.max(0, requestedDurationSeconds));
+  };
   const handleSegmentTimelineBoundaryInputCommit = (
     event: ReactFocusEvent<HTMLInputElement>,
     options: {
@@ -31992,6 +32056,38 @@ export function WorkspacePage({
     }
 
     input.value = formatWorkspaceSegmentEditorTime(timing.boundaryTime, { roundUp: true });
+    setActiveSegmentIndex(Math.max(0, Math.min(options.segmentArrayIndex, (currentDraft?.segments.length ?? 1) - 1)));
+  };
+  const handleSegmentTimelineDurationInputCommit = (
+    event: ReactFocusEvent<HTMLInputElement>,
+    options: {
+      initialValue: string;
+      segmentArrayIndex: number;
+      segmentIndex: number;
+    },
+  ) => {
+    const input = event.currentTarget;
+    const nextValue = input.value.trim();
+    if (nextValue === options.initialValue.trim()) {
+      input.value = options.initialValue;
+      return;
+    }
+
+    const nextDurationSeconds = parseWorkspaceSegmentEditorDurationInput(nextValue);
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegment = currentDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+    if (nextDurationSeconds === null || !currentSegment) {
+      input.value = options.initialValue;
+      return;
+    }
+
+    const timing = applySegmentTimelineManualDuration(options.segmentIndex, nextDurationSeconds);
+    if (!timing) {
+      input.value = options.initialValue;
+      return;
+    }
+
+    input.value = formatWorkspaceSegmentEditorSegmentDurationLabel(0, timing.duration, locale);
     setActiveSegmentIndex(Math.max(0, Math.min(options.segmentArrayIndex, (currentDraft?.segments.length ?? 1) - 1)));
   };
   const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -32814,6 +32910,37 @@ export function WorkspacePage({
       />
     );
   };
+  const renderSegmentTimelineSceneBackdrop = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+    const previewUrl = mediaSurface.displayUrl;
+
+    return (
+      <span className="studio-segment-editor__timeline-scene-backdrop" aria-hidden="true">
+        {previewUrl ? (
+          <WorkspaceSegmentPreviewCardMedia
+            allowBrowserPosterCapture={mediaSurface.allowBrowserPosterCapture}
+            allowVideoPlayback={false}
+            autoplay={false}
+            fallbackPosterUrl={mediaSurface.fallbackPosterUrl}
+            imageLoading="lazy"
+            loop={false}
+            mediaKey={`timeline-scene-backdrop:${getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface)}`}
+            mountVideoWhenIdle={mediaSurface.mountVideoWhenIdle}
+            muted
+            posterUrl={mediaSurface.posterUrl}
+            preferPosterFrame={mediaSurface.preferPosterFrame}
+            preload={mediaSurface.previewKind === "video" ? mediaSurface.preloadPolicy : undefined}
+            primePausedFrame={mediaSurface.primePausedFrame}
+            previewFallbackUrls={mediaSurface.fallbackUrls}
+            previewKind={mediaSurface.previewKind}
+            previewUrl={previewUrl}
+          />
+        ) : (
+          <span className="studio-segment-editor__timeline-scene-backdrop-placeholder"></span>
+        )}
+      </span>
+    );
+  };
   const segmentEditorTimeline =
     segmentEditorDraft && segmentEditorTracks ? (
       <div
@@ -32967,6 +33094,13 @@ export function WorkspacePage({
                 aria-hidden="true"
               ></div>
             ) : null}
+            {segmentEditorTimelineActiveSceneSpan ? (
+              <span
+                className="studio-segment-editor__timeline-scene-selection-frame"
+                style={getSegmentEditorTimelineSpanStyle(segmentEditorTimelineActiveSceneSpan)}
+                aria-hidden="true"
+              ></span>
+            ) : null}
             {segmentEditorTimelineVisualRow?.spans.map((span) => {
               const index = span.arrayIndex ?? 0;
               const segment = segmentEditorDraft.segments[index];
@@ -32974,14 +33108,18 @@ export function WorkspacePage({
                 return null;
               }
 
-              const thumbMediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
-              const thumbPreviewKind = thumbMediaSurface.previewKind;
-              const thumbUrl = thumbMediaSurface.displayUrl;
-              const isActiveThumb = index === activeSegmentIndex;
+              const isActiveThumb = index === segmentEditorTimelineActiveArrayIndex;
               const isThumbVisualEdited = span.isEdited;
               const isDraggedThumb = index === draggedSegmentThumbIndex;
               const thumbGenerationLabel = getSegmentVisualGenerationStatusLabel(segment.index, "compact");
               const isThumbVisualGenerationPending = Boolean(thumbGenerationLabel);
+              const segmentDisplayNumber = getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index);
+              const segmentDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
+                span.startTime,
+                span.endTime,
+                locale,
+              );
+              const isSegmentDurationManual = normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual";
               const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);
               const baselineVisualSegment = segmentEditorChecklistBaseSession?.segments.find(
                 (baselineSegment) => baselineSegment.index === segment.index,
@@ -33000,6 +33138,7 @@ export function WorkspacePage({
                     className={`studio-segment-editor__timeline-cell-shell${isDraggedThumb ? " is-dragging" : ""}`}
                     style={getSegmentEditorTimelineSpanStyle(span)}
                   >
+                    {renderSegmentTimelineSceneBackdrop(segment)}
                     <button
                       ref={setSegmentThumbButtonRef(segment.index)}
                       className={`studio-segment-editor__timeline-cell studio-segment-editor__timeline-cell--visual${
@@ -33010,7 +33149,14 @@ export function WorkspacePage({
                       type="button"
                       aria-busy={isThumbVisualGenerationPending ? true : undefined}
                       aria-pressed={isActiveThumb}
-                      aria-label={workspaceText(locale, `Открыть визуал сцены ${index + 1}`, `Open scene ${index + 1} visual`)}
+                      aria-label={workspaceText(
+                        locale,
+                        `Открыть визуал сцены ${segmentDisplayNumber}, ${segmentDurationLabel}`,
+                        `Open scene ${segmentDisplayNumber} visual, ${segmentDurationLabel}`,
+                      )}
+                      onPointerDown={() => {
+                        previewSegmentTimelineActiveStateByArrayIndex(index);
+                      }}
                       onClick={(event) => {
                         if (isSegmentThumbClickSuppressed()) {
                           event.preventDefault();
@@ -33021,39 +33167,8 @@ export function WorkspacePage({
                         handleSegmentEditorTimelineVisualClick(index, event);
                       }}
                     >
-                      <span className="studio-segment-editor__timeline-visual-media">
-                        {thumbUrl ? (
-                          <WorkspaceSegmentPreviewCardMedia
-                            allowBrowserPosterCapture={thumbMediaSurface.allowBrowserPosterCapture}
-                            allowVideoPlayback={thumbMediaSurface.mountVideoWhenIdle}
-                            autoplay={false}
-                            fallbackPosterUrl={thumbMediaSurface.fallbackPosterUrl}
-                            imageLoading="lazy"
-                            loop={false}
-                            mediaKey={`timeline-thumb:${getWorkspaceSegmentMediaIdentityKey(segment, thumbMediaSurface)}`}
-                            mountVideoWhenIdle={thumbMediaSurface.mountVideoWhenIdle}
-                            muted
-                            posterUrl={thumbMediaSurface.posterUrl}
-                            preferPosterFrame={thumbMediaSurface.preferPosterFrame}
-                            preload={thumbPreviewKind === "video" ? thumbMediaSurface.preloadPolicy : undefined}
-                            primePausedFrame={thumbMediaSurface.primePausedFrame}
-                            previewFallbackUrls={thumbMediaSurface.fallbackUrls}
-                            previewKind={thumbPreviewKind}
-                            previewUrl={thumbUrl}
-                          />
-                        ) : (
-                          <span className="studio-segment-editor__timeline-placeholder">
-                            {getSegmentVisualPlaceholderLabel(segment.index)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="studio-segment-editor__timeline-cell-copy">
-                        <strong>{workspaceText(locale, `Сцена ${index + 1}`, `Scene ${index + 1}`)}</strong>
-                        <small>
-                          {formatWorkspaceSegmentEditorSegmentTimeRange(span.startTime, span.endTime, {
-                            isFirstSegment: index === 0,
-                          })}
-                        </small>
+                      <span className="studio-segment-editor__timeline-scene-number" aria-hidden="true">
+                        {segmentDisplayNumber}
                       </span>
                       {isThumbVisualEdited ? (
                         <span className="studio-segment-editor__timeline-status">
@@ -33067,6 +33182,56 @@ export function WorkspacePage({
                         </span>
                       ) : null}
                     </button>
+                    <input
+                      className={`studio-segment-editor__timeline-duration-badge${
+                        isSegmentDurationManual ? " is-manual" : ""
+                      }`}
+                      key={`segment-duration:${segment.index}:${segmentDurationLabel}:${
+                        isSegmentDurationManual ? "manual" : "auto"
+                      }`}
+                      type="text"
+                      inputMode="decimal"
+                      defaultValue={segmentDurationLabel}
+                      aria-label={workspaceText(
+                        locale,
+                        `Изменить длительность сцены ${segmentDisplayNumber}`,
+                        `Edit scene ${segmentDisplayNumber} duration`,
+                      )}
+                      title={workspaceText(
+                        locale,
+                        "Длительность сцены. Можно ввести 4, 4.5 или 00:04.",
+                        "Scene duration. Enter 4, 4.5, or 00:04.",
+                      )}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                      onFocus={(event) => {
+                        event.currentTarget.select();
+                        setSegmentEditorVideoError(null);
+                        activateSegmentEditorSegmentByArrayIndex(index, { pendingPlaybackIndex: null });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur();
+                          return;
+                        }
+
+                        if (event.key === "Escape") {
+                          event.currentTarget.value = segmentDurationLabel;
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={(event) =>
+                        handleSegmentTimelineDurationInputCommit(event, {
+                          initialValue: segmentDurationLabel,
+                          segmentArrayIndex: index,
+                          segmentIndex: segment.index,
+                        })
+                      }
+                    />
                     {renderSegmentTimelineHistoryButtons({
                       canBack: canBackVisual && !isThumbVisualGenerationPending,
                       canForward: canForwardVisual && !isThumbVisualGenerationPending,
@@ -33186,6 +33351,9 @@ export function WorkspacePage({
                     data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`)}
+                    onPointerDown={() => {
+                      previewSegmentTimelineActiveStateByArrayIndex(index);
+                    }}
                     onClick={(event) => handleSegmentEditorTimelineVoiceClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
@@ -33256,6 +33424,9 @@ export function WorkspacePage({
                     data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить текст сцены ${index + 1}`, `Change scene ${index + 1} text`)}
+                    onPointerDown={() => {
+                      previewSegmentTimelineActiveStateByArrayIndex(index);
+                    }}
                     onClick={(event) => handleSegmentEditorTimelineTextClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
@@ -33328,6 +33499,9 @@ export function WorkspacePage({
                     data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Изменить звуки сцены ${index + 1}`, `Change scene ${index + 1} sounds`)}
+                    onPointerDown={() => {
+                      previewSegmentTimelineActiveStateByArrayIndex(index);
+                    }}
                     onClick={(event) => handleSegmentEditorTimelineSoundClick(index, event)}
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
