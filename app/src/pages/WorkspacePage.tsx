@@ -34327,6 +34327,29 @@ export function WorkspacePage({
     : "";
   const segmentTimelineDurationEffectiveAiPrompt =
     normalizeWorkspaceSegmentAiVideoPrompt(segmentTimelineDurationAiPrompt) || segmentTimelineDurationDefaultAiPrompt;
+  const segmentTimelineDurationMenuExtensionSeconds = segmentTimelineDurationMenuExtensionPlan
+    ? Math.min(WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS, segmentTimelineDurationMenuExtensionPlan.extraDurationSeconds)
+    : null;
+  const segmentTimelineDurationMenuExtensionSecondsLabel =
+    segmentTimelineDurationMenuExtensionSeconds !== null
+      ? String(
+          Number.isInteger(segmentTimelineDurationMenuExtensionSeconds)
+            ? segmentTimelineDurationMenuExtensionSeconds
+            : Math.round(segmentTimelineDurationMenuExtensionSeconds * 10) / 10,
+        ).replace(".", ",")
+      : "5";
+  const segmentTimelineDurationMenuRangeLabel =
+    segmentTimelineDurationMenuCurrentSeconds !== null && segmentTimelineDurationMenuTargetSeconds !== null
+      ? `${formatWorkspaceSegmentEditorSegmentDurationLabel(
+          0,
+          segmentTimelineDurationMenuCurrentSeconds,
+          locale,
+        ).replace(/\s+/g, "")} -> ${formatWorkspaceSegmentEditorSegmentDurationLabel(
+          0,
+          segmentTimelineDurationMenuTargetSeconds,
+          locale,
+        ).replace(/\s+/g, "")}`
+      : null;
   const isSegmentTimelineDurationAiExtensionPending = Boolean(
     segmentTimelineDurationMenuSegment &&
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentTimelineDurationMenuSegment.index),
@@ -34367,13 +34390,11 @@ export function WorkspacePage({
                   <strong>
                     {workspaceText(
                       locale,
-                      "Продлить видео",
-                      "Extend video",
+                      `Продлить видео на ${segmentTimelineDurationMenuExtensionSecondsLabel} секунд`,
+                      `Extend video by ${segmentTimelineDurationMenuExtensionSecondsLabel} seconds`,
                     )}
                   </strong>
-                  <small>
-                    {workspaceText(locale, "Продление до 5 секунд", "Extension up to 5 seconds")}
-                  </small>
+                  {segmentTimelineDurationMenuRangeLabel ? <small>{segmentTimelineDurationMenuRangeLabel}</small> : null}
                 </span>
                 <button
                   className="studio-segment-editor__timeline-text-menu-close"
@@ -34387,30 +34408,6 @@ export function WorkspacePage({
                   </svg>
                 </button>
               </div>
-              {segmentTimelineDurationMenuCurrentSeconds !== null && segmentTimelineDurationMenuTargetSeconds !== null ? (
-                <div className="studio-segment-editor__timeline-duration-summary">
-                  <div>
-                    <span>{workspaceText(locale, "Сейчас", "Now")}</span>
-                    <strong>
-                      {formatWorkspaceSegmentEditorSegmentDurationLabel(
-                        0,
-                        segmentTimelineDurationMenuCurrentSeconds,
-                        locale,
-                      )}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>{workspaceText(locale, "Будет", "Result")}</span>
-                    <strong>
-                      {formatWorkspaceSegmentEditorSegmentDurationLabel(
-                        0,
-                        segmentTimelineDurationMenuTargetSeconds,
-                        locale,
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              ) : null}
               {segmentTimelineDurationMenuHasVoiceover ? (
                 <div className="studio-segment-editor__timeline-duration-options">
                   <button
@@ -34429,13 +34426,13 @@ export function WorkspacePage({
               ) : null}
               {segmentTimelineDurationMenuExtensionPlan ? (
                 <label className="studio-segment-editor__timeline-duration-menu-field" htmlFor={`${segmentTimelineDurationInputId}-ai`}>
-                  <span>{workspaceText(locale, "Опишите сцену продления", "Describe the extension scene")}</span>
                   <textarea
                     ref={segmentTimelineDurationAiPromptRef}
                     id={`${segmentTimelineDurationInputId}-ai`}
                     className="studio-segment-editor__timeline-duration-menu-textarea"
                     value={segmentTimelineDurationAiPrompt}
                     rows={3}
+                    aria-label={workspaceText(locale, "Опишите сцену продления", "Describe the extension scene")}
                     placeholder={workspaceText(locale, "Опишите сцену продления", "Describe the extension scene")}
                     onChange={(event) => {
                       setSegmentEditorVideoError(null);
