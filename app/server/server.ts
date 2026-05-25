@@ -4029,6 +4029,17 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
   const customVideoFileName =
     typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
   const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+  const durationExtensionMode =
+    typeof req.body?.durationExtensionMode === "string" ? req.body.durationExtensionMode.trim() : "";
+  const durationExtensionBaseDurationSeconds = normalizeRequestDurationSeconds(
+    req.body?.durationExtensionBaseDurationSeconds ?? req.body?.duration_extension_base_duration_seconds,
+  );
+  const durationExtensionTailDurationSeconds = normalizeRequestDurationSeconds(
+    req.body?.durationExtensionTailDurationSeconds ?? req.body?.duration_extension_tail_duration_seconds,
+  );
+  const durationExtensionTargetDurationSeconds = normalizeRequestDurationSeconds(
+    req.body?.durationExtensionTargetDurationSeconds ?? req.body?.duration_extension_target_duration_seconds,
+  );
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = Number(req.body?.segmentIndex ?? -1);
 
@@ -4048,6 +4059,10 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
       customVideoFileDataUrl: customVideoFileDataUrl || undefined,
       customVideoFileMimeType: customVideoFileMimeType || undefined,
       customVideoFileName: customVideoFileName || undefined,
+      durationExtensionBaseDurationSeconds,
+      durationExtensionMode,
+      durationExtensionTailDurationSeconds,
+      durationExtensionTargetDurationSeconds,
       durationSeconds,
       language,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,

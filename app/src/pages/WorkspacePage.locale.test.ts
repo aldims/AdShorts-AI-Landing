@@ -32,6 +32,9 @@ import {
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentRecommendedDurationSeconds,
+  getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentSceneSoundDurationSeconds,
   normalizeWorkspaceTalkingCharacterTarget,
   getWorkspaceInitialStudioDefaults,
   getWorkspaceSegmentEditorGenerationOverrides,
@@ -2124,6 +2127,69 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentDurationExtensionPlan(segment, baselineSegment)).toBeNull();
+  });
+
+  it("recommends duration from voiceover only when it is longer than the video", () => {
+    const longVoiceSegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      mediaType: "video",
+      speechDuration: 8,
+    });
+    const shortVoiceSegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      mediaType: "video",
+      speechDuration: 3,
+    });
+    const soundOnlySegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      mediaType: "video",
+      sceneSoundAsset: {
+        durationSeconds: 9,
+        fileName: "scene-sound.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/media/scene-sound.wav",
+      },
+    });
+
+    expect(getWorkspaceSegmentRecommendedDurationSeconds(longVoiceSegment, createDraftSession(longVoiceSegment))).toBe(8);
+    expect(getWorkspaceSegmentRecommendedDurationSeconds(shortVoiceSegment, createDraftSession(shortVoiceSegment))).toBe(5);
+    expect(getWorkspaceSegmentRecommendedDurationSeconds(soundOnlySegment, createDraftSession(soundOnlySegment))).toBe(5);
+    expect(getWorkspaceSegmentSceneSoundDurationSeconds(soundOnlySegment)).toBe(9);
+  });
+
+  it("refreshes scene sound only when an existing generated sound has a prompt", () => {
+    const generatedSoundSegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      sceneSoundAsset: {
+        durationSeconds: 5,
+        fileName: "scene-sound.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/media/scene-sound.wav",
+      },
+      sceneSoundGeneratedFromPrompt: "soft rain and distant cars",
+      sceneSoundPrompt: "soft rain",
+      sceneSoundPromptInitialized: true,
+    });
+    const uploadedSoundSegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      sceneSoundAsset: {
+        durationSeconds: 5,
+        fileName: "uploaded.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/media/uploaded.wav",
+      },
+    });
+
+    expect(getWorkspaceSegmentSceneSoundRefreshPrompt(generatedSoundSegment)).toBe("soft rain and distant cars");
+    expect(getWorkspaceSegmentSceneSoundRefreshPrompt(uploadedSoundSegment)).toBe("");
   });
 
   it("rejects segment boundary timing before the edited segment start", () => {

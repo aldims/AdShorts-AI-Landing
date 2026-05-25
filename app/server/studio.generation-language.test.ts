@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStudioSegmentVisualDurationExtensionPayload,
   buildStudioSegmentVisualDurationPayload,
   canExposeStudioFinalVideoFromStatus,
   getStudioVoiceCreditCost,
@@ -284,5 +285,21 @@ describe("studio generation language resolution", () => {
   it("forwards visual generation target duration with the upstream field name", () => {
     expect(buildStudioSegmentVisualDurationPayload(13)).toEqual({ duration: 13 });
     expect(buildStudioSegmentVisualDurationPayload(0.5)).toEqual({});
+  });
+
+  it("forwards AI duration extension stitch metadata upstream", () => {
+    expect(
+      buildStudioSegmentVisualDurationExtensionPayload({
+        baseDurationSeconds: 5,
+        mode: "stitch",
+        tailDurationSeconds: 3,
+        targetDurationSeconds: 8,
+      }),
+    ).toEqual({
+      duration_extension_base_duration_seconds: 5,
+      duration_extension_mode: "stitch",
+      duration_extension_tail_duration_seconds: 3,
+      duration_extension_target_duration_seconds: 8,
+    });
   });
 });

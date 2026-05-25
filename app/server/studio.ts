@@ -1153,6 +1153,33 @@ export const buildStudioSegmentVisualDurationPayload = (durationSeconds: unknown
   return normalizedDurationSeconds ? { duration: normalizedDurationSeconds } : {};
 };
 
+export const buildStudioSegmentVisualDurationExtensionPayload = (options?: {
+  baseDurationSeconds?: unknown;
+  mode?: unknown;
+  tailDurationSeconds?: unknown;
+  targetDurationSeconds?: unknown;
+}) => {
+  const mode = String(options?.mode ?? "").trim().toLowerCase();
+  const baseDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.baseDurationSeconds);
+  const targetDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.targetDurationSeconds);
+  if (mode !== "stitch" || !baseDurationSeconds || !targetDurationSeconds || targetDurationSeconds <= baseDurationSeconds) {
+    return {};
+  }
+
+  const maxTailDurationSeconds = roundStudioTimelineSeconds(targetDurationSeconds - baseDurationSeconds);
+  const requestedTailDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.tailDurationSeconds);
+  const tailDurationSeconds = requestedTailDurationSeconds
+    ? Math.min(requestedTailDurationSeconds, maxTailDurationSeconds)
+    : maxTailDurationSeconds;
+
+  return {
+    duration_extension_base_duration_seconds: baseDurationSeconds,
+    duration_extension_mode: "stitch",
+    duration_extension_tail_duration_seconds: roundStudioTimelineSeconds(tailDurationSeconds),
+    duration_extension_target_duration_seconds: targetDurationSeconds,
+  };
+};
+
 type StudioTalkingCharacterTarget = {
   height: number;
   width: number;
@@ -5891,6 +5918,10 @@ export async function createStudioSegmentPhotoAnimationJob(
     customVideoFileDataUrl?: string;
     customVideoFileMimeType?: string;
     customVideoFileName?: string;
+    durationExtensionBaseDurationSeconds?: number;
+    durationExtensionMode?: string;
+    durationExtensionTailDurationSeconds?: number;
+    durationExtensionTargetDurationSeconds?: number;
     durationSeconds?: number;
     language?: string;
     projectId?: number;
@@ -5952,6 +5983,12 @@ export async function createStudioSegmentPhotoAnimationJob(
     custom_video_mime_type: normalizedCustomVideoFileMimeType,
     custom_video_original_name: normalizedCustomVideoFileName,
     external_user_id: externalUserId,
+    ...buildStudioSegmentVisualDurationExtensionPayload({
+      baseDurationSeconds: options?.durationExtensionBaseDurationSeconds,
+      mode: options?.durationExtensionMode,
+      tailDurationSeconds: options?.durationExtensionTailDurationSeconds,
+      targetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
+    }),
     ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
     language: normalizedLanguage,
