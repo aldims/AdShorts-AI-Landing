@@ -107,6 +107,105 @@ const pickWorkspaceRenderableMediaUrl = (...candidates) => {
 const ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN = /\/api\/media\/(\d+)\/download(?:[/?#]|$)/i;
 const buildWorkspaceMediaAssetProxyUrl = (assetId) => `/api/workspace/media-assets/${assetId}`;
 const getProjectMediaEntryAssetId = (entry) => normalizeInteger(entry?.media_asset_id) ?? normalizeInteger(entry?.id);
+const getProjectMediaEntryRoleText = (entry) => [
+    entry?.asset_kind,
+    entry?.kind,
+    entry?.link_role,
+    entry?.role,
+    entry?.source,
+    entry?.source_kind,
+    entry?.storage_key,
+]
+    .map((value) => normalizeText(value).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+const isProjectMediaEntryAudio = (entry) => {
+    const mediaType = normalizeText(entry?.media_type).toLowerCase();
+    const mimeType = normalizeText(entry?.mime_type).toLowerCase();
+    return mediaType === "audio" || mimeType.startsWith("audio/");
+};
+const isProjectSceneSoundMediaEntry = (entry) => {
+    if (!isProjectMediaEntryAudio(entry)) {
+        return false;
+    }
+    const roleText = getProjectMediaEntryRoleText(entry).replace(/-/g, "_");
+    return (roleText.includes("scene_sound") ||
+        roleText.includes("segment_sound") ||
+        roleText.includes("segment_scene") ||
+        roleText.includes("sound_effect"));
+};
+const buildWorkspaceSegmentSceneSoundRef = (entry) => {
+    if (!entry || typeof entry !== "object") {
+        return null;
+    }
+    const record = entry;
+    const assetId = normalizePositiveProjectId(record.media_asset_id) ?? normalizePositiveProjectId(record.id);
+    const downloadUrl = normalizeText(record.download_url);
+    const remoteUrl = normalizeText(record.remote_url);
+    const url = normalizeText(record.url);
+    if (!assetId && !downloadUrl && !remoteUrl && !url) {
+        return null;
+    }
+    return {
+        download_url: downloadUrl || null,
+        file_name: normalizeText(record.file_name) ||
+            normalizeText(record.storage_key).split("/").pop() ||
+            (assetId ? `segment-scene-sound-${assetId}.wav` : "segment-scene-sound.wav"),
+        file_size: Math.max(0, Number(record.file_size ?? 0) || 0),
+        media_asset_id: assetId,
+        mime_type: normalizeText(record.mime_type) || "audio/wav",
+        remote_url: remoteUrl || null,
+        url: url || null,
+    };
+};
+const findProjectSceneSoundMediaEntry = (entries, segmentIndex) => entries.find((entry) => normalizeInteger(entry?.segment_index) === segmentIndex && isProjectSceneSoundMediaEntry(entry)) ??
+    null;
+const getWorkspaceMediaAssetRoleText = (asset) => [
+    asset?.kind,
+    asset?.libraryKind,
+    asset?.role,
+    asset?.sourceKind,
+    asset?.storageKey,
+]
+    .map((value) => normalizeText(value).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+const isWorkspaceSceneSoundMediaAsset = (asset) => {
+    const mediaType = normalizeText(asset?.mediaType).toLowerCase();
+    const mimeType = normalizeText(asset?.mimeType).toLowerCase();
+    const isAudio = mediaType === "audio" || mimeType.startsWith("audio/");
+    if (!isAudio) {
+        return false;
+    }
+    const roleText = getWorkspaceMediaAssetRoleText(asset).replace(/-/g, "_");
+    return (roleText.includes("scene_sound") ||
+        roleText.includes("segment_sound") ||
+        roleText.includes("segment_scene") ||
+        roleText.includes("sound_effect"));
+};
+const buildWorkspaceSegmentSceneSoundRefFromAsset = (asset) => {
+    if (!asset) {
+        return null;
+    }
+    const assetId = normalizePositiveProjectId(asset.assetId);
+    const downloadUrl = normalizeText(asset.downloadPath) || normalizeText(asset.downloadUrl);
+    const remoteUrl = normalizeText(asset.playbackUrl) || normalizeText(asset.originalUrl);
+    if (!assetId && !downloadUrl && !remoteUrl) {
+        return null;
+    }
+    return {
+        download_url: downloadUrl || null,
+        file_name: normalizeText(asset.storageKey).split("/").pop() ||
+            (assetId ? `segment-scene-sound-${assetId}.wav` : "segment-scene-sound.wav"),
+        file_size: 0,
+        media_asset_id: assetId,
+        mime_type: normalizeText(asset.mimeType) || "audio/wav",
+        remote_url: remoteUrl || null,
+        url: normalizeText(asset.originalUrl) || null,
+    };
+};
+const findProjectSceneSoundMediaAsset = (assets, segmentIndex) => assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceSceneSoundMediaAsset(asset)) ??
+    null;
 const normalizeWorkspaceProjectMediaUrl = (entry, value) => {
     const normalizedUrl = normalizeUrl(value);
     if (!normalizedUrl) {
@@ -233,6 +332,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
         const duration = normalizeNumber(record.duration) ??
             (startTime !== null && endTime !== null ? Math.max(0, endTime - startTime) : null);
         const text = normalizeText(record.text);
+        const sceneSound = buildWorkspaceSegmentSceneSoundRef(typeof record.scene_sound === "object" ? record.scene_sound : null);
+        const sceneSoundAssetId = normalizePositiveProjectId(record.scene_sound_asset_id) ??
+            normalizePositiveProjectId(record.sceneSoundAssetId) ??
+            sceneSound?.media_asset_id ??
+            null;
         if (!text && duration === null && !currentEntry && !originalEntry) {
             return null;
         }
@@ -245,6 +349,8 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             manual_duration_seconds: normalizeNumber(record.manual_duration_seconds),
             media_type: normalizeMediaType(currentEntry?.media_type ?? originalEntry?.media_type ?? record.media_type),
             original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
+            scene_sound: sceneSound,
+            scene_sound_asset_id: sceneSoundAssetId,
             speech_duration: normalizeNumber(record.speech_duration),
             speech_end_time: normalizeNumber(record.speech_end_time),
             speech_start_time: normalizeNumber(record.speech_start_time),
@@ -643,6 +749,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
     const segments = (payload.segments ?? [])
         .map((segment) => buildWorkspaceSegmentEditorSegment(sessionProjectId, segment, {
         currentEntries,
+        projectMediaAssets: projectMediaEnvelope.assets,
         projectMediaLoaded: projectMediaEnvelope.loaded,
         projectMediaByAssetId,
         originalEntries,
@@ -656,11 +763,21 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         throw new WorkspaceSegmentEditorError(`Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`, 409);
     }
     const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
+    const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+        ? projectDetailsPayload.generation_settings
+        : null;
     const musicAssetId = normalizePositiveProjectId(payload.music_asset_id) ??
         normalizePositiveProjectId(projectDetailsPayload?.music_asset_id) ??
+        normalizePositiveProjectId(generationSettings?.music_asset_id) ??
+        normalizePositiveProjectId(generationSettings?.custom_music_asset_id) ??
         null;
+    const musicType = normalizeText(payload.music_type) ||
+        normalizeText(projectDetailsPayload?.music_type) ||
+        normalizeText(generationSettings?.music_type) ||
+        (customMusicMetadata.customMusicAssetId ? "custom" : musicAssetId ? "ai" : "");
     const ttsAssetId = normalizePositiveProjectId(payload.tts_asset_id) ??
         normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
+        normalizePositiveProjectId(generationSettings?.tts_asset_id) ??
         null;
     return {
         customMusicAssetId: customMusicMetadata.customMusicAssetId,
@@ -668,8 +785,10 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         description: normalizeText(payload.description),
         language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
         musicAssetId,
-        musicName: normalizeText(payload.music_name) || normalizeText(projectDetailsPayload?.music_name),
-        musicType: normalizeText(payload.music_type),
+        musicName: normalizeText(payload.music_name) ||
+            normalizeText(projectDetailsPayload?.music_name) ||
+            normalizeText(generationSettings?.custom_music_original_name),
+        musicType,
         projectId: sessionProjectId,
         segments,
         subtitleColor: normalizeText(payload.subtitle_color),
@@ -705,6 +824,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     const originalEntry = explicitOriginalEntry ??
         (!hasOriginalVideo && currentEntry && detectWorkspaceSegmentSourceKind(currentEntry) !== "upload" ? currentEntry : null);
     const projectMediaByAssetId = projectSources?.projectMediaByAssetId ?? new Map();
+    const projectMediaAssets = projectSources?.projectMediaAssets ?? [];
     const projectMediaLoaded = Boolean(projectSources?.projectMediaLoaded);
     const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectMediaByAssetId, {
         projectId,
@@ -725,6 +845,19 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         originalEntry,
         payloadMediaType: payload.media_type,
     });
+    const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
+    const projectSceneSoundEntry = findProjectSceneSoundMediaEntry([
+        ...(projectSources?.currentEntries ?? []),
+        ...(projectSources?.originalEntries ?? []),
+    ], index);
+    const projectSceneSoundAsset = findProjectSceneSoundMediaAsset(projectMediaAssets, index);
+    const sceneSound = explicitSceneSound ??
+        buildWorkspaceSegmentSceneSoundRef(projectSceneSoundEntry) ??
+        buildWorkspaceSegmentSceneSoundRefFromAsset(projectSceneSoundAsset);
+    const sceneSoundAssetId = normalizePositiveProjectId(payload.scene_sound_asset_id) ??
+        sceneSound?.media_asset_id ??
+        normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
+        null;
     return {
         currentAsset,
         currentExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(currentEntry),
@@ -754,6 +887,9 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
             : null,
         originalSourceKind: detectWorkspaceSegmentSourceKind(originalEntry),
+        sceneSoundAssetId,
+        scene_sound: sceneSound,
+        scene_sound_asset_id: sceneSoundAssetId,
         speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
         speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
         speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,

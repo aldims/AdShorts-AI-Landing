@@ -190,7 +190,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
   options?: {
     preferEstimatedDuration?: (segment: T) => boolean;
     stillNoTextFallbackDuration?: number | null;
-    subtitleEnabled?: boolean;
+    subtitleEnabled?: boolean | ((segment: T) => boolean);
     visualDurationSeconds?: (segment: T) => number | null | undefined;
     visualKind?: (segment: T) => "image" | "video" | null | undefined;
     voiceEnabled?: boolean | ((segment: T) => boolean);
@@ -202,11 +202,13 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
   const nextSegments = segments.map((segment) => {
     const voiceEnabled =
       typeof options?.voiceEnabled === "function" ? options.voiceEnabled(segment) : options?.voiceEnabled;
+    const subtitleEnabled =
+      typeof options?.subtitleEnabled === "function" ? options.subtitleEnabled(segment) : options?.subtitleEnabled;
     const duration = roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
       fallbackDuration: segment.duration,
       preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
       stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
-      subtitleEnabled: options?.subtitleEnabled,
+      subtitleEnabled,
       visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
       visualKind: options?.visualKind?.(segment) ?? null,
       voiceEnabled,

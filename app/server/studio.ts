@@ -4738,6 +4738,9 @@ export async function createStudioGenerationJob(
   prompt: string,
   user: StudioUser,
   options?: {
+    addWatermark?: boolean;
+    brandChanged?: boolean;
+    clearBranding?: boolean;
     brandLogoAssetId?: number;
     brandLogoFileDataUrl?: string;
     brandLogoFileMimeType?: string;
@@ -4821,9 +4824,11 @@ export async function createStudioGenerationJob(
   const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
   const externalUserId = await resolveStudioExternalUserId(user);
   const shouldAddWatermark =
-    creditReservation.profile.plan === "FREE" &&
-    creditReservation.consumed.subscription > 0 &&
-    creditReservation.consumed.purchased <= 0;
+    typeof options?.addWatermark === "boolean"
+      ? options.addWatermark
+      : creditReservation.profile.plan === "FREE" &&
+        creditReservation.consumed.subscription > 0 &&
+        creditReservation.consumed.purchased <= 0;
   const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
   const prefillSettings = normalizeExamplePrefillStudioSettings({
     brandText: normalizedBrandText,
@@ -4863,6 +4868,10 @@ export async function createStudioGenerationJob(
       brandTextLength: normalizedBrandText?.length ?? 0,
       hasBrandLogo: Boolean(normalizedBrandLogoFileDataUrl),
       hasBrandText: Boolean(normalizedBrandText),
+      addWatermark: shouldAddWatermark,
+      addWatermarkOverride: options?.addWatermark ?? null,
+      brandChangedOverride: options?.brandChanged ?? null,
+      clearBrandingOverride: options?.clearBranding ?? null,
       isRegeneration: Boolean(options?.isRegeneration),
       requestedLanguage,
       resolvedLanguage: normalizedLanguage,
@@ -4999,6 +5008,8 @@ export async function createStudioGenerationJob(
         user_name: user.name ?? undefined,
         language: normalizedLanguage,
         add_watermark: shouldAddWatermark,
+        brand_changed: options?.brandChanged,
+        clear_branding: options?.clearBranding,
         credit_cost: requiredCredits,
         brand_logo_asset_id: brandLogoAssetId,
         brand_logo_mime_type: normalizedBrandLogoFileMimeType,

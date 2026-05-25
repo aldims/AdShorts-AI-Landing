@@ -635,6 +635,20 @@ const getFormDataBoolean = (formData: FormData, key: string, defaultValue: boole
   return !["0", "false", "no", "off"].includes(normalized);
 };
 
+const getFormDataOptionalBoolean = (formData: FormData, key: string) => {
+  const value = formData.get(key);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return !["0", "false", "no", "off"].includes(normalized);
+};
+
 const getFormDataNumber = (formData: FormData, key: string) => {
   const value = Number(getFormDataString(formData, key));
   return Number.isFinite(value) ? value : 0;
@@ -901,6 +915,9 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
       : undefined;
 
   return {
+    addWatermark: getFormDataOptionalBoolean(formData, "addWatermark"),
+    brandChanged: getFormDataOptionalBoolean(formData, "brandChanged"),
+    clearBranding: getFormDataOptionalBoolean(formData, "clearBranding"),
     brandLogoAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "brandLogoAssetId")),
     brandLogoFileDataUrl: brandLogoFile ? await buildMultipartFileDataUrl(brandLogoFile) : getFormDataString(formData, "brandLogoFileDataUrl"),
     brandLogoFileMimeType:
@@ -3304,8 +3321,11 @@ app.post("/api/studio/generate", async (req, res) => {
   }
 
   const requestBody = isMultipartFormRequest(req)
-    ? await parseStudioGenerateMultipartBody(req)
-    : {
+      ? await parseStudioGenerateMultipartBody(req)
+      : {
+        addWatermark: typeof req.body?.addWatermark === "boolean" ? req.body.addWatermark : undefined,
+        brandChanged: typeof req.body?.brandChanged === "boolean" ? req.body.brandChanged : undefined,
+        clearBranding: typeof req.body?.clearBranding === "boolean" ? req.body.clearBranding : undefined,
         brandLogoAssetId: normalizeRequestPositiveInteger(req.body?.brandLogoAssetId),
         brandLogoFileDataUrl:
           typeof req.body?.brandLogoFileDataUrl === "string" ? req.body.brandLogoFileDataUrl.trim() : "",
@@ -3341,6 +3361,9 @@ app.post("/api/studio/generate", async (req, res) => {
         voiceId: typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "",
       };
   const prompt = requestBody.prompt;
+  const addWatermark = requestBody.addWatermark;
+  const brandChanged = requestBody.brandChanged;
+  const clearBranding = requestBody.clearBranding;
   const isRegeneration = requestBody.isRegeneration;
   const language = requestBody.language;
   const voiceId = requestBody.voiceId;
@@ -3379,6 +3402,9 @@ app.post("/api/studio/generate", async (req, res) => {
     language: language || null,
     projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
     segmentEditorActive: Boolean(segmentEditor),
+    addWatermarkOverride: addWatermark ?? null,
+    brandChangedOverride: brandChanged ?? null,
+    clearBrandingOverride: clearBranding ?? null,
     voiceId: voiceId || null,
   });
 
@@ -3389,6 +3415,9 @@ app.post("/api/studio/generate", async (req, res) => {
 
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
+      addWatermark,
+      brandChanged,
+      clearBranding,
       brandLogoFileDataUrl,
       brandLogoAssetId,
       brandLogoFileMimeType,

@@ -6,12 +6,37 @@ import {
   getWorkspaceSegmentEditorSessionForAccessibleProject,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
+import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("segment editor asset lifecycle mapping", () => {
+  const createMediaAsset = (overrides: Partial<WorkspaceMediaAssetRef> = {}): WorkspaceMediaAssetRef => ({
+    assetId: 333,
+    createdAt: null,
+    deletedAt: null,
+    downloadPath: "/api/media/333/download",
+    downloadUrl: null,
+    expiresAt: null,
+    isCurrent: true,
+    kind: "segment_scene_sound",
+    libraryKind: null,
+    lifecycle: "ready",
+    mediaType: "audio",
+    mimeType: "audio/wav",
+    originalUrl: null,
+    playbackUrl: "/api/media/333/download",
+    projectId: 42,
+    role: "segment_scene_sound",
+    segmentIndex: 0,
+    sourceKind: null,
+    status: "ready",
+    storageKey: "projects/42/segment-scene-sound-333.wav",
+    ...overrides,
+  });
+
   it("downgrades upstream video segments to photo when linked entries only expose photo assets", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,
@@ -90,6 +115,56 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.currentPosterUrl).toContain("/api/workspace/media-assets/1201/poster");
     expect(segment?.originalAsset?.mediaType).toBe("photo");
     expect(segment?.originalPosterUrl).toBeNull();
+  });
+
+  it("restores a scene sound asset from project media into the editor segment", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 5,
+        index: 0,
+        text: "Segment",
+      },
+      {
+        currentEntries: [],
+        originalEntries: [],
+        projectMediaAssets: [createMediaAsset()],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: true,
+      },
+    );
+
+    expect(segment?.sceneSoundAssetId).toBe(333);
+    expect(segment?.scene_sound?.media_asset_id).toBe(333);
+    expect(segment?.scene_sound?.mime_type).toBe("audio/wav");
+  });
+
+  it("restores embedded scene sound metadata from the upstream segment payload", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 5,
+        index: 0,
+        scene_sound: {
+          download_url: "/api/media/444/download",
+          file_name: "rain.wav",
+          media_asset_id: 444,
+          mime_type: "audio/wav",
+        },
+        text: "Segment",
+      },
+      {
+        currentEntries: [],
+        originalEntries: [],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: true,
+      },
+    );
+
+    expect(segment?.sceneSoundAssetId).toBe(444);
+    expect(segment?.scene_sound?.file_name).toBe("rain.wav");
   });
 
   it("marks missing linked project assets as deleted when the media envelope was loaded", () => {
@@ -397,6 +472,41 @@ describe("segment editor asset lifecycle mapping", () => {
 
     expect(metadata.customMusicAssetId).toBeNull();
     expect(metadata.customMusicFileName).toBe("");
+  });
+
+  it("restores generated music settings from project generation metadata", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      42,
+      {
+        project_id: 42,
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 5,
+            index: 0,
+            text: "Segment",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            music_asset_id: 649,
+            music_type: "upbeat",
+          },
+          music_name: "upbeat_10.mp3",
+        },
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 42,
+        },
+      },
+    );
+
+    expect(session.musicAssetId).toBe(649);
+    expect(session.musicName).toBe("upbeat_10.mp3");
+    expect(session.musicType).toBe("upbeat");
   });
 
   it("keeps legacy explicit custom music metadata even when music type is absent", () => {

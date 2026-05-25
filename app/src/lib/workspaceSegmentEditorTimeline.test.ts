@@ -242,4 +242,29 @@ describe("workspace segment editor timeline", () => {
       }),
     ).toBeCloseTo(4.6, 6);
   });
+
+  it("supports per-segment subtitle duration decisions while rebuilding the timeline", () => {
+    const localSubtitleSegment = createSegment({
+      duration: undefined,
+      endTime: undefined,
+      mediaType: "photo",
+      text: "local subtitles should keep this still scene paced by readable text",
+    });
+    const silentStillSegment = createSegment({
+      duration: undefined,
+      endTime: undefined,
+      mediaType: "photo",
+      text: "this text should not stretch the still scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([localSubtitleSegment, silentStillSegment], {
+      stillNoTextFallbackDuration: 1.2,
+      subtitleEnabled: (segment) => segment === localSubtitleSegment,
+      visualKind: () => "image",
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]?.duration).toBeGreaterThan(1.8);
+    expect(rebuilt[1]?.duration).toBeCloseTo(1.2, 6);
+  });
 });

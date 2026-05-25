@@ -27994,6 +27994,141 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   font-weight: 750;
 }
 
+.studio-segment-editor__timeline-duration-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-segment-editor__timeline-duration-summary div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(2, 6, 12, 0.38);
+}
+
+.studio-segment-editor__timeline-duration-summary span,
+.studio-segment-editor__timeline-duration-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.studio-segment-editor__timeline-duration-summary span {
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.58rem;
+  font-weight: 760;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.studio-segment-editor__timeline-duration-summary strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 1rem;
+  font-weight: 860;
+  line-height: 1.1;
+}
+
+.studio-segment-editor__timeline-duration-options {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.studio-segment-editor__timeline-duration-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 9px 8px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.34);
+  color: rgba(226, 232, 240, 0.78);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.studio-segment-editor__timeline-duration-switch span {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-segment-editor__timeline-duration-switch i {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 31px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(71, 85, 105, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.08);
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.studio-segment-editor__timeline-duration-switch i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 4px 10px -5px rgba(0, 0, 0, 0.8);
+  transition:
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+
+.studio-segment-editor__timeline-duration-switch:hover,
+.studio-segment-editor__timeline-duration-switch:focus-visible,
+.studio-segment-editor__timeline-duration-switch.is-selected {
+  border-color: rgba(45, 212, 191, 0.3);
+  background: rgba(13, 148, 136, 0.14);
+  color: rgba(240, 253, 250, 0.94);
+}
+
+.studio-segment-editor__timeline-duration-switch:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.28);
+  outline-offset: 2px;
+}
+
+.studio-segment-editor__timeline-duration-switch.is-selected i {
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.86), rgba(251, 191, 36, 0.78));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 6px 16px -11px rgba(45, 212, 191, 0.8);
+}
+
+.studio-segment-editor__timeline-duration-switch.is-selected i::after {
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateX(13px);
+}
+
 .studio-segment-editor__timeline-duration-menu-modes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -28117,6 +28252,16 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   outline-offset: 2px;
 }
 
+.studio-segment-editor__timeline-duration-sound-sync.is-static {
+  cursor: default;
+}
+
+.studio-segment-editor__timeline-duration-sound-sync.is-static:hover {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.34);
+  color: rgba(203, 213, 225, 0.74);
+}
+
 .studio-segment-editor__timeline-duration-menu-textarea {
   width: 100%;
   min-height: 88px;
@@ -28186,6 +28331,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   }
 
   .studio-segment-editor__timeline-duration-compact,
+  .studio-segment-editor__timeline-duration-summary,
   .studio-segment-editor__timeline-duration-menu-modes {
     grid-template-columns: 1fr;
   }
@@ -30064,6 +30210,75 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 }
 
 .studio-video-selector__brand-clear:hover {
+  color: white;
+}
+
+.studio-brand-selector__watermark {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.studio-brand-selector__watermark.is-enabled {
+  border-color: rgba(251, 191, 36, 0.28);
+  background:
+    linear-gradient(180deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.05)),
+    rgba(0, 0, 0, 0.14);
+}
+
+.studio-brand-selector__watermark-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.studio-brand-selector__watermark-copy span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-brand-selector__watermark-copy small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-brand-selector__watermark-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(226, 232, 240, 0.88);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.studio-brand-selector__watermark-toggle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.1);
   color: white;
 }
 

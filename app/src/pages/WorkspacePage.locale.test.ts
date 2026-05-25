@@ -25,6 +25,7 @@ import {
   formatWorkspaceSegmentEditorSegmentDurationLabel,
   formatWorkspaceSegmentEditorSegmentTimeRange,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
+  getWorkspaceSegmentEffectiveSubtitleSettings,
   insertWorkspacePromptCharacterMentionText,
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
   resolveWorkspacePromptMentionedCharacterOptions,
@@ -32,6 +33,8 @@ import {
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentDurationExtensionPlan,
+  resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
+  resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
   getWorkspaceSegmentSceneSoundDurationSeconds,
@@ -853,6 +856,53 @@ describe("WorkspacePage segment editor draft persistence", () => {
     );
 
     expect(checklist.map((item) => item.label)).toContain("Сегмент 1: добавлен звук сцены");
+  });
+
+  it("treats a generated scene sound as changed when a refreshed baseline already sees its asset", () => {
+    const sceneSoundAsset = {
+      assetId: 202,
+      fileName: "scene-sound.wav",
+      fileSize: 2048,
+      mimeType: "audio/wav",
+      remoteUrl: "/api/workspace/media-assets/202",
+      source: "media-library" as const,
+    };
+    const baselineSegment = createDraftSegment({
+      index: 0,
+      sceneSoundAsset,
+      sceneSoundPromptInitialized: true,
+    });
+    const draftSegment = createDraftSegment({
+      index: 0,
+      sceneSoundAsset,
+      sceneSoundGeneratedFromPrompt: "kitten eating crunchy food",
+      sceneSoundPrompt: "kitten eating crunchy food",
+      sceneSoundPromptInitialized: true,
+    });
+
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(draftSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(checklist.map((item) => item.label)).toContain("Сегмент 1: обновлен звук сцены");
+  });
+
+  it("does not treat a prompt-only scene sound draft as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({ index: 0 });
+    const draftSegment = createDraftSegment({
+      index: 0,
+      sceneSoundPrompt: "quiet room tone",
+      sceneSoundPromptInitialized: true,
+    });
+
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(draftSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(checklist.map((item) => item.label)).not.toContain("Сегмент 1: добавлен звук сцены");
+    expect(checklist).toHaveLength(0);
   });
 
   it("treats a scene voice override as a Shorts edit", () => {
@@ -2192,6 +2242,61 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentSceneSoundRefreshPrompt(uploadedSoundSegment)).toBe("");
   });
 
+  it("targets a five second AI extension when a video duration has not been manually expanded", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 8,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 8,
+      endTime: 8,
+      mediaType: "photo",
+      videoAction: "photo_animation",
+    });
+
+    expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 8)).toBe(13);
+    expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 12)).toBe(12);
+  });
+
+  it("trims an AI duration extension target to voiceover when requested", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 8,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 8,
+      endTime: 8,
+      mediaType: "photo",
+      speechDuration: 10.2,
+      videoAction: "photo_animation",
+    });
+
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 13, {
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 10.2,
+      }),
+    ).toBe(10.2);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 13, {
+        trimToVoiceover: false,
+        voiceoverDurationSeconds: 10.2,
+      }),
+    ).toBe(13);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 13, {
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 5,
+      }),
+    ).toBe(13);
+  });
+
   it("rejects segment boundary timing before the edited segment start", () => {
     const segment = createDraftSegment({
       duration: 4,
@@ -2322,6 +2427,68 @@ describe("WorkspacePage studio locale defaults", () => {
         voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
       }),
     );
+  });
+
+  it("allows a scene subtitle override when global subtitles are off", async () => {
+    const segment = createDraftSegment({
+      subtitleColor: "cyan",
+      subtitleStyle: "impact",
+      text: "Scene-level subtitles remain available",
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = {
+      ...createDraftSession(segment),
+      subtitleType: "none",
+    };
+    const effectiveSettings = getWorkspaceSegmentEffectiveSubtitleSettings(session, segment, {
+      subtitleColorId: "purple",
+      subtitleStyleId: "modern",
+    });
+
+    expect(effectiveSettings).toMatchObject({
+      globalEnabled: false,
+      isEnabled: true,
+      subtitleColorId: "cyan",
+      subtitleStyleId: "impact",
+      subtitleType: "default",
+      voiceEnabled: true,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(session, { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        subtitleColor: "cyan",
+        subtitleStyle: "impact",
+        subtitleType: "default",
+        text: "Scene-level subtitles remain available",
+      }),
+    );
+  });
+
+  it("keeps inherited scene subtitles off when global subtitles are off", () => {
+    const segment = createDraftSegment({
+      text: "Scene inherits global subtitle defaults",
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const effectiveSettings = getWorkspaceSegmentEffectiveSubtitleSettings(
+      {
+        ...createDraftSession(segment),
+        subtitleType: "none",
+      },
+      segment,
+      {
+        subtitleColorId: "purple",
+        subtitleStyleId: "modern",
+      },
+    );
+
+    expect(effectiveSettings).toMatchObject({
+      globalEnabled: false,
+      isEnabled: false,
+      subtitleType: "none",
+      voiceEnabled: true,
+    });
   });
 
   it("exports a scene voice from another language without changing the project language", async () => {
@@ -2852,6 +3019,24 @@ describe("WorkspacePage studio locale defaults", () => {
       customVideoAssetId: undefined,
       sceneSoundAssetId: 8801,
       videoAction: "original",
+    });
+  });
+
+  it("sends AdsFlow-shaped scene sound asset ids in the generation payload", async () => {
+    const segment = createDraftSegment({
+      sceneSoundAsset: {
+        fileName: "segment-scene-sound.wav",
+        fileSize: 0,
+        media_asset_id: 9902,
+        mimeType: "audio/wav",
+        remote_url: "/api/workspace/media-assets/9902",
+      } as NonNullable<DraftSegment["sceneSoundAsset"]>,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      sceneSoundAssetId: 9902,
     });
   });
 
