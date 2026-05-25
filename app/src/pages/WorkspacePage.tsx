@@ -34361,6 +34361,28 @@ export function WorkspacePage({
       isSegmentTimelineDurationAiExtensionPending ||
       (segmentTimelineDurationMenuSegment && isWorkspaceSegmentVisualJobBusy(segmentTimelineDurationMenuSegment.index)),
   );
+  const handleSegmentTimelineDurationAiExtensionClick = () => {
+    if (segmentTimelineDurationMenuTargetSeconds === null) {
+      return;
+    }
+
+    setSegmentTimelineDurationInputValue(
+      formatWorkspaceSegmentDurationInputValue(segmentTimelineDurationMenuTargetSeconds),
+    );
+    setActiveSegmentIndex(
+      Math.max(
+        0,
+        Math.min(
+          segmentTimelineDurationMenuArrayIndex,
+          (segmentEditorDraft?.segments.length ?? 1) - 1,
+        ),
+      ),
+    );
+    setSegmentTimelineDurationMenuSegmentIndex(null);
+    void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
+      targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
+    });
+  };
   const segmentTimelineDurationMenu =
     segmentTimelineDurationMenuSegment &&
     segmentTimelineDurationMenuArrayIndex >= 0 &&
@@ -34396,17 +34418,6 @@ export function WorkspacePage({
                   </strong>
                   {segmentTimelineDurationMenuRangeLabel ? <small>{segmentTimelineDurationMenuRangeLabel}</small> : null}
                 </span>
-                <button
-                  className="studio-segment-editor__timeline-text-menu-close"
-                  type="button"
-                  aria-label={workspaceText(locale, "Закрыть настройки длительности", "Close duration settings")}
-                  onClick={() => setSegmentTimelineDurationMenuSegmentIndex(null)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M7 7l10 10" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                    <path d="M17 7 7 17" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                  </svg>
-                </button>
               </div>
               {segmentTimelineDurationMenuHasVoiceover ? (
                 <div className="studio-segment-editor__timeline-duration-options">
@@ -34425,7 +34436,9 @@ export function WorkspacePage({
                 </div>
               ) : null}
               {segmentTimelineDurationMenuExtensionPlan ? (
-                <label className="studio-segment-editor__timeline-duration-menu-field" htmlFor={`${segmentTimelineDurationInputId}-ai`}>
+                <div
+                  className="studio-segment-editor__timeline-duration-menu-field studio-segment-editor__timeline-duration-prompt-card"
+                >
                   <textarea
                     ref={segmentTimelineDurationAiPromptRef}
                     id={`${segmentTimelineDurationInputId}-ai`}
@@ -34439,52 +34452,32 @@ export function WorkspacePage({
                       setSegmentTimelineDurationAiPrompt(event.target.value);
                     }}
                   />
-                </label>
-              ) : null}
-              <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
-                <button type="button" onClick={() => setSegmentTimelineDurationMenuSegmentIndex(null)}>
-                  {workspaceText(locale, "Закрыть", "Close")}
-                </button>
-                {segmentTimelineDurationMenuExtensionPlan ? (
-                  <button
-                    type="button"
-                    disabled={isSegmentTimelineDurationAiExtensionDisabled}
-                    title={
-                      segmentTimelineDurationMenuExtensionPlan.canRequestAiExtension
-                        ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
-                        : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
-                    }
-                    onClick={() => {
-                      if (segmentTimelineDurationMenuTargetSeconds !== null) {
-                        setSegmentTimelineDurationInputValue(
-                          formatWorkspaceSegmentDurationInputValue(segmentTimelineDurationMenuTargetSeconds),
-                        );
-                        setActiveSegmentIndex(
-                          Math.max(
-                            0,
-                            Math.min(
-                              segmentTimelineDurationMenuArrayIndex,
-                              (segmentEditorDraft?.segments.length ?? 1) - 1,
-                            ),
-                          ),
-                        );
-                        setSegmentTimelineDurationMenuSegmentIndex(null);
-                        void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
-                          targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
-                        });
+                  <div className="studio-segment-editor__timeline-duration-prompt-actions">
+                    <button
+                      className="studio-segment-editor__timeline-duration-extend-button"
+                      type="button"
+                      disabled={isSegmentTimelineDurationAiExtensionDisabled}
+                      title={
+                        segmentTimelineDurationMenuExtensionPlan.canRequestAiExtension
+                          ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
+                          : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
                       }
-                    }}
-                  >
-                    {isSegmentTimelineDurationAiExtensionPending ? (
-                      <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                    ) : (
-                      <>
-                        <span>{workspaceText(locale, "Продлить", "Extend")}</span>
-                        <small>{formatSegmentVisualCreditsLabel(getSegmentPhotoAnimationCreditCost("standard"))}</small>
-                      </>
-                    )}
-                  </button>
-                ) : (
+                      onClick={handleSegmentTimelineDurationAiExtensionClick}
+                    >
+                      {isSegmentTimelineDurationAiExtensionPending ? (
+                        <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                      ) : (
+                        <>
+                          <span>{workspaceText(locale, "Продлить", "Extend")}</span>
+                          <small>{formatSegmentVisualCreditsLabel(getSegmentPhotoAnimationCreditCost("standard"))}</small>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {!segmentTimelineDurationMenuExtensionPlan ? (
+                <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
                   <button
                     type="button"
                     onClick={() => {
@@ -34496,8 +34489,8 @@ export function WorkspacePage({
                   >
                     {workspaceText(locale, "Сохранить", "Save")}
                   </button>
-                )}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>,
           document.body,
