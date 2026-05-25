@@ -34471,6 +34471,7 @@ export function WorkspacePage({
                             ),
                           ),
                         );
+                        setSegmentTimelineDurationMenuSegmentIndex(null);
                         void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
                           targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
                         });
