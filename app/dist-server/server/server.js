@@ -557,6 +557,8 @@ const parseStudioGenerateMultipartBody = async (req) => {
                             ? segmentRecord.customVideoFileName.trim()
                             : undefined,
                     duration: segmentRecord.duration,
+                    durationExtensionSourceDurationSeconds: segmentRecord.durationExtensionSourceDurationSeconds ??
+                        segmentRecord.duration_extension_source_duration_seconds,
                     durationMode: segmentRecord.durationMode ?? segmentRecord.duration_mode,
                     endTime: segmentRecord.endTime,
                     index: segmentRecord.index,

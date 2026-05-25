@@ -567,6 +567,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         const rawEndTime = normalizeNumber(segmentRecord.endTime);
         const rawDuration = normalizeNumber(segmentRecord.duration);
         const rawDurationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+        const rawDurationExtensionSourceDurationSeconds = normalizeStudioSegmentManualDurationSeconds(segmentRecord.durationExtensionSourceDurationSeconds ?? segmentRecord.duration_extension_source_duration_seconds);
         const rawManualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds);
         const timelineDuration = rawStartTime !== null && rawEndTime !== null && rawEndTime > rawStartTime ? rawEndTime - rawStartTime : null;
         // Generation must use the editor timeline snapshot. If an already resolved timeline is exported as "auto",
@@ -622,6 +623,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
             customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
             duration,
+            durationExtensionSourceDurationSeconds: rawDurationExtensionSourceDurationSeconds,
             durationMode,
             endTime,
             index,
@@ -3283,6 +3285,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         custom_video_mime_type: segment.customVideoFileMimeType,
                         custom_video_original_name: segment.customVideoFileName,
                         duration: segment.duration,
+                        duration_extension_source_duration_seconds: segment.durationExtensionSourceDurationSeconds ?? null,
                         duration_mode: segment.durationMode,
                         end_time: segment.endTime,
                         index: segment.index,
@@ -3308,6 +3311,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 segmentOrder: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.index),
                 segmentTimings: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
                     duration: segment.duration ?? null,
+                    durationExtensionSourceDurationSeconds: segment.duration_extension_source_duration_seconds ?? null,
                     durationMode: segment.duration_mode ?? null,
                     endTime: segment.end_time ?? null,
                     index: segment.index,

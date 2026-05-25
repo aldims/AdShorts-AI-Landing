@@ -1627,6 +1627,14 @@ type StudioCustomVideoFile = {
 };
 
 type WorkspaceSegmentVisualRunState = Record<number, number>;
+type WorkspaceSegmentVisualRunScope =
+  | "ai_photo"
+  | "ai_video"
+  | "image_edit"
+  | "image_upscale"
+  | "photo_animation"
+  | "scene_sound"
+  | "talking_photo";
 
 const hasWorkspaceSegmentVisualRun = (
   runState: WorkspaceSegmentVisualRunState,
@@ -17844,6 +17852,7 @@ export function WorkspacePage({
   const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentEditorActiveVisualRunKeysRef = useRef<Set<string>>(new Set());
   const segmentEditorRunRef = useRef(0);
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
@@ -17992,6 +18001,27 @@ export function WorkspacePage({
     return () => window.clearTimeout(timer);
   }, [segmentEditorVideoError, showStudioToast]);
 
+  const getSegmentVisualRunScope = (
+    runRef: { current: WorkspaceSegmentVisualRunState },
+  ): WorkspaceSegmentVisualRunScope => {
+    if (runRef === segmentAiPhotoRunRef) return "ai_photo";
+    if (runRef === segmentAiVideoRunRef) return "ai_video";
+    if (runRef === segmentImageEditRunRef) return "image_edit";
+    if (runRef === segmentImageUpscaleRunRef) return "image_upscale";
+    if (runRef === segmentPhotoAnimationRunRef) return "photo_animation";
+    if (runRef === segmentSceneSoundRunRef) return "scene_sound";
+    return "talking_photo";
+  };
+  const getSegmentVisualRunKey = (
+    runRef: { current: WorkspaceSegmentVisualRunState },
+    segmentIndex: number,
+    runId: number,
+  ) => `${getSegmentVisualRunScope(runRef)}:${segmentIndex}:${runId}`;
+  const hasActiveSegmentEditorVisualRunScope = (scope: WorkspaceSegmentVisualRunScope) =>
+    Array.from(segmentEditorActiveVisualRunKeysRef.current).some((key) => key.startsWith(`${scope}:`));
+  const hasActiveSegmentEditorVisualRunForSegment = (segmentIndex: number | null | undefined) =>
+    typeof segmentIndex === "number" &&
+    Array.from(segmentEditorActiveVisualRunKeysRef.current).some((key) => key.split(":")[1] === String(segmentIndex));
   const startSegmentVisualRun = (
     runRef: { current: WorkspaceSegmentVisualRunState },
     setRunState: (value: WorkspaceSegmentVisualRunState | ((current: WorkspaceSegmentVisualRunState) => WorkspaceSegmentVisualRunState)) => void,
@@ -18002,6 +18032,7 @@ export function WorkspacePage({
       ...runRef.current,
       [segmentIndex]: runId,
     };
+    segmentEditorActiveVisualRunKeysRef.current.add(getSegmentVisualRunKey(runRef, segmentIndex, runId));
     setRunState((current) => ({
       ...current,
       [segmentIndex]: runId,
@@ -18023,6 +18054,10 @@ export function WorkspacePage({
       return;
     }
 
+    const activeRunId = runRef.current[segmentIndex];
+    if (typeof activeRunId === "number") {
+      segmentEditorActiveVisualRunKeysRef.current.delete(getSegmentVisualRunKey(runRef, segmentIndex, activeRunId));
+    }
     runRef.current = {
       ...runRef.current,
       [segmentIndex]: (runRef.current[segmentIndex] ?? 0) + 1,
@@ -18038,6 +18073,7 @@ export function WorkspacePage({
       runRef.current = nextRunState;
     };
 
+    segmentEditorActiveVisualRunKeysRef.current.clear();
     clearRunRef(segmentAiPhotoRunRef);
     clearRunRef(segmentAiVideoRunRef);
     clearRunRef(segmentPhotoAnimationRunRef);
@@ -21760,21 +21796,72 @@ export function WorkspacePage({
   });
   const isAnySegmentEditorVisualJobBusy =
     isSegmentEditorGeneratingAiPhoto ||
+    hasActiveSegmentEditorVisualRunScope("ai_photo") ||
     isSegmentEditorGeneratingAiVideo ||
+    hasActiveSegmentEditorVisualRunScope("ai_video") ||
     isSegmentEditorGeneratingPhotoAnimation ||
+    hasActiveSegmentEditorVisualRunScope("photo_animation") ||
     isSegmentEditorGeneratingTalkingPhoto ||
+    hasActiveSegmentEditorVisualRunScope("talking_photo") ||
     isSegmentEditorGeneratingImageEdit ||
+    hasActiveSegmentEditorVisualRunScope("image_edit") ||
     isSegmentEditorUpscalingImage ||
-    isSegmentEditorGeneratingSceneSound;
+    hasActiveSegmentEditorVisualRunScope("image_upscale") ||
+    isSegmentEditorGeneratingSceneSound ||
+    hasActiveSegmentEditorVisualRunScope("scene_sound");
   const isWorkspaceSegmentVisualJobBusy = (segmentIndex: number | null | undefined) =>
     typeof segmentIndex === "number" &&
-    (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex) ||
+    (hasActiveSegmentEditorVisualRunForSegment(segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex));
+  const getActiveSegmentEditorVisualJobKind = (): WorkspaceSegmentVisualRunScope | null => {
+    if (
+      isSegmentEditorGeneratingAiPhoto ||
+      hasActiveSegmentEditorVisualRunScope("ai_photo") ||
+      segmentAiPhotoActiveJobIdsRef.current.size > 0
+    ) {
+      return "ai_photo";
+    }
+
+    if (isSegmentEditorGeneratingAiVideo || hasActiveSegmentEditorVisualRunScope("ai_video")) {
+      return "ai_video";
+    }
+
+    if (
+      isSegmentEditorGeneratingPhotoAnimation ||
+      hasActiveSegmentEditorVisualRunScope("photo_animation") ||
+      segmentPhotoAnimationActiveJobIdsRef.current.size > 0
+    ) {
+      return "photo_animation";
+    }
+
+    if (
+      isSegmentEditorGeneratingTalkingPhoto ||
+      hasActiveSegmentEditorVisualRunScope("talking_photo") ||
+      segmentTalkingPhotoActiveJobIdsRef.current.size > 0
+    ) {
+      return "talking_photo";
+    }
+
+    if (isSegmentEditorGeneratingImageEdit || hasActiveSegmentEditorVisualRunScope("image_edit")) {
+      return "image_edit";
+    }
+
+    if (isSegmentEditorUpscalingImage || hasActiveSegmentEditorVisualRunScope("image_upscale")) {
+      return "image_upscale";
+    }
+
+    if (isSegmentEditorGeneratingSceneSound || hasActiveSegmentEditorVisualRunScope("scene_sound")) {
+      return "scene_sound";
+    }
+
+    return null;
+  };
   const isActiveSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
   const isSegmentEditorStructureActionBusy =
     isGenerating ||
@@ -30628,36 +30715,40 @@ export function WorkspacePage({
       return;
     }
 
-    if (
-      isSegmentEditorPreparingCustomVideo ||
-      isSegmentEditorGeneratingAiPhoto ||
-      isSegmentEditorGeneratingImageEdit ||
-      isSegmentEditorGeneratingAiVideo ||
-      isSegmentEditorGeneratingPhotoAnimation ||
-      isSegmentEditorUpscalingImage
-    ) {
-      if (isSegmentEditorGeneratingAiPhoto) {
+    const activeSegmentEditorVisualJobKind = getActiveSegmentEditorVisualJobKind();
+    if (isSegmentEditorPreparingCustomVideo || activeSegmentEditorVisualJobKind) {
+      if (activeSegmentEditorVisualJobKind === "ai_photo") {
         reportGeneratePreflightFailure("Подождите, пока ИИ фото создаётся для сегмента.", "AI photo preparing");
         return;
       }
 
-      if (isSegmentEditorGeneratingImageEdit) {
+      if (activeSegmentEditorVisualJobKind === "image_edit") {
         reportGeneratePreflightFailure("Подождите, пока дорисовка фото выполняется для сегмента.", "Image edit preparing");
         return;
       }
 
-      if (isSegmentEditorGeneratingAiVideo) {
+      if (activeSegmentEditorVisualJobKind === "ai_video") {
         reportGeneratePreflightFailure("Подождите, пока ИИ видео создаётся для сегмента.", "AI video preparing");
         return;
       }
 
-      if (isSegmentEditorGeneratingPhotoAnimation) {
+      if (activeSegmentEditorVisualJobKind === "photo_animation") {
         reportGeneratePreflightFailure("Подождите, пока ИИ анимация фото создаётся для сегмента.", "Photo animation preparing");
         return;
       }
 
-      if (isSegmentEditorUpscalingImage) {
+      if (activeSegmentEditorVisualJobKind === "talking_photo") {
+        reportGeneratePreflightFailure("Подождите, пока видео с говорящим персонажем создаётся для сегмента.", "Talking photo preparing");
+        return;
+      }
+
+      if (activeSegmentEditorVisualJobKind === "image_upscale") {
         reportGeneratePreflightFailure("Подождите, пока качество изображения улучшается для сегмента.", "Image upscaling");
+        return;
+      }
+
+      if (activeSegmentEditorVisualJobKind === "scene_sound") {
+        reportGeneratePreflightFailure("Подождите, пока звук сцены создаётся для сегмента.", "Scene sound preparing");
         return;
       }
 
