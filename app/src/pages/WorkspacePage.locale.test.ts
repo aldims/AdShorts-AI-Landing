@@ -2162,6 +2162,33 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentDurationExtensionPlan(segment)).toBeNull();
   });
 
+  it("ignores stale extension source duration from a failed AI extension on an original video", () => {
+    const baselineSegment = createDraftSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0",
+      currentPosterUrl: "/api/workspace/project-segment-poster?projectId=77&segmentIndex=0",
+      duration: 5,
+      endTime: 5,
+      mediaType: "video",
+    });
+    const segment = createDraftSegment({
+      ...baselineSegment,
+      duration: 10,
+      durationExtensionSourceDurationSeconds: 10,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment, baselineSegment)).toMatchObject({
+      canRequestAiExtension: true,
+      extraDurationSeconds: 5,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 10,
+      sourceDurationSeconds: 5,
+    });
+  });
+
   it("does not show a duration extension plan when a segment stays within source length", () => {
     const baselineSegment = createDraftSegment({
       duration: 4,

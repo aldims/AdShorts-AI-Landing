@@ -12,8 +12,8 @@ import {
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
+  getStudioSegmentPhotoAnimationCreditCost,
+  normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -858,8 +858,10 @@ const getStudioSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) 
 const getStudioSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
 
-const getStudioSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
+const getStudioSegmentPhotoAnimationRequiredCredits = (
+  quality: StudioSegmentVisualQuality,
+  durationSeconds: unknown,
+) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
 
 const studioPremiumVoiceIds = new Set([
   "Liam",
@@ -5950,7 +5952,14 @@ export async function createStudioSegmentPhotoAnimationJob(
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
   const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
-  const requiredCredits = getStudioSegmentPhotoAnimationCreditCost(normalizedQuality);
+  const normalizedPhotoAnimationDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+    normalizedQuality,
+    normalizedDurationSeconds,
+  );
+  const requiredCredits = getStudioSegmentPhotoAnimationRequiredCredits(
+    normalizedQuality,
+    normalizedPhotoAnimationDurationSeconds,
+  );
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
     timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
@@ -6000,7 +6009,7 @@ export async function createStudioSegmentPhotoAnimationJob(
       tailDurationSeconds: options?.durationExtensionTailDurationSeconds,
       targetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
     }),
-    ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
+    ...buildStudioSegmentVisualDurationPayload(normalizedPhotoAnimationDurationSeconds),
     ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
     language: normalizedLanguage,
     project_id: normalizedProjectId,

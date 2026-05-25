@@ -84,8 +84,9 @@ import {
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST,
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY,
+  getStudioSegmentPhotoAnimationCreditCost,
+  getStudioSegmentPhotoAnimationDurationOptions,
+  normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -93,6 +94,7 @@ import {
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   type StudioCreditAction,
+  type StudioSegmentPhotoAnimationDurationSeconds,
   type StudioSegmentVisualQuality,
 } from "../../shared/studio-credit-costs";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
@@ -1344,6 +1346,8 @@ type WorkspaceSegmentSceneSoundJobCreateRequest = {
 
 type StoredWorkspaceSegmentPhotoAnimationJob = {
   createdAt: number;
+  durationExtensionSourceDurationSeconds?: number | null;
+  durationExtensionTargetDurationSeconds?: number | null;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -7342,8 +7346,10 @@ const getWorkspaceReferenceGenerationCreditCost = (
 const getSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
 
-const getSegmentPhotoAnimationCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
+const getSegmentPhotoAnimationCreditCost = (
+  quality: StudioSegmentVisualQuality,
+  durationSeconds: unknown = 5,
+) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
 
 const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
 const cloneStudioCustomMusicFile = (value: StudioCustomMusicFile | null) => (value ? { ...value } : null);
@@ -8308,12 +8314,21 @@ export const getWorkspaceSegmentDurationExtensionPlan = (
   }
 
   const draftVisualAssetDurationSeconds = getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment));
+  const storedDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+  const usableStoredDurationExtensionSourceDurationSeconds =
+    storedDurationExtensionSourceDurationSeconds !== null &&
+    (storedDurationExtensionSourceDurationSeconds < slotDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS ||
+      latestVisualAction === "photo_animation")
+      ? storedDurationExtensionSourceDurationSeconds
+      : null;
   const baselineVisualDurationSeconds = baselineSegment
     ? getWorkspaceSegmentBaselineDurationExtensionSourceDurationSeconds(baselineSegment)
     : null;
   const sourceDurationSeconds =
     draftVisualAssetDurationSeconds ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ??
+    usableStoredDurationExtensionSourceDurationSeconds ??
     baselineVisualDurationSeconds;
   if (sourceDurationSeconds === null || slotDurationSeconds <= sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS) {
     return null;
@@ -8332,9 +8347,21 @@ const getWorkspaceSegmentDurationExtensionSourceDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
 ) => {
+  const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+  const storedDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+  const usableStoredDurationExtensionSourceDurationSeconds =
+    storedDurationExtensionSourceDurationSeconds !== null &&
+    (slotDurationSeconds === null ||
+      storedDurationExtensionSourceDurationSeconds < slotDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS ||
+      latestVisualAction === "photo_animation")
+      ? storedDurationExtensionSourceDurationSeconds
+      : null;
+
   return (
     getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ??
+    usableStoredDurationExtensionSourceDurationSeconds ??
     (baselineSegment ? getWorkspaceSegmentBaselineDurationExtensionSourceDurationSeconds(baselineSegment) : null) ??
     normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
   );
@@ -9907,6 +9934,12 @@ const normalizeStoredWorkspaceSegmentPhotoAnimationJob = (
   value: StoredWorkspaceSegmentPhotoAnimationJob,
 ): StoredWorkspaceSegmentPhotoAnimationJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  durationExtensionSourceDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(
+    value.durationExtensionSourceDurationSeconds,
+  ),
+  durationExtensionTargetDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(
+    value.durationExtensionTargetDurationSeconds,
+  ),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.trunc(Number(value.projectId)),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),
@@ -17743,6 +17776,8 @@ export function WorkspacePage({
     useState<StudioSegmentVisualQuality>("standard");
   const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
     useState<StudioSegmentVisualQuality>("standard");
+  const [selectedSegmentPhotoAnimationDurationSeconds, setSelectedSegmentPhotoAnimationDurationSeconds] =
+    useState<StudioSegmentPhotoAnimationDurationSeconds>(5);
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
@@ -17756,6 +17791,11 @@ export function WorkspacePage({
   const [isSavedWorkspaceReferencesLoading, setIsSavedWorkspaceReferencesLoading] = useState(false);
   const [savedWorkspaceReferencesError, setSavedWorkspaceReferencesError] = useState<string | null>(null);
   const [savedWorkspaceReferencesNotice, setSavedWorkspaceReferencesNotice] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedSegmentPhotoAnimationDurationSeconds((current) =>
+      normalizeStudioSegmentPhotoAnimationDurationSeconds(selectedSegmentPhotoAnimationQuality, current),
+    );
+  }, [selectedSegmentPhotoAnimationQuality]);
   const [isWorkspaceReferenceCreatorOpen, setIsWorkspaceReferenceCreatorOpen] = useState(false);
   const [referenceCreationSource, setReferenceCreationSource] = useState<WorkspaceReferenceCreationSource>("ai");
   const [referenceCreationPrompt, setReferenceCreationPrompt] = useState("");
@@ -21037,6 +21077,48 @@ export function WorkspacePage({
             )
           : null}
       </>
+    );
+  };
+  const renderSegmentPhotoAnimationDurationSwitch = (options: {
+    className?: string;
+    disabled?: boolean;
+    label?: string;
+    onChange: (durationSeconds: StudioSegmentPhotoAnimationDurationSeconds) => void;
+    quality: StudioSegmentVisualQuality;
+    value: StudioSegmentPhotoAnimationDurationSeconds;
+  }) => {
+    const durationOptions = getStudioSegmentPhotoAnimationDurationOptions(options.quality);
+    const normalizedValue = normalizeStudioSegmentPhotoAnimationDurationSeconds(options.quality, options.value);
+
+    return (
+      <div
+        className={`studio-segment-photo-animation-duration${options.className ? ` ${options.className}` : ""}`}
+        role="radiogroup"
+        aria-label={workspaceText(locale, "Длительность ИИ анимации", "AI animation duration")}
+      >
+        {options.label ? <span className="studio-segment-photo-animation-duration__caption">{options.label}</span> : null}
+        <div className="studio-segment-photo-animation-duration__control">
+          {durationOptions.map((durationSeconds) => {
+            const isActive = durationSeconds === normalizedValue;
+            const durationLabel = workspaceText(locale, `${durationSeconds}с`, `${durationSeconds}s`);
+
+            return (
+              <button
+                key={`${options.quality}-${durationSeconds}`}
+                className={`studio-segment-photo-animation-duration__option${isActive ? " is-active" : ""}`}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                disabled={options.disabled}
+                title={durationLabel}
+                onClick={() => options.onChange(durationSeconds)}
+              >
+                <span>{durationLabel}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     );
   };
   const hasPreviewModalDescription = Boolean(previewModalDescription);
@@ -27253,6 +27335,7 @@ export function WorkspacePage({
     initialStatus = "queued",
     options: {
       durationExtensionSourceDurationSeconds?: number | null;
+      durationExtensionTargetDurationSeconds?: number | null;
       projectId?: number;
       prompt: string;
       refreshSceneSoundPrompt?: string | null;
@@ -27340,6 +27423,8 @@ export function WorkspacePage({
         if (options.projectId) {
           upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
             createdAt: startedAt,
+            durationExtensionSourceDurationSeconds: options.durationExtensionSourceDurationSeconds ?? null,
+            durationExtensionTargetDurationSeconds: options.durationExtensionTargetDurationSeconds ?? null,
             jobId: safeJobId,
             projectId: options.projectId,
             prompt: options.prompt,
@@ -27376,6 +27461,8 @@ export function WorkspacePage({
                 posterUrl: preferredPosterUrl,
               }
             : payload.data.asset;
+          const durationExtensionTargetDurationSeconds =
+            normalizeWorkspaceSegmentManualDurationSeconds(options.durationExtensionTargetDurationSeconds);
           const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
@@ -27388,6 +27475,8 @@ export function WorkspacePage({
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
             durationExtensionSourceDurationSeconds: options.durationExtensionSourceDurationSeconds ?? null,
+            durationMode: durationExtensionTargetDurationSeconds !== null ? "manual" : segment.durationMode,
+            manualDurationSeconds: durationExtensionTargetDurationSeconds ?? segment.manualDurationSeconds,
             visualReset: false,
             videoAction: "photo_animation",
           }));
@@ -28514,9 +28603,13 @@ export function WorkspacePage({
     const nextPrompt = options?.prompt ?? targetSegment?.aiVideoPrompt ?? "";
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
-    const durationSeconds = options?.durationSeconds ?? getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
-    const requiredCredits = getSegmentPhotoAnimationCreditCost(generationQuality);
+    const durationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+      generationQuality,
+      options?.durationSeconds ?? selectedSegmentPhotoAnimationDurationSeconds,
+    );
+    const requiredCredits = getSegmentPhotoAnimationCreditCost(generationQuality, durationSeconds);
     logSegmentEditorDiagnostics("client.segment-editor.photo-animation.resolved", {
+      durationSeconds,
       hasPhotoAnimationSourceAsset: Boolean(photoAnimationSourceAsset),
       hasTargetSegment: Boolean(targetSegment),
       promptLength: normalizedPrompt.length,
@@ -28612,6 +28705,7 @@ export function WorkspacePage({
 
       logSegmentEditorDiagnostics("client.segment-editor.photo-animation.fetch.start", {
         customVideoAssetId,
+        durationSeconds,
         hasCustomVideoFileDataUrl: Boolean(customVideoFileDataUrl),
         quality: generationQuality,
         sourceFileName: customVideoFileName ?? null,
@@ -28675,6 +28769,8 @@ export function WorkspacePage({
       if (visualJobBinding.projectId) {
         upsertStoredWorkspaceSegmentPhotoAnimationJob(session.email, {
           createdAt: Date.now(),
+          durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds ?? null,
+          durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds ?? null,
           jobId: payload.data.jobId,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
@@ -28686,6 +28782,7 @@ export function WorkspacePage({
       pollStarted = true;
       await pollSegmentEditorPhotoAnimationJob(payload.data.jobId, payload.data.status, {
         durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds,
+        durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
         projectId: visualJobBinding.projectId,
         prompt: normalizedPrompt,
         refreshSceneSoundPrompt: options?.refreshSceneSoundPrompt,
@@ -29192,6 +29289,8 @@ export function WorkspacePage({
     });
 
     void pollSegmentEditorPhotoAnimationJob(job.jobId, job.status || "queued", {
+      durationExtensionSourceDurationSeconds: job.durationExtensionSourceDurationSeconds,
+      durationExtensionTargetDurationSeconds: job.durationExtensionTargetDurationSeconds,
       projectId: job.projectId,
       prompt: job.prompt,
       runId,
@@ -29557,6 +29656,7 @@ export function WorkspacePage({
 
   const handleSegmentPhotoAnimationModalGenerate = async (
     options?: {
+      durationSeconds?: number;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
       segmentIndex?: number | null;
@@ -29570,6 +29670,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("photo_animation");
     await handleSegmentEditorPhotoAnimationGenerate({
+      durationSeconds: options?.durationSeconds,
       prompt: options?.prompt ?? segmentAiVideoModalPrompt,
       quality: options?.quality,
       segmentIndex: targetSegmentIndex,
@@ -33220,7 +33321,10 @@ export function WorkspacePage({
       }));
     }
   };
-  const handleSegmentTimelineDurationAiExtensionGenerate = async (segmentArrayIndex: number) => {
+  const handleSegmentTimelineDurationAiExtensionGenerate = async (
+    segmentArrayIndex: number,
+    options?: { targetDurationSeconds?: number | null },
+  ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const targetSegment = currentDraft?.segments[segmentArrayIndex] ?? null;
     if (!targetSegment || isWorkspaceSegmentVisualJobBusy(targetSegment.index)) {
@@ -33229,7 +33333,16 @@ export function WorkspacePage({
 
     const baselineSegment =
       segmentEditorChecklistBaseSession?.segments.find((segment) => segment.index === targetSegment.index) ?? null;
-    const extensionPlan = getWorkspaceSegmentDurationExtensionPlan(targetSegment, baselineSegment);
+    const targetDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.targetDurationSeconds);
+    const planningSegment =
+      targetDurationSeconds !== null
+        ? {
+            ...targetSegment,
+            durationMode: "manual" as const,
+            manualDurationSeconds: targetDurationSeconds,
+          }
+        : targetSegment;
+    const extensionPlan = getWorkspaceSegmentDurationExtensionPlan(planningSegment, baselineSegment);
     const extensionSourceAsset = getWorkspaceSegmentDurationExtensionStillSourceAsset(targetSegment);
     if (!extensionPlan || !extensionSourceAsset) {
       setSegmentEditorVideoError(
@@ -33266,7 +33379,6 @@ export function WorkspacePage({
       aiVideoPrompt: nextPrompt,
       aiVideoPromptInitialized: true,
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(extensionSourceAsset),
-      durationExtensionSourceDurationSeconds: nextDurationExtensionSourceDurationSeconds,
     }));
     setSegmentTimelineDurationAiPrompt(nextPrompt);
     await handleSegmentEditorPhotoAnimationGenerate({
@@ -34346,9 +34458,22 @@ export function WorkspacePage({
                         : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
                     }
                     onClick={() => {
-                      const timing = handleSegmentTimelineDurationMenuApply(segmentTimelineDurationMenuSegment.index);
-                      if (timing) {
-                        void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex);
+                      if (segmentTimelineDurationMenuTargetSeconds !== null) {
+                        setSegmentTimelineDurationInputValue(
+                          formatWorkspaceSegmentDurationInputValue(segmentTimelineDurationMenuTargetSeconds),
+                        );
+                        setActiveSegmentIndex(
+                          Math.max(
+                            0,
+                            Math.min(
+                              segmentTimelineDurationMenuArrayIndex,
+                              (segmentEditorDraft?.segments.length ?? 1) - 1,
+                            ),
+                          ),
+                        );
+                        void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
+                          targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
+                        });
                       }
                     }}
                   >
@@ -37407,7 +37532,10 @@ export function WorkspacePage({
   };
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(selectedSegmentAiPhotoQuality);
   const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(selectedSegmentAiVideoQuality);
-  const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(selectedSegmentPhotoAnimationQuality);
+  const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(
+    selectedSegmentPhotoAnimationQuality,
+    selectedSegmentPhotoAnimationDurationSeconds,
+  );
   const promptVisualTextareaValue = isPromptImageEditMode
     ? segmentImageEditModalPrompt
     : isPromptSceneSoundMode
@@ -37794,6 +37922,7 @@ export function WorkspacePage({
       });
     } else if (isPromptPhotoAnimationMode) {
       void handleSegmentPhotoAnimationModalGenerate({
+        durationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
         prompt: promptVisualPromptForAction,
         quality: selectedSegmentPhotoAnimationQuality,
         segmentIndex: activeSegment.index,
@@ -38856,23 +38985,34 @@ export function WorkspacePage({
                           />
                         </div>
                       ) : null}
-                      <button
-                        className="studio-segment-editor__prompt-action"
-                        type="button"
-                        disabled={isPromptVisualActionDisabled}
-                        onClick={handlePromptVisualAction}
-                      >
-                        {isPromptVisualBusy ? (
-                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                        ) : (
-                          <>
-                            <span>{promptVisualActionLabel}</span>
-                            {promptVisualActionCost !== null ? (
-                              <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
-                            ) : null}
-                          </>
-                        )}
-                      </button>
+                      <div className="studio-segment-editor__prompt-action-cluster">
+                        {isPromptPhotoAnimationMode
+                          ? renderSegmentPhotoAnimationDurationSwitch({
+                              className: "studio-segment-photo-animation-duration--action-row",
+                              disabled: isPromptVisualBaseDisabled,
+                              onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                              quality: selectedSegmentPhotoAnimationQuality,
+                              value: selectedSegmentPhotoAnimationDurationSeconds,
+                            })
+                          : null}
+                        <button
+                          className="studio-segment-editor__prompt-action"
+                          type="button"
+                          disabled={isPromptVisualActionDisabled}
+                          onClick={handlePromptVisualAction}
+                        >
+                          {isPromptVisualBusy ? (
+                            <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                          ) : (
+                            <>
+                              <span>{promptVisualActionLabel}</span>
+                              {promptVisualActionCost !== null ? (
+                                <small>{formatSegmentVisualCreditsLabel(promptVisualActionCost)}</small>
+                              ) : null}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -41098,7 +41238,17 @@ export function WorkspacePage({
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
-                          <div className="studio-ai-photo-modal__tab-actions">
+                          <div className="studio-ai-photo-modal__tab-actions studio-ai-photo-modal__tab-actions--with-duration">
+                            {renderSegmentPhotoAnimationDurationSwitch({
+                              className: "studio-segment-photo-animation-duration--modal-action",
+                              disabled:
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoPromptImproving,
+                              onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                              quality: selectedSegmentPhotoAnimationQuality,
+                              value: selectedSegmentPhotoAnimationDurationSeconds,
+                            })}
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
@@ -41114,6 +41264,7 @@ export function WorkspacePage({
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
                                   handleSegmentPhotoAnimationModalGenerate({
+                                    durationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
                                     prompt: snapshot.aiVideoPrompt,
                                     quality: selectedSegmentPhotoAnimationQuality,
                                     segmentIndex: snapshot.segmentIndex,

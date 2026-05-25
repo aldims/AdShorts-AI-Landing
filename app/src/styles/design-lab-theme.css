@@ -8922,6 +8922,84 @@ textarea {
   transform: none;
 }
 
+.studio-segment-photo-animation-duration {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: max-content;
+  min-width: 0;
+}
+
+.studio-segment-photo-animation-duration__caption {
+  display: block;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.studio-segment-photo-animation-duration__control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 22px -22px rgba(0, 0, 0, 0.78);
+}
+
+.studio-segment-photo-animation-duration__option {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(203, 213, 225, 0.64);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.studio-segment-photo-animation-duration__option:hover:not(:disabled) {
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.studio-segment-photo-animation-duration__option.is-active {
+  color: rgba(255, 255, 255, 0.98);
+  background:
+    radial-gradient(circle at 28% 0%, rgba(186, 230, 253, 0.2), transparent 54%),
+    linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(20, 184, 166, 0.18)),
+    rgba(8, 16, 25, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 8px 16px -14px rgba(14, 165, 233, 0.64);
+}
+
+.studio-segment-photo-animation-duration__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .studio-ai-photo-modal__textarea {
   width: 100%;
   min-height: 86px;
@@ -9320,6 +9398,19 @@ textarea {
   width: 100%;
 }
 
+.studio-ai-photo-modal__tab-actions--with-duration {
+  align-items: center;
+}
+
+.studio-ai-photo-modal__tab-actions--with-duration .studio-segment-photo-animation-duration--modal-action {
+  flex: 0 0 auto;
+}
+
+.studio-ai-photo-modal__tab-actions--with-duration .studio-ai-photo-modal__action {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .studio-ai-photo-modal__action--primary {
   min-height: 44px;
   padding: 0 18px;
@@ -9546,6 +9637,15 @@ textarea {
   .studio-ai-photo-modal__upload-btn,
   .studio-ai-photo-modal__library-state-action {
     width: 100%;
+  }
+
+  .studio-ai-photo-modal__tab-actions--with-duration {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .studio-ai-photo-modal__tab-actions--with-duration .studio-ai-photo-modal__action {
+    width: auto;
   }
 }
 
@@ -24037,6 +24137,14 @@ textarea {
   width: 100%;
 }
 
+.studio-segment-editor__prompt-action-cluster {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .studio-segment-editor__prompt-improve {
   position: absolute;
   top: 12px;
@@ -32070,6 +32178,15 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
     width: 100%;
   }
 
+  .studio-ai-photo-modal__tab-actions--with-duration {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .studio-ai-photo-modal__tab-actions--with-duration .studio-ai-photo-modal__action {
+    width: auto;
+  }
+
   .studio-voice-selector__value {
     font-size: 0.65rem;
   }
@@ -38369,6 +38486,7 @@ html, body {
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
 }
@@ -41823,9 +41941,27 @@ html, body {
   order: 1;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
+.studio-canvas-main.is-segment-editor .studio-segment-photo-animation-duration--action-row {
+  flex: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-cluster {
   order: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
   margin-left: auto;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-cluster .studio-segment-photo-animation-duration--action-row {
+  order: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-cluster .studio-segment-editor__prompt-action {
+  order: 1;
+  margin-left: 0;
 }
 
 .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-delete--visual {

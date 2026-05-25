@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  getStudioSegmentPhotoAnimationCreditCost,
+  getStudioSegmentPhotoAnimationDurationOptions,
+  normalizeStudioSegmentPhotoAnimationDurationSeconds,
+} from "./studio-credit-costs";
+
+describe("photo animation credit costs", () => {
+  it("prices standard 5s and 8s animation durations", () => {
+    expect(getStudioSegmentPhotoAnimationDurationOptions("standard")).toEqual([5, 8]);
+    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 5)).toBe(5);
+    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 8)).toBe(8);
+  });
+
+  it("prices premium 5s and 10s animation durations", () => {
+    expect(getStudioSegmentPhotoAnimationDurationOptions("premium")).toEqual([5, 10]);
+    expect(getStudioSegmentPhotoAnimationCreditCost("premium", 5)).toBe(10);
+    expect(getStudioSegmentPhotoAnimationCreditCost("premium", 10)).toBe(20);
+  });
+
+  it("normalizes unsupported durations to the nearest option for the selected quality", () => {
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("standard", 10)).toBe(8);
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 8)).toBe(10);
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 6)).toBe(5);
+  });
+});

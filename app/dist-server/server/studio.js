@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST, STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -246,7 +246,7 @@ const normalizeStudioSegmentVisualQuality = (value) => {
 };
 const getStudioSegmentAiPhotoCreditCost = (quality) => STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 const getStudioSegmentAiVideoCreditCost = (quality) => STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
-const getStudioSegmentPhotoAnimationCreditCost = (quality) => STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST;
+const getStudioSegmentPhotoAnimationRequiredCredits = (quality, durationSeconds) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
 const studioPremiumVoiceIds = new Set([
     "Liam",
     "English_ManWithDeepVoice",
@@ -4076,7 +4076,8 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
     const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
-    const requiredCredits = getStudioSegmentPhotoAnimationCreditCost(normalizedQuality);
+    const normalizedPhotoAnimationDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(normalizedQuality, normalizedDurationSeconds);
+    const requiredCredits = getStudioSegmentPhotoAnimationRequiredCredits(normalizedQuality, normalizedPhotoAnimationDurationSeconds);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
         timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
@@ -4125,7 +4126,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
             tailDurationSeconds: options?.durationExtensionTailDurationSeconds,
             targetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
         }),
-        ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
+        ...buildStudioSegmentVisualDurationPayload(normalizedPhotoAnimationDurationSeconds),
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
         language: normalizedLanguage,
         project_id: normalizedProjectId,

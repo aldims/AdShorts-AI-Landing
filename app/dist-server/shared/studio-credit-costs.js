@@ -6,8 +6,12 @@ export const STUDIO_VIDEO_GENERATION_CREDIT_COST = STUDIO_STANDARD_VIDEO_GENERAT
 export const STUDIO_SEGMENT_AI_VIDEO_STANDARD_CREDIT_COST = 7;
 export const STUDIO_SEGMENT_AI_VIDEO_PREMIUM_CREDIT_COST = 15;
 export const STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST = STUDIO_SEGMENT_AI_VIDEO_STANDARD_CREDIT_COST;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST = 5;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_CREDIT_COST = 10;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST = 5;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_8S_CREDIT_COST = 8;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST = 10;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_10S_CREDIT_COST = 20;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST;
 export const STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST = 10;
 export const STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST = 5;
@@ -28,6 +32,44 @@ export const STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY = {
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY = {
     premium: STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_CREDIT_COST,
     standard: STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST,
+};
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_DURATION_OPTIONS_BY_QUALITY = {
+    premium: [5, 10],
+    standard: [5, 8],
+};
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY_AND_DURATION = {
+    premium: {
+        5: STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST,
+        10: STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_10S_CREDIT_COST,
+    },
+    standard: {
+        5: STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST,
+        8: STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_8S_CREDIT_COST,
+    },
+};
+export const getStudioSegmentPhotoAnimationDurationOptions = (quality) => STUDIO_SEGMENT_PHOTO_ANIMATION_DURATION_OPTIONS_BY_QUALITY[quality] ??
+    STUDIO_SEGMENT_PHOTO_ANIMATION_DURATION_OPTIONS_BY_QUALITY.standard;
+export const normalizeStudioSegmentPhotoAnimationDurationSeconds = (quality, durationSeconds) => {
+    const options = getStudioSegmentPhotoAnimationDurationOptions(quality);
+    const numeric = Number(durationSeconds);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return options[0] ?? 5;
+    }
+    const rounded = Math.round(numeric);
+    if (options.includes(rounded)) {
+        return rounded;
+    }
+    const [shortDuration, longDuration] = options;
+    if (!shortDuration || !longDuration) {
+        return shortDuration ?? 5;
+    }
+    return numeric > (shortDuration + longDuration) / 2 ? longDuration : shortDuration;
+};
+export const getStudioSegmentPhotoAnimationCreditCost = (quality, durationSeconds) => {
+    const normalizedDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(quality, durationSeconds);
+    return (STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY_AND_DURATION[quality]?.[normalizedDurationSeconds] ??
+        STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ??
+        STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST);
 };
 export const STUDIO_CREDIT_COST_BY_ACTION = {
     video_generation: STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
