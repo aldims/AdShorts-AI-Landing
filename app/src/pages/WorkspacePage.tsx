@@ -732,6 +732,8 @@ type WorkspaceSegmentEditorSegment = {
   currentPreviewUrl: string | null;
   currentSourceKind: WorkspaceSegmentSourceKind;
   duration: number;
+  durationExtensionSourceDurationSeconds?: number | null;
+  duration_extension_source_duration_seconds?: number | null;
   durationMode?: WorkspaceSegmentDurationMode | null;
   endTime: number;
   index: number;
@@ -790,6 +792,7 @@ type WorkspaceSegmentEditorPayloadSegment = {
   customVideoRemoteUrl?: string;
   customVideoFileUploadKey?: string;
   duration?: number;
+  durationExtensionSourceDurationSeconds?: number | null;
   durationMode?: WorkspaceSegmentDurationMode;
   endTime?: number;
   index: number;
@@ -2568,13 +2571,20 @@ const isWorkspaceSegmentDraftSubtitleEdited = (
 
 const getWorkspaceSegmentEffectiveSubtitleSettings = (
   session:
-    | Pick<WorkspaceSegmentEditorSession, "subtitleColor" | "subtitleStyle" | "subtitleType">
+    | Pick<WorkspaceSegmentEditorSession, "subtitleColor" | "subtitleStyle" | "subtitleType" | "voiceType">
     | null
     | undefined,
   segment:
     | Pick<
         WorkspaceSegmentEditorSegment,
-        "subtitleColor" | "subtitle_color" | "subtitleStyle" | "subtitle_style" | "subtitleType" | "subtitle_type"
+        | "subtitleColor"
+        | "subtitle_color"
+        | "subtitleStyle"
+        | "subtitle_style"
+        | "subtitleType"
+        | "subtitle_type"
+        | "voiceType"
+        | "voice_type"
       >
     | null
     | undefined,
@@ -2585,6 +2595,9 @@ const getWorkspaceSegmentEffectiveSubtitleSettings = (
 ) => {
   const globalType = normalizeWorkspaceSegmentEditorSetting(session?.subtitleType);
   const globalEnabled = globalType !== "none";
+  const globalVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
+  const segmentVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
+  const voiceEnabled = segmentVoiceType === "none" ? false : globalVoiceEnabled || Boolean(segmentVoiceType);
   const segmentType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
   const segmentStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
   const segmentColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
@@ -2601,10 +2614,11 @@ const getWorkspaceSegmentEffectiveSubtitleSettings = (
 
   return {
     globalEnabled,
-    isEnabled: globalEnabled && segmentType !== "none",
+    isEnabled: globalEnabled && voiceEnabled && segmentType !== "none",
     subtitleColorId,
     subtitleStyleId,
     subtitleType: segmentType ?? (globalType === "none" ? "none" : "default"),
+    voiceEnabled,
   };
 };
 
@@ -2824,8 +2838,8 @@ type WorkspaceSegmentEditorChecklistBuildOptions = {
 };
 
 const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEditorDraftSession | null) => {
-  const subtitleEnabled = normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
   const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
+  const subtitleEnabled = voiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
   const musicType = normalizeWorkspaceSegmentEditorSetting(session?.musicType) ?? "ai";
   const customMusicAssetId =
     musicType === "custom" && Number.isFinite(Number(session?.customMusicAssetId)) && Number(session?.customMusicAssetId) > 0
@@ -3554,16 +3568,18 @@ export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {
   const subtitleStyleId = normalizeWorkspaceExamplePrefillString(settings?.subtitleStyleId) || "modern";
   const subtitleColorId = normalizeWorkspaceExamplePrefillString(settings?.subtitleColorId) || "purple";
   const brandText = normalizeWorkspaceExamplePrefillString(settings?.brandText).slice(0, STUDIO_BRAND_TEXT_MAX_CHARS);
+  const voiceEnabled = typeof settings?.voiceEnabled === "boolean" ? settings.voiceEnabled : true;
+  const subtitleEnabled = voiceEnabled && (typeof settings?.subtitleEnabled === "boolean" ? settings.subtitleEnabled : true);
 
   return {
     brandText,
     language,
     musicType: resolveWorkspaceExamplePrefillInitialMusicType(settings),
     subtitleColorId,
-    subtitleEnabled: typeof settings?.subtitleEnabled === "boolean" ? settings.subtitleEnabled : true,
+    subtitleEnabled,
     subtitleStyleId,
     videoMode: resolveWorkspaceExamplePrefillInitialVideoMode(settings),
-    voiceEnabled: typeof settings?.voiceEnabled === "boolean" ? settings.voiceEnabled : true,
+    voiceEnabled,
     voiceId,
   };
 };
@@ -8146,8 +8162,17 @@ const getStudioCustomVideoFileDurationSeconds = (asset: StudioCustomVideoFile | 
   normalizeWorkspaceSegmentManualDurationSeconds(asset?.durationSeconds);
 
 const getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-) => normalizeWorkspaceSegmentManualDurationSeconds(segment.durationExtensionSourceDurationSeconds);
+  segment:
+    | Pick<
+        WorkspaceSegmentEditorDraftSegment,
+        "durationExtensionSourceDurationSeconds" | "duration_extension_source_duration_seconds"
+      >
+    | null
+    | undefined,
+) =>
+  normalizeWorkspaceSegmentManualDurationSeconds(
+    segment?.durationExtensionSourceDurationSeconds ?? segment?.duration_extension_source_duration_seconds,
+  );
 
 const getWorkspaceSegmentCanonicalSlotDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
@@ -8373,7 +8398,9 @@ const rebuildWorkspaceSegmentEditorDraftTimeline = (
   rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments), {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
     stillNoTextFallbackDuration: WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
-    subtitleEnabled: normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none",
+    subtitleEnabled:
+      normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none" &&
+      normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none",
     visualDurationSeconds: getWorkspaceSegmentKnownVisualDurationSeconds,
     visualKind: (segment) => (getWorkspaceSegmentPreviewKind(segment) === "video" ? "video" : "image"),
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
@@ -8410,7 +8437,7 @@ const createWorkspaceSegmentEditorDraftSession = (
           aiVideoPrompt: "",
           aiVideoPromptInitialized: false,
           customVideo: null,
-          durationExtensionSourceDurationSeconds: null,
+          durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
           durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
           imageEditAsset: null,
           imageEditGeneratedFromPrompt: null,
@@ -8972,7 +8999,7 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
     })),
     subtitleColor: fallbackStudioSubtitleColorOption.id,
     subtitleStyle: fallbackStudioSubtitleStyleOption.id,
-    subtitleType: "default",
+    subtitleType: "none",
     ttsAssetId: null,
     voiceType: "none",
   };
@@ -10515,11 +10542,15 @@ const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedVoiceType !== getWorkspaceSegmentVoiceOverrideId(segment) ||
       normalizedVideoAction !== segment.videoAction ||
       normalizedMediaType !== segment.mediaType ||
-      normalizedDurationMode !== segment.durationMode ||
-      !areWorkspaceSegmentDurationValuesEqual(
-        normalizedManualDurationSeconds,
-        normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-      );
+          normalizedDurationMode !== segment.durationMode ||
+          !areWorkspaceSegmentDurationValuesEqual(
+            normalizedManualDurationSeconds,
+            normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+          ) ||
+          !areWorkspaceSegmentDurationValuesEqual(
+            normalizedDurationExtensionSourceDurationSeconds,
+            getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
+          );
 
     if (
       segment.customVideo ||
@@ -10825,9 +10856,14 @@ export const buildWorkspaceSegmentEditorPayload = async (
     if (typeof duration === "number") {
       timelineCursor = endTime;
     }
-    const segmentSubtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
-    const segmentSubtitleStyle = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
-    const segmentSubtitleColor = getWorkspaceSegmentSubtitleColorOverrideId(segment);
+    const segmentVoiceType = isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideId(segment);
+    const segmentHasVoice =
+      segmentVoiceType === "none"
+        ? false
+        : normalizeWorkspaceSegmentEditorSetting(session.voiceType) !== "none" || Boolean(segmentVoiceType);
+    const segmentSubtitleType = segmentHasVoice ? getWorkspaceSegmentSubtitleTypeOverrideId(segment) : "none";
+    const segmentSubtitleStyle = segmentHasVoice ? getWorkspaceSegmentSubtitleStyleOverrideId(segment) : null;
+    const segmentSubtitleColor = segmentHasVoice ? getWorkspaceSegmentSubtitleColorOverrideId(segment) : null;
 
     segments.push({
       customVideoAssetId,
@@ -10837,6 +10873,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       customVideoRemoteUrl,
       customVideoFileUploadKey,
       duration,
+      durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
       durationMode,
       endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
@@ -10850,7 +10887,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       ...(segmentSubtitleType ? { subtitleType: segmentSubtitleType } : {}),
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
-      voiceType: isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideId(segment),
+      voiceType: segmentVoiceType,
     });
   }
 
@@ -11767,25 +11804,21 @@ const parseWorkspaceSegmentEditorDurationInput = (value: string) => {
 
 export const getWorkspaceSegmentEditorGenerationOverrides = (
   session?: WorkspaceSegmentEditorDraftSession | null,
-) => ({
-  language:
-    normalizeStudioLanguageValue(session?.language) ?? getStudioLanguageForVoiceId(session?.voiceType) ?? undefined,
-  musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType),
-  subtitleEnabled: normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none",
-  subtitleColorId:
-    normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) === "none"
-      ? undefined
-      : normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor),
-  subtitleStyleId:
-    normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) === "none"
-      ? undefined
-      : normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle),
-  voiceEnabled: normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none",
-  voiceId:
-    normalizeWorkspaceSegmentEditorSetting(session?.voiceType) === "none"
-      ? undefined
-      : normalizeWorkspaceSegmentEditorSetting(session?.voiceType),
-});
+) => {
+  const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
+  const subtitleEnabled = voiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
+
+  return {
+    language:
+      normalizeStudioLanguageValue(session?.language) ?? getStudioLanguageForVoiceId(session?.voiceType) ?? undefined,
+    musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType),
+    subtitleEnabled,
+    subtitleColorId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) : undefined,
+    subtitleStyleId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) : undefined,
+    voiceEnabled,
+    voiceId: voiceEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.voiceType) : undefined,
+  };
+};
 
 const isTextInputTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -14263,6 +14296,8 @@ const buildStudioRouteUrl = (
 
 type StudioSubtitleSelectorChipProps = {
   closeRequestId?: number;
+  disabledReason?: string;
+  isDisabled?: boolean;
   isProgrammaticOnly?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
@@ -14363,6 +14398,8 @@ type StudioBrandSelectorChipProps = {
 
 function StudioSubtitleSelectorChip({
   closeRequestId = 0,
+  disabledReason,
+  isDisabled = false,
   isProgrammaticOnly = false,
   isEnabled,
   openAnchorRect = null,
@@ -14402,6 +14439,8 @@ function StudioSubtitleSelectorChip({
   const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle);
   const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle);
   const isSidebarVariant = variant === "sidebar";
+  const resolvedDisabledReason =
+    disabledReason ?? (locale === "en" ? "Turn voiceover on before using subtitles" : "Включите озвучку, чтобы использовать субтитры");
 
   useEffect(() => {
     if (openRequestId <= 0 || lastHandledOpenRequestIdRef.current === openRequestId) {
@@ -14409,12 +14448,18 @@ function StudioSubtitleSelectorChip({
     }
 
     lastHandledOpenRequestIdRef.current = openRequestId;
+    if (isDisabled) {
+      setRequestAnchorRect(null);
+      setIsOpen(false);
+      return;
+    }
+
     setRequestAnchorRect(openAnchorRect);
     setIsOpen(true);
     if (!openAnchorRect) {
       triggerRef.current?.focus({ preventScroll: true });
     }
-  }, [openAnchorRect, openRequestId]);
+  }, [isDisabled, openAnchorRect, openRequestId]);
 
   useEffect(() => {
     if (closeRequestId <= 0) {
@@ -14424,6 +14469,15 @@ function StudioSubtitleSelectorChip({
     setRequestAnchorRect(null);
     setIsOpen(false);
   }, [closeRequestId]);
+
+  useEffect(() => {
+    if (!isDisabled) {
+      return;
+    }
+
+    setRequestAnchorRect(null);
+    setIsOpen(false);
+  }, [isDisabled]);
 
   useEffect(() => {
     if (lastReportedOpenRef.current === isOpen) {
@@ -14507,15 +14561,23 @@ function StudioSubtitleSelectorChip({
           isSidebarVariant
             ? `studio-subtitle-selector__trigger studio-subtitle-selector__trigger--sidebar studio-sidebar__item studio-sidebar__item--static${
                 isOpen ? " is-open" : ""
+              }${isDisabled ? " is-disabled" : ""}`
+            : `studio-canvas-prompt__chip studio-subtitle-selector__trigger${isOpen ? " is-open" : ""}${
+                isDisabled ? " is-disabled" : ""
               }`
-            : `studio-canvas-prompt__chip studio-subtitle-selector__trigger${isOpen ? " is-open" : ""}`
         }
         type="button"
         tabIndex={isProgrammaticOnly ? -1 : undefined}
         aria-haspopup="menu"
-        aria-expanded={isOpen}
+        aria-expanded={!isDisabled && isOpen}
         aria-controls={menuId}
+        disabled={isDisabled}
+        title={isDisabled ? resolvedDisabledReason : undefined}
         onClick={() => {
+          if (isDisabled) {
+            return;
+          }
+
           setRequestAnchorRect(null);
           setIsOpen((open) => !open);
         }}
@@ -20693,7 +20755,7 @@ export function WorkspacePage({
     const settings: ExamplePrefillStudioSettings = {
       language: selectedLanguage,
       subtitleColorId: selectedSubtitleColorId,
-      subtitleEnabled: areSubtitlesEnabled,
+      subtitleEnabled: isVoiceoverEnabled && areSubtitlesEnabled,
       subtitleStyleId: selectedSubtitleStyleId,
       voiceEnabled: isVoiceoverEnabled,
       voiceId: resolvedSelectedVoiceId || undefined,
@@ -20741,6 +20803,7 @@ export function WorkspacePage({
     const nextSubtitleStyleId = typeof settings.subtitleStyleId === "string" ? settings.subtitleStyleId.trim() : "";
     const nextSubtitleColorId = typeof settings.subtitleColorId === "string" ? settings.subtitleColorId.trim() : "";
     const nextBrandText = typeof settings.brandText === "string" ? settings.brandText.trim() : "";
+    const nextVoiceEnabled = typeof settings.voiceEnabled === "boolean" ? settings.voiceEnabled : isVoiceoverEnabled;
 
     activeExamplePrefillSettingsRef.current = settings;
 
@@ -20749,7 +20812,7 @@ export function WorkspacePage({
     }
 
     if (typeof settings.subtitleEnabled === "boolean") {
-      setAreSubtitlesEnabled(settings.subtitleEnabled);
+      setAreSubtitlesEnabled(nextVoiceEnabled && settings.subtitleEnabled);
     }
 
     if (nextSubtitleStyleId) {
@@ -20762,6 +20825,9 @@ export function WorkspacePage({
 
     if (typeof settings.voiceEnabled === "boolean") {
       setIsVoiceoverEnabled(settings.voiceEnabled);
+      if (!settings.voiceEnabled) {
+        setAreSubtitlesEnabled(false);
+      }
     }
 
     if (nextVoiceId) {
@@ -20785,8 +20851,9 @@ export function WorkspacePage({
       setBrandText(nextBrandText.slice(0, STUDIO_BRAND_TEXT_MAX_CHARS));
     }
   };
-  const isCurrentDraftSubtitleDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none";
   const isCurrentDraftVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType) === "none";
+  const isCurrentDraftSubtitleDisabled =
+    normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none" || isCurrentDraftVoiceDisabled;
   const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
   const activeProjectsCount = projects.filter(
@@ -23617,6 +23684,14 @@ export function WorkspacePage({
   }, [isVoiceoverEnabled, resolvedSelectedVoiceId, selectedVoiceId]);
 
   useEffect(() => {
+    if (isVoiceoverEnabled || !areSubtitlesEnabled) {
+      return;
+    }
+
+    setAreSubtitlesEnabled(false);
+  }, [areSubtitlesEnabled, isVoiceoverEnabled]);
+
+  useEffect(() => {
     publishFormSnapshotRef.current = {
       description: publishDescription,
       hashtags: publishHashtags,
@@ -23706,6 +23781,11 @@ export function WorkspacePage({
     };
 
   const handleSubtitleStyleSelect = (styleId: StudioSubtitleStyleOption["id"]) => {
+    if (!isVoiceoverEnabled) {
+      setAreSubtitlesEnabled(false);
+      return;
+    }
+
     setAreSubtitlesEnabled(true);
     setSelectedSubtitleStyleId(styleId);
     setSelectedSubtitleColorId((currentColorId) =>
@@ -23720,11 +23800,19 @@ export function WorkspacePage({
   };
 
   const handleSubtitleToggle = (enabled: boolean) => {
+    if (enabled && !isVoiceoverEnabled) {
+      setAreSubtitlesEnabled(false);
+      return;
+    }
+
     setAreSubtitlesEnabled(enabled);
   };
 
   const handleVoiceToggle = (enabled: boolean) => {
     setIsVoiceoverEnabled(enabled);
+    if (!enabled) {
+      setAreSubtitlesEnabled(false);
+    }
   };
 
   const handleVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
@@ -23956,7 +24044,7 @@ export function WorkspacePage({
       setMusicSelectionError(null);
     }
 
-    setAreSubtitlesEnabled(draftSubtitleType !== "none");
+    setAreSubtitlesEnabled(draftVoiceId !== "none" && draftSubtitleType !== "none");
 
     setSelectedSubtitleStyleId(nextSubtitleSelection.subtitleStyleId);
     setSelectedSubtitleColorId(nextSubtitleSelection.subtitleColorId);
@@ -24813,18 +24901,29 @@ export function WorkspacePage({
   const applySegmentEditorGlobalVoiceToAllSegments = (
     draft: WorkspaceSegmentEditorDraftSession,
     voiceType: string,
-  ): WorkspaceSegmentEditorDraftSession => ({
-    ...draft,
-    voiceType,
-    segments: draft.segments.map((segment) =>
-      getWorkspaceSegmentVoiceOverrideId(segment)
-        ? {
-            ...segment,
-            voiceType: null,
-          }
-        : segment,
-    ),
-  });
+  ): WorkspaceSegmentEditorDraftSession => {
+    const isVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(voiceType) === "none";
+
+    return {
+      ...draft,
+      subtitleType: isVoiceDisabled ? "none" : draft.subtitleType,
+      voiceType,
+      segments: draft.segments.map((segment) =>
+        getWorkspaceSegmentVoiceOverrideId(segment)
+          ? {
+              ...segment,
+              subtitleType: isVoiceDisabled ? "none" : segment.subtitleType,
+              voiceType: null,
+            }
+          : isVoiceDisabled
+            ? {
+                ...segment,
+                subtitleType: "none",
+              }
+            : segment,
+      ),
+    };
+  };
 
   const handleAddSegmentEditorSegment = () => {
     if (!segmentEditorDraft) {
@@ -24939,7 +25038,7 @@ export function WorkspacePage({
       setSelectedCustomMusic(null);
       setMusicSelectionError(null);
       setIsPreparingCustomMusic(false);
-      setAreSubtitlesEnabled(true);
+      setAreSubtitlesEnabled(false);
       setIsVoiceoverEnabled(false);
       setSegmentTimelineRedoSnapshots({});
       setSegmentTimelineGlobalControlOpen(null);
@@ -25059,7 +25158,7 @@ export function WorkspacePage({
     setSelectedMusicType(baselineMusicType as StudioMusicType);
     setSelectedCustomMusic(null);
     setMusicSelectionError(null);
-    setAreSubtitlesEnabled(baselineSubtitleType !== "none");
+    setAreSubtitlesEnabled(baselineVoiceType !== "none" && baselineSubtitleType !== "none");
 
     if (baselineSubtitleStyleId) {
       setSelectedSubtitleStyleId(baselineSubtitleStyleId);
@@ -25080,14 +25179,29 @@ export function WorkspacePage({
   };
 
   const handleSegmentEditorSubtitleColorSelect = (colorId: StudioSubtitleColorOption["id"]) => {
-    updateSegmentEditorDraft((currentDraft) => ({
-      ...currentDraft,
-      subtitleColor: colorId,
-    }));
+    updateSegmentEditorDraft((currentDraft) =>
+      normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) === "none"
+        ? {
+            ...currentDraft,
+            subtitleType: "none",
+          }
+        : {
+            ...currentDraft,
+            subtitleColor: colorId,
+          },
+    );
   };
 
   const handleSegmentEditorSubtitleToggle = (enabled: boolean) => {
     updateSegmentEditorDraft((currentDraft) => {
+      const isDraftVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) !== "none";
+      if (enabled && !isDraftVoiceEnabled) {
+        return {
+          ...currentDraft,
+          subtitleType: "none",
+        };
+      }
+
       const shouldUseBlankSubtitleDefaults = isWorkspaceSegmentEditorCleanEmptyDraft(currentDraft);
 
       return {
@@ -25105,6 +25219,13 @@ export function WorkspacePage({
 
   const handleSegmentEditorSubtitleStyleSelect = (styleId: StudioSubtitleStyleOption["id"]) => {
     updateSegmentEditorDraft((currentDraft) => {
+      if (normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) === "none") {
+        return {
+          ...currentDraft,
+          subtitleType: "none",
+        };
+      }
+
       const currentStyleId = normalizeWorkspaceSegmentEditorSetting(currentDraft.subtitleStyle) ?? studioSidebarSubtitleStyleId;
       const currentColorId = normalizeWorkspaceSegmentEditorSetting(currentDraft.subtitleColor) ?? studioSidebarSubtitleColorId;
       const nextColorId = getStudioSubtitleColorAfterStyleChange({
@@ -25327,10 +25448,6 @@ export function WorkspacePage({
     updateSegmentEditorDraft((currentDraft) => applySegmentEditorGlobalVoiceToAllSegments(currentDraft, voiceId));
   };
 
-  const handleSegmentEditorGlobalVoiceLanguageSelect = (language: StudioLanguage) => {
-    void handleSegmentEditorLanguageSelect(language, { applyGlobalVoiceToAllSegments: true });
-  };
-
   const handleSegmentEditorSceneVoiceUseGlobal = () => {
     if (!activeSegment) {
       return;
@@ -25339,6 +25456,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
       ...segment,
+      subtitleType: "none",
       voiceType: "none",
     }));
   };
@@ -25421,6 +25539,14 @@ export function WorkspacePage({
     }
 
     if (settingId === "subtitle") {
+      if (normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType) === "none") {
+        updateSegmentEditorDraft((currentDraft) => ({
+          ...currentDraft,
+          subtitleType: "none",
+        }));
+        return;
+      }
+
       const baselineSubtitleType = normalizeWorkspaceSegmentEditorSetting(baselineSession.subtitleType);
       const baselineSubtitleStyleId = normalizeWorkspaceSegmentEditorSetting(baselineSession.subtitleStyle) ?? selectedSubtitleStyleId;
       const baselineSubtitleColorId = normalizeWorkspaceSegmentEditorSetting(baselineSession.subtitleColor) ?? selectedSubtitleColorId;
@@ -25440,6 +25566,7 @@ export function WorkspacePage({
     }
     updateSegmentEditorDraft((currentDraft) => ({
       ...currentDraft,
+      subtitleType: baselineVoiceType === "none" ? "none" : currentDraft.subtitleType,
       voiceType: baselineVoiceType === "none" ? "none" : baselineVoiceType || resolvedSelectedVoiceId,
     }));
   };
@@ -26360,6 +26487,7 @@ export function WorkspacePage({
     if (kind === "voice") {
       updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) => ({
         ...segment,
+        subtitleType: "none",
         voiceType: "none",
       }));
       setSegmentTimelineVoiceMenuSegmentIndex(null);
@@ -30554,7 +30682,7 @@ export function WorkspacePage({
       selectedMusicType,
     });
     const effectiveMusicType = effectiveMusicRequest.effectiveMusicType;
-    const effectiveSubtitleEnabled = options?.subtitleEnabled ?? areSubtitlesEnabled;
+    const effectiveSubtitleEnabled = effectiveVoiceEnabled && (options?.subtitleEnabled ?? areSubtitlesEnabled);
     const effectiveSubtitleColorId = effectiveSubtitleEnabled ? options?.subtitleColorId ?? selectedSubtitleColorId : undefined;
     const effectiveSubtitleStyleId = effectiveSubtitleEnabled ? options?.subtitleStyleId ?? selectedSubtitleStyleId : undefined;
 
@@ -32983,6 +33111,23 @@ export function WorkspacePage({
         return currentDraft;
       }
 
+      if (!getWorkspaceSegmentEffectiveSubtitleSettings(currentDraft, targetSegment, {
+        subtitleColorId: studioSidebarSubtitleColorId,
+        subtitleStyleId: studioSidebarSubtitleStyleId,
+      }).voiceEnabled) {
+        return {
+          ...currentDraft,
+          segments: currentDraft.segments.map((segment) =>
+            segment.index === segmentIndex
+              ? {
+                  ...segment,
+                  subtitleType: "none",
+                }
+              : segment,
+          ),
+        };
+      }
+
       const effectiveSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(currentDraft, targetSegment, {
         subtitleColorId: studioSidebarSubtitleColorId,
         subtitleStyleId: studioSidebarSubtitleStyleId,
@@ -33015,10 +33160,25 @@ export function WorkspacePage({
     colorId: StudioSubtitleColorOption["id"],
   ) => {
     setSegmentEditorVideoError(null);
-    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
-      ...segment,
-      subtitleColor: colorId,
-      subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment) === "none" ? "default" : segment.subtitleType ?? null,
+    updateSegmentEditorDraft((currentDraft) => ({
+      ...currentDraft,
+      segments: currentDraft.segments.map((segment) =>
+        segment.index === segmentIndex
+          ? getWorkspaceSegmentEffectiveSubtitleSettings(currentDraft, segment, {
+              subtitleColorId: studioSidebarSubtitleColorId,
+              subtitleStyleId: studioSidebarSubtitleStyleId,
+            }).voiceEnabled
+            ? {
+                ...segment,
+                subtitleColor: colorId,
+                subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment) === "none" ? "default" : segment.subtitleType ?? null,
+              }
+            : {
+                ...segment,
+                subtitleType: "none",
+              }
+          : segment,
+      ),
     }));
   };
   const handleSegmentTimelineVoiceUseGlobal = (segmentIndex: number) => {
@@ -33026,6 +33186,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
+      subtitleType: "none",
       voiceType: "none",
     }));
   };
@@ -33481,6 +33642,11 @@ export function WorkspacePage({
 
     if (!effectiveSubtitleSettings.globalEnabled) {
       const label = workspaceText(locale, "Глобально выключены", "Globally off");
+      return { colorAccent: null, label, title: label };
+    }
+
+    if (!effectiveSubtitleSettings.voiceEnabled) {
+      const label = workspaceText(locale, "Нет озвучки", "No voiceover");
       return { colorAccent: null, label, title: label };
     }
 
@@ -34349,6 +34515,15 @@ export function WorkspacePage({
                 )}
               </div>
             ) : null}
+            {segmentTimelineSubtitleMenuSettings.globalEnabled && !segmentTimelineSubtitleMenuSettings.voiceEnabled ? (
+              <div className="studio-segment-editor__timeline-subtitle-menu-status">
+                {workspaceText(
+                  locale,
+                  "В этой сцене нет озвучки. Субтитры недоступны.",
+                  "This scene has no voiceover, so subtitles are unavailable.",
+                )}
+              </div>
+            ) : null}
             <div className="studio-segment-editor__timeline-subtitle-menu-section">
               <span className="studio-segment-editor__timeline-subtitle-menu-title">
                 {workspaceText(locale, "Режим", "Mode")}
@@ -34385,6 +34560,7 @@ export function WorkspacePage({
                       style.id === segmentTimelineSubtitleMenuSettings.subtitleStyleId &&
                       segmentTimelineSubtitleMenuType !== "none"
                     }
+                    disabled={!segmentTimelineSubtitleMenuSettings.globalEnabled || !segmentTimelineSubtitleMenuSettings.voiceEnabled}
                     onClick={() => handleSegmentTimelineSubtitleStyleSelect(segmentTimelineTextMenuSegment.index, style.id)}
                   >
                     <span>{style.label}</span>
@@ -34412,6 +34588,7 @@ export function WorkspacePage({
                       color.id === segmentTimelineSubtitleMenuSettings.subtitleColorId &&
                       segmentTimelineSubtitleMenuType !== "none"
                     }
+                    disabled={!segmentTimelineSubtitleMenuSettings.globalEnabled || !segmentTimelineSubtitleMenuSettings.voiceEnabled}
                     onClick={() => handleSegmentTimelineSubtitleColorSelect(segmentTimelineTextMenuSegment.index, color.id)}
                   >
                     <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
@@ -38266,6 +38443,8 @@ export function WorkspacePage({
                 <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
                   <StudioSubtitleSelectorChip
                     closeRequestId={segmentTimelineSubtitleCloseRequestId}
+                    disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
+                    isDisabled={!studioSidebarVoiceEnabled}
                     isProgrammaticOnly
                     isEnabled={studioSidebarSubtitlesEnabled}
                     openAnchorRect={segmentTimelineGlobalControlAnchorRect}
@@ -38293,9 +38472,7 @@ export function WorkspacePage({
                     onApplyBulkText={handleApplySegmentSubtitleBulkText}
                     onBulkTextChange={handleSegmentSubtitleBulkTextChange}
                     onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
-                    onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
                     onToggleEnabled={handleSegmentEditorVoiceToggle}
-                    selectedLanguage={selectedLanguage}
                     selectedVoiceId={studioSidebarVoiceId}
                     voiceOptions={selectedVoiceOptions}
                     onSelect={handleSegmentEditorVoiceSelect}
@@ -38357,6 +38534,8 @@ export function WorkspacePage({
 
       <div className="studio-sidebar__nav studio-sidebar__nav--settings" aria-label={workspaceText(locale, "Параметры видео", "Video settings")}>
         <StudioSubtitleSelectorChip
+          disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
+          isDisabled={!studioSidebarVoiceEnabled}
           isEnabled={studioSidebarSubtitlesEnabled}
           variant="sidebar"
           onToggleEnabled={handleSegmentEditorSubtitleToggle}
@@ -38377,9 +38556,7 @@ export function WorkspacePage({
           variant="sidebar"
           onApplyBulkText={handleApplySegmentSubtitleBulkText}
           onBulkTextChange={handleSegmentSubtitleBulkTextChange}
-          onSelectLanguage={handleSegmentEditorGlobalVoiceLanguageSelect}
           onToggleEnabled={handleSegmentEditorVoiceToggle}
-          selectedLanguage={selectedLanguage}
           selectedVoiceId={studioSidebarVoiceId}
           voiceOptions={selectedVoiceOptions}
           onSelect={handleSegmentEditorVoiceSelect}
@@ -39131,6 +39308,8 @@ export function WorkspacePage({
                               ) : chip === "Субтитры" ? (
                                 <StudioSubtitleSelectorChip
                                   key={chip}
+                                  disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
+                                  isDisabled={!isVoiceoverEnabled}
                                   isEnabled={areSubtitlesEnabled}
                                   onToggleEnabled={handleSubtitleToggle}
                                   selectedColorId={selectedSubtitleColorId}
@@ -39146,9 +39325,7 @@ export function WorkspacePage({
                                 <StudioVoiceSelectorChip
                                   key={chip}
                                   isEnabled={isVoiceoverEnabled}
-                                  onSelectLanguage={handleSegmentEditorLanguageSelect}
                                   onToggleEnabled={handleVoiceToggle}
-                                  selectedLanguage={selectedLanguage}
                                   selectedVoiceId={resolvedSelectedVoiceId}
                                   onSelect={handleVoiceSelect}
                                   voiceOptions={selectedVoiceOptions}

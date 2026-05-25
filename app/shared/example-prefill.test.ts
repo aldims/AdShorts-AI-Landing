@@ -24,7 +24,7 @@ describe("example prefill normalization", () => {
       language: "ru",
       musicType: "ai",
       subtitleColorId: "purple",
-      subtitleEnabled: true,
+      subtitleEnabled: false,
       subtitleStyleId: "modern",
       videoMode: "standard",
       voiceEnabled: false,

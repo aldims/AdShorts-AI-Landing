@@ -536,7 +536,7 @@ const normalizeStudioSegmentManualDurationSeconds = (value) => {
     const normalized = normalizeNumber(value);
     return normalized !== null && normalized >= 1 ? normalized : null;
 };
-export const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId) => {
+export const normalizeStudioSegmentEditorPayload = (value, language, fallbackProjectId, options) => {
     if (!value || typeof value !== "object") {
         return undefined;
     }
@@ -604,12 +604,13 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             : segmentVoiceTypeText.toLowerCase() === "none"
                 ? "none"
                 : normalizeStudioVoiceId(segmentVoiceTypeText) ?? null;
+        const segmentHasVoice = segmentVoiceType === "none" ? false : options?.globalVoiceEnabled !== false || Boolean(segmentVoiceType);
         const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
-        const segmentSubtitleType = segmentSubtitleTypeRaw || null;
+        const segmentSubtitleType = segmentHasVoice ? segmentSubtitleTypeRaw || null : "none";
         const segmentSubtitleStyleRaw = normalizeGenerationText(segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style);
-        const segmentSubtitleStyle = segmentSubtitleStyleRaw ? normalizeStudioSubtitleStyle(segmentSubtitleStyleRaw) : null;
+        const segmentSubtitleStyle = segmentHasVoice && segmentSubtitleStyleRaw ? normalizeStudioSubtitleStyle(segmentSubtitleStyleRaw) : null;
         const segmentSubtitleColorRaw = normalizeGenerationText(segmentRecord.subtitleColor ?? segmentRecord.subtitle_color);
-        const segmentSubtitleColor = segmentSubtitleColorRaw
+        const segmentSubtitleColor = segmentHasVoice && segmentSubtitleColorRaw
             ? normalizeStudioSubtitleColor(segmentSubtitleColorRaw, getDefaultStudioSubtitleColorForStyle(segmentSubtitleStyle ?? "modern"))
             : null;
         if (videoAction === "custom" && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
@@ -3141,7 +3142,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const isVoiceEnabled = options?.voiceEnabled !== false;
     const normalizedVoiceId = isVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
     const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
-    const isSubtitleEnabled = options?.subtitleEnabled !== false;
+    const isSubtitleEnabled = isVoiceEnabled && options?.subtitleEnabled !== false;
     const normalizedSubtitleStyleId = isSubtitleEnabled ? normalizeStudioSubtitleStyle(options?.subtitleStyleId) : undefined;
     const normalizedSubtitleColorId = isSubtitleEnabled && normalizedSubtitleStyleId
         ? normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId))
@@ -3160,7 +3161,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
     const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-    const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined);
+    const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: isVoiceEnabled });
     const requiredCredits = normalizedSegmentEditor
         ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
             Math.max(isVoiceEnabled ? getStudioVoiceCreditCost(normalizedVoiceId) : 0, ...normalizedSegmentEditor.segments.map((segment) => getStudioVoiceCreditCost(segment.voiceType)))

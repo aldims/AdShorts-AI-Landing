@@ -634,6 +634,7 @@ export type StudioSegmentEditorSegment = {
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
   duration?: number;
+  durationExtensionSourceDurationSeconds?: number | null;
   durationMode?: StudioSegmentEditorDurationMode;
   endTime?: number;
   index: number;
@@ -1291,6 +1292,7 @@ export const normalizeStudioSegmentEditorPayload = (
   value: unknown,
   language: Locale,
   fallbackProjectId?: number,
+  options?: { globalVoiceEnabled?: boolean },
 ): StudioSegmentEditorPayload | undefined => {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -1323,6 +1325,8 @@ export const normalizeStudioSegmentEditorPayload = (
       customVideoFileMimeType?: unknown;
       customVideoFileName?: unknown;
       duration?: unknown;
+      durationExtensionSourceDurationSeconds?: unknown;
+      duration_extension_source_duration_seconds?: unknown;
       durationMode?: unknown;
       duration_mode?: unknown;
       endTime?: unknown;
@@ -1357,6 +1361,9 @@ export const normalizeStudioSegmentEditorPayload = (
     const rawEndTime = normalizeNumber(segmentRecord.endTime);
     const rawDuration = normalizeNumber(segmentRecord.duration);
     const rawDurationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+    const rawDurationExtensionSourceDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
+      segmentRecord.durationExtensionSourceDurationSeconds ?? segmentRecord.duration_extension_source_duration_seconds,
+    );
     const rawManualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
       segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
     );
@@ -1403,12 +1410,14 @@ export const normalizeStudioSegmentEditorPayload = (
         : segmentVoiceTypeText.toLowerCase() === "none"
           ? "none"
           : normalizeStudioVoiceId(segmentVoiceTypeText) ?? null;
+    const segmentHasVoice =
+      segmentVoiceType === "none" ? false : options?.globalVoiceEnabled !== false || Boolean(segmentVoiceType);
     const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
-    const segmentSubtitleType = segmentSubtitleTypeRaw || null;
+    const segmentSubtitleType = segmentHasVoice ? segmentSubtitleTypeRaw || null : "none";
     const segmentSubtitleStyleRaw = normalizeGenerationText(segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style);
-    const segmentSubtitleStyle = segmentSubtitleStyleRaw ? normalizeStudioSubtitleStyle(segmentSubtitleStyleRaw) : null;
+    const segmentSubtitleStyle = segmentHasVoice && segmentSubtitleStyleRaw ? normalizeStudioSubtitleStyle(segmentSubtitleStyleRaw) : null;
     const segmentSubtitleColorRaw = normalizeGenerationText(segmentRecord.subtitleColor ?? segmentRecord.subtitle_color);
-    const segmentSubtitleColor = segmentSubtitleColorRaw
+    const segmentSubtitleColor = segmentHasVoice && segmentSubtitleColorRaw
       ? normalizeStudioSubtitleColor(
           segmentSubtitleColorRaw,
           getDefaultStudioSubtitleColorForStyle(segmentSubtitleStyle ?? "modern"),
@@ -1425,6 +1434,7 @@ export const normalizeStudioSegmentEditorPayload = (
       customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
       customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
       duration,
+      durationExtensionSourceDurationSeconds: rawDurationExtensionSourceDurationSeconds,
       durationMode,
       endTime,
       index,
@@ -4742,7 +4752,7 @@ export async function createStudioGenerationJob(
   const isVoiceEnabled = options?.voiceEnabled !== false;
   const normalizedVoiceId = isVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
   const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
-  const isSubtitleEnabled = options?.subtitleEnabled !== false;
+  const isSubtitleEnabled = isVoiceEnabled && options?.subtitleEnabled !== false;
   const normalizedSubtitleStyleId = isSubtitleEnabled ? normalizeStudioSubtitleStyle(options?.subtitleStyleId) : undefined;
   const normalizedSubtitleColorId =
     isSubtitleEnabled && normalizedSubtitleStyleId
@@ -4765,7 +4775,12 @@ export async function createStudioGenerationJob(
   const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
   const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-  const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined);
+  const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(
+    options?.segmentEditor,
+    normalizedLanguage,
+    normalizedProjectId ?? undefined,
+    { globalVoiceEnabled: isVoiceEnabled },
+  );
   const requiredCredits = normalizedSegmentEditor
     ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
       Math.max(
@@ -4903,6 +4918,7 @@ export async function createStudioGenerationJob(
                 custom_video_mime_type: segment.customVideoFileMimeType,
                 custom_video_original_name: segment.customVideoFileName,
                 duration: segment.duration,
+                duration_extension_source_duration_seconds: segment.durationExtensionSourceDurationSeconds ?? null,
                 duration_mode: segment.durationMode,
                 end_time: segment.endTime,
                 index: segment.index,
@@ -4930,6 +4946,7 @@ export async function createStudioGenerationJob(
         segmentOrder: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.index),
         segmentTimings: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
           duration: segment.duration ?? null,
+          durationExtensionSourceDurationSeconds: segment.duration_extension_source_duration_seconds ?? null,
           durationMode: segment.duration_mode ?? null,
           endTime: segment.end_time ?? null,
           index: segment.index,

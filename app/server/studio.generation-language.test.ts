@@ -79,6 +79,7 @@ describe("studio generation language resolution", () => {
         segments: [
           {
             duration: 3,
+            durationExtensionSourceDurationSeconds: 3,
             durationMode: "manual",
             endTime: 13,
             index: 0,
@@ -103,6 +104,7 @@ describe("studio generation language resolution", () => {
     expect(normalized?.segments[0]).toEqual(
       expect.objectContaining({
         duration: 13,
+        durationExtensionSourceDurationSeconds: 3,
         endTime: 13,
         durationMode: "manual",
         manualDurationSeconds: 13,
@@ -227,6 +229,56 @@ describe("studio generation language resolution", () => {
 
     expect(normalized?.segments[0]?.voiceType).toBe("Aiden");
     expect(normalized?.segments[1]?.voiceType).toBe("none");
+  });
+
+  it("disables segment subtitles when the segment has no voiceover", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 3,
+            index: 0,
+            subtitleColor: "cyan",
+            subtitleStyle: "impact",
+            subtitleType: "default",
+            text: "Muted scene",
+            videoAction: "original",
+            voiceType: "none",
+          },
+          {
+            duration: 3,
+            index: 1,
+            subtitleColor: "cyan",
+            subtitleStyle: "impact",
+            subtitleType: "default",
+            text: "Override voice scene",
+            videoAction: "original",
+            voiceType: "Aiden",
+          },
+        ],
+      },
+      "ru",
+      undefined,
+      { globalVoiceEnabled: false },
+    );
+
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        subtitleColor: null,
+        subtitleStyle: null,
+        subtitleType: "none",
+        voiceType: "none",
+      }),
+    );
+    expect(normalized?.segments[1]).toEqual(
+      expect.objectContaining({
+        subtitleColor: "cyan",
+        subtitleStyle: "impact",
+        subtitleType: "default",
+        voiceType: "Aiden",
+      }),
+    );
   });
 
   it("forwards visual generation target duration with the upstream field name", () => {

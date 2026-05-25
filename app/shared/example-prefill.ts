@@ -91,6 +91,10 @@ export const normalizeExamplePrefillStudioSettings = (
     settings.brandText = brandText;
   }
 
+  if (settings.voiceEnabled === false) {
+    settings.subtitleEnabled = false;
+  }
+
   return Object.keys(settings).length ? settings : null;
 };
 

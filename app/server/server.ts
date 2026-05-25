@@ -563,6 +563,8 @@ type StudioGenerateMultipartSegment = {
   customVideoRemoteUrl?: unknown;
   customVideoFileUploadKey?: unknown;
   duration?: unknown;
+  durationExtensionSourceDurationSeconds?: unknown;
+  duration_extension_source_duration_seconds?: unknown;
   durationMode?: unknown;
   duration_mode?: unknown;
   endTime?: unknown;
@@ -876,6 +878,9 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                     ? segmentRecord.customVideoFileName.trim()
                     : undefined,
                 duration: segmentRecord.duration,
+                durationExtensionSourceDurationSeconds:
+                  segmentRecord.durationExtensionSourceDurationSeconds ??
+                  segmentRecord.duration_extension_source_duration_seconds,
                 durationMode: segmentRecord.durationMode ?? segmentRecord.duration_mode,
                 endTime: segmentRecord.endTime,
                 index: segmentRecord.index,

@@ -655,6 +655,21 @@ describe("WorkspacePage example prefill settings", () => {
     });
   });
 
+  it("turns subtitles off when example voiceover is disabled", () => {
+    expect(
+      resolveWorkspaceExamplePrefillInitialStudioState({
+        prefillSettings: {
+          subtitleEnabled: true,
+          voiceEnabled: false,
+        },
+        routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+      }),
+    ).toMatchObject({
+      subtitleEnabled: false,
+      voiceEnabled: false,
+    });
+  });
+
   it("keeps example subtitle style and color when workspace bootstrap arrives later", () => {
     const styleBase = {
       defaultColorId: "purple",
@@ -961,7 +976,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(resetDraft.musicName).toBeNull();
     expect(resetDraft.voiceType).toBe("none");
     expect(resetDraft.ttsAssetId).toBeNull();
-    expect(resetDraft.subtitleType).toBe("default");
+    expect(resetDraft.subtitleType).toBe("none");
     expect(resetDraft.subtitleStyle).toBe("modern");
     expect(resetDraft.subtitleColor).toBe("purple");
     expect(resetDraft.segments[0]?.text).toBe("");
@@ -971,9 +986,9 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(isWorkspaceSegmentEditorDraftSegmentEmpty(resetDraft.segments[0])).toBe(true);
     expect(shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(resetDraft)).toBe(true);
     expect(getWorkspaceSegmentEditorGenerationOverrides(resetDraft)).toMatchObject({
-      subtitleColorId: "purple",
-      subtitleEnabled: true,
-      subtitleStyleId: "modern",
+      subtitleColorId: undefined,
+      subtitleEnabled: false,
+      subtitleStyleId: undefined,
     });
     expect(
       buildWorkspaceSegmentEditorTracks(resetDraft.segments, resetDraft.segments, resetDraft, resetDraft).rows
@@ -1481,6 +1496,19 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(overrides.language).toBe("en");
     expect(overrides.voiceEnabled).toBe(true);
     expect(overrides.voiceId).toBe("Ryan");
+  });
+
+  it("turns segment editor subtitles off when global voiceover is disabled", () => {
+    const overrides = getWorkspaceSegmentEditorGenerationOverrides({
+      ...createDraftSession(createDraftSegment()),
+      subtitleType: "default",
+      voiceType: "none",
+    });
+
+    expect(overrides.subtitleEnabled).toBe(false);
+    expect(overrides.subtitleColorId).toBeUndefined();
+    expect(overrides.subtitleStyleId).toBeUndefined();
+    expect(overrides.voiceEnabled).toBe(false);
   });
 
   it("preserves existing visuals for regeneration until the video mode is explicitly changed", () => {
@@ -2192,6 +2220,7 @@ describe("WorkspacePage studio locale defaults", () => {
   it("includes manual duration fields and resolved timeline duration in segment editor payload", async () => {
     const segment = createDraftSegment({
       duration: 4,
+      durationExtensionSourceDurationSeconds: 4,
       durationMode: "manual",
       manualDurationSeconds: 7.2,
       text: "Manual payload segment",
@@ -2202,6 +2231,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.payload.segments[0]).toEqual(
       expect.objectContaining({
         duration: 7.2,
+        durationExtensionSourceDurationSeconds: 4,
         durationMode: "manual",
         endTime: 7.2,
         manualDurationSeconds: 7.2,
