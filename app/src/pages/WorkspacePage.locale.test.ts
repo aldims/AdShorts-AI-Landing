@@ -2285,6 +2285,11 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 8)).toBe(13);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 8, {
+        extensionStepSeconds: 8,
+      }),
+    ).toBe(16);
     expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 12)).toBe(12);
   });
 

@@ -8371,11 +8371,17 @@ export const resolveWorkspaceSegmentAiDurationExtensionTargetSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
   currentSlotDurationSeconds?: number | null,
+  options?: {
+    extensionStepSeconds?: number | null;
+  },
 ) => {
   const sourceDurationSeconds = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(segment, baselineSegment);
   const currentSlotDuration =
     normalizeWorkspaceSegmentManualDurationSeconds(currentSlotDurationSeconds) ??
     getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+  const extensionStepSeconds =
+    normalizeWorkspaceSegmentManualDurationSeconds(options?.extensionStepSeconds) ??
+    WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS;
 
   if (
     sourceDurationSeconds !== null &&
@@ -8390,7 +8396,7 @@ export const resolveWorkspaceSegmentAiDurationExtensionTargetSeconds = (
     return null;
   }
 
-  return roundWorkspaceSegmentTimelineSeconds(baseDurationSeconds + WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS);
+  return roundWorkspaceSegmentTimelineSeconds(baseDurationSeconds + extensionStepSeconds);
 };
 
 export const resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds = (
@@ -33323,7 +33329,11 @@ export function WorkspacePage({
   };
   const handleSegmentTimelineDurationAiExtensionGenerate = async (
     segmentArrayIndex: number,
-    options?: { targetDurationSeconds?: number | null },
+    options?: {
+      durationSeconds?: number | null;
+      quality?: StudioSegmentVisualQuality;
+      targetDurationSeconds?: number | null;
+    },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const targetSegment = currentDraft?.segments[segmentArrayIndex] ?? null;
@@ -33355,8 +33365,13 @@ export function WorkspacePage({
       return;
     }
 
+    const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
+    const requestedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+      generationQuality,
+      options?.durationSeconds ?? selectedSegmentPhotoAnimationDurationSeconds,
+    );
     const extensionDurationSeconds = Math.min(
-      WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
+      requestedExtensionDurationSeconds,
       extensionPlan.extraDurationSeconds,
     );
     const nextDurationExtensionSourceDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
@@ -33387,9 +33402,9 @@ export function WorkspacePage({
       durationExtensionSourceDurationSeconds: nextDurationExtensionSourceDurationSeconds,
       durationExtensionTailDurationSeconds: extensionDurationSeconds,
       durationExtensionTargetDurationSeconds: nextDurationExtensionSourceDurationSeconds,
-      durationSeconds: extensionDurationSeconds,
+      durationSeconds: requestedExtensionDurationSeconds,
       prompt: nextPrompt,
-      quality: "standard",
+      quality: generationQuality,
       refreshSceneSoundPrompt: getWorkspaceSegmentSceneSoundRefreshPrompt(targetSegment) || null,
       segmentIndex: targetSegment.index,
       sourceAsset: extensionSourceAsset,
@@ -33981,8 +33996,14 @@ export function WorkspacePage({
     }
 
     const recommendedDurationSeconds = getWorkspaceSegmentRecommendedDurationSeconds(targetSegment, segmentEditorDraft);
+    const selectedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+      selectedSegmentPhotoAnimationQuality,
+      selectedSegmentPhotoAnimationDurationSeconds,
+    );
     const aiExtensionTargetDurationSeconds =
-      resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(targetSegment, baselineSegment, durationSeconds) ??
+      resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(targetSegment, baselineSegment, durationSeconds, {
+        extensionStepSeconds: selectedExtensionDurationSeconds,
+      }) ??
       Math.max(durationSeconds, recommendedDurationSeconds ?? durationSeconds);
     const initialDurationSeconds = Math.max(aiExtensionTargetDurationSeconds, recommendedDurationSeconds ?? 0);
     const hasVoiceover = getWorkspaceSegmentEffectiveVoiceEnabled(targetSegment, segmentEditorDraft);
@@ -34275,6 +34296,24 @@ export function WorkspacePage({
     : null;
   const segmentTimelineDurationMenuInputSeconds =
     parseWorkspaceSegmentEditorDurationInput(segmentTimelineDurationInputValue);
+  const segmentTimelineDurationSelectedExtensionQuality = selectedSegmentPhotoAnimationQuality;
+  const segmentTimelineDurationSelectedExtensionDurationSeconds =
+    normalizeStudioSegmentPhotoAnimationDurationSeconds(
+      segmentTimelineDurationSelectedExtensionQuality,
+      selectedSegmentPhotoAnimationDurationSeconds,
+    );
+  const segmentTimelineDurationMenuSourceSeconds = segmentTimelineDurationMenuSegment
+    ? getWorkspaceSegmentDurationExtensionSourceDurationSeconds(
+        segmentTimelineDurationMenuSegment,
+        segmentTimelineDurationMenuBaselineSegment,
+      )
+    : null;
+  const segmentTimelineDurationMenuRequestedInputSeconds =
+    segmentTimelineDurationMenuSourceSeconds !== null
+      ? roundWorkspaceSegmentTimelineSeconds(
+          segmentTimelineDurationMenuSourceSeconds + segmentTimelineDurationSelectedExtensionDurationSeconds,
+        )
+      : segmentTimelineDurationMenuInputSeconds;
   const segmentTimelineDurationMenuVoiceoverSeconds = segmentTimelineDurationMenuSegment
     ? getWorkspaceSegmentVoiceoverDurationSeconds(segmentTimelineDurationMenuSegment, segmentEditorDraft)
     : null;
@@ -34286,13 +34325,13 @@ export function WorkspacePage({
     ? resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(
         segmentTimelineDurationMenuSegment,
         segmentTimelineDurationMenuBaselineSegment,
-        segmentTimelineDurationMenuInputSeconds,
+        segmentTimelineDurationMenuRequestedInputSeconds,
         {
           trimToVoiceover: segmentTimelineDurationTrimToVoiceover,
           voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverSeconds,
         },
       )
-    : segmentTimelineDurationMenuInputSeconds;
+    : segmentTimelineDurationMenuRequestedInputSeconds;
   const segmentTimelineDurationMenuPreviewSegment: WorkspaceSegmentEditorDraftSegment | null =
     segmentTimelineDurationMenuSegment && segmentTimelineDurationMenuEffectiveInputSeconds !== null
       ? {
@@ -34314,12 +34353,7 @@ export function WorkspacePage({
     : null;
   const segmentTimelineDurationMenuCurrentSeconds =
     segmentTimelineDurationMenuExtensionPlan?.sourceDurationSeconds ??
-    (segmentTimelineDurationMenuSegment
-      ? getWorkspaceSegmentDurationExtensionSourceDurationSeconds(
-          segmentTimelineDurationMenuSegment,
-          segmentTimelineDurationMenuBaselineSegment,
-        )
-      : null);
+    segmentTimelineDurationMenuSourceSeconds;
   const segmentTimelineDurationMenuTargetSeconds =
     segmentTimelineDurationMenuExtensionPlan?.slotDurationSeconds ?? segmentTimelineDurationMenuEffectiveInputSeconds;
   const segmentTimelineDurationDefaultAiPrompt = segmentTimelineDurationMenuExtensionPlan
@@ -34328,8 +34362,12 @@ export function WorkspacePage({
   const segmentTimelineDurationEffectiveAiPrompt =
     normalizeWorkspaceSegmentAiVideoPrompt(segmentTimelineDurationAiPrompt) || segmentTimelineDurationDefaultAiPrompt;
   const segmentTimelineDurationMenuExtensionSeconds = segmentTimelineDurationMenuExtensionPlan
-    ? Math.min(WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS, segmentTimelineDurationMenuExtensionPlan.extraDurationSeconds)
+    ? segmentTimelineDurationMenuExtensionPlan.extraDurationSeconds
     : null;
+  const segmentTimelineDurationMenuExtensionCreditCost = getSegmentPhotoAnimationCreditCost(
+    segmentTimelineDurationSelectedExtensionQuality,
+    segmentTimelineDurationMenuExtensionSeconds ?? segmentTimelineDurationSelectedExtensionDurationSeconds,
+  );
   const segmentTimelineDurationMenuExtensionSecondsLabel =
     segmentTimelineDurationMenuExtensionSeconds !== null
       ? String(
@@ -34380,6 +34418,8 @@ export function WorkspacePage({
     );
     setSegmentTimelineDurationMenuSegmentIndex(null);
     void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
+      durationSeconds: segmentTimelineDurationSelectedExtensionDurationSeconds,
+      quality: segmentTimelineDurationSelectedExtensionQuality,
       targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
     });
   };
@@ -34453,26 +34493,50 @@ export function WorkspacePage({
                     }}
                   />
                   <div className="studio-segment-editor__timeline-duration-prompt-actions">
-                    <button
-                      className="studio-segment-editor__timeline-duration-extend-button"
-                      type="button"
-                      disabled={isSegmentTimelineDurationAiExtensionDisabled}
-                      title={
-                        segmentTimelineDurationMenuExtensionPlan.canRequestAiExtension
-                          ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
-                          : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
-                      }
-                      onClick={handleSegmentTimelineDurationAiExtensionClick}
-                    >
-                      {isSegmentTimelineDurationAiExtensionPending ? (
-                        <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                      ) : (
-                        <>
-                          <span>{workspaceText(locale, "Продлить", "Extend")}</span>
-                          <small>{formatSegmentVisualCreditsLabel(getSegmentPhotoAnimationCreditCost("standard"))}</small>
-                        </>
-                      )}
-                    </button>
+                    {renderSegmentVisualQualitySwitch({
+                      ariaLabel: workspaceText(locale, "Качество продления видео", "Video extension quality"),
+                      className: "studio-segment-visual-quality--duration-extension",
+                      costForQuality: (quality) =>
+                        getSegmentPhotoAnimationCreditCost(
+                          quality,
+                          normalizeStudioSegmentPhotoAnimationDurationSeconds(
+                            quality,
+                            segmentTimelineDurationSelectedExtensionDurationSeconds,
+                          ),
+                        ),
+                      disabled: isSegmentTimelineDurationAiExtensionPending,
+                      onChange: setSelectedSegmentPhotoAnimationQuality,
+                      value: segmentTimelineDurationSelectedExtensionQuality,
+                    })}
+                    <div className="studio-segment-editor__timeline-duration-action-cluster">
+                      {renderSegmentPhotoAnimationDurationSwitch({
+                        className: "studio-segment-photo-animation-duration--duration-extension",
+                        disabled: isSegmentTimelineDurationAiExtensionPending,
+                        onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                        quality: segmentTimelineDurationSelectedExtensionQuality,
+                        value: segmentTimelineDurationSelectedExtensionDurationSeconds,
+                      })}
+                      <button
+                        className="studio-segment-editor__timeline-duration-extend-button"
+                        type="button"
+                        disabled={isSegmentTimelineDurationAiExtensionDisabled}
+                        title={
+                          segmentTimelineDurationMenuExtensionPlan.canRequestAiExtension
+                            ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
+                            : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
+                        }
+                        onClick={handleSegmentTimelineDurationAiExtensionClick}
+                      >
+                        {isSegmentTimelineDurationAiExtensionPending ? (
+                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                        ) : (
+                          <>
+                            <span>{workspaceText(locale, "Продлить", "Extend")}</span>
+                            <small>{formatSegmentVisualCreditsLabel(segmentTimelineDurationMenuExtensionCreditCost)}</small>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : null}
