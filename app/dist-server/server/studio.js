@@ -3813,6 +3813,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+    const normalizedBillingQuality = normalizeStudioSegmentVisualQuality(options?.billingQuality || normalizedQuality);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const preserveCharacters = Boolean(options?.preserveCharacters);
     const characterReferenceMode = normalizeCharacterContinuityMode(options?.characterContinuityMode, preserveCharacters);
@@ -3829,7 +3830,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         normalizedReferenceKind === "character";
     const requiredCredits = isWorkspaceCharacterReference
         ? STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST
-        : getStudioSegmentAiPhotoCreditCost(normalizedQuality);
+        : getStudioSegmentAiPhotoCreditCost(normalizedBillingQuality);
     const workspaceCharacterReferencePrompt = isWorkspaceCharacterReference
         ? buildWorkspaceReferenceCharacterSheetPrompt(normalizedPrompt, {
             sourceMode: referenceAssetIds.length > 0 ? "reference_image" : "text",
@@ -3951,6 +3952,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         event: "server.segment-ai-photo.prepare",
         language: normalizedLanguage,
         preserveCharacters,
+        billingQuality: normalizedBillingQuality,
         promptLength: normalizedPrompt.length,
         projectId: normalizedProjectId,
         quality: normalizedQuality,
@@ -4023,8 +4025,9 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
+    const normalizedBillingQuality = normalizeStudioSegmentVisualQuality(options?.billingQuality || normalizedQuality);
     const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
-    const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedQuality);
+    const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedBillingQuality);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
         timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,

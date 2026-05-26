@@ -9,6 +9,7 @@ import {
   buildWorkspaceSegmentEditorChangeChecklist,
   buildWorkspaceSegmentVisualReferenceRequest,
   createStudioCustomVideoFileFromMediaLibraryItem,
+  createWorkspaceSegmentEditorProjectBrandState,
   buildWorkspaceReferenceAiPrompt,
   buildWorkspacePromptCharacterMentionTokens,
   buildWorkspacePromptRichEditorHtml,
@@ -28,6 +29,8 @@ import {
   getWorkspaceSegmentEffectiveSubtitleSettings,
   insertWorkspacePromptCharacterMentionText,
   mapWorkspaceTalkingCharacterTargetToSourceFrame,
+  removeWorkspacePromptCharacterMentionText,
+  resolveWorkspacePromptCharacterBillingQuality,
   resolveWorkspacePromptMentionedCharacterOptions,
   createWorkspaceTalkingCharacterTargetFromPoints,
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
@@ -35,6 +38,7 @@ import {
   getWorkspaceSegmentDurationExtensionPlan,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
+  getWorkspaceSegmentVoiceoverPreviewRange,
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
   getWorkspaceSegmentSceneSoundDurationSeconds,
@@ -53,6 +57,7 @@ import {
   getWorkspaceSegmentResolvedMediaSurface,
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
+  readStoredWorkspaceSegmentEditorBrandSnapshot,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
@@ -62,6 +67,7 @@ import {
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentEditorMediaUploadScope,
+  resolveWorkspaceSegmentEditorProjectBrandSnapshot,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
@@ -80,6 +86,7 @@ import {
   shouldDeferSegmentEditorRouteRestore,
   shouldShowWorkspaceMediaLibraryLoadingState,
   studioVoiceOptionsByLanguage,
+  writeStoredWorkspaceSegmentEditorBrandSnapshot,
 } from "./WorkspacePage";
 
 type DraftSegment = Parameters<typeof isWorkspaceSegmentDraftVisualResettable>[0];
@@ -562,6 +569,31 @@ describe("WorkspacePage prompt character mentions", () => {
 
     expect(mentionedOptions.map((option) => option.label)).toEqual(["Генри", "Барсик"]);
   });
+
+  it("bills prompt-mentioned characters as premium without changing selected quality", () => {
+    const options = [
+      createMentionOption("henry", "Генри"),
+      createMentionOption("barsik", "Барсик"),
+    ];
+
+    expect(resolveWorkspacePromptCharacterBillingQuality("Генри идет по лесу", options, "standard")).toBe("premium");
+    expect(resolveWorkspacePromptCharacterBillingQuality("Пустая сцена в лесу", options, "standard")).toBe("standard");
+  });
+
+  it("removes a selected character mention from rich prompt text", () => {
+    const options = [
+      createMentionOption("henry", "Генри"),
+      createMentionOption("barsik", "Барсик"),
+    ];
+
+    expect(
+      removeWorkspacePromptCharacterMentionText(
+        "Генри и Барсик идут по лесу, Барсик машет лапой.",
+        options[1],
+        options,
+      ),
+    ).toBe("Генри и идут по лесу, машет лапой.");
+  });
 });
 
 describe("WorkspacePage reference creation defaults", () => {
@@ -819,6 +851,80 @@ describe("WorkspacePage segment editor draft persistence", () => {
         Object.defineProperty(window, "sessionStorage", originalSessionStorage);
       }
     }
+  });
+
+  it("restores project-scoped brand removal after refresh", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    const localStorageMock = createMemoryStorage();
+    const sessionStorageMock = createMemoryStorage();
+    const email = "Brand-Removal@Example.test";
+    const projectId = 711;
+    const baseline = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "Old brand",
+      systemWatermarkEnabled: true,
+    });
+    const applied = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "",
+      systemWatermarkEnabled: false,
+    });
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+      Object.defineProperty(window, "sessionStorage", { configurable: true, value: sessionStorageMock });
+      writeStoredWorkspaceSegmentEditorBrandSnapshot(email, projectId, { applied, baseline });
+
+      expect(readStoredWorkspaceSegmentEditorBrandSnapshot(email, projectId)).toEqual({
+        applied,
+        baseline,
+      });
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+      if (originalSessionStorage) {
+        Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
+  });
+
+  it("prefers a stored project brand snapshot over default editor brand state", () => {
+    const defaultState = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "Global saved brand",
+      systemWatermarkEnabled: true,
+    });
+    const baseline = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "Project brand",
+      systemWatermarkEnabled: true,
+    });
+    const applied = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "",
+      systemWatermarkEnabled: false,
+    });
+
+    expect(
+      resolveWorkspaceSegmentEditorProjectBrandSnapshot({
+        defaultState,
+        storedSnapshot: { applied, baseline },
+      }),
+    ).toEqual({ applied, baseline });
   });
 
   it("allows saved draft segment structure changes during Shorts creation", () => {
@@ -2000,15 +2106,17 @@ describe("WorkspacePage studio locale defaults", () => {
   });
 
   it("formats adjacent fractional segment ranges with a shared displayed boundary", () => {
-    expect(formatWorkspaceSegmentEditorSegmentTimeRange(0, 6.5, { isFirstSegment: true })).toBe("00:00 - 00:07");
-    expect(formatWorkspaceSegmentEditorSegmentTimeRange(6.5, 15, { isFirstSegment: false })).toBe("00:07 - 00:15");
+    expect(formatWorkspaceSegmentEditorSegmentTimeRange(0, 6.5, { isFirstSegment: true })).toBe("00:00 - 00:06.5");
+    expect(formatWorkspaceSegmentEditorSegmentTimeRange(6.5, 15, { isFirstSegment: false })).toBe("00:06.5 - 00:15");
+    expect(formatWorkspaceSegmentEditorSegmentTimeRange(0, 6.38, { isFirstSegment: true })).toBe("00:00 - 00:06.4");
   });
 
   it("formats segment duration labels from the same displayed boundaries as the ruler", () => {
-    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "ru", { isFirstSegment: true })).toBe("3 с");
-    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(2.4, 4.6, "ru", { isFirstSegment: false })).toBe("2 с");
-    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "en", { isFirstSegment: true })).toBe("3s");
-    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 3.2, "ru")).toBe("3 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "ru", { isFirstSegment: true })).toBe("2.4 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(2.4, 4.6, "ru", { isFirstSegment: false })).toBe("2.2 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 2.4, "en", { isFirstSegment: true })).toBe("2.4s");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 3.2, "ru")).toBe("3.2 с");
+    expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 6.38, "ru")).toBe("6.4 с");
   });
 
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {
@@ -2236,6 +2344,21 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentRecommendedDurationSeconds(shortVoiceSegment, createDraftSession(shortVoiceSegment))).toBe(5);
     expect(getWorkspaceSegmentRecommendedDurationSeconds(soundOnlySegment, createDraftSession(soundOnlySegment))).toBe(5);
     expect(getWorkspaceSegmentSceneSoundDurationSeconds(soundOnlySegment)).toBe(9);
+  });
+
+  it("builds voiceover preview range from full project TTS with a small safety tail", () => {
+    const segment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      speechEndTime: 4.8,
+      speechStartTime: 0.4,
+      startTime: 0,
+    });
+
+    expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment))).toEqual({
+      endTime: 5.15,
+      startTime: 0.32,
+    });
   });
 
   it("refreshes scene sound only when an existing generated sound has a prompt", () => {

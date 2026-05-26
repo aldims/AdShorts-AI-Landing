@@ -26397,16 +26397,18 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   height: 20px;
   color: rgba(148, 163, 184, 0.68);
   font: inherit;
+  font-variant-numeric: tabular-nums;
   font-weight: 780;
   letter-spacing: 0;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .studio-segment-editor__timeline-timecode-input {
   appearance: none;
   -webkit-appearance: none;
-  width: 48px;
-  min-width: 48px;
+  width: clamp(64px, 8.4ch, 76px);
+  min-width: 64px;
   margin: -3px 0 0 -7px;
   padding: 0 6px;
   border: 1px solid transparent;
@@ -26952,9 +26954,9 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   -webkit-appearance: none;
   right: 9px;
   bottom: 8px;
-  width: clamp(42px, 5.6ch, 66px);
-  max-width: calc(100% - 18px);
-  min-width: 0;
+  width: clamp(62px, 8.2ch, 88px);
+  max-width: none;
+  min-width: 62px;
   padding: 4px 7px 5px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
@@ -26962,10 +26964,12 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   box-sizing: border-box;
   color: rgba(248, 250, 252, 0.92);
   font-family: inherit;
+  font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
   font-weight: 900;
   line-height: 1;
   text-align: center;
+  white-space: nowrap;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 8px 16px -12px rgba(0, 0, 0, 0.86);
@@ -27016,6 +27020,17 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 0 0 2px rgba(45, 212, 191, 0.14),
     0 10px 20px -12px rgba(0, 0, 0, 0.9);
+}
+
+.studio-segment-editor__timeline-duration-input {
+  width: clamp(62px, 8.2ch, 88px);
+  min-width: 62px;
+  cursor: text;
+}
+
+.studio-segment-editor__timeline-duration-input::selection {
+  background: rgba(168, 85, 247, 0.38);
+  color: rgba(255, 255, 255, 0.98);
 }
 
 .studio-segment-editor__timeline-cell-copy {
@@ -27920,15 +27935,18 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   min-width: 0;
 }
 
-.studio-segment-editor__timeline-duration-menu-field > span {
+.studio-segment-editor__timeline-duration-menu-field > span,
+.studio-segment-editor__timeline-duration-menu-field > label {
   color: rgba(203, 213, 225, 0.58);
   font-size: 0.58rem;
   font-weight: 750;
+  letter-spacing: 0;
   line-height: 1.15;
   text-transform: uppercase;
 }
 
-.studio-segment-editor__timeline-duration-menu-field--primary > span {
+.studio-segment-editor__timeline-duration-menu-field--primary > span,
+.studio-segment-editor__timeline-duration-menu-field--primary > label {
   color: rgba(248, 250, 252, 0.74);
 }
 

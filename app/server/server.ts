@@ -3805,6 +3805,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const billingQuality = typeof req.body?.billingQuality === "string" ? req.body.billingQuality.trim() : "";
   const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const preserveCharacters = req.body?.preserveCharacters === true;
   const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
@@ -3837,6 +3838,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
   try {
     const job = await createStudioSegmentAiPhotoJob(prompt, session.user, {
       language,
+      billingQuality,
       characterContinuityMode,
       characterIds,
       preserveCharacters,
@@ -3913,6 +3915,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
 
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const billingQuality = typeof req.body?.billingQuality === "string" ? req.body.billingQuality.trim() : "";
   const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
   const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
@@ -3939,6 +3942,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
       imageFileName: imageFileName || undefined,
       imageMimeType: imageMimeType || undefined,
       language,
+      billingQuality,
       characterContinuityMode,
       characterIds,
       durationSeconds,
