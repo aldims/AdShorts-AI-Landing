@@ -19,7 +19,7 @@ import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -3748,6 +3748,98 @@ app.get("/api/studio/segment-scene-sound/jobs/:jobId/audio", async (req, res) =>
         });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment scene sound.",
+        });
+    }
+});
+app.post("/api/studio/segment-voiceover/jobs", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+    const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
+        normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
+        getRequestStudioRouteProjectId(req);
+    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+    const voiceType = typeof req.body?.voiceType === "string"
+        ? req.body.voiceType.trim()
+        : typeof req.body?.voice_type === "string"
+            ? req.body.voice_type.trim()
+            : "";
+    if (!text) {
+        res.status(400).json({ error: "Voiceover text is required." });
+        return;
+    }
+    if (!projectId) {
+        res.status(400).json({ error: "Project id is required for segment voiceover generation." });
+        return;
+    }
+    if (segmentIndex === null) {
+        res.status(400).json({ error: "Segment index is required for segment voiceover generation." });
+        return;
+    }
+    try {
+        const job = await createStudioSegmentVoiceoverJob(text, session.user, {
+            language,
+            projectId,
+            segmentIndex,
+            voiceType,
+        });
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create segment voiceover job", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to create segment voiceover job.",
+        });
+    }
+});
+app.get("/api/studio/segment-voiceover/jobs/:jobId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const status = await getStudioSegmentVoiceoverJobStatus(req.params.jobId, session.user);
+        if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
+        res.json({ data: status });
+    }
+    catch (error) {
+        console.error("[studio] Failed to fetch segment voiceover job status", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to fetch segment voiceover job status.",
+        });
+    }
+});
+app.get("/api/studio/segment-voiceover/jobs/:jobId/audio", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const target = await getStudioSegmentVoiceoverJobFileProxyTarget(req.params.jobId, session.user);
+        await proxyVideoResponse(req, res, target, "Failed to load generated segment voiceover.");
+    }
+    catch (error) {
+        console.error("[studio] Failed to load generated segment voiceover", {
+            error: getServerErrorMessage(error, "Failed to load generated segment voiceover."),
+            jobId: req.params.jobId,
+        });
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to load generated segment voiceover.",
         });
     }
 });

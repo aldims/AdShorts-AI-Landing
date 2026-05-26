@@ -49,6 +49,11 @@ type AdsflowSegmentEditorSegmentPayload = {
   subtitle_style?: string | null;
   subtitle_type?: string | null;
   text?: string | null;
+  voiceover?: AdsflowProjectMediaEntryPayload | null;
+  voiceover_asset_id?: number | string | null;
+  voiceover_language?: string | null;
+  voiceover_text_hash?: string | null;
+  voiceover_voice_type?: string | null;
   voice_type?: string | null;
 };
 
@@ -100,6 +105,8 @@ type WorkspaceSegmentSceneSoundRef = {
   remote_url?: string | null;
   url?: string | null;
 };
+
+type WorkspaceSegmentVoiceoverRef = WorkspaceSegmentSceneSoundRef;
 
 type AdsflowProjectGenerationSettingsPayload = {
   background_urls?: AdsflowProjectMediaEntryPayload[] | null;
@@ -199,6 +206,12 @@ export type WorkspaceSegmentEditorSegment = {
   subtitleStyle: string | null;
   subtitleType: string | null;
   text: string;
+  voiceover: WorkspaceSegmentVoiceoverRef | null;
+  voiceoverAssetId: number | null;
+  voiceoverLanguage: string | null;
+  voiceoverTextHash: string | null;
+  voiceoverVoiceType: string | null;
+  voiceover_asset_id: number | null;
   voiceType: string | null;
 };
 
@@ -401,6 +414,20 @@ const isProjectSceneSoundMediaEntry = (entry?: AdsflowProjectMediaEntryPayload |
   );
 };
 
+const isProjectVoiceoverMediaEntry = (entry?: AdsflowProjectMediaEntryPayload | null) => {
+  if (!isProjectMediaEntryAudio(entry)) {
+    return false;
+  }
+
+  const roleText = getProjectMediaEntryRoleText(entry).replace(/-/g, "_");
+  return (
+    roleText.includes("voiceover") ||
+    roleText.includes("segment_voice") ||
+    roleText.includes("segment_tts") ||
+    roleText.includes("tts")
+  );
+};
+
 const buildWorkspaceSegmentSceneSoundRef = (
   entry?: AdsflowProjectMediaEntryPayload | WorkspaceSegmentSceneSoundRef | null,
 ): WorkspaceSegmentSceneSoundRef | null => {
@@ -439,6 +466,13 @@ const findProjectSceneSoundMediaEntry = (
   entries.find((entry) => normalizeInteger(entry?.segment_index) === segmentIndex && isProjectSceneSoundMediaEntry(entry)) ??
   null;
 
+const findProjectVoiceoverMediaEntry = (
+  entries: AdsflowProjectMediaEntryPayload[],
+  segmentIndex: number,
+) =>
+  entries.find((entry) => normalizeInteger(entry?.segment_index) === segmentIndex && isProjectVoiceoverMediaEntry(entry)) ??
+  null;
+
 const getWorkspaceMediaAssetRoleText = (asset?: WorkspaceMediaAssetRef | null) =>
   [
     asset?.kind,
@@ -465,6 +499,23 @@ const isWorkspaceSceneSoundMediaAsset = (asset?: WorkspaceMediaAssetRef | null) 
     roleText.includes("segment_sound") ||
     roleText.includes("segment_scene") ||
     roleText.includes("sound_effect")
+  );
+};
+
+const isWorkspaceVoiceoverMediaAsset = (asset?: WorkspaceMediaAssetRef | null) => {
+  const mediaType = normalizeText(asset?.mediaType).toLowerCase();
+  const mimeType = normalizeText(asset?.mimeType).toLowerCase();
+  const isAudio = mediaType === "audio" || mimeType.startsWith("audio/");
+  if (!isAudio) {
+    return false;
+  }
+
+  const roleText = getWorkspaceMediaAssetRoleText(asset).replace(/-/g, "_");
+  return (
+    roleText.includes("voiceover") ||
+    roleText.includes("segment_voice") ||
+    roleText.includes("segment_tts") ||
+    roleText.includes("tts")
   );
 };
 
@@ -501,6 +552,13 @@ const findProjectSceneSoundMediaAsset = (
   segmentIndex: number,
 ) =>
   assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceSceneSoundMediaAsset(asset)) ??
+  null;
+
+const findProjectVoiceoverMediaAsset = (
+  assets: WorkspaceMediaAssetRef[],
+  segmentIndex: number,
+) =>
+  assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceVoiceoverMediaAsset(asset)) ??
   null;
 
 const normalizeWorkspaceProjectMediaUrl = (
@@ -706,6 +764,14 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         normalizePositiveProjectId(record.sceneSoundAssetId) ??
         sceneSound?.media_asset_id ??
         null;
+      const voiceover = buildWorkspaceSegmentSceneSoundRef(
+        typeof record.voiceover === "object" ? record.voiceover as WorkspaceSegmentVoiceoverRef : null,
+      );
+      const voiceoverAssetId =
+        normalizePositiveProjectId(record.voiceover_asset_id) ??
+        normalizePositiveProjectId(record.voiceoverAssetId) ??
+        voiceover?.media_asset_id ??
+        null;
 
       if (!text && duration === null && !currentEntry && !originalEntry) {
         return null;
@@ -731,6 +797,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         subtitle_style: normalizeText(record.subtitle_style),
         subtitle_type: normalizeText(record.subtitle_type),
         text,
+        voiceover,
+        voiceover_asset_id: voiceoverAssetId,
+        voiceover_language: normalizeText(record.voiceover_language ?? record.voiceoverLanguage),
+        voiceover_text_hash: normalizeText(record.voiceover_text_hash ?? record.voiceoverTextHash),
+        voiceover_voice_type: normalizeText(record.voiceover_voice_type ?? record.voiceoverVoiceType),
         voice_type: normalizeText(record.voice_type),
       } satisfies AdsflowSegmentEditorSegmentPayload;
     })
@@ -1393,6 +1464,24 @@ export const buildWorkspaceSegmentEditorSegment = (
     sceneSound?.media_asset_id ??
     normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
     null;
+  const explicitVoiceover = buildWorkspaceSegmentSceneSoundRef(payload.voiceover);
+  const projectVoiceoverEntry = findProjectVoiceoverMediaEntry(
+    [
+      ...(projectSources?.currentEntries ?? []),
+      ...(projectSources?.originalEntries ?? []),
+    ],
+    index,
+  );
+  const projectVoiceoverAsset = findProjectVoiceoverMediaAsset(projectMediaAssets, index);
+  const voiceover =
+    explicitVoiceover ??
+    buildWorkspaceSegmentSceneSoundRef(projectVoiceoverEntry) ??
+    buildWorkspaceSegmentSceneSoundRefFromAsset(projectVoiceoverAsset);
+  const voiceoverAssetId =
+    normalizePositiveProjectId(payload.voiceover_asset_id) ??
+    voiceover?.media_asset_id ??
+    normalizePositiveProjectId(projectVoiceoverAsset?.assetId) ??
+    null;
 
   return {
     currentAsset,
@@ -1436,6 +1525,12 @@ export const buildWorkspaceSegmentEditorSegment = (
     subtitleStyle: normalizeText(payload.subtitle_style) || null,
     subtitleType: normalizeText(payload.subtitle_type) || null,
     text: normalizeText(payload.text),
+    voiceover,
+    voiceoverAssetId,
+    voiceoverLanguage: normalizeText(payload.voiceover_language) || null,
+    voiceoverTextHash: normalizeText(payload.voiceover_text_hash) || null,
+    voiceoverVoiceType: normalizeText(payload.voiceover_voice_type) || null,
+    voiceover_asset_id: voiceoverAssetId,
     voiceType: normalizeText(payload.voice_type) || null,
   };
 };

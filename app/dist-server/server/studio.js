@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -655,6 +655,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             subtitleType: segmentSubtitleType,
             text: normalizeGenerationText(String(segmentRecord.text ?? "")),
             videoAction,
+            voiceoverAssetId: normalizePositiveInteger(segmentRecord.voiceoverAssetId ?? segmentRecord.voiceover_asset_id) ?? undefined,
             voiceType: segmentVoiceType,
         });
     });
@@ -1050,6 +1051,14 @@ const buildStudioSegmentSceneSoundJobAudioProxyUrl = (jobId) => {
         return null;
     }
     const proxyUrl = new URL(`/api/studio/segment-scene-sound/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const buildStudioSegmentVoiceoverJobAudioProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 const buildStudioPlaybackUrl = (jobId, version) => {
@@ -2187,6 +2196,45 @@ const normalizeAdsflowSegmentSceneSoundAsset = (jobId, payload) => {
         remoteUrl,
     };
 };
+const normalizeAdsflowSegmentVoiceoverAsset = (jobId, payload) => {
+    const remoteUrl = buildStudioSegmentVoiceoverJobAudioProxyUrl(jobId);
+    if (!remoteUrl) {
+        throw new Error("Generated voiceover is unavailable.");
+    }
+    return {
+        assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        fileName: normalizeGenerationText(payload?.file_name) || `segment-voiceover-${jobId}.wav`,
+        fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        mimeType: normalizeGenerationText(payload?.mime_type) || "audio/wav",
+        remoteUrl,
+    };
+};
+const normalizeSegmentVoiceoverSpeechWords = (value) => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .map((item) => {
+        if (!item || typeof item !== "object") {
+            return null;
+        }
+        const record = item;
+        const text = normalizeGenerationText(record.text);
+        const startTime = normalizeNumber(record.start_time);
+        const endTime = normalizeNumber(record.end_time);
+        const confidence = normalizeNumber(record.confidence);
+        if (!text || startTime === null || endTime === null || endTime <= startTime) {
+            return null;
+        }
+        return {
+            confidence: confidence !== null ? Math.max(0, confidence) : 0,
+            endTime: Math.max(startTime, endTime),
+            startTime: Math.max(0, startTime),
+            text,
+        };
+    })
+        .filter((item) => Boolean(item));
+};
 const buildWorkspaceStudioOptions = (payload) => {
     const subtitleStyles = Array.isArray(payload?.subtitle_styles)
         ? payload.subtitle_styles
@@ -3016,6 +3064,18 @@ const fetchAdsflowSegmentSceneSoundJobStatus = async (jobId, user) => {
         external_user_id: externalUserId,
     }));
 };
+const fetchAdsflowSegmentVoiceoverJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
 const consumeWorkspaceGenerationCredit = async (user, amount = 1, language) => {
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -3183,9 +3243,20 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: isVoiceEnabled });
+    const segmentEditorFinalVoiceCredits = normalizedSegmentEditor
+        ? normalizedSegmentEditor.segments.map((segment) => {
+            if (segment.voiceoverAssetId) {
+                return 0;
+            }
+            if (segment.voiceType === "none") {
+                return 0;
+            }
+            return getStudioVoiceCreditCost(segment.voiceType ?? normalizedVoiceId);
+        })
+        : [];
     const requiredCredits = normalizedSegmentEditor
         ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
-            Math.max(isVoiceEnabled ? getStudioVoiceCreditCost(normalizedVoiceId) : 0, ...normalizedSegmentEditor.segments.map((segment) => getStudioVoiceCreditCost(segment.voiceType)))
+            Math.max(0, ...segmentEditorFinalVoiceCredits)
         : getStudioGenerationCreditCost(normalizedVideoMode, {
             voiceEnabled: isVoiceEnabled,
             voiceId: normalizedVoiceId,
@@ -3323,6 +3394,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         subtitle_type: segment.subtitleType ?? null,
                         text: segment.text,
                         video_action: segment.videoAction,
+                        voiceover_asset_id: segment.voiceoverAssetId,
                         voice_type: segment.voiceType ?? null,
                     };
                 })),
@@ -4372,6 +4444,62 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
         status: String(payload.status ?? "queued"),
     };
 }
+export async function createStudioSegmentVoiceoverJob(text, user, options) {
+    assertAdsflowConfigured();
+    const normalizedText = normalizeGenerationText(text);
+    if (!normalizedText) {
+        throw new Error("Voiceover text is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+    const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
+    const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+    if (!normalizedProjectId) {
+        throw new Error("Project id is required for segment voiceover generation.");
+    }
+    if (normalizedSegmentIndex === null) {
+        throw new Error("Segment index is required for segment voiceover generation.");
+    }
+    if (!normalizedVoiceType || normalizedVoiceType === "none") {
+        throw new Error("Voice type is required for segment voiceover generation.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    let payload;
+    try {
+        payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
+            admin_token: env.adsflowAdminToken,
+            credit_cost: requiredCredits,
+            external_user_id: externalUserId,
+            language: normalizedLanguage,
+            project_id: normalizedProjectId,
+            segment_index: normalizedSegmentIndex,
+            text: normalizedText,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+            voice_type: normalizedVoiceType,
+        }, {
+            retryDelaysMs: [],
+            timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+        });
+    }
+    catch (error) {
+        if (isAdsflowHttpStatusError(error, 404)) {
+            throw new Error("AdsFlow segment voiceover endpoint is not deployed. Deploy /api/web/segment-voiceover/jobs before enabling scene voiceover generation.");
+        }
+        throw error;
+    }
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a segment voiceover job id.");
+    }
+    return {
+        jobId,
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
+        status: String(payload.status ?? "queued"),
+    };
+}
 export async function getStudioSegmentAiPhotoJobStatus(jobId, user) {
     const safeJobId = String(jobId ?? "").trim();
     const waveSpeedPredictionId = parseWaveSpeedSegmentAiPhotoPredictionId(safeJobId);
@@ -4560,6 +4688,29 @@ export async function getStudioSegmentSceneSoundJobStatus(jobId, user) {
         profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
             rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
         }),
+        status,
+    };
+}
+export async function getStudioSegmentVoiceoverJobStatus(jobId, user) {
+    const payload = await fetchAdsflowSegmentVoiceoverJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+    const asset = payload.asset ? normalizeAdsflowSegmentVoiceoverAsset(resolvedJobId, payload.asset) : undefined;
+    const speechStartTime = normalizeNumber(payload.speech_start_time);
+    const speechEndTime = normalizeNumber(payload.speech_end_time);
+    const speechDuration = normalizeNumber(payload.speech_duration) ??
+        (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: resolvedJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
+        speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
+        speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
+        speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
         status,
     };
 }
@@ -5052,6 +5203,18 @@ export async function getStudioSegmentSceneSoundJobFileProxyTarget(jobId, user) 
     assertAdsflowConfigured();
     const externalUserId = await resolveStudioExternalUserId(user);
     return buildAdsflowUrl(`/api/web/segment-scene-sound/jobs/${encodeURIComponent(safeJobId)}/file`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    });
+}
+export async function getStudioSegmentVoiceoverJobFileProxyTarget(jobId, user) {
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    assertAdsflowConfigured();
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}/file`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     });

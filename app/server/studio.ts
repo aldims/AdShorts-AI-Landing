@@ -13,6 +13,7 @@ import {
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   getStudioSegmentPhotoAnimationCreditCost,
+  getStudioSegmentVoiceoverCreditCost,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
@@ -285,6 +286,13 @@ type AdsflowSegmentAiVideoAssetPayload = {
   url?: string | null;
 };
 
+type AdsflowSegmentVoiceoverSpeechWordPayload = {
+  confidence?: number | string | null;
+  end_time?: number | string | null;
+  start_time?: number | string | null;
+  text?: string | null;
+};
+
 type AdsflowSegmentAiVideoJobCreateResponse = {
   job_id?: string;
   status?: string;
@@ -322,6 +330,13 @@ type AdsflowSegmentAiVideoJobStatusResponse = {
   job_id?: string;
   status?: string;
   user?: AdsflowWebUserPayload | null;
+};
+
+type AdsflowSegmentVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobStatusResponse & {
+  speech_duration?: number | string | null;
+  speech_end_time?: number | string | null;
+  speech_start_time?: number | string | null;
+  speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
 };
 
 type WorkspaceCreditConsumption = {
@@ -509,6 +524,31 @@ export type StudioSegmentSceneSoundJobStatus = {
   status: string;
 };
 
+export type StudioSegmentVoiceoverSpeechWord = {
+  confidence: number;
+  endTime: number;
+  startTime: number;
+  text: string;
+};
+
+export type StudioSegmentVoiceoverJob = {
+  jobId: string;
+  profile: WorkspaceProfile;
+  status: string;
+};
+
+export type StudioSegmentVoiceoverJobStatus = {
+  asset?: StudioGeneratedAudioAsset;
+  error?: string;
+  jobId: string;
+  profile: WorkspaceProfile;
+  speechDuration: number | null;
+  speechEndTime: number | null;
+  speechStartTime: number | null;
+  speechWords: StudioSegmentVoiceoverSpeechWord[];
+  status: string;
+};
+
 type StudioSegmentPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 
 export type StudioSegmentAiPhotoPromptImproveResult = {
@@ -647,6 +687,7 @@ export type StudioSegmentEditorSegment = {
   subtitleType?: string | null;
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
+  voiceoverAssetId?: number;
   voiceType?: string | null;
 };
 
@@ -1373,6 +1414,8 @@ export const normalizeStudioSegmentEditorPayload = (
       subtitle_type?: unknown;
       text?: unknown;
       videoAction?: unknown;
+      voiceoverAssetId?: unknown;
+      voiceover_asset_id?: unknown;
       voiceType?: unknown;
       voice_type?: unknown;
     };
@@ -1476,6 +1519,8 @@ export const normalizeStudioSegmentEditorPayload = (
       subtitleType: segmentSubtitleType,
       text: normalizeGenerationText(String(segmentRecord.text ?? "")),
       videoAction,
+      voiceoverAssetId:
+        normalizePositiveInteger(segmentRecord.voiceoverAssetId ?? segmentRecord.voiceover_asset_id) ?? undefined,
       voiceType: segmentVoiceType,
     });
   });
@@ -1934,6 +1979,16 @@ const buildStudioSegmentSceneSoundJobAudioProxyUrl = (jobId: string | null | und
   }
 
   const proxyUrl = new URL(`/api/studio/segment-scene-sound/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
+  return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+
+const buildStudioSegmentVoiceoverJobAudioProxyUrl = (jobId: string | null | undefined) => {
+  const normalizedJobId = normalizeGenerationText(jobId);
+  if (!normalizedJobId) {
+    return null;
+  }
+
+  const proxyUrl = new URL(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
   return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 
@@ -3441,6 +3496,57 @@ const normalizeAdsflowSegmentSceneSoundAsset = (
   };
 };
 
+const normalizeAdsflowSegmentVoiceoverAsset = (
+  jobId: string,
+  payload?: AdsflowSegmentAiVideoAssetPayload | null,
+): StudioGeneratedAudioAsset => {
+  const remoteUrl = buildStudioSegmentVoiceoverJobAudioProxyUrl(jobId);
+  if (!remoteUrl) {
+    throw new Error("Generated voiceover is unavailable.");
+  }
+
+  return {
+    assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    fileName: normalizeGenerationText(payload?.file_name) || `segment-voiceover-${jobId}.wav`,
+    fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+    mimeType: normalizeGenerationText(payload?.mime_type) || "audio/wav",
+    remoteUrl,
+  };
+};
+
+const normalizeSegmentVoiceoverSpeechWords = (
+  value: unknown,
+): StudioSegmentVoiceoverSpeechWord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const record = item as AdsflowSegmentVoiceoverSpeechWordPayload;
+      const text = normalizeGenerationText(record.text);
+      const startTime = normalizeNumber(record.start_time);
+      const endTime = normalizeNumber(record.end_time);
+      const confidence = normalizeNumber(record.confidence);
+
+      if (!text || startTime === null || endTime === null || endTime <= startTime) {
+        return null;
+      }
+
+      return {
+        confidence: confidence !== null ? Math.max(0, confidence) : 0,
+        endTime: Math.max(startTime, endTime),
+        startTime: Math.max(0, startTime),
+        text,
+      };
+    })
+    .filter((item): item is StudioSegmentVoiceoverSpeechWord => Boolean(item));
+};
+
 const buildWorkspaceStudioOptions = (payload?: AdsflowStudioOptionsPayload | null): WorkspaceStudioOptions => {
   const subtitleStyles = Array.isArray(payload?.subtitle_styles)
     ? payload.subtitle_styles
@@ -4562,6 +4668,24 @@ const fetchAdsflowSegmentSceneSoundJobStatus = async (jobId: string, user: Studi
   );
 };
 
+const fetchAdsflowSegmentVoiceoverJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return fetchAdsflowJson<AdsflowSegmentVoiceoverJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
 const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1, language?: string) => {
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
@@ -4813,12 +4937,22 @@ export async function createStudioGenerationJob(
     normalizedProjectId ?? undefined,
     { globalVoiceEnabled: isVoiceEnabled },
   );
+  const segmentEditorFinalVoiceCredits = normalizedSegmentEditor
+    ? normalizedSegmentEditor.segments.map((segment) => {
+        if (segment.voiceoverAssetId) {
+          return 0;
+        }
+
+        if (segment.voiceType === "none") {
+          return 0;
+        }
+
+        return getStudioVoiceCreditCost(segment.voiceType ?? normalizedVoiceId);
+      })
+    : [];
   const requiredCredits = normalizedSegmentEditor
     ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
-      Math.max(
-        isVoiceEnabled ? getStudioVoiceCreditCost(normalizedVoiceId) : 0,
-        ...normalizedSegmentEditor.segments.map((segment) => getStudioVoiceCreditCost(segment.voiceType)),
-      )
+      Math.max(0, ...segmentEditorFinalVoiceCredits)
     : getStudioGenerationCreditCost(normalizedVideoMode, {
         voiceEnabled: isVoiceEnabled,
         voiceId: normalizedVoiceId,
@@ -4969,6 +5103,7 @@ export async function createStudioGenerationJob(
                 subtitle_type: segment.subtitleType ?? null,
                 text: segment.text,
                 video_action: segment.videoAction,
+                voiceover_asset_id: segment.voiceoverAssetId,
                 voice_type: segment.voiceType ?? null,
               };
             }),
@@ -6342,6 +6477,85 @@ export async function createStudioSegmentSceneSoundJob(
   };
 }
 
+export async function createStudioSegmentVoiceoverJob(
+  text: string,
+  user: StudioUser,
+  options?: {
+    language?: string;
+    projectId?: number;
+    segmentIndex?: number;
+    voiceType?: string | null;
+  },
+): Promise<StudioSegmentVoiceoverJob> {
+  assertAdsflowConfigured();
+
+  const normalizedText = normalizeGenerationText(text);
+  if (!normalizedText) {
+    throw new Error("Voiceover text is required.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
+  const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+
+  if (!normalizedProjectId) {
+    throw new Error("Project id is required for segment voiceover generation.");
+  }
+
+  if (normalizedSegmentIndex === null) {
+    throw new Error("Segment index is required for segment voiceover generation.");
+  }
+
+  if (!normalizedVoiceType || normalizedVoiceType === "none") {
+    throw new Error("Voice type is required for segment voiceover generation.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+
+  let payload: AdsflowSegmentAiVideoJobCreateResponse;
+  try {
+    payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
+      admin_token: env.adsflowAdminToken,
+      credit_cost: requiredCredits,
+      external_user_id: externalUserId,
+      language: normalizedLanguage,
+      project_id: normalizedProjectId,
+      segment_index: normalizedSegmentIndex,
+      text: normalizedText,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+      voice_type: normalizedVoiceType,
+    }, {
+      retryDelaysMs: [],
+      timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (isAdsflowHttpStatusError(error, 404)) {
+      throw new Error("AdsFlow segment voiceover endpoint is not deployed. Deploy /api/web/segment-voiceover/jobs before enabling scene voiceover generation.");
+    }
+
+    throw error;
+  }
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment voiceover job id.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
+      payload.user ?? undefined,
+      payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      subscriptionDetails,
+    ),
+    status: String(payload.status ?? "queued"),
+  };
+}
+
 export async function getStudioSegmentAiPhotoJobStatus(
   jobId: string,
   user: StudioUser,
@@ -6568,6 +6782,36 @@ export async function getStudioSegmentSceneSoundJobStatus(
     profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
       rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
     }),
+    status,
+  };
+}
+
+export async function getStudioSegmentVoiceoverJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentVoiceoverJobStatus> {
+  const payload = await fetchAdsflowSegmentVoiceoverJobStatus(jobId, user);
+  const status = String(payload.status ?? "queued").trim() || "queued";
+  const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const asset = payload.asset ? normalizeAdsflowSegmentVoiceoverAsset(resolvedJobId, payload.asset) : undefined;
+  const speechStartTime = normalizeNumber(payload.speech_start_time);
+  const speechEndTime = normalizeNumber(payload.speech_end_time);
+  const speechDuration =
+    normalizeNumber(payload.speech_duration) ??
+    (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+
+  return {
+    asset,
+    error: normalizeGenerationText(payload.error) || undefined,
+    jobId: resolvedJobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
+    speechEndTime:
+      speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
+    speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
+    speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
     status,
   };
 }
@@ -7168,6 +7412,22 @@ export async function getStudioSegmentSceneSoundJobFileProxyTarget(jobId: string
   const externalUserId = await resolveStudioExternalUserId(user);
 
   return buildAdsflowUrl(`/api/web/segment-scene-sound/jobs/${encodeURIComponent(safeJobId)}/file`, {
+    admin_token: env.adsflowAdminToken ?? "",
+    external_user_id: externalUserId,
+  });
+}
+
+export async function getStudioSegmentVoiceoverJobFileProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  assertAdsflowConfigured();
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+
+  return buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}/file`, {
     admin_token: env.adsflowAdminToken ?? "",
     external_user_id: externalUserId,
   });

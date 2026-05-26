@@ -167,6 +167,54 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.scene_sound?.file_name).toBe("rain.wav");
   });
 
+  it("restores scene voiceover asset and speech metadata into the editor segment", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 5,
+        index: 0,
+        speech_duration: 2.8,
+        speech_end_time: 2.8,
+        speech_start_time: 0,
+        speech_words: [
+          { end_time: 0.8, start_time: 0, text: "Subscribe" },
+          { end_time: 1.4, start_time: 0.8, text: "now" },
+        ],
+        text: "Subscribe now",
+        voiceover_language: "en",
+        voiceover_text_hash: "subscribe now",
+        voiceover_voice_type: "Liam",
+      },
+      {
+        currentEntries: [],
+        originalEntries: [],
+        projectMediaAssets: [
+          createMediaAsset({
+            assetId: 555,
+            kind: "segment_voiceover",
+            role: "segment_voiceover",
+            storageKey: "projects/42/segment-voiceover-555.wav",
+          }),
+        ],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: true,
+      },
+    );
+
+    expect(segment?.voiceoverAssetId).toBe(555);
+    expect(segment?.voiceover_asset_id).toBe(555);
+    expect(segment?.voiceover?.media_asset_id).toBe(555);
+    expect(segment?.voiceoverLanguage).toBe("en");
+    expect(segment?.voiceoverTextHash).toBe("subscribe now");
+    expect(segment?.voiceoverVoiceType).toBe("Liam");
+    expect(segment?.speechDuration).toBe(2.8);
+    expect(segment?.speechWords).toEqual([
+      { confidence: 0, endTime: 0.8, startTime: 0, text: "Subscribe" },
+      { confidence: 0, endTime: 1.4, startTime: 0.8, text: "now" },
+    ]);
+  });
+
   it("marks missing linked project assets as deleted when the media envelope was loaded", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

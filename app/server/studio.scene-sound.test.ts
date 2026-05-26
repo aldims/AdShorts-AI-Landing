@@ -102,3 +102,192 @@ describe("studio scene sound jobs", () => {
     );
   });
 });
+
+describe("studio segment voiceover jobs", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("requires a project id before contacting AdsFlow", async () => {
+    const { createStudioSegmentVoiceoverJob } = await loadStudioModule();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createStudioSegmentVoiceoverJob("Subscribe to the channel", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+        segmentIndex: 0,
+        voiceType: "Boris",
+      }),
+    ).rejects.toThrow("Project id is required for segment voiceover generation.");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("requires text and a real voice before contacting AdsFlow", async () => {
+    const { createStudioSegmentVoiceoverJob } = await loadStudioModule();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createStudioSegmentVoiceoverJob("", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+        projectId: 3576,
+        segmentIndex: 0,
+        voiceType: "Boris",
+      }),
+    ).rejects.toThrow("Voiceover text is required.");
+
+    await expect(
+      createStudioSegmentVoiceoverJob("Subscribe to the channel", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+        projectId: 3576,
+        segmentIndex: 0,
+        voiceType: "none",
+      }),
+    ).rejects.toThrow("Voice type is required for segment voiceover generation.");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards credit cost and segment voiceover payload to AdsFlow", async () => {
+    const { createStudioSegmentVoiceoverJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-voiceover/jobs") {
+          return jsonResponse({
+            job_id: "segment-voiceover-job-1",
+            status: "queued",
+            user: {
+              balance: 7,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioSegmentVoiceoverJob("Subscribe to the channel", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      language: "ru",
+      projectId: 3576,
+      segmentIndex: 4,
+      voiceType: "Liam",
+    });
+
+    expect(job).toEqual(expect.objectContaining({
+      jobId: "segment-voiceover-job-1",
+      status: "queued",
+    }));
+    expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body).toEqual(
+      expect.objectContaining({
+        admin_token: "admin-token",
+        credit_cost: 5,
+        external_user_id: "email:alex@example.test",
+        language: "ru",
+        project_id: 3576,
+        segment_index: 4,
+        text: "Subscribe to the channel",
+        voice_type: "Liam",
+      }),
+    );
+  });
+
+  it("normalizes speech metadata from AdsFlow status responses", async () => {
+    const { getStudioSegmentVoiceoverJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-voiceover/jobs/segment-voiceover-job-1") {
+          return jsonResponse({
+            asset: {
+              file_name: "scene-voice.wav",
+              media_asset_id: 901,
+              mime_type: "audio/wav",
+            },
+            job_id: "segment-voiceover-job-1",
+            speech_end_time: "3.25",
+            speech_start_time: "0.25",
+            speech_words: [
+              { confidence: "0.93", end_time: "0.9", start_time: "0.25", text: "Subscribe" },
+              { confidence: "0.9", end_time: "0.8", start_time: "0.9", text: "bad" },
+            ],
+            status: "completed",
+            user: {
+              balance: 7,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioSegmentVoiceoverJobStatus("segment-voiceover-job-1", {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status).toEqual(expect.objectContaining({
+      jobId: "segment-voiceover-job-1",
+      speechDuration: 3,
+      speechEndTime: 3.25,
+      speechStartTime: 0.25,
+      status: "completed",
+    }));
+    expect(status.asset).toEqual(expect.objectContaining({
+      assetId: 901,
+      fileName: "scene-voice.wav",
+      mimeType: "audio/wav",
+      remoteUrl: "/api/studio/segment-voiceover/jobs/segment-voiceover-job-1/audio",
+    }));
+    expect(status.speechWords).toEqual([
+      {
+        confidence: 0.93,
+        endTime: 0.9,
+        startTime: 0.25,
+        text: "Subscribe",
+      },
+    ]);
+  });
+});

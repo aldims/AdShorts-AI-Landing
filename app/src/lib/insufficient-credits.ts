@@ -66,6 +66,8 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
         return "Image upscale";
       case "scene_sound":
         return "Scene sound";
+      case "segment_voiceover":
+        return "Scene voiceover";
       case "video_generation":
       default:
         return "Shorts generation";
@@ -87,6 +89,8 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
       return "Улучшение качества изображения";
     case "scene_sound":
       return "Звук сцены";
+    case "segment_voiceover":
+      return "Озвучка сцены";
     case "video_generation":
     default:
       return "Создание Shorts";

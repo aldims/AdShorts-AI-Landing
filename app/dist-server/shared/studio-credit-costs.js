@@ -21,6 +21,13 @@ export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = STUDIO_SEGMENT_AI_PHOTO_STAND
 export const STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST = 10;
 export const STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST = 1;
 export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST = 1;
+export const STUDIO_SEGMENT_VOICEOVER_CREDIT_COST = 1;
+export const STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST = 5;
+export const STUDIO_PREMIUM_VOICE_IDS = [
+    "Liam",
+    "English_ManWithDeepVoice",
+    "Russian_BrightHeroine",
+];
 export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY = {
     premium: STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST,
     standard: STUDIO_SEGMENT_AI_PHOTO_STANDARD_CREDIT_COST,
@@ -71,6 +78,16 @@ export const getStudioSegmentPhotoAnimationCreditCost = (quality, durationSecond
         STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ??
         STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST);
 };
+export const getStudioSegmentVoiceoverCreditCost = (voiceId) => {
+    const normalizedVoiceId = String(voiceId ?? "").trim();
+    if (!normalizedVoiceId || normalizedVoiceId.toLowerCase() === "none") {
+        return 0;
+    }
+    const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+    return STUDIO_PREMIUM_VOICE_IDS.some((premiumVoiceId) => premiumVoiceId.toLowerCase() === normalizedVoiceKey)
+        ? STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST
+        : STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
+};
 export const STUDIO_CREDIT_COST_BY_ACTION = {
     video_generation: STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
     ai_photo: STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
@@ -80,4 +97,5 @@ export const STUDIO_CREDIT_COST_BY_ACTION = {
     image_edit: STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
     image_upscale: STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
     scene_sound: STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
+    segment_voiceover: STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
 };

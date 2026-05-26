@@ -26709,6 +26709,21 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
     0 0 20px rgba(45, 212, 191, 0.18);
 }
 
+.studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-play--mix {
+  left: 9px;
+  top: auto;
+  bottom: 6px;
+  z-index: 11;
+  width: 26px;
+  height: 26px;
+  transform: none;
+}
+
+.studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-play--mix:hover:not(:disabled),
+.studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-play--mix:focus-visible {
+  transform: scale(1.05);
+}
+
 .studio-segment-editor__timeline-play-spinner {
   width: 12px;
   height: 12px;
@@ -29931,6 +29946,22 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   margin-bottom: 6px;
 }
 
+.studio-segment-editor__timeline-voice-generate {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(180, 140, 255, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(124, 58, 237, 0.12), rgba(45, 212, 191, 0.055)),
+    rgba(2, 6, 12, 0.28);
+}
+
+.studio-segment-editor__timeline-voice-generate .studio-segment-editor__prompt-info-card {
+  margin: 0;
+}
+
 .studio-segment-editor__timeline-voice-textarea {
   min-height: 118px;
   max-height: min(190px, 30vh);
@@ -29973,6 +30004,26 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
 .studio-segment-editor__timeline-voice-text-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+
+.studio-segment-editor__timeline-voice-text-actions .studio-segment-editor__timeline-voice-text-generate {
+  min-width: 190px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-color: rgba(45, 212, 191, 0.32);
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.2), rgba(20, 184, 166, 0.1)),
+    rgba(8, 47, 73, 0.62);
+  color: rgba(240, 253, 250, 0.96);
+}
+
+.studio-segment-editor__timeline-voice-text-actions .studio-segment-editor__timeline-voice-text-generate small {
+  color: rgba(204, 251, 241, 0.72);
+  font-size: 0.62rem;
+  font-weight: 900;
 }
 
 .studio-segment-editor__timeline-voice-menu .studio-voice-selector__option {
@@ -38498,6 +38549,14 @@ html, body {
   border-color: rgba(251, 191, 36, 0.28);
   background:
     radial-gradient(circle at 12% 0%, rgba(251, 191, 36, 0.12), transparent 48%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(6, 10, 17, 0.82)),
+    rgba(8, 10, 14, 0.9);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-info-card.is-error {
+  border-color: rgba(248, 113, 113, 0.3);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(248, 113, 113, 0.14), transparent 48%),
     linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(6, 10, 17, 0.82)),
     rgba(8, 10, 14, 0.9);
 }

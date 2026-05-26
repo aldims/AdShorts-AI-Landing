@@ -134,6 +134,16 @@ const isProjectSceneSoundMediaEntry = (entry) => {
         roleText.includes("segment_scene") ||
         roleText.includes("sound_effect"));
 };
+const isProjectVoiceoverMediaEntry = (entry) => {
+    if (!isProjectMediaEntryAudio(entry)) {
+        return false;
+    }
+    const roleText = getProjectMediaEntryRoleText(entry).replace(/-/g, "_");
+    return (roleText.includes("voiceover") ||
+        roleText.includes("segment_voice") ||
+        roleText.includes("segment_tts") ||
+        roleText.includes("tts"));
+};
 const buildWorkspaceSegmentSceneSoundRef = (entry) => {
     if (!entry || typeof entry !== "object") {
         return null;
@@ -160,6 +170,8 @@ const buildWorkspaceSegmentSceneSoundRef = (entry) => {
 };
 const findProjectSceneSoundMediaEntry = (entries, segmentIndex) => entries.find((entry) => normalizeInteger(entry?.segment_index) === segmentIndex && isProjectSceneSoundMediaEntry(entry)) ??
     null;
+const findProjectVoiceoverMediaEntry = (entries, segmentIndex) => entries.find((entry) => normalizeInteger(entry?.segment_index) === segmentIndex && isProjectVoiceoverMediaEntry(entry)) ??
+    null;
 const getWorkspaceMediaAssetRoleText = (asset) => [
     asset?.kind,
     asset?.libraryKind,
@@ -183,6 +195,19 @@ const isWorkspaceSceneSoundMediaAsset = (asset) => {
         roleText.includes("segment_scene") ||
         roleText.includes("sound_effect"));
 };
+const isWorkspaceVoiceoverMediaAsset = (asset) => {
+    const mediaType = normalizeText(asset?.mediaType).toLowerCase();
+    const mimeType = normalizeText(asset?.mimeType).toLowerCase();
+    const isAudio = mediaType === "audio" || mimeType.startsWith("audio/");
+    if (!isAudio) {
+        return false;
+    }
+    const roleText = getWorkspaceMediaAssetRoleText(asset).replace(/-/g, "_");
+    return (roleText.includes("voiceover") ||
+        roleText.includes("segment_voice") ||
+        roleText.includes("segment_tts") ||
+        roleText.includes("tts"));
+};
 const buildWorkspaceSegmentSceneSoundRefFromAsset = (asset) => {
     if (!asset) {
         return null;
@@ -205,6 +230,8 @@ const buildWorkspaceSegmentSceneSoundRefFromAsset = (asset) => {
     };
 };
 const findProjectSceneSoundMediaAsset = (assets, segmentIndex) => assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceSceneSoundMediaAsset(asset)) ??
+    null;
+const findProjectVoiceoverMediaAsset = (assets, segmentIndex) => assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceVoiceoverMediaAsset(asset)) ??
     null;
 const normalizeWorkspaceProjectMediaUrl = (entry, value) => {
     const normalizedUrl = normalizeUrl(value);
@@ -337,6 +364,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             normalizePositiveProjectId(record.sceneSoundAssetId) ??
             sceneSound?.media_asset_id ??
             null;
+        const voiceover = buildWorkspaceSegmentSceneSoundRef(typeof record.voiceover === "object" ? record.voiceover : null);
+        const voiceoverAssetId = normalizePositiveProjectId(record.voiceover_asset_id) ??
+            normalizePositiveProjectId(record.voiceoverAssetId) ??
+            voiceover?.media_asset_id ??
+            null;
         if (!text && duration === null && !currentEntry && !originalEntry) {
             return null;
         }
@@ -360,6 +392,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             subtitle_style: normalizeText(record.subtitle_style),
             subtitle_type: normalizeText(record.subtitle_type),
             text,
+            voiceover,
+            voiceover_asset_id: voiceoverAssetId,
+            voiceover_language: normalizeText(record.voiceover_language ?? record.voiceoverLanguage),
+            voiceover_text_hash: normalizeText(record.voiceover_text_hash ?? record.voiceoverTextHash),
+            voiceover_voice_type: normalizeText(record.voiceover_voice_type ?? record.voiceoverVoiceType),
             voice_type: normalizeText(record.voice_type),
         };
     })
@@ -858,6 +895,19 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         sceneSound?.media_asset_id ??
         normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
         null;
+    const explicitVoiceover = buildWorkspaceSegmentSceneSoundRef(payload.voiceover);
+    const projectVoiceoverEntry = findProjectVoiceoverMediaEntry([
+        ...(projectSources?.currentEntries ?? []),
+        ...(projectSources?.originalEntries ?? []),
+    ], index);
+    const projectVoiceoverAsset = findProjectVoiceoverMediaAsset(projectMediaAssets, index);
+    const voiceover = explicitVoiceover ??
+        buildWorkspaceSegmentSceneSoundRef(projectVoiceoverEntry) ??
+        buildWorkspaceSegmentSceneSoundRefFromAsset(projectVoiceoverAsset);
+    const voiceoverAssetId = normalizePositiveProjectId(payload.voiceover_asset_id) ??
+        voiceover?.media_asset_id ??
+        normalizePositiveProjectId(projectVoiceoverAsset?.assetId) ??
+        null;
     return {
         currentAsset,
         currentExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(currentEntry),
@@ -899,6 +949,12 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         subtitleStyle: normalizeText(payload.subtitle_style) || null,
         subtitleType: normalizeText(payload.subtitle_type) || null,
         text: normalizeText(payload.text),
+        voiceover,
+        voiceoverAssetId,
+        voiceoverLanguage: normalizeText(payload.voiceover_language) || null,
+        voiceoverTextHash: normalizeText(payload.voiceover_text_hash) || null,
+        voiceoverVoiceType: normalizeText(payload.voiceover_voice_type) || null,
+        voiceover_asset_id: voiceoverAssetId,
         voiceType: normalizeText(payload.voice_type) || null,
     };
 };

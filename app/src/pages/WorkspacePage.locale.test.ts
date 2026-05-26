@@ -38,7 +38,9 @@ import {
   getWorkspaceSegmentDurationExtensionPlan,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
+  getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
+  getWorkspaceSegmentVoiceoverTextHash,
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
   getWorkspaceSegmentSceneSoundDurationSeconds,
@@ -180,6 +182,10 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   startTime: 0,
   text: "Segment",
   textByLanguage: { ru: "Segment" },
+  voiceoverAsset: null,
+  voiceoverLanguage: null,
+  voiceoverTextHash: null,
+  voiceoverVoiceType: null,
   videoAction: "original",
   visualReset: false,
   ...overrides,
@@ -2361,6 +2367,37 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("keeps generated scene voiceover as the segment duration floor", () => {
+    const segment = createDraftSegment({
+      duration: 2,
+      endTime: 2,
+      speechDuration: 6.4,
+      speechEndTime: 6.4,
+      speechStartTime: 0,
+      text: "Готовая озвучка длиннее визуала",
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 6.4,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-1/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Готовая озвучка длиннее визуала"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(6.4);
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 6.4,
+      endTime: 6.4,
+      startTime: 0,
+    }));
+  });
+
   it("refreshes scene sound only when an existing generated sound has a prompt", () => {
     const generatedSoundSegment = createDraftSegment({
       duration: 5,
@@ -2564,6 +2601,49 @@ describe("WorkspacePage studio locale defaults", () => {
         startTime: 0,
       }),
     );
+  });
+
+  it("exports scene voiceover asset only while text, voice, and language still match", async () => {
+    const freshSegment = createDraftSegment({
+      text: "Подписывайтесь на канал",
+      voiceoverAsset: {
+        assetId: 888,
+        durationSeconds: 2.6,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-1/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Подписывайтесь на канал"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const staleTextSegment = {
+      ...freshSegment,
+      text: "Подписывайтесь на канал прямо сейчас",
+    };
+    const staleVoiceSegment = {
+      ...freshSegment,
+      voiceType: "Marfa",
+    };
+
+    const freshResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(freshSegment), { language: "ru" });
+    const staleTextResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(staleTextSegment), { language: "ru" });
+    const staleVoiceResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(staleVoiceSegment), { language: "ru" });
+    const staleLanguageResult = await buildWorkspaceSegmentEditorPayload(
+      {
+        ...createDraftSession(freshSegment),
+        language: "en",
+      },
+      { language: "en" },
+    );
+
+    expect(freshResult.payload.segments[0]).toEqual(expect.objectContaining({
+      voiceoverAssetId: 888,
+    }));
+    expect(staleTextResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
+    expect(staleVoiceResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
+    expect(staleLanguageResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
   });
 
   it("includes per-scene subtitle disable override without changing the shared segment text", async () => {
