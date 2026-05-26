@@ -15853,7 +15853,7 @@ function StudioVoiceSelectorChip({
                   })()
                 ))}
               </div>
-              {hasBulkTextEditor && isEnabled ? (
+              {hasBulkTextEditor ? (
                 <div className="studio-voice-selector__bulk-text">
                   <div className="studio-voice-selector__bulk-head">
                     <label htmlFor={bulkTextAreaId}>{locale === "en" ? "Voiceover text" : "Текст озвучки"}</label>
@@ -39925,7 +39925,11 @@ export function WorkspacePage({
                     onApplyBulkText={handleApplySegmentSubtitleBulkText}
                     onBulkTextChange={handleSegmentSubtitleBulkTextChange}
                     onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("voice", isOpen)}
+                    onSelectLanguage={(language) => {
+                      void handleSegmentEditorLanguageSelect(language);
+                    }}
                     onToggleEnabled={handleSegmentEditorVoiceToggle}
+                    selectedLanguage={selectedLanguage}
                     selectedVoiceId={studioSidebarVoiceId}
                     voiceOptions={selectedVoiceOptions}
                     onSelect={handleSegmentEditorVoiceSelect}
@@ -40013,7 +40017,11 @@ export function WorkspacePage({
           variant="sidebar"
           onApplyBulkText={handleApplySegmentSubtitleBulkText}
           onBulkTextChange={handleSegmentSubtitleBulkTextChange}
+          onSelectLanguage={(language) => {
+            void handleSegmentEditorLanguageSelect(language);
+          }}
           onToggleEnabled={handleSegmentEditorVoiceToggle}
+          selectedLanguage={selectedLanguage}
           selectedVoiceId={studioSidebarVoiceId}
           voiceOptions={selectedVoiceOptions}
           onSelect={handleSegmentEditorVoiceSelect}
