@@ -18582,10 +18582,6 @@ export function WorkspacePage({
     useState<WorkspaceSegmentVisualRunState>({});
   const [segmentEditorGeneratingVoiceoverRunIds, setSegmentEditorGeneratingVoiceoverRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
-  const [segmentEditorVoiceoverErrors, setSegmentEditorVoiceoverErrors] = useState<Record<number, string>>({});
-  useEffect(() => {
-    setSegmentEditorVoiceoverErrors({});
-  }, [segmentEditorLoadedSession?.projectId]);
   const isSegmentEditorGeneratingAiPhoto = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds);
   const isSegmentEditorGeneratingAiVideo = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds);
   const isSegmentEditorGeneratingPhotoAnimation = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingPhotoAnimationRunIds);
@@ -18594,39 +18590,20 @@ export function WorkspacePage({
   const isSegmentEditorUpscalingImage = hasAnyWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds);
   const isSegmentEditorGeneratingSceneSound = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds);
   const isSegmentEditorGeneratingVoiceover = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds);
-  const clearSegmentEditorVoiceoverError = (segmentIndex: number) => {
-    setSegmentEditorVoiceoverErrors((current) => {
-      if (!current[segmentIndex]) {
-        return current;
-      }
-
-      const next = { ...current };
-      delete next[segmentIndex];
-      return next;
-    });
-  };
-  const setSegmentEditorVoiceoverError = (segmentIndex: number, message: string) => {
-    setSegmentEditorVoiceoverErrors((current) => ({
-      ...current,
-      [segmentIndex]: message,
-    }));
-  };
-  const getSegmentEditorVoiceoverGenerationErrorMessage = (error: unknown) => {
-    const rawMessage =
-      error instanceof Error && error.message.trim()
-        ? error.message.trim()
-        : "Не удалось сгенерировать озвучку сцены.";
-
-    if (/not found|404|segment voiceover endpoint/i.test(rawMessage)) {
-      return workspaceText(
-        locale,
-        "Сервис по-сценовой озвучки ещё не включён в AdsFlow: endpoint генерации возвращает 404.",
-        "Scene voiceover generation is not enabled in AdsFlow yet: the generation endpoint returns 404.",
-      );
-    }
-
-    return rawMessage;
-  };
+  const clearSegmentEditorVoiceoverError = (_segmentIndex: number) => {};
+  const getSegmentEditorVoiceoverGenerationRawErrorMessage = (error: unknown) =>
+    error instanceof Error && error.message.trim()
+      ? error.message.trim()
+      : "";
+  const isSegmentEditorVoiceoverEndpointMissingError = (error: unknown) =>
+    /not found|404|segment voiceover endpoint/i.test(getSegmentEditorVoiceoverGenerationRawErrorMessage(error));
+  const getSegmentEditorVoiceoverGenerationErrorMessage = (error: unknown) =>
+    getSegmentEditorVoiceoverGenerationRawErrorMessage(error) ||
+    workspaceText(
+      locale,
+      "Не удалось сгенерировать озвучку сцены.",
+      "Failed to generate scene voiceover.",
+    );
   const [isSegmentEditorPreparingCustomVideo, setIsSegmentEditorPreparingCustomVideo] = useState(false);
   const [segmentEditorPanelHeightLock, setSegmentEditorPanelHeightLock] = useState<number | null>(null);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
@@ -30664,8 +30641,19 @@ export function WorkspacePage({
         return;
       }
 
+      if (isSegmentEditorVoiceoverEndpointMissingError(error)) {
+        showStudioToast(
+          workspaceText(
+            locale,
+            "По-сценовая озвучка пока недоступна.",
+            "Scene voiceover is not available yet.",
+          ),
+          { durationMs: 4000, kind: "warning" },
+        );
+        return;
+      }
+
       const message = getSegmentEditorVoiceoverGenerationErrorMessage(error);
-      setSegmentEditorVoiceoverError(targetSegmentIndex, message);
       setSegmentEditorVideoError(message);
     } finally {
       if (!pollStarted && isSegmentVisualRunCurrent(segmentVoiceoverRunRef, targetSegmentIndex, runId)) {
@@ -36092,32 +36080,9 @@ export function WorkspacePage({
 	      segmentEditorDraft &&
 	      isWorkspaceSegmentVoiceoverAssetFresh(segmentTimelineVoiceMenuSegment, segmentEditorDraft),
 	  );
-	  const segmentTimelineVoiceMenuVoiceoverDuration =
-	    segmentTimelineVoiceMenuSegment && segmentEditorDraft
-	      ? getWorkspaceSegmentVoiceoverDurationSeconds(segmentTimelineVoiceMenuSegment, segmentEditorDraft)
-	      : null;
-	  const segmentTimelineVoiceMenuVoiceoverUrl =
-	    segmentTimelineVoiceMenuVoiceoverFresh && segmentTimelineVoiceMenuSegment
-	      ? getStudioSceneSoundAssetPreviewUrl(segmentTimelineVoiceMenuSegment.voiceoverAsset)
-	      : null;
 	  const segmentTimelineVoiceMenuVoiceoverCost = segmentTimelineVoiceMenuEffectiveGenerationVoiceId
 	    ? getStudioSegmentVoiceoverCreditCost(segmentTimelineVoiceMenuEffectiveGenerationVoiceId)
 	    : 0;
-	  const segmentTimelineVoiceMenuEstimatedVoiceDuration = segmentTimelineVoiceMenuSegment
-	    ? getWorkspaceSegmentEditorPlaybackDuration(segmentTimelineVoiceMenuSegment, undefined, { preferEstimatedDuration: true })
-	    : null;
-	  const segmentTimelineVoiceMenuVoiceoverError = segmentTimelineVoiceMenuSegment
-	    ? segmentEditorVoiceoverErrors[segmentTimelineVoiceMenuSegment.index] ?? null
-	    : null;
-	  const segmentTimelineVoiceMenuVoiceoverStatusLabel = isSegmentTimelineVoiceMenuGeneratingVoiceover
-	    ? workspaceText(locale, "Генерируется", "Generating")
-	    : segmentTimelineVoiceMenuVoiceoverError
-	      ? workspaceText(locale, "Ошибка", "Error")
-	    : segmentTimelineVoiceMenuVoiceoverFresh
-	      ? workspaceText(locale, "Готово", "Ready")
-	      : segmentTimelineVoiceMenuSegment?.voiceoverAsset
-	        ? workspaceText(locale, "Нужно пересоздать", "Regenerate")
-	        : workspaceText(locale, "Не создана", "Not generated");
 	  const getSegmentTimelineVoiceLanguageLabel = (language: StudioLanguage) =>
 	    locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getSegmentTimelineVoiceLanguageDescription = (language: StudioLanguage) =>
@@ -36149,41 +36114,6 @@ export function WorkspacePage({
                 `Scene ${segmentTimelineVoiceMenuArrayIndex + 1} voice`,
               )}
             </span>
-            <div className="studio-segment-editor__timeline-voice-generate">
-              <div
-                className={`studio-segment-editor__prompt-info-card${
-                  isSegmentTimelineVoiceMenuGeneratingVoiceover
-                    ? " is-processing"
-                    : segmentTimelineVoiceMenuVoiceoverError
-                      ? " is-error"
-                      : ""
-                }`}
-                role="status"
-                aria-live="polite"
-              >
-                <strong>
-                  {workspaceText(locale, "Озвучка сцены", "Scene voiceover")} · {segmentTimelineVoiceMenuVoiceoverStatusLabel}
-                </strong>
-                <span>
-                  {segmentTimelineVoiceMenuVoiceoverError
-                    ? segmentTimelineVoiceMenuVoiceoverError
-                    : segmentTimelineVoiceMenuVoiceoverFresh && segmentTimelineVoiceMenuVoiceoverDuration
-                    ? workspaceText(
-                        locale,
-                        `Длительность ${formatWorkspaceSegmentEditorTime(segmentTimelineVoiceMenuVoiceoverDuration)}`,
-                        `Duration ${formatWorkspaceSegmentEditorTime(segmentTimelineVoiceMenuVoiceoverDuration)}`,
-                      )
-                    : workspaceText(
-                        locale,
-                        `Оценка ${formatWorkspaceSegmentEditorTime(segmentTimelineVoiceMenuEstimatedVoiceDuration ?? 0)} · ${segmentTimelineVoiceMenuVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡`,
-                        `Estimate ${formatWorkspaceSegmentEditorTime(segmentTimelineVoiceMenuEstimatedVoiceDuration ?? 0)} · ${segmentTimelineVoiceMenuVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡`,
-                      )}
-                </span>
-                {segmentTimelineVoiceMenuVoiceoverUrl ? (
-                  <audio controls src={segmentTimelineVoiceMenuVoiceoverUrl} preload="metadata" />
-                ) : null}
-              </div>
-            </div>
             <div className="studio-voice-selector__language-panel studio-segment-editor__timeline-voice-language">
               <span className="studio-voice-selector__language-title">
                 {workspaceText(locale, "Язык озвучки", "Voice language")}
@@ -39656,23 +39586,9 @@ export function WorkspacePage({
     activeSegment && segmentEditorDraft ? getWorkspaceSegmentEffectiveVoiceId(activeSegment, segmentEditorDraft) : null;
   const activeSegmentVoiceoverFresh =
     Boolean(activeSegment && segmentEditorDraft && isWorkspaceSegmentVoiceoverAssetFresh(activeSegment, segmentEditorDraft));
-  const activeSegmentVoiceoverUrl =
-    activeSegmentVoiceoverFresh && activeSegment ? getStudioSceneSoundAssetPreviewUrl(activeSegment.voiceoverAsset) : null;
-  const activeSegmentVoiceoverDuration =
-    activeSegment && segmentEditorDraft ? getWorkspaceSegmentVoiceoverDurationSeconds(activeSegment, segmentEditorDraft) : null;
   const activeSegmentVoiceoverCost = activeSegmentEffectiveVoiceIdForGeneration
     ? getStudioSegmentVoiceoverCreditCost(activeSegmentEffectiveVoiceIdForGeneration)
     : 0;
-  const activeSegmentEstimatedVoiceDuration = activeSegment
-    ? getWorkspaceSegmentEditorPlaybackDuration(activeSegment, undefined, { preferEstimatedDuration: true })
-    : null;
-  const activeSegmentVoiceoverStatusLabel = isActiveSegmentVoiceoverCurrent
-    ? workspaceText(locale, "Генерируется", "Generating")
-    : activeSegmentVoiceoverFresh
-      ? workspaceText(locale, "Готово", "Ready")
-      : activeSegment?.voiceoverAsset
-        ? workspaceText(locale, "Нужно пересоздать", "Regenerate")
-        : workspaceText(locale, "Не создана", "Not generated");
   const promptVisualPanelTitle = isPromptAiPhotoMode
     ? workspaceText(locale, "Новый кадр по описанию", "New shot from prompt")
     : isPromptAiVideoMode
@@ -40467,27 +40383,6 @@ export function WorkspacePage({
                             </button>
                           );
                         })}
-                      </div>
-                      <div className={`studio-segment-editor__prompt-info-card${isActiveSegmentVoiceoverCurrent ? " is-processing" : ""}`} role="status" aria-live="polite">
-                        <strong>
-                          {workspaceText(locale, "Озвучка сцены", "Scene voiceover")} · {activeSegmentVoiceoverStatusLabel}
-                        </strong>
-                        <span>
-                          {activeSegmentVoiceoverFresh && activeSegmentVoiceoverDuration
-                            ? workspaceText(
-                                locale,
-                                `Длительность ${formatWorkspaceSegmentEditorTime(activeSegmentVoiceoverDuration)}`,
-                                `Duration ${formatWorkspaceSegmentEditorTime(activeSegmentVoiceoverDuration)}`,
-                              )
-                            : workspaceText(
-                                locale,
-                                `Оценка ${formatWorkspaceSegmentEditorTime(activeSegmentEstimatedVoiceDuration ?? 0)} · ${activeSegmentVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡`,
-                                `Estimate ${formatWorkspaceSegmentEditorTime(activeSegmentEstimatedVoiceDuration ?? 0)} · ${activeSegmentVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡`,
-                              )}
-                        </span>
-                        {activeSegmentVoiceoverUrl ? (
-                          <audio controls src={activeSegmentVoiceoverUrl} preload="metadata" />
-                        ) : null}
                       </div>
                       <button
                         className="studio-segment-editor__prompt-action"
