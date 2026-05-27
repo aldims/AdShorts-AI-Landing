@@ -61,7 +61,9 @@ import {
   clampWorkspaceSegmentEditorFullPreviewTime,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
+  mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  type WorkspaceSegmentEditorFullPreviewAudioTimelineRange,
   type WorkspaceSegmentEditorFullPreviewSegment,
 } from "../lib/workspaceSegmentEditorFullPreview";
 import { sanitizeWorkspaceSegmentEditorCustomMusicState } from "../lib/workspaceSegmentEditorMusic";
@@ -37012,13 +37014,61 @@ export function WorkspacePage({
   };
   const getSegmentEditorFullPreviewSegmentSpan = (arrayIndex: number) =>
     segmentEditorTimelineVisualRow?.spans.find((span) => span.arrayIndex === arrayIndex) ?? null;
+  const getSegmentEditorFullPreviewDurationSeconds = () => {
+    const baseDuration = segmentEditorTracks?.totalDuration ?? 0;
+    if (!segmentEditorDraft || !segmentEditorTracks || baseDuration <= 0) {
+      return baseDuration;
+    }
+
+    return segmentEditorDraft.segments.reduce((duration, segment, arrayIndex) => {
+      const span = getSegmentEditorFullPreviewSegmentSpan(arrayIndex);
+      const timelineStartTime = span?.startTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment);
+      const timelineEndTime = span?.endTime ?? getWorkspaceSegmentEditorDisplayEndTime(segment);
+      if (timelineEndTime <= timelineStartTime || !studioSidebarVoiceEnabled || !getSegmentTimelineVoiceOption(segment)) {
+        return duration;
+      }
+
+      const voiceoverPreviewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, segmentEditorDraft);
+      const voiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
+      const previewRangeEndTime = voiceoverPreviewRange?.endTime ?? null;
+      const isolatedVoiceEndTime =
+        voiceoverDurationSeconds !== null
+          ? timelineStartTime + voiceoverDurationSeconds + WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS
+          : null;
+
+      return Math.max(duration, previewRangeEndTime ?? 0, isolatedVoiceEndTime ?? 0);
+    }, baseDuration);
+  };
   const buildSegmentEditorFullPreviewAudioTracks = (): WorkspaceSegmentEditorFullPreviewAudioTrack[] => {
-    if (!segmentEditorDraft || !segmentEditorTracks || segmentEditorTracks.totalDuration <= 0) {
+    const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
+    if (!segmentEditorDraft || !segmentEditorTracks || totalDuration <= 0) {
       return [];
     }
 
     const tracks: WorkspaceSegmentEditorFullPreviewAudioTrack[] = [];
-    const totalDuration = segmentEditorTracks.totalDuration;
+    const projectVoiceoverAudioRanges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] = [];
+    const projectVoiceoverAudioVersion = segmentEditorDraft.ttsAssetId
+      ? segmentEditorDraft.segments
+          .map((segment) => {
+            const voiceOption = getSegmentTimelineVoiceOption(segment);
+            return [
+              segment.index,
+              segment.voiceoverAsset?.assetId ?? "",
+              segment.voiceoverTextHash ?? "",
+              segment.voiceoverVoiceType ?? "",
+              segment.voiceoverLanguage ?? "",
+              segment.startTime,
+              segment.endTime,
+              segment.speechStartTime ?? "",
+              segment.speechEndTime ?? "",
+              voiceOption?.id ?? "",
+            ].join(":");
+          })
+          .join("|")
+      : "";
+    const projectVoiceoverAudioUrl = segmentEditorDraft.ttsAssetId
+      ? `${buildWorkspaceMediaAssetProxyUrl(segmentEditorDraft.ttsAssetId)}?v=${encodeURIComponent(projectVoiceoverAudioVersion)}`
+      : null;
 
     if (segmentTimelineMusicPreviewUrl) {
       tracks.push({
@@ -37082,9 +37132,9 @@ export function WorkspacePage({
         voiceOption?.id ?? "",
       ].join(":");
       const voiceoverPreviewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, segmentEditorDraft);
-      const projectVoiceoverAudioUrl =
-        studioSidebarVoiceEnabled && voiceOption && segmentEditorDraft.ttsAssetId && voiceoverPreviewRange
-          ? `${buildWorkspaceMediaAssetProxyUrl(segmentEditorDraft.ttsAssetId)}?v=${encodeURIComponent(voiceoverAudioVersion)}`
+      const projectVoiceoverAudioUrlForSegment =
+        studioSidebarVoiceEnabled && voiceOption && projectVoiceoverAudioUrl && voiceoverPreviewRange
+          ? projectVoiceoverAudioUrl
           : null;
       const segmentVoiceoverAudioUrl =
         studioSidebarVoiceEnabled && voiceOption
@@ -37096,35 +37146,44 @@ export function WorkspacePage({
           : null;
       const voiceoverAudioUrl =
         latestSceneVoiceoverAudioUrl ??
-        (!isVoiceAudioStale ? projectVoiceoverAudioUrl : null) ??
+        (!isVoiceAudioStale ? projectVoiceoverAudioUrlForSegment : null) ??
         segmentVoiceoverAudioUrl ??
-        projectVoiceoverAudioUrl;
+        projectVoiceoverAudioUrlForSegment;
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
-        const isProjectVoiceoverAudio = voiceoverAudioUrl === projectVoiceoverAudioUrl;
+        const isProjectVoiceoverAudio = voiceoverAudioUrl === projectVoiceoverAudioUrlForSegment;
         const voiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
-        const projectVoiceoverSourceStartTime = isProjectVoiceoverAudio
-          ? normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime) ??
-            normalizeWorkspaceSegmentVoicePreviewTime(segment.speechWords[0]?.startTime) ??
-            normalizeWorkspaceSegmentVoicePreviewTime(segment.startTime) ??
-            timelineStartTime
-          : 0;
         const voiceTimelineStartTime = timelineStartTime;
+        const previewRangeEndTime = isProjectVoiceoverAudio ? voiceoverPreviewRange?.endTime ?? null : null;
+        const isolatedVoiceEndTime =
+          !isProjectVoiceoverAudio && voiceoverDurationSeconds !== null
+            ? voiceTimelineStartTime + voiceoverDurationSeconds + WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS
+            : null;
         const voiceTimelineEndTime =
-          voiceoverDurationSeconds !== null
-            ? Math.max(timelineEndTime, voiceTimelineStartTime + voiceoverDurationSeconds)
-            : timelineEndTime;
+          previewRangeEndTime !== null
+            ? Math.max(timelineEndTime, previewRangeEndTime)
+            : isolatedVoiceEndTime !== null
+              ? Math.max(timelineEndTime, isolatedVoiceEndTime)
+              : timelineEndTime;
 
         if (voiceTimelineEndTime > voiceTimelineStartTime) {
-          tracks.push({
-            key: `full-preview:voice:${segment.index}:${voiceoverAudioUrl}`,
-            kind: "voice",
-            sourceKind: isProjectVoiceoverAudio ? "timeline" : "isolated",
-            sourceStartTime: isProjectVoiceoverAudio ? projectVoiceoverSourceStartTime : 0,
-            timelineEndTime: voiceTimelineEndTime,
-            timelineStartTime: voiceTimelineStartTime,
-            url: voiceoverAudioUrl,
-            volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
-          });
+          if (isProjectVoiceoverAudio) {
+            projectVoiceoverAudioRanges.push({
+              endTime: voiceTimelineEndTime,
+              startTime: voiceTimelineStartTime,
+              url: voiceoverAudioUrl,
+            });
+          } else {
+            tracks.push({
+              key: `full-preview:voice:${segment.index}:${voiceoverAudioUrl}`,
+              kind: "voice",
+              sourceKind: "isolated",
+              sourceStartTime: 0,
+              timelineEndTime: voiceTimelineEndTime,
+              timelineStartTime: voiceTimelineStartTime,
+              url: voiceoverAudioUrl,
+              volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
+            });
+          }
         }
       }
 
@@ -37141,6 +37200,19 @@ export function WorkspacePage({
           volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME,
         });
       }
+    });
+
+    mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(projectVoiceoverAudioRanges).forEach((range, rangeIndex) => {
+      tracks.push({
+        key: `full-preview:voice:project:${rangeIndex}:${range.url}`,
+        kind: "voice",
+        sourceKind: "timeline",
+        sourceStartTime: range.startTime,
+        timelineEndTime: range.endTime,
+        timelineStartTime: range.startTime,
+        url: range.url,
+        volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
+      });
     });
 
     return tracks;
@@ -37669,7 +37741,7 @@ export function WorkspacePage({
       return;
     }
 
-    const totalDuration = segmentEditorTracks?.totalDuration ?? 0;
+    const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
     const previousFrameAt = segmentEditorFullPreviewLastFrameAtRef.current;
     segmentEditorFullPreviewLastFrameAtRef.current = frameNow;
     const elapsedSeconds =
@@ -37697,11 +37769,11 @@ export function WorkspacePage({
     });
   };
   const startSegmentEditorFullPreview = async (options?: { startTime?: number }) => {
-    if (!segmentEditorDraft || !segmentEditorTracks || segmentEditorTracks.totalDuration <= 0 || typeof window === "undefined") {
+    const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
+    if (!segmentEditorDraft || !segmentEditorTracks || totalDuration <= 0 || typeof window === "undefined") {
       return;
     }
 
-    const totalDuration = segmentEditorTracks.totalDuration;
     const currentStatus = segmentEditorFullPreviewStatusRef.current;
     const currentTime = segmentEditorFullPreviewTimeRef.current;
     const startTime =
@@ -37747,7 +37819,7 @@ export function WorkspacePage({
   };
   const handleSegmentEditorFullPreviewToggle = () => {
     if (segmentEditorFullPreviewStatusRef.current === "playing") {
-      const duration = segmentEditorTracks?.totalDuration ?? 0;
+      const duration = getSegmentEditorFullPreviewDurationSeconds();
       const currentTime = clampWorkspaceSegmentEditorFullPreviewTime(segmentEditorFullPreviewTimeRef.current, duration);
       stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
       setSegmentEditorFullPreviewPlaybackTime(currentTime);
@@ -37767,7 +37839,7 @@ export function WorkspacePage({
     return getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio(previewSegments, ratio);
   };
   const scrubSegmentEditorFullPreviewToTime = (time: number) => {
-    const totalDuration = segmentEditorTracks?.totalDuration ?? 0;
+    const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
     const safeTime = clampWorkspaceSegmentEditorFullPreviewTime(time, totalDuration);
     setSegmentEditorFullPreviewPlaybackTime(safeTime);
     segmentEditorFullPreviewLastFrameAtRef.current = null;
@@ -37775,7 +37847,8 @@ export function WorkspacePage({
     return safeTime;
   };
   const handleSegmentEditorFullPreviewScrubPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const isPreviewUnavailable = !segmentEditorDraft || !segmentEditorTracks || segmentEditorTracks.totalDuration <= 0;
+    const isPreviewUnavailable =
+      !segmentEditorDraft || !segmentEditorTracks || getSegmentEditorFullPreviewDurationSeconds() <= 0;
     if (isPreviewUnavailable || event.button !== 0) {
       return;
     }
@@ -37843,7 +37916,7 @@ export function WorkspacePage({
       createMode !== "segment-editor" ||
       !segmentEditorDraft ||
       !segmentEditorTracks ||
-      segmentEditorTracks.totalDuration <= 0 ||
+      getSegmentEditorFullPreviewDurationSeconds() <= 0 ||
       segmentEditorFullPreviewStatusRef.current === "playing"
     ) {
       return;
@@ -37860,7 +37933,7 @@ export function WorkspacePage({
     studioSidebarVoiceEnabled,
   ]);
   useEffect(() => {
-    const totalDuration = segmentEditorTracks?.totalDuration ?? 0;
+    const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
     if (segmentEditorFullPreviewStatusRef.current === "idle") {
       setSegmentEditorFullPreviewPlaybackTime(0);
       return;
@@ -39267,7 +39340,7 @@ export function WorkspacePage({
         { isFirstSegment: activeSegmentIndex === 0 },
       )
     : "";
-  const segmentEditorFullPreviewDuration = segmentEditorTracks?.totalDuration ?? 0;
+  const segmentEditorFullPreviewDuration = getSegmentEditorFullPreviewDurationSeconds();
   const segmentEditorFullPreviewSegmentsForRender = getSegmentEditorFullPreviewSegments();
   const segmentEditorFullPreviewRatio = getWorkspaceSegmentEditorFullPreviewSegmentRatio(
     segmentEditorFullPreviewSegmentsForRender,

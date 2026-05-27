@@ -14,6 +14,12 @@ export type WorkspaceSegmentEditorFullPreviewResolvedSegment = {
   startTime: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioTimelineRange = {
+  endTime: number;
+  startTime: number;
+  url: string;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -88,6 +94,42 @@ export const getWorkspaceSegmentEditorFullPreviewDuration = (
     0,
     ...segments.map((segment) => normalizePreviewTime(segment.endTime) ?? 0),
   );
+
+export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
+  ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
+  joinToleranceSeconds = 0.05,
+): WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] => {
+  const tolerance = normalizePreviewTime(joinToleranceSeconds) ?? 0;
+  const normalizedRanges = ranges
+    .map((range) => {
+      const startTime = normalizePreviewTime(range.startTime);
+      const endTime = normalizePreviewTime(range.endTime);
+      const url = range.url.trim();
+
+      return startTime !== null && endTime !== null && endTime > startTime && url
+        ? { endTime, startTime, url }
+        : null;
+    })
+    .filter((range): range is WorkspaceSegmentEditorFullPreviewAudioTimelineRange => range !== null)
+    .sort((left, right) => left.startTime - right.startTime || left.endTime - right.endTime);
+
+  const mergedRanges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] = [];
+  normalizedRanges.forEach((range) => {
+    const previousRange = mergedRanges[mergedRanges.length - 1];
+    if (
+      previousRange &&
+      previousRange.url === range.url &&
+      range.startTime <= previousRange.endTime + tolerance
+    ) {
+      previousRange.endTime = Math.max(previousRange.endTime, range.endTime);
+      return;
+    }
+
+    mergedRanges.push({ ...range });
+  });
+
+  return mergedRanges;
+};
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (
   segments: WorkspaceSegmentEditorFullPreviewSegment[],

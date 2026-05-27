@@ -6,6 +6,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
+  mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
 } from "./workspaceSegmentEditorFullPreview";
 
@@ -71,5 +72,27 @@ describe("workspace segment editor full preview", () => {
       progress: 1,
       segmentIndex: 30,
     });
+  });
+
+  it("merges adjacent timeline audio ranges for continuous project voiceover", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+        { endTime: 5.15, startTime: 0, url: "/voice.mp3" },
+        { endTime: 9.7, startTime: 5.15, url: "/voice.mp3" },
+        { endTime: 14.35, startTime: 9.7, url: "/voice.mp3" },
+      ]),
+    ).toEqual([{ endTime: 14.35, startTime: 0, url: "/voice.mp3" }]);
+  });
+
+  it("keeps separate timeline audio ranges when the source changes", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+        { endTime: 5.15, startTime: 0, url: "/voice.mp3" },
+        { endTime: 9.7, startTime: 5.15, url: "/custom-scene.wav" },
+      ]),
+    ).toEqual([
+      { endTime: 5.15, startTime: 0, url: "/voice.mp3" },
+      { endTime: 9.7, startTime: 5.15, url: "/custom-scene.wav" },
+    ]);
   });
 });
