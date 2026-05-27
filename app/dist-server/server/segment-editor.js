@@ -524,6 +524,8 @@ const normalizeSpeechWords = (value) => {
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
 const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 10 * 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
+const SEGMENT_EDITOR_OPTIONAL_CONTEXT_TIMEOUT_MS = 2_500;
+const SEGMENT_EDITOR_FALLBACK_CONTEXT_TIMEOUT_MS = 4_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE = "Project components are still being prepared";
@@ -672,6 +674,48 @@ const withTimeout = async (promise, timeoutMs, errorMessage) => {
             clearTimeout(timeoutId);
         }
     }
+};
+const createEmptyProjectMediaEnvelope = (projectId) => ({
+    assets: [],
+    loaded: false,
+    projectId,
+});
+const withOptionalSegmentEditorContextTimeout = async (promise, fallback, timeoutMs, options) => {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+            console.warn("[segment-editor] Optional context timed out; continuing without it", {
+                label: options.label,
+                projectId: options.projectId,
+                timeoutMs,
+            });
+            resolve(fallback);
+        }, timeoutMs);
+    });
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    }
+    finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    }
+};
+const resolveOptionalSegmentEditorContext = async (projectId, projectDetailsPromise, projectMediaPromise, timeoutMs) => {
+    const [projectDetailsPayload, projectMediaEnvelope] = await Promise.all([
+        withOptionalSegmentEditorContextTimeout(projectDetailsPromise, null, timeoutMs, {
+            label: "project-details",
+            projectId,
+        }),
+        withOptionalSegmentEditorContextTimeout(projectMediaPromise, createEmptyProjectMediaEnvelope(projectId), timeoutMs, {
+            label: "project-media",
+            projectId,
+        }),
+    ]);
+    return {
+        projectDetailsPayload,
+        projectMediaEnvelope,
+    };
 };
 const assertWorkspaceProjectAccess = async (user, projectId) => {
     const deletedProjects = await listWorkspaceDeletedProjects(user).catch(() => []);
@@ -962,7 +1006,7 @@ const loadWorkspaceSegmentEditorSession = async (projectId) => {
     assertAdsflowConfigured();
     let payload = null;
     let projectDetailsPayload = null;
-    let projectMediaEnvelope = { assets: [], loaded: false, projectId };
+    let projectMediaEnvelope = createEmptyProjectMediaEnvelope(projectId);
     const projectDetailsPromise = fetchAdsflowJsonWithPolicy({
         context: {
             endpoint: "segment-editor.project-details",
@@ -979,40 +1023,56 @@ const loadWorkspaceSegmentEditorSession = async (projectId) => {
     });
     const projectMediaPromise = fetchProjectMediaEnvelope(projectId).catch((error) => {
         console.warn(`[segment-editor] Failed to load durable media for project ${projectId}`, error);
-        return { assets: [], loaded: false, projectId };
+        return createEmptyProjectMediaEnvelope(projectId);
     });
     try {
-        const [segmentEditorPayload, projectPayload, mediaEnvelope] = await Promise.all([
-            fetchAdsflowJsonWithPolicy({
-                context: {
-                    endpoint: "segment-editor.session",
-                    projectId,
+        payload = await fetchAdsflowJsonWithPolicy({
+            context: {
+                endpoint: "segment-editor.session",
+                projectId,
+            },
+            init: {
+                headers: {
+                    "X-Admin-Token": env.adsflowAdminToken ?? "",
                 },
-                init: {
-                    headers: {
-                        "X-Admin-Token": env.adsflowAdminToken ?? "",
-                    },
-                },
-                path: `/api/projects/${projectId}/segment-editor`,
-                policy: upstreamPolicies.adsflowMetadata,
-            }),
-            projectDetailsPromise,
-            projectMediaPromise,
-        ]);
-        payload = segmentEditorPayload;
-        projectDetailsPayload = projectPayload;
-        projectMediaEnvelope = mediaEnvelope;
+            },
+            path: `/api/projects/${projectId}/segment-editor`,
+            policy: upstreamPolicies.adsflowMetadata,
+        });
+        const optionalContext = await resolveOptionalSegmentEditorContext(projectId, projectDetailsPromise, projectMediaPromise, SEGMENT_EDITOR_OPTIONAL_CONTEXT_TIMEOUT_MS);
+        projectDetailsPayload = optionalContext.projectDetailsPayload;
+        projectMediaEnvelope = optionalContext.projectMediaEnvelope;
     }
     catch (error) {
-        projectDetailsPayload = await projectDetailsPromise;
-        projectMediaEnvelope = await projectMediaPromise;
         if (error instanceof UpstreamFetchError && error.isTimeout) {
-            throw new WorkspaceSegmentEditorError(SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE, 504);
+            projectDetailsPayload = await withOptionalSegmentEditorContextTimeout(projectDetailsPromise, null, SEGMENT_EDITOR_FALLBACK_CONTEXT_TIMEOUT_MS, {
+                label: "project-details-timeout-fallback",
+                projectId,
+            });
+            const fallbackPayload = buildSegmentEditorPayloadFromProjectDetails(projectId, projectDetailsPayload);
+            if (fallbackPayload) {
+                console.warn("[segment-editor] Using project details fallback after upstream timeout", {
+                    projectId,
+                    segmentCount: fallbackPayload.segments?.length ?? 0,
+                });
+                payload = fallbackPayload;
+                projectMediaEnvelope = await withOptionalSegmentEditorContextTimeout(projectMediaPromise, createEmptyProjectMediaEnvelope(projectId), SEGMENT_EDITOR_OPTIONAL_CONTEXT_TIMEOUT_MS, {
+                    label: "project-media-timeout-fallback",
+                    projectId,
+                });
+            }
+            else {
+                throw new WorkspaceSegmentEditorError(SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE, 504);
+            }
         }
         if (error instanceof UpstreamHttpError && error.statusCode === 404) {
             throw new WorkspaceSegmentEditorError("Для этого проекта сегменты пока недоступны.", 404);
         }
         if (error instanceof UpstreamHttpError && error.statusCode === 409) {
+            projectDetailsPayload = await withOptionalSegmentEditorContextTimeout(projectDetailsPromise, null, SEGMENT_EDITOR_FALLBACK_CONTEXT_TIMEOUT_MS, {
+                label: "project-details-preparing-fallback",
+                projectId,
+            });
             const fallbackPayload = buildSegmentEditorPayloadFromProjectDetails(projectId, projectDetailsPayload);
             if (fallbackPayload) {
                 console.warn("[segment-editor] Using project details fallback after upstream preparing response", {
@@ -1020,6 +1080,10 @@ const loadWorkspaceSegmentEditorSession = async (projectId) => {
                     segmentCount: fallbackPayload.segments?.length ?? 0,
                 });
                 payload = fallbackPayload;
+                projectMediaEnvelope = await withOptionalSegmentEditorContextTimeout(projectMediaPromise, createEmptyProjectMediaEnvelope(projectId), SEGMENT_EDITOR_OPTIONAL_CONTEXT_TIMEOUT_MS, {
+                    label: "project-media-preparing-fallback",
+                    projectId,
+                });
             }
             else {
                 throw new WorkspaceSegmentEditorError(normalizeText(error.message) || SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE, 409);

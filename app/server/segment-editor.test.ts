@@ -9,6 +9,7 @@ import {
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -520,6 +521,76 @@ describe("segment editor asset lifecycle mapping", () => {
 
     expect(metadata.customMusicAssetId).toBeNull();
     expect(metadata.customMusicFileName).toBe("");
+  });
+
+  it("opens a fast segment editor session without waiting for slow durable media enrichment", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/media")) {
+        return new Promise<Response>(() => undefined);
+      }
+
+      if (url.includes("/segment-editor")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              project_id: 4455,
+              segments: [
+                {
+                  current_video: "current-marker",
+                  duration: 4,
+                  index: 0,
+                  text: "Fast scene.",
+                },
+              ],
+              title: "Fast project",
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 200,
+            },
+          ),
+        );
+      }
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ai_title: "Fast project",
+            generation_settings: {
+              current_rendered_segments: [
+                {
+                  download_url: "/api/media/7788/download",
+                  media_asset_id: 7788,
+                  media_type: "video",
+                  segment_index: 0,
+                },
+              ],
+            },
+            project_id: 4455,
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sessionPromise = getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { id: "user-slow-durable-media" },
+      4455,
+      { bypassCache: true },
+    );
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    const session = await sessionPromise;
+    expect(session.projectId).toBe(4455);
+    expect(session.title).toBe("Fast project");
+    expect(session.segments).toHaveLength(1);
+    expect(session.segments[0]?.currentAsset?.assetId).toBe(7788);
   });
 
   it("restores generated music settings from project generation metadata", () => {

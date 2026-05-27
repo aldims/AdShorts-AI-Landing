@@ -11,6 +11,9 @@ import { clearWorkspaceMediaIndex, getWorkspaceMediaIndexProjectEntry, listWorks
 import { postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
 const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS = 3_500;
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_BUDGET_MS = 2_000;
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MAX_PROJECTS = 2;
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MIN_REMAINING_MS = 250;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
@@ -861,28 +864,59 @@ const buildWorkspaceMediaLibraryIndexEntry = async (user, project, options) => {
     await upsertWorkspaceMediaIndexProjectEntry(user, entry);
     return entry;
 };
-const warmWorkspaceMediaLibraryProjectIndexEntries = (user, projects, options) => {
-    if (!projects.length) {
-        return;
+const startWorkspaceMediaLibraryIndexEntryBuild = (user, project, options) => {
+    const warmKey = getWorkspaceMediaLibraryIndexWarmKey(user, project.adId);
+    if (workspaceMediaLibraryIndexWarmInFlight.has(warmKey)) {
+        return null;
     }
-    void mapWithConcurrencyLimit(projects, 2, async (project) => {
-        const warmKey = getWorkspaceMediaLibraryIndexWarmKey(user, project.adId);
-        if (workspaceMediaLibraryIndexWarmInFlight.has(warmKey)) {
-            return;
-        }
-        workspaceMediaLibraryIndexWarmInFlight.add(warmKey);
-        try {
-            await buildWorkspaceMediaLibraryIndexEntry(user, project, options);
-        }
-        catch (error) {
+    workspaceMediaLibraryIndexWarmInFlight.add(warmKey);
+    const buildPromise = buildWorkspaceMediaLibraryIndexEntry(user, project, {
+        bypassCache: options?.bypassCache,
+    });
+    void buildPromise
+        .catch((error) => {
+        if (options?.logFailures) {
             console.warn("[workspace] Failed to warm media library index entry", {
                 error: error instanceof Error ? error.message : "Unknown media library index warmup error.",
                 projectId: project.adId,
             });
         }
-        finally {
-            workspaceMediaLibraryIndexWarmInFlight.delete(warmKey);
+    })
+        .finally(() => {
+        workspaceMediaLibraryIndexWarmInFlight.delete(warmKey);
+    });
+    return buildPromise;
+};
+const waitForWorkspaceMediaLibraryIndexEntry = async (buildPromise, timeoutMs) => {
+    if (timeoutMs <= 0) {
+        return null;
+    }
+    let timeoutId = null;
+    const timeoutPromise = new Promise((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), timeoutMs);
+    });
+    try {
+        return await Promise.race([buildPromise, timeoutPromise]);
+    }
+    finally {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
         }
+    }
+};
+const warmWorkspaceMediaLibraryProjectIndexEntries = (user, projects, options) => {
+    if (!projects.length) {
+        return;
+    }
+    void mapWithConcurrencyLimit(projects, 2, async (project) => {
+        const buildPromise = startWorkspaceMediaLibraryIndexEntryBuild(user, project, {
+            bypassCache: options?.bypassCache,
+            logFailures: true,
+        });
+        if (!buildPromise) {
+            return;
+        }
+        await buildPromise.catch(() => undefined);
     });
 };
 const loadWorkspaceMediaLibraryIndexEntries = async (user, options) => {
@@ -904,6 +938,9 @@ const loadWorkspaceMediaLibraryIndexEntries = async (user, options) => {
     const targetItemCount = Math.max(1, (options?.offset ?? 0) + (options?.limit ?? WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT));
     const resolvedEntries = [];
     const remainingProjects = [];
+    const syncStartedAt = Date.now();
+    let synchronousIndexBuildCount = 0;
+    let hasDeferredProjects = false;
     let indexedItemCount = 0;
     let firstFailure = null;
     let hasSuccessfulProjectLoad = false;
@@ -917,12 +954,34 @@ const loadWorkspaceMediaLibraryIndexEntries = async (user, options) => {
             entry = null;
         }
         if (!entry) {
-            if (indexedItemCount >= targetItemCount) {
+            const remainingSyncBudgetMs = WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_BUDGET_MS - (Date.now() - syncStartedAt);
+            const canBuildSynchronously = indexedItemCount < targetItemCount &&
+                synchronousIndexBuildCount < WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MAX_PROJECTS &&
+                remainingSyncBudgetMs >= WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MIN_REMAINING_MS;
+            if (!canBuildSynchronously) {
+                hasDeferredProjects = true;
                 remainingProjects.push(project);
                 continue;
             }
+            const buildPromise = startWorkspaceMediaLibraryIndexEntryBuild(user, project, {
+                bypassCache: options?.bypassCache,
+                logFailures: false,
+            });
+            if (!buildPromise) {
+                hasDeferredProjects = true;
+                continue;
+            }
+            synchronousIndexBuildCount += 1;
             try {
-                entry = await buildWorkspaceMediaLibraryIndexEntry(user, project, options);
+                entry = await waitForWorkspaceMediaLibraryIndexEntry(buildPromise, remainingSyncBudgetMs);
+                if (!entry) {
+                    hasDeferredProjects = true;
+                    console.warn("[workspace] Deferred media library project index build after sync budget", {
+                        projectId: project.adId,
+                        remainingSyncBudgetMs,
+                    });
+                    continue;
+                }
                 entriesByProjectId.set(entry.projectId, entry);
                 hasSuccessfulProjectLoad = true;
             }
@@ -945,7 +1004,7 @@ const loadWorkspaceMediaLibraryIndexEntries = async (user, options) => {
         warmWorkspaceMediaLibraryProjectIndexEntries(user, remainingProjects, options);
     }
     return {
-        hasPendingProjects: remainingProjects.length > 0,
+        hasPendingProjects: hasDeferredProjects || remainingProjects.length > 0,
         records: resolvedEntries,
     };
 };
@@ -1100,19 +1159,33 @@ export const getWorkspaceMediaLibraryItems = async (user, options) => {
             return cloneWorkspaceMediaLibraryPage(await inFlightRequest);
         }
     }
-    const request = loadWorkspaceMediaLibraryIndexEntries(user, {
-        bypassCache: shouldBypassCache,
-        limit,
-        offset,
-    }).then(async (entries) => {
-        const hydratedIndexItems = entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry));
-        const durableMedia = await fetchWorkspaceDurableMediaLibraryItems(user, {
-            existingItems: hydratedIndexItems,
+    const request = Promise.all([
+        loadWorkspaceMediaLibraryIndexEntries(user, {
+            bypassCache: shouldBypassCache,
+            limit,
+            offset,
+        }).catch((error) => {
+            console.warn("[workspace] Failed to load media library project index, using durable media only", {
+                error: error instanceof Error ? error.message : "Unknown media library index error.",
+            });
+            return {
+                hasPendingProjects: true,
+                records: [],
+            };
+        }),
+        fetchWorkspaceDurableMediaLibraryItems(user, {
             limit,
             maxWaitMs: WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS,
             offset,
-        });
-        const referenceItems = await buildWorkspaceReferenceMediaLibraryItems(user);
+        }),
+        buildWorkspaceReferenceMediaLibraryItems(user).catch((error) => {
+            console.warn("[workspace] Failed to load saved media library references", {
+                error: error instanceof Error ? error.message : "Unknown media library reference error.",
+            });
+            return [];
+        }),
+    ]).then(([entries, durableMedia, referenceItems]) => {
+        const hydratedIndexItems = entries.records.flatMap(({ entry, project }) => hydrateWorkspaceMediaLibraryIndexEntry(project, entry));
         const allItems = sortWorkspaceMediaLibraryItemsNewestFirst(dedupeWorkspaceMediaLibraryPageItems([
             ...hydratedIndexItems,
             ...durableMedia.items,
