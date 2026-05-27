@@ -22,6 +22,8 @@ export type WorkspaceSegmentTimelineSegment = {
 export const WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS = 1;
 const WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS = 1.8;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD = 0.34;
+const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_INLINE_PAUSE = 0.55;
+const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_SENTENCE_PAUSE = 0.35;
 const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
 
 export const roundWorkspaceSegmentTimelineSeconds = (value: number) => Number(value.toFixed(3));
@@ -48,15 +50,21 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
   text: string | null | undefined,
   fallbackWordCount?: number,
 ) => {
+  const normalizedText = String(text ?? "");
   const resolvedWordCount = Math.max(
     1,
-    fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(String(text ?? "")).length,
+    fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(normalizedText).length,
   );
+  const inlinePauseCount = normalizedText.match(/[,;:]/g)?.length ?? 0;
+  const sentencePauseCount = normalizedText.match(/[.!?…]+/g)?.length ?? 0;
+  const punctuationPauseSeconds =
+    inlinePauseCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_INLINE_PAUSE +
+    sentencePauseCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_SENTENCE_PAUSE;
 
   return roundWorkspaceSegmentTimelineSeconds(
     Math.max(
       WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS,
-      resolvedWordCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD,
+      resolvedWordCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD + punctuationPauseSeconds,
     ),
   );
 };

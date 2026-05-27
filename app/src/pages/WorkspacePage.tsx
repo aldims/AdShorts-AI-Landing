@@ -9172,7 +9172,7 @@ export const resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo = (
       isWorkspaceSegmentDraftTextEdited(segment));
 
   return getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, session, {
-    allowEstimatedVoiceover: isVoiceAudioStale ? undefined : false,
+    allowEstimatedVoiceover: true,
     baselineSegment: options?.baselineSegment,
     includeAnyVideoVisual: options?.includeAnyVideoVisual,
     isVoiceoverStale: isVoiceAudioStale,
@@ -36489,12 +36489,12 @@ export function WorkspacePage({
         {isLoading ? (
           <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>
         ) : isPlaying ? (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.2" fill="currentColor" />
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="4.35" y="4.35" width="7.3" height="7.3" rx="1.55" fill="currentColor" />
           </svg>
         ) : (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M4.2 3.5v7l5.8-3.5-5.8-3.5Z" fill="currentColor" />
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M5.15 3.55v8.9L12.1 8 5.15 3.55Z" fill="currentColor" />
           </svg>
         )}
       </button>

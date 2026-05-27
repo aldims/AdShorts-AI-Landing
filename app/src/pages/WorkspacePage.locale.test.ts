@@ -2292,6 +2292,34 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBeNull();
   });
 
+  it("shows a visual warning when estimated punctuated voiceover is longer than the video", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 5,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 5,
+      endTime: 5,
+      mediaType: "photo",
+      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      videoAction: "ai",
+    });
+
+    expect(
+      resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        visualDurationSeconds: 5,
+        voiceoverDurationSource: "estimated",
+      }),
+    );
+  });
+
   it("detects generated video shorter than voiceover from measured metadata", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {

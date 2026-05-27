@@ -91,6 +91,14 @@ describe("workspace segment editor timeline", () => {
     );
   });
 
+  it("adds pause time for punctuation when estimating speech duration", () => {
+    expect(
+      estimateWorkspaceSegmentEditorSpeechDuration(
+        "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      ),
+    ).toBeGreaterThan(5);
+  });
+
   it("keeps manual segment duration and rebuilds following start/end times", () => {
     const firstSegment = createSegment({
       duration: 2,
