@@ -44,6 +44,23 @@ const tokenizeWorkspaceSegmentTimelineText = (value: string) =>
     .map((word) => word.trim())
     .filter(Boolean);
 
+export const estimateWorkspaceSegmentEditorSpeechDuration = (
+  text: string | null | undefined,
+  fallbackWordCount?: number,
+) => {
+  const resolvedWordCount = Math.max(
+    1,
+    fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(String(text ?? "")).length,
+  );
+
+  return roundWorkspaceSegmentTimelineSeconds(
+    Math.max(
+      WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS,
+      resolvedWordCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD,
+    ),
+  );
+};
+
 const areTimelineNumbersEqual = (left: number | null, right: number | null) =>
   left !== null && right !== null && Math.abs(left - right) <= WORKSPACE_SEGMENT_TIMELINE_EPSILON;
 
@@ -96,10 +113,7 @@ export const getWorkspaceSegmentEditorPlaybackDuration = <T extends WorkspaceSeg
     1,
     fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(String(segment.text ?? "")).length,
   );
-  const estimatedDurationFloor = Math.max(
-    WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS,
-    resolvedWordCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD,
-  );
+  const estimatedDurationFloor = estimateWorkspaceSegmentEditorSpeechDuration(segment.text, resolvedWordCount);
   const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
   const speechStart =
     normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime) ??
@@ -140,12 +154,15 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     subtitleEnabled?: boolean;
     visualDurationSeconds?: number | null;
     visualKind?: "image" | "video" | null;
+    voiceDurationSeconds?: number | null;
     voiceEnabled?: boolean;
   },
 ) => {
   const speechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
   const voiceEnabled = options?.voiceEnabled !== false;
-  const voiceMinimumDuration = voiceEnabled && speechDuration !== null ? speechDuration : null;
+  const explicitVoiceDuration = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceDurationSeconds);
+  const voiceDuration = voiceEnabled ? speechDuration ?? explicitVoiceDuration : null;
+  const voiceMinimumDuration = voiceDuration !== null ? voiceDuration : null;
   const minimumDuration = Math.max(
     WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
     voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
@@ -162,8 +179,8 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     return Math.max(minimumDuration, visualDuration);
   }
 
-  if (voiceEnabled && speechDuration !== null) {
-    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, speechDuration);
+  if (voiceDuration !== null) {
+    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
   }
 
   if (options?.subtitleEnabled === false && visualKind === "image") {
@@ -193,6 +210,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     subtitleEnabled?: boolean | ((segment: T) => boolean);
     visualDurationSeconds?: (segment: T) => number | null | undefined;
     visualKind?: (segment: T) => "image" | "video" | null | undefined;
+    voiceDurationSeconds?: (segment: T) => number | null | undefined;
     voiceEnabled?: boolean | ((segment: T) => boolean);
   },
 ) => {
@@ -211,6 +229,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       subtitleEnabled,
       visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
       visualKind: options?.visualKind?.(segment) ?? null,
+      voiceDurationSeconds: options?.voiceDurationSeconds?.(segment) ?? null,
       voiceEnabled,
     }));
     const startTime = cursor;

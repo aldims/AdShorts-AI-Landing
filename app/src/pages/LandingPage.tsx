@@ -855,8 +855,8 @@ export function LandingPage({
                     </div>
                     <p className="plan-card__tagline">Разовый пакет для первого запуска</p>
                     <div className="plan-card__output">
-                      <span>До 5 Shorts</span>
-                      <small>≈ 78 ₽ за Shorts</small>
+                      <span>До 10 Shorts</span>
+                      <small>≈ 39 ₽ за Shorts</small>
                     </div>
                     <div className="plan-card__divider" aria-hidden="true" />
                     <ul className="plan-card__features">
@@ -886,8 +886,8 @@ export function LandingPage({
                     </div>
                     <p className="plan-card__tagline">Для регулярного создания Shorts</p>
                     <div className="plan-card__output">
-                      <span>До 25 Shorts</span>
-                      <small>≈ 60 ₽ за Shorts</small>
+                      <span>До 50 Shorts</span>
+                      <small>≈ 30 ₽ за Shorts</small>
                     </div>
                     <div className="plan-card__divider" aria-hidden="true" />
                     <ul className="plan-card__features">
@@ -914,8 +914,8 @@ export function LandingPage({
                     </div>
                     <p className="plan-card__tagline">Для максимального объёма</p>
                     <div className="plan-card__output">
-                      <span>До 100 Shorts</span>
-                      <small>≈ 50 ₽ за Shorts</small>
+                      <span>До 200 Shorts</span>
+                      <small>≈ 25 ₽ за Shorts</small>
                     </div>
                     <div className="plan-card__divider" aria-hidden="true" />
                     <ul className="plan-card__features">

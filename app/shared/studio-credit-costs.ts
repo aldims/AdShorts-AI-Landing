@@ -12,7 +12,7 @@ export type StudioCreditAction =
 export type StudioSegmentVisualQuality = "standard" | "premium";
 export type StudioSegmentPhotoAnimationDurationSeconds = 5 | 8 | 10;
 
-export const STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST = 10;
+export const STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST = 5;
 export const STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST = 20;
 export const STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST = 5;
 export const STUDIO_PREMIUM_VOICE_CREDIT_COST = 5;

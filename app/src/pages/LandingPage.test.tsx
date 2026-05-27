@@ -73,9 +73,9 @@ describe("LandingPage guides section", () => {
     expect(screen.queryByText("/ 50 кредитов")).toBeNull();
     expect(screen.queryByText("/ 250 кредитов")).toBeNull();
     expect(screen.queryByText("/ 1000 кредитов")).toBeNull();
-    expect(screen.getByText("До 5 Shorts")).toBeTruthy();
-    expect(screen.getByText("До 25 Shorts")).toBeTruthy();
-    expect(screen.getByText("До 100 Shorts")).toBeTruthy();
+    expect(screen.getByText("До 10 Shorts")).toBeTruthy();
+    expect(screen.getByText("До 50 Shorts")).toBeTruthy();
+    expect(screen.getByText("До 200 Shorts")).toBeTruthy();
     expect(screen.queryByText("Полный доступ к созданию Shorts")).toBeNull();
     expect(screen.queryByText("Можно докупать кредиты")).toBeNull();
     expect(screen.queryByText("Автопубликация в YouTube")).toBeNull();

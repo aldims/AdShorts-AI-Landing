@@ -239,8 +239,8 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     audienceLines: { ru: ["Разовый пакет для", "первого запуска"], en: ["Ideal for the first", "launch"] },
     price: { ru: "390 ₽", en: "Coming soon" },
     billing: { ru: "/ 50 кредитов", en: "/ international checkout" },
-    credits: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
-    subnote: { ru: "≈ 78 ₽ за Shorts", en: "Try the studio for free today" },
+    credits: { ru: "До 10 Shorts", en: "Up to 10 Shorts" },
+    subnote: { ru: "≈ 39 ₽ за Shorts", en: "Try the studio for free today" },
     features: {
       ru: ["Без водяного знака"],
       en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube publishing tools"],
@@ -254,8 +254,8 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     audienceLines: { ru: ["Для регулярного", "создания Shorts"], en: ["Ideal for a regular", "content flow"] },
     price: { ru: "1 490 ₽", en: "Coming soon" },
     billing: { ru: "/ 250 кредитов", en: "/ international checkout" },
-    credits: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
-    subnote: { ru: "≈ 60 ₽ за Shorts", en: "Regular-use tier preview" },
+    credits: { ru: "До 50 Shorts", en: "Up to 50 Shorts" },
+    subnote: { ru: "≈ 30 ₽ за Shorts", en: "Regular-use tier preview" },
     features: {
       ru: ["Без водяного знака", "Приоритетная генерация", "Можно докупать пакеты"],
       en: ["Everything in START", "Priority generation", "Credit top-ups when checkout launches", "Built for regular content"],
@@ -271,8 +271,8 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
     audienceLines: { ru: ["Для максимального", "объёма"], en: ["Ideal for maximum", "volume"] },
     price: { ru: "4 990 ₽", en: "Coming soon" },
     billing: { ru: "/ 1000 кредитов", en: "/ international checkout" },
-    credits: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
-    subnote: { ru: "≈ 50 ₽ за Shorts", en: "Highest-limit tier preview" },
+    credits: { ru: "До 200 Shorts", en: "Up to 200 Shorts" },
+    subnote: { ru: "≈ 25 ₽ за Shorts", en: "Highest-limit tier preview" },
     features: {
       ru: ["Без водяного знака", "Максимальный приоритет", "Можно докупать пакеты", "Ранний доступ к новым функциям"],
       en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
@@ -295,21 +295,21 @@ const pricingPackCopy: LocalizedPackCopy[] = [
     name: "Pack 100",
     credits: { ru: "100 кредитов", en: "100 credits" },
     price: { ru: "690 ₽", en: "Coming soon" },
-    subnote: { ru: "До 10 Shorts", en: "Up to 10 Shorts" },
+    subnote: { ru: "До 20 Shorts", en: "Up to 20 Shorts" },
   },
   {
     checkoutProductId: "package_50",
     name: "Pack 500",
     credits: { ru: "500 кредитов", en: "500 credits" },
     price: { ru: "2 750 ₽", en: "Coming soon" },
-    subnote: { ru: "До 50 Shorts", en: "Up to 50 Shorts" },
+    subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
   },
   {
     checkoutProductId: "package_100",
     name: "Pack 1000",
     credits: { ru: "1000 кредитов", en: "1000 credits" },
     price: { ru: "4 990 ₽", en: "Coming soon" },
-    subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
+    subnote: { ru: "До 200 Shorts", en: "Up to 200 Shorts" },
     badge: { ru: "Выгодно", en: "Good value" },
   },
 ];
@@ -318,8 +318,8 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
   {
     question: { ru: "Как списываются кредиты", en: "How credits are charged" },
     answer: {
-      ru: "Стандартный Shorts — 10 кредитов, Премиум Shorts — 20 кредитов. В редакторе стоимость каждого AI-улучшения указана на кнопке.",
-      en: "Credits are the usage unit inside AdShorts AI. Standard Shorts use 10 credits, Premium Shorts use 20 credits, and each AI improvement shows its credit cost in the editor.",
+      ru: "Стандартный Shorts — 5 кредитов, Премиум Shorts — 20 кредитов. Озвучка и каждое AI-улучшение списываются отдельно и показывают стоимость на кнопке.",
+      en: "Credits are the usage unit inside AdShorts AI. Standard Shorts use 5 credits, Premium Shorts use 20 credits, and voiceover plus each AI improvement show their own button cost.",
     },
   },
   {

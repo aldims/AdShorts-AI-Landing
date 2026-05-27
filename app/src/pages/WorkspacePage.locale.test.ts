@@ -15,6 +15,7 @@ import {
   buildWorkspacePromptRichEditorHtml,
   clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   createWorkspaceSegmentEditorInsertedSegment,
+  createWorkspaceSegmentEditorResetDraftFromBaseline,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspacePromptRichEditorSelectionRange,
@@ -36,8 +37,12 @@ import {
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentEditorVisualDurationMaxSeconds,
+  WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
+  getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
   getWorkspaceSegmentVoiceoverTextHash,
@@ -52,6 +57,7 @@ import {
   getWorkspaceSegmentDraftPreviewFallbackUrls,
   getWorkspaceSegmentDraftPreviewUrl,
   getWorkspaceSegmentDraftVideoUrl,
+  getWorkspaceSegmentVisualDurationMeasurementUrl,
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorProjectOpenOptions,
@@ -70,6 +76,7 @@ import {
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentEditorMediaUploadScope,
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
+  resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
@@ -79,7 +86,13 @@ import {
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
+  resolveWorkspaceSegmentGeneratedVoiceoverEdited,
+  resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
+  resolveWorkspaceSegmentVisualDurationMaxGuard,
+  resolveWorkspaceSegmentVoiceTimelineState,
+  restoreWorkspaceSegmentTimelineSnapshot,
   resolveStudioVoiceIdForLanguage,
+  shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
@@ -770,6 +783,83 @@ describe("WorkspacePage segment editor draft persistence", () => {
       discardLocalDraft: true,
       forceRefresh: true,
     });
+  });
+
+  it("keeps the first loaded segment editor session as the reset baseline during fresh refreshes", () => {
+    const baselineText = "Исходная озвучка сцены";
+    const freshText = "Исходная озвучка сцены. Новая длинная фраза.";
+    const originalAsset = createMediaAsset(101, { mediaType: "photo", sourceKind: "stock" });
+    const generatedAsset = createMediaAsset(303, { mediaType: "video", sourceKind: "ai_generated" });
+    const baselineSession = createFreshSession(createDraftSegment({
+      currentAsset: originalAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      speechDuration: 6.5,
+      text: baselineText,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
+    }));
+    const refreshedSession = createFreshSession(createDraftSegment({
+      currentAsset: generatedAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      speechDuration: 12.4,
+      text: freshText,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(freshText),
+    }));
+
+    const loadedBaseline = resolveWorkspaceSegmentEditorLoadedBaselineSession(refreshedSession, baselineSession);
+
+    expect(loadedBaseline.segments[0]?.text).toBe(baselineText);
+    expect(loadedBaseline.segments[0]?.speechDuration).toBe(6.5);
+    expect(loadedBaseline.segments[0]?.currentAsset?.assetId).toBe(101);
+  });
+
+  it("restores original segment text and visual when a reset baseline already contains fresh edits", () => {
+    const originalText = "Исходная озвучка сцены";
+    const editedText = "Исходная озвучка сцены. Новая длинная фраза.";
+    const originalAsset = createMediaAsset(101, { mediaType: "photo", sourceKind: "stock" });
+    const generatedAsset = createMediaAsset(303, { mediaType: "video", sourceKind: "ai_generated" });
+    const editedSegment = createDraftSegment({
+      currentAsset: generatedAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      originalText,
+      originalTextByLanguage: { ru: originalText },
+      speechDuration: 12.4,
+      text: editedText,
+      textByLanguage: { ru: editedText },
+      voiceoverAsset: {
+        assetId: 901,
+        durationSeconds: 12.4,
+        fileName: "generated-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/901/playback",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(editedText),
+    });
+    const pollutedBaseline = createDraftSession(editedSegment);
+
+    const resetDraft = createWorkspaceSegmentEditorResetDraftFromBaseline(
+      createDraftSession(editedSegment),
+      pollutedBaseline,
+    );
+    const resetSegment = resetDraft.segments[0]!;
+
+    expect(resetSegment.text).toBe(originalText);
+    expect(resetSegment.speechDuration).toBeNull();
+    expect(resetSegment.voiceoverAsset).toBeNull();
+    expect(resetSegment.currentAsset?.assetId).toBe(101);
+    expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
   });
 
   it("clears temporary editor state for other projects after a project is created", () => {
@@ -2125,6 +2215,199 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(formatWorkspaceSegmentEditorSegmentDurationLabel(0, 6.38, "ru")).toBe("6.4 с");
   });
 
+  it("detects generated video shorter than scene voiceover", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 5,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 6.5,
+      endTime: 6.5,
+      mediaType: "photo",
+      speechDuration: 6.5,
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 6.5,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("does not warn when generated video covers the voiceover", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 7,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 6.5,
+      endTime: 6.5,
+      mediaType: "photo",
+      speechDuration: 6.5,
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toBeNull();
+  });
+
+  it("can suppress estimated video and voiceover mismatch until voiceover timings are known", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 5,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 5,
+      endTime: 5,
+      mediaType: "photo",
+      text: "Раз два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать тринадцать четырнадцать пятнадцать шестнадцать",
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toEqual(
+      expect.objectContaining({
+        visualDurationSeconds: 5,
+        voiceoverDurationSource: "estimated",
+      }),
+    );
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        allowEstimatedVoiceover: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("detects generated video shorter than voiceover from measured metadata", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 6.5,
+      endTime: 6.5,
+      mediaType: "photo",
+      speechDuration: 6.5,
+      videoAction: "ai",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        visualDurationSeconds: 5,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 6.5,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("detects persisted AI-generated video shorter than voiceover from measured metadata", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(3429, {
+        mediaType: "video",
+        role: "segment_current",
+        sourceKind: "ai_generated",
+      }),
+      currentSourceKind: "ai_generated",
+      duration: 6.5,
+      endTime: 6.5,
+      mediaType: "video",
+      speechDuration: 6.5,
+      videoAction: "original",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        visualDurationSeconds: 5,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 6.5,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("can warn on the visual track when any video visual is shorter than voiceover", () => {
+    const segment = createDraftSegment({
+      customVideo: {
+        durationSeconds: 5,
+        fileName: "custom-clip.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/505/playback",
+      },
+      duration: 5,
+      endTime: 5,
+      mediaType: "video",
+      speechDuration: 6.5,
+      videoAction: "custom",
+    });
+
+    expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toBeNull();
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 6.5,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("keeps the video visual duration when voiceover stretches the scene duration", () => {
+    const segment = createDraftSegment({
+      currentAsset: createMediaAsset(505, {
+        mediaType: "video",
+        sourceKind: "ai_generated",
+      }),
+      currentSourceKind: "ai_generated",
+      duration: 7,
+      durationExtensionSourceDurationSeconds: 6.5,
+      endTime: 7,
+      mediaType: "video",
+      speechDuration: 6.8,
+      videoAction: "original",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 6.5,
+      voiceoverDurationSeconds: 6.8,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("measures video visual duration from the raw asset instead of the looped segment preview", () => {
+    const segment = createDraftSegment({
+      currentExternalPlaybackUrl: "/api/workspace/media-assets/505/playback",
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=3&source=current&delivery=playback",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=3&source=current&delivery=preview",
+      currentSourceKind: "ai_generated",
+      duration: 6.5,
+      endTime: 6.5,
+      mediaType: "video",
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentDraftVideoUrl(segment)).toBe(segment.currentPlaybackUrl);
+    expect(getWorkspaceSegmentVisualDurationMeasurementUrl(segment)).toBe("/api/workspace/media-assets/505/playback");
+  });
+
   it("persists premium AI photo drafts with durable asset routes instead of data urls", () => {
     const largeDataUrl = `data:image/png;base64,${"a".repeat(900_000)}`;
     const segment = createDraftSegment({
@@ -2367,6 +2650,62 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("blocks photo visual duration shorter than the voiceover duration", () => {
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
+      minimumDurationSeconds: 3.2,
+      requestedDurationSeconds: 2.4,
+    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.15, 3.2)).toEqual({
+      minimumDurationSeconds: 3.2,
+      requestedDurationSeconds: 3.15,
+    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toBeNull();
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.1995, 3.2)).toBeNull();
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, null)).toBeNull();
+  });
+
+  it("limits AI photo visual duration to ten seconds", () => {
+    const aiPhotoSegment = createDraftSegment({
+      aiPhotoAsset: {
+        assetId: 909,
+        fileName: "segment-ai-photo.jpg",
+        fileSize: 0,
+        mimeType: "image/jpeg",
+        remoteUrl: "/api/studio/segment-ai-photo/jobs/job-1/image",
+      },
+      mediaType: "photo",
+      videoAction: "ai_photo",
+    });
+    const stockPhotoSegment = createDraftSegment({
+      currentSourceKind: "stock",
+      mediaType: "photo",
+      originalSourceKind: "stock",
+    });
+    const generatedStillSegment = createDraftSegment({
+      currentAsset: createMediaAsset(303, { mediaType: "photo", sourceKind: "ai_generated" }),
+      currentSourceKind: "ai_generated",
+      mediaType: "photo",
+      originalSourceKind: "stock",
+    });
+
+    expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(aiPhotoSegment)).toBe(
+      WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
+    );
+    expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(generatedStillSegment)).toBe(
+      WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
+    );
+    expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(stockPhotoSegment)).toBe(
+      WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+    );
+    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 12)).toEqual({
+      limitKind: "ai_photo",
+      maximumDurationSeconds: WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
+      requestedDurationSeconds: 12,
+    });
+    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 10)).toBeNull();
+    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(stockPhotoSegment, 12)).toBeNull();
+  });
+
   it("keeps generated scene voiceover as the segment duration floor", () => {
     const segment = createDraftSegment({
       duration: 2,
@@ -2395,6 +2734,86 @@ describe("WorkspacePage studio locale defaults", () => {
       duration: 6.4,
       endTime: 6.4,
       startTime: 0,
+    }));
+  });
+
+  it("automatically syncs scene timing to a freshly generated voiceover", () => {
+    const voiceText = "Короткая озвучка задает новый тайминг";
+    const firstSegment = createDraftSegment({
+      duration: 8,
+      durationMode: "manual",
+      endTime: 8,
+      index: 0,
+      manualDurationSeconds: 8,
+      mediaType: "video",
+      speechDuration: 3.2,
+      speechEndTime: 3.2,
+      speechStartTime: 0,
+      startTime: 0,
+      text: voiceText,
+      voiceoverAsset: {
+        assetId: 778,
+        durationSeconds: 3.2,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-2/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const secondSegment = createDraftSegment({
+      duration: 4,
+      endTime: 12,
+      index: 1,
+      startTime: 8,
+      text: "Следующая сцена",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 3.2,
+      durationMode: "auto",
+      endTime: 3.2,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 3.2,
+    }));
+  });
+
+  it("uses the voiceover asset duration when speech metadata is missing", () => {
+    const voiceText = "Длительность есть только в аудиофайле";
+    const segment = createDraftSegment({
+      duration: 2,
+      endTime: 2,
+      text: voiceText,
+      voiceoverAsset: {
+        assetId: 779,
+        durationSeconds: 4.7,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-3/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(4.7);
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 4.7,
+      endTime: 4.7,
+      speechDuration: 4.7,
     }));
   });
 
@@ -2453,6 +2872,31 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 12)).toBe(12);
   });
 
+  it("caps an AI duration extension target at the maximum visual duration", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 48,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 48,
+      endTime: 48,
+      mediaType: "photo",
+      videoAction: "photo_animation",
+    });
+
+    expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 48)).toBe(
+      WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+    );
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 55, {
+        extensionStepSeconds: 8,
+      }),
+    ).toBe(WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS);
+  });
+
   it("trims an AI duration extension target to voiceover when requested", () => {
     const videoSegment = createDraftSegment({
       aiVideoAsset: {
@@ -2487,6 +2931,64 @@ describe("WorkspacePage studio locale defaults", () => {
         voiceoverDurationSeconds: 5,
       }),
     ).toBe(13);
+  });
+
+  it("keeps an effective AI duration extension target within the maximum visual duration", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 8,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 8,
+      endTime: 8,
+      mediaType: "photo",
+      speechDuration: 60,
+      videoAction: "photo_animation",
+    });
+
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 55, {
+        trimToVoiceover: false,
+        voiceoverDurationSeconds: 60,
+      }),
+    ).toBe(WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 55, {
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 60,
+      }),
+    ).toBe(WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 55, {
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 49.2,
+      }),
+    ).toBe(49.2);
+  });
+
+  it("shows AI extension voiceover trim only when voiceover lands between source and target", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 8,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 8,
+      endTime: 8,
+      mediaType: "photo",
+      videoAction: "photo_animation",
+    });
+
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 10.2)).toBe(true);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 13)).toBe(false);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 15)).toBe(false);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 8)).toBe(false);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, null)).toBe(false);
   });
 
   it("rejects segment boundary timing before the edited segment start", () => {
@@ -2601,6 +3103,123 @@ describe("WorkspacePage studio locale defaults", () => {
         startTime: 0,
       }),
     );
+  });
+
+  it("keeps the voice track unmarked for text edits until voiceover is generated", () => {
+    const textOnlyState = resolveWorkspaceSegmentVoiceTimelineState({
+      canForwardText: false,
+      canForwardVoice: false,
+      isGeneratedVoiceoverEdited: false,
+      isTextEdited: true,
+      isVoiceSettingsEdited: false,
+    });
+    const generatedVoiceoverState = resolveWorkspaceSegmentVoiceTimelineState({
+      canForwardText: false,
+      canForwardVoice: false,
+      isGeneratedVoiceoverEdited: true,
+      isTextEdited: false,
+      isVoiceSettingsEdited: true,
+    });
+
+    expect(textOnlyState).toMatchObject({
+      canBack: true,
+      hasHistory: true,
+      historyKind: "text",
+      isEdited: false,
+    });
+    expect(generatedVoiceoverState).toMatchObject({
+      canBack: true,
+      hasHistory: true,
+      historyKind: "voice",
+      isEdited: true,
+    });
+  });
+
+  it("restores generated voiceover timing together with voice text history", () => {
+    const baselineText = "Исходная озвучка сцены";
+    const generatedText = "Исходная озвучка сцены. Новая длинная фраза для проверки.";
+    const currentSegment = createDraftSegment({
+      speechDuration: 12.4,
+      text: generatedText,
+      textByLanguage: { ru: generatedText },
+      voiceoverAsset: {
+        assetId: 901,
+        durationSeconds: 12.4,
+        fileName: "generated-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/901/playback",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(generatedText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const baselineSegment = createDraftSegment({
+      speechDuration: 6.5,
+      text: baselineText,
+      textByLanguage: { ru: baselineText },
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 6.5,
+        fileName: "baseline-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/777/playback",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(restoreWorkspaceSegmentTimelineSnapshot(currentSegment, baselineSegment, "text")).toEqual(
+      expect.objectContaining({
+        speechDuration: 6.5,
+        text: baselineText,
+        textByLanguage: { ru: baselineText },
+        voiceoverAsset: expect.objectContaining({ assetId: 777 }),
+        voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
+      }),
+    );
+    expect(restoreWorkspaceSegmentTimelineSnapshot(currentSegment, baselineSegment, "voice")).toEqual(
+      expect.objectContaining({
+        speechDuration: 6.5,
+        text: baselineText,
+        textByLanguage: { ru: baselineText },
+        voiceoverAsset: expect.objectContaining({ assetId: 777 }),
+        voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
+      }),
+    );
+  });
+
+  it("marks generated voiceover as edited only when a fresh asset differs from baseline", () => {
+    const unchangedOptions = {
+      baselineVoiceoverAssetKey: "asset:888",
+      baselineVoiceoverLanguage: "ru",
+      baselineVoiceoverTextHash: "hash:old",
+      baselineVoiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      currentVoiceoverAssetKey: "asset:888",
+      currentVoiceoverLanguage: "ru",
+      currentVoiceoverTextHash: "hash:old",
+      currentVoiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      hasBaseline: true,
+      isVoiceoverFresh: true,
+    };
+
+    expect(resolveWorkspaceSegmentGeneratedVoiceoverEdited(unchangedOptions)).toBe(false);
+    expect(
+      resolveWorkspaceSegmentGeneratedVoiceoverEdited({
+        ...unchangedOptions,
+        currentVoiceoverAssetKey: "asset:889",
+        currentVoiceoverTextHash: "hash:new",
+      }),
+    ).toBe(true);
+    expect(
+      resolveWorkspaceSegmentGeneratedVoiceoverEdited({
+        ...unchangedOptions,
+        currentVoiceoverAssetKey: "asset:889",
+        isVoiceoverFresh: false,
+      }),
+    ).toBe(false);
   });
 
   it("exports scene voiceover asset only while text, voice, and language still match", async () => {

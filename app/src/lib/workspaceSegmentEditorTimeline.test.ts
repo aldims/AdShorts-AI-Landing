@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  estimateWorkspaceSegmentEditorSpeechDuration,
   getWorkspaceSegmentEditorPlaybackDuration,
   rebuildWorkspaceSegmentEditorTimeline,
   resolveWorkspaceSegmentDuration,
@@ -81,6 +82,13 @@ describe("workspace segment editor timeline", () => {
         preferEstimatedDuration: true,
       }),
     ).toBeCloseTo(3.4, 6);
+  });
+
+  it("estimates speech duration from current segment text", () => {
+    expect(estimateWorkspaceSegmentEditorSpeechDuration("одно два три четыре пять шесть семь восемь девять десять")).toBeCloseTo(
+      3.4,
+      6,
+    );
   });
 
   it("keeps manual segment duration and rebuilds following start/end times", () => {
@@ -205,6 +213,36 @@ describe("workspace segment editor timeline", () => {
         voiceEnabled: true,
       }),
     ).toBeCloseTo(12, 6);
+  });
+
+  it("uses explicit voice duration for automatic scene timing", () => {
+    const firstSegment = createSegment({
+      duration: 8,
+      endTime: 8,
+      mediaType: "photo",
+      text: "voice estimate controls this still",
+    });
+    const secondSegment = createSegment({
+      duration: 3,
+      endTime: 11,
+      mediaType: "photo",
+      startTime: 8,
+      text: "next scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, secondSegment], {
+      voiceDurationSeconds: (segment) => (segment === firstSegment ? 4.2 : null),
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 4.2,
+      endTime: 4.2,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      startTime: 4.2,
+    }));
   });
 
   it("ignores text for silent stills when subtitles are disabled", () => {

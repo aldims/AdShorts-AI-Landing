@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  STUDIO_CREDIT_COST_BY_ACTION,
+  STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_VIDEO_GENERATION_CREDIT_COST,
   getStudioSegmentVoiceoverCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
 } from "./studio-credit-costs";
+
+describe("video generation credit costs", () => {
+  it("prices standard Create Shorts generation at five credits", () => {
+    expect(STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST).toBe(5);
+    expect(STUDIO_VIDEO_GENERATION_CREDIT_COST).toBe(5);
+    expect(STUDIO_CREDIT_COST_BY_ACTION.video_generation).toBe(5);
+  });
+});
 
 describe("photo animation credit costs", () => {
   it("prices standard 5s and 8s animation durations", () => {
