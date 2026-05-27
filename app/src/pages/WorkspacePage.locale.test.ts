@@ -37,13 +37,18 @@ import {
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentDraftSourceLabel,
+  getWorkspaceSegmentDraftSourceDisplayLabel,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
   getWorkspaceSegmentVisualAudioDurationMismatchInfo,
+  resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
   getWorkspaceSegmentVoiceoverDurationSeconds,
+  getWorkspaceSegmentTimelineVoiceoverDurationInfo,
+  getWorkspaceSegmentVideoVisualDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
   getWorkspaceSegmentVoiceoverTextHash,
   getWorkspaceSegmentRecommendedDurationSeconds,
@@ -90,6 +95,7 @@ import {
   resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
   resolveWorkspaceSegmentVisualDurationMaxGuard,
   resolveWorkspaceSegmentVoiceTimelineState,
+  restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   restoreWorkspaceSegmentTimelineSnapshot,
   resolveStudioVoiceIdForLanguage,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
@@ -2392,6 +2398,116 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("uses the baseline video duration for the visual badge when voiceover loops the scene", () => {
+    const videoAsset = createMediaAsset(505, {
+      mediaType: "video",
+      sourceKind: "ai_generated",
+    });
+    const baselineSegment = createDraftSegment({
+      currentAsset: videoAsset,
+      currentSourceKind: "ai_generated",
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      endTime: 5,
+      mediaType: "video",
+      videoAction: "original",
+    });
+    const stretchedSegment = createDraftSegment({
+      currentAsset: videoAsset,
+      currentSourceKind: "ai_generated",
+      duration: 12.4,
+      endTime: 12.4,
+      mediaType: "video",
+      speechDuration: 12.4,
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentVideoVisualDurationSeconds(stretchedSegment, {
+      baselineSegment,
+      session: createDraftSession(stretchedSegment),
+    })).toBe(5);
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(stretchedSegment, createDraftSession(stretchedSegment), {
+        baselineSegment,
+        includeAnyVideoVisual: true,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 12.4,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
+  it("does not show the scene slot duration as the video duration before metadata is known", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        fileName: "segment-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/test-job-505/video",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      duration: 4,
+      endTime: 4,
+      mediaType: "video",
+      speechDuration: 6.2,
+      videoAction: "photo_animation",
+    });
+
+    expect(getWorkspaceSegmentVideoVisualDurationSeconds(segment, {
+      session: createDraftSession(segment),
+    })).toBeNull();
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("warns on the visual timeline when a generated animation is shorter than a known voiceover asset", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 505,
+        durationSeconds: 5,
+        fileName: "segment-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/test-job-505/video",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      currentSourceKind: "ai_generated",
+      duration: 7.5,
+      endTime: 7.5,
+      mediaType: "video",
+      originalText: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      originalTextByLanguage: { ru: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?" },
+      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      textByLanguage: { ru: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?" },
+      videoAction: "photo_animation",
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 7.5,
+        fileName: "segment-voiceover.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/777/playback",
+      },
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+
+    expect(
+      resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 5,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 7.5,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
   it("measures video visual duration from the raw asset instead of the looped segment preview", () => {
     const segment = createDraftSegment({
       currentExternalPlaybackUrl: "/api/workspace/media-assets/505/playback",
@@ -2509,6 +2625,37 @@ describe("WorkspacePage studio locale defaults", () => {
       slotDurationSeconds: 50,
       sourceDurationSeconds: 5,
     });
+  });
+
+  it("uses the measured visual duration when opening AI extension from a timeline badge", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 4,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      mediaType: "photo",
+      videoAction: "photo_animation",
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment, null, { sourceDurationSeconds: 5 })).toMatchObject({
+      extraDurationSeconds: 5,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 10,
+      sourceDurationSeconds: 5,
+    });
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(segment, null, 5, {
+        extensionStepSeconds: 5,
+        sourceDurationSeconds: 5,
+      }),
+    ).toBe(10);
   });
 
   it("shows cinematic hold for still-preview segments extended beyond their baseline slot", () => {
@@ -3189,6 +3336,82 @@ describe("WorkspacePage studio locale defaults", () => {
         voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
       }),
     );
+  });
+
+  it("restores ungenerated voice text edits from the timeline menu snapshot", () => {
+    const originalText = "Исходный текст озвучки";
+    const editedText = "Новый текст без генерации озвучки";
+    const snapshotSegment = createDraftSegment({
+      speechDuration: 6.4,
+      text: originalText,
+      textByLanguage: { ru: originalText },
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 6.4,
+        fileName: "baseline-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/777/playback",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(originalText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const editedSegment = {
+      ...snapshotSegment,
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      text: editedText,
+      textByLanguage: { ru: editedText },
+    };
+
+    expect(restoreWorkspaceSegmentVoiceTextDraftSnapshot(editedSegment, snapshotSegment)).toEqual(
+      expect.objectContaining({
+        speechDuration: 6.4,
+        text: originalText,
+        textByLanguage: { ru: originalText },
+        voiceoverAsset: expect.objectContaining({ assetId: 777 }),
+        voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(originalText),
+      }),
+    );
+  });
+
+  it("keeps a visible voice duration after text changes make generated voiceover stale", () => {
+    const generatedText = "Короткий исходный текст";
+    const editedText = "Новый текст озвучки стал заметно длиннее и должен иметь расчетную длительность.";
+    const segment = {
+      ...createDraftSegment({
+        speechDuration: 4.2,
+        text: generatedText,
+        voiceoverAsset: {
+          assetId: 901,
+          durationSeconds: 4.2,
+          fileName: "generated-voice.wav",
+          fileSize: 0,
+          mimeType: "audio/wav",
+          remoteUrl: "/api/workspace/media-assets/901/playback",
+        },
+        voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(generatedText),
+        voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      }),
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      text: editedText,
+      textByLanguage: { ru: editedText },
+    };
+
+    const durationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(
+      segment,
+      createDraftSession(segment),
+      { isStale: true },
+    );
+
+    expect(durationInfo?.source).toBe("estimated");
+    expect(durationInfo?.durationSeconds).toBeGreaterThan(0);
   });
 
   it("marks generated voiceover as edited only when a fresh asset differs from baseline", () => {
@@ -4374,6 +4597,33 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resetSegment.imageEditAsset).toBeNull();
     expect(resetSegment.videoAction).toBe("original");
     expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+  });
+
+  it("keeps the original AI visual type visible after resetting a replacement", () => {
+    const originalPhotoAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "ai_generated",
+    });
+    const mediaLibraryAsset = createStudioCustomVideoFileFromMediaLibraryItem(createMediaLibraryItem({
+      itemKey: "live:ai_photo:job:job-1",
+      previewUrl: "/api/studio/segment-ai-photo/jobs/job-1/image",
+      source: "live",
+    }));
+    const segment = createDraftSegment({
+      currentAsset: originalPhotoAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "ai_generated",
+      customVideo: mediaLibraryAsset,
+      originalAsset: originalPhotoAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "ai_generated",
+      videoAction: "custom",
+    });
+
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(segment, 77);
+
+    expect(getWorkspaceSegmentDraftSourceLabel(resetSegment)).toBe("ИИ фото");
+    expect(getWorkspaceSegmentDraftSourceDisplayLabel(getWorkspaceSegmentDraftSourceLabel(resetSegment), "en")).toBe("AI photo");
   });
 
   it("keeps an applied AI photo reset as a pending segment change", () => {

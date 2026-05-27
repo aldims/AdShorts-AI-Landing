@@ -77,6 +77,15 @@ export class WorkspaceCreditLimitError extends Error {
         this.name = "WorkspaceCreditLimitError";
     }
 }
+export const STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE = "generation_unavailable";
+export const STUDIO_GENERATION_UNAVAILABLE_MESSAGE = "Генерация временно недоступна. Кредиты не списаны — попробуйте позже.";
+export class StudioGenerationUnavailableError extends Error {
+    code = STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE;
+    constructor(message = STUDIO_GENERATION_UNAVAILABLE_MESSAGE) {
+        super(message);
+        this.name = "StudioGenerationUnavailableError";
+    }
+}
 const studioSupportedMusicTypes = new Set([
     "ai",
     "business",
@@ -2846,6 +2855,72 @@ const postAdsflowJson = async (path, body, options) => {
         body: JSON.stringify(addCurrentAdsflowWebDeviceToBody(body)),
     }, options);
 };
+const getAdsflowHealthComponentStatus = (value) => {
+    if (!value || typeof value !== "object") {
+        return normalizeGenerationText(value).toLowerCase();
+    }
+    const statusValue = value.status;
+    return normalizeGenerationText(statusValue).toLowerCase();
+};
+const isAdsflowHealthComponentHealthy = (value) => {
+    const status = getAdsflowHealthComponentStatus(value);
+    return status === "healthy" || status === "ok";
+};
+const getAdsflowHealthWorkersOnlineCount = (value) => {
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+    const workerPayload = value;
+    const rawCount = workerPayload.online_count ?? workerPayload.workers_count;
+    const count = Number(rawCount);
+    return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : null;
+};
+export async function getStudioGenerationAvailability() {
+    try {
+        assertAdsflowConfigured();
+        const response = await fetchAdsflowResponse(buildAdsflowUrl("/health"), undefined, {
+            retryDelaysMs: [],
+            timeoutMs: Math.max(1_000, env.upstreamProbeTimeoutMs),
+        });
+        const payload = (await response.json().catch(() => null));
+        const components = payload?.components ?? {};
+        const workersOnline = getAdsflowHealthWorkersOnlineCount(components.workers);
+        const workersHealthy = isAdsflowHealthComponentHealthy(components.workers) && (workersOnline === null || workersOnline > 0);
+        const redisHealthy = isAdsflowHealthComponentHealthy(components.redis);
+        const databaseHealthy = isAdsflowHealthComponentHealthy(components.database);
+        const taskQueueHealthy = components.task_queue === undefined || isAdsflowHealthComponentHealthy(components.task_queue);
+        const statusValue = normalizeGenerationText(payload?.status).toLowerCase() || null;
+        const available = response.ok &&
+            (statusValue === null || statusValue === "healthy") &&
+            workersHealthy &&
+            redisHealthy &&
+            databaseHealthy &&
+            taskQueueHealthy;
+        return {
+            available,
+            reason: available ? null : "adsflow_health_unavailable",
+            status: statusValue,
+            workersOnline,
+        };
+    }
+    catch (error) {
+        console.warn("[studio] Failed to check generation worker availability", {
+            error: error instanceof Error ? error.message : "Unknown worker availability error.",
+        });
+        return {
+            available: false,
+            reason: "adsflow_health_check_failed",
+            status: null,
+            workersOnline: null,
+        };
+    }
+}
+export async function ensureStudioGenerationWorkersAvailable() {
+    const availability = await getStudioGenerationAvailability();
+    if (!availability.available) {
+        throw new StudioGenerationUnavailableError();
+    }
+}
 export async function getStudioProjectCharacters(projectId, _user, options) {
     assertAdsflowConfigured();
     const normalizedProjectId = normalizePositiveInteger(projectId);
@@ -3261,6 +3336,19 @@ export async function createStudioGenerationJob(prompt, user, options) {
             voiceEnabled: isVoiceEnabled,
             voiceId: normalizedVoiceId,
         });
+    if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
+        throw new Error("Загрузите свой музыкальный трек или выберите другой режим музыки.");
+    }
+    if (normalizedVideoMode === "custom" && !normalizedCustomVideoAssetId && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
+        throw new Error("Загрузите своё видео или выберите другой режим видео.");
+    }
+    if (normalizedSegmentEditor && !options?.isRegeneration) {
+        throw new Error("Редактор сегментов можно использовать только при перегенерации.");
+    }
+    if (normalizedSegmentEditor && !normalizedProjectId) {
+        throw new Error("Для перегенерации из редактора сегментов нужен project id.");
+    }
+    await ensureStudioGenerationWorkersAvailable();
     const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
     const externalUserId = await resolveStudioExternalUserId(user);
     const shouldAddWatermark = typeof options?.addWatermark === "boolean"
@@ -3280,18 +3368,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
         voiceEnabled: isVoiceEnabled,
         voiceId: normalizedVoiceId,
     });
-    if (normalizedMusicType === "custom" && !normalizedCustomMusicAssetId && (!normalizedCustomMusicFileName || !normalizedCustomMusicFileDataUrl)) {
-        throw new Error("Загрузите свой музыкальный трек или выберите другой режим музыки.");
-    }
-    if (normalizedVideoMode === "custom" && !normalizedCustomVideoAssetId && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
-        throw new Error("Загрузите своё видео или выберите другой режим видео.");
-    }
-    if (normalizedSegmentEditor && !options?.isRegeneration) {
-        throw new Error("Редактор сегментов можно использовать только при перегенерации.");
-    }
-    if (normalizedSegmentEditor && !normalizedProjectId) {
-        throw new Error("Для перегенерации из редактора сегментов нужен project id.");
-    }
     let jobCreated = false;
     try {
         console.info("[studio] adsflow.brand-payload", {
@@ -3467,10 +3543,15 @@ export async function createStudioGenerationJob(prompt, user, options) {
         if (!jobId) {
             throw new Error("AdsFlow did not return a job id.");
         }
-        jobCreated = true;
-        if (payload.enqueue_error) {
-            console.warn("[studio] AdsFlow enqueue warning:", payload.enqueue_error);
+        const enqueueError = normalizeGenerationText(payload.enqueue_error);
+        if (enqueueError) {
+            console.warn("[studio] AdsFlow enqueue failed:", {
+                enqueueError,
+                jobId,
+            });
+            throw new StudioGenerationUnavailableError();
         }
+        jobCreated = true;
         const queuedMetadata = resolveGenerationPresentation({
             description: normalizedPrompt,
             fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",

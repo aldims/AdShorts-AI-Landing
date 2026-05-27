@@ -122,6 +122,7 @@ import {
   getStudioPlaybackAsset,
   getStudioProjectCharacters,
   getWorkspaceBootstrap,
+  getStudioGenerationAvailability,
   getStudioGenerationStatus,
   getStudioVideoProxyTargetByPath,
   getStudioVideoProxyTarget,
@@ -131,6 +132,9 @@ import {
   normalizeStudioMediaSegmentIndexForScope,
   previewStudioSegmentTalkingPhotoSpeaker,
   translateStudioTexts,
+  STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
+  STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
+  StudioGenerationUnavailableError,
   WorkspaceCreditLimitError,
 } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
@@ -3313,6 +3317,29 @@ app.get("/api/workspace/publish/jobs/:jobId", async (req, res) => {
   }
 });
 
+app.get("/api/studio/generation-availability", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const availability = await getStudioGenerationAvailability();
+  if (!availability.available) {
+    res.status(503).json({
+      code: STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
+      data: availability,
+      error: STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
+    });
+    return;
+  }
+
+  res.json({ data: availability });
+});
+
 app.post("/api/studio/generate", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -3451,9 +3478,16 @@ app.post("/api/studio/generate", async (req, res) => {
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create generation job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+    const statusCode =
+      error instanceof WorkspaceCreditLimitError ? 402 :
+      error instanceof StudioGenerationUnavailableError ? 503 :
+      500;
 
     res.status(statusCode).json({
+      code:
+        error instanceof StudioGenerationUnavailableError
+          ? STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE
+          : undefined,
       error: error instanceof Error ? error.message : "Failed to create generation job.",
     });
   }

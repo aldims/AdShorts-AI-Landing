@@ -19,7 +19,7 @@ import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { createTelegramOidcSession, createTelegramLoginNonce, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, serializeTelegramLoginNonce, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -2688,6 +2688,25 @@ app.get("/api/workspace/publish/jobs/:jobId", async (req, res) => {
         });
     }
 });
+app.get("/api/studio/generation-availability", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const availability = await getStudioGenerationAvailability();
+    if (!availability.available) {
+        res.status(503).json({
+            code: STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
+            data: availability,
+            error: STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
+        });
+        return;
+    }
+    res.json({ data: availability });
+});
 app.post("/api/studio/generate", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -2816,8 +2835,13 @@ app.post("/api/studio/generate", async (req, res) => {
     }
     catch (error) {
         console.error("[studio] Failed to create generation job", error);
-        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 :
+            error instanceof StudioGenerationUnavailableError ? 503 :
+                500;
         res.status(statusCode).json({
+            code: error instanceof StudioGenerationUnavailableError
+                ? STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE
+                : undefined,
             error: error instanceof Error ? error.message : "Failed to create generation job.",
         });
     }

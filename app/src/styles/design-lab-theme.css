@@ -29959,7 +29959,7 @@ button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segm
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  margin: 8px 0 0;
+  margin: 0;
   padding: 8px 10px;
   border: 1px solid rgba(251, 191, 36, 0.28);
   border-radius: 8px;
@@ -39545,40 +39545,69 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay {
-  padding: 56px 14px 14px;
+  padding: 56px 10px 10px;
   background:
     linear-gradient(180deg, rgba(3, 6, 12, 0) 0%, rgba(3, 6, 12, 0.58) 62%, rgba(3, 6, 12, 0.92) 100%);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-footer {
   align-items: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-main {
+  min-width: 0;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card-footer-actions {
+  max-width: 68%;
+  gap: 6px;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
-  gap: 3px;
+  gap: 2px;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy strong {
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 760;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy span {
   color: rgba(226, 232, 240, 0.68);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
+  line-height: 1.1;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge {
-  min-height: 24px;
-  padding: 0 9px;
-  border-color: rgba(255, 255, 255, 0.11);
-  background: rgba(255, 255, 255, 0.065);
+  max-width: min(100%, 124px);
+  min-height: 21px;
+  padding: 0 7px;
+  border-color: transparent;
+  background: transparent;
   color: rgba(226, 232, 240, 0.82);
+  font-size: 0.54rem;
+  line-height: 1;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__card-overlay.is-active
+  .studio-segment-editor__card-badge {
+  min-height: auto;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: rgba(236, 254, 255, 0.96);
   font-size: 0.62rem;
+  font-weight: 800;
+  box-shadow: none;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay {
+  appearance: none;
+  -webkit-appearance: none;
   position: absolute;
   top: auto;
   bottom: 20px;
@@ -39598,6 +39627,7 @@ html, body {
     linear-gradient(180deg, rgba(6, 22, 28, 0.86), rgba(2, 10, 18, 0.76)),
     rgba(6, 18, 24, 0.72);
   color: rgba(236, 254, 255, 0.96);
+  font: inherit;
   font-size: 0.72rem;
   font-weight: 850;
   line-height: 1;
@@ -39609,6 +39639,16 @@ html, body {
     0 8px 18px -16px rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable {
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay img {
@@ -39627,19 +39667,68 @@ html, body {
   white-space: nowrap;
 }
 
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-edit-label {
+  display: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:hover,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:focus-visible {
+  border-color: rgba(45, 212, 191, 0.3);
+  background:
+    linear-gradient(180deg, rgba(6, 22, 28, 0.88), rgba(2, 10, 18, 0.78)),
+    rgba(6, 18, 24, 0.74);
+  color: rgba(236, 254, 255, 0.96);
+  transform: translateX(-50%) translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 22px -16px rgba(45, 212, 191, 0.54),
+    0 8px 18px -16px rgba(0, 0, 0, 0.8);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:hover img,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:hover .studio-segment-editor__brand-value,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:focus-visible img,
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__brand-overlay--editable:focus-visible
+  .studio-segment-editor__brand-value {
+  visibility: hidden;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__brand-overlay--editable:hover
+  .studio-segment-editor__brand-edit-label,
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__brand-overlay--editable:focus-visible
+  .studio-segment-editor__brand-edit-label {
+  position: absolute;
+  left: 50%;
+  max-width: calc(100% - 18px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  color: rgba(236, 254, 255, 0.96);
+  font-weight: 850;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.54);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--editable:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.3);
+  outline-offset: 3px;
+}
+
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
   appearance: none;
   -webkit-appearance: none;
   position: absolute;
+  top: auto;
+  bottom: 20px;
   left: 50%;
-  bottom: 68px;
-  z-index: 6;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   max-width: calc(100% - 40px);
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 26px;
+  padding: 3px 9px;
   border: 1px solid rgba(45, 212, 191, 0.3);
   border-radius: 999px;
   background:
@@ -39652,6 +39741,8 @@ html, body {
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transform: translateX(-50%);
   pointer-events: auto;

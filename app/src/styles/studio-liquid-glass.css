@@ -1092,7 +1092,8 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-visual-quality--action-row {
   flex: 0 0 auto !important;
-  margin-left: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .studio-segment-references__mention-chip {
