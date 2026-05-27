@@ -2825,6 +2825,75 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("builds voiceover preview range from speech duration when speech end is missing", () => {
+    const segment = createDraftSegment({
+      duration: 5,
+      endTime: undefined,
+      speechDuration: 4.6,
+      speechEndTime: null,
+      speechStartTime: 5.2,
+      startTime: 5.2,
+    });
+
+    expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment))).toEqual({
+      endTime: 10.15,
+      startTime: 5.12,
+    });
+  });
+
+  it("does not treat scene boundaries as the actual voiceover duration", () => {
+    const segment = createDraftSegment({
+      duration: 5.2,
+      endTime: 5.2,
+      speechDuration: null,
+      speechEndTime: 5.2,
+      speechStartTime: 0,
+      startTime: 0,
+    });
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, createDraftSession(segment))).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
+        allowEstimated: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not use the full project TTS asset duration as a scene voiceover duration", () => {
+    const segment = createDraftSegment({
+      duration: 5.2,
+      endTime: 5.2,
+      speechDuration: null,
+      speechEndTime: 5.2,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      voiceoverAsset: {
+        assetId: 503,
+        durationSeconds: 27.4,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/503",
+      },
+    });
+    const session = {
+      ...createDraftSession(segment),
+      ttsAssetId: 503,
+    };
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
+        allowEstimated: false,
+      }),
+    ).toBeNull();
+    expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session)).toEqual({
+      durationSeconds: 5.19,
+      source: "estimated",
+    });
+  });
+
   it("blocks photo visual duration shorter than the voiceover duration", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
       minimumDurationSeconds: 3.2,
