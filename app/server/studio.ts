@@ -647,6 +647,8 @@ export class WorkspaceCreditLimitError extends Error {
 
 export const STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE = "generation_unavailable";
 export const STUDIO_GENERATION_UNAVAILABLE_MESSAGE = "Генерация временно недоступна. Кредиты не списаны — попробуйте позже.";
+const STUDIO_GENERATION_HEALTH_CHECK_INDETERMINATE_REASON = "adsflow_health_check_indeterminate";
+const STUDIO_GENERATION_ADSFLOW_NOT_CONFIGURED_REASON = "adsflow_not_configured";
 
 export class StudioGenerationUnavailableError extends Error {
   code = STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE;
@@ -4213,6 +4215,18 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const isAdsflowHttpStatusError = (error: unknown, ...statusCodes: number[]) =>
   error instanceof AdsflowHttpError && statusCodes.includes(error.statusCode);
 
+const isAdsflowTransientFailure = (error: unknown) => {
+  if (error instanceof StudioGenerationUnavailableError) {
+    return true;
+  }
+
+  if (error instanceof AdsflowHttpError) {
+    return ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(error.statusCode);
+  }
+
+  return error instanceof Error && error.message.startsWith("AdsFlow unavailable for ");
+};
+
 const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
   "character_reference",
   "character_reference_source",
@@ -4400,10 +4414,21 @@ const getAdsflowHealthWorkersOnlineCount = (value: unknown): number | null => {
   return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : null;
 };
 
-export async function getStudioGenerationAvailability(): Promise<StudioGenerationAvailability> {
-  try {
-    assertAdsflowConfigured();
+const isAdsflowHealthResponsePayload = (value: unknown): value is AdsflowHealthResponse =>
+  Boolean(value && typeof value === "object" && ("components" in value || "status" in value));
 
+export async function getStudioGenerationAvailability(): Promise<StudioGenerationAvailability> {
+  if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
+    console.warn("[studio] Generation worker availability unavailable because AdsFlow is not configured");
+    return {
+      available: false,
+      reason: STUDIO_GENERATION_ADSFLOW_NOT_CONFIGURED_REASON,
+      status: null,
+      workersOnline: null,
+    };
+  }
+
+  try {
     const response = await fetchAdsflowResponse(
       buildAdsflowUrl("/health"),
       undefined,
@@ -4413,6 +4438,10 @@ export async function getStudioGenerationAvailability(): Promise<StudioGeneratio
       },
     );
     const payload = (await response.json().catch(() => null)) as AdsflowHealthResponse | null;
+    if (!isAdsflowHealthResponsePayload(payload)) {
+      throw new Error(`AdsFlow health returned an unexpected response (${response.status}).`);
+    }
+
     const components: NonNullable<AdsflowHealthResponse["components"]> = payload?.components ?? {};
     const workersOnline = getAdsflowHealthWorkersOnlineCount(components.workers);
     const workersHealthy = isAdsflowHealthComponentHealthy(components.workers) && (workersOnline === null || workersOnline > 0);
@@ -4435,13 +4464,15 @@ export async function getStudioGenerationAvailability(): Promise<StudioGeneratio
       workersOnline,
     };
   } catch (error) {
-    console.warn("[studio] Failed to check generation worker availability", {
+    console.warn("[studio] Generation worker health check is indeterminate; continuing to enqueue safeguards", {
       error: error instanceof Error ? error.message : "Unknown worker availability error.",
     });
 
+    // Probe failures are advisory: the enqueue path below reserves credits and refunds
+    // if AdsFlow cannot accept the job, so transient health timeouts should not block users.
     return {
-      available: false,
-      reason: "adsflow_health_check_failed",
+      available: true,
+      reason: STUDIO_GENERATION_HEALTH_CHECK_INDETERMINATE_REASON,
       status: null,
       workersOnline: null,
     };
@@ -5341,6 +5372,10 @@ export async function createStudioGenerationJob(
       } catch (refundError) {
         console.error("[studio] Failed to refund reserved credits", refundError);
       }
+    }
+
+    if (isAdsflowTransientFailure(error)) {
+      throw error instanceof StudioGenerationUnavailableError ? error : new StudioGenerationUnavailableError();
     }
 
     throw error;

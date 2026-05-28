@@ -61,6 +61,24 @@ describe("studio generation worker availability", () => {
     });
   });
 
+  it("treats failed AdsFlow health probes as indeterminate instead of unavailable", async () => {
+    const { getStudioGenerationAvailability } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("The operation was aborted due to timeout");
+      }),
+    );
+
+    await expect(getStudioGenerationAvailability()).resolves.toEqual({
+      available: true,
+      reason: "adsflow_health_check_indeterminate",
+      status: null,
+      workersOnline: null,
+    });
+  });
+
   it("does not consume credits when workers are unavailable before generation", async () => {
     const {
       STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
@@ -101,6 +119,70 @@ describe("studio generation worker availability", () => {
 
     expect(paths).toEqual(["/health"]);
     expect(paths).not.toContain("/api/web/credits/consume");
+  });
+
+  it("refunds reserved credits when the health probe is indeterminate and enqueue is unavailable", async () => {
+    const {
+      STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
+      createStudioGenerationJob,
+    } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          throw new Error("The operation was aborted due to timeout");
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 5, subscription: 0 },
+            user: { balance: 95, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({ detail: "Generation workers are unavailable." }, 503);
+        }
+
+        if (url.pathname === "/api/web/credits/refund") {
+          return jsonResponse({
+            refunded: { purchased: 5, subscription: 0 },
+            user: { balance: 100, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("A short video about focus", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+      }),
+    ).rejects.toThrow(STUDIO_GENERATION_UNAVAILABLE_MESSAGE);
+
+    expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/consume");
+    expect(calls.map((call) => call.pathname)).toContain("/api/web/generations");
+    expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/refund");
+    expect(calls.find((call) => call.pathname === "/api/web/credits/refund")?.body).toEqual(
+      expect.objectContaining({
+        consumed_purchased: 5,
+        consumed_subscription: 0,
+      }),
+    );
   });
 
   it("refunds reserved credits when AdsFlow cannot enqueue the created job", async () => {
