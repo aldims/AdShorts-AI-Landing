@@ -191,7 +191,7 @@ describe("workspace segment editor timeline", () => {
     ).toBeCloseTo(5.5, 6);
   });
 
-  it("keeps known video duration when voice is shorter", () => {
+  it("uses voice duration for automatic timing when video is longer", () => {
     const segment = createSegment({
       mediaType: "video",
       speechDuration: 3.75,
@@ -204,7 +204,7 @@ describe("workspace segment editor timeline", () => {
         visualKind: "video",
         voiceEnabled: true,
       }),
-    ).toBeCloseTo(10, 6);
+    ).toBeCloseTo(3.75, 6);
   });
 
   it("extends video duration when voice is longer than the known video", () => {
@@ -250,6 +250,35 @@ describe("workspace segment editor timeline", () => {
     }));
     expect(rebuilt[1]).toEqual(expect.objectContaining({
       startTime: 4.2,
+    }));
+  });
+
+  it("uses the longer playable voice duration when speech metadata is shorter", () => {
+    const segment = createSegment({
+      duration: 4,
+      endTime: 4,
+      speechDuration: 4,
+      speechEndTime: 4,
+      speechStartTime: 0,
+      text: "speech metadata is slightly shorter than the audio file",
+    });
+
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        voiceDurationSeconds: 4.45,
+        voiceEnabled: true,
+      }),
+    ).toBeCloseTo(4.45, 6);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([segment], {
+      voiceDurationSeconds: () => 4.45,
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 4.45,
+      endTime: 4.45,
+      startTime: 0,
     }));
   });
 

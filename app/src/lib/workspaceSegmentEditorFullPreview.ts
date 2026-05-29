@@ -16,6 +16,7 @@ export type WorkspaceSegmentEditorFullPreviewResolvedSegment = {
 
 export type WorkspaceSegmentEditorFullPreviewAudioTimelineRange = {
   endTime: number;
+  sourceStartTime?: number | null;
   startTime: number;
   url: string;
 };
@@ -101,25 +102,34 @@ export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
 ): WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] => {
   const tolerance = normalizePreviewTime(joinToleranceSeconds) ?? 0;
   const normalizedRanges = ranges
-    .map((range) => {
+    .flatMap((range): Array<WorkspaceSegmentEditorFullPreviewAudioTimelineRange & { sourceStartTime: number }> => {
       const startTime = normalizePreviewTime(range.startTime);
       const endTime = normalizePreviewTime(range.endTime);
+      const sourceStartTime = normalizePreviewTime(range.sourceStartTime) ?? startTime;
       const url = range.url.trim();
 
       return startTime !== null && endTime !== null && endTime > startTime && url
-        ? { endTime, startTime, url }
-        : null;
+        ? [{ endTime, sourceStartTime: sourceStartTime ?? startTime, startTime, url }]
+        : [];
     })
-    .filter((range): range is WorkspaceSegmentEditorFullPreviewAudioTimelineRange => range !== null)
     .sort((left, right) => left.startTime - right.startTime || left.endTime - right.endTime);
 
-  const mergedRanges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] = [];
+  const mergedRanges: Array<WorkspaceSegmentEditorFullPreviewAudioTimelineRange & { sourceStartTime: number }> = [];
   normalizedRanges.forEach((range) => {
     const previousRange = mergedRanges[mergedRanges.length - 1];
+    const previousSourceEndTime = previousRange
+      ? previousRange.sourceStartTime + Math.max(0, previousRange.endTime - previousRange.startTime)
+      : null;
+    const previousSourceOffset = previousRange ? previousRange.sourceStartTime - previousRange.startTime : null;
+    const nextSourceOffset = range.sourceStartTime - range.startTime;
     if (
       previousRange &&
       previousRange.url === range.url &&
-      range.startTime <= previousRange.endTime + tolerance
+      previousSourceEndTime !== null &&
+      range.startTime <= previousRange.endTime + tolerance &&
+      range.sourceStartTime <= previousSourceEndTime + tolerance &&
+      previousSourceOffset !== null &&
+      Math.abs(previousSourceOffset - nextSourceOffset) <= tolerance
     ) {
       previousRange.endTime = Math.max(previousRange.endTime, range.endTime);
       return;

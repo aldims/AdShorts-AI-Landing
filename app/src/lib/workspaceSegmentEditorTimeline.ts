@@ -169,7 +169,10 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const speechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
   const voiceEnabled = options?.voiceEnabled !== false;
   const explicitVoiceDuration = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceDurationSeconds);
-  const voiceDuration = voiceEnabled ? speechDuration ?? explicitVoiceDuration : null;
+  const voiceDurationCandidates = voiceEnabled
+    ? [speechDuration, explicitVoiceDuration].filter((value): value is number => value !== null)
+    : [];
+  const voiceDuration = voiceDurationCandidates.length > 0 ? Math.max(...voiceDurationCandidates) : null;
   const voiceMinimumDuration = voiceDuration !== null ? voiceDuration : null;
   const minimumDuration = Math.max(
     WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
@@ -183,12 +186,12 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     return Math.max(minimumDuration, manualDuration);
   }
 
-  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
-    return Math.max(minimumDuration, visualDuration);
-  }
-
   if (voiceDuration !== null) {
     return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
+  }
+
+  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
+    return Math.max(minimumDuration, visualDuration);
   }
 
   if (options?.subtitleEnabled === false && visualKind === "image") {

@@ -4,6 +4,7 @@ import {
   buildWorkspaceSegmentEditorSessionFromPayload,
   buildWorkspaceSegmentEditorSegment,
   getWorkspaceSegmentEditorSessionForAccessibleProject,
+  readWorkspaceAudioDurationSecondsFromBuffer,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
@@ -11,6 +12,26 @@ import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("segment editor audio duration parser", () => {
+  it("counts MP3 frames instead of relying on rounded metadata", () => {
+    const frameCount = 114;
+    const frameLength = 576;
+    const buffer = Buffer.alloc(10 + frameCount * frameLength);
+    buffer.write("ID3", 0, "ascii");
+    buffer[3] = 4;
+
+    for (let index = 0; index < frameCount; index += 1) {
+      const offset = 10 + index * frameLength;
+      buffer[offset] = 0xff;
+      buffer[offset + 1] = 0xfb;
+      buffer[offset + 2] = 0x98;
+      buffer[offset + 3] = 0xc0;
+    }
+
+    expect(readWorkspaceAudioDurationSecondsFromBuffer(buffer)).toBe(4.104);
+  });
 });
 
 describe("segment editor asset lifecycle mapping", () => {

@@ -81,7 +81,7 @@ describe("workspace segment editor full preview", () => {
         { endTime: 9.7, startTime: 5.15, url: "/voice.mp3" },
         { endTime: 14.35, startTime: 9.7, url: "/voice.mp3" },
       ]),
-    ).toEqual([{ endTime: 14.35, startTime: 0, url: "/voice.mp3" }]);
+    ).toEqual([{ endTime: 14.35, sourceStartTime: 0, startTime: 0, url: "/voice.mp3" }]);
   });
 
   it("keeps separate timeline audio ranges when the source changes", () => {
@@ -91,8 +91,29 @@ describe("workspace segment editor full preview", () => {
         { endTime: 9.7, startTime: 5.15, url: "/custom-scene.wav" },
       ]),
     ).toEqual([
-      { endTime: 5.15, startTime: 0, url: "/voice.mp3" },
-      { endTime: 9.7, startTime: 5.15, url: "/custom-scene.wav" },
+      { endTime: 5.15, sourceStartTime: 0, startTime: 0, url: "/voice.mp3" },
+      { endTime: 9.7, sourceStartTime: 5.15, startTime: 5.15, url: "/custom-scene.wav" },
     ]);
+  });
+
+  it("keeps separate project voiceover ranges when source and preview offsets differ", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+        { endTime: 4.4, sourceStartTime: 0, startTime: 0, url: "/project-voice.mp3" },
+        { endTime: 8.8, sourceStartTime: 4.8, startTime: 4.4, url: "/project-voice.mp3" },
+      ]),
+    ).toEqual([
+      { endTime: 4.4, sourceStartTime: 0, startTime: 0, url: "/project-voice.mp3" },
+      { endTime: 8.8, sourceStartTime: 4.8, startTime: 4.4, url: "/project-voice.mp3" },
+    ]);
+  });
+
+  it("merges project voiceover ranges when the source offset is continuous", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+        { endTime: 4, sourceStartTime: 10, startTime: 0, url: "/project-voice.mp3" },
+        { endTime: 8, sourceStartTime: 14, startTime: 4, url: "/project-voice.mp3" },
+      ]),
+    ).toEqual([{ endTime: 8, sourceStartTime: 10, startTime: 0, url: "/project-voice.mp3" }]);
   });
 });

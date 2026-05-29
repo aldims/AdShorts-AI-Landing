@@ -1,7 +1,7 @@
 import { env } from "./env.js";
 import { getWorkspaceProjects } from "./projects.js";
 import { buildWorkspaceMediaAssetRef, fetchProjectMediaEnvelope, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { assertAdsflowConfigured, buildAdsflowUrl, fetchAdsflowJson as fetchAdsflowJsonWithPolicy, UpstreamFetchError, UpstreamHttpError, upstreamPolicies, } from "./upstream-client.js";
+import { assertAdsflowConfigured, buildAdsflowUrl, fetchAdsflowJson as fetchAdsflowJsonWithPolicy, fetchUpstreamResponse, UpstreamFetchError, UpstreamHttpError, upstreamPolicies, } from "./upstream-client.js";
 import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory } from "./workspace-history.js";
 export class WorkspaceSegmentEditorError extends Error {
     statusCode;
@@ -529,11 +529,125 @@ const SEGMENT_EDITOR_FALLBACK_CONTEXT_TIMEOUT_MS = 4_000;
 const PROJECT_ACCESS_TIMEOUT_ERROR_MESSAGE = "Список проектов загружается слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаются слишком долго. Попробуйте ещё раз.";
 const SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE = "Project components are still being prepared";
+const SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS = 30 * 60_000;
+const SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS = 6_500;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map();
 const segmentEditorSessionCache = new Map();
 const segmentEditorSessionInFlight = new Map();
+const segmentEditorVoiceoverDurationCache = new Map();
+const readId3v2TagSize = (buffer) => {
+    if (buffer.length < 10 || buffer.toString("ascii", 0, 3) !== "ID3") {
+        return 0;
+    }
+    const size = ((buffer[6] & 0x7f) << 21) |
+        ((buffer[7] & 0x7f) << 14) |
+        ((buffer[8] & 0x7f) << 7) |
+        (buffer[9] & 0x7f);
+    const hasFooter = (buffer[5] & 0x10) !== 0;
+    return Math.min(buffer.length, 10 + size + (hasFooter ? 10 : 0));
+};
+const MPEG_SAMPLE_RATES = {
+    0: [11025, 12000, 8000],
+    2: [22050, 24000, 16000],
+    3: [44100, 48000, 32000],
+};
+const MPEG_BITRATES_KBPS = {
+    "1:1": [32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+    "1:2": [32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+    "1:3": [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+    "2:1": [32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
+    "2:2": [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    "2:3": [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+};
+const getMpegFrameInfo = (buffer, offset) => {
+    if (offset + 4 > buffer.length) {
+        return null;
+    }
+    const header = buffer.readUInt32BE(offset);
+    if (((header & 0xffe00000) >>> 0) !== 0xffe00000) {
+        return null;
+    }
+    const versionBits = (header >> 19) & 0x3;
+    const layerBits = (header >> 17) & 0x3;
+    const bitrateIndex = (header >> 12) & 0xf;
+    const sampleRateIndex = (header >> 10) & 0x3;
+    const padding = (header >> 9) & 0x1;
+    if (versionBits === 1 || layerBits === 0 || bitrateIndex === 0 || bitrateIndex === 0xf || sampleRateIndex === 3) {
+        return null;
+    }
+    const layer = 4 - layerBits;
+    const versionGroup = versionBits === 3 ? 1 : 2;
+    const sampleRate = MPEG_SAMPLE_RATES[versionBits]?.[sampleRateIndex] ?? null;
+    const bitrateKbps = MPEG_BITRATES_KBPS[`${versionGroup}:${layer}`]?.[bitrateIndex - 1] ?? null;
+    if (!sampleRate || !bitrateKbps) {
+        return null;
+    }
+    const samplesPerFrame = layer === 1 ? 384 : layer === 3 && versionBits !== 3 ? 576 : 1152;
+    const frameLength = layer === 1
+        ? Math.floor(((12 * bitrateKbps * 1000) / sampleRate + padding) * 4)
+        : Math.floor((((layer === 3 && versionBits !== 3 ? 72 : 144) * bitrateKbps * 1000) / sampleRate) + padding);
+    if (frameLength <= 4) {
+        return null;
+    }
+    return {
+        frameLength,
+        sampleRate,
+        samplesPerFrame,
+    };
+};
+const readMp3DurationSeconds = (buffer) => {
+    let offset = readId3v2TagSize(buffer);
+    let durationSeconds = 0;
+    let frameCount = 0;
+    while (offset + 4 <= buffer.length) {
+        const frameInfo = getMpegFrameInfo(buffer, offset);
+        if (!frameInfo) {
+            const nextSyncOffset = buffer.indexOf(0xff, offset + 1);
+            if (nextSyncOffset < 0) {
+                break;
+            }
+            offset = nextSyncOffset;
+            continue;
+        }
+        durationSeconds += frameInfo.samplesPerFrame / frameInfo.sampleRate;
+        frameCount += 1;
+        offset += frameInfo.frameLength;
+    }
+    return frameCount > 0 && Number.isFinite(durationSeconds) ? durationSeconds : null;
+};
+const readWavDurationSeconds = (buffer) => {
+    if (buffer.length < 44 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE") {
+        return null;
+    }
+    let offset = 12;
+    let byteRate = null;
+    let dataSize = null;
+    while (offset + 8 <= buffer.length) {
+        const chunkId = buffer.toString("ascii", offset, offset + 4);
+        const chunkSize = buffer.readUInt32LE(offset + 4);
+        const chunkStart = offset + 8;
+        if (chunkStart + chunkSize > buffer.length) {
+            break;
+        }
+        if (chunkId === "fmt " && chunkSize >= 16) {
+            byteRate = buffer.readUInt32LE(chunkStart + 8);
+        }
+        else if (chunkId === "data") {
+            dataSize = chunkSize;
+        }
+        offset = chunkStart + chunkSize + (chunkSize % 2);
+    }
+    return byteRate && dataSize !== null && byteRate > 0 ? dataSize / byteRate : null;
+};
+export const readWorkspaceAudioDurationSecondsFromBuffer = (buffer) => {
+    const durationSeconds = readMp3DurationSeconds(buffer) ??
+        readWavDurationSeconds(buffer);
+    return durationSeconds !== null && Number.isFinite(durationSeconds) && durationSeconds > 0
+        ? Math.round(durationSeconds * 1000) / 1000
+        : null;
+};
 const getProjectAccessCacheKey = (user, projectId) => {
     const userId = normalizeText(user.id);
     if (userId) {
@@ -632,8 +746,104 @@ const setCachedSegmentEditorSession = (user, projectId, session) => {
         session,
     });
 };
+const getSegmentEditorVoiceoverDurationCacheKey = (projectId, segmentIndex) => `${projectId}:${segmentIndex}`;
+const readCachedSegmentEditorVoiceoverDuration = (projectId, segmentIndex) => {
+    const cachedEntry = segmentEditorVoiceoverDurationCache.get(getSegmentEditorVoiceoverDurationCacheKey(projectId, segmentIndex));
+    if (!cachedEntry) {
+        return null;
+    }
+    if (cachedEntry.expiresAt <= Date.now()) {
+        segmentEditorVoiceoverDurationCache.delete(getSegmentEditorVoiceoverDurationCacheKey(projectId, segmentIndex));
+        return null;
+    }
+    return cachedEntry.durationSeconds;
+};
+const writeCachedSegmentEditorVoiceoverDuration = (projectId, segmentIndex, durationSeconds) => {
+    segmentEditorVoiceoverDurationCache.set(getSegmentEditorVoiceoverDurationCacheKey(projectId, segmentIndex), {
+        durationSeconds,
+        expiresAt: Date.now() + SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS,
+    });
+};
+const fetchWorkspaceProjectSegmentVoiceoverDuration = async (projectId, segmentIndex) => {
+    const cachedDurationSeconds = readCachedSegmentEditorVoiceoverDuration(projectId, segmentIndex);
+    if (cachedDurationSeconds !== null) {
+        return cachedDurationSeconds;
+    }
+    const response = await fetchUpstreamResponse(buildAdsflowUrl(`/api/projects/${projectId}/segments/${segmentIndex}/voiceover`), {
+        headers: {
+            "X-Admin-Token": env.adsflowAdminToken ?? "",
+        },
+        signal: AbortSignal.timeout(SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS),
+    }, upstreamPolicies.proxyInteractive, {
+        assetKind: "segment-voiceover-duration",
+        endpoint: "segment-editor.segment-voiceover-duration",
+        projectId,
+    });
+    if (!response.ok) {
+        void response.body?.cancel();
+        return null;
+    }
+    const durationSeconds = readWorkspaceAudioDurationSecondsFromBuffer(Buffer.from(await response.arrayBuffer()));
+    if (durationSeconds !== null) {
+        writeCachedSegmentEditorVoiceoverDuration(projectId, segmentIndex, durationSeconds);
+    }
+    return durationSeconds;
+};
+export async function getWorkspaceProjectSegmentVoiceoverDuration(user, options) {
+    assertAdsflowConfigured();
+    await assertWorkspaceProjectAccess(user, options.projectId);
+    return fetchWorkspaceProjectSegmentVoiceoverDuration(options.projectId, options.segmentIndex);
+}
+const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session) => {
+    if (!session.segments.length || !session.voiceType || session.voiceType === "none") {
+        return session;
+    }
+    const measuredDurations = await Promise.all(session.segments.map(async (segment) => {
+        try {
+            const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(session.projectId, segment.index);
+            return [segment.index, durationSeconds];
+        }
+        catch (error) {
+            console.warn("[segment-editor] Failed to measure segment voiceover duration", {
+                error: error instanceof Error ? error.message : String(error),
+                projectId: session.projectId,
+                segmentIndex: segment.index,
+            });
+            return [segment.index, null];
+        }
+    }));
+    const durationBySegmentIndex = new Map(measuredDurations.filter((entry) => entry[1] !== null));
+    if (durationBySegmentIndex.size === 0) {
+        return session;
+    }
+    return {
+        ...session,
+        segments: session.segments.map((segment) => {
+            const durationSeconds = durationBySegmentIndex.get(segment.index);
+            if (!durationSeconds) {
+                return segment;
+            }
+            const speechStartTime = segment.speechStartTime ?? segment.startTime;
+            return {
+                ...segment,
+                speechDuration: durationSeconds,
+                speechDurationSource: "audio",
+                speechEndTime: speechStartTime + durationSeconds,
+                speechStartTime,
+            };
+        }),
+    };
+};
 export const invalidateWorkspaceSegmentEditorSessionCache = (user, projectId) => {
     clearCachedProjectAccess(user, projectId);
+    if (typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0) {
+        const voiceoverDurationCachePrefix = `${projectId}:`;
+        for (const key of segmentEditorVoiceoverDurationCache.keys()) {
+            if (key.startsWith(voiceoverDurationCachePrefix)) {
+                segmentEditorVoiceoverDurationCache.delete(key);
+            }
+        }
+    }
     const exactCacheKey = typeof projectId === "number" && Number.isFinite(projectId) && projectId > 0
         ? getSegmentEditorSessionCacheKey(user, projectId)
         : null;
@@ -985,6 +1195,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         scene_sound: sceneSound,
         scene_sound_asset_id: sceneSoundAssetId,
         speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
+        speechDurationSource: null,
         speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
         speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
         speechWords,
@@ -1100,10 +1311,11 @@ const loadWorkspaceSegmentEditorSession = async (projectId) => {
     if (!payload) {
         throw new WorkspaceSegmentEditorError("Не удалось загрузить сегменты проекта.", 500);
     }
-    return buildWorkspaceSegmentEditorSessionFromPayload(projectId, payload, {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(projectId, payload, {
         projectDetailsPayload,
         projectMediaEnvelope,
     });
+    return enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations(session);
 };
 const getWorkspaceSegmentEditorSessionInternal = async (user, projectId, options) => {
     const shouldBypassCache = Boolean(options?.bypassCache);

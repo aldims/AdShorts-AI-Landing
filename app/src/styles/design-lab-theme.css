@@ -26322,6 +26322,14 @@ textarea {
   color: rgba(254, 243, 199, 0.98);
 }
 
+.studio-segment-editor__timeline-preview-toggle.is-loading {
+  border-color: rgba(125, 211, 252, 0.38);
+  background:
+    linear-gradient(180deg, rgba(14, 165, 233, 0.16), rgba(15, 23, 42, 0.3)),
+    rgba(2, 6, 12, 0.68);
+  color: rgba(224, 242, 254, 0.98);
+}
+
 .studio-segment-editor__timeline-preview-toggle:disabled {
   cursor: not-allowed;
   opacity: 0.42;

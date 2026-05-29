@@ -48,6 +48,7 @@ import {
   resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
+  getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVideoVisualDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
   getWorkspaceSegmentVoiceoverTextHash,
@@ -2841,6 +2842,72 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("uses the full segment voiceover proxy before project voiceover ranges", () => {
+    const segment = createDraftSegment({
+      duration: 4.4,
+      endTime: 12.4,
+      index: 2,
+      speechDuration: 4.36,
+      speechEndTime: 12.36,
+      speechStartTime: 8,
+      startTime: 8,
+      text: "Этот древний ящер использует свою мощь, чтобы защитить планету от угроз.",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3457,
+      ttsAssetId: 3473,
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.sourceKind).toBe("segment");
+    expect(source.audioUrl).toBe(source.segmentVoiceoverAudioUrl);
+    expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(source.shouldClip).toBe(false);
+    expect(source.previewRange).toEqual({
+      endTime: 12.71,
+      startTime: 7.92,
+    });
+  });
+
+  it("falls back to the segment voiceover proxy when project voiceover is stale", () => {
+    const segment = createDraftSegment({
+      index: 2,
+      speechDuration: 4.36,
+      speechEndTime: 12.36,
+      speechStartTime: 8,
+      startTime: 8,
+      text: "Этот древний ящер использует свою мощь, чтобы защитить планету от угроз.",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3457,
+      ttsAssetId: 3473,
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.sourceKind).toBe("segment");
+    expect(source.audioUrl).toBe(source.segmentVoiceoverAudioUrl);
+    expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.shouldClip).toBe(false);
+  });
+
   it("does not treat scene boundaries as the actual voiceover duration", () => {
     const segment = createDraftSegment({
       duration: 5.2,
@@ -2857,6 +2924,36 @@ describe("WorkspacePage studio locale defaults", () => {
         allowEstimated: false,
       }),
     ).toBeNull();
+  });
+
+  it("trusts measured audio duration even when it matches the scene boundary", () => {
+    const segment = createDraftSegment({
+      duration: 4.104,
+      endTime: 4.104,
+      speechDuration: 4.104,
+      speechDurationSource: "audio",
+      speechEndTime: 4.104,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceoverAsset: {
+        assetId: 503,
+        durationSeconds: 27.4,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/503",
+      },
+    });
+    const session = {
+      ...createDraftSession(segment),
+      ttsAssetId: 503,
+    };
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)).toBe(4.104);
+    expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, { allowEstimated: false })).toEqual({
+      durationSeconds: 4.104,
+      source: "actual",
+    });
   });
 
   it("does not use the full project TTS asset duration as a scene voiceover duration", () => {
@@ -2977,6 +3074,38 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
       duration: 6.4,
       endTime: 6.4,
+      startTime: 0,
+    }));
+  });
+
+  it("uses generated voiceover audio duration when speech metadata is shorter", () => {
+    const voiceText = "Фактический файл озвучки немного длиннее speech-разметки";
+    const segment = createDraftSegment({
+      duration: 2,
+      endTime: 2,
+      speechDuration: 4.8,
+      speechEndTime: 4.8,
+      speechStartTime: 0,
+      text: voiceText,
+      voiceoverAsset: {
+        assetId: 780,
+        durationSeconds: 5.24,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-4/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(5.24);
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5.24,
+      endTime: 5.24,
       startTime: 0,
     }));
   });
