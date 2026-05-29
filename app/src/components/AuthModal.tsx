@@ -125,30 +125,10 @@ const readResponseErrorMessage = async (response: Response, fallback: string) =>
 
 const normalizeEmailCode = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
-const buildTelegramLoginUrl = (config: TelegramAuthConfig, locale: Locale) => {
-  const scopes = ["openid", "profile"];
-  for (const access of config.requestAccess ?? []) {
-    if (access === "write") scopes.push("telegram:bot_access");
-    if (access === "phone") scopes.push("phone");
-  }
-
-  const redirectUri = `${window.location.origin}/`;
-  const params = new URLSearchParams({
-    client_id: config.clientId || config.botId,
-    redirect_uri: redirectUri,
-    response_type: "post_message",
-    scope: scopes.join(" "),
-  });
-
-  if (config.nonce) params.set("nonce", config.nonce);
-  if (config.nonce) {
-    params.set("code_challenge", config.nonce);
-    params.set("code_challenge_method", "plain");
-  }
-  if (locale) params.set("lang", locale);
-
-  return `${TELEGRAM_OIDC_ORIGIN}/auth?${params.toString()}`;
-};
+const hasTelegramAuthorizationUrl = (
+  config: TelegramAuthConfig | null,
+): config is TelegramAuthConfig & { authorizationUrl: string } =>
+  typeof config?.authorizationUrl === "string" && config.authorizationUrl.trim().length > 0;
 
 const readTelegramSignedInResult = async (): Promise<TelegramLoginResult | null> => {
   try {
@@ -166,13 +146,25 @@ const readTelegramSignedInResult = async (): Promise<TelegramLoginResult | null>
 
 const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
   new Promise<TelegramLoginResult>((resolve, reject) => {
+    const authorizationUrl = config.authorizationUrl?.trim();
+    if (!authorizationUrl) {
+      reject(
+        new Error(
+          locale === "en"
+            ? "Telegram sign-in is not configured correctly."
+            : "Вход через Telegram настроен некорректно.",
+        ),
+      );
+      return;
+    }
+
     const width = 550;
     const height = 650;
     const screenOffset = window.screen as Screen & { availLeft?: number; availTop?: number };
     const left = Math.max(0, (window.screen.width - width) / 2) + (screenOffset.availLeft || 0);
     const top = Math.max(0, (window.screen.height - height) / 2) + (screenOffset.availTop || 0);
     const popup = window.open(
-      config.authorizationUrl || buildTelegramLoginUrl(config, locale),
+      authorizationUrl,
       "telegram_oidc_login",
       `width=${width},height=${height},left=${left},top=${top},status=0,location=0,menubar=0,toolbar=0`,
     );
@@ -364,7 +356,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
 
         if (!isCancelled) {
           setTelegramConfig(config);
-          setIsTelegramReady(Boolean(config.clientId || config.botId));
+          setIsTelegramReady(hasTelegramAuthorizationUrl(config));
         }
       } catch {
         if (!isCancelled) {

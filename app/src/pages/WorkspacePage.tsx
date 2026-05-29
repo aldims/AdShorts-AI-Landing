@@ -37843,17 +37843,19 @@ export function WorkspacePage({
       const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
         const isProjectVoiceoverAudio = voiceoverAudioPreviewSource.sourceKind === "project";
+        const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft.ttsAssetId);
+        const fullPreviewVoiceoverAudioUrl = isProjectVoiceoverAudio
+          ? projectVoiceoverAssetId !== null
+            ? buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)
+            : voiceoverAudioUrl
+          : voiceoverAudioUrl;
         const voiceTimelineStartTime = timelineStartTime;
         const projectVoiceSourceStartTime = isProjectVoiceoverAudio
-          ? voiceoverPreviewRange?.startTime ?? voiceTimelineStartTime
+          ? voiceTimelineStartTime
           : null;
-        const projectVoiceSourceDuration =
-          isProjectVoiceoverAudio && voiceoverPreviewRange && projectVoiceSourceStartTime !== null
-            ? Math.max(0, voiceoverPreviewRange.endTime - projectVoiceSourceStartTime)
-            : null;
         const voiceTimelineEndTime =
-          projectVoiceSourceDuration !== null
-            ? Math.max(timelineEndTime, voiceTimelineStartTime + projectVoiceSourceDuration)
+          isProjectVoiceoverAudio && voiceoverPreviewRange
+            ? Math.max(timelineEndTime, voiceoverPreviewRange.endTime)
             : timelineEndTime;
 
         if (voiceTimelineEndTime > voiceTimelineStartTime) {
@@ -37862,17 +37864,17 @@ export function WorkspacePage({
               endTime: voiceTimelineEndTime,
               sourceStartTime: projectVoiceSourceStartTime,
               startTime: voiceTimelineStartTime,
-              url: voiceoverAudioUrl,
+              url: fullPreviewVoiceoverAudioUrl,
             });
           } else {
             tracks.push({
-              key: `full-preview:voice:${segment.index}:${voiceoverAudioUrl}`,
+              key: `full-preview:voice:${segment.index}:${fullPreviewVoiceoverAudioUrl}`,
               kind: "voice",
               sourceKind: "isolated",
               sourceStartTime: 0,
               timelineEndTime: voiceTimelineEndTime,
               timelineStartTime: voiceTimelineStartTime,
-              url: voiceoverAudioUrl,
+              url: fullPreviewVoiceoverAudioUrl,
               volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
             });
           }

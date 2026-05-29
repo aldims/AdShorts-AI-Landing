@@ -116,16 +116,17 @@ npm run dev
 ### Проверка:
 
 - `GET http://127.0.0.1:4174/api/auth/status` — `telegramEnabled: true`
-- `GET http://127.0.0.1:4174/api/auth/telegram/config` — `botId: "123456789"`, `botUsername: "YourBotName"`
+- `GET http://127.0.0.1:4174/api/auth/telegram/config` — `botId: "123456789"`, `botUsername: "YourBotName"`, `authorizationUrl` содержит `redirect_uri`
+
+`telegramEnabled` становится `true` только когда заданы оба значения: `TELEGRAM_BOT_ID` и `TELEGRAM_CLIENT_SECRET`. Если задан только bot id, кнопка Telegram не включается, потому что OIDC code flow не сможет корректно передать `redirect_uri`.
 
 ### Как это работает:
 
 1. В модальном окне авторизации появляется кнопка Telegram
 2. Пользователь нажимает кнопку и авторизуется в Telegram
-3. Telegram возвращает `id_token` в JavaScript callback или через fallback-страницу `/api/auth/telegram/login`
-4. Frontend отправляет `id_token` на `/api/auth/telegram/callback`
-5. Сервер верифицирует JWT и создаёт/связывает пользователя
-6. Сервер устанавливает session cookie и возвращает успех
+3. Telegram возвращает `code` на `/api/auth/telegram/oidc/callback`
+4. Сервер обменивает `code` на `id_token`, верифицирует JWT и создаёт/связывает пользователя
+5. Сервер устанавливает session cookie и возвращает успех в popup
 
 ### Важно:
 

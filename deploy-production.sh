@@ -196,6 +196,7 @@ const pickKeys = [
   "GOOGLE_CLIENT_SECRET",
   "TELEGRAM_BOT_ID",
   "TELEGRAM_BOT_USERNAME",
+  "TELEGRAM_CLIENT_SECRET",
   "TELEGRAM_BOT_TOKEN",
   "ADSFLOW_API_BASE_URL",
   "ADSFLOW_ADMIN_TOKEN",
@@ -345,6 +346,12 @@ if (
 ) {
   throw new Error(
     `Missing OPENROUTER_API_KEY for production backend. Set it in ${prodEnvFile}, set PROD_SHARED_ENV_FILE, or create a valid ADSHORTS_SHARED_ENV_FILE.`,
+  );
+}
+
+if (String(effectiveEnv.TELEGRAM_BOT_ID ?? "").trim() && !String(effectiveEnv.TELEGRAM_CLIENT_SECRET ?? "").trim()) {
+  throw new Error(
+    `TELEGRAM_CLIENT_SECRET is required when TELEGRAM_BOT_ID is set. Add it to ${prodEnvFile}, staging env, or the shared secrets file before deploying Telegram login.`,
   );
 }
 NODE

@@ -135,6 +135,15 @@ describe("workspace segment editor full preview", () => {
     ).toEqual([{ endTime: 8, sourceStartTime: 10, startTime: 0, url: "/project-voice.mp3" }]);
   });
 
+  it("merges overlapping project voiceover ranges when they share the timeline source offset", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+        { endTime: 4.35, sourceStartTime: 0, startTime: 0, url: "/project-voice.mp3" },
+        { endTime: 9.92, sourceStartTime: 4.02, startTime: 4.02, url: "/project-voice.mp3" },
+      ]),
+    ).toEqual([{ endTime: 9.92, sourceStartTime: 0, startTime: 0, url: "/project-voice.mp3" }]);
+  });
+
   it("holds the playhead at a voice segment boundary until audio starts", () => {
     const tracks = [
       { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },

@@ -7,15 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../lib/i18n";
 import { AuthModal } from "./AuthModal";
 
-const renderAuthModal = (mode: "signup" | "signin") =>
+const renderAuthModal = (
+  mode: "signup" | "signin",
+  handlers: Partial<Pick<Parameters<typeof AuthModal>[0], "onClose" | "onSignedIn">> = {},
+) =>
   render(
     <MemoryRouter>
       <LocaleProvider locale="ru">
         <AuthModal
           isOpen
           mode={mode}
-          onClose={() => undefined}
-          onSignedIn={() => undefined}
+          onClose={handlers.onClose ?? (() => undefined)}
+          onSignedIn={handlers.onSignedIn ?? (() => undefined)}
         />
       </LocaleProvider>
     </MemoryRouter>,
@@ -38,6 +41,7 @@ describe("AuthModal", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -76,6 +80,69 @@ describe("AuthModal", () => {
     renderAuthModal("signup");
 
     await waitFor(() => expect(screen.getByText("Telegram")).toBeTruthy());
+  });
+
+  it("opens the server-built Telegram OIDC authorization URL", async () => {
+    const authorizationUrl =
+      "https://oauth.telegram.org/auth?client_id=123&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Ftelegram%2Foidc%2Fcallback&response_type=code";
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/auth/status") {
+        return {
+          json: async () => ({
+            googleEnabled: true,
+            mailMode: "smtp",
+            smtpConfigured: true,
+            telegramEnabled: true,
+          }),
+          ok: true,
+        } as Response;
+      }
+
+      if (url.startsWith("/api/auth/telegram/config")) {
+        return {
+          json: async () => ({
+            authorizationUrl,
+            botId: "123",
+            botUsername: "AuthBot",
+            clientId: "123",
+            flow: "code",
+            requestAccess: ["write"],
+          }),
+          ok: true,
+        } as Response;
+      }
+
+      return {
+        json: async () => ({}),
+        ok: true,
+      } as Response;
+    });
+    const popup = {
+      closed: false,
+      focus: vi.fn(),
+    };
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+
+    renderAuthModal("signin");
+
+    const telegramButton = await screen.findByRole<HTMLButtonElement>("button", { name: /Telegram/ });
+    await waitFor(() => expect(telegramButton.disabled).toBe(false));
+
+    fireEvent.click(telegramButton);
+    expect(openSpy).toHaveBeenCalledWith(
+      authorizationUrl,
+      "telegram_oidc_login",
+      expect.stringContaining("width=550"),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: { error: "cancelled", type: "adshorts.telegramAuth" },
+        origin: window.location.origin,
+      }),
+    );
+    expect(await screen.findByText("cancelled")).toBeTruthy();
   });
 
   it("uses an email code instead of a password", async () => {

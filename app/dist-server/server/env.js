@@ -168,6 +168,6 @@ export const env = {
 };
 export const authProviderStatus = {
     googleEnabled: Boolean(env.googleClientId && env.googleClientSecret),
-    telegramEnabled: Boolean(env.telegramBotId),
+    telegramEnabled: Boolean(env.telegramBotId && env.telegramClientSecret),
     smtpConfigured: Boolean(env.smtpHost && env.smtpUser && env.smtpPass),
 };
