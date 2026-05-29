@@ -33,6 +33,24 @@ export type WorkspaceSegmentEditorFullPreviewAudioStartGate = {
   trackKey: string;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudibleAudioTrack = {
+  key: string;
+  kind: string;
+  timelineEndTime: number;
+  timelineStartTime: number;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions = {
+  audioSeekToleranceSeconds: number;
+  currentSourceTime: number;
+  isPaused: boolean;
+  isVoiceTrack: boolean;
+  musicSeekToleranceSeconds: number;
+  nextSourceTime: number;
+  trackKind: string;
+  voicePausedSeekToleranceSeconds: number;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -197,6 +215,63 @@ export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGate = (
     holdTime: normalizePreviewTime(blockedTrack.timelineStartTime) ?? 0,
     trackKey: blockedTrack.key,
   };
+};
+
+export const selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks = <
+  Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
+>(
+  tracks: Track[],
+): Track[] => {
+  const nonVoiceTracks = tracks.filter((track) => track.kind !== "voice" && track.kind !== "embedded_voice");
+  const voiceTracks = tracks.filter((track) => track.kind === "voice" || track.kind === "embedded_voice");
+  if (voiceTracks.length <= 1) {
+    return [...nonVoiceTracks, ...voiceTracks];
+  }
+
+  const selectedVoiceTrack = [...voiceTracks].sort(
+    (left, right) =>
+      right.timelineStartTime - left.timelineStartTime ||
+      left.timelineEndTime - right.timelineEndTime ||
+      left.key.localeCompare(right.key),
+  )[0];
+
+  return [
+    ...nonVoiceTracks,
+    selectedVoiceTrack,
+  ];
+};
+
+export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks = <
+  Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
+>(
+  activeTracks: Track[],
+  gateTrackKey: string,
+): Track[] => {
+  const selectedTracks = selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks(activeTracks);
+  const selectedTrackByKey = new Map(selectedTracks.map((track) => [track.key, track]));
+  const gateTrack = activeTracks.find((track) => track.key === gateTrackKey);
+  if (gateTrack) {
+    selectedTrackByKey.set(gateTrack.key, gateTrack);
+  }
+
+  return Array.from(selectedTrackByKey.values());
+};
+
+export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
+  options: WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions,
+) => {
+  if (!Number.isFinite(options.currentSourceTime) || !Number.isFinite(options.nextSourceTime)) {
+    return false;
+  }
+
+  const driftSeconds = Math.abs(options.currentSourceTime - options.nextSourceTime);
+  if (options.isVoiceTrack) {
+    return options.isPaused && driftSeconds > options.voicePausedSeekToleranceSeconds;
+  }
+
+  const toleranceSeconds =
+    options.trackKind === "music" ? options.musicSeekToleranceSeconds : options.audioSeekToleranceSeconds;
+  return driftSeconds > toleranceSeconds;
 };
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (

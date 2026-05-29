@@ -82,6 +82,7 @@ import {
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentEditorMediaUploadScope,
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
+  resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
@@ -1040,6 +1041,56 @@ describe("WorkspacePage segment editor draft persistence", () => {
     };
 
     expect(shouldAllowWorkspaceSegmentEditorStructureChange(draft, baseline)).toBe(true);
+  });
+
+  it("uses the current draft as display baseline while the project baseline is unavailable", () => {
+    const currentAsset = createMediaAsset(301, { sourceKind: "ai_generated" });
+    const draftSegment = createDraftSegment({
+      currentAsset,
+      currentPlaybackUrl: currentAsset.playbackUrl,
+      currentPreviewUrl: currentAsset.playbackUrl,
+      currentSourceKind: "ai_generated",
+      mediaType: "photo",
+    });
+    const draft = {
+      ...createDraftSession(draftSegment),
+      musicType: "upbeat",
+    };
+
+    const displayBaseline = resolveWorkspaceSegmentEditorChangeDisplayBaselineSession(draft, null);
+
+    expect(displayBaseline).toBe(draft);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, displayBaseline)).toEqual([]);
+
+    const tracks = buildWorkspaceSegmentEditorTracks(
+      draft.segments,
+      displayBaseline?.segments ?? [],
+      draft,
+      displayBaseline,
+      {
+        isVisualEdited: (segment, baselineSegment) =>
+          getWorkspaceSegmentDraftVisualStatus(segment, baselineSegment) === "changed",
+      },
+    );
+
+    expect(tracks.rows.find((row) => row.kind === "visual")?.spans[0]?.isEdited).toBe(false);
+    expect(tracks.rows.find((row) => row.kind === "music")?.spans[0]?.isEdited).toBe(false);
+  });
+
+  it("uses the matching loaded project baseline for display comparisons", () => {
+    const baseline = createDraftSession(createDraftSegment({ index: 0, text: "Original" }));
+    const draft = {
+      ...baseline,
+      segments: [createDraftSegment({ index: 0, text: "Edited" })],
+    };
+
+    expect(resolveWorkspaceSegmentEditorChangeDisplayBaselineSession(draft, baseline)).toBe(baseline);
+    expect(
+      resolveWorkspaceSegmentEditorChangeDisplayBaselineSession(draft, {
+        ...baseline,
+        projectId: baseline.projectId + 1,
+      }),
+    ).toBe(draft);
   });
 
   it("treats an added scene sound as a Shorts edit", () => {
@@ -2936,7 +2987,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment))).toEqual({
-      endTime: 5.15,
+      endTime: 5.25,
       startTime: 0.32,
     });
   });
@@ -2952,12 +3003,34 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment))).toEqual({
-      endTime: 10.15,
+      endTime: 10.25,
       startTime: 5.12,
     });
   });
 
-  it("uses the full segment voiceover proxy before project voiceover ranges", () => {
+  it("uses ASR word timings before stale segment speech boundaries for project voiceover ranges", () => {
+    const segment = createDraftSegment({
+      duration: 4.72,
+      endTime: 15.04,
+      speechDuration: 4.39,
+      speechEndTime: 14.016,
+      speechStartTime: 9.624,
+      speechWords: [
+        { confidence: 0.95, endTime: 10.82, startTime: 10.32, text: "Оказалось," },
+        { confidence: 0.74, endTime: 14.52, startTime: 14.02, text: "соседям." },
+      ],
+      startTime: 10.32,
+      text: "Оказалось, этот пушистый аферист ежедневно пробирается через дыру в заборе к соседям.",
+    });
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, createDraftSession(segment))).toBe(4.2);
+    expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment))).toEqual({
+      endTime: 14.97,
+      startTime: 10.24,
+    });
+  });
+
+  it("uses project voiceover ranges before the segment proxy while project audio is fresh", () => {
     const segment = createDraftSegment({
       duration: 4.4,
       endTime: 12.4,
@@ -2982,14 +3055,14 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: studioVoiceOptionsByLanguage.ru[0],
     });
 
-    expect(source.sourceKind).toBe("segment");
-    expect(source.audioUrl).toBe(source.segmentVoiceoverAudioUrl);
-    expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.sourceKind).toBe("project");
+    expect(source.audioUrl).toBe(source.projectVoiceoverAudioUrl);
+    expect(source.audioUrl).toContain("/api/workspace/media-assets/3473?v=");
     expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
-    expect(source.shouldClip).toBe(false);
+    expect(source.shouldClip).toBe(true);
     expect(source.previewRange).toEqual({
-      endTime: 12.71,
+      endTime: 12.81,
       startTime: 7.92,
     });
   });

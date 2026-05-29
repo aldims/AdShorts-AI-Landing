@@ -7,8 +7,11 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
+  resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
+  shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
 } from "./workspaceSegmentEditorFullPreview";
 
 describe("workspace segment editor full preview", () => {
@@ -152,6 +155,35 @@ describe("workspace segment editor full preview", () => {
     ).toBeNull();
   });
 
+  it("prefers the newest voice track when voice tails overlap at a segment boundary", () => {
+    expect(
+      selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks([
+        { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+        { key: "voice-1", kind: "voice", timelineEndTime: 4.55, timelineStartTime: 0 },
+        { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
+      ]),
+    ).toEqual([
+      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
+    ]);
+  });
+
+  it("keeps music alive while waiting for a boundary voice track to start", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks(
+        [
+          { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+          { key: "voice-1", kind: "voice", timelineEndTime: 4.45, timelineStartTime: 0 },
+          { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
+        ],
+        "voice-2",
+      ),
+    ).toEqual([
+      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
+    ]);
+  });
+
   it("ignores old voice starts outside the startup gate window", () => {
     const tracks = [
       { key: "voice-1", kind: "voice", timelineEndTime: 8, timelineStartTime: 0 },
@@ -166,5 +198,50 @@ describe("workspace segment editor full preview", () => {
         { startWindowSeconds: 1 },
       ),
     ).toBeNull();
+  });
+
+  it("does not continuously re-seek music for small playback drift", () => {
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack({
+        audioSeekToleranceSeconds: 0.09,
+        currentSourceTime: 12.2,
+        isPaused: false,
+        isVoiceTrack: false,
+        musicSeekToleranceSeconds: 0.75,
+        nextSourceTime: 12,
+        trackKind: "music",
+        voicePausedSeekToleranceSeconds: 0.5,
+      }),
+    ).toBe(false);
+  });
+
+  it("still re-syncs music after a large playback drift", () => {
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack({
+        audioSeekToleranceSeconds: 0.09,
+        currentSourceTime: 14,
+        isPaused: false,
+        isVoiceTrack: false,
+        musicSeekToleranceSeconds: 0.75,
+        nextSourceTime: 12,
+        trackKind: "music",
+        voicePausedSeekToleranceSeconds: 0.5,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps voice playback free from per-frame forward seeks", () => {
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack({
+        audioSeekToleranceSeconds: 0.09,
+        currentSourceTime: 2,
+        isPaused: false,
+        isVoiceTrack: true,
+        musicSeekToleranceSeconds: 0.75,
+        nextSourceTime: 3,
+        trackKind: "voice",
+        voicePausedSeekToleranceSeconds: 0.5,
+      }),
+    ).toBe(false);
   });
 });

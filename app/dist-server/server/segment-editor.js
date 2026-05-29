@@ -521,6 +521,30 @@ const normalizeSpeechWords = (value) => {
     })
         .filter((item) => Boolean(item));
 };
+const getSegmentEditorSpeechWordsRange = (segment) => {
+    const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
+    const firstSpeechWord = speechWords[0] ?? null;
+    const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
+    const startTime = normalizeNumber(firstSpeechWord?.startTime);
+    const endTime = normalizeNumber(lastSpeechWord?.endTime);
+    if (startTime === null || endTime === null || endTime <= startTime) {
+        return null;
+    }
+    return { endTime, startTime };
+};
+const hasSegmentEditorAuthoritativeSpeechTiming = (segment) => {
+    const speechWordsRange = getSegmentEditorSpeechWordsRange(segment);
+    if (speechWordsRange) {
+        return true;
+    }
+    const speechStartTime = normalizeNumber(segment.speechStartTime);
+    const speechEndTime = normalizeNumber(segment.speechEndTime);
+    if (speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime) {
+        return true;
+    }
+    const speechDuration = normalizeNumber(segment.speechDuration);
+    return speechStartTime !== null && speechDuration !== null && speechDuration > 0;
+};
 const PROJECT_ACCESS_CACHE_TTL_MS = 5 * 60_000;
 const SEGMENT_EDITOR_SESSION_CACHE_TTL_MS = 10 * 60_000;
 const PROJECT_ACCESS_FALLBACK_TIMEOUT_MS = 8_000;
@@ -798,7 +822,11 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
     if (!session.segments.length || !session.voiceType || session.voiceType === "none") {
         return session;
     }
-    const measuredDurations = await Promise.all(session.segments.map(async (segment) => {
+    const segmentsNeedingMeasurement = session.segments.filter((segment) => !hasSegmentEditorAuthoritativeSpeechTiming(segment));
+    if (segmentsNeedingMeasurement.length === 0) {
+        return session;
+    }
+    const measuredDurations = await Promise.all(segmentsNeedingMeasurement.map(async (segment) => {
         try {
             const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(session.projectId, segment.index);
             return [segment.index, durationSeconds];
