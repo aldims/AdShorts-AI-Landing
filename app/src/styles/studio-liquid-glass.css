@@ -1158,3 +1158,231 @@
     margin-left: 0 !important;
   }
 }
+
+/* Phone polish for the segment editor route. These late overrides keep the
+   desktop timeline model, but present it as a compact phone-first control. */
+@media (max-width: 640px) {
+  .studio-canvas-route.is-segment-editor {
+    --studio-header-reserve: 76px;
+    overflow-x: hidden !important;
+  }
+
+  .studio-canvas-route.is-segment-editor .studio-canvas-main.is-segment-editor {
+    padding-top: var(--studio-header-reserve) !important;
+    overflow-x: hidden !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-canvas-shell,
+  .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden,
+  .studio-canvas-main.is-segment-editor .studio-canvas-stage,
+  .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor,
+  .studio-canvas-main.is-segment-editor .studio-canvas-content.is-segment-editor,
+  .studio-canvas-main.is-segment-editor .studio-canvas-create-layout,
+  .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    max-width: 100%;
+    overflow-x: clip !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-canvas-shell,
+  .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden {
+    padding-inline: 12px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-canvas-bg__gradient {
+    width: 100%;
+    left: 50%;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    gap: 12px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
+    min-width: 0 !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
+    align-items: stretch !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    padding: 0 !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-controls,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-toggle {
+    min-height: 42px !important;
+    border-radius: 14px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__prompt-submit {
+    width: min(100%, 184px) !important;
+    min-height: 42px !important;
+    border-radius: 16px !important;
+    font-size: 0.82rem !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-row-label-width: 42px;
+    --studio-segment-editor-timeline-track-width: max(
+      calc(100vw - 88px),
+      calc(var(--studio-segment-editor-timeline-slot-count) * 48px)
+    ) !important;
+    --studio-segment-editor-timeline-visual-track-height: 58px;
+    --studio-segment-editor-timeline-scene-track-height: 38px;
+    --studio-segment-editor-timeline-scene-gap: 2px;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 6px !important;
+    border-radius: 18px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline::-webkit-scrollbar {
+    display: none;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row {
+    grid-template-columns:
+      var(--studio-segment-editor-timeline-row-label-width)
+      minmax(var(--studio-segment-editor-timeline-track-width), 1fr) !important;
+    gap: 6px !important;
+    min-width: calc(
+      var(--studio-segment-editor-timeline-row-label-width) + 6px + var(--studio-segment-editor-timeline-track-width)
+    ) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+    color: transparent !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
+    width: 18px !important;
+    height: 18px !important;
+    color: rgba(226, 232, 240, 0.82) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler {
+    min-height: 34px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler .studio-segment-editor__timeline-track {
+    min-height: 34px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track {
+    min-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track--visual,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual {
+    min-height: var(--studio-segment-editor-timeline-visual-track-height) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
+    gap: 5px !important;
+    min-height: 34px !important;
+    padding: 6px 7px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-play {
+    padding-left: 32px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-history {
+    padding-right: 34px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
+    padding-left: 32px !important;
+    padding-right: 34px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-play {
+    left: 5px !important;
+    width: 22px !important;
+    height: 24px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-history {
+    right: 4px !important;
+    top: 4px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-history-button {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell-copy {
+    gap: 1px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell-copy strong {
+    font-size: 0.58rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell-copy small {
+    display: none !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-number {
+    left: 6px !important;
+    top: 6px !important;
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.72rem !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-duration-badge {
+    right: 6px !important;
+    bottom: 6px !important;
+    padding: 3px 6px !important;
+    font-size: 0.58rem !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-duration-input {
+    width: calc((var(--studio-segment-editor-duration-label-chars, 7) * 0.58em) + 14px) !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-delete--visual {
+    top: 4px !important;
+    right: 4px !important;
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-history {
+    right: 25px !important;
+    top: 3px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-cell--has-history {
+    padding-right: 52px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .studio-canvas-route.is-segment-editor {
+    --studio-header-reserve: 72px;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-row-label-width: 38px;
+    --studio-segment-editor-timeline-track-width: max(
+      calc(100vw - 82px),
+      calc(var(--studio-segment-editor-timeline-slot-count) * 46px)
+    ) !important;
+  }
+}

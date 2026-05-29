@@ -145,8 +145,8 @@ describe("studio generation worker availability", () => {
 
         if (url.pathname === "/api/web/credits/consume") {
           return jsonResponse({
-            consumed: { purchased: 5, subscription: 0 },
-            user: { balance: 95, plan: "PRO", user_id: "123" },
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
           });
         }
 
@@ -156,7 +156,7 @@ describe("studio generation worker availability", () => {
 
         if (url.pathname === "/api/web/credits/refund") {
           return jsonResponse({
-            refunded: { purchased: 5, subscription: 0 },
+            refunded: { purchased: 10, subscription: 0 },
             user: { balance: 100, plan: "PRO", user_id: "123" },
           });
         }
@@ -179,7 +179,7 @@ describe("studio generation worker availability", () => {
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/refund");
     expect(calls.find((call) => call.pathname === "/api/web/credits/refund")?.body).toEqual(
       expect.objectContaining({
-        consumed_purchased: 5,
+        consumed_purchased: 10,
         consumed_subscription: 0,
       }),
     );
@@ -209,8 +209,8 @@ describe("studio generation worker availability", () => {
 
         if (url.pathname === "/api/web/credits/consume") {
           return jsonResponse({
-            consumed: { purchased: 5, subscription: 0 },
-            user: { balance: 95, plan: "PRO", user_id: "123" },
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
           });
         }
 
@@ -224,7 +224,7 @@ describe("studio generation worker availability", () => {
 
         if (url.pathname === "/api/web/credits/refund") {
           return jsonResponse({
-            refunded: { purchased: 5, subscription: 0 },
+            refunded: { purchased: 10, subscription: 0 },
             user: { balance: 100, plan: "PRO", user_id: "123" },
           });
         }
@@ -246,7 +246,7 @@ describe("studio generation worker availability", () => {
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/refund");
     expect(calls.find((call) => call.pathname === "/api/web/credits/refund")?.body).toEqual(
       expect.objectContaining({
-        consumed_purchased: 5,
+        consumed_purchased: 10,
         consumed_subscription: 0,
       }),
     );

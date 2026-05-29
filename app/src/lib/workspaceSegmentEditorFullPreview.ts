@@ -170,6 +170,24 @@ export const getWorkspaceSegmentEditorFullPreviewPlaybackEndTime = (
   return Math.max(safeVisualDuration, audioEndTime);
 };
 
+export const resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime = (options: {
+  timelineEndTime: number;
+  timelineStartTime: number;
+  voiceDurationSeconds?: number | null;
+}) => {
+  const timelineStartTime = normalizePreviewTime(options.timelineStartTime) ?? 0;
+  const timelineEndTime = Math.max(
+    timelineStartTime,
+    normalizePreviewTime(options.timelineEndTime) ?? timelineStartTime,
+  );
+  const voiceDurationSeconds = normalizePreviewTime(options.voiceDurationSeconds);
+  if (voiceDurationSeconds === null || voiceDurationSeconds <= 0) {
+    return timelineEndTime;
+  }
+
+  return timelineStartTime + voiceDurationSeconds;
+};
+
 export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
   ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
   joinToleranceSeconds = 0.05,

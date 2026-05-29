@@ -7,6 +7,7 @@ import {
   getStudioVoiceCreditCost,
   normalizeStudioSegmentEditorPayload,
   normalizeStudioVoiceIdForLanguage,
+  resolveAdsflowFinalVideoDownloadPath,
   resolveStudioGenerationLanguage,
 } from "./studio.js";
 
@@ -49,6 +50,20 @@ describe("studio generation language resolution", () => {
         status: "failed",
       }),
     ).toBe(false);
+  });
+
+  it("resolves a playable final video path from a media asset id when AdsFlow omits download_path", () => {
+    expect(resolveAdsflowFinalVideoDownloadPath({ media_asset_id: 4433 })).toBe("/api/media/4433/download");
+  });
+
+  it("resolves a playable final video path from nested AdsFlow asset payloads", () => {
+    expect(
+      resolveAdsflowFinalVideoDownloadPath({
+        final_video_asset: {
+          id: "4434",
+        },
+      }),
+    ).toBe("/api/media/4434/download");
   });
 
   it("replaces a mismatched voice with the default voice for the requested language", () => {

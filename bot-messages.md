@@ -15,7 +15,7 @@
 • Музыка под настроение
 • Видеофон по теме
 
-🚀 Начните прямо сейчас — у вас есть 3 бесплатных видео!
+🚀 Начните прямо сейчас — у вас есть 1 бесплатный Shorts!
 
 Просто напишите тему вашего ролика, и я создам готовое видео.
 ```
@@ -24,14 +24,14 @@
 ```
 🎁 Бесплатный тариф
 
-У вас есть 3 видео для знакомства с платформой.
+У вас есть 1 Shorts для знакомства с платформой.
 
 📝 Особенности:
 • С водяным знаком
 • Все функции доступны
 • Готово к публикации
 
-💡 После использования бесплатных видео вы сможете выбрать тариф Pro или Ultra для создания видео без водяного знака.
+💡 После использования бесплатного Shorts вы сможете выбрать тариф Pro или Ultra для создания видео без водяного знака.
 
 Напишите тему вашего первого видео, и я создам его прямо сейчас!
 ```
@@ -85,7 +85,7 @@ AdShorts AI создаст для вас готовое вертикальное
 ✨ Профессиональная озвучка
 ✨ Музыка и видеофон
 
-🚀 У вас есть 3 бесплатных видео для старта!
+🚀 У вас есть 1 бесплатный Shorts для старта!
 
 Просто напишите тему вашего ролика, и я создам готовое видео прямо сейчас.
 ```
@@ -107,7 +107,7 @@ Create vertical videos for Shorts, Reels, and TikTok in 1 minute — automatical
 • Music matching the mood
 • Video background by topic
 
-🚀 Start right now — you have 3 free videos!
+🚀 Start right now — you have 1 free Short!
 
 Just write the topic of your video, and I'll create a ready video for you.
 ```
@@ -116,14 +116,14 @@ Just write the topic of your video, and I'll create a ready video for you.
 ```
 🎁 Free Plan
 
-You have 3 videos to try the platform.
+You have 1 Short to try the platform.
 
 📝 Features:
 • With watermark
 • All features available
 • Ready to publish
 
-💡 After using your free videos, you can choose Pro or Ultra plan to create videos without watermark.
+💡 After using your free Short, you can choose Pro or Ultra plan to create videos without watermark.
 
 Write the topic of your first video, and I'll create it right now!
 ```
@@ -177,7 +177,7 @@ AdShorts AI will create a ready vertical video for you in 1 minute:
 ✨ Professional voiceover
 ✨ Music and video background
 
-🚀 You have 3 free videos to start!
+🚀 You have 1 free Short to start!
 
 Just write the topic of your video, and I'll create a ready video right now.
 ```

@@ -79,6 +79,8 @@ export class WorkspaceCreditLimitError extends Error {
 }
 export const STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE = "generation_unavailable";
 export const STUDIO_GENERATION_UNAVAILABLE_MESSAGE = "Генерация временно недоступна. Кредиты не списаны — попробуйте позже.";
+const STUDIO_GENERATION_HEALTH_CHECK_INDETERMINATE_REASON = "adsflow_health_check_indeterminate";
+const STUDIO_GENERATION_ADSFLOW_NOT_CONFIGURED_REASON = "adsflow_not_configured";
 export class StudioGenerationUnavailableError extends Error {
     code = STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE;
     constructor(message = STUDIO_GENERATION_UNAVAILABLE_MESSAGE) {
@@ -994,6 +996,120 @@ const buildStudioVideoProxyUrl = (value) => {
     const proxyUrl = new URL("/api/studio/video", env.appUrl);
     proxyUrl.searchParams.set("path", upstreamUrl.toString());
     return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
+const ADSFLOW_FINAL_VIDEO_ASSET_FIELDS = [
+    "final_video_asset",
+    "final_asset",
+    "media_asset",
+    "video_asset",
+    "asset",
+];
+const normalizeAdsflowFinalVideoCandidatePath = (value) => {
+    const normalized = normalizeGenerationText(value);
+    return normalized && isPlayableStudioVideoPath(normalized) ? normalized : null;
+};
+const getAdsflowFinalVideoAssetPayloads = (payload) => ADSFLOW_FINAL_VIDEO_ASSET_FIELDS
+    .map((fieldName) => payload?.[fieldName])
+    .filter((value) => Boolean(value && typeof value === "object"));
+const resolveAdsflowFinalVideoMediaAssetId = (payload) => {
+    const rootAssetId = normalizePositiveInteger(payload?.media_asset_id);
+    if (rootAssetId) {
+        return rootAssetId;
+    }
+    for (const asset of getAdsflowFinalVideoAssetPayloads(payload)) {
+        const assetId = normalizePositiveInteger(asset.media_asset_id ?? asset.id);
+        if (assetId) {
+            return assetId;
+        }
+    }
+    return null;
+};
+export const resolveAdsflowFinalVideoDownloadPath = (payload, fallbackDownloadPath) => {
+    const rootCandidate = [
+        payload?.download_path,
+        payload?.download_url,
+        payload?.video_url,
+        payload?.result_url,
+        payload?.url,
+    ].map(normalizeAdsflowFinalVideoCandidatePath).find(Boolean);
+    if (rootCandidate) {
+        return rootCandidate;
+    }
+    for (const asset of getAdsflowFinalVideoAssetPayloads(payload)) {
+        const assetCandidate = [
+            asset.download_path,
+            asset.download_url,
+            asset.url,
+            asset.remote_url,
+            asset.original_url,
+        ].map(normalizeAdsflowFinalVideoCandidatePath).find(Boolean);
+        if (assetCandidate) {
+            return assetCandidate;
+        }
+    }
+    const mediaAssetId = resolveAdsflowFinalVideoMediaAssetId(payload);
+    if (mediaAssetId) {
+        return `/api/media/${mediaAssetId}/download`;
+    }
+    return normalizeAdsflowFinalVideoCandidatePath(fallbackDownloadPath);
+};
+const normalizeAdsflowMediaAssetClassifier = (value) => normalizeGenerationText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+const isAdsflowVideoMediaAsset = (asset) => {
+    const mediaType = normalizeGenerationText(asset?.media_type).toLowerCase();
+    const mimeType = normalizeGenerationText(asset?.mime_type).toLowerCase();
+    return (mediaType === "video" ||
+        mimeType.startsWith("video/") ||
+        Boolean(resolveAdsflowFinalVideoDownloadPath({ asset: asset ?? null })));
+};
+const isAdsflowReadyMediaAsset = (asset) => {
+    if (normalizeGenerationText(asset?.deleted_at)) {
+        return false;
+    }
+    const normalizedStatus = normalizeGenerationText(asset?.status).toLowerCase();
+    return (!normalizedStatus ||
+        normalizedStatus === "ready" ||
+        normalizedStatus === "completed" ||
+        normalizedStatus === "done");
+};
+const isAdsflowFinalVideoMediaAsset = (asset) => {
+    if (!asset || !isAdsflowVideoMediaAsset(asset) || !isAdsflowReadyMediaAsset(asset)) {
+        return false;
+    }
+    const segmentIndex = Number(asset.segment_index);
+    const hasSegmentIndex = Number.isFinite(segmentIndex) && segmentIndex >= 0;
+    const classifiers = [
+        asset.kind,
+        asset.role,
+        asset.library_kind,
+        asset.source_kind,
+    ].map(normalizeAdsflowMediaAssetClassifier);
+    const hasFinalClassifier = classifiers.some((classifier) => classifier === "final_video" ||
+        classifier.endsWith("_final_video") ||
+        classifier.includes("full_video") ||
+        classifier.includes("complete_video"));
+    return hasFinalClassifier && !hasSegmentIndex;
+};
+const compareAdsflowMediaAssetRecency = (left, right) => {
+    const leftCreatedAt = Date.parse(normalizeGenerationText(left.created_at));
+    const rightCreatedAt = Date.parse(normalizeGenerationText(right.created_at));
+    if (Number.isFinite(leftCreatedAt) && Number.isFinite(rightCreatedAt) && leftCreatedAt !== rightCreatedAt) {
+        return rightCreatedAt - leftCreatedAt;
+    }
+    return (normalizePositiveInteger(right.id) ?? 0) - (normalizePositiveInteger(left.id) ?? 0);
+};
+const pickAdsflowProjectFinalVideoAsset = (assets, jobId) => {
+    const candidates = (Array.isArray(assets) ? assets : []).filter(isAdsflowFinalVideoMediaAsset);
+    if (!candidates.length) {
+        return null;
+    }
+    const normalizedJobId = normalizeGenerationText(jobId).toLowerCase();
+    const matchingJobAsset = normalizedJobId
+        ? candidates.find((asset) => normalizeGenerationText(asset.storage_key).toLowerCase().includes(normalizedJobId)) ?? null
+        : null;
+    return matchingJobAsset ?? [...candidates].sort(compareAdsflowMediaAssetRecency)[0] ?? null;
 };
 const buildStudioJobVideoProxyUrl = (jobId) => {
     const normalizedJobId = normalizeGenerationText(jobId);
@@ -2430,17 +2546,19 @@ const buildStudioGeneration = (payload, options) => {
         title: options?.title ?? payload.title,
     });
     const jobId = String(payload.job_id ?? "");
+    const downloadPath = resolveAdsflowFinalVideoDownloadPath(payload, options?.historyEntry?.downloadPath);
+    const mediaAssetId = resolveAdsflowFinalVideoMediaAssetId(payload);
     const finalAsset = buildStudioFinalAsset({
         adId: payload.ad_id ?? null,
-        downloadPath: payload.download_path ?? null,
+        downloadPath,
         generatedAt: payload.generated_at ?? null,
         historyEntry: options?.historyEntry ?? null,
         kind: "final_video",
-        mediaAssetId: payload.media_asset_id ?? null,
+        mediaAssetId,
         status: payload.status ?? null,
     });
     const videoUrls = buildStudioGenerationVideoUrls({
-        downloadPath: finalAsset?.downloadPath ?? payload.download_path,
+        downloadPath: finalAsset?.downloadPath ?? downloadPath,
         generatedAt: payload.generated_at,
         jobId,
     });
@@ -2484,17 +2602,19 @@ const buildStudioGenerationFromLatest = (payload, historyEntry) => {
         title: historyEntry?.title || payload.title,
     });
     const jobId = String(payload.job_id ?? "");
+    const downloadPath = resolveAdsflowFinalVideoDownloadPath(payload, historyEntry?.downloadPath);
+    const mediaAssetId = resolveAdsflowFinalVideoMediaAssetId(payload);
     const finalAsset = buildStudioFinalAsset({
         adId: payload.ad_id ?? null,
-        downloadPath: payload.download_path ?? null,
+        downloadPath,
         generatedAt: payload.generated_at ?? null,
         historyEntry,
         kind: "final_video",
-        mediaAssetId: payload.media_asset_id ?? null,
+        mediaAssetId,
         status: payload.status ?? null,
     });
     const videoUrls = buildStudioGenerationVideoUrls({
-        downloadPath: finalAsset?.downloadPath ?? payload.download_path,
+        downloadPath: finalAsset?.downloadPath ?? downloadPath,
         generatedAt: payload.generated_at,
         jobId,
     });
@@ -2586,8 +2706,9 @@ const buildLatestGenerationStatus = (payload, historyEntry) => {
         return null;
     }
     const status = String(payload.status ?? "queued");
+    const downloadPath = resolveAdsflowFinalVideoDownloadPath(payload, historyEntry?.downloadPath);
     const publicStatus = getStudioGenerationPublicStatus({
-        downloadPath: payload.download_path,
+        downloadPath,
         error: payload.error,
         projectStatus: payload.project_status,
         readyReason: payload.ready_reason,
@@ -2743,6 +2864,15 @@ class AdsflowHttpError extends Error {
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const isAdsflowHttpStatusError = (error, ...statusCodes) => error instanceof AdsflowHttpError && statusCodes.includes(error.statusCode);
+const isAdsflowTransientFailure = (error) => {
+    if (error instanceof StudioGenerationUnavailableError) {
+        return true;
+    }
+    if (error instanceof AdsflowHttpError) {
+        return ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(error.statusCode);
+    }
+    return error instanceof Error && error.message.startsWith("AdsFlow unavailable for ");
+};
 const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
     "character_reference",
     "character_reference_source",
@@ -2875,14 +3005,26 @@ const getAdsflowHealthWorkersOnlineCount = (value) => {
     const count = Number(rawCount);
     return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : null;
 };
+const isAdsflowHealthResponsePayload = (value) => Boolean(value && typeof value === "object" && ("components" in value || "status" in value));
 export async function getStudioGenerationAvailability() {
+    if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
+        console.warn("[studio] Generation worker availability unavailable because AdsFlow is not configured");
+        return {
+            available: false,
+            reason: STUDIO_GENERATION_ADSFLOW_NOT_CONFIGURED_REASON,
+            status: null,
+            workersOnline: null,
+        };
+    }
     try {
-        assertAdsflowConfigured();
         const response = await fetchAdsflowResponse(buildAdsflowUrl("/health"), undefined, {
             retryDelaysMs: [],
             timeoutMs: Math.max(1_000, env.upstreamProbeTimeoutMs),
         });
         const payload = (await response.json().catch(() => null));
+        if (!isAdsflowHealthResponsePayload(payload)) {
+            throw new Error(`AdsFlow health returned an unexpected response (${response.status}).`);
+        }
         const components = payload?.components ?? {};
         const workersOnline = getAdsflowHealthWorkersOnlineCount(components.workers);
         const workersHealthy = isAdsflowHealthComponentHealthy(components.workers) && (workersOnline === null || workersOnline > 0);
@@ -2904,12 +3046,14 @@ export async function getStudioGenerationAvailability() {
         };
     }
     catch (error) {
-        console.warn("[studio] Failed to check generation worker availability", {
+        console.warn("[studio] Generation worker health check is indeterminate; continuing to enqueue safeguards", {
             error: error instanceof Error ? error.message : "Unknown worker availability error.",
         });
+        // Probe failures are advisory: the enqueue path below reserves credits and refunds
+        // if AdsFlow cannot accept the job, so transient health timeouts should not block users.
         return {
-            available: false,
-            reason: "adsflow_health_check_failed",
+            available: true,
+            reason: STUDIO_GENERATION_HEALTH_CHECK_INDETERMINATE_REASON,
             status: null,
             workersOnline: null,
         };
@@ -3054,6 +3198,26 @@ const fetchAdsflowJobStatus = async (jobId, user) => {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     }));
+};
+const fetchAdsflowProjectMedia = async (projectId, user) => {
+    assertAdsflowConfigured();
+    const safeProjectId = normalizePositiveInteger(projectId);
+    if (!safeProjectId) {
+        throw new Error("Project id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/projects/${encodeURIComponent(String(safeProjectId))}/media`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowProjectFinalVideoAsset = async (projectId, user, jobId) => {
+    const safeProjectId = normalizePositiveInteger(projectId);
+    if (!safeProjectId) {
+        return null;
+    }
+    const payload = await fetchAdsflowProjectMedia(safeProjectId, user);
+    return pickAdsflowProjectFinalVideoAsset(payload.assets, jobId);
 };
 const fetchAdsflowSegmentAiPhotoJobStatus = async (jobId, user) => {
     assertAdsflowConfigured();
@@ -3591,6 +3755,9 @@ export async function createStudioGenerationJob(prompt, user, options) {
             catch (refundError) {
                 console.error("[studio] Failed to refund reserved credits", refundError);
             }
+        }
+        if (isAdsflowTransientFailure(error)) {
+            throw error instanceof StudioGenerationUnavailableError ? error : new StudioGenerationUnavailableError();
         }
         throw error;
     }
@@ -4819,6 +4986,38 @@ export async function getStudioGenerationStatus(jobId, user) {
     const status = String(payload.status ?? "queued");
     const safeJobId = String(payload.job_id ?? jobId).trim();
     const existingHistoryEntry = await getWorkspaceGenerationHistoryEntry(user, safeJobId).catch(() => null);
+    let projectFinalVideoAsset = null;
+    let downloadPath = resolveAdsflowFinalVideoDownloadPath(payload, existingHistoryEntry?.downloadPath);
+    let mediaAssetId = resolveAdsflowFinalVideoMediaAssetId(payload) ?? existingHistoryEntry?.finalAssetId ?? null;
+    if (!downloadPath &&
+        !mediaAssetId &&
+        payload.ad_id &&
+        canExposeStudioFinalVideoFromStatus({
+            downloadPath,
+            error: payload.error,
+            projectStatus: payload.project_status,
+            readyReason: payload.ready_reason,
+            status,
+        })) {
+        try {
+            projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(payload.ad_id, user, safeJobId);
+            downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }, existingHistoryEntry?.downloadPath);
+            mediaAssetId = resolveAdsflowFinalVideoMediaAssetId({ asset: projectFinalVideoAsset }) ?? existingHistoryEntry?.finalAssetId ?? null;
+        }
+        catch (error) {
+            console.warn("[studio] Failed to resolve final video from AdsFlow project media", {
+                adId: payload.ad_id,
+                error: error instanceof Error ? error.message : "Unknown project media error.",
+                jobId: safeJobId,
+            });
+        }
+    }
+    const payloadWithResolvedVideo = {
+        ...payload,
+        download_path: downloadPath ?? payload.download_path ?? null,
+        final_video_asset: projectFinalVideoAsset ?? payload.final_video_asset,
+        media_asset_id: mediaAssetId,
+    };
     const resolvedMetadata = resolveGenerationPresentation({
         description: payload.description ?? existingHistoryEntry?.description ?? "",
         fallbackTitle: existingHistoryEntry?.prefillSettings?.language === "en" ? "Ready video" : "Готовое видео",
@@ -4831,10 +5030,10 @@ export async function getStudioGenerationStatus(jobId, user) {
         await saveWorkspaceGenerationHistory(user, {
             adId: payload.ad_id ?? null,
             description: resolvedMetadata.description,
-            downloadPath: payload.download_path ?? null,
+            downloadPath,
             editedFromProjectAdId: existingHistoryEntry?.editedFromProjectAdId ?? null,
             error: payload.error ?? null,
-            finalAssetId: payload.media_asset_id ?? existingHistoryEntry?.finalAssetId ?? null,
+            finalAssetId: mediaAssetId,
             finalAssetKind: "final_video",
             finalAssetStatus: status,
             generatedAt: payload.generated_at ?? null,
@@ -4851,25 +5050,23 @@ export async function getStudioGenerationStatus(jobId, user) {
         console.error("[studio] Failed to sync generation history", error);
     }
     const publicStatus = getStudioGenerationPublicStatus({
-        downloadPath: payload.download_path,
+        downloadPath,
         error: payload.error,
         projectStatus: payload.project_status,
         readyReason: payload.ready_reason,
         status,
     });
     if (publicStatus === "done") {
-        if (!payload.download_path) {
-            throw new Error("AdsFlow finished the job without a video path.");
-        }
-        const generation = buildStudioGeneration(payload, {
+        const generation = buildStudioGeneration(payloadWithResolvedVideo, {
             ...resolvedMetadata,
             historyEntry: existingHistoryEntry,
         });
         if (!generation) {
             console.warn("[studio] Done generation is missing playable preview metadata", {
                 adId: payload.ad_id ?? null,
-                downloadPath: payload.download_path ?? null,
+                downloadPath,
                 jobId: safeJobId,
+                mediaAssetId,
                 status,
             });
             return {
@@ -4920,7 +5117,12 @@ const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user) => {
     }
     const historyEntries = await listWorkspaceGenerationHistory(user, 200);
     const historyEntry = historyEntries.find((entry) => normalizeGenerationText(entry.jobId) === safeJobId) ?? null;
-    const downloadPath = normalizeGenerationText(historyEntry?.downloadPath);
+    const historyAssetDownloadPath = historyEntry?.finalAssetId ? `/api/media/${historyEntry.finalAssetId}/download` : null;
+    let downloadPath = normalizeGenerationText(historyEntry?.downloadPath) || normalizeGenerationText(historyAssetDownloadPath);
+    if (!downloadPath && historyEntry?.adId) {
+        const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(historyEntry.adId, user, safeJobId);
+        downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }) ?? "";
+    }
     if (!downloadPath) {
         return null;
     }
@@ -4930,10 +5132,29 @@ export async function getStudioVideoProxyTarget(jobId, user) {
     let fallbackError = null;
     try {
         const payload = await fetchAdsflowJobStatus(jobId, user);
-        if (String(payload.status ?? "") !== "done") {
+        let downloadPath = resolveAdsflowFinalVideoDownloadPath(payload);
+        if (!downloadPath && payload.ad_id) {
+            try {
+                const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(payload.ad_id, user, jobId);
+                downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset });
+            }
+            catch (error) {
+                console.warn("[studio] Failed to resolve playback from AdsFlow project media", {
+                    adId: payload.ad_id,
+                    error: error instanceof Error ? error.message : "Unknown project media error.",
+                    jobId: normalizeGenerationText(jobId),
+                });
+            }
+        }
+        if (!canExposeStudioFinalVideoFromStatus({
+            downloadPath,
+            error: payload.error,
+            projectStatus: payload.project_status,
+            readyReason: payload.ready_reason,
+            status: payload.status,
+        })) {
             throw new Error("Video is not ready yet.");
         }
-        const downloadPath = String(payload.download_path ?? "").trim();
         if (!downloadPath) {
             throw new Error("AdsFlow did not return a download path.");
         }
@@ -5438,11 +5659,36 @@ async function getStudioGenerationPlaybackSource(generation, user) {
     }, user);
 }
 async function prepareStudioLatestGenerationForBootstrap(latestGeneration, user) {
-    if (!latestGeneration?.generation || latestGeneration.status !== "done") {
+    if (!latestGeneration || latestGeneration.status !== "done") {
         return latestGeneration;
     }
-    warmStudioGenerationPlayback(latestGeneration.generation, user);
-    return latestGeneration;
+    if (latestGeneration.generation) {
+        warmStudioGenerationPlayback(latestGeneration.generation, user);
+        return latestGeneration;
+    }
+    const safeJobId = normalizeGenerationText(latestGeneration.jobId);
+    if (!safeJobId) {
+        return latestGeneration;
+    }
+    try {
+        const resolvedStatus = await getStudioGenerationStatus(safeJobId, user);
+        if (resolvedStatus.generation) {
+            warmStudioGenerationPlayback(resolvedStatus.generation, user);
+        }
+        return {
+            ...latestGeneration,
+            ...resolvedStatus,
+            error: resolvedStatus.error ?? latestGeneration.error,
+            status: resolvedStatus.status || latestGeneration.status,
+        };
+    }
+    catch (error) {
+        console.warn("[studio] Failed to resolve latest generation preview during bootstrap", {
+            error: error instanceof Error ? error.message : "Unknown latest generation preview error.",
+            jobId: safeJobId,
+        });
+        return latestGeneration;
+    }
 }
 const warmStudioGenerationPlayback = (generation, user) => {
     const safeJobId = normalizeGenerationText(generation?.id);

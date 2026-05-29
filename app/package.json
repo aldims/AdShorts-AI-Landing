@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n auth,web \"npm:dev:server\" \"npm:dev:web\"",
+    "dev": "concurrently -k -n auth,web \"npm:dev:server\" \"ADSHORTS_AUTO_AUTH_BACKEND=0 npm run dev:web\"",
     "dev:server": "tsx watch --include .env --include .env.* server/server.ts",
     "dev:server:detached": "node scripts/start-auth-dev-server.mjs",
     "dev:web": "node --max-http-header-size=65536 ./node_modules/vite/bin/vite.js --host 127.0.0.1",
@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "audit:responsive": "node scripts/responsive-audit.mjs",
-    "preview": "concurrently -k -n auth,web \"npm:start:server\" \"npm:preview:web\"",
+    "preview": "concurrently -k -n auth,web \"npm:start:server\" \"ADSHORTS_AUTO_AUTH_BACKEND=0 npm run preview:web\"",
     "preview:web": "node --max-http-header-size=65536 ./node_modules/vite/bin/vite.js preview --host 127.0.0.1",
     "start:server": "node dist-server/server/server.js",
     "auth:generate": "npx auth@latest generate --config ./server/auth.ts --yes",

@@ -3250,6 +3250,38 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("does not stretch full-preview project voiceover audio to a longer manual visual slot", () => {
+    const segment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 5,
+      speechEndTime: 5,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 5.45,
+      startTime: 0,
+    });
+    expect(
+      resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+        previewRange,
+        segment,
+        timelineEndTime: 10,
+        timelineStartTime: 0,
+      }),
+    ).toEqual({
+      sourceStartTime: 0,
+      timelineEndTime: 5.45,
+    });
+  });
+
   it("uses segment voiceover proxy in full preview after a prior non-project voiceover", () => {
     const segment = createDraftSegment({
       index: 1,
@@ -3573,6 +3605,46 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
       duration: 5.24,
       endTime: 5.24,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves a manual photo duration longer than the fresh voiceover", () => {
+    const voiceText = "Озвучка короче ручной длительности фото";
+    const segment = createDraftSegment({
+      duration: 10,
+      durationExtensionSourceDurationSeconds: 5.2,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      mediaType: "photo",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&delivery=preview",
+      speechDuration: 5,
+      speechDurationSource: "audio",
+      speechEndTime: 5,
+      speechStartTime: 0,
+      text: voiceText,
+      voiceoverAsset: {
+        assetId: 781,
+        durationSeconds: 5,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-5/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(5);
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
       startTime: 0,
     }));
   });

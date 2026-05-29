@@ -11,10 +11,10 @@ import {
 } from "./studio-credit-costs";
 
 describe("video generation credit costs", () => {
-  it("prices standard Create Shorts generation at five credits", () => {
-    expect(STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST).toBe(5);
-    expect(STUDIO_VIDEO_GENERATION_CREDIT_COST).toBe(5);
-    expect(STUDIO_CREDIT_COST_BY_ACTION.video_generation).toBe(5);
+  it("prices standard Create Shorts generation at ten credits", () => {
+    expect(STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST).toBe(10);
+    expect(STUDIO_VIDEO_GENERATION_CREDIT_COST).toBe(10);
+    expect(STUDIO_CREDIT_COST_BY_ACTION.video_generation).toBe(10);
   });
 });
 

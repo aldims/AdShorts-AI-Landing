@@ -10,6 +10,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
+  resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
@@ -46,6 +47,36 @@ describe("workspace segment editor full preview", () => {
         { finalVoiceGraceSeconds: 0.45 },
       ),
     ).toBeCloseTo(9.7, 6);
+  });
+
+  it("ends an isolated voice track by voice duration when the visual slot is longer", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+        timelineEndTime: 10,
+        timelineStartTime: 2,
+        voiceDurationSeconds: 5,
+      }),
+    ).toBe(7);
+  });
+
+  it("keeps an isolated voice track long enough when voice is longer than the visual slot", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+        timelineEndTime: 6,
+        timelineStartTime: 2,
+        voiceDurationSeconds: 5,
+      }),
+    ).toBe(7);
+  });
+
+  it("falls back to the visual slot when isolated voice duration is unknown", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+        timelineEndTime: 10,
+        timelineStartTime: 2,
+        voiceDurationSeconds: null,
+      }),
+    ).toBe(10);
   });
 
   it("returns the playhead ratio for CSS positioning", () => {

@@ -26255,6 +26255,20 @@ textarea {
   font-size: clamp(0.82rem, 0.9vw, 0.96rem);
 }
 
+.studio-segment-editor__timeline-preview-controls {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  min-width: 0;
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 12px;
+  background: rgba(2, 6, 12, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px -20px rgba(20, 184, 166, 0.72);
+  overflow: hidden;
+}
+
 .studio-segment-editor__timeline-preview-toggle {
   display: inline-flex;
   align-items: center;
@@ -26285,6 +26299,28 @@ textarea {
     color 0.16s ease,
     opacity 0.16s ease,
     transform 0.16s ease;
+}
+
+.studio-segment-editor__timeline-preview-controls .studio-segment-editor__timeline-preview-toggle {
+  min-height: 38px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.studio-segment-editor__timeline-preview-toggle--resume,
+.studio-segment-editor__timeline-preview-toggle--stop {
+  padding-inline: 12px;
+  background:
+    linear-gradient(180deg, rgba(20, 184, 166, 0.17), rgba(15, 23, 42, 0.28)),
+    rgba(2, 6, 12, 0.6);
+}
+
+.studio-segment-editor__timeline-preview-toggle--stop {
+  width: 42px;
+  min-width: 42px;
+  padding-inline: 0;
+  border-right: 1px solid rgba(148, 163, 184, 0.16) !important;
 }
 
 .studio-segment-editor__timeline-preview-toggle svg {
@@ -26322,6 +26358,10 @@ textarea {
   color: rgba(254, 243, 199, 0.98);
 }
 
+.studio-segment-editor__timeline-preview-toggle.is-paused {
+  color: rgba(204, 251, 241, 0.96);
+}
+
 .studio-segment-editor__timeline-preview-toggle.is-loading {
   border-color: rgba(125, 211, 252, 0.38);
   background:
@@ -26344,6 +26384,20 @@ textarea {
   .studio-segment-editor__timeline-preview-toggle {
     width: 42px;
     padding: 0;
+  }
+
+  .studio-segment-editor__timeline-preview-controls {
+    min-width: 86px;
+  }
+
+  .studio-segment-editor__timeline-preview-controls .studio-segment-editor__timeline-preview-toggle {
+    width: 42px;
+    min-width: 42px;
+    padding: 0;
+  }
+
+  .studio-segment-editor__timeline-preview-toggle--stop {
+    min-width: 42px;
   }
 
   .studio-segment-editor__timeline-preview-toggle span,
@@ -26428,19 +26482,6 @@ button.studio-segment-editor__timeline-label:focus-visible {
   outline: 2px solid rgba(45, 212, 191, 0.42);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.08);
-}
-
-button.studio-segment-editor__timeline-label--brand.is-brand-active {
-  color: rgba(204, 251, 241, 0.96);
-  background:
-    linear-gradient(90deg, rgba(8, 47, 73, 0.98) 72%, rgba(8, 47, 73, 0.68));
-  box-shadow:
-    inset 0 0 0 1px rgba(45, 212, 191, 0.18),
-    0 0 18px rgba(45, 212, 191, 0.08);
-}
-
-button.studio-segment-editor__timeline-label--brand.is-brand-active .studio-segment-editor__timeline-label-icon {
-  color: rgba(94, 234, 212, 0.95);
 }
 
 .studio-segment-editor__timeline-label-icon {
@@ -42440,7 +42481,8 @@ html, body {
     pointer-events: auto;
   }
 
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__timeline-preview-toggle {
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__timeline-preview-toggle,
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__timeline-preview-controls {
     pointer-events: auto;
   }
 

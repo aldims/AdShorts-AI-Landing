@@ -67,6 +67,7 @@ import {
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
@@ -9868,12 +9869,14 @@ export const resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange = ({
   const timelineEndTimeFromShiftedSource =
     sourcePreviewDuration !== null ? normalizedTimelineStartTime + sourcePreviewDuration : null;
   const resolvedTimelineEndTime = hasShiftedSourceTimeline
-    ? Math.max(normalizedTimelineEndTime, timelineEndTimeFromShiftedSource ?? normalizedTimelineEndTime)
-    : Math.max(normalizedTimelineEndTime, previewEndTime ?? normalizedTimelineEndTime);
+    ? timelineEndTimeFromShiftedSource ?? normalizedTimelineEndTime
+    : previewEndTime ?? normalizedTimelineEndTime;
 
   return {
     sourceStartTime: roundWorkspaceSegmentTimelineSeconds(sourceStartTime),
-    timelineEndTime: roundWorkspaceSegmentTimelineSeconds(resolvedTimelineEndTime),
+    timelineEndTime: roundWorkspaceSegmentTimelineSeconds(
+      Math.max(normalizedTimelineStartTime, resolvedTimelineEndTime),
+    ),
   };
 };
 
@@ -9985,10 +9988,26 @@ const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
 
   const currentSpeechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
   const shouldFillSpeechDuration = currentSpeechDuration === null;
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const storedDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
   const hasManualTimelineOverride =
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null ||
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) !== null;
+    manualDurationSeconds !== null ||
+    storedDurationExtensionSourceDurationSeconds !== null;
+  const isStillVisualSegment =
+    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" ||
+    getWorkspaceSegmentPreviewKind(segment) === "image" ||
+    String(segment.mediaType ?? "").trim().toLowerCase() === "photo";
+  const shouldPreserveManualPhotoDuration =
+    hasManualTimelineOverride &&
+    (isStillVisualSegment || storedDurationExtensionSourceDurationSeconds !== null) &&
+    manualDurationSeconds !== null &&
+    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= voiceoverDurationSeconds;
+
+  if (shouldPreserveManualPhotoDuration) {
+    return segment;
+  }
 
   if (!hasManualTimelineOverride && !shouldFillSpeechDuration) {
     return segment;
@@ -16466,14 +16485,14 @@ const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>>
       name: "Pack 100",
       credits: "100 кредитов",
       price: "690 ₽",
-      subnote: "До 20 видео",
+      subnote: "До 10 видео",
     },
     en: {
       checkoutProductId: "package_10",
       name: "Pack 100",
       credits: "100 credits",
       price: "690 ₽",
-      subnote: "Up to 20 videos",
+      subnote: "Up to 10 videos",
     },
   },
   {
@@ -16482,7 +16501,7 @@ const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>>
       name: "Pack 500",
       credits: "500 кредитов",
       price: "2 750 ₽",
-      subnote: "до 100 видео",
+      subnote: "до 50 видео",
       badge: "Выгодно",
     },
     en: {
@@ -16490,7 +16509,7 @@ const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>>
       name: "Pack 500",
       credits: "500 credits",
       price: "2 750 ₽",
-      subnote: "Up to 100 videos",
+      subnote: "Up to 50 videos",
       badge: "Good value",
     },
   },
@@ -16500,14 +16519,14 @@ const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>>
       name: "Pack 1000",
       credits: "1000 кредитов",
       price: "4 990 ₽",
-      subnote: "до 200 видео",
+      subnote: "до 100 видео",
     },
     en: {
       checkoutProductId: "package_100",
       name: "Pack 1000",
       credits: "1000 credits",
       price: "4 990 ₽",
-      subnote: "Up to 200 videos",
+      subnote: "Up to 100 videos",
     },
   },
 ];
@@ -19963,6 +19982,8 @@ export function WorkspacePage({
   const [musicSelectionError, setMusicSelectionError] = useState<string | null>(null);
   const [, setStatus] = useState("Ready to generate");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationUiSource, setGenerationUiSource] =
+    useState<"idle" | "studio" | "segment-editor" | "bootstrap">("idle");
 
   useEffect(() => {
     const previousRouteLanguage = previousRouteLocaleLanguageRef.current;
@@ -22439,7 +22460,7 @@ export function WorkspacePage({
   }, [projects]);
 
   useEffect(() => {
-    if (isWorkspaceBootstrapPending || isGenerating) {
+    if (isWorkspaceBootstrapPending || (isGenerating && generationUiSource !== "bootstrap")) {
       return;
     }
 
@@ -22463,7 +22484,14 @@ export function WorkspacePage({
     }
 
     setGeneratedVideo(fallbackGeneration);
-  }, [failedStudioVideoUrls, generatedVideo?.videoUrl, isGenerating, isWorkspaceBootstrapPending, projects]);
+  }, [
+    failedStudioVideoUrls,
+    generatedVideo?.videoUrl,
+    generationUiSource,
+    isGenerating,
+    isWorkspaceBootstrapPending,
+    projects,
+  ]);
 
   useEffect(() => {
     if (generatedVideo && generateError === "Failed to fetch generation status.") {
@@ -23122,7 +23150,9 @@ export function WorkspacePage({
   const isGeneratedVideoDismissed = Boolean(generatedVideoDismissKey) && dismissedStudioPreviewKey === generatedVideoDismissKey;
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
-  const shouldShowStudioPreviewGenerationOverlay = isGenerating && !visibleGeneratedVideo;
+  const isUserFacingGeneration = isGenerating && generationUiSource !== "bootstrap";
+  const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
+  const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
   const selectedLocalExampleGoalOption =
     workspaceLocalExampleGoalOptions.find((option) => option.id === selectedLocalExampleGoal) ??
@@ -24486,8 +24516,6 @@ export function WorkspacePage({
     !baselineSegmentEditorSystemWatermarkEnabled &&
     appliedSegmentEditorSystemWatermarkEnabled;
   const hasAppliedSegmentEditorBranding = hasStudioBranding(appliedSegmentEditorBrandSnapshot);
-  const hasVisibleSegmentEditorBranding =
-    hasAppliedSegmentEditorBranding || hasAppliedSegmentEditorSystemWatermark;
   const hasSegmentEditorBrandRemoval =
     hasBaselineSegmentEditorBranding && !hasAppliedSegmentEditorBranding;
   const hasSegmentEditorBrandChange = !areStudioBrandSettingsEqual(
@@ -24636,14 +24664,14 @@ export function WorkspacePage({
   };
   const isActiveSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
   const isSegmentEditorStructureActionBusy =
-    isGenerating ||
+    isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo ||
     isAnySegmentEditorVisualJobBusy;
   const isSegmentEditorAddSegmentBusy =
-    isGenerating ||
+    isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo;
   const isSegmentEditorThumbReorderBusy =
-    isGenerating ||
+    isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo;
   const segmentAiPhotoModalSegment =
     typeof segmentAiPhotoModalSegmentIndex === "number"
@@ -33879,6 +33907,7 @@ export function WorkspacePage({
     options?: {
       clearAppliedSegmentEditorOnSuccess?: boolean;
       clearStoredSegmentEditorDraftProjectId?: number | null;
+      generationUiSource?: "studio" | "segment-editor" | "bootstrap";
       invalidateSegmentEditorOnSuccess?: boolean;
       openStudioCreateOnSuccess?: boolean;
       projectBrandStateOnSuccess?: WorkspaceSegmentEditorProjectBrandState | null;
@@ -33894,6 +33923,7 @@ export function WorkspacePage({
     }
 
     setIsGenerating(true);
+    setGenerationUiSource(options?.generationUiSource ?? "studio");
     setStatus(getStudioStatusLabel(initialStatus, locale));
     generationRunRef.current += 1;
     const runId = generationRunRef.current;
@@ -34026,6 +34056,7 @@ export function WorkspacePage({
     } finally {
       if (generationRunRef.current === runId) {
         setIsGenerating(false);
+        setGenerationUiSource("idle");
       }
     }
   };
@@ -34561,6 +34592,7 @@ export function WorkspacePage({
         setSegmentEditorAppliedSession(null);
       }
       setIsGenerating(true);
+      setGenerationUiSource(isSegmentEditorGeneration ? "segment-editor" : "studio");
       setIsPreviewModalOpen(false);
       setGenerateError(null);
       setInsufficientCreditsContext(null);
@@ -34787,6 +34819,7 @@ export function WorkspacePage({
 
       if (response.status === 402) {
         setIsGenerating(false);
+        setGenerationUiSource("idle");
         setStatus("Credits required");
         openInsufficientCreditsModal("video_generation", requiredCredits);
         return;
@@ -34813,6 +34846,7 @@ export function WorkspacePage({
       await pollGenerationJob(payload.data.jobId, payload.data.status, {
         clearAppliedSegmentEditorOnSuccess: Boolean(options?.clearAppliedSegmentEditorOnSuccess),
         clearStoredSegmentEditorDraftProjectId: options?.segmentEditorSession?.projectId ?? null,
+        generationUiSource: isSegmentEditorGeneration ? "segment-editor" : "studio",
         invalidateSegmentEditorOnSuccess: Boolean(options?.isRegeneration && options?.projectId),
         openStudioCreateOnSuccess: true,
         projectBrandStateOnSuccess,
@@ -34822,6 +34856,7 @@ export function WorkspacePage({
       console.error("[studio] generate.failed-before-job", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to generate task.";
       setIsGenerating(false);
+      setGenerationUiSource("idle");
       setStatus("Generation failed");
       setGenerateError(errorMessage);
       if (isSegmentEditorGeneration) {
@@ -36095,12 +36130,15 @@ export function WorkspacePage({
         if (latestGeneration.status === "done" && latestGeneration.generation) {
           setStatus("");
           setIsGenerating(false);
+          setGenerationUiSource("idle");
           return;
         }
 
         if (latestGeneration.status === "done") {
           setStatus(workspaceText(locale, "Подготавливаем видео...", "Preparing video..."));
-          void pollGenerationJob(latestGeneration.jobId, "preparing_preview");
+          void pollGenerationJob(latestGeneration.jobId, "preparing_preview", {
+            generationUiSource: "bootstrap",
+          });
           return;
         }
 
@@ -36108,11 +36146,14 @@ export function WorkspacePage({
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
           setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
+          setGenerationUiSource("idle");
           return;
         }
 
         setStatus(getStudioStatusLabel(latestGeneration.status, locale));
-        void pollGenerationJob(latestGeneration.jobId, latestGeneration.status);
+        void pollGenerationJob(latestGeneration.jobId, latestGeneration.status, {
+          generationUiSource: "bootstrap",
+        });
       } catch (error) {
         if (isCancelled || isAbortLikeError(error)) return;
         console.error("[workspace] Failed to bootstrap workspace", error);
@@ -36590,7 +36631,7 @@ export function WorkspacePage({
   const isSegmentEditorCreateShortsDisabled =
     !hasSegmentEditorChanges ||
     isSegmentEditorBrandDirty ||
-    isGenerating ||
+    isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo ||
     isAnySegmentEditorVisualJobBusy;
   const handleSegmentEditorPromptVisualToolSelect = (tab: WorkspaceSegmentVisualModalTab) => {
@@ -37252,26 +37293,21 @@ export function WorkspacePage({
         }
       : null;
   };
-	  const showSegmentTimelinePhotoDurationAudioGuardWarning = (
-	    guard: {
-	      minimumDurationSeconds: number;
-	      voiceoverDurationSource: "actual" | "estimated";
-	    },
-	  ) => {
-	    const minimumDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
-	      0,
-	      guard.minimumDurationSeconds,
-	      locale,
-	    );
-	    const warning = workspaceText(
-	      locale,
-	      guard.voiceoverDurationSource === "estimated"
-	        ? "Озвучка может оказаться длиннее фото. Точную длительность покажем после генерации озвучки."
-	        : `Длина фото не может быть меньше озвучки. Минимум ${minimumDurationLabel}.`,
-	      guard.voiceoverDurationSource === "estimated"
-	        ? "Voiceover may be longer than the photo. The exact duration will appear after voiceover generation."
-	        : `Photo duration cannot be shorter than voiceover. Minimum ${minimumDurationLabel}.`,
-	    );
+    const showSegmentTimelinePhotoDurationAudioGuardWarning = (
+      guard: {
+        minimumDurationSeconds: number;
+        voiceoverDurationSource: "actual" | "estimated";
+      },
+    ) => {
+      const warning = workspaceText(
+        locale,
+        guard.voiceoverDurationSource === "estimated"
+          ? "Озвучка может оказаться длиннее фото. Точную длительность покажем после генерации озвучки."
+          : `Длина визуала не может быть меньше озвучки.`,
+        guard.voiceoverDurationSource === "estimated"
+          ? "Voiceover may be longer than the photo. The exact duration will appear after voiceover generation."
+          : `Visual duration cannot be shorter than voiceover.`,
+      );
 
     setSegmentEditorVideoError(warning);
     showStudioToast(warning, { durationMs: 4000, kind: "warning" });
@@ -37977,6 +38013,7 @@ export function WorkspacePage({
       });
       const voiceoverAudioUrl = voiceoverAudioPreviewSource.audioUrl;
       const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
+      const voiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
         const isProjectVoiceoverAudio = voiceoverAudioPreviewSource.sourceKind === "project";
         const shouldUseSegmentProxyForProjectVoiceover =
@@ -38004,7 +38041,13 @@ export function WorkspacePage({
             })
           : null;
         const projectVoiceSourceStartTime = projectVoiceoverFullPreviewRange?.sourceStartTime ?? null;
-        const voiceTimelineEndTime = projectVoiceoverFullPreviewRange?.timelineEndTime ?? timelineEndTime;
+        const voiceTimelineEndTime =
+          projectVoiceoverFullPreviewRange?.timelineEndTime ??
+          resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+            timelineEndTime,
+            timelineStartTime: voiceTimelineStartTime,
+            voiceDurationSeconds: voiceoverDurationSeconds,
+          });
 
         if (voiceTimelineEndTime > voiceTimelineStartTime) {
           if (shouldUseProjectVoiceoverTimelineSource) {
@@ -39282,6 +39325,19 @@ export function WorkspacePage({
 
     void startSegmentEditorFullPreview();
   };
+  const handleSegmentEditorFullPreviewStop = () => {
+    const duration = getSegmentEditorFullPreviewDurationSeconds();
+    const currentTime = clampWorkspaceSegmentEditorFullPreviewTime(segmentEditorFullPreviewTimeRef.current, duration);
+    writeSegmentEditorFullPreviewDebugTrace("stop.request", {
+      currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+      totalDuration: roundWorkspaceSegmentTimelineSeconds(duration),
+    });
+    stopSegmentEditorFullPreview({ resetTime: true, status: "idle" });
+    logSegmentEditorDiagnostics("client.segment-editor.full-preview.stopped", {
+      currentTime,
+      totalDuration: duration,
+    });
+  };
   const getSegmentEditorFullPreviewTimeFromPointerEvent = (event: ReactPointerEvent<HTMLDivElement>) => {
     const previewSegments = getSegmentEditorFullPreviewSegments();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -40151,7 +40207,7 @@ export function WorkspacePage({
       segmentEditorDraft &&
       isWorkspaceSegmentVoiceoverAssetFresh(segmentTimelineVoiceMenuSegment, segmentEditorDraft),
   );
-	  const isSegmentTimelineVoiceMenuSegmentJobBusy = Boolean(
+    const isSegmentTimelineVoiceMenuSegmentJobBusy = Boolean(
     segmentTimelineVoiceMenuSegment && isWorkspaceSegmentVisualJobBusy(segmentTimelineVoiceMenuSegment.index),
   );
   const segmentTimelineVoiceMenuTextNormalized = normalizeWorkspaceSegmentEditorTextForCompare(
@@ -40389,37 +40445,37 @@ export function WorkspacePage({
                 <label htmlFor={segmentTimelineVoiceTextAreaId}>
                   {workspaceText(locale, "Текст озвучки", "Voiceover text")}
                 </label>
-	                <small>
-	                  {workspaceText(
-	                    locale,
-	                    `Сцена ${segmentTimelineVoiceMenuArrayIndex + 1}`,
-	                    `Scene ${segmentTimelineVoiceMenuArrayIndex + 1}`,
-	                  )}
-	                </small>
-	              </div>
-	              {segmentTimelineVoiceMenuVisualAudioWarningText ? (
-	                <p className="studio-segment-editor__timeline-voice-loop-warning" role="status">
-	                  <span className="studio-segment-editor__timeline-duration-warning" aria-hidden="true">
-	                    !
-	                  </span>
-	                  <span>{segmentTimelineVoiceMenuVisualAudioWarningText}</span>
-	                </p>
-	              ) : null}
-	              <textarea
-	                id={segmentTimelineVoiceTextAreaId}
-	                className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"
-	                value={segmentTimelineVoiceMenuSegment.text}
-	                rows={5}
-	                placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
-	                onChange={(event) => handleSegmentTimelineTextChange(segmentTimelineVoiceMenuSegment.index, event)}
-	                onKeyDown={(event) => {
-	                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-	                    event.preventDefault();
-	                    setSegmentTimelineVoiceMenuSegmentIndex(null);
-	                  }
-	                }}
-	              />
-	              <div className="studio-voice-selector__bulk-actions studio-segment-editor__timeline-voice-text-actions">
+                  <small>
+                    {workspaceText(
+                      locale,
+                      `Сцена ${segmentTimelineVoiceMenuArrayIndex + 1}`,
+                      `Scene ${segmentTimelineVoiceMenuArrayIndex + 1}`,
+                    )}
+                  </small>
+                </div>
+                {segmentTimelineVoiceMenuVisualAudioWarningText ? (
+                  <p className="studio-segment-editor__timeline-voice-loop-warning" role="status">
+                    <span className="studio-segment-editor__timeline-duration-warning" aria-hidden="true">
+                      !
+                    </span>
+                    <span>{segmentTimelineVoiceMenuVisualAudioWarningText}</span>
+                  </p>
+                ) : null}
+                <textarea
+                  id={segmentTimelineVoiceTextAreaId}
+                  className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"
+                  value={segmentTimelineVoiceMenuSegment.text}
+                  rows={5}
+                  placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
+                  onChange={(event) => handleSegmentTimelineTextChange(segmentTimelineVoiceMenuSegment.index, event)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      setSegmentTimelineVoiceMenuSegmentIndex(null);
+                    }
+                  }}
+                />
+                <div className="studio-voice-selector__bulk-actions studio-segment-editor__timeline-voice-text-actions">
                 <button
                   className="studio-segment-editor__timeline-voice-text-generate"
                   type="button"
@@ -41026,15 +41082,7 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--visual">
-          <button
-            className={`studio-segment-editor__timeline-label studio-segment-editor__timeline-label--brand${
-              isSegmentEditorBrandDirty || hasVisibleSegmentEditorBranding ? " is-brand-active" : ""
-            }`}
-            type="button"
-            aria-label={workspaceText(locale, "Настроить бренд всего видео", "Configure whole-video brand")}
-            title={workspaceText(locale, "Настроить бренд всего видео", "Configure whole-video brand")}
-            onClick={handleSegmentEditorPromptBrandToolButtonClick}
-          >
+          <div className="studio-segment-editor__timeline-label">
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
@@ -41043,7 +41091,7 @@ export function WorkspacePage({
               </svg>
             </span>
             <span>{workspaceText(locale, "Визуал", "Visual")}</span>
-          </button>
+          </div>
           <div
             ref={segmentThumbStripRef}
             className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
@@ -44347,6 +44395,7 @@ export function WorkspacePage({
   );
   const isSegmentEditorFullPreviewPlaying = segmentEditorFullPreviewStatus === "playing";
   const isSegmentEditorFullPreviewLoading = segmentEditorFullPreviewStatus === "loading";
+  const isSegmentEditorFullPreviewPaused = segmentEditorFullPreviewStatus === "paused";
   const isSegmentEditorFullPreviewUnavailable =
     !segmentEditorDraft || !segmentEditorTracks || segmentEditorFullPreviewDuration <= 0;
   const segmentEditorFullPreviewButtonLabel = isSegmentEditorFullPreviewUnavailable
@@ -44354,11 +44403,39 @@ export function WorkspacePage({
     : isSegmentEditorFullPreviewLoading
       ? workspaceText(locale, "Готовим аудио предпросмотра", "Preparing preview audio")
       : isSegmentEditorFullPreviewPlaying
-      ? workspaceText(locale, "Остановить предпросмотр", "Pause preview")
-      : segmentEditorFullPreviewStatus === "paused" && segmentEditorFullPreviewTime > 0
+      ? workspaceText(locale, "Поставить предпросмотр на паузу", "Pause preview")
+      : isSegmentEditorFullPreviewPaused
         ? workspaceText(locale, "Продолжить предпросмотр", "Resume preview")
         : workspaceText(locale, "Воспроизвести предпросмотр", "Play preview");
-  const segmentEditorFullPreviewButton = (
+  const segmentEditorFullPreviewStopButtonLabel = workspaceText(locale, "Остановить предпросмотр", "Stop preview");
+  const segmentEditorFullPreviewButton = isSegmentEditorFullPreviewPaused && !isSegmentEditorFullPreviewUnavailable ? (
+    <span className="studio-segment-editor__timeline-preview-controls" role="group" aria-label={workspaceText(locale, "Управление предпросмотром", "Preview controls")}>
+      <button
+        className="studio-segment-editor__timeline-preview-toggle studio-segment-editor__timeline-preview-toggle--stop is-paused"
+        type="button"
+        aria-label={segmentEditorFullPreviewStopButtonLabel}
+        title={segmentEditorFullPreviewStopButtonLabel}
+        onClick={handleSegmentEditorFullPreviewStop}
+      >
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+          <rect x="4.4" y="4.4" width="8.2" height="8.2" rx="1.7" fill="currentColor" />
+        </svg>
+      </button>
+      <button
+        className="studio-segment-editor__timeline-preview-toggle studio-segment-editor__timeline-preview-toggle--resume is-paused"
+        type="button"
+        aria-label={segmentEditorFullPreviewButtonLabel}
+        title={segmentEditorFullPreviewButtonLabel}
+        onClick={handleSegmentEditorFullPreviewToggle}
+      >
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+          <path d="M6 3.8v9.4l7.35-4.7L6 3.8Z" fill="currentColor" />
+        </svg>
+        <span>{workspaceText(locale, "Продолжить", "Resume")}</span>
+        {segmentEditorFullPreviewTime > 0 ? <small>{segmentEditorFullPreviewTimeLabel}</small> : null}
+      </button>
+    </span>
+  ) : (
     <button
       className={`studio-segment-editor__timeline-preview-toggle${isSegmentEditorFullPreviewPlaying ? " is-playing" : ""}${
         isSegmentEditorFullPreviewLoading ? " is-loading" : ""
@@ -44375,7 +44452,8 @@ export function WorkspacePage({
         <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>
       ) : isSegmentEditorFullPreviewPlaying ? (
         <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-          <rect x="4.2" y="4.2" width="8.6" height="8.6" rx="1.8" fill="currentColor" />
+          <rect x="4.4" y="3.7" width="2.7" height="9.6" rx="1" fill="currentColor" />
+          <rect x="9.9" y="3.7" width="2.7" height="9.6" rx="1" fill="currentColor" />
         </svg>
       ) : (
         <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
@@ -44390,9 +44468,9 @@ export function WorkspacePage({
   );
   const segmentEditorCreateShortsSubmitButton = (
     <button
-      className={`studio-canvas-prompt__btn studio-segment-editor__prompt-submit${isGenerating ? " is-generating" : ""}`}
+      className={`studio-canvas-prompt__btn studio-segment-editor__prompt-submit${isSegmentEditorShortsGeneration ? " is-generating" : ""}`}
       type="button"
-      aria-busy={isGenerating ? true : undefined}
+      aria-busy={isSegmentEditorShortsGeneration ? true : undefined}
       aria-label={workspaceText(
         locale,
         isSegmentEditorBrandDirty
@@ -44424,7 +44502,7 @@ export function WorkspacePage({
         void handleCreateShortsFromSegmentEditor();
       }}
     >
-      {isGenerating ? (
+      {isSegmentEditorShortsGeneration ? (
         <>
           <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
           <span>{workspaceText(locale, "Генерируем Shorts", "Generating Shorts")}</span>
@@ -44638,11 +44716,11 @@ export function WorkspacePage({
                       workspaceText(locale, "Оживить фото голосом", "Animate with voice"),
                     )}
                   </button>
-	                  <button
-	                    className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
-	                    type="button"
-	                    aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
-	                    disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
+                    <button
+                      className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
+                      type="button"
+                      aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
                     title={workspaceText(locale, "Улучшить качество", "Upscale image")}
                     onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
                     onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
@@ -44653,12 +44731,12 @@ export function WorkspacePage({
                     {renderSegmentEditorPromptToolButtonContent(
                       "image_upscale",
                       workspaceText(locale, "Улучшить качество", "Upscale image"),
-	                      workspaceText(locale, "Повысить разрешение", "Increase resolution"),
-	                    )}
-	                  </button>
-	                </div>
-	              </div>
-	            </div>
+                        workspaceText(locale, "Повысить разрешение", "Increase resolution"),
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
             <div className="studio-canvas-prompt__input-row">
               <div className="studio-canvas-prompt__input-main">
                 <div className="studio-segment-editor__prompt-visual-panel">
@@ -45822,7 +45900,7 @@ export function WorkspacePage({
                               </svg>
                             </button>
 
-                            {isGenerating ? (
+                            {isSegmentEditorShortsGeneration ? (
                               <div className="studio-segment-editor__generation-overlay" role="status" aria-live="polite">
                                 <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
                                 <strong>{workspaceText(locale, "Генерируем Shorts", "Generating Shorts")}</strong>
@@ -45901,11 +45979,11 @@ export function WorkspacePage({
                   </div>
                 ) : (
                   <div
-                    className={`studio-canvas-preview__placeholder${isGenerating ? " is-generating" : ""}${generateError ? " is-error" : ""}`}
-                    role={isGenerating ? "status" : undefined}
-                    aria-live={isGenerating ? "polite" : undefined}
+                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${generateError ? " is-error" : ""}`}
+                    role={isUserFacingGeneration ? "status" : undefined}
+                    aria-live={isUserFacingGeneration ? "polite" : undefined}
                   >
-                    {isGenerating ? (
+                    {isUserFacingGeneration ? (
                       renderStudioShortsGenerationStatus()
                     ) : generateError ? (
                       <>
@@ -46071,7 +46149,7 @@ export function WorkspacePage({
                             </div>
                             <div className="studio-canvas-prompt__submit" ref={promptSubmitRef}>
                               <button
-                                className={`studio-canvas-prompt__btn${isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
+                                className={`studio-canvas-prompt__btn${isUserFacingGeneration || isPreparingCustomVideo || isPreparingCustomMusic ? " is-generating" : ""}`}
                                 type="button"
                                 aria-label={workspaceText(
                                   locale,
@@ -46079,12 +46157,12 @@ export function WorkspacePage({
                                     ? "Нет изменений для обновления"
                                     : isStudioPrimaryActionPromptEmpty
                                       ? "Введите prompt для генерации"
-                                    : `${studioPrimaryActionLabel} за ${formatCreditsCountLabel(studioPrimaryActionRequiredCredits, locale)}`,
+                                      : `${studioPrimaryActionLabel} за ${formatCreditsCountLabel(studioPrimaryActionRequiredCredits, locale)}`,
                                   hasNoSegmentEditorUpdateChanges
                                     ? "No changes to update"
                                     : isStudioPrimaryActionPromptEmpty
                                       ? "Enter a prompt to generate"
-                                    : `${studioPrimaryActionLabel} for ${formatCreditsCountLabel(studioPrimaryActionRequiredCredits, locale)}`,
+                                      : `${studioPrimaryActionLabel} for ${formatCreditsCountLabel(studioPrimaryActionRequiredCredits, locale)}`,
                                 )}
                                 title={workspaceText(
                                   locale,
@@ -46092,15 +46170,15 @@ export function WorkspacePage({
                                     ? "Нет изменений для обновления"
                                     : isStudioPrimaryActionPromptEmpty
                                       ? "Введите prompt для генерации"
-                                    : `${studioPrimaryActionLabel} за ${studioPrimaryActionCostLabel}`,
+                                      : `${studioPrimaryActionLabel} за ${studioPrimaryActionCostLabel}`,
                                   hasNoSegmentEditorUpdateChanges
                                     ? "No changes to update"
                                     : isStudioPrimaryActionPromptEmpty
                                       ? "Enter a prompt to generate"
-                                    : `${studioPrimaryActionLabel} for ${studioPrimaryActionCostLabel}`,
+                                      : `${studioPrimaryActionLabel} for ${studioPrimaryActionCostLabel}`,
                                 )}
                                 disabled={
-                                  isGenerating ||
+                                  isUserFacingGeneration ||
                                   isPreparingCustomVideo ||
                                   isPreparingCustomMusic ||
                                   hasNoSegmentEditorUpdateChanges ||
@@ -46112,7 +46190,7 @@ export function WorkspacePage({
                                     : handleGenerate(topicInput)
                                 }
                               >
-                                {isGenerating || isPreparingCustomVideo || isPreparingCustomMusic ? (
+                                {isUserFacingGeneration || isPreparingCustomVideo || isPreparingCustomMusic ? (
                                   <span className="studio-canvas-prompt__btn-spinner"></span>
                                 ) : (
                                   <>
@@ -47166,8 +47244,8 @@ export function WorkspacePage({
                                 setSegmentAiPhotoModalTab("image_upscale");
                               },
                             })}
-	                          </div>
-	                        </section>
+                            </div>
+                          </section>
 
                         <section className="studio-ai-photo-modal__tool-group" aria-labelledby="segment-visual-group-pick">
                           <div className="studio-ai-photo-modal__tool-group-head">
@@ -47419,7 +47497,7 @@ export function WorkspacePage({
                             <p>{workspaceText(locale, "Выберите говорящего на карточке сцены в карусели, затем запустите генерацию.", "Select the speaker on the scene card in the carousel, then start generation.")}</p>
                           </div>
 
-	                          <div className="studio-ai-photo-modal__prompt-field">
+                            <div className="studio-ai-photo-modal__prompt-field">
                             <textarea
                               className="studio-ai-photo-modal__textarea"
                               value={segmentAiPhotoModalSegment?.text ?? ""}
@@ -47604,7 +47682,7 @@ export function WorkspacePage({
                             </button>
                           </div>
                         </div>
-	                      ) : segmentAiPhotoModalTab === "ai_photo" ? (
+                        ) : segmentAiPhotoModalTab === "ai_photo" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
                             <strong>{workspaceText(locale, "ИИ фото", "AI photo")}</strong>
