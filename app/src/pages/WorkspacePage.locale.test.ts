@@ -50,6 +50,8 @@ import {
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVideoVisualDurationSeconds,
+  resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange,
+  shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
   getWorkspaceSegmentVoiceoverPreviewRange,
   getWorkspaceSegmentVoiceoverTextHash,
   getWorkspaceSegmentRecommendedDurationSeconds,
@@ -3186,6 +3188,113 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("keeps full-preview project voiceover on the timeline clock while source timings still match", () => {
+    const segment = createDraftSegment({
+      duration: 5.7,
+      endTime: 9.92,
+      index: 1,
+      speechDuration: 5.44,
+      speechEndTime: 9.86,
+      speechStartTime: 4.42,
+      speechWords: [{ confidence: 1, endTime: 9.86, startTime: 4.42, text: "Second" }],
+      startTime: 4.22,
+      text: "Second",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 10.31,
+      startTime: 4.34,
+    });
+    expect(
+      resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+        previewRange,
+        segment,
+        timelineEndTime: 9.92,
+        timelineStartTime: 4.22,
+      }),
+    ).toEqual({
+      sourceStartTime: 4.22,
+      timelineEndTime: 10.31,
+    });
+  });
+
+  it("maps shifted full-preview project voiceover back to the original speech source range", () => {
+    const segment = createDraftSegment({
+      duration: 5.9,
+      endTime: 11.1,
+      index: 1,
+      speechDuration: 5.44,
+      speechEndTime: 10.64,
+      speechStartTime: 5.2,
+      speechWords: [{ confidence: 1, endTime: 9.86, startTime: 4.42, text: "Second" }],
+      startTime: 5.2,
+      text: "Second",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 10.31,
+      startTime: 4.34,
+    });
+    expect(
+      resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+        previewRange,
+        segment,
+        timelineEndTime: 11.1,
+        timelineStartTime: 5.2,
+      }),
+    ).toEqual({
+      sourceStartTime: 4.34,
+      timelineEndTime: 11.17,
+    });
+  });
+
+  it("uses segment voiceover proxy in full preview after a prior non-project voiceover", () => {
+    const segment = createDraftSegment({
+      index: 1,
+      speechDuration: 5.44,
+      speechEndTime: 11.1,
+      speechStartTime: 5.2,
+      startTime: 5.2,
+      text: "Second",
+    });
+
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
+        hasPriorNonProjectVoiceover: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses segment voiceover proxy in full preview when a scene voice override differs from the project voice", () => {
+    const segment = createDraftSegment({
+      index: 0,
+      text: "First",
+      voiceType: "gleb",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      voiceType: "boris",
+    };
+
+    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
+  });
+
+  it("keeps the project voiceover source in full preview when the scene voice still matches the project voice", () => {
+    const segment = createDraftSegment({
+      index: 0,
+      text: "First",
+      voiceType: "boris",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      voiceType: "boris",
+    };
+
+    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(false);
+  });
+
   it("uses project voiceover ranges before the segment proxy while project audio is fresh", () => {
     const segment = createDraftSegment({
       duration: 4.4,
@@ -3221,6 +3330,20 @@ describe("WorkspacePage studio locale defaults", () => {
       endTime: 12.81,
       startTime: 7.92,
     });
+
+    const timelineSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      preferSegmentProxy: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(timelineSource.sourceKind).toBe("segment");
+    expect(timelineSource.audioUrl).toBe(timelineSource.segmentVoiceoverAudioUrl);
+    expect(timelineSource.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(timelineSource.shouldClip).toBe(false);
   });
 
   it("falls back to the segment voiceover proxy when project voiceover is stale", () => {

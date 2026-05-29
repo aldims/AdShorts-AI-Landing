@@ -210,7 +210,7 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
-  it("keeps music and sound muted while an active voice track is still starting", () => {
+  it("keeps music audible and sound muted while an active voice track is still starting", () => {
     const activeTracks = [
       { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
       { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
@@ -218,6 +218,7 @@ describe("workspace segment editor full preview", () => {
     ];
 
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, true)).toEqual([
+      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
       { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
     ]);
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);

@@ -82,6 +82,7 @@ import {
   getWorkspaceSegmentEditorDisplayStartTime,
   getWorkspaceSegmentEditorPlaybackDuration,
   getWorkspaceSegmentEditorSpeechDuration,
+  getWorkspaceSegmentTimelineSpeechRange,
   normalizeWorkspaceSegmentManualDurationSeconds,
   rebuildWorkspaceSegmentEditorTimeline,
   roundWorkspaceSegmentTimelineSeconds,
@@ -2197,6 +2198,7 @@ const WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS = 0.075;
 const WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS = 0.08;
 const WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS = 0.45;
 const WORKSPACE_SEGMENT_VOICE_PREVIEW_MIN_DURATION_SECONDS = 0.2;
+const WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS = 0.35;
 const WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS = 5;
 const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
@@ -8721,12 +8723,13 @@ type WorkspaceSegmentVoiceoverAudioPreviewSource = {
 
 export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
   isVoiceAudioStale?: boolean;
+  preferSegmentProxy?: boolean;
   segment: WorkspaceSegmentEditorDraftSegment;
   session: WorkspaceSegmentEditorDraftSession;
   voiceEnabled: boolean;
   voiceOption: StudioVoiceOption | null | undefined;
 }): WorkspaceSegmentVoiceoverAudioPreviewSource => {
-  const { isVoiceAudioStale = false, segment, session, voiceEnabled, voiceOption } = options;
+  const { isVoiceAudioStale = false, preferSegmentProxy = false, segment, session, voiceEnabled, voiceOption } = options;
   const latestSceneVoiceoverAudioUrl = isWorkspaceSegmentProjectVoiceoverAsset(segment, session)
     ? null
     : getStudioSceneSoundAssetPreviewUrl(segment.voiceoverAsset);
@@ -8754,7 +8757,11 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
       : null;
   const audioUrl =
     latestSceneVoiceoverAudioUrl ??
-    (!isVoiceAudioStale ? projectVoiceoverAudioUrl : null) ??
+    (!isVoiceAudioStale
+      ? preferSegmentProxy
+        ? segmentVoiceoverAudioUrl ?? projectVoiceoverAudioUrl
+        : projectVoiceoverAudioUrl
+      : null) ??
     segmentVoiceoverAudioUrl ??
     projectVoiceoverAudioUrl;
   const sourceKind =
@@ -9444,9 +9451,21 @@ const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
   const speechWordsDuration =
     speechWordsRange !== null ? Math.max(0, speechWordsRange.endTime - speechWordsRange.startTime) : null;
+  const hasStaleSpeechBoundary = hasWorkspaceSegmentStaleSpeechBoundary(segment);
+  const explicitSpeechDuration =
+    !hasStaleSpeechBoundary &&
+    typeof segment.speechDuration === "number" &&
+    Number.isFinite(segment.speechDuration) &&
+    segment.speechDuration > 0
+      ? segment.speechDuration
+      : null;
+  const speechDurationCandidates = [speechWordsDuration, explicitSpeechDuration].filter(
+    (value): value is number => value !== null,
+  );
   const speechDuration =
-    normalizeWorkspaceSegmentManualDurationSeconds(speechWordsDuration) ??
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration);
+    speechDurationCandidates.length > 0
+      ? normalizeWorkspaceSegmentManualDurationSeconds(Math.max(...speechDurationCandidates))
+      : null;
   if (speechDuration !== null) {
     const rawSegmentDuration = Number(segment.duration ?? segment.manualDurationSeconds);
     const segmentDuration =
@@ -9475,13 +9494,9 @@ const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
 const getWorkspaceSegmentSpeechTimelineDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ) => {
-  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
-  const speechStartTime =
-    speechWordsRange?.startTime ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime);
-  const speechEndTime =
-    speechWordsRange?.endTime ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime);
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+  const speechStartTime = speechRange?.startTime ?? null;
+  const speechEndTime = speechRange?.endTime ?? null;
   if (speechStartTime === null || speechEndTime === null || speechEndTime <= speechStartTime) {
     return null;
   }
@@ -9729,6 +9744,16 @@ const getWorkspaceSegmentSpeechWordsRange = (segment: WorkspaceSegmentEditorDraf
   return { endTime, startTime };
 };
 
+const hasWorkspaceSegmentStaleSpeechBoundary = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
+  const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime);
+  return (
+    speechWordsRange !== null &&
+    speechStartTime !== null &&
+    Math.abs(speechStartTime - speechWordsRange.startTime) > 0.35
+  );
+};
+
 const hasWorkspaceSegmentProjectVoiceoverTimingData = (
   segment: Pick<
     WorkspaceSegmentEditorSegment,
@@ -9765,26 +9790,31 @@ export const getWorkspaceSegmentVoiceoverPreviewRange = (
     return null;
   }
 
-  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+  const hasStaleSpeechBoundary = hasWorkspaceSegmentStaleSpeechBoundary(segment);
   const speechStartTime =
-    speechWordsRange?.startTime ??
+    speechRange?.startTime ??
     normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime) ??
     normalizeWorkspaceSegmentVoicePreviewTime(segment.startTime) ??
     0;
   const rawSpeechDuration = Number(segment.speechDuration);
   const speechDuration =
-    Number.isFinite(rawSpeechDuration) && rawSpeechDuration > 0
+    !hasStaleSpeechBoundary && Number.isFinite(rawSpeechDuration) && rawSpeechDuration > 0
       ? rawSpeechDuration
       : getWorkspaceSegmentVoiceoverDurationSeconds(segment, session);
   const explicitSpeechEndTime =
     speechDuration !== null && Number.isFinite(speechDuration)
       ? speechStartTime + speechDuration
       : null;
+  const speechEndTimeCandidates = [
+    speechRange?.endTime,
+    hasStaleSpeechBoundary ? null : normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime),
+    explicitSpeechEndTime,
+  ].filter((value): value is number => value !== null && typeof value !== "undefined");
   const speechEndTime =
-    speechWordsRange?.endTime ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime) ??
-    explicitSpeechEndTime ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.endTime);
+    speechEndTimeCandidates.length > 0
+      ? Math.max(...speechEndTimeCandidates)
+      : normalizeWorkspaceSegmentVoicePreviewTime(segment.endTime);
 
   if (speechEndTime === null || speechEndTime <= speechStartTime) {
     return null;
@@ -9804,6 +9834,65 @@ export const getWorkspaceSegmentVoiceoverPreviewRange = (
     endTime,
     startTime,
   };
+};
+
+export const resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange = ({
+  previewRange,
+  segment,
+  timelineEndTime,
+  timelineStartTime,
+}: {
+  previewRange?: { endTime: number; startTime: number } | null;
+  segment: Pick<WorkspaceSegmentEditorDraftSegment, "speechDuration" | "speechEndTime" | "speechStartTime" | "speechWords">;
+  timelineEndTime: number;
+  timelineStartTime: number;
+}) => {
+  const normalizedTimelineStartTime = normalizeWorkspaceSegmentVoicePreviewTime(timelineStartTime) ?? 0;
+  const normalizedTimelineEndTime = Math.max(
+    normalizedTimelineStartTime,
+    normalizeWorkspaceSegmentVoicePreviewTime(timelineEndTime) ?? normalizedTimelineStartTime,
+  );
+  const previewStartTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.startTime);
+  const previewEndTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.endTime);
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+  const sourceBoundaryStartTime = previewStartTime ?? speechRange?.startTime ?? null;
+  const hasShiftedSourceTimeline =
+    sourceBoundaryStartTime !== null &&
+    Math.abs(sourceBoundaryStartTime - normalizedTimelineStartTime) >
+      WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS;
+  const sourceStartTime = hasShiftedSourceTimeline ? sourceBoundaryStartTime : normalizedTimelineStartTime;
+  const sourcePreviewDuration =
+    hasShiftedSourceTimeline && previewEndTime !== null && previewEndTime > sourceStartTime
+      ? previewEndTime - sourceStartTime
+      : null;
+  const timelineEndTimeFromShiftedSource =
+    sourcePreviewDuration !== null ? normalizedTimelineStartTime + sourcePreviewDuration : null;
+  const resolvedTimelineEndTime = hasShiftedSourceTimeline
+    ? Math.max(normalizedTimelineEndTime, timelineEndTimeFromShiftedSource ?? normalizedTimelineEndTime)
+    : Math.max(normalizedTimelineEndTime, previewEndTime ?? normalizedTimelineEndTime);
+
+  return {
+    sourceStartTime: roundWorkspaceSegmentTimelineSeconds(sourceStartTime),
+    timelineEndTime: roundWorkspaceSegmentTimelineSeconds(resolvedTimelineEndTime),
+  };
+};
+
+export const shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  options?: { hasPriorNonProjectVoiceover?: boolean },
+) => {
+  if (options?.hasPriorNonProjectVoiceover) {
+    return true;
+  }
+
+  const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
+  if (!segmentVoiceOverrideId || segmentVoiceOverrideId === "none") {
+    return false;
+  }
+
+  const sessionVoiceId = normalizeWorkspaceSegmentEditorSetting(session?.voiceType);
+  return segmentVoiceOverrideId !== sessionVoiceId;
 };
 
 const isWorkspaceSegmentProjectVoiceoverTimingFresh = (
@@ -9975,9 +10064,46 @@ export const getWorkspaceSegmentVisualGenerationDurationSeconds = (
   return resolvedDuration !== null ? Number(resolvedDuration.toFixed(3)) : undefined;
 };
 
+const doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
+) => {
+  const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(session?.ttsAssetId);
+  if (
+    projectVoiceoverAssetId === null ||
+    !getWorkspaceSegmentEffectiveVoiceEnabled(segment, session) ||
+    !hasWorkspaceSegmentProjectVoiceoverTimingData(segment)
+  ) {
+    return false;
+  }
+
+  const segmentVoiceoverAssetId = getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset);
+  return segmentVoiceoverAssetId === null || segmentVoiceoverAssetId === projectVoiceoverAssetId;
+};
+
+const shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary = (
+  previousSegment: WorkspaceSegmentEditorDraftSegment,
+  nextSegment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
+) => {
+  const previousIsAuto =
+    normalizeWorkspaceSegmentDurationMode(previousSegment.durationMode) !== "manual" &&
+    normalizeWorkspaceSegmentManualDurationSeconds(previousSegment.manualDurationSeconds) === null;
+  const nextIsAuto =
+    normalizeWorkspaceSegmentDurationMode(nextSegment.durationMode) !== "manual" &&
+    normalizeWorkspaceSegmentManualDurationSeconds(nextSegment.manualDurationSeconds) === null;
+
+  return (
+    previousIsAuto &&
+    nextIsAuto &&
+    doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming(previousSegment, session) &&
+    doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming(nextSegment, session)
+  );
+};
+
 const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "voiceType"> | null,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
 ) =>
   rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments).map((segment) => {
     const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(segment, session);
@@ -10007,6 +10133,9 @@ const rebuildWorkspaceSegmentEditorDraftTimeline = (
     visualKind: (segment) => (getWorkspaceSegmentPreviewKind(segment) === "video" ? "video" : "image"),
     voiceDurationSeconds: (segment) => getWorkspaceSegmentTimelineVoiceoverDurationSeconds(segment, session),
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
+    speechBoundaryEnabled: (previousSegment, nextSegment) =>
+      shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
+    preserveSourceTimelineEnd: true,
   });
 
 const rebuildWorkspaceSegmentEditorDraftSessionTimeline = (
@@ -37791,6 +37920,7 @@ export function WorkspacePage({
 
     const tracks: WorkspaceSegmentEditorFullPreviewAudioTrack[] = [];
     const projectVoiceoverAudioRanges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] = [];
+    let hasPriorNonProjectVoiceover = false;
 
     if (segmentTimelineMusicPreviewUrl) {
       tracks.push({
@@ -37833,6 +37963,7 @@ export function WorkspacePage({
           url: embeddedAudioUrl,
           volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
         });
+        hasPriorNonProjectVoiceover = true;
       }
 
       const isVoiceAudioStale = !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, segmentEditorDraft);
@@ -37848,23 +37979,35 @@ export function WorkspacePage({
       const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
         const isProjectVoiceoverAudio = voiceoverAudioPreviewSource.sourceKind === "project";
+        const shouldUseSegmentProxyForProjectVoiceover =
+          isProjectVoiceoverAudio &&
+          Boolean(voiceoverAudioPreviewSource.segmentVoiceoverAudioUrl) &&
+          shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, segmentEditorDraft, {
+            hasPriorNonProjectVoiceover,
+          });
         const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft.ttsAssetId);
-        const fullPreviewVoiceoverAudioUrl = isProjectVoiceoverAudio
-          ? projectVoiceoverAssetId !== null
-            ? buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)
-            : voiceoverAudioUrl
-          : voiceoverAudioUrl;
+        const fullPreviewVoiceoverAudioUrl = shouldUseSegmentProxyForProjectVoiceover
+          ? voiceoverAudioPreviewSource.segmentVoiceoverAudioUrl ?? voiceoverAudioUrl
+          : isProjectVoiceoverAudio
+            ? projectVoiceoverAssetId !== null
+              ? buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)
+              : voiceoverAudioUrl
+            : voiceoverAudioUrl;
         const voiceTimelineStartTime = timelineStartTime;
-        const projectVoiceSourceStartTime = isProjectVoiceoverAudio
-          ? voiceTimelineStartTime
+        const shouldUseProjectVoiceoverTimelineSource = isProjectVoiceoverAudio && !shouldUseSegmentProxyForProjectVoiceover;
+        const projectVoiceoverFullPreviewRange = shouldUseProjectVoiceoverTimelineSource
+          ? resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+              previewRange: voiceoverPreviewRange,
+              segment,
+              timelineEndTime,
+              timelineStartTime,
+            })
           : null;
-        const voiceTimelineEndTime =
-          isProjectVoiceoverAudio && voiceoverPreviewRange
-            ? Math.max(timelineEndTime, voiceoverPreviewRange.endTime)
-            : timelineEndTime;
+        const projectVoiceSourceStartTime = projectVoiceoverFullPreviewRange?.sourceStartTime ?? null;
+        const voiceTimelineEndTime = projectVoiceoverFullPreviewRange?.timelineEndTime ?? timelineEndTime;
 
         if (voiceTimelineEndTime > voiceTimelineStartTime) {
-          if (isProjectVoiceoverAudio) {
+          if (shouldUseProjectVoiceoverTimelineSource) {
             projectVoiceoverAudioRanges.push({
               endTime: voiceTimelineEndTime,
               sourceStartTime: projectVoiceSourceStartTime,
@@ -37882,6 +38025,10 @@ export function WorkspacePage({
               url: fullPreviewVoiceoverAudioUrl,
               volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
             });
+          }
+
+          if (!shouldUseProjectVoiceoverTimelineSource) {
+            hasPriorNonProjectVoiceover = true;
           }
         }
       }
@@ -41274,6 +41421,7 @@ export function WorkspacePage({
                 !isSceneVoiceoverFresh && (isSegmentTimelineGlobalVoiceEdited || span.isEdited || isVoiceTextEdited);
               const voiceoverAudioPreviewSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
                 isVoiceAudioStale,
+                preferSegmentProxy: true,
                 segment,
                 session: segmentEditorDraft,
                 voiceEnabled: studioSidebarVoiceEnabled,
@@ -41383,9 +41531,13 @@ export function WorkspacePage({
                   >
                     <span className="studio-segment-editor__timeline-cell-copy">
                       {isVoiceoverGenerationPending ? (
-                        <span className="studio-segment-editor__timeline-voice-spinner" aria-hidden="true"></span>
-                      ) : null}
-                      <strong>{voiceDisplayLabel}</strong>
+                        <span className="studio-segment-editor__timeline-pending-heading">
+                          <span className="studio-segment-editor__timeline-voice-spinner" aria-hidden="true"></span>
+                          <strong>{voiceDisplayLabel}</strong>
+                        </span>
+                      ) : (
+                        <strong>{voiceDisplayLabel}</strong>
+                      )}
                       {isVoiceoverGenerationPending ? (
                         <small>{workspaceText(locale, "Создаём озвучку", "Generating voiceover")}</small>
                       ) : voiceoverDurationDisplayLabel ? (
@@ -43782,40 +43934,52 @@ export function WorkspacePage({
       hasAppliedSegmentEditorSystemWatermark ? systemWatermarkText : "",
     ].filter(Boolean).join(" · ");
     const isEditable = variant === "card" && Boolean(options?.editable);
-    const brandOverlayClassName = `studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}${
+    const brandOverlayBaseClassName = `studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}${
       appliedSegmentEditorBrandLogoPreviewUrl ? " has-logo" : ""
     }${normalizedBrandText || hasAppliedSegmentEditorSystemWatermark ? " has-text" : ""}${
       hasAppliedSegmentEditorSystemWatermark ? " has-system-watermark" : ""
-    }${isEditable ? " studio-segment-editor__brand-overlay--editable" : ""}`;
-    const brandOverlayContent = (
+    }`;
+    const brandOverlayClassName = `${brandOverlayBaseClassName}${
+      isEditable ? " studio-segment-editor__brand-overlay--editable" : ""
+    }`;
+    const renderBrandDisplayContent = () => (
       <>
         {appliedSegmentEditorBrandLogoPreviewUrl ? <img src={appliedSegmentEditorBrandLogoPreviewUrl} alt="" /> : null}
         {normalizedBrandText ? <span className="studio-segment-editor__brand-value">{normalizedBrandText}</span> : null}
         {hasAppliedSegmentEditorSystemWatermark ? (
           <span className="studio-segment-editor__brand-value">{systemWatermarkText}</span>
         ) : null}
-        {isEditable ? <span className="studio-segment-editor__brand-edit-label">{editBrandLabel}</span> : null}
       </>
     );
 
     if (isEditable) {
       return (
-        <button
-          className={brandOverlayClassName}
-          type="button"
-          aria-label={editBrandLabel}
-          title={brandTitle ? `${editBrandLabel}: ${brandTitle}` : editBrandLabel}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleSegmentEditorPromptBrandToolButtonClick(event);
-          }}
-        >
-          {brandOverlayContent}
-        </button>
+        <>
+          <span
+            className={`${brandOverlayBaseClassName} studio-segment-editor__brand-overlay--backdrop`}
+            title={brandTitle}
+            aria-hidden="true"
+          >
+            {renderBrandDisplayContent()}
+          </span>
+          <button
+            className={`${brandOverlayClassName} studio-segment-editor__brand-overlay--edit-hitbox`}
+            type="button"
+            aria-label={editBrandLabel}
+            title={brandTitle ? `${editBrandLabel}: ${brandTitle}` : editBrandLabel}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleSegmentEditorPromptBrandToolButtonClick(event);
+            }}
+          >
+            {renderBrandDisplayContent()}
+            <span className="studio-segment-editor__brand-edit-label">{editBrandLabel}</span>
+          </button>
+        </>
       );
     }
 
@@ -43825,7 +43989,7 @@ export function WorkspacePage({
         title={brandTitle}
         aria-hidden="true"
       >
-        {brandOverlayContent}
+        {renderBrandDisplayContent()}
       </span>
     );
   };

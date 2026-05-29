@@ -311,7 +311,9 @@ export const selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart =
     return activeTracks;
   }
 
-  return activeTracks.filter((track) => track.kind === "voice" || track.kind === "embedded_voice");
+  return activeTracks.filter(
+    (track) => track.kind === "music" || track.kind === "voice" || track.kind === "embedded_voice",
+  );
 };
 
 export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (

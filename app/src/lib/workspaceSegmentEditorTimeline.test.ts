@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   estimateWorkspaceSegmentEditorSpeechDuration,
   getWorkspaceSegmentEditorPlaybackDuration,
+  getWorkspaceSegmentTimelineSpeechRange,
   rebuildWorkspaceSegmentEditorTimeline,
+  resolveWorkspaceSegmentTimelineSpeechBoundaryTime,
   resolveWorkspaceSegmentDuration,
   type WorkspaceSegmentTimelineSegment,
 } from "./workspaceSegmentEditorTimeline";
@@ -279,6 +281,71 @@ describe("workspace segment editor timeline", () => {
       duration: 4.45,
       endTime: 4.45,
       startTime: 0,
+    }));
+  });
+
+  it("uses the latest known speech end when word timings stop before the audio tail", () => {
+    const segment = createSegment({
+      duration: 4.4,
+      endTime: 4.4,
+      speechDuration: 4.02,
+      speechEndTime: 4.02,
+      speechStartTime: 0,
+      speechWords: [
+        { startTime: 0, endTime: 0.3 },
+        { startTime: 3.6, endTime: 3.9 },
+      ],
+      text: "last word has a tail",
+    });
+
+    expect(getWorkspaceSegmentTimelineSpeechRange(segment)).toEqual({
+      endTime: 4.02,
+      startTime: 0,
+    });
+    expect(getWorkspaceSegmentEditorPlaybackDuration(segment)).toBeCloseTo(4.4, 6);
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        voiceEnabled: true,
+      }),
+    ).toBeCloseTo(4.02, 6);
+  });
+
+  it("places automatic project voiceover scene boundaries in the middle of speech gaps", () => {
+    const firstSegment = createSegment({
+      duration: 4.42,
+      endTime: 4.42,
+      speechDuration: 4.02,
+      speechEndTime: 4.02,
+      speechStartTime: 0,
+      text: "first scene",
+    });
+    const secondSegment = createSegment({
+      duration: 5.9,
+      endTime: 10.32,
+      speechDuration: 5.44,
+      speechEndTime: 9.86,
+      speechStartTime: 4.42,
+      startTime: 4.42,
+      text: "second scene",
+    });
+
+    expect(resolveWorkspaceSegmentTimelineSpeechBoundaryTime(firstSegment, secondSegment)).toBeCloseTo(4.22, 6);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, secondSegment], {
+      preserveSourceTimelineEnd: true,
+      speechBoundaryEnabled: true,
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 4.22,
+      endTime: 4.22,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 6.1,
+      endTime: 10.32,
+      startTime: 4.22,
     }));
   });
 

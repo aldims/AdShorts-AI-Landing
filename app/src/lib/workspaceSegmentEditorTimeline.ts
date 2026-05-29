@@ -25,6 +25,7 @@ const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD = 0.34;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_INLINE_PAUSE = 0.55;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_SENTENCE_PAUSE = 0.35;
 const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
+const WORKSPACE_SEGMENT_TIMELINE_STALE_SPEECH_BOUNDARY_THRESHOLD_SECONDS = 0.35;
 
 export const roundWorkspaceSegmentTimelineSeconds = (value: number) => Number(value.toFixed(3));
 
@@ -72,42 +73,105 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
 const areTimelineNumbersEqual = (left: number | null, right: number | null) =>
   left !== null && right !== null && Math.abs(left - right) <= WORKSPACE_SEGMENT_TIMELINE_EPSILON;
 
-export const getWorkspaceSegmentEditorDisplayStartTime = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
+const getWorkspaceSegmentTimelineSpeechWordsRange = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
   const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
+  const firstSpeechWord = speechWords[0] ?? null;
+  const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
+  const startTime = normalizeWorkspaceSegmentTimelineTimeValue(firstSpeechWord?.startTime);
+  const endTime = normalizeWorkspaceSegmentTimelineTimeValue(lastSpeechWord?.endTime);
+  if (startTime === null || endTime === null || endTime <= startTime) {
+    return null;
+  }
+
+  return { endTime, startTime };
+};
+
+export const getWorkspaceSegmentTimelineSpeechRange = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
+  const speechWordsRange = getWorkspaceSegmentTimelineSpeechWordsRange(segment);
+  const speechStartTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime);
+  const speechEndTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime);
+  const hasStaleSpeechBoundary =
+    speechWordsRange !== null &&
+    speechStartTime !== null &&
+    Math.abs(speechStartTime - speechWordsRange.startTime) >
+      WORKSPACE_SEGMENT_TIMELINE_STALE_SPEECH_BOUNDARY_THRESHOLD_SECONDS;
+  if (hasStaleSpeechBoundary) {
+    return speechWordsRange;
+  }
+
+  const speechDuration =
+    typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
+      ? segment.speechDuration
+      : null;
+  const startTimeCandidates = [speechStartTime, speechWordsRange?.startTime].filter(
+    (value): value is number => value !== null && typeof value !== "undefined",
+  );
+  const startTime = startTimeCandidates.length > 0 ? Math.min(...startTimeCandidates) : null;
+  const endTimeCandidates = [speechEndTime, speechWordsRange?.endTime].filter(
+    (value): value is number => value !== null && typeof value !== "undefined",
+  );
+  if (startTime !== null && speechDuration !== null) {
+    endTimeCandidates.push(startTime + speechDuration);
+  }
+  const endTime = endTimeCandidates.length > 0 ? Math.max(...endTimeCandidates) : null;
+  if (startTime === null || endTime === null || endTime <= startTime) {
+    return null;
+  }
+
+  return {
+    endTime: roundWorkspaceSegmentTimelineSeconds(endTime),
+    startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
+  };
+};
+
+export const resolveWorkspaceSegmentTimelineSpeechBoundaryTime = <T extends WorkspaceSegmentTimelineSegment>(
+  previousSegment: T,
+  nextSegment: T,
+) => {
+  const previousSpeechRange = getWorkspaceSegmentTimelineSpeechRange(previousSegment);
+  const nextSpeechRange = getWorkspaceSegmentTimelineSpeechRange(nextSegment);
+  if (
+    previousSpeechRange === null ||
+    nextSpeechRange === null ||
+    nextSpeechRange.startTime <= previousSpeechRange.endTime + WORKSPACE_SEGMENT_TIMELINE_EPSILON
+  ) {
+    return null;
+  }
+
+  return roundWorkspaceSegmentTimelineSeconds(
+    previousSpeechRange.endTime + (nextSpeechRange.startTime - previousSpeechRange.endTime) / 2,
+  );
+};
+
+export const getWorkspaceSegmentEditorDisplayStartTime = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
   return (
     normalizeWorkspaceSegmentTimelineTimeValue(segment.startTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[0]?.startTime) ??
+    speechRange?.startTime ??
     0
   );
 };
 
 export const getWorkspaceSegmentEditorDisplayEndTime = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
-  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
   return (
     normalizeWorkspaceSegmentTimelineTimeValue(segment.endTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[speechWords.length - 1]?.endTime) ??
+    speechRange?.endTime ??
     getWorkspaceSegmentEditorDisplayStartTime(segment)
   );
 };
 
 export const getWorkspaceSegmentEditorSpeechDuration = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
-  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
-  const speechStart =
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[0]?.startTime);
-  const speechEnd =
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[speechWords.length - 1]?.endTime);
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
   const speechTimelineDuration =
-    speechStart !== null && speechEnd !== null && speechEnd > speechStart ? speechEnd - speechStart : null;
-
-  return (
-    (typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
+    speechRange !== null && speechRange.endTime > speechRange.startTime ? speechRange.endTime - speechRange.startTime : null;
+  const explicitSpeechDuration =
+    typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
       ? segment.speechDuration
-      : null) ?? speechTimelineDuration
-  );
+      : null;
+  const candidates = [explicitSpeechDuration, speechTimelineDuration].filter((value): value is number => value !== null);
+
+  return candidates.length > 0 ? Math.max(...candidates) : null;
 };
 
 export const getWorkspaceSegmentEditorPlaybackDuration = <T extends WorkspaceSegmentTimelineSegment>(
@@ -122,15 +186,9 @@ export const getWorkspaceSegmentEditorPlaybackDuration = <T extends WorkspaceSeg
     fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(String(segment.text ?? "")).length,
   );
   const estimatedDurationFloor = estimateWorkspaceSegmentEditorSpeechDuration(segment.text, resolvedWordCount);
-  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
-  const speechStart =
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechStartTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[0]?.startTime);
-  const speechEnd =
-    normalizeWorkspaceSegmentTimelineTimeValue(segment.speechEndTime) ??
-    normalizeWorkspaceSegmentTimelineTimeValue(speechWords[speechWords.length - 1]?.endTime);
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
   const speechTimelineDuration =
-    speechStart !== null && speechEnd !== null && speechEnd > speechStart ? speechEnd - speechStart : null;
+    speechRange !== null && speechRange.endTime > speechRange.startTime ? speechRange.endTime - speechRange.startTime : null;
   const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
   const candidates = [
     typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
@@ -223,6 +281,8 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     visualKind?: (segment: T) => "image" | "video" | null | undefined;
     voiceDurationSeconds?: (segment: T) => number | null | undefined;
     voiceEnabled?: boolean | ((segment: T) => boolean);
+    speechBoundaryEnabled?: boolean | ((previousSegment: T, nextSegment: T) => boolean);
+    preserveSourceTimelineEnd?: boolean;
   },
 ) => {
   let cursor = 0;
@@ -266,6 +326,75 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       startTime,
     };
   });
+
+  if (options?.speechBoundaryEnabled && nextSegments.length > 1) {
+    const boundaries: number[] = [0];
+    for (let index = 0; index < nextSegments.length - 1; index += 1) {
+      const previousSegment = segments[index];
+      const nextSegment = segments[index + 1];
+      const rebuiltBoundary = normalizeWorkspaceSegmentTimelineTimeValue(nextSegments[index]?.endTime);
+      const boundaryEnabled =
+        typeof options.speechBoundaryEnabled === "function"
+          ? previousSegment !== undefined &&
+            nextSegment !== undefined &&
+            options.speechBoundaryEnabled(previousSegment, nextSegment)
+          : options.speechBoundaryEnabled;
+      const speechBoundary =
+        boundaryEnabled && previousSegment !== undefined && nextSegment !== undefined
+          ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment)
+          : null;
+      boundaries.push(speechBoundary ?? rebuiltBoundary ?? boundaries[boundaries.length - 1] ?? 0);
+    }
+
+    const lastSourceSegment = segments[segments.length - 1];
+    const lastRebuiltSegment = nextSegments[nextSegments.length - 1];
+    const lastSpeechRange = lastSourceSegment ? getWorkspaceSegmentTimelineSpeechRange(lastSourceSegment) : null;
+    const rebuiltTimelineEnd = normalizeWorkspaceSegmentTimelineTimeValue(lastRebuiltSegment?.endTime) ?? cursor;
+    const sourceTimelineEnd =
+      options.preserveSourceTimelineEnd && lastSourceSegment
+        ? normalizeWorkspaceSegmentTimelineTimeValue(lastSourceSegment.endTime) ??
+          getWorkspaceSegmentEditorDisplayEndTime(lastSourceSegment)
+        : null;
+    boundaries.push(
+      roundWorkspaceSegmentTimelineSeconds(
+        Math.max(rebuiltTimelineEnd, sourceTimelineEnd ?? 0, lastSpeechRange?.endTime ?? 0),
+      ),
+    );
+
+    const hasValidBoundaryOrder = boundaries.every(
+      (boundary, index) =>
+        Number.isFinite(boundary) &&
+        boundary >= 0 &&
+        (index === 0 || boundary > boundaries[index - 1] + WORKSPACE_SEGMENT_TIMELINE_EPSILON),
+    );
+    if (hasValidBoundaryOrder) {
+      const boundarySegments = nextSegments.map((segment, index) => {
+        const startTime = roundWorkspaceSegmentTimelineSeconds(boundaries[index] ?? 0);
+        const endTime = roundWorkspaceSegmentTimelineSeconds(boundaries[index + 1] ?? startTime);
+        const duration = roundWorkspaceSegmentTimelineSeconds(Math.max(0, endTime - startTime));
+        const currentDuration = normalizeWorkspaceSegmentTimelineTimeValue(segment.duration);
+        const currentStartTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.startTime);
+        const currentEndTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.endTime);
+        if (
+          areTimelineNumbersEqual(currentDuration, duration) &&
+          areTimelineNumbersEqual(currentStartTime, startTime) &&
+          areTimelineNumbersEqual(currentEndTime, endTime)
+        ) {
+          return segment;
+        }
+
+        hasChanges = true;
+        return {
+          ...segment,
+          duration,
+          endTime,
+          startTime,
+        };
+      });
+
+      return hasChanges ? boundarySegments : segments;
+    }
+  }
 
   return hasChanges ? nextSegments : segments;
 };
