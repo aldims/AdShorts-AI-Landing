@@ -126,6 +126,29 @@ export const getWorkspaceSegmentEditorFullPreviewDuration = (
     ...segments.map((segment) => normalizePreviewTime(segment.endTime) ?? 0),
   );
 
+export const getWorkspaceSegmentEditorFullPreviewPlaybackEndTime = (
+  visualDuration: number,
+  tracks: WorkspaceSegmentEditorFullPreviewAudibleAudioTrack[],
+  options?: {
+    finalVoiceGraceSeconds?: number;
+  },
+) => {
+  const safeVisualDuration = normalizePreviewTime(visualDuration) ?? 0;
+  const finalVoiceGraceSeconds = normalizePreviewTime(options?.finalVoiceGraceSeconds) ?? 0;
+  const audioEndTime = Math.max(
+    safeVisualDuration,
+    ...tracks.map((track) => {
+      if (track.kind === "voice" || track.kind === "embedded_voice") {
+        return (normalizePreviewTime(track.timelineEndTime) ?? 0) + finalVoiceGraceSeconds;
+      }
+
+      return 0;
+    }),
+  );
+
+  return Math.max(safeVisualDuration, audioEndTime);
+};
+
 export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
   ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
   joinToleranceSeconds = 0.05,

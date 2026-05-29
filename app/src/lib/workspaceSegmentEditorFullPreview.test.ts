@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
   getWorkspaceSegmentEditorFullPreviewDuration,
+  getWorkspaceSegmentEditorFullPreviewPlaybackEndTime,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
@@ -29,6 +30,19 @@ describe("workspace segment editor full preview", () => {
 
   it("resolves total duration from segment end times", () => {
     expect(getWorkspaceSegmentEditorFullPreviewDuration(segments)).toBe(9);
+  });
+
+  it("extends playback end for a final voice tail without changing visual duration", () => {
+    expect(
+      getWorkspaceSegmentEditorFullPreviewPlaybackEndTime(
+        9,
+        [
+          { key: "music", kind: "music", timelineEndTime: 9, timelineStartTime: 0 },
+          { key: "voice-3", kind: "voice", timelineEndTime: 9.25, timelineStartTime: 6 },
+        ],
+        { finalVoiceGraceSeconds: 0.45 },
+      ),
+    ).toBeCloseTo(9.7, 6);
   });
 
   it("returns the playhead ratio for CSS positioning", () => {

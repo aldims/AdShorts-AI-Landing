@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently -k -n auth,web \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch --include .env --include .env.* server/server.ts",
+    "dev:server:detached": "node scripts/start-auth-dev-server.mjs",
     "dev:web": "node --max-http-header-size=65536 ./node_modules/vite/bin/vite.js --host 127.0.0.1",
     "build": "tsc && tsc -p tsconfig.server.json && vite build && node ../scripts/generate-app-route-shells.mjs",
     "test": "vitest run",

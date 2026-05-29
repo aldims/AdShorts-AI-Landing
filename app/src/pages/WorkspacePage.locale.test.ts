@@ -2259,6 +2259,162 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("adopts fresh auto timing during refresh even when no stored baseline is available", () => {
+    const staleLiveSegments = [
+      createDraftSegment({
+        duration: 4.7,
+        durationMode: null,
+        endTime: 4.7,
+        index: 0,
+        manualDurationSeconds: null,
+        speechDuration: 4.7,
+        startTime: 0,
+        text: "First",
+      }),
+      createDraftSegment({
+        duration: 4.7,
+        durationMode: null,
+        endTime: 9.4,
+        index: 1,
+        manualDurationSeconds: null,
+        speechDuration: 4.7,
+        startTime: 4.7,
+        text: "Second",
+      }),
+    ];
+    const freshSegments = [
+      createDraftSegment({
+        duration: 5.62,
+        durationMode: null,
+        endTime: 5.62,
+        index: 0,
+        manualDurationSeconds: null,
+        speechDuration: 5.62,
+        startTime: 0,
+        text: "First",
+      }),
+      createDraftSegment({
+        duration: 5.043,
+        durationMode: null,
+        endTime: 10.663,
+        index: 1,
+        manualDurationSeconds: null,
+        speechDuration: 5.043,
+        startTime: 5.62,
+        text: "Second",
+      }),
+    ];
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(staleLiveSegments[0]!),
+        segments: staleLiveSegments,
+      },
+      createFreshSessionFromDraftSegments(freshSegments),
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 5.62,
+      endTime: 5.62,
+      manualDurationSeconds: null,
+      startTime: 0,
+    });
+    expect(refreshedDraft.segments[1]).toMatchObject({
+      duration: 5.043,
+      endTime: 10.663,
+      manualDurationSeconds: null,
+      startTime: 5.62,
+    });
+  });
+
+  it("drops a stale scene voiceover asset when fresh project voiceover timing is available", () => {
+    const staleLiveSegments = [
+      createDraftSegment({
+        duration: 5,
+        endTime: 5,
+        index: 0,
+        speechDuration: 4.6,
+        speechEndTime: 4.6,
+        speechStartTime: 0,
+        startTime: 0,
+        text: "First",
+        voiceoverAsset: {
+          durationSeconds: 4.6,
+          fileName: "old-segment-voiceover.wav",
+          fileSize: 0,
+          mimeType: "audio/wav",
+          remoteUrl: "/api/workspace/project-segment-voiceover?projectId=77&segmentIndex=0",
+          source: "media-library",
+        },
+        voiceoverLanguage: "ru",
+        voiceoverTextHash: "old-hash",
+        voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      }),
+      createDraftSegment({
+        duration: 4.7,
+        endTime: 9.7,
+        index: 1,
+        speechDuration: 4.7,
+        speechEndTime: 9.7,
+        speechStartTime: 5,
+        startTime: 5,
+        text: "Second",
+      }),
+    ];
+    const freshSegments = [
+      createDraftSegment({
+        duration: 5.62,
+        endTime: 5.62,
+        index: 0,
+        speechDuration: 5.16,
+        speechEndTime: 5.16,
+        speechStartTime: 0,
+        speechWords: [{ confidence: 1, endTime: 5.04, startTime: 0.1, text: "First" }],
+        startTime: 0,
+        text: "First",
+      }),
+      createDraftSegment({
+        duration: 5.043,
+        endTime: 10.663,
+        index: 1,
+        speechDuration: 4.78,
+        speechEndTime: 10.4,
+        speechStartTime: 5.62,
+        speechWords: [{ confidence: 1, endTime: 10.28, startTime: 5.7, text: "Second" }],
+        startTime: 5.62,
+        text: "Second",
+      }),
+    ];
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(staleLiveSegments[0]!),
+        segments: staleLiveSegments,
+      },
+      {
+        ...createFreshSessionFromDraftSegments(freshSegments),
+        ttsAssetId: 123,
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 5.62,
+      endTime: 5.62,
+      startTime: 0,
+      voiceoverAsset: null,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("First"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    expect(refreshedDraft.segments[1]).toMatchObject({
+      duration: 5.043,
+      endTime: 10.663,
+      startTime: 5.62,
+      voiceoverAsset: null,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Second"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+  });
+
   it("adopts fresh server timing when the live draft still matches its baseline", () => {
     const baselineSegments = [
       createDraftSegment({
