@@ -2208,6 +2208,121 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("adopts fresh server timing when the live draft still matches its baseline", () => {
+    const baselineSegments = [
+      createDraftSegment({
+        duration: 4.1,
+        durationMode: "manual",
+        endTime: 4.1,
+        index: 0,
+        manualDurationSeconds: 4.1,
+        startTime: 0,
+        text: "First",
+      }),
+      createDraftSegment({
+        duration: 4,
+        durationMode: "manual",
+        endTime: 8.1,
+        index: 1,
+        manualDurationSeconds: 4,
+        startTime: 4.1,
+        text: "Second",
+      }),
+    ];
+    const freshSegments = [
+      createDraftSegment({
+        duration: 3.932,
+        durationMode: "manual",
+        endTime: 3.932,
+        index: 0,
+        manualDurationSeconds: 3.932,
+        startTime: 0,
+        text: "First",
+      }),
+      createDraftSegment({
+        duration: 4.591,
+        durationMode: "manual",
+        endTime: 8.523,
+        index: 1,
+        manualDurationSeconds: 4.591,
+        startTime: 3.932,
+        text: "Second",
+      }),
+    ];
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(baselineSegments[0]!),
+        segments: baselineSegments,
+      },
+      createFreshSessionFromDraftSegments(freshSegments),
+      {
+        baselineSession: createFreshSessionFromDraftSegments(baselineSegments),
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 3.932,
+      durationMode: "manual",
+      endTime: 3.932,
+      manualDurationSeconds: 3.932,
+      startTime: 0,
+    });
+    expect(refreshedDraft.segments[1]).toMatchObject({
+      duration: 4.591,
+      durationMode: "manual",
+      endTime: 8.523,
+      manualDurationSeconds: 4.591,
+      startTime: 3.932,
+    });
+  });
+
+  it("preserves a user-edited manual duration when fresh server timing changes", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      endTime: 4,
+      index: 0,
+      manualDurationSeconds: 4,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const liveSegment = createDraftSegment({
+      duration: 6.5,
+      durationMode: "manual",
+      endTime: 6.5,
+      index: 0,
+      manualDurationSeconds: 6.5,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const freshSegment = createDraftSegment({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 5,
+      index: 0,
+      manualDurationSeconds: 5,
+      startTime: 0,
+      text: "Manual segment",
+    });
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(liveSegment),
+      createFreshSession(freshSegment),
+      {
+        baselineSession: createFreshSession(baselineSegment),
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 6.5,
+      durationMode: "manual",
+      endTime: 6.5,
+      manualDurationSeconds: 6.5,
+      startTime: 0,
+    });
+  });
+
   it("formats adjacent fractional segment ranges with a shared displayed boundary", () => {
     expect(formatWorkspaceSegmentEditorSegmentTimeRange(0, 6.5, { isFirstSegment: true })).toBe("00:00 - 00:06.5");
     expect(formatWorkspaceSegmentEditorSegmentTimeRange(6.5, 15, { isFirstSegment: false })).toBe("00:06.5 - 00:15");

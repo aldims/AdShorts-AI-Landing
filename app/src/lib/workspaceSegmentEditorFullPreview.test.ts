@@ -7,6 +7,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
+  resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
 } from "./workspaceSegmentEditorFullPreview";
 
@@ -115,5 +116,55 @@ describe("workspace segment editor full preview", () => {
         { endTime: 8, sourceStartTime: 14, startTime: 4, url: "/project-voice.mp3" },
       ]),
     ).toEqual([{ endTime: 8, sourceStartTime: 10, startTime: 0, url: "/project-voice.mp3" }]);
+  });
+
+  it("holds the playhead at a voice segment boundary until audio starts", () => {
+    const tracks = [
+      { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 8, timelineStartTime: 4 },
+    ];
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioStartGate(
+        tracks,
+        3.98,
+        4.05,
+        (track) => track.key === "voice-1",
+      ),
+    ).toEqual({
+      holdTime: 4,
+      trackKey: "voice-2",
+    });
+  });
+
+  it("does not hold the playhead when the boundary voice track is already started", () => {
+    const tracks = [
+      { key: "voice-2", kind: "voice", timelineEndTime: 8, timelineStartTime: 4 },
+    ];
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioStartGate(
+        tracks,
+        3.98,
+        4.05,
+        () => true,
+      ),
+    ).toBeNull();
+  });
+
+  it("ignores old voice starts outside the startup gate window", () => {
+    const tracks = [
+      { key: "voice-1", kind: "voice", timelineEndTime: 8, timelineStartTime: 0 },
+    ];
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioStartGate(
+        tracks,
+        3,
+        3.1,
+        () => false,
+        { startWindowSeconds: 1 },
+      ),
+    ).toBeNull();
   });
 });

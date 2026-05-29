@@ -21,6 +21,18 @@ export type WorkspaceSegmentEditorFullPreviewAudioTimelineRange = {
   url: string;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioStartGateTrack = {
+  key: string;
+  kind: string;
+  timelineEndTime: number;
+  timelineStartTime: number;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioStartGate = {
+  holdTime: number;
+  trackKey: string;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -139,6 +151,52 @@ export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
   });
 
   return mergedRanges;
+};
+
+export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGate = (
+  tracks: WorkspaceSegmentEditorFullPreviewAudioStartGateTrack[],
+  currentTime: number,
+  nextTime: number,
+  isTrackStarted: (track: WorkspaceSegmentEditorFullPreviewAudioStartGateTrack) => boolean,
+  options?: {
+    startWindowSeconds?: number;
+    timeToleranceSeconds?: number;
+  },
+): WorkspaceSegmentEditorFullPreviewAudioStartGate | null => {
+  const safeCurrentTime = normalizePreviewTime(currentTime) ?? 0;
+  const safeNextTime = normalizePreviewTime(nextTime) ?? safeCurrentTime;
+  const startWindowSeconds = normalizePreviewTime(options?.startWindowSeconds) ?? 2;
+  const tolerance = normalizePreviewTime(options?.timeToleranceSeconds) ?? 0.025;
+
+  const candidateTracks = tracks
+    .filter((track) => {
+      if (track.kind !== "voice" && track.kind !== "embedded_voice") {
+        return false;
+      }
+
+      const trackStartTime = normalizePreviewTime(track.timelineStartTime);
+      const trackEndTime = normalizePreviewTime(track.timelineEndTime);
+      if (trackStartTime === null || trackEndTime === null || trackEndTime <= trackStartTime) {
+        return false;
+      }
+
+      if (safeNextTime + tolerance < trackStartTime || safeCurrentTime > trackStartTime + startWindowSeconds) {
+        return false;
+      }
+
+      return !isTrackStarted(track);
+    })
+    .sort((left, right) => left.timelineStartTime - right.timelineStartTime || left.key.localeCompare(right.key));
+
+  const blockedTrack = candidateTracks[0] ?? null;
+  if (!blockedTrack) {
+    return null;
+  }
+
+  return {
+    holdTime: normalizePreviewTime(blockedTrack.timelineStartTime) ?? 0,
+    trackKey: blockedTrack.key,
+  };
 };
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (
