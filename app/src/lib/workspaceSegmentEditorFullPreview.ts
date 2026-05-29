@@ -51,6 +51,27 @@ export type WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions = {
   voicePausedSeekToleranceSeconds: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioPlaybackStartOptions = {
+  currentSourceTime: number;
+  expectedSourceTime: number;
+  isEnded: boolean;
+  isPaused: boolean;
+  isPlaying: boolean;
+  isSeeking: boolean;
+  leadToleranceSeconds: number;
+  minimumProgressSeconds: number;
+  minimumReadyState: number;
+  readyState: number;
+  syncToleranceSeconds: number;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
+  sourceKind: "isolated" | "timeline";
+  sourceStartTime: number;
+  timelineEndTime: number;
+  timelineStartTime: number;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -280,6 +301,19 @@ export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTrac
   return Array.from(selectedTrackByKey.values());
 };
 
+export const selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart = <
+  Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
+>(
+  activeTracks: Track[],
+  hasPendingVoiceStart: boolean,
+): Track[] => {
+  if (!hasPendingVoiceStart) {
+    return activeTracks;
+  }
+
+  return activeTracks.filter((track) => track.kind === "voice" || track.kind === "embedded_voice");
+};
+
 export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
   options: WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions,
 ) => {
@@ -295,6 +329,61 @@ export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
   const toleranceSeconds =
     options.trackKind === "music" ? options.musicSeekToleranceSeconds : options.audioSeekToleranceSeconds;
   return driftSeconds > toleranceSeconds;
+};
+
+export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed = (
+  options: WorkspaceSegmentEditorFullPreviewAudioPlaybackStartOptions,
+) => {
+  if (
+    !options.isPlaying ||
+    options.isPaused ||
+    options.isEnded ||
+    options.isSeeking ||
+    options.readyState < options.minimumReadyState ||
+    !Number.isFinite(options.currentSourceTime) ||
+    !Number.isFinite(options.expectedSourceTime)
+  ) {
+    return false;
+  }
+
+  const currentSourceTime = Math.max(0, options.currentSourceTime);
+  const expectedSourceTime = Math.max(0, options.expectedSourceTime);
+  const syncToleranceSeconds = normalizePreviewTime(options.syncToleranceSeconds) ?? 0;
+  const leadToleranceSeconds = normalizePreviewTime(options.leadToleranceSeconds) ?? 0;
+  const minimumProgressSeconds = normalizePreviewTime(options.minimumProgressSeconds) ?? 0;
+
+  if (currentSourceTime + syncToleranceSeconds < expectedSourceTime) {
+    return false;
+  }
+
+  if (currentSourceTime - expectedSourceTime > leadToleranceSeconds) {
+    return false;
+  }
+
+  return currentSourceTime >= expectedSourceTime + minimumProgressSeconds;
+};
+
+export const getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime = (
+  track: WorkspaceSegmentEditorFullPreviewAudioClockTrack,
+  sourceTime: number,
+) => {
+  const normalizedSourceTime = normalizePreviewTime(sourceTime);
+  if (normalizedSourceTime === null) {
+    return null;
+  }
+
+  const timelineStartTime = normalizePreviewTime(track.timelineStartTime) ?? 0;
+  const timelineEndTime = Math.max(
+    timelineStartTime,
+    normalizePreviewTime(track.timelineEndTime) ?? timelineStartTime,
+  );
+  const sourceStartTime = normalizePreviewTime(track.sourceStartTime) ?? 0;
+  const elapsedSourceTime =
+    track.sourceKind === "timeline"
+      ? Math.max(0, normalizedSourceTime - sourceStartTime)
+      : normalizedSourceTime;
+
+  return Math.min(timelineEndTime, Math.max(timelineStartTime, timelineStartTime + elapsedSourceTime));
 };
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (

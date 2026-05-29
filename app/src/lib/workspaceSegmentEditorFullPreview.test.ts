@@ -7,10 +7,13 @@ import {
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
+  getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
+  isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
 } from "./workspaceSegmentEditorFullPreview";
@@ -207,6 +210,19 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
+  it("keeps music and sound muted while an active voice track is still starting", () => {
+    const activeTracks = [
+      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
+    ];
+
+    expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, true)).toEqual([
+      { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
+    ]);
+    expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);
+  });
+
   it("ignores old voice starts outside the startup gate window", () => {
     const tracks = [
       { key: "voice-1", kind: "voice", timelineEndTime: 8, timelineStartTime: 0 },
@@ -266,5 +282,65 @@ describe("workspace segment editor full preview", () => {
         voicePausedSeekToleranceSeconds: 0.5,
       }),
     ).toBe(false);
+  });
+
+  it("does not confirm voice startup before the media clock advances", () => {
+    expect(
+      isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed({
+        currentSourceTime: 0,
+        expectedSourceTime: 0,
+        isEnded: false,
+        isPaused: false,
+        isPlaying: true,
+        isSeeking: false,
+        leadToleranceSeconds: 0.75,
+        minimumProgressSeconds: 0.02,
+        minimumReadyState: 2,
+        readyState: 4,
+        syncToleranceSeconds: 0.03,
+      }),
+    ).toBe(false);
+
+    expect(
+      isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed({
+        currentSourceTime: 0.024,
+        expectedSourceTime: 0,
+        isEnded: false,
+        isPaused: false,
+        isPlaying: true,
+        isSeeking: false,
+        leadToleranceSeconds: 0.75,
+        minimumProgressSeconds: 0.02,
+        minimumReadyState: 2,
+        readyState: 4,
+        syncToleranceSeconds: 0.03,
+      }),
+    ).toBe(true);
+  });
+
+  it("maps audio media time back to preview timeline time", () => {
+    expect(
+      getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime(
+        {
+          sourceKind: "isolated",
+          sourceStartTime: 0,
+          timelineEndTime: 9,
+          timelineStartTime: 4,
+        },
+        1.5,
+      ),
+    ).toBe(5.5);
+
+    expect(
+      getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime(
+        {
+          sourceKind: "timeline",
+          sourceStartTime: 12,
+          timelineEndTime: 9,
+          timelineStartTime: 4,
+        },
+        13.25,
+      ),
+    ).toBe(5.25);
   });
 });
