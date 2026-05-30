@@ -1168,6 +1168,46 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist).toHaveLength(0);
   });
 
+  it("treats a manual photo duration change as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 4.9,
+      durationMode: "auto",
+      endTime: 4.9,
+      index: 0,
+      manualDurationSeconds: null,
+      mediaType: "photo",
+      startTime: 0,
+    });
+    const draftSegment = createDraftSegment({
+      ...baselineSegment,
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+    });
+
+    const draftSession = createDraftSession(draftSegment);
+    const baselineSession = createDraftSession(baselineSegment);
+    const resetTargetSession = createWorkspaceSegmentEditorResetDraftFromBaseline(draftSession, baselineSession);
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draftSession, baselineSession)).toEqual([
+      expect.objectContaining({
+        kind: "segment",
+        label: "Сегмент 1: длина: 10 сек",
+        resetDuration: true,
+        segmentIndex: 0,
+      }),
+    ]);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draftSession, resetTargetSession)).toEqual([
+      expect.objectContaining({
+        kind: "segment",
+        label: "Сегмент 1: длина: 10 сек",
+        resetDuration: true,
+        segmentIndex: 0,
+      }),
+    ]);
+  });
+
   it("treats a scene voice override as a Shorts edit", () => {
     const baselineSegment = createDraftSegment({ index: 0, voiceType: null });
     const draftSegment = createDraftSegment({ index: 0, voiceType: "Liam" });

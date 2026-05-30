@@ -1718,27 +1718,41 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle {
   z-index: 24;
+  top: -7px;
+  width: 64px;
+  height: 28px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: transparent;
+  opacity: 1;
+  box-shadow: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 39px;
   height: 18px;
-  border-color: rgba(190, 205, 230, 0.16);
+  border: 1px solid rgba(190, 205, 230, 0.16);
   border-radius: 999px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.026)),
     rgba(7, 10, 16, 0.58);
-  color: transparent;
-  opacity: 0.78;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.34),
     0 0 0 0.5px rgba(200, 212, 236, 0.08),
     0 8px 16px -12px rgba(0, 0, 0, 0.84);
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
-  content: none;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, 2px);
   gap: 2px;
@@ -1756,11 +1770,17 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled)::before,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible::before {
   border-color: rgba(94, 234, 212, 0.30);
   background:
     linear-gradient(180deg, rgba(94, 234, 212, 0.16), rgba(255, 255, 255, 0.032)),
     rgba(7, 12, 18, 0.72);
-  opacity: 1;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     inset 0 -1px 0 rgba(0, 0, 0, 0.36),
@@ -1770,6 +1790,12 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging {
+  border-color: transparent;
+  background: transparent;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active::before,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging::before {
   border-color: rgba(251, 191, 36, 0.30);
   background:
     linear-gradient(180deg, rgba(251, 191, 36, 0.16), rgba(255, 255, 255, 0.03)),
