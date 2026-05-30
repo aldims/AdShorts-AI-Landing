@@ -14,7 +14,32 @@ import {
 import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-assets";
 import type { WorkspaceReferenceKind } from "../../../shared/workspace-references";
 import { WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS } from "./workspace-constants";
-import type { StudioVideoMode } from "./workspace-types";
+import type {
+  StudioBrandLogoFile,
+  StudioCustomMusicFile,
+  StudioCustomVideoFile,
+  StudioLanguage,
+  StudioSubtitleColorCatalogOption,
+  StudioSubtitleColorOption,
+  StudioSubtitleColorOverrides,
+  StudioSubtitleStyleOption,
+  StudioVideoMode,
+  StudioVideoOption,
+  StudioVoiceOption,
+  WorkspaceProject,
+  WorkspaceSegmentAiVideoMode,
+  WorkspaceSegmentEditorDraftSegment,
+  WorkspaceSegmentEditorDraftSession,
+  WorkspaceSegmentEditorLocalizedTextMap,
+  WorkspaceSegmentEditorMediaUploadScope,
+  WorkspaceSegmentEditorSegment,
+  WorkspaceSegmentEditorSession,
+  WorkspaceSegmentEditorVideoAction,
+  WorkspaceSegmentMediaType,
+  WorkspaceSegmentPreviewKind,
+  WorkspaceSegmentSourceKind,
+  WorkspaceSegmentTimelineHistoryKind,
+} from "./workspace-types";
 import {
   getWorkspaceSegmentVoiceoverTextHash,
   normalizeWorkspaceSegmentBulkSubtitleText,
@@ -38,31 +63,6 @@ import {
   filterWorkspaceStillAssetUrls,
   isLikelyVideoAssetUrl,
 } from "../../lib/workspaceSegmentPreview";
-import type {
-  StudioBrandLogoFile,
-  StudioCustomMusicFile,
-  StudioCustomVideoFile,
-  StudioLanguage,
-  StudioSubtitleColorCatalogOption,
-  StudioSubtitleColorOption,
-  StudioSubtitleColorOverrides,
-  StudioSubtitleStyleOption,
-  StudioVideoOption,
-  StudioVoiceOption,
-  WorkspaceProject,
-  WorkspaceSegmentAiVideoMode,
-  WorkspaceSegmentEditorDraftSegment,
-  WorkspaceSegmentEditorDraftSession,
-  WorkspaceSegmentEditorLocalizedTextMap,
-  WorkspaceSegmentEditorMediaUploadScope,
-  WorkspaceSegmentEditorSegment,
-  WorkspaceSegmentEditorSession,
-  WorkspaceSegmentEditorVideoAction,
-  WorkspaceSegmentMediaType,
-  WorkspaceSegmentPreviewKind,
-  WorkspaceSegmentSourceKind,
-  WorkspaceSegmentTimelineHistoryKind,
-} from "../../pages/WorkspacePage";
 
 export const STUDIO_CUSTOM_ASSET_NAME_MAX_CHARS = 16;
 
