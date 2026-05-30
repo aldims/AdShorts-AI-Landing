@@ -7306,32 +7306,8 @@ const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegmentEditorD
   return markers.some((marker) => marker === "ai_generated" || marker === "ai_video" || marker === "photo_animation");
 };
 
-const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-    return false;
-  }
-
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-
-  if (
-    latestVisualAction === "ai_photo" ||
-    latestVisualAction === "image_edit" ||
-    latestVisualAction === "photo_animation" ||
-    latestVisualAction === "talking_photo"
-  ) {
-    return false;
-  }
-
-  if (latestVisualAction === "ai") {
-    if (segment.aiVideoGeneratedMode) {
-      return segment.aiVideoGeneratedMode === "ai_video";
-    }
-
-    return segment.mediaType === "video";
-  }
-
-  return true;
-};
+export const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video";
 
 const isWorkspaceSegmentAiPhotoVisualDurationLimited = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image") {
@@ -24559,8 +24535,13 @@ export function WorkspacePage({
     currentSegmentEditorBrandSettings,
     appliedSegmentEditorBrandSnapshot,
   ) || isSegmentEditorSystemWatermarkDirty;
+  const segmentEditorOriginalResetTargetSession =
+    segmentEditorDraft && segmentEditorChecklistBaseSession
+      ? createWorkspaceSegmentEditorResetDraftFromBaseline(segmentEditorDraft, segmentEditorChecklistBaseSession)
+      : null;
+  const segmentEditorChangeBaselineSession = segmentEditorOriginalResetTargetSession ?? segmentEditorChangeDisplayBaseSession;
   const segmentEditorBaseChangeChecklist = segmentEditorDraft
-    ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChangeDisplayBaseSession, {
+    ? buildWorkspaceSegmentEditorChangeChecklist(segmentEditorDraft, segmentEditorChangeBaselineSession, {
         subtitleColorOptions,
         subtitleStyleOptions,
       })
@@ -24593,15 +24574,35 @@ export function WorkspacePage({
       ]
     : segmentEditorBaseChangeChecklist;
   const hasSegmentEditorChanges = segmentEditorChangeChecklist.length > 0;
-  const segmentEditorPendingInsertedSegmentCount = segmentEditorDraft
+  const segmentEditorPendingInsertedSegmentIndices = segmentEditorDraft
     ? getWorkspaceSegmentEditorPendingInsertedSegmentIndices(
         segmentEditorDraft,
-        segmentEditorChangeDisplayBaseSession,
-      ).size
-    : 0;
+        segmentEditorChangeBaselineSession,
+      )
+    : new Set<number>();
+  const segmentEditorPendingInsertedSegmentChanges = segmentEditorDraft
+    ? segmentEditorDraft.segments.flatMap((segment, index) =>
+        segmentEditorPendingInsertedSegmentIndices.has(segment.index)
+          ? [
+              {
+                key: `segment-insert:${segment.index}`,
+                label: workspaceText(
+                  locale,
+                  `Сегмент ${index + 1}: добавлена новая сцена`,
+                  `Scene ${index + 1}: new scene added`,
+                ),
+              },
+            ]
+          : [],
+      )
+    : [];
+  const segmentEditorResetChangeItems = [
+    ...segmentEditorChangeChecklist.map((item) => ({ key: item.key, label: item.label })),
+    ...segmentEditorPendingInsertedSegmentChanges,
+  ];
+  const segmentEditorPendingInsertedSegmentCount = segmentEditorPendingInsertedSegmentIndices.size;
   const hasSegmentEditorResettableChanges = hasSegmentEditorChanges || segmentEditorPendingInsertedSegmentCount > 0;
-  const segmentEditorResetChangesCount =
-    segmentEditorChangeChecklist.length + segmentEditorPendingInsertedSegmentCount;
+  const segmentEditorResetChangesCount = segmentEditorResetChangeItems.length;
   const hasNoSegmentEditorUpdateChanges = hasAppliedSegmentEditorSession && !hasSegmentEditorChanges;
   const canAddSegmentEditorSegment = segmentEditorSegmentCount < WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS;
   const isSegmentEditorBlankSceneDraft =
@@ -40631,9 +40632,12 @@ export function WorkspacePage({
                 </svg>
               </button>
             </div>
-            <label className="studio-segment-editor__timeline-text-menu-field">
-              <span>{workspaceText(locale, "Описание звука", "Sound prompt")}</span>
+            <div className="studio-segment-editor__timeline-text-menu-field">
+              <label htmlFor={`studio-segment-editor-scene-sound-${segmentTimelineSoundMenuSegment.index}`}>
+                {workspaceText(locale, "Описание звука", "Sound prompt")}
+              </label>
               <textarea
+                id={`studio-segment-editor-scene-sound-${segmentTimelineSoundMenuSegment.index}`}
                 ref={segmentTimelineSoundMenuTextareaRef}
                 className="studio-segment-editor__timeline-text-menu-textarea"
                 value={segmentTimelineSoundMenuPrompt}
@@ -40647,7 +40651,36 @@ export function WorkspacePage({
                   }
                 }}
               />
-            </label>
+              <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-sound-menu-actions">
+                <button
+                  type="button"
+                  disabled={!canDeleteSegmentTimelineSoundMenu || isSegmentEditorStructureActionBusy}
+                  onClick={() => handleSegmentTimelineDelete("sound", segmentTimelineSoundMenuSegment.index)}
+                >
+                  {workspaceText(locale, "Удалить звук", "Delete sound")}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSegmentTimelineSoundMenuActionDisabled}
+                  onClick={() =>
+                    handleSegmentTimelineSoundGenerate(segmentTimelineSoundMenuSegment.index, segmentTimelineSoundMenuPrompt)
+                  }
+                >
+                  {isSegmentTimelineSoundMenuPending ? (
+                    <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                  ) : (
+                    <>
+                      <span>
+                        {segmentTimelineSoundMenuPreviewUrl
+                          ? workspaceText(locale, "Перегенерировать", "Regenerate")
+                          : workspaceText(locale, "Добавить звук", "Add sound")}
+                      </span>
+                      <small>{formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST)}</small>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
             {isSegmentTimelineSoundMenuPending ? (
               <div className="studio-segment-editor__timeline-sound-menu-status is-processing" role="status" aria-live="polite">
                 <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
@@ -40659,35 +40692,6 @@ export function WorkspacePage({
                 <audio controls src={segmentTimelineSoundMenuPreviewUrl} preload="metadata" />
               </div>
             ) : null}
-            <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-sound-menu-actions">
-              <button
-                type="button"
-                disabled={!canDeleteSegmentTimelineSoundMenu || isSegmentEditorStructureActionBusy}
-                onClick={() => handleSegmentTimelineDelete("sound", segmentTimelineSoundMenuSegment.index)}
-              >
-                {workspaceText(locale, "Удалить звук", "Delete sound")}
-              </button>
-              <button
-                type="button"
-                disabled={isSegmentTimelineSoundMenuActionDisabled}
-                onClick={() =>
-                  handleSegmentTimelineSoundGenerate(segmentTimelineSoundMenuSegment.index, segmentTimelineSoundMenuPrompt)
-                }
-              >
-                {isSegmentTimelineSoundMenuPending ? (
-                  <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                ) : (
-                  <>
-                    <span>
-                      {segmentTimelineSoundMenuPreviewUrl
-                        ? workspaceText(locale, "Перегенерировать", "Regenerate")
-                        : workspaceText(locale, "Добавить звук", "Add sound")}
-                    </span>
-                    <small>{formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST)}</small>
-                  </>
-                )}
-              </button>
-            </div>
           </div>,
           document.body,
         )
@@ -46876,7 +46880,7 @@ export function WorkspacePage({
                   aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
                   onClick={closeSegmentEditorResetModal}
                 />
-                <div className="workspace-confirm-modal__panel" role="document">
+                <div className="workspace-confirm-modal__panel workspace-confirm-modal__panel--reset" role="document">
                   <button
                     className="workspace-confirm-modal__close route-close"
                     type="button"
@@ -46900,8 +46904,8 @@ export function WorkspacePage({
                       <p className="workspace-confirm-modal__message">
                         {workspaceText(
                           locale,
-                          "Черновик вернётся к состоянию до правок. Текст, визуалы, порядок сцен, настройки и бренд будут восстановлены.",
-                          "The draft will return to its pre-edit state. Text, visuals, scene order, settings, and branding will be restored.",
+                          "Черновик вернётся к состоянию исходного видео. Текст, визуалы, порядок сцен, настройки и бренд будут восстановлены.",
+                          "The draft will return to the original video's state. Text, visuals, scene order, settings, and branding will be restored.",
                         )}
                       </p>
                     </div>
@@ -46914,6 +46918,20 @@ export function WorkspacePage({
                       `${segmentEditorResetChangesCount} changes will be reset`,
                     )}
                   </p>
+
+                  <div className="workspace-confirm-modal__change-list">
+                    <span className="workspace-confirm-modal__change-list-title">
+                      {workspaceText(locale, "Список изменений", "Changes")}
+                    </span>
+                    <ul>
+                      {segmentEditorResetChangeItems.map((item) => (
+                        <li key={item.key}>
+                          <span aria-hidden="true"></span>
+                          <strong>{item.label}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
 
                   <div className="workspace-confirm-modal__actions">
                     <button

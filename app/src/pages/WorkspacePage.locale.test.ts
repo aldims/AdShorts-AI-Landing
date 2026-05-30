@@ -8,6 +8,7 @@ import {
   buildWorkspaceSegmentEditorPayload,
   buildWorkspaceSegmentEditorChangeChecklist,
   buildWorkspaceSegmentVisualReferenceRequest,
+  canWorkspaceSegmentUseVideoExtensionTool,
   createStudioCustomVideoFileFromMediaLibraryItem,
   createWorkspaceSegmentEditorProjectBrandState,
   buildWorkspaceReferenceAiPrompt,
@@ -3011,6 +3012,28 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(10);
   });
 
+  it("shows video extension tools for video visuals and photo animation tools for still visuals", () => {
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        mediaType: "video",
+        videoAction: "original",
+      })),
+    ).toBe(true);
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        aiVideoGeneratedMode: "photo_animation",
+        mediaType: "video",
+        videoAction: "photo_animation",
+      })),
+    ).toBe(true);
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        mediaType: "photo",
+        videoAction: "original",
+      })),
+    ).toBe(false);
+  });
+
   it("shows cinematic hold for still-preview segments extended beyond their baseline slot", () => {
     const baselineSegment = createDraftSegment({
       currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=0&delivery=preview",
@@ -5427,6 +5450,43 @@ describe("WorkspacePage studio locale defaults", () => {
         label: "Сегмент 1: сброшен визуал",
         resetVisual: false,
         restoreVisual: true,
+        segmentIndex: 0,
+      }),
+    ]);
+  });
+
+  it("compares reset-all visual changes with the original source visual", () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const generatedAsset = createMediaAsset(303, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const appliedSegment = createDraftSegment({
+      currentAsset: generatedAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      videoAction: "original",
+    });
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(appliedSegment, 77);
+    const resetTarget = createWorkspaceSegmentEditorResetDraftFromBaseline(
+      createDraftSession(resetSegment),
+      createDraftSession(appliedSegment),
+    );
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(resetSegment), resetTarget)).toEqual([]);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(appliedSegment), resetTarget)).toEqual([
+      expect.objectContaining({
+        label: "Сегмент 1: обновлен визуал",
+        resetVisual: true,
+        restoreVisual: false,
         segmentIndex: 0,
       }),
     ]);
