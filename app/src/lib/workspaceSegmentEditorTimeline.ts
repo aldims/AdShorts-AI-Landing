@@ -339,8 +339,13 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
             nextSegment !== undefined &&
             options.speechBoundaryEnabled(previousSegment, nextSegment)
           : options.speechBoundaryEnabled;
+      const hasManualDurationBoundary = [nextSegments[index], nextSegments[index + 1]].some(
+        (segment) =>
+          segment?.durationMode === "manual" &&
+          normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null,
+      );
       const speechBoundary =
-        boundaryEnabled && previousSegment !== undefined && nextSegment !== undefined
+        boundaryEnabled && !hasManualDurationBoundary && previousSegment !== undefined && nextSegment !== undefined
           ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment)
           : null;
       boundaries.push(speechBoundary ?? rebuiltBoundary ?? boundaries[boundaries.length - 1] ?? 0);

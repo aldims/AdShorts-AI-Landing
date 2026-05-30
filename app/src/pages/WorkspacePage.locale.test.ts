@@ -42,11 +42,11 @@ import {
   getWorkspaceSegmentDraftSourceDisplayLabel,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
-  WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
   getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
+  shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
@@ -87,12 +87,14 @@ import {
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
+  resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentBoundaryTiming,
+  resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
@@ -120,6 +122,20 @@ type DraftSession = Parameters<typeof refreshWorkspaceSegmentEditorDraftWithFres
 type FreshSession = Parameters<typeof refreshWorkspaceSegmentEditorDraftWithFreshSession>[1];
 type GeneratedMediaLibraryEntry = Parameters<typeof hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary>[1][number];
 type MediaLibraryItem = Parameters<typeof createStudioCustomVideoFileFromMediaLibraryItem>[0];
+
+describe("WorkspacePage segment timeline drag drop", () => {
+  it("commits the previewed drop position when pointerup coordinates drift", () => {
+    expect(resolveWorkspaceSegmentThumbFinalInsertIndex(true, 4, 1)).toBe(4);
+  });
+
+  it("falls back to the pointer position when no preview position exists", () => {
+    expect(resolveWorkspaceSegmentThumbFinalInsertIndex(true, null, 3)).toBe(3);
+  });
+
+  it("does not commit a drop when dragging never started", () => {
+    expect(resolveWorkspaceSegmentThumbFinalInsertIndex(false, 4, 3)).toBeNull();
+  });
+});
 
 const createMediaAsset = (
   assetId: number,
@@ -1785,6 +1801,22 @@ describe("WorkspacePage studio route transitions", () => {
     expect(shouldDeferSegmentEditorRouteRestore("media")).toBe(true);
     expect(shouldDeferSegmentEditorRouteRestore("edit")).toBe(false);
     expect(shouldDeferSegmentEditorRouteRestore(null)).toBe(false);
+  });
+
+  it("defers stale edit-route restoration until the selected scene URL is current", () => {
+    expect(resolveWorkspaceSegmentEditorPendingRouteSync("3643:2", "3643:1")).toEqual({
+      didReachPendingRoute: false,
+      nextPendingRouteSyncKey: "3643:2",
+      shouldDeferRestore: true,
+    });
+  });
+
+  it("consumes the pending edit-route sync when the selected scene URL arrives", () => {
+    expect(resolveWorkspaceSegmentEditorPendingRouteSync("3643:2", "3643:2")).toEqual({
+      didReachPendingRoute: true,
+      nextPendingRouteSyncKey: null,
+      shouldDeferRestore: false,
+    });
   });
 });
 
@@ -3567,7 +3599,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, null)).toBeNull();
   });
 
-  it("limits AI photo visual duration to ten seconds", () => {
+  it("allows AI photo scenes to use the full visual timeline duration", () => {
     const aiPhotoSegment = createDraftSegment({
       aiPhotoAsset: {
         assetId: 909,
@@ -3592,20 +3624,20 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(aiPhotoSegment)).toBe(
-      WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
+      WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
     );
     expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(generatedStillSegment)).toBe(
-      WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
+      WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
     );
     expect(getWorkspaceSegmentEditorVisualDurationMaxSeconds(stockPhotoSegment)).toBe(
       WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
     );
-    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 12)).toEqual({
-      limitKind: "ai_photo",
-      maximumDurationSeconds: WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS,
-      requestedDurationSeconds: 12,
+    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 51)).toEqual({
+      limitKind: "visual",
+      maximumDurationSeconds: WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+      requestedDurationSeconds: 51,
     });
-    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 10)).toBeNull();
+    expect(resolveWorkspaceSegmentVisualDurationMaxGuard(aiPhotoSegment, 12)).toBeNull();
     expect(resolveWorkspaceSegmentVisualDurationMaxGuard(stockPhotoSegment, 12)).toBeNull();
   });
 
@@ -3710,6 +3742,19 @@ describe("WorkspacePage studio locale defaults", () => {
       manualDurationSeconds: 10,
       startTime: 0,
     }));
+  });
+
+  it("keeps a manually extended photo duration when background audio measurement completes", () => {
+    const segment = createDraftSegment({
+      duration: 12,
+      durationMode: "manual",
+      endTime: 12,
+      manualDurationSeconds: 12,
+      mediaType: "photo",
+    });
+
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 4.9)).toBe(true);
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 12.1)).toBe(false);
   });
 
   it("automatically syncs scene timing to a freshly generated voiceover", () => {

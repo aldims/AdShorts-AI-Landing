@@ -1911,8 +1911,6 @@ type WorkspaceSegmentThumbDragState = {
   y: number;
 };
 
-const WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID = -1;
-
 type WorkspacePublishChannel = {
   channelId: string | null;
   channelName: string;
@@ -2195,7 +2193,6 @@ const STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS = [
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS = 2.4;
-export const WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS = 10;
 export const WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS = 50;
 const WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS = 0.075;
 const WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS = 0.08;
@@ -7265,21 +7262,6 @@ const getWorkspaceSegmentSelectedVisualPreviewKind = (
   );
 };
 
-const isWorkspaceSegmentAiGeneratedStillImage = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const sourceKinds = [
-    segment.currentSourceKind,
-    segment.originalSourceKind,
-    segment.currentAsset?.sourceKind,
-    segment.originalAsset?.sourceKind,
-    segment.aiPhotoAsset?.source,
-  ];
-
-  return (
-    segment.mediaType === "photo" &&
-    sourceKinds.some((sourceKind) => String(sourceKind ?? "").trim().toLowerCase() === "ai_generated")
-  );
-};
-
 const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
     return false;
@@ -7311,25 +7293,9 @@ const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegmentEditorD
 export const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) =>
   getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video";
 
-const isWorkspaceSegmentAiPhotoVisualDurationLimited = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image") {
-    return false;
-  }
-
-  return (
-    getWorkspaceSegmentLatestVisualAction(segment) === "ai_photo" ||
-    Boolean(segment.aiPhotoAsset) ||
-    isWorkspaceSegmentAiPhotoRenderedStill(segment) ||
-    isWorkspaceSegmentAiGeneratedStillImage(segment)
-  );
-};
-
 export const getWorkspaceSegmentEditorVisualDurationMaxSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-) =>
-  isWorkspaceSegmentAiPhotoVisualDurationLimited(segment)
-    ? WORKSPACE_SEGMENT_EDITOR_MAX_AI_PHOTO_DURATION_SECONDS
-    : WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS;
+  _segment: WorkspaceSegmentEditorDraftSegment,
+) => WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS;
 
 export const resolveWorkspaceSegmentVisualDurationMaxGuard = (
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -7346,7 +7312,7 @@ export const resolveWorkspaceSegmentVisualDurationMaxGuard = (
   }
 
   return {
-    limitKind: isWorkspaceSegmentAiPhotoVisualDurationLimited(segment) ? ("ai_photo" as const) : ("visual" as const),
+    limitKind: "visual" as const,
     maximumDurationSeconds: roundWorkspaceSegmentTimelineSeconds(maximumDuration),
     requestedDurationSeconds: roundWorkspaceSegmentTimelineSeconds(requestedDuration),
   };
@@ -9978,17 +9944,11 @@ const getWorkspaceSegmentFreshVoiceoverDurationSeconds = (
     : null;
 };
 
-const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
+export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null,
-): WorkspaceSegmentEditorDraftSegment => {
-  const voiceoverDurationSeconds = getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session);
-  if (voiceoverDurationSeconds === null) {
-    return segment;
-  }
-
-  const currentSpeechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
-  const shouldFillSpeechDuration = currentSpeechDuration === null;
+  voiceoverDurationSeconds: number | null | undefined,
+) => {
+  const normalizedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
   const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const storedDurationExtensionSourceDurationSeconds =
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
@@ -10000,16 +9960,38 @@ const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" ||
     getWorkspaceSegmentPreviewKind(segment) === "image" ||
     String(segment.mediaType ?? "").trim().toLowerCase() === "photo";
-  const shouldPreserveManualPhotoDuration =
+
+  return (
+    normalizedVoiceoverDurationSeconds !== null &&
     hasManualTimelineOverride &&
     (isStillVisualSegment || storedDurationExtensionSourceDurationSeconds !== null) &&
     manualDurationSeconds !== null &&
-    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= voiceoverDurationSeconds;
+    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= normalizedVoiceoverDurationSeconds
+  );
+};
 
-  if (shouldPreserveManualPhotoDuration) {
+const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null,
+): WorkspaceSegmentEditorDraftSegment => {
+  const voiceoverDurationSeconds = getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session);
+  if (voiceoverDurationSeconds === null) {
     return segment;
   }
 
+  const currentSpeechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
+  const shouldFillSpeechDuration = currentSpeechDuration === null;
+  const shouldPreserveManualVisualDuration =
+    shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, voiceoverDurationSeconds);
+
+  if (shouldPreserveManualVisualDuration) {
+    return segment;
+  }
+
+  const hasManualTimelineOverride =
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null ||
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) !== null;
   if (!hasManualTimelineOverride && !shouldFillSpeechDuration) {
     return segment;
   }
@@ -12261,6 +12243,12 @@ const getVisibleInsertIndexForDraggedItem = (
   const adjustedInsertIndex = boundedInsertIndex > draggedIndex ? boundedInsertIndex - 1 : boundedInsertIndex;
   return adjustedInsertIndex === draggedIndex ? null : boundedInsertIndex;
 };
+
+export const resolveWorkspaceSegmentThumbFinalInsertIndex = (
+  isDragActive: boolean,
+  previewInsertIndex: number | null,
+  pointerInsertIndex: number | null,
+) => (isDragActive ? previewInsertIndex ?? pointerInsertIndex : null);
 
 const reorderWorkspaceSegmentEditorSegmentsByIndex = (
   segments: WorkspaceSegmentEditorDraftSegment[],
@@ -16588,6 +16576,33 @@ const getStudioViewFromRouteSection = (section: StudioEntryIntentSection): Studi
 export const shouldDeferSegmentEditorRouteRestore = (pendingSection: StudioEntryIntentSection | null) =>
   pendingSection !== null && pendingSection !== "edit";
 
+export const resolveWorkspaceSegmentEditorPendingRouteSync = (
+  pendingRouteSyncKey: string | null,
+  restoreKey: string,
+) => {
+  if (!pendingRouteSyncKey) {
+    return {
+      didReachPendingRoute: false,
+      nextPendingRouteSyncKey: null,
+      shouldDeferRestore: false,
+    };
+  }
+
+  if (pendingRouteSyncKey !== restoreKey) {
+    return {
+      didReachPendingRoute: false,
+      nextPendingRouteSyncKey: pendingRouteSyncKey,
+      shouldDeferRestore: true,
+    };
+  }
+
+  return {
+    didReachPendingRoute: true,
+    nextPendingRouteSyncKey: null,
+    shouldDeferRestore: false,
+  };
+};
+
 const buildStudioRouteUrl = (
   search: string,
   section: StudioEntryIntentSection,
@@ -20312,6 +20327,7 @@ export function WorkspacePage({
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorFreshRouteFetchKeyRef = useRef<string | null>(null);
+  const segmentEditorPendingRouteSyncKeyRef = useRef<string | null>(null);
   const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
   const workspaceSessionResetEmailRef = useRef(session.email);
@@ -20398,6 +20414,7 @@ export function WorkspacePage({
   const segmentTimelineDurationButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineDurationMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineDurationInputRef = useRef<HTMLInputElement | null>(null);
+  const segmentTimelineVisualDurationInputApplyTimerRef = useRef<number | null>(null);
   const segmentTimelineDurationAiPromptRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentTimelineVisualMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineVoiceButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
@@ -20410,6 +20427,7 @@ export function WorkspacePage({
   const segmentTimelineTextMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
   const segmentThumbDocumentPointerCleanupRef = useRef<(() => void) | null>(null);
+  const segmentThumbDropInsertIndexRef = useRef<number | null>(null);
   const segmentThumbPendingDragRef = useRef<{
     index: number;
     pointerId: number;
@@ -21098,8 +21116,13 @@ export function WorkspacePage({
     const boundedSegmentArrayIndex = Math.max(0, Math.min(segmentArrayIndex, draft.segments.length - 1));
     const routeSegmentIndex = getSegmentEditorRouteSegmentIndex(draft, boundedSegmentArrayIndex);
     const handledRouteKey = `${draft.projectId}:${routeSegmentIndex}`;
+    const currentRouteKey =
+      routeStudioState.section === "edit" && routeStudioState.projectId
+        ? `${routeStudioState.projectId}:${routeStudioState.segmentIndex ?? 0}`
+        : null;
     segmentEditorRouteRestoreKeyRef.current = null;
     segmentEditorHandledRouteRestoreKeyRef.current = handledRouteKey;
+    segmentEditorPendingRouteSyncKeyRef.current = currentRouteKey === handledRouteKey ? null : handledRouteKey;
     syncStudioRouteSection("edit", {
       projectId: draft.projectId,
       replace: options?.replace ?? true,
@@ -21300,6 +21323,9 @@ export function WorkspacePage({
       }
       if (segmentCarouselReleaseTimerRef.current) {
         window.clearTimeout(segmentCarouselReleaseTimerRef.current);
+      }
+      if (segmentTimelineVisualDurationInputApplyTimerRef.current !== null) {
+        window.clearTimeout(segmentTimelineVisualDurationInputApplyTimerRef.current);
       }
       segmentCarouselDragStateRef.current = null;
       segmentEditorRequestAbortRef.current?.abort("segment-editor-dispose");
@@ -22131,9 +22157,14 @@ export function WorkspacePage({
     segmentThumbPendingDragRef.current = null;
     segmentThumbSuppressClickUntilRef.current = 0;
     segmentThumbDragStateRef.current = null;
+    segmentThumbDropInsertIndexRef.current = null;
     setSegmentThumbDragState(null);
     setSegmentThumbDropInsertIndex(null);
-  }, [createMode, segmentEditorDraft]);
+    // NOTE: only reset when leaving the editor or switching projects. Depending on the
+    // whole `segmentEditorDraft` object would abort an in-progress drag whenever the draft
+    // reference churns (persistence, hydration, duration measurement, playback ticks),
+    // which left the handle "highlighting but not dragging".
+  }, [createMode, segmentEditorDraft?.projectId]);
 
   useEffect(() => {
     return () => {
@@ -25255,8 +25286,13 @@ export function WorkspacePage({
     clearSegmentThumbDocumentPointerListeners();
     segmentThumbPendingDragRef.current = null;
     segmentThumbDragStateRef.current = null;
+    segmentThumbDropInsertIndexRef.current = null;
     setSegmentThumbDragState(null);
     setSegmentThumbDropInsertIndex(null);
+  };
+  const setResolvedSegmentThumbDropInsertIndex = (insertIndex: number | null) => {
+    segmentThumbDropInsertIndexRef.current = insertIndex;
+    setSegmentThumbDropInsertIndex(insertIndex);
   };
   const isSegmentThumbClickSuppressed = () => window.performance.now() < segmentThumbSuppressClickUntilRef.current;
   const setSegmentThumbButtonRef =
@@ -26166,18 +26202,18 @@ export function WorkspacePage({
     return visibleInsertIndex >= draggedIndex ? visibleInsertIndex + 1 : visibleInsertIndex;
   };
   const startSegmentThumbPointerDrag = (
-    draggedIndex: number,
     pointer: {
       clientX: number;
       clientY: number;
       pointerId: number;
-      sourceElement: HTMLElement | null;
     },
+    draggedIndex: number,
+    sourceElement?: HTMLElement | null,
   ) => {
     setSegmentTimelineVisualMenuSegmentIndex(null);
-    const dragSourceElement = getSegmentThumbDragSourceElement(draggedIndex) ?? pointer.sourceElement;
+    const dragSourceElement = getSegmentThumbDragSourceElement(draggedIndex) ?? sourceElement;
     if (!dragSourceElement) {
-      return false;
+      return;
     }
 
     const bounds = dragSourceElement.getBoundingClientRect();
@@ -26197,8 +26233,7 @@ export function WorkspacePage({
     scrollSegmentThumbStripForPointer(pointer.clientX);
     segmentThumbDragStateRef.current = nextDragState;
     setSegmentThumbDragState(nextDragState);
-    setSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(pointer.clientX, draggedIndex));
-    return true;
+    setResolvedSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(pointer.clientX, draggedIndex));
   };
   const updateSegmentThumbPointerDrag = (clientX: number, clientY: number, draggedIndex: number) => {
     scrollSegmentThumbStripForPointer(clientX);
@@ -26215,7 +26250,7 @@ export function WorkspacePage({
 
     segmentThumbDragStateRef.current = nextDragState;
     setSegmentThumbDragState(nextDragState);
-    setSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(clientX, draggedIndex));
+    setResolvedSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(clientX, draggedIndex));
   };
   const cancelSegmentEditorVideoPlaybackRequest = () => {
     const cleanup = segmentEditorVideoPlaybackCleanupRef.current;
@@ -26612,28 +26647,6 @@ export function WorkspacePage({
     );
     setActiveSegmentIndex(nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0);
   };
-  const handleSegmentThumbPointerDown =
-    (segmentArrayIndex: number) =>
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!isSegmentThumbReorderEnabled || (event.pointerType === "mouse" && event.button !== 0)) {
-        return;
-      }
-
-      segmentThumbPendingDragRef.current = {
-        index: segmentArrayIndex,
-        pointerId: event.pointerId,
-        sourceElement: event.currentTarget,
-        startX: event.clientX,
-        startY: event.clientY,
-      };
-      bindSegmentThumbDocumentPointerListeners(segmentArrayIndex, event.pointerId);
-
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch {
-        // Ignore capture errors for unsupported pointers.
-      }
-    };
   const continueSegmentThumbPointerDrag = (
     segmentArrayIndex: number,
     pointer: {
@@ -26662,12 +26675,8 @@ export function WorkspacePage({
 
       pointer.preventDefault?.();
       segmentThumbSuppressClickUntilRef.current = window.performance.now() + 320;
-      return startSegmentThumbPointerDrag(segmentArrayIndex, {
-        clientX: pointer.clientX,
-        clientY: pointer.clientY,
-        pointerId: pointer.pointerId,
-        sourceElement: pendingDragState.sourceElement,
-      });
+      startSegmentThumbPointerDrag(pointer, segmentArrayIndex, pendingDragState.sourceElement);
+      return true;
     }
 
     if (currentDragState.pointerId !== pointer.pointerId || currentDragState.draggedIndex !== segmentArrayIndex) {
@@ -26702,10 +26711,11 @@ export function WorkspacePage({
       Boolean(currentDragState) &&
       currentDragState?.pointerId === pointer.pointerId &&
       currentDragState.draggedIndex === segmentArrayIndex;
-
-    const finalInsertIndex = isDragActive
-      ? resolveSegmentThumbInsertIndexFromClientX(pointer.clientX, segmentArrayIndex)
-      : null;
+    const finalInsertIndex = resolveWorkspaceSegmentThumbFinalInsertIndex(
+      isDragActive,
+      segmentThumbDropInsertIndexRef.current,
+      resolveSegmentThumbInsertIndexFromClientX(pointer.clientX, segmentArrayIndex),
+    );
 
     logSegmentEditorDiagnostics("client.segment-editor.reorder.finish", {
       cancelled: options?.cancelled ?? false,
@@ -26717,7 +26727,6 @@ export function WorkspacePage({
 
     if (isDragActive && !options?.cancelled) {
       pointer.preventDefault?.();
-      updateSegmentThumbPointerDrag(pointer.clientX, pointer.clientY, segmentArrayIndex);
       if (finalInsertIndex !== null) {
         moveSegmentEditorThumb(segmentArrayIndex, finalInsertIndex);
       }
@@ -26735,6 +26744,84 @@ export function WorkspacePage({
     clearSegmentThumbDragState();
     return true;
   };
+  const bindSegmentThumbDocumentPointerListeners = (segmentArrayIndex: number, pointerId: number) => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    clearSegmentThumbDocumentPointerListeners();
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) {
+        return;
+      }
+
+      continueSegmentThumbPointerDrag(segmentArrayIndex, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerId: event.pointerId,
+        preventDefault: () => event.preventDefault(),
+      });
+    };
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) {
+        return;
+      }
+
+      finishSegmentThumbPointerDragForPointer(segmentArrayIndex, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerId: event.pointerId,
+        preventDefault: () => event.preventDefault(),
+      });
+    };
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) {
+        return;
+      }
+
+      finishSegmentThumbPointerDragForPointer(
+        segmentArrayIndex,
+        {
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerId: event.pointerId,
+        },
+        { cancelled: true },
+      );
+    };
+
+    document.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
+    document.addEventListener("pointerup", handlePointerUp, { capture: true });
+    document.addEventListener("pointercancel", handlePointerCancel, { capture: true });
+    segmentThumbDocumentPointerCleanupRef.current = () => {
+      document.removeEventListener("pointermove", handlePointerMove, { capture: true });
+      document.removeEventListener("pointerup", handlePointerUp, { capture: true });
+      document.removeEventListener("pointercancel", handlePointerCancel, { capture: true });
+    };
+  };
+  const handleSegmentThumbPointerDown =
+    (segmentArrayIndex: number) =>
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!isSegmentThumbReorderEnabled || (event.pointerType === "mouse" && event.button !== 0)) {
+        return;
+      }
+
+      segmentThumbPendingDragRef.current = {
+        index: segmentArrayIndex,
+        pointerId: event.pointerId,
+        sourceElement: event.currentTarget,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      bindSegmentThumbDocumentPointerListeners(segmentArrayIndex, event.pointerId);
+
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Ignore capture errors for unsupported pointers.
+      }
+    };
   const handleSegmentThumbPointerMove =
     (segmentArrayIndex: number) =>
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -26758,123 +26845,6 @@ export function WorkspacePage({
         },
         options,
       );
-    };
-  const bindSegmentThumbDocumentPointerListeners = (segmentArrayIndex: number, pointerId: number) => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    clearSegmentThumbDocumentPointerListeners();
-
-    const handlePointerMove = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) {
-        return;
-      }
-
-      const wasHandled = continueSegmentThumbPointerDrag(segmentArrayIndex, {
-        clientX: event.clientX,
-        clientY: event.clientY,
-        pointerId: event.pointerId,
-        preventDefault: () => event.preventDefault(),
-      });
-      if (wasHandled) {
-        event.stopPropagation();
-      }
-    };
-
-    const finishPointerInteraction = (event: PointerEvent, options?: { cancelled?: boolean }) => {
-      if (event.pointerId !== pointerId) {
-        return;
-      }
-
-      const wasHandled = finishSegmentThumbPointerDragForPointer(
-        segmentArrayIndex,
-        {
-          clientX: event.clientX,
-          clientY: event.clientY,
-          pointerId: event.pointerId,
-          preventDefault: () => event.preventDefault(),
-        },
-        options,
-      );
-      if (wasHandled) {
-        event.stopPropagation();
-      }
-    };
-
-    const handlePointerUp = (event: PointerEvent) => finishPointerInteraction(event);
-    const handlePointerCancel = (event: PointerEvent) => finishPointerInteraction(event, { cancelled: true });
-
-    document.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
-    document.addEventListener("pointerup", handlePointerUp, { capture: true });
-    document.addEventListener("pointercancel", handlePointerCancel, { capture: true });
-
-    segmentThumbDocumentPointerCleanupRef.current = () => {
-      document.removeEventListener("pointermove", handlePointerMove, { capture: true });
-      document.removeEventListener("pointerup", handlePointerUp, { capture: true });
-      document.removeEventListener("pointercancel", handlePointerCancel, { capture: true });
-    };
-  };
-  const bindSegmentThumbDocumentMouseListeners = (segmentArrayIndex: number) => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    clearSegmentThumbDocumentPointerListeners();
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const wasHandled = continueSegmentThumbPointerDrag(segmentArrayIndex, {
-        clientX: event.clientX,
-        clientY: event.clientY,
-        pointerId: WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
-        preventDefault: () => event.preventDefault(),
-      });
-      if (wasHandled) {
-        event.stopPropagation();
-      }
-    };
-
-    const handleMouseUp = (event: MouseEvent) => {
-      const wasHandled = finishSegmentThumbPointerDragForPointer(segmentArrayIndex, {
-        clientX: event.clientX,
-        clientY: event.clientY,
-        pointerId: WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
-        preventDefault: () => event.preventDefault(),
-      });
-      if (wasHandled) {
-        event.stopPropagation();
-      }
-    };
-
-    document.addEventListener("mousemove", handleMouseMove, { capture: true });
-    document.addEventListener("mouseup", handleMouseUp, { capture: true });
-
-    segmentThumbDocumentPointerCleanupRef.current = () => {
-      document.removeEventListener("mousemove", handleMouseMove, { capture: true });
-      document.removeEventListener("mouseup", handleMouseUp, { capture: true });
-    };
-  };
-  const handleSegmentThumbMouseDown =
-    (segmentArrayIndex: number) =>
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      if (
-        !isSegmentThumbReorderEnabled ||
-        event.button !== 0 ||
-        segmentThumbPendingDragRef.current?.index === segmentArrayIndex
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      segmentThumbPendingDragRef.current = {
-        index: segmentArrayIndex,
-        pointerId: WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
-        sourceElement: event.currentTarget,
-        startX: event.clientX,
-        startY: event.clientY,
-      };
-      bindSegmentThumbDocumentMouseListeners(segmentArrayIndex);
     };
   const handleSegmentEditorTimelineRulerPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const pendingDragState = segmentThumbPendingDragRef.current;
@@ -26953,7 +26923,7 @@ export function WorkspacePage({
 
   useLayoutEffect(() => {
     syncAdaptivePromptPanelWidth();
-  });
+  }, [syncAdaptivePromptPanelWidth]);
 
   useEffect(() => {
     if (createMode === "segment-editor" || typeof window === "undefined") {
@@ -28319,6 +28289,7 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorPendingRouteSyncKeyRef.current = null;
       return;
     }
 
@@ -28330,6 +28301,7 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorPendingRouteSyncKeyRef.current = null;
       hasProcessedInitialSegmentEditorEditRouteRef.current = false;
       return;
     }
@@ -28337,6 +28309,18 @@ export function WorkspacePage({
     const routeProjectId = routeStudioState.projectId;
     const requestedSegmentIndex = routeStudioState.segmentIndex ?? 0;
     const restoreKey = `${routeProjectId}:${requestedSegmentIndex}`;
+    const pendingRouteSync = resolveWorkspaceSegmentEditorPendingRouteSync(
+      segmentEditorPendingRouteSyncKeyRef.current,
+      restoreKey,
+    );
+    segmentEditorPendingRouteSyncKeyRef.current = pendingRouteSync.nextPendingRouteSyncKey;
+    if (pendingRouteSync.shouldDeferRestore) {
+      return;
+    }
+    if (pendingRouteSync.didReachPendingRoute) {
+      segmentEditorRouteRestoreKeyRef.current = restoreKey;
+      segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
+    }
     const storedDraftForRoute = readStoredWorkspaceSegmentEditorDraft(session.email, routeProjectId);
 
     logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
@@ -37592,7 +37576,7 @@ export function WorkspacePage({
   };
   const showSegmentTimelineVisualDurationMaxWarning = (
     guard: {
-      limitKind: "ai_photo" | "visual";
+      limitKind: "visual";
       maximumDurationSeconds: number;
     },
   ) => {
@@ -37601,18 +37585,11 @@ export function WorkspacePage({
       guard.maximumDurationSeconds,
       locale,
     );
-    const warning =
-      guard.limitKind === "ai_photo"
-        ? workspaceText(
-            locale,
-            `Длительность ИИ фото не может быть больше ${maximumDurationLabel}.`,
-            `AI photo duration cannot exceed ${maximumDurationLabel}.`,
-          )
-        : workspaceText(
-            locale,
-            `Длительность визуала не может быть больше ${maximumDurationLabel}.`,
-            `Visual duration cannot exceed ${maximumDurationLabel}.`,
-          );
+    const warning = workspaceText(
+      locale,
+      `Длительность визуала не может быть больше ${maximumDurationLabel}.`,
+      `Visual duration cannot exceed ${maximumDurationLabel}.`,
+    );
 
     setSegmentEditorVideoError(warning);
     showStudioToast(warning, { durationMs: 4000, kind: "warning" });
@@ -37738,6 +37715,14 @@ export function WorkspacePage({
     setActiveSegmentIndex(Math.max(0, Math.min(options.segmentArrayIndex, (segmentEditorDraftRef.current?.segments.length ?? 1) - 1)));
     return formatWorkspaceSegmentEditorDurationBadgeLabel(timing.duration, locale);
   };
+  const clearSegmentTimelineVisualDurationInputApplyTimer = () => {
+    if (segmentTimelineVisualDurationInputApplyTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(segmentTimelineVisualDurationInputApplyTimerRef.current);
+    segmentTimelineVisualDurationInputApplyTimerRef.current = null;
+  };
   const commitSegmentTimelineVisualDurationInput = (
     input: HTMLInputElement,
     options: {
@@ -37746,8 +37731,27 @@ export function WorkspacePage({
       segmentIndex: number;
     },
   ) => {
+    clearSegmentTimelineVisualDurationInputApplyTimer();
     applySegmentTimelineVisualDurationInputValue(input, options, true);
     setSegmentTimelineVisualDurationInputDraft(null);
+  };
+  const scheduleSegmentTimelineVisualDurationInputCommit = (
+    input: HTMLInputElement,
+    options: {
+      initialValue: string;
+      segmentArrayIndex: number;
+      segmentIndex: number;
+    },
+  ) => {
+    clearSegmentTimelineVisualDurationInputApplyTimer();
+    segmentTimelineVisualDurationInputApplyTimerRef.current = window.setTimeout(() => {
+      segmentTimelineVisualDurationInputApplyTimerRef.current = null;
+      if (!input.isConnected) {
+        return;
+      }
+
+      commitSegmentTimelineVisualDurationInput(input, options);
+    }, 700);
   };
   const handleSegmentTimelineVisualDurationInputElementChange = (
     input: HTMLInputElement,
@@ -37761,7 +37765,7 @@ export function WorkspacePage({
       segmentIndex: options.segmentIndex,
       value: input.value,
     });
-    applySegmentTimelineVisualDurationInputValue(input, options, false);
+    scheduleSegmentTimelineVisualDurationInputCommit(input, options);
   };
   const handleSegmentTimelineVisualDurationInputChange = (
     event: ChangeEvent<HTMLInputElement> | ReactFormEvent<HTMLInputElement> | ReactKeyboardEvent<HTMLInputElement>,
@@ -38103,6 +38107,8 @@ export function WorkspacePage({
             return currentSegment;
           }
 
+          const shouldPreserveManualVisualDuration =
+            shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentSegment, nextDurationSeconds);
           const nextVoiceoverAsset =
             latestSceneVoiceoverAudioUrl !== null && currentSegment.voiceoverAsset
               ? {
@@ -38112,9 +38118,11 @@ export function WorkspacePage({
               : currentSegment.voiceoverAsset;
           return {
             ...currentSegment,
-            durationExtensionSourceDurationSeconds: null,
-            durationMode: "auto",
-            manualDurationSeconds: null,
+            durationExtensionSourceDurationSeconds: shouldPreserveManualVisualDuration
+              ? currentSegment.durationExtensionSourceDurationSeconds
+              : null,
+            durationMode: shouldPreserveManualVisualDuration ? currentSegment.durationMode : "auto",
+            manualDurationSeconds: shouldPreserveManualVisualDuration ? currentSegment.manualDurationSeconds : null,
             speechDuration: nextDurationSeconds,
             speechDurationSource: "audio",
             speechEndTime,
@@ -41382,24 +41390,14 @@ export function WorkspacePage({
                         `Drag scene ${segmentDisplayNumber}`,
                       )}
                       title={workspaceText(locale, "Перетащить сцену", "Drag scene")}
-                      onPointerCancel={(event) => {
-                        event.stopPropagation();
-                        finishSegmentThumbPointerDrag(segmentArrayIndex)(event, { cancelled: true });
-                      }}
+                      onPointerCancel={(event) => finishSegmentThumbPointerDrag(segmentArrayIndex)(event, { cancelled: true })}
                       onPointerDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
                         handleSegmentThumbPointerDown(segmentArrayIndex)(event);
                       }}
-                      onMouseDown={handleSegmentThumbMouseDown(segmentArrayIndex)}
-                      onPointerMove={(event) => {
-                        event.stopPropagation();
-                        handleSegmentThumbPointerMove(segmentArrayIndex)(event);
-                      }}
-                      onPointerUp={(event) => {
-                        event.stopPropagation();
-                        finishSegmentThumbPointerDrag(segmentArrayIndex)(event);
-                      }}
+                      onPointerMove={handleSegmentThumbPointerMove(segmentArrayIndex)}
+                      onPointerUp={finishSegmentThumbPointerDrag(segmentArrayIndex)}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();

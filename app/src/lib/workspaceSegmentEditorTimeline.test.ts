@@ -349,6 +349,45 @@ describe("workspace segment editor timeline", () => {
     }));
   });
 
+  it("does not override a manual duration with automatic project voiceover boundaries", () => {
+    const firstSegment = createSegment({
+      duration: 4.9,
+      durationMode: "manual",
+      endTime: 4.9,
+      manualDurationSeconds: 12,
+      speechDuration: 4.6,
+      speechEndTime: 4.6,
+      speechStartTime: 0,
+      text: "first scene",
+    });
+    const secondSegment = createSegment({
+      duration: 4.4,
+      endTime: 9.3,
+      speechDuration: 4.1,
+      speechEndTime: 9,
+      speechStartTime: 4.9,
+      startTime: 4.9,
+      text: "second scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, secondSegment], {
+      preserveSourceTimelineEnd: true,
+      speechBoundaryEnabled: true,
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 12,
+      endTime: 12,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 4.1,
+      endTime: 16.1,
+      startTime: 12,
+    }));
+  });
+
   it("ignores text for silent stills when subtitles are disabled", () => {
     const segment = createSegment({
       duration: null,
