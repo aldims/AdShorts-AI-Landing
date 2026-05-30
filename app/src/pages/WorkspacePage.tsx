@@ -12,12 +12,162 @@ import {
   MEDIA_LIBRARY_PAGE_SIZE,
   shouldLoadWorkspaceMediaLibraryView,
 } from "../features/workspace/hot-path";
-import { WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS } from "../features/workspace/workspace-constants";
+import {
+  areStudioCustomVideoFilesSameIdentity,
+  areWorkspaceSegmentDurationValuesEqual,
+  areWorkspaceSegmentEditorLocalizedTextMapsEqual,
+  buildWorkspaceMediaAssetPlaybackUrl,
+  buildWorkspaceMediaAssetProxyUrl,
+  buildWorkspaceMediaLibraryAssetPosterUrl,
+  buildWorkspaceProjectMusicAudioProxyUrl,
+  canWorkspaceSegmentUseVideoExtensionTool,
+  clampWorkspaceSegmentEditorVisualDurationSeconds,
+  clearWorkspaceSegmentVoiceoverTiming,
+  cloneStudioCustomMusicFile,
+  cloneStudioCustomVideoFile,
+  cloneWorkspaceProject,
+  cloneWorkspaceSegmentEditorDraftSegment,
+  cloneWorkspaceSegmentEditorDraftSession,
+  cloneWorkspaceSegmentEditorLocalizedTextMap,
+  createStudioSubtitleColorOption,
+  createWorkspaceSegmentEditorDraftSession,
+  createWorkspaceSegmentEditorInsertedSegment,
+  createWorkspaceSegmentEditorResetDraftFromBaseline,
+  createWorkspaceSegmentSceneSoundAsset,
+  createWorkspaceSegmentVoiceoverAsset,
+  doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio,
+  fallbackStudioSubtitleColorCatalogOption,
+  fallbackStudioSubtitleColorOption,
+  fallbackStudioSubtitleStyleOption,
+  getPositiveWorkspaceMediaAssetId,
+  getSegmentAiPhotoCreditCost,
+  getSegmentAiVideoCreditCost,
+  getSegmentPhotoAnimationCreditCost,
+  getStudioCustomAssetPreviewUrl,
+  getStudioCustomVideoFileDurationSeconds,
+  getStudioCustomVideoFileIdentityKey,
+  getStudioGenerationRequiredCredits,
+  getStudioLanguageForVoiceId,
+  getStudioSceneSoundAssetPreviewUrl,
+  getStudioVideoChipValue,
+  getStudioVideoOptionCopy,
+  getUniqueWorkspaceSegmentPreviewUrls,
+  getWorkspaceMediaAssetDurablePreviewUrl,
+  getWorkspaceMediaAssetIdentityKey,
+  getWorkspaceMediaAssetResolvedPreviewUrl,
+  getWorkspaceReferenceGenerationCreditCost,
+  getWorkspaceSegmentCurrentPosterUrl,
+  getWorkspaceSegmentCurrentVisualIdentityKey,
+  getWorkspaceSegmentCustomAssetId,
+  getWorkspaceSegmentCustomPreviewKind,
+  getWorkspaceSegmentDisplayAiVideoAssetUrl,
+  getWorkspaceSegmentDraftVisualAsset,
+  getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentDurationExtensionSourceDurationSeconds,
+  getWorkspaceSegmentDurationExtensionStillSourceAsset,
+  getWorkspaceSegmentEditorCarouselNavigation,
+  getWorkspaceSegmentEditorCarouselSlots,
+  getWorkspaceSegmentEditorEffectiveSubtitleSelection,
+  getWorkspaceSegmentEditorGenerationRequiredCredits,
+  getWorkspaceSegmentEditorReservedSegmentIndexes,
+  getWorkspaceSegmentEditorSessionLanguage,
+  getWorkspaceSegmentEditorVisualDurationMaxSeconds,
+  getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentEffectiveVoiceId,
+  getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
+  getWorkspaceSegmentKnownVisualDurationSeconds,
+  getWorkspaceSegmentLatestEditablePhotoAsset,
+  getWorkspaceSegmentLatestVisualAction,
+  getWorkspaceSegmentOriginalPosterUrl,
+  getWorkspaceSegmentOriginalVisualIdentityKey,
+  getWorkspaceSegmentPendingImageEditSourceAsset,
+  getWorkspaceSegmentPhotoAnimationSourceAsset,
+  getWorkspaceSegmentPreferredStillPreviewUrl,
+  getWorkspaceSegmentPreviewKind,
+  getWorkspaceSegmentRecommendedDurationSeconds,
+  getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentSelectedVisualPreviewKind,
+  getWorkspaceSegmentStillPreviewUrls,
+  getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
+  getWorkspaceSegmentSubtitleColorOverrideId,
+  getWorkspaceSegmentSubtitleStyleOverrideId,
+  getWorkspaceSegmentSubtitleTypeOverrideId,
+  getWorkspaceSegmentTimelineHistoryKey,
+  getWorkspaceSegmentTimelineVoiceoverDurationInfo,
+  getWorkspaceSegmentVideoAssetPosterUrl,
+  getWorkspaceSegmentVideoVisualDurationSeconds,
+  getWorkspaceSegmentVisualGenerationDurationSeconds,
+  getWorkspaceSegmentVoiceoverAudioPreviewSource,
+  getWorkspaceSegmentVoiceoverDurationSeconds,
+  getWorkspaceSegmentVoiceOverrideId,
+  hasStudioBranding,
+  hasWorkspaceSegmentDisplayAiVideoAsset,
+  hasWorkspaceSegmentExplicitDraftVisual,
+  hasWorkspaceSegmentPersistedMediaReference,
+  isWorkspacePhotoMediaAsset,
+  isWorkspaceSegmentCachedLanguageTextUsable,
+  isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
+  isWorkspaceSegmentDraftDurationEdited,
+  isWorkspaceSegmentDraftTextEdited,
+  isWorkspaceSegmentEditorCleanEmptyDraft,
+  isWorkspaceSegmentEditorDraftSegmentEmpty,
+  isWorkspaceSegmentImageFile,
+  isWorkspaceSegmentServerPhotoAnimationOverride,
+  isWorkspaceSegmentStaleUploadOriginalVisual,
+  isWorkspaceSegmentVisualResetApplied,
+  isWorkspaceSegmentVoiceoverAssetFresh,
+  isWorkspaceSegmentVoiceoverPlaybackFresh,
+  isWorkspaceVideoMediaAsset,
+  normalizeStudioLanguageValue,
+  normalizeWorkspaceLocalizedTextForCompare,
+  normalizeWorkspaceSegmentAiPhotoPrompt,
+  normalizeWorkspaceSegmentDurationMode,
+  normalizeWorkspaceSegmentEditorSegmentUrls,
+  normalizeWorkspaceSegmentEditorSession,
+  normalizeWorkspaceSegmentEditorSetting,
+  normalizeWorkspaceSegmentEditorTextForCompare,
+  normalizeWorkspaceSegmentMediaType,
+  normalizeWorkspaceSegmentSceneSoundPrompt,
+  normalizeWorkspaceSegmentSourceKind,
+  normalizeWorkspaceSegmentVoicePreviewTime,
+  preserveWorkspaceSegmentEditorOriginalVisualReferences,
+  rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  rebuildWorkspaceSegmentEditorDraftTimeline,
+  refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  resetWorkspaceSegmentDraftVisualToOriginal,
+  resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
+  resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
+  resolveWorkspaceSegmentBoundaryTiming,
+  resolveWorkspaceSegmentDurationExtensionSourceDurationSeconds,
+  resolveWorkspaceSegmentEditorLoadedBaselineSession,
+  resolveWorkspaceSegmentEditorMediaUploadScope,
+  resolveWorkspaceSegmentEditorSegmentsAfterDelete,
+  resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange,
+  resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
+  resolveWorkspaceSegmentVisualDurationMaxGuard,
+  restoreWorkspaceSegmentDraftVisualFromBaseline,
+  restoreWorkspaceSegmentTimelineSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSnapshot,
+  rewriteWorkspaceSegmentProjectProxyUrl,
+  shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
+  shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
+  shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
+  shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview,
+  shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
+  STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS,
+  studioVideoOptions,
+  studioVoiceOptionsByLanguage,
+  truncateStudioCustomAssetName,
+  WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
+  WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
+} from "../features/workspace/workspace-segment-editor";
 import {
   buildWorkspaceSegmentBulkSubtitleText,
   distributeWorkspaceSegmentBulkSubtitleText,
   getWorkspaceSegmentVoiceoverTextHash,
-  normalizeWorkspaceSegmentBulkSubtitleText,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceRegenerationVideoMode,
   resolveWorkspaceSegmentActivationPlaybackIndex,
@@ -25,7 +175,6 @@ import {
   resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
-  splitWorkspaceSegmentBulkSubtitleWords,
 } from "../features/workspace/workspace-utils";
 import type { StudioVideoMode } from "../features/workspace/workspace-types";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
@@ -94,33 +243,20 @@ import {
 import { sanitizeWorkspaceSegmentEditorCustomMusicState } from "../lib/workspaceSegmentEditorMusic";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
-  estimateWorkspaceSegmentEditorSpeechDuration,
   getWorkspaceSegmentEditorDisplayEndTime,
   getWorkspaceSegmentEditorDisplayStartTime,
   getWorkspaceSegmentEditorPlaybackDuration,
-  getWorkspaceSegmentEditorSpeechDuration,
-  getWorkspaceSegmentTimelineSpeechRange,
   normalizeWorkspaceSegmentManualDurationSeconds,
-  rebuildWorkspaceSegmentEditorTimeline,
   roundWorkspaceSegmentTimelineSeconds,
   type WorkspaceSegmentDurationMode,
 } from "../lib/workspaceSegmentEditorTimeline";
 import {
-  filterWorkspaceStillAssetUrls,
   getWorkspaceSegmentPausedPreviewTime,
-  isLikelyVideoAssetUrl,
   sanitizeWorkspaceSegmentPosterUrl,
 } from "../lib/workspaceSegmentPreview";
-import { hasWorkspaceSegmentEditorStructureChanged } from "../lib/workspaceSegmentEditorStructure";
 import {
-  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
-  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY,
-  STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
-  getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   getStudioSegmentVoiceoverCreditCost,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
@@ -128,7 +264,6 @@ import {
   STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
-  STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   type StudioCreditAction,
@@ -144,6 +279,54 @@ import type {
   WorkspaceSavedReferencesPayload,
 } from "../../shared/workspace-references";
 
+export {
+  canWorkspaceSegmentUseVideoExtensionTool,
+  createWorkspaceSegmentEditorInsertedSegment,
+  createWorkspaceSegmentEditorResetDraftFromBaseline,
+  getStudioLanguageForVoiceId,
+  getStudioVoiceCreditCost,
+  getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentEditorCarouselNavigation,
+  getWorkspaceSegmentEditorCarouselSlots,
+  getWorkspaceSegmentEditorEffectiveSubtitleSelection,
+  getWorkspaceSegmentEditorVisualDurationMaxSeconds,
+  getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentRecommendedDurationSeconds,
+  getWorkspaceSegmentSceneSoundDurationSeconds,
+  getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentTimelineVoiceoverDurationInfo,
+  getWorkspaceSegmentVideoVisualDurationSeconds,
+  getWorkspaceSegmentVisualAudioDurationMismatchInfo,
+  getWorkspaceSegmentVisualGenerationDurationSeconds,
+  getWorkspaceSegmentVoiceoverAudioPreviewSource,
+  getWorkspaceSegmentVoiceoverDurationSeconds,
+  getWorkspaceSegmentVoiceoverPreviewRange,
+  isWorkspaceSegmentEditorCleanEmptyDraft,
+  isWorkspaceSegmentEditorDraftSegmentEmpty,
+  normalizeStudioLanguageValue,
+  preserveWorkspaceSegmentEditorOriginalVisualReferences,
+  refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  resetWorkspaceSegmentDraftVisualToOriginal,
+  resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
+  resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
+  resolveWorkspaceSegmentBoundaryTiming,
+  resolveWorkspaceSegmentEditorLoadedBaselineSession,
+  resolveWorkspaceSegmentEditorMediaUploadScope,
+  resolveWorkspaceSegmentEditorSegmentsAfterDelete,
+  resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange,
+  resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
+  resolveWorkspaceSegmentVisualDurationMaxGuard,
+  restoreWorkspaceSegmentTimelineSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSnapshot,
+  shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
+  shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
+  shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
+  shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
+  studioVoiceOptionsByLanguage,
+  WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
+} from "../features/workspace/workspace-segment-editor";
 export {
   buildWorkspaceSegmentBulkSubtitleText,
   distributeWorkspaceSegmentBulkSubtitleText,
@@ -787,7 +970,7 @@ type WorkspaceProjectYouTubePublication = {
   youtubeVideoId: string | null;
 };
 
-type WorkspaceProject = {
+export type WorkspaceProject = {
   adId: number | null;
   createdAt: string;
   description: string;
@@ -983,7 +1166,7 @@ type StoredWorkspaceGeneratedMediaLibraryEntry = {
   sourceJobId: string;
 };
 
-type WorkspaceSegmentEditorVideoAction =
+export type WorkspaceSegmentEditorVideoAction =
   | "ai"
   | "ai_photo"
   | "custom"
@@ -992,10 +1175,10 @@ type WorkspaceSegmentEditorVideoAction =
   | "photo_animation"
   | "talking_photo";
 type WorkspaceSegmentEditorPayloadVideoAction = "ai" | "custom" | "original";
-type WorkspaceSegmentPreviewKind = "video" | "image";
-type WorkspaceSegmentAiVideoMode = "ai_video" | "photo_animation" | "talking_photo";
-type WorkspaceSegmentMediaType = "photo" | "video";
-type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
+export type WorkspaceSegmentPreviewKind = "video" | "image";
+export type WorkspaceSegmentAiVideoMode = "ai_video" | "photo_animation" | "talking_photo";
+export type WorkspaceSegmentMediaType = "photo" | "video";
+export type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "unknown";
 type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
 type WorkspaceSegmentVisualModalTab =
   | "ai_video"
@@ -1027,7 +1210,7 @@ type WorkspaceSegmentSceneSoundPayload = {
   url?: string | null;
 };
 
-type WorkspaceSegmentEditorSegment = {
+export type WorkspaceSegmentEditorSegment = {
   currentAsset: WorkspaceMediaAssetRef | null;
   currentExternalPlaybackUrl: string | null;
   currentExternalPreviewUrl: string | null;
@@ -1077,7 +1260,7 @@ type WorkspaceSegmentEditorSegment = {
   voice_type?: string | null;
 };
 
-type WorkspaceSegmentEditorSession = {
+export type WorkspaceSegmentEditorSession = {
   customMusicAssetId?: number | null;
   customMusicFileName?: string | null;
   description: string;
@@ -1126,9 +1309,9 @@ type WorkspaceSegmentEditorPayload = {
   segments: WorkspaceSegmentEditorPayloadSegment[];
 };
 
-type WorkspaceSegmentEditorLocalizedTextMap = Partial<Record<StudioLanguage, string>>;
+export type WorkspaceSegmentEditorLocalizedTextMap = Partial<Record<StudioLanguage, string>>;
 
-type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment & {
+export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment & {
   aiPhotoAsset: StudioCustomVideoFile | null;
   aiPhotoGeneratedFromPrompt: string | null;
   aiPhotoPrompt: string;
@@ -1160,16 +1343,16 @@ type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment & {
   visualReset: boolean;
 };
 
-type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "segments"> & {
+export type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "segments"> & {
   segments: WorkspaceSegmentEditorDraftSegment[];
 };
 
-type WorkspaceSegmentEditorMediaUploadScope = {
+export type WorkspaceSegmentEditorMediaUploadScope = {
   projectId?: number;
   segmentIndex?: number;
 };
 
-type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text" | "subtitle";
+export type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text" | "subtitle";
 type WorkspaceSegmentTimelineVoiceTextEditSnapshot = {
   segment: WorkspaceSegmentEditorDraftSegment;
   segmentIndex: number;
@@ -1763,7 +1946,7 @@ type WorkspacePublishJobStatusResponse = {
   error?: string;
 };
 
-type StudioVoiceOption = {
+export type StudioVoiceOption = {
   badgeLabel?: string;
   creditCost?: number;
   id: string;
@@ -1772,7 +1955,7 @@ type StudioVoiceOption = {
   previewSampleUrl?: string;
 };
 
-type StudioLanguage = "ru" | "en";
+export type StudioLanguage = "ru" | "en";
 
 type StudioLanguageOption = {
   description: string;
@@ -1800,7 +1983,7 @@ type StudioMusicOption = {
   label: string;
 };
 
-type StudioCustomMusicFile = {
+export type StudioCustomMusicFile = {
   assetId?: number;
   dataUrl?: string;
   file?: File;
@@ -1809,7 +1992,7 @@ type StudioCustomMusicFile = {
   objectUrl?: string;
 };
 
-type StudioVideoOption = {
+export type StudioVideoOption = {
   description: string;
   detail?: string;
   duration?: string;
@@ -1817,7 +2000,7 @@ type StudioVideoOption = {
   label: string;
 };
 
-type StudioCustomVideoFile = {
+export type StudioCustomVideoFile = {
   assetId?: number;
   dataUrl?: string;
   durationSeconds?: number;
@@ -1865,7 +2048,7 @@ const clearWorkspaceSegmentVisualRunState = (
   return nextRunState;
 };
 
-type StudioBrandLogoFile = {
+export type StudioBrandLogoFile = {
   assetId?: number;
   dataUrl?: string;
   file?: File;
@@ -1884,7 +2067,7 @@ type WorkspaceSegmentEditorProjectBrandSnapshot = {
   baseline: WorkspaceSegmentEditorProjectBrandState;
 };
 
-type StudioSubtitleStyleOption = {
+export type StudioSubtitleStyleOption = {
   defaultColorId: string;
   description: string;
   fontFamily: string;
@@ -1901,13 +2084,13 @@ type StudioSubtitleStyleOption = {
   wordEffect: string;
 };
 
-type StudioSubtitleColorCatalogOption = {
+export type StudioSubtitleColorCatalogOption = {
   hex: string;
   id: string;
   label: string;
 };
 
-type StudioSubtitleColorOption = {
+export type StudioSubtitleColorOption = {
   accent: string;
   id: string;
   label: string;
@@ -1924,7 +2107,7 @@ type StudioSubtitleExampleOption = {
   note: string;
 };
 
-type StudioSubtitleColorOverrides = Partial<Pick<StudioSubtitleColorOption, "outline" | "surface" | "text">>;
+export type StudioSubtitleColorOverrides = Partial<Pick<StudioSubtitleColorOption, "outline" | "surface" | "text">>;
 type StudioSubtitlePreviewWordState = "active" | "future" | "past";
 type StudioSubtitlePreviewWord = {
   sourceIndex?: number;
@@ -1943,7 +2126,6 @@ type WorkspaceStudioOptionsPayload = {
 
 const STUDIO_SUBTITLE_PREVIEW_MAX_CHARS_PER_LINE = 20;
 const STUDIO_SUBTITLE_PREVIEW_MAX_WORDS_PER_LINE = 4;
-const STUDIO_CUSTOM_ASSET_NAME_MAX_CHARS = 16;
 const STUDIO_CUSTOM_MUSIC_MAX_BYTES = 18 * 1024 * 1024;
 const STUDIO_ALLOWED_CUSTOM_MUSIC_EXTENSIONS = [".m4a", ".mp3", ".wav"] as const;
 const STUDIO_CUSTOM_IMAGE_MAX_BYTES = 48 * 1024 * 1024;
@@ -1954,21 +2136,11 @@ const STUDIO_BRAND_TEXT_MAX_CHARS = 50;
 const STUDIO_PROMPT_PANEL_BASE_WIDTH = 620;
 const STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH = 1220;
 const STUDIO_PROMPT_PANEL_INLINE_BUFFER = 8;
-const STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS = [".avif", ".jpeg", ".jpg", ".png", ".webp"] as const;
 const STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS = [
   ...STUDIO_ALLOWED_CUSTOM_VIDEO_EXTENSIONS,
   ...STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS,
 ] as const;
-const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
-const WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS = 2.4;
-export const WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS = 50;
-const WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS = 0.075;
-const WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS = 0.08;
-const WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS = 0.45;
-const WORKSPACE_SEGMENT_VOICE_PREVIEW_MIN_DURATION_SECONDS = 0.2;
-const WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS = 0.35;
-const WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS = 5;
 const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
@@ -1980,23 +2152,9 @@ const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
 
 const normalizeWorkspaceSegmentGenerationJobStatus = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
-const normalizeWorkspaceSegmentDurationMode = (value: unknown): WorkspaceSegmentDurationMode =>
-  String(value ?? "").trim().toLowerCase() === "manual" ? "manual" : "auto";
-
 const formatWorkspaceSegmentDurationInputValue = (value: number | null | undefined) => {
   const normalizedValue = normalizeWorkspaceSegmentManualDurationSeconds(value);
   return normalizedValue === null ? "" : String(Number(normalizedValue.toFixed(1)));
-};
-
-const clampWorkspaceSegmentEditorVisualDurationSeconds = (value: number | null | undefined) => {
-  const normalizedValue = normalizeWorkspaceSegmentManualDurationSeconds(value);
-  if (normalizedValue === null) {
-    return null;
-  }
-
-  return roundWorkspaceSegmentTimelineSeconds(
-    Math.min(normalizedValue, WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS),
-  );
 };
 
 const isWorkspaceSegmentGenerationJobDoneStatus = (value: unknown) =>
@@ -2017,68 +2175,6 @@ const measureElementChildrenInlineWidth = (element: HTMLElement, gap: number) =>
 
   return childWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, childWidths.length - 1);
 };
-
-const rgbFromHex = (value: string) => {
-  const normalized = value.replace("#", "");
-  if (normalized.length !== 6) return null;
-
-  const numeric = Number.parseInt(normalized, 16);
-  if (Number.isNaN(numeric)) return null;
-
-  return {
-    r: (numeric >> 16) & 255,
-    g: (numeric >> 8) & 255,
-    b: numeric & 255,
-  };
-};
-
-const createStudioSubtitleColorOption = (
-  id: string,
-  label: string,
-  accent: string,
-  overrides: StudioSubtitleColorOverrides = {},
-): StudioSubtitleColorOption => {
-  const rgb = rgbFromHex(accent) ?? { r: 255, g: 255, b: 255 };
-  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-
-  return {
-    id,
-    label,
-    accent,
-    surface: overrides.surface ?? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`,
-    text: overrides.text ?? (brightness >= 170 ? "#08111d" : "#f8fbff"),
-    outline: overrides.outline ?? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.34)`,
-  };
-};
-
-const fallbackStudioSubtitleStyleOption: StudioSubtitleStyleOption = {
-  defaultColorId: "purple",
-  description: "Текущий дефолт для Shorts на Manrope.",
-  fontFamily: "Manrope",
-  fontSize: 96,
-  id: "modern",
-  label: "Modern",
-  logicMode: "block",
-  marginBottom: 420,
-  outlineWidth: 3,
-  position: "bottom_center",
-  transitionMode: "hard_cut",
-  usesAccentColor: true,
-  windowSize: 3,
-  wordEffect: "none",
-};
-
-const fallbackStudioSubtitleColorCatalogOption: StudioSubtitleColorCatalogOption = {
-  hex: "8B5CF6",
-  id: "purple",
-  label: "Фиолетовый",
-};
-
-const fallbackStudioSubtitleColorOption = createStudioSubtitleColorOption(
-  fallbackStudioSubtitleColorCatalogOption.id,
-  fallbackStudioSubtitleColorCatalogOption.label,
-  `#${fallbackStudioSubtitleColorCatalogOption.hex}`,
-);
 
 const buildStudioSubtitleColorOptions = (
   colorCatalog: StudioSubtitleColorCatalogOption[],
@@ -2378,8 +2474,6 @@ const getStudioSubtitlePreviewStyle = (style: StudioSubtitleStyleOption, color: 
 };
 
 const WORKSPACE_SEGMENT_SUBTITLE_PREVIEW_MAX_LINES = 6;
-
-const normalizeWorkspaceSegmentEditorTextForCompare = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const normalizeWorkspaceSegmentSubtitleToken = (value: string) =>
   value
@@ -2765,31 +2859,6 @@ const buildWorkspaceSegmentSubtitlePreviewLines = ({
   }
 };
 
-const isWorkspaceSegmentDraftTextEdited = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  normalizeWorkspaceSegmentEditorTextForCompare(segment.text) !==
-  normalizeWorkspaceSegmentEditorTextForCompare(segment.originalText);
-
-const getWorkspaceSegmentSubtitleTypeOverrideId = (
-  segment:
-    | Pick<WorkspaceSegmentEditorSegment, "subtitleType" | "subtitle_type">
-    | null
-    | undefined,
-) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleType ?? segment?.subtitle_type) ?? null;
-
-const getWorkspaceSegmentSubtitleStyleOverrideId = (
-  segment:
-    | Pick<WorkspaceSegmentEditorSegment, "subtitleStyle" | "subtitle_style">
-    | null
-    | undefined,
-) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleStyle ?? segment?.subtitle_style) ?? null;
-
-const getWorkspaceSegmentSubtitleColorOverrideId = (
-  segment:
-    | Pick<WorkspaceSegmentEditorSegment, "subtitleColor" | "subtitle_color">
-    | null
-    | undefined,
-) => normalizeWorkspaceSegmentEditorSetting(segment?.subtitleColor ?? segment?.subtitle_color) ?? null;
-
 const isWorkspaceSegmentDraftSubtitleEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
@@ -2807,64 +2876,6 @@ const isWorkspaceSegmentDraftSubtitleEdited = (
     getWorkspaceSegmentSubtitleStyleOverrideId(segment) !== getWorkspaceSegmentSubtitleStyleOverrideId(baselineSegment) ||
     getWorkspaceSegmentSubtitleColorOverrideId(segment) !== getWorkspaceSegmentSubtitleColorOverrideId(baselineSegment)
   );
-};
-
-export const getWorkspaceSegmentEffectiveSubtitleSettings = (
-  session:
-    | (Pick<WorkspaceSegmentEditorSession, "subtitleType" | "voiceType"> &
-        Partial<Pick<WorkspaceSegmentEditorSession, "subtitleColor" | "subtitleStyle">>)
-    | null
-    | undefined,
-  segment:
-    | Pick<
-        WorkspaceSegmentEditorSegment,
-        | "subtitleColor"
-        | "subtitle_color"
-        | "subtitleStyle"
-        | "subtitle_style"
-        | "subtitleType"
-        | "subtitle_type"
-        | "voiceType"
-        | "voice_type"
-      >
-    | null
-    | undefined,
-  fallbackSelection: {
-    subtitleColorId: string;
-    subtitleStyleId: string;
-  },
-) => {
-  const globalType = normalizeWorkspaceSegmentEditorSetting(session?.subtitleType);
-  const globalEnabled = globalType !== "none";
-  const globalVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
-  const segmentVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
-  const voiceEnabled = segmentVoiceType === "none" ? false : globalVoiceEnabled || Boolean(segmentVoiceType);
-  const segmentType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
-  const segmentStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
-  const segmentColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
-  const hasSceneSubtitleOverride = Boolean(segmentType || segmentStyleId || segmentColorId);
-  const sceneSubtitleDisabled = segmentType === "none";
-  const sceneSubtitleEnabled = hasSceneSubtitleOverride && !sceneSubtitleDisabled;
-  const isEnabled = voiceEnabled && !sceneSubtitleDisabled && (globalEnabled || sceneSubtitleEnabled);
-  const subtitleStyleId =
-    segmentStyleId ??
-    normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ??
-    normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleStyleId) ??
-    fallbackStudioSubtitleStyleOption.id;
-  const subtitleColorId =
-    segmentColorId ??
-    normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ??
-    normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleColorId) ??
-    fallbackStudioSubtitleColorOption.id;
-
-  return {
-    globalEnabled,
-    isEnabled,
-    subtitleColorId,
-    subtitleStyleId,
-    subtitleType: segmentType ?? (globalEnabled || sceneSubtitleEnabled ? "default" : "none"),
-    voiceEnabled,
-  };
 };
 
 const isWorkspaceSegmentDraftVisualEdited = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -2962,34 +2973,6 @@ export const getWorkspaceSegmentDraftVisualStatus = (
   }
 
   return isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ? "changed" : "none";
-};
-
-const areWorkspaceSegmentDurationValuesEqual = (left: number | null, right: number | null) => {
-  if (left === null || right === null) {
-    return left === right;
-  }
-
-  return Math.abs(left - right) <= 0.05;
-};
-
-const isWorkspaceSegmentDraftDurationEdited = (
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "durationMode" | "manualDurationSeconds">,
-  baselineSegment: Pick<WorkspaceSegmentEditorDraftSegment, "durationMode" | "manualDurationSeconds"> | null | undefined,
-) => {
-  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
-  const baselineDurationMode = normalizeWorkspaceSegmentDurationMode(baselineSegment?.durationMode);
-  if (durationMode !== baselineDurationMode) {
-    return true;
-  }
-
-  if (durationMode !== "manual") {
-    return false;
-  }
-
-  return !areWorkspaceSegmentDurationValuesEqual(
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-    normalizeWorkspaceSegmentManualDurationSeconds(baselineSegment?.manualDurationSeconds),
-  );
 };
 
 const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
@@ -3195,26 +3178,6 @@ const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegment
   return "обновлен визуал";
 };
 
-const getWorkspaceSegmentCustomAssetId = (asset: StudioCustomVideoFile | null | undefined) => {
-  if (!asset) {
-    return null;
-  }
-
-  const record = asset as StudioCustomVideoFile & {
-    id?: unknown;
-    mediaAssetId?: unknown;
-    media_asset_id?: unknown;
-  };
-  const assetId = Number(
-    record.assetId ??
-      record.mediaAssetId ??
-      record.media_asset_id ??
-      record.id,
-  );
-
-  return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
-};
-
 const getWorkspaceSegmentCustomAssetIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
   if (!asset) {
     return null;
@@ -3292,10 +3255,6 @@ const isWorkspaceSegmentDraftSceneSoundEdited = (
     getWorkspaceSegmentSceneSoundGenerationKey(baselineSegment)
   );
 };
-
-const getWorkspaceSegmentVoiceOverrideId = (
-  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
-) => normalizeWorkspaceSegmentEditorSetting(segment?.voiceType ?? segment?.voice_type) ?? null;
 
 const normalizeWorkspaceSegmentVoiceOverrideForLanguage = (
   voiceId: string | null | undefined,
@@ -3638,153 +3597,6 @@ const studioLanguageOptions: StudioLanguageOption[] = [
   },
 ];
 
-const studioVoicePreviewAssetVersion = "20260504-1";
-const getStudioVoicePreviewSampleUrl = (fileName: string) =>
-  `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
-
-export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
-  ru: [
-    {
-      id: "Liam",
-      label: "Александр",
-      description: "Выразительный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
-    },
-    {
-      id: "English_ManWithDeepVoice",
-      label: "Глеб",
-      description: "Глубокий premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("gleb-premium.wav"),
-    },
-    {
-      id: "Russian_BrightHeroine",
-      label: "Тим",
-      description: "Яркий premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("tim-premium.wav"),
-    },
-    {
-      id: "Bys_24000",
-      label: "Борис",
-      description: "Базовый мужской голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("boris.wav"),
-    },
-    {
-      id: "Nec_24000",
-      label: "Наталья",
-      description: "Базовый женский голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("natalya.wav"),
-    },
-    {
-      id: "Tur_24000",
-      label: "Тарас",
-      description: "Уверенный мужской голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("taras.wav"),
-    },
-    {
-      id: "May_24000",
-      label: "Марфа",
-      description: "Молодой женский голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("marfa.wav"),
-    },
-    {
-      id: "Ost_24000",
-      label: "Александра",
-      description: "Естественный рекламный голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexandra.wav"),
-    },
-    {
-      id: "Pon_24000",
-      label: "Сергей",
-      description: "Деловой мужской голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("sergey.wav"),
-    },
-    {
-      id: "male-qn-jingying",
-      label: "Алексей",
-      description: "Выразительный мужской голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("aleksey.wav"),
-    },
-  ],
-  en: [
-    {
-      id: "Aiden",
-      label: "Aiden",
-      description: "Ясный американский мужской голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("aiden.wav"),
-    },
-    {
-      id: "Ryan",
-      label: "Ryan",
-      description: "Энергичный мужской голос с сильным ритмом",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("ryan.wav"),
-    },
-    {
-      id: "Serena",
-      label: "Serena",
-      description: "Теплый мягкий женский голос",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("serena.wav"),
-    },
-    {
-      id: "Vivian",
-      label: "Vivian",
-      description: "Яркий молодой женский голос с характером",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("vivian.wav"),
-    },
-    {
-      id: "Uncle_Fu",
-      label: "Uncle Fu",
-      description: "Низкий зрелый мужской тембр",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("uncle-fu.wav"),
-    },
-    {
-      id: "Dylan",
-      label: "Dylan",
-      description: "Молодой мужской голос с пекинским оттенком",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("dylan.wav"),
-    },
-    {
-      id: "Eric",
-      label: "Eric",
-      description: "Живой мужской голос с легкой хрипотцой",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("eric.wav"),
-    },
-    {
-      id: "Ono_Anna",
-      label: "Ono Anna",
-      description: "Легкий японский женский тембр",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("ono-anna.wav"),
-    },
-    {
-      id: "Sohee",
-      label: "Sohee",
-      description: "Теплый корейский женский голос с эмоцией",
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("sohee.wav"),
-    },
-  ],
-};
-
-export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
-  const normalizedVoiceId = String(voiceId ?? "").trim();
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
-    return null;
-  }
-
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
-  for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
-    if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)) {
-      return language;
-    }
-  }
-
-  return null;
-};
-
 const getStudioVoiceOptionById = (voiceId: string | null | undefined): StudioVoiceOption | null => {
   const normalizedVoiceKey = String(voiceId ?? "").trim().toLowerCase();
   if (!normalizedVoiceKey || normalizedVoiceKey === "none") {
@@ -3799,11 +3611,6 @@ const getStudioVoiceOptionById = (voiceId: string | null | undefined): StudioVoi
   }
 
   return null;
-};
-
-export const normalizeStudioLanguageValue = (value: string | null | undefined): StudioLanguage | null => {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "ru" || normalized === "en" ? normalized : null;
 };
 
 export const getDefaultStudioVoiceId = (language: StudioLanguage): StudioVoiceOption["id"] =>
@@ -3901,10 +3708,6 @@ export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {
   };
 };
 
-const getWorkspaceSegmentEditorSessionLanguage = (
-  session: Pick<WorkspaceSegmentEditorSession, "language" | "voiceType">,
-): StudioLanguage => normalizeStudioLanguageValue(session.language) ?? getStudioLanguageForVoiceId(session.voiceType) ?? "ru";
-
 const studioMusicOptions: StudioMusicOption[] = [
   {
     id: "ai",
@@ -3989,64 +3792,6 @@ const studioMusicOptionEnglishCopy: Record<StudioMusicType, Pick<StudioMusicOpti
 const getStudioMusicOptionCopy = (option: StudioMusicOption, locale: string) =>
   locale === "en" ? studioMusicOptionEnglishCopy[option.id] ?? option : option;
 
-const studioVideoOptions: StudioVideoOption[] = [
-  {
-    id: "standard",
-    label: "Стандартный",
-    description: "Стоки + AI фото",
-    detail: "Быстрый результат для обычных Shorts",
-    duration: "1–2 мин",
-  },
-  {
-    id: "ai_photo",
-    label: "Премиум",
-    description: "AI фото для всех сцен",
-    detail: "Продвинутые AI-модели, больше деталей и реализма",
-    duration: "3–5 мин",
-  },
-  {
-    id: "custom",
-    label: "Свой визуал",
-    description: "Загрузите свое фото или видео",
-  },
-];
-const studioVideoOptionEnglishCopy: Record<StudioVideoMode, Pick<StudioVideoOption, "description" | "label">> = {
-  ai_photo: { label: "Premium", description: "AI photos for every scene" },
-  ai_video: { label: "AI video", description: "Full AI mode for every scene" },
-  custom: { label: "Custom visual", description: "Upload your own photo or video" },
-  standard: { label: "Standard", description: "Stock assets + AI photos" },
-};
-
-const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: string): StudioVideoOption => {
-  if (locale !== "en") {
-    return option;
-  }
-
-  if (option.id === "standard") {
-    return {
-      ...option,
-      description: "Stock assets + AI photos",
-      detail: "Fast result for regular Shorts",
-      duration: "1–2 min",
-      label: "Standard",
-    };
-  }
-
-  if (option.id === "ai_photo") {
-    return {
-      ...option,
-      description: "AI photos for every scene",
-      detail: "Advanced AI models, more detail and realism",
-      duration: "3–5 min",
-      label: "Premium",
-    };
-  }
-
-  return {
-    ...option,
-    ...(studioVideoOptionEnglishCopy[option.id] ?? {}),
-  };
-};
 const STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST =
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST - STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 const workspaceLocalExampleGoalOptions: Array<{
@@ -4244,16 +3989,6 @@ const createStudioObjectUrl = (file: Blob) => {
 
   return URL.createObjectURL(file);
 };
-
-const buildWorkspaceMediaAssetProxyUrl = (assetId: number) => `/api/workspace/media-assets/${Math.trunc(assetId)}`;
-const buildWorkspaceMediaAssetPlaybackUrl = (assetId: number) =>
-  `/api/workspace/media-assets/${Math.trunc(assetId)}/playback`;
-const WORKSPACE_MEDIA_ASSET_RAW_PROXY_ROUTE_PATTERN =
-  /^\/api\/(?:workspace\/media-assets\/\d+|media\/\d+\/download)(?:[/?#]|$)/i;
-const WORKSPACE_VIDEO_FILE_NAME_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
-
-const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
-  Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
 const WORKSPACE_REFERENCE_CHARACTER_MIN_AGE = 1;
 const WORKSPACE_REFERENCE_STYLE_UNSET_OPTION = "Не задан";
@@ -4675,64 +4410,6 @@ const resizeWorkspaceTalkingCharacterTarget = (
   return createWorkspaceTalkingCharacterTargetFromEdges(left, top, right, bottom);
 };
 
-const getWorkspaceMediaAssetResolvedPreviewUrl = (
-  asset:
-    | {
-        assetId?: number | null;
-        fileName?: string | null;
-        mimeType?: string | null;
-        remoteUrl?: string | null;
-      }
-    | null
-    | undefined,
-) => {
-  const assetId =
-    Number.isFinite(Number(asset?.assetId)) && Number(asset?.assetId) > 0
-      ? Math.trunc(Number(asset?.assetId))
-      : null;
-  const fileName = String(asset?.fileName ?? "").trim();
-  const mimeType = String(asset?.mimeType ?? "").trim().toLowerCase();
-  const remoteUrl = String(asset?.remoteUrl ?? "").trim();
-  const isVideoAsset =
-    mimeType.startsWith("video/") ||
-    WORKSPACE_VIDEO_FILE_NAME_PATTERN.test(fileName);
-
-  if (assetId && isVideoAsset && (!remoteUrl || WORKSPACE_MEDIA_ASSET_RAW_PROXY_ROUTE_PATTERN.test(remoteUrl))) {
-    return buildWorkspaceMediaAssetPlaybackUrl(assetId);
-  }
-
-  if (remoteUrl) {
-    return remoteUrl;
-  }
-
-  return assetId ? buildWorkspaceMediaAssetProxyUrl(assetId) : null;
-};
-
-const getWorkspaceMediaAssetDurablePreviewUrl = (
-  asset:
-    | {
-        assetId?: number | null;
-        fileName?: string | null;
-        mimeType?: string | null;
-        remoteUrl?: string | null;
-      }
-    | null
-    | undefined,
-) => {
-  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
-  if (!assetId) {
-    return getWorkspaceMediaAssetResolvedPreviewUrl(asset);
-  }
-
-  const fileName = String(asset?.fileName ?? "").trim();
-  const mimeType = String(asset?.mimeType ?? "").trim().toLowerCase();
-  const isVideoAsset =
-    mimeType.startsWith("video/") ||
-    WORKSPACE_VIDEO_FILE_NAME_PATTERN.test(fileName);
-
-  return isVideoAsset ? buildWorkspaceMediaAssetPlaybackUrl(assetId) : buildWorkspaceMediaAssetProxyUrl(assetId);
-};
-
 const revokeStudioObjectUrl = (value: string | null | undefined) => {
   if (typeof URL === "undefined") {
     return;
@@ -4744,207 +4421,11 @@ const revokeStudioObjectUrl = (value: string | null | undefined) => {
   }
 };
 
-const getStudioCustomAssetPreviewUrl = (
-  asset:
-    | Pick<StudioBrandLogoFile, "assetId" | "dataUrl" | "fileName" | "mimeType" | "objectUrl">
-    | Pick<StudioCustomMusicFile, "assetId" | "dataUrl" | "objectUrl">
-    | Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "mimeType" | "objectUrl" | "remoteUrl">
-    | null
-    | undefined,
-) => {
-  const objectUrl = typeof asset?.objectUrl === "string" ? asset.objectUrl.trim() : "";
-  if (objectUrl) {
-    return objectUrl;
-  }
-
-  const dataUrl = typeof asset?.dataUrl === "string" ? asset.dataUrl.trim() : "";
-  if (dataUrl) {
-    return dataUrl;
-  }
-
-  const remoteUrl = getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId:
-      Number.isFinite(Number((asset as { assetId?: unknown } | null | undefined)?.assetId)) &&
-      Number((asset as { assetId?: unknown } | null | undefined)?.assetId) > 0
-        ? Math.trunc(Number((asset as { assetId?: unknown }).assetId))
-        : null,
-    fileName:
-      typeof (asset as { fileName?: unknown } | null | undefined)?.fileName === "string"
-        ? String((asset as { fileName?: string }).fileName)
-        : "",
-    mimeType:
-      typeof (asset as { mimeType?: unknown } | null | undefined)?.mimeType === "string"
-        ? String((asset as { mimeType?: string }).mimeType)
-        : "",
-    remoteUrl:
-    typeof (asset as { remoteUrl?: unknown } | null | undefined)?.remoteUrl === "string"
-        ? String((asset as { remoteUrl?: string }).remoteUrl)
-        : "",
-  });
-  if (remoteUrl) {
-    return remoteUrl;
-  }
-
-  return null;
-};
-
-const getStudioSceneSoundAssetPreviewUrl = (
-  asset: Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "fileName" | "mimeType" | "objectUrl" | "remoteUrl"> | null | undefined,
-) => {
-  const assetId =
-    Number.isFinite(Number(asset?.assetId)) && Number(asset?.assetId) > 0
-      ? Math.trunc(Number(asset?.assetId))
-      : null;
-  if (assetId) {
-    return getWorkspaceMediaAssetDurablePreviewUrl({
-      assetId,
-      fileName: asset?.fileName,
-      mimeType: asset?.mimeType,
-      remoteUrl: asset?.remoteUrl,
-    });
-  }
-
-  return getStudioCustomAssetPreviewUrl(asset);
-};
-
 const getStudioCustomAssetPosterUrl = (
   asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
 ) => {
   const posterUrl = typeof asset?.posterUrl === "string" ? asset.posterUrl.trim() : "";
   return posterUrl || null;
-};
-
-const getWorkspaceMediaAssetFileName = (asset: WorkspaceMediaAssetRef | null | undefined, fallbackName: string) => {
-  const storageFileName = String(asset?.storageKey ?? "").split("/").pop()?.trim();
-  const downloadFileName = String(asset?.downloadPath ?? asset?.downloadUrl ?? asset?.playbackUrl ?? "").split("/").pop()?.split("?")[0]?.trim();
-  return storageFileName || downloadFileName || fallbackName;
-};
-
-const createStudioCustomVideoFileFromWorkspaceMediaAsset = (
-  asset: WorkspaceMediaAssetRef | null | undefined,
-  options: {
-    fallbackFileName: string;
-    fallbackMimeType?: string;
-    fallbackRemoteUrl?: string | null;
-    posterUrl?: string | null;
-  },
-): StudioCustomVideoFile | null => {
-  const assetId =
-    Number.isFinite(Number(asset?.assetId)) && Number(asset?.assetId) > 0
-      ? Math.trunc(Number(asset?.assetId))
-      : undefined;
-  const fileName = getWorkspaceMediaAssetFileName(asset, options.fallbackFileName);
-  const remoteUrl = getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId: assetId ?? null,
-    fileName,
-    mimeType: String(asset?.mimeType ?? "").trim() || options.fallbackMimeType || "video/mp4",
-    remoteUrl:
-    String(asset?.downloadPath ?? "").trim() ||
-    String(asset?.downloadUrl ?? "").trim() ||
-    String(asset?.playbackUrl ?? "").trim() ||
-    String(asset?.originalUrl ?? "").trim() ||
-    String(options.fallbackRemoteUrl ?? "").trim() ||
-      "",
-  });
-
-  if (!assetId && !remoteUrl) {
-    return null;
-  }
-
-  return {
-    assetId,
-    fileName,
-    fileSize: 0,
-    mimeType: String(asset?.mimeType ?? "").trim() || options.fallbackMimeType || "video/mp4",
-    posterUrl: String(options.posterUrl ?? "").trim() || undefined,
-    remoteUrl: remoteUrl || undefined,
-    source: "media-library",
-  };
-};
-
-const createWorkspaceSegmentSceneSoundAsset = (
-  segment: WorkspaceSegmentEditorSegment,
-  fallbackSegmentIndex: number,
-): StudioCustomVideoFile | null => {
-  const camelAsset = segment.sceneSound ?? null;
-  const snakeAsset = segment.scene_sound ?? null;
-  const assetId =
-    getPositiveWorkspaceMediaAssetId(camelAsset?.assetId) ??
-    getPositiveWorkspaceMediaAssetId(segment.sceneSoundAssetId) ??
-    getPositiveWorkspaceMediaAssetId(snakeAsset?.media_asset_id) ??
-    getPositiveWorkspaceMediaAssetId(segment.scene_sound_asset_id);
-  const fileName =
-    String(camelAsset?.fileName ?? "").trim() ||
-    String(snakeAsset?.file_name ?? "").trim() ||
-    `segment-${fallbackSegmentIndex + 1}-scene-sound.wav`;
-  const mimeType =
-    String(camelAsset?.mimeType ?? "").trim() ||
-    String(snakeAsset?.mime_type ?? "").trim() ||
-    "audio/wav";
-  const rawRemoteUrl =
-    String(camelAsset?.remoteUrl ?? "").trim() ||
-    String(snakeAsset?.download_url ?? "").trim() ||
-    String(snakeAsset?.remote_url ?? "").trim() ||
-    String(snakeAsset?.url ?? "").trim();
-  const remoteUrl = getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId,
-    fileName,
-    mimeType,
-    remoteUrl: rawRemoteUrl,
-  });
-
-  if (!assetId && !remoteUrl) {
-    return null;
-  }
-
-  return {
-    assetId: assetId ?? undefined,
-    fileName,
-    fileSize: Math.max(0, Number(camelAsset?.fileSize ?? snakeAsset?.file_size ?? 0) || 0),
-    mimeType,
-    remoteUrl: remoteUrl ?? undefined,
-    source: "media-library",
-  };
-};
-
-const createWorkspaceSegmentVoiceoverAsset = (
-  segment: WorkspaceSegmentEditorSegment,
-  fallbackSegmentIndex: number,
-): StudioCustomVideoFile | null => {
-  const camelAsset = segment.voiceover ?? null;
-  const assetId =
-    getPositiveWorkspaceMediaAssetId(segment.voiceoverAssetId) ??
-    getPositiveWorkspaceMediaAssetId(camelAsset?.media_asset_id) ??
-    getPositiveWorkspaceMediaAssetId(segment.voiceover_asset_id);
-  const fileName =
-    String(camelAsset?.file_name ?? "").trim() ||
-    `segment-${fallbackSegmentIndex + 1}-voiceover.wav`;
-  const mimeType =
-    String(camelAsset?.mime_type ?? "").trim() ||
-    "audio/wav";
-  const rawRemoteUrl =
-    String(camelAsset?.download_url ?? "").trim() ||
-    String(camelAsset?.remote_url ?? "").trim() ||
-    String(camelAsset?.url ?? "").trim();
-  const remoteUrl = getWorkspaceMediaAssetResolvedPreviewUrl({
-    assetId,
-    fileName,
-    mimeType,
-    remoteUrl: rawRemoteUrl,
-  });
-
-  if (!assetId && !remoteUrl) {
-    return null;
-  }
-
-  return {
-    assetId: assetId ?? undefined,
-    fileName,
-    fileSize: Math.max(0, Number(camelAsset?.file_size ?? 0) || 0),
-    mimeType,
-    remoteUrl: remoteUrl ?? undefined,
-    source: "media-library",
-  };
 };
 
 const isStudioSegmentPhotoAnimationPosterUrl = (value: string | null | undefined) => {
@@ -5528,29 +5009,6 @@ const isSupportedStudioMusicFile = (fileName: string) => {
   return STUDIO_ALLOWED_CUSTOM_MUSIC_EXTENSIONS.some((extension) => normalized.endsWith(extension));
 };
 
-const truncateStudioCustomAssetName = (value: string, maxChars = STUDIO_CUSTOM_ASSET_NAME_MAX_CHARS) => {
-  const normalized = value.trim();
-
-  if (!normalized || normalized.length <= maxChars) {
-    return normalized;
-  }
-
-  const lastDotIndex = normalized.lastIndexOf(".");
-
-  if (lastDotIndex <= 0 || lastDotIndex === normalized.length - 1) {
-    return `${normalized.slice(0, Math.max(1, maxChars - 3))}...`;
-  }
-
-  const extension = normalized.slice(lastDotIndex);
-  const baseMaxChars = maxChars - extension.length - 3;
-
-  if (baseMaxChars <= 0) {
-    return `${normalized.slice(0, Math.max(1, maxChars - 3))}...`;
-  }
-
-  return `${normalized.slice(0, baseMaxChars)}...${extension}`;
-};
-
 const getStudioMusicChipValue = (musicType: StudioMusicType, customMusicFile: StudioCustomMusicFile | null, locale = "ru") => {
   if (musicType === "custom") {
     return customMusicFile ? truncateStudioCustomAssetName(customMusicFile.fileName) : locale === "en" ? "Custom music" : "Своя музыка";
@@ -5587,9 +5045,6 @@ const getStudioBrandTextPreview = (value: string) => {
   return normalized ? truncateStudioCustomAssetName(normalized, 20) : "";
 };
 
-const hasStudioBranding = (options: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null }) =>
-  Boolean(options.brandLogoFile) || Boolean(String(options.brandText ?? "").trim());
-
 const getStudioBrandSummary = (options: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null }) => {
   const normalizedText = String(options.brandText ?? "").trim();
   if (options.brandLogoFile && normalizedText) {
@@ -5612,11 +5067,6 @@ const isSupportedWorkspaceSegmentVisualFile = (fileName: string) => {
   return STUDIO_ALLOWED_SEGMENT_CUSTOM_VISUAL_EXTENSIONS.some((extension) => normalized.endsWith(extension));
 };
 
-const isWorkspaceSegmentImageFile = (fileName: string) => {
-  const normalized = fileName.trim().toLowerCase();
-  return STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
-};
-
 const getStudioCustomVisualMaxBytes = (fileName: string) =>
   isWorkspaceSegmentImageFile(fileName) ? STUDIO_CUSTOM_IMAGE_MAX_BYTES : STUDIO_CUSTOM_VIDEO_MAX_BYTES;
 
@@ -5629,18 +5079,6 @@ const getWorkspaceSegmentCustomVisualMimeType = (file: File) => {
   }
 
   return isWorkspaceSegmentImageFile(file.name) ? "image/jpeg" : "video/mp4";
-};
-
-const getWorkspaceSegmentCustomPreviewKind = (customVideo: StudioCustomVideoFile | null): WorkspaceSegmentPreviewKind | null => {
-  if (!customVideo) {
-    return null;
-  }
-
-  if (customVideo.mimeType.startsWith("image/") || isWorkspaceSegmentImageFile(customVideo.fileName)) {
-    return "image";
-  }
-
-  return "video";
 };
 
 const getReferencedStudioObjectUrls = (options: {
@@ -5681,7 +5119,6 @@ const getReferencedStudioObjectUrls = (options: {
   return referencedUrls;
 };
 
-const normalizeWorkspaceSegmentAiPhotoPrompt = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 const escapeWorkspacePromptRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 type WorkspacePromptCharacterMentionToken =
   | { text: string; type: "text" }
@@ -6223,9 +5660,6 @@ export const buildWorkspacePromptRichEditorHtml = (
       "</span>",
     ].join("");
   }).join("");
-const normalizeWorkspaceSegmentMediaType = (value: unknown): WorkspaceSegmentMediaType =>
-  String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
-
 const getWorkspaceSegmentAiPhotoPromptPrefill = (segment: Pick<WorkspaceSegmentEditorSegment, "text">) =>
   String(segment.text ?? "").trim();
 
@@ -6248,8 +5682,6 @@ const isWorkspaceSegmentImageEditReady = (segment: Pick<
     normalizeWorkspaceSegmentImageEditPrompt(segment.imageEditPrompt);
 
 const normalizeWorkspaceSegmentAiVideoPrompt = normalizeWorkspaceSegmentAiPhotoPrompt;
-const normalizeWorkspaceSegmentSceneSoundPrompt = normalizeWorkspaceSegmentAiPhotoPrompt;
-
 const isWorkspaceSegmentAiVideoReady = (segment: Pick<
   WorkspaceSegmentEditorDraftSegment,
   "aiVideoAsset" | "aiVideoGeneratedFromPrompt" | "aiVideoGeneratedMode" | "aiVideoPrompt"
@@ -6258,68 +5690,6 @@ const isWorkspaceSegmentAiVideoReady = (segment: Pick<
   (!mode || segment.aiVideoGeneratedMode === mode) &&
   normalizeWorkspaceSegmentAiVideoPrompt(segment.aiVideoGeneratedFromPrompt) ===
     normalizeWorkspaceSegmentAiVideoPrompt(segment.aiVideoPrompt);
-
-const hasWorkspaceSegmentDisplayAiVideoAsset = (segment: Pick<
-  WorkspaceSegmentEditorDraftSegment,
-  "aiVideoAsset" | "aiVideoGeneratedMode" | "videoAction"
->, mode?: WorkspaceSegmentAiVideoMode) =>
-  Boolean(segment.aiVideoAsset) &&
-  (!mode ||
-    segment.aiVideoGeneratedMode === mode ||
-    (!segment.aiVideoGeneratedMode &&
-      ((mode === "ai_video" && segment.videoAction === "ai") ||
-        (mode === "photo_animation" && segment.videoAction === "photo_animation") ||
-        (mode === "talking_photo" && segment.videoAction === "talking_photo"))));
-
-const getWorkspaceSegmentDisplayAiVideoAssetUrl = (segment: Pick<
-  WorkspaceSegmentEditorDraftSegment,
-  "aiVideoAsset" | "aiVideoGeneratedMode" | "videoAction"
->, mode?: WorkspaceSegmentAiVideoMode) =>
-  hasWorkspaceSegmentDisplayAiVideoAsset(segment, mode) ? getStudioCustomAssetPreviewUrl(segment.aiVideoAsset) : null;
-
-const getWorkspaceSegmentPendingImageEditSourceAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): StudioCustomVideoFile | null => {
-  if (segment.imageEditAsset) {
-    return null;
-  }
-
-  if (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image") {
-    return segment.aiPhotoAsset;
-  }
-
-  if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "image") {
-    return segment.customVideo;
-  }
-
-  if (getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image") {
-    return segment.photoAnimationSourceAsset;
-  }
-
-  return null;
-};
-
-const getWorkspaceSegmentDraftVisualAsset = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-
-  if (latestVisualAction === "ai" || latestVisualAction === "photo_animation" || latestVisualAction === "talking_photo") {
-    return segment.aiVideoAsset;
-  }
-
-  if (latestVisualAction === "image_edit") {
-    return segment.imageEditAsset ?? getWorkspaceSegmentPendingImageEditSourceAsset(segment);
-  }
-
-  if (latestVisualAction === "custom") {
-    return segment.customVideo;
-  }
-
-  if (latestVisualAction === "ai_photo") {
-    return segment.aiPhotoAsset;
-  }
-
-  return null;
-};
 
 const getWorkspaceSegmentSceneSoundVisualAssetId = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
@@ -6376,172 +5746,6 @@ const getWorkspaceSegmentSceneSoundVisualJobSource = (
     return null;
   }
 };
-
-const getWorkspaceSegmentOriginalPhotoAsset = (segment: WorkspaceSegmentEditorDraftSegment): StudioCustomVideoFile | null => {
-  const hasOriginalPhotoAsset = isWorkspacePhotoMediaAsset(segment.originalAsset);
-  if (segment.mediaType !== "photo" && !hasOriginalPhotoAsset) {
-    return null;
-  }
-
-  const originalRemoteUrl =
-    segment.originalExternalPreviewUrl ??
-    segment.originalExternalPlaybackUrl ??
-    segment.originalPreviewUrl ??
-    segment.originalPlaybackUrl ??
-    null;
-  const remoteUrl = hasOriginalPhotoAsset
-    ? originalRemoteUrl ??
-      getWorkspaceSegmentPreferredStillPreviewUrl(segment) ??
-      segment.currentExternalPreviewUrl ??
-      segment.currentExternalPlaybackUrl ??
-      segment.currentPreviewUrl ??
-      segment.currentPlaybackUrl ??
-      ""
-    : getWorkspaceSegmentPreferredStillPreviewUrl(segment)
-      ?? segment.currentPreviewUrl
-      ?? segment.originalPreviewUrl
-      ?? segment.currentPlaybackUrl
-      ?? segment.originalPlaybackUrl
-      ?? segment.currentExternalPreviewUrl
-      ?? segment.originalExternalPreviewUrl
-      ?? "";
-  if (!remoteUrl) {
-    return null;
-  }
-
-  return {
-    fileName: `segment-photo-${segment.index + 1}.jpg`,
-    fileSize: 0,
-    mimeType: "image/jpeg",
-    remoteUrl,
-  };
-};
-
-const getWorkspaceSegmentCurrentPhotoAsset = (segment: WorkspaceSegmentEditorDraftSegment): StudioCustomVideoFile | null => {
-  const currentStillUrl =
-    getWorkspaceSegmentStillPreviewUrlsFromValues(segment, [
-      segment.currentExternalPreviewUrl,
-      segment.currentExternalPlaybackUrl,
-      segment.currentPreviewUrl,
-      segment.currentPlaybackUrl,
-    ])[0] ?? null;
-
-  if (!currentStillUrl) {
-    return null;
-  }
-
-  if (
-    !isWorkspacePhotoMediaAsset(segment.currentAsset) &&
-    !isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment) &&
-    segment.mediaType !== "photo"
-  ) {
-    return null;
-  }
-
-  return {
-    fileName: `segment-current-photo-${segment.index + 1}.jpg`,
-    fileSize: 0,
-    mimeType: "image/jpeg",
-    remoteUrl: currentStillUrl,
-  };
-};
-
-const createWorkspaceSegmentStillFrameAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  remoteUrl: string,
-): StudioCustomVideoFile => ({
-  fileName: `segment-frame-${segment.index + 1}.jpg`,
-  fileSize: 0,
-  mimeType: "image/jpeg",
-  remoteUrl,
-});
-
-const getWorkspaceSegmentFallbackStillFrameAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): StudioCustomVideoFile | null => {
-  const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
-  const draftPosterUrl =
-    getWorkspaceSegmentCustomPreviewKind(draftVisualAsset) === "video" ? draftVisualAsset?.posterUrl : null;
-  const stillUrl =
-    getWorkspaceSegmentPreferredStillPreviewUrl(segment) ||
-    draftPosterUrl ||
-    segment.currentPosterUrl ||
-    segment.originalPosterUrl ||
-    "";
-
-  return stillUrl ? createWorkspaceSegmentStillFrameAsset(segment, stillUrl) : null;
-};
-
-const getWorkspaceSegmentLatestEditablePhotoAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): StudioCustomVideoFile | null => {
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-  const originalPhotoAsset = getWorkspaceSegmentOriginalPhotoAsset(segment);
-  const currentPhotoAsset = getWorkspaceSegmentCurrentPhotoAsset(segment);
-
-  if (latestVisualAction === "custom") {
-    if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "image" && segment.customVideo) {
-      return segment.customVideo;
-    }
-
-    return currentPhotoAsset ?? originalPhotoAsset ?? getWorkspaceSegmentFallbackStillFrameAsset(segment);
-    }
-
-  if (latestVisualAction === "image_edit") {
-    if (getWorkspaceSegmentCustomPreviewKind(segment.imageEditAsset) === "image" && segment.imageEditAsset) {
-      return segment.imageEditAsset;
-    }
-
-    return (
-      currentPhotoAsset ??
-      (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image" ? segment.aiPhotoAsset : null) ??
-      originalPhotoAsset ??
-      getWorkspaceSegmentFallbackStillFrameAsset(segment)
-    );
-  }
-
-  if (latestVisualAction === "ai_photo") {
-    if (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image" && segment.aiPhotoAsset) {
-      return segment.aiPhotoAsset;
-    }
-
-    return currentPhotoAsset ?? originalPhotoAsset ?? getWorkspaceSegmentFallbackStillFrameAsset(segment);
-  }
-
-  if (latestVisualAction === "photo_animation" || latestVisualAction === "talking_photo") {
-    if (getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image" && segment.photoAnimationSourceAsset) {
-      return segment.photoAnimationSourceAsset;
-    }
-
-    if (getWorkspaceSegmentCustomPreviewKind(segment.imageEditAsset) === "image" && segment.imageEditAsset) {
-      return segment.imageEditAsset;
-    }
-
-    if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "image" && segment.customVideo) {
-      return segment.customVideo;
-    }
-
-    if (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image" && segment.aiPhotoAsset) {
-      return segment.aiPhotoAsset;
-    }
-
-    return currentPhotoAsset ?? originalPhotoAsset ?? getWorkspaceSegmentFallbackStillFrameAsset(segment);
-  }
-
-  if (latestVisualAction === "original") {
-    return currentPhotoAsset ?? originalPhotoAsset ?? getWorkspaceSegmentFallbackStillFrameAsset(segment);
-  }
-
-      return null;
-};
-
-const getWorkspaceSegmentPhotoAnimationSourceAsset = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  return getWorkspaceSegmentLatestEditablePhotoAsset(segment);
-};
-
-const getWorkspaceSegmentDurationExtensionStillSourceAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): StudioCustomVideoFile | null => getWorkspaceSegmentPhotoAnimationSourceAsset(segment);
 
 const getWorkspaceSegmentCurrentVideoSourceAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -6959,3858 +6163,6 @@ const getWorkspaceSegmentPhotoToolUnavailableReason = (
   }
 
   return fallbackReason;
-};
-
-const getWorkspaceSegmentFallbackPreviewKind = (
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "mediaType">,
-): WorkspaceSegmentPreviewKind => (segment.mediaType === "photo" ? "image" : "video");
-
-const getWorkspaceSegmentSelectedVisualPreviewKind = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentPreviewKind => {
-  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
-    return "image";
-  }
-
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-
-  if (latestVisualAction === "ai" || latestVisualAction === "photo_animation" || latestVisualAction === "talking_photo") {
-    return "video";
-  }
-
-  return (
-    getWorkspaceSegmentCustomPreviewKind(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentFallbackPreviewKind(segment)
-  );
-};
-
-const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-    return false;
-  }
-
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-  if (latestVisualAction === "ai" || latestVisualAction === "photo_animation") {
-    return true;
-  }
-
-  const markers = [
-    segment.currentSourceKind,
-    segment.originalSourceKind,
-    segment.currentAsset?.sourceKind,
-    segment.originalAsset?.sourceKind,
-    segment.currentAsset?.libraryKind,
-    segment.originalAsset?.libraryKind,
-    segment.currentAsset?.kind,
-    segment.originalAsset?.kind,
-    segment.currentAsset?.role,
-    segment.originalAsset?.role,
-  ]
-    .map((value) => String(value ?? "").trim().toLowerCase().replace(/-/g, "_"))
-    .filter(Boolean);
-
-  return markers.some((marker) => marker === "ai_generated" || marker === "ai_video" || marker === "photo_animation");
-};
-
-export const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video";
-
-export const getWorkspaceSegmentEditorVisualDurationMaxSeconds = (
-  _segment: WorkspaceSegmentEditorDraftSegment,
-) => WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS;
-
-export const resolveWorkspaceSegmentVisualDurationMaxGuard = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  requestedDurationSeconds: number | null | undefined,
-) => {
-  const requestedDuration = normalizeWorkspaceSegmentManualDurationSeconds(requestedDurationSeconds);
-  if (requestedDuration === null) {
-    return null;
-  }
-
-  const maximumDuration = getWorkspaceSegmentEditorVisualDurationMaxSeconds(segment);
-  if (requestedDuration <= maximumDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS) {
-    return null;
-  }
-
-  return {
-    limitKind: "visual" as const,
-    maximumDurationSeconds: roundWorkspaceSegmentTimelineSeconds(maximumDuration),
-    requestedDurationSeconds: roundWorkspaceSegmentTimelineSeconds(requestedDuration),
-  };
-};
-
-const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDraftSegment): WorkspaceSegmentPreviewKind => {
-  if (shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview(segment)) {
-    return "image";
-  }
-
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-
-  // Fresh segment sessions can promote a photo segment to a server-backed animation
-  // before the local `videoAction` catches up. The carousel must treat that case as
-  // video, otherwise it falls back to synthetic pan/zoom playback over the source photo.
-  if (latestVisualAction === "ai") {
-    return getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, "ai_video")
-      ? "video"
-      : getWorkspaceSegmentFallbackPreviewKind(segment);
-  }
-
-  if (latestVisualAction === "photo_animation" || latestVisualAction === "talking_photo") {
-    const generatedMode = latestVisualAction === "talking_photo" ? "talking_photo" : "photo_animation";
-    return getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, generatedMode) ||
-      isWorkspaceSegmentServerPhotoAnimationOverride(segment) ||
-      isWorkspacePhotoAnimationMediaAsset(segment.currentAsset)
-      ? "video"
-      : getWorkspaceSegmentFallbackPreviewKind(segment);
-  }
-
-  return (
-    getWorkspaceSegmentCustomPreviewKind(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentFallbackPreviewKind(segment)
-  );
-};
-
-const normalizeWorkspaceMediaAssetToken = (value: string | null | undefined) =>
-  String(value ?? "").trim().toLowerCase();
-
-const getWorkspaceMediaAssetSignature = (asset: WorkspaceMediaAssetRef | null | undefined) =>
-  [
-    asset?.kind,
-    asset?.role,
-    asset?.sourceKind,
-    asset?.storageKey,
-    asset?.downloadPath,
-    asset?.downloadUrl,
-    asset?.originalUrl,
-  ]
-    .map(normalizeWorkspaceMediaAssetToken)
-    .filter(Boolean)
-    .join(" ");
-
-const isWorkspacePhotoAnimationMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const signature = getWorkspaceMediaAssetSignature(asset);
-  return (
-    signature.includes("photo_animation") ||
-    signature.includes("photo-animation") ||
-    signature.includes("image_to_video") ||
-    signature.includes("image-to-video") ||
-    signature.includes("animate_photo") ||
-    signature.includes("animate-photo")
-  );
-};
-
-const isWorkspaceTalkingPhotoMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const signature = getWorkspaceMediaAssetSignature(asset);
-  return (
-    signature.includes("talking_photo") ||
-    signature.includes("talking-photo") ||
-    signature.includes("talking_avatar") ||
-    signature.includes("talking-avatar")
-  );
-};
-
-const isWorkspacePhotoMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const mediaType = normalizeWorkspaceMediaAssetToken(asset?.mediaType);
-  const mimeType = normalizeWorkspaceMediaAssetToken(asset?.mimeType);
-  return mediaType === "photo" || mediaType === "image" || mimeType.startsWith("image/");
-};
-
-const isWorkspaceVideoMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const mediaType = normalizeWorkspaceMediaAssetToken(asset?.mediaType);
-  const mimeType = normalizeWorkspaceMediaAssetToken(asset?.mimeType);
-  return mediaType === "video" || mimeType.startsWith("video/");
-};
-
-const getWorkspaceMediaAssetBaseProxyUrlAssetId = (value: string | null | undefined) => {
-  const normalizedValue = String(value ?? "").trim();
-  if (!normalizedValue) {
-    return null;
-  }
-
-  try {
-    const url = new URL(normalizedValue, "http://localhost");
-    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)$/i);
-    if (!match) {
-      return null;
-    }
-
-    const assetId = Number(match[1]);
-    return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
-  } catch {
-    return null;
-  }
-};
-
-const isWorkspaceMediaAssetRefAssetId = (
-  asset: WorkspaceMediaAssetRef | null | undefined,
-  assetId: number | null,
-) => {
-  if (assetId === null) {
-    return false;
-  }
-
-  const candidateAssetId = Number(asset?.assetId);
-  return Number.isFinite(candidateAssetId) && Math.trunc(candidateAssetId) === assetId;
-};
-
-const isWorkspaceAiPhotoRenderedStillAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  if (!isWorkspaceVideoMediaAsset(asset)) {
-    return false;
-  }
-
-  const signature = getWorkspaceMediaAssetSignature(asset);
-  const libraryKind = normalizeWorkspaceMediaAssetToken(asset?.libraryKind);
-  const sourceKind = normalizeWorkspaceMediaAssetToken(asset?.sourceKind);
-  const isRenderedSegment =
-    signature.includes("rendered_segment") ||
-    signature.includes("current_rendered_segment") ||
-    signature.includes("/rendered_segment/");
-  const hasAiPhotoMarker =
-    libraryKind === "ai_photo" ||
-    signature.includes("source_ai_image") ||
-    signature.includes("ai_photo") ||
-    signature.includes("ai-photo") ||
-    signature.includes("segment_animation_fallback");
-
-  return isRenderedSegment && hasAiPhotoMarker && (libraryKind === "ai_photo" || sourceKind === "ai_generated");
-};
-
-const isWorkspaceSegmentAiPhotoRenderedStill = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    isWorkspaceAiPhotoRenderedStillAsset(segment.currentAsset) ||
-      isWorkspaceAiPhotoRenderedStillAsset(segment.originalAsset),
-  );
-
-const hasWorkspaceSegmentExplicitDraftVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  (segment.videoAction === "custom" && Boolean(segment.customVideo)) ||
-  (segment.videoAction === "ai_photo" && Boolean(segment.aiPhotoAsset)) ||
-  (segment.videoAction === "image_edit" && Boolean(segment.imageEditAsset)) ||
-  ((segment.videoAction === "ai" || segment.videoAction === "photo_animation" || segment.videoAction === "talking_photo") &&
-    Boolean(segment.aiVideoAsset));
-
-const shouldUseWorkspaceSegmentAiPhotoRenderedStillPreview = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  isWorkspaceSegmentAiPhotoRenderedStill(segment) && !hasWorkspaceSegmentExplicitDraftVisual(segment);
-
-const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const assetId = Number(asset?.assetId);
-  if (!Number.isFinite(assetId) || assetId <= 0 || !isWorkspaceVideoMediaAsset(asset)) {
-    return null;
-  }
-
-  const posterUrl = new URL(`/api/workspace/media-assets/${Math.trunc(assetId)}/poster`, "http://localhost");
-  const version = [
-    asset?.createdAt,
-    asset?.expiresAt,
-    asset?.storageKey,
-    asset?.mimeType,
-    asset?.downloadPath,
-    asset?.downloadUrl,
-    asset?.playbackUrl,
-    asset?.originalUrl,
-  ]
-    .map(normalizeWorkspaceMediaAssetToken)
-    .filter(Boolean)
-    .join(":");
-
-  if (version) {
-    posterUrl.searchParams.set("v", version);
-  }
-
-  return `${posterUrl.pathname}${posterUrl.search}`;
-};
-
-const buildWorkspaceMediaLibraryAssetPosterUrl = (item: WorkspaceMediaLibraryItem) => {
-  const assetId = getPositiveWorkspaceMediaAssetId(item.assetId);
-  if (!assetId || item.previewKind !== "video") {
-    return null;
-  }
-
-  const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, "http://localhost");
-  const version = [
-    item.createdAt ? String(item.createdAt) : null,
-    item.assetExpiresAt,
-    item.assetKind,
-    item.assetMediaType,
-    item.previewUrl,
-    item.downloadUrl,
-  ]
-    .map(normalizeWorkspaceMediaAssetToken)
-    .filter(Boolean)
-    .join(":");
-
-  if (version) {
-    posterUrl.searchParams.set("v", version);
-  }
-
-  return `${posterUrl.pathname}${posterUrl.search}`;
-};
-
-const getWorkspaceSegmentVideoAssetPosterUrl = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  options?: { preferOriginal?: boolean },
-) =>
-  getUniqueWorkspaceSegmentPreviewUrls(
-    options?.preferOriginal
-      ? [
-          buildWorkspaceMediaAssetPosterUrl(segment.originalAsset),
-          buildWorkspaceMediaAssetPosterUrl(segment.currentAsset),
-        ]
-      : [
-          buildWorkspaceMediaAssetPosterUrl(segment.currentAsset),
-          buildWorkspaceMediaAssetPosterUrl(segment.originalAsset),
-        ],
-  )[0] ?? null;
-
-const isWorkspaceTimelineFallbackMediaAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  if (!asset) {
-    return false;
-  }
-
-  const signature = [
-    asset.kind,
-    asset.libraryKind,
-    asset.role,
-    asset.sourceKind,
-    asset.storageKey,
-  ]
-    .map((value) => String(value ?? "").trim().toLowerCase())
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    signature.includes("final_video") ||
-    signature.includes("combined_background") ||
-    signature.includes("project_background")
-  );
-};
-
-const isWorkspaceSegmentScopedPosterUrl = (value: string | null | undefined) =>
-  String(value ?? "").includes("/api/workspace/project-segment-poster");
-
-const buildWorkspaceSegmentScopedPosterUrlFromVideoUrl = (value: string | null | undefined) => {
-  const normalizedValue = String(value ?? "").trim();
-  if (!normalizedValue || !normalizedValue.includes("/api/workspace/project-segment-video")) {
-    return null;
-  }
-
-  try {
-    const videoUrl = new URL(normalizedValue, window.location.origin);
-    if (videoUrl.pathname !== "/api/workspace/project-segment-video") {
-      return null;
-    }
-
-    const projectId = videoUrl.searchParams.get("projectId");
-    const segmentIndex = videoUrl.searchParams.get("segmentIndex");
-    const source = videoUrl.searchParams.get("source");
-    if (!projectId || !segmentIndex || !source) {
-      return null;
-    }
-
-    const posterParams = new URLSearchParams({
-      projectId,
-      segmentIndex,
-      source,
-    });
-    const marker = videoUrl.searchParams.get("v");
-    if (marker) {
-      posterParams.set("v", marker);
-    }
-    return `/api/workspace/project-segment-poster?${posterParams.toString()}`;
-  } catch {
-    return null;
-  }
-};
-
-const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const scopedPosterUrl = isWorkspaceSegmentScopedPosterUrl(segment.currentPosterUrl)
-    ? segment.currentPosterUrl
-    : buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(segment.currentPreviewUrl ?? segment.currentPlaybackUrl);
-
-  if (isWorkspaceTimelineFallbackMediaAsset(segment.currentAsset)) {
-    return scopedPosterUrl;
-  }
-
-  return segment.currentPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.currentAsset);
-};
-
-const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const scopedPosterUrl = isWorkspaceSegmentScopedPosterUrl(segment.originalPosterUrl)
-    ? segment.originalPosterUrl
-    : buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(segment.originalPreviewUrl ?? segment.originalPlaybackUrl);
-
-  if (isWorkspaceTimelineFallbackMediaAsset(segment.originalAsset)) {
-    return scopedPosterUrl;
-  }
-
-  return segment.originalPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.originalAsset);
-};
-
-const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  const assetId = Number(asset?.assetId);
-  if (Number.isFinite(assetId) && assetId > 0) {
-    return `asset:${Math.trunc(assetId)}`;
-  }
-
-  const storageKey = String(asset?.storageKey ?? "").trim();
-  if (storageKey) {
-    return `storage:${storageKey}`;
-  }
-
-  const urlIdentity = [
-    asset?.downloadPath,
-    asset?.downloadUrl,
-    asset?.playbackUrl,
-    asset?.originalUrl,
-  ].find((value) => String(value ?? "").trim());
-  return urlIdentity ? `url:${String(urlIdentity).trim()}` : null;
-};
-
-const getWorkspaceSegmentCurrentVisualIdentityKey = (
-  segment: Pick<
-    WorkspaceSegmentEditorSegment,
-    | "currentAsset"
-    | "currentExternalPlaybackUrl"
-    | "currentExternalPreviewUrl"
-    | "currentPlaybackUrl"
-    | "currentPosterUrl"
-    | "currentPreviewUrl"
-  >,
-) =>
-  getWorkspaceMediaAssetIdentityKey(segment.currentAsset) ??
-  [
-    segment.currentExternalPlaybackUrl,
-    segment.currentExternalPreviewUrl,
-    segment.currentPosterUrl,
-    segment.currentPlaybackUrl,
-    segment.currentPreviewUrl,
-  ]
-    .map((value) => String(value ?? "").trim())
-    .find(Boolean) ??
-  null;
-
-const getWorkspaceSegmentOriginalVisualIdentityKey = (
-  segment: Pick<
-    WorkspaceSegmentEditorSegment,
-    | "originalAsset"
-    | "originalExternalPlaybackUrl"
-    | "originalExternalPreviewUrl"
-    | "originalPlaybackUrl"
-    | "originalPosterUrl"
-    | "originalPreviewUrl"
-  >,
-) =>
-  getWorkspaceMediaAssetIdentityKey(segment.originalAsset) ??
-  [
-    segment.originalExternalPlaybackUrl,
-    segment.originalExternalPreviewUrl,
-    segment.originalPosterUrl,
-    segment.originalPlaybackUrl,
-    segment.originalPreviewUrl,
-  ]
-    .map((value) => String(value ?? "").trim())
-    .find(Boolean) ??
-  null;
-
-const isWorkspaceSegmentOriginalVisualCollapsedIntoCurrent = (segment: WorkspaceSegmentEditorSegment) => {
-  const currentIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
-  const originalIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(segment);
-
-  return Boolean(currentIdentity && originalIdentity && currentIdentity === originalIdentity);
-};
-
-export const preserveWorkspaceSegmentEditorOriginalVisualReferences = (
-  incomingSession: WorkspaceSegmentEditorSession,
-  baselineSession: WorkspaceSegmentEditorSession | null | undefined,
-): WorkspaceSegmentEditorSession => {
-  if (!baselineSession || baselineSession.projectId !== incomingSession.projectId) {
-    return incomingSession;
-  }
-
-  let hasChanges = false;
-  const baselineSegmentsByIndex = new Map(baselineSession.segments.map((segment) => [segment.index, segment] as const));
-  const segments = incomingSession.segments.map((segment) => {
-    if (!isWorkspaceSegmentOriginalVisualCollapsedIntoCurrent(segment)) {
-      return segment;
-    }
-
-    const baselineSegment = baselineSegmentsByIndex.get(segment.index);
-    if (!baselineSegment) {
-      return segment;
-    }
-
-    const baselineOriginalIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(baselineSegment);
-    const incomingCurrentIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
-    if (!baselineOriginalIdentity || baselineOriginalIdentity === incomingCurrentIdentity) {
-      return segment;
-    }
-
-    hasChanges = true;
-    return {
-      ...segment,
-      originalAsset: cloneWorkspaceMediaAssetRef(baselineSegment.originalAsset),
-      originalExternalPlaybackUrl: baselineSegment.originalExternalPlaybackUrl,
-      originalExternalPreviewUrl: baselineSegment.originalExternalPreviewUrl,
-      originalPlaybackUrl: baselineSegment.originalPlaybackUrl,
-      originalPosterUrl: baselineSegment.originalPosterUrl,
-      originalPreviewUrl: baselineSegment.originalPreviewUrl,
-      originalSourceKind: baselineSegment.originalSourceKind,
-    };
-  });
-
-  return hasChanges
-    ? {
-        ...incomingSession,
-        segments,
-      }
-    : incomingSession;
-};
-
-export const resolveWorkspaceSegmentEditorLoadedBaselineSession = (
-  incomingSession: WorkspaceSegmentEditorSession,
-  existingBaselineSession: WorkspaceSegmentEditorSession | null | undefined,
-): WorkspaceSegmentEditorSession =>
-  existingBaselineSession?.projectId === incomingSession.projectId ? existingBaselineSession : incomingSession;
-
-const isWorkspaceSegmentCurrentVisualDifferentFromOriginal = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const currentAssetIdentity = getWorkspaceMediaAssetIdentityKey(segment.currentAsset);
-  const originalAssetIdentity = getWorkspaceMediaAssetIdentityKey(segment.originalAsset);
-
-  if (currentAssetIdentity && originalAssetIdentity) {
-    return currentAssetIdentity !== originalAssetIdentity;
-  }
-
-  if (currentAssetIdentity || originalAssetIdentity) {
-    return Boolean(
-      segment.currentPlaybackUrl ||
-        segment.currentPreviewUrl ||
-        segment.currentExternalPlaybackUrl ||
-        segment.currentExternalPreviewUrl,
-    );
-  }
-
-  const currentUrlIdentity = [
-    segment.currentExternalPlaybackUrl,
-    segment.currentExternalPreviewUrl,
-    segment.currentPlaybackUrl,
-    segment.currentPreviewUrl,
-  ].find((value) => String(value ?? "").trim());
-  const originalUrlIdentity = [
-    segment.originalExternalPlaybackUrl,
-    segment.originalExternalPreviewUrl,
-    segment.originalPlaybackUrl,
-    segment.originalPreviewUrl,
-  ].find((value) => String(value ?? "").trim());
-
-  return Boolean(
-    currentUrlIdentity &&
-      originalUrlIdentity &&
-      String(currentUrlIdentity).trim() !== String(originalUrlIdentity).trim(),
-  );
-};
-
-const hasWorkspaceSegmentCurrentVideoReference = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    segment.currentPlaybackUrl ||
-      segment.currentExternalPlaybackUrl ||
-      segment.currentPreviewUrl ||
-      segment.currentExternalPreviewUrl,
-  );
-
-const isWorkspaceSegmentServerPhotoAnimationOverride = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment) &&
-      isWorkspacePhotoMediaAsset(segment.originalAsset) &&
-      (isWorkspaceVideoMediaAsset(segment.currentAsset) || segment.mediaType === "video") &&
-      hasWorkspaceSegmentCurrentVideoReference(segment),
-  );
-
-const hasWorkspaceSegmentPlayableVideoUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, "photo_animation") ||
-      getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, "talking_photo") ||
-      getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, "ai_video") ||
-      segment.currentPlaybackUrl ||
-      segment.currentExternalPlaybackUrl ||
-      segment.currentPreviewUrl ||
-      segment.currentExternalPreviewUrl ||
-      segment.originalPlaybackUrl ||
-      segment.originalExternalPlaybackUrl ||
-      segment.originalPreviewUrl ||
-      segment.originalExternalPreviewUrl,
-  );
-
-const getWorkspaceSegmentLatestVisualAction = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentEditorVideoAction => {
-  if (segment.videoAction === "custom" && segment.customVideo) {
-    return "custom";
-  }
-
-  if (segment.videoAction === "photo_animation") {
-    return "photo_animation";
-  }
-
-  if (segment.videoAction === "talking_photo") {
-    return "talking_photo";
-  }
-
-  if (segment.aiVideoGeneratedMode === "photo_animation" && hasWorkspaceSegmentPlayableVideoUrl(segment)) {
-    return "photo_animation";
-  }
-
-  if (segment.aiVideoGeneratedMode === "talking_photo" && hasWorkspaceSegmentPlayableVideoUrl(segment)) {
-    return "talking_photo";
-  }
-
-  if (isWorkspaceTalkingPhotoMediaAsset(segment.currentAsset)) {
-    return "talking_photo";
-  }
-
-  if (isWorkspacePhotoAnimationMediaAsset(segment.currentAsset)) {
-    return "photo_animation";
-  }
-
-  if (isWorkspaceSegmentServerPhotoAnimationOverride(segment)) {
-    return "photo_animation";
-  }
-
-  if (
-    segment.videoAction === "original" &&
-    segment.mediaType === "video" &&
-    isWorkspacePhotoMediaAsset(segment.originalAsset) &&
-    (segment.currentSourceKind === "ai_generated" || segment.currentAsset?.sourceKind === "ai_generated") &&
-    hasWorkspaceSegmentPlayableVideoUrl(segment)
-  ) {
-    return "photo_animation";
-  }
-
-  if (
-    segment.videoAction === "image_edit" &&
-    segment.mediaType === "video" &&
-    hasWorkspaceSegmentPlayableVideoUrl(segment)
-  ) {
-    return "photo_animation";
-  }
-
-  return segment.videoAction;
-};
-
-const doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-) => getWorkspaceSegmentLatestVisualAction(segment) === "talking_photo";
-
-const getStudioVideoChipValue = (
-  videoMode: StudioVideoMode,
-  customVideoFile: StudioCustomVideoFile | null,
-  options?: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null; locale?: string },
-) => {
-  const locale = options?.locale ?? "ru";
-  const visualLabel =
-    videoMode === "custom"
-      ? customVideoFile
-        ? truncateStudioCustomAssetName(customVideoFile.fileName)
-        : locale === "en"
-          ? "Custom visual"
-          : "Свой визуал"
-      : (() => {
-          const option = studioVideoOptions.find((item) => item.id === videoMode);
-          return option ? getStudioVideoOptionCopy(option, locale).label : locale === "en" ? "Standard" : "Стандартный";
-        })();
-
-  return hasStudioBranding(options ?? {}) ? `${visualLabel} + ${locale === "en" ? "brand" : "бренд"}` : visualLabel;
-};
-
-const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
-  return videoMode === "ai_photo"
-    ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
-    : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
-};
-
-export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
-  const normalizedVoiceId = String(voiceId ?? "").trim();
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
-    return 0;
-  }
-
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
-  for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
-    const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
-    if (voice) {
-      return voice.creditCost ?? 0;
-    }
-  }
-
-  return 0;
-};
-
-const getStudioGenerationRequiredCredits = (
-  videoMode: StudioVideoMode,
-  options?: { isSegmentEditorGeneration?: boolean; voiceEnabled?: boolean; voiceId?: string | null },
-) => {
-  const baseCredits = options?.isSegmentEditorGeneration
-    ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
-    : getRequiredCreditsForVideoMode(videoMode);
-  const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
-  return baseCredits + voiceCredits;
-};
-
-const getStudioEditVideoGenerationRequiredCredits = (
-  options?: { voiceEnabled?: boolean; voiceId?: string | null },
-) =>
-  getStudioGenerationRequiredCredits("standard", {
-    isSegmentEditorGeneration: true,
-    voiceEnabled: options?.voiceEnabled,
-    voiceId: options?.voiceId,
-  });
-
-const getWorkspaceSegmentEditorVoiceCreditCost = (
-  session: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null | undefined,
-) => {
-  if (!session) {
-    return 0;
-  }
-
-  const voiceCreditCosts: number[] = [];
-  const globalVoiceId = normalizeWorkspaceSegmentEditorSetting(session.voiceType);
-
-  for (const segment of session.segments) {
-    const draftSegment = segment as WorkspaceSegmentEditorDraftSegment;
-    if (
-      draftSegment.voiceoverAsset &&
-      isWorkspaceSegmentVoiceoverAssetFresh(draftSegment, session as WorkspaceSegmentEditorDraftSession)
-    ) {
-      continue;
-    }
-
-    const segmentVoiceId = getWorkspaceSegmentVoiceOverrideId(segment);
-    if (segmentVoiceId === "none") {
-      continue;
-    }
-
-    const effectiveVoiceId = segmentVoiceId ?? (globalVoiceId !== "none" ? globalVoiceId : null);
-    if (effectiveVoiceId) {
-      voiceCreditCosts.push(getStudioVoiceCreditCost(effectiveVoiceId));
-    }
-  }
-
-  return Math.max(0, ...voiceCreditCosts);
-};
-
-const getWorkspaceSegmentEditorGenerationRequiredCredits = (
-  session: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null | undefined,
-) => {
-  if (!session) {
-    return getStudioEditVideoGenerationRequiredCredits();
-  }
-
-  return STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getWorkspaceSegmentEditorVoiceCreditCost(session);
-};
-
-const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
-
-const getWorkspaceReferenceGenerationCreditCost = (
-  kind: WorkspaceReferenceKind,
-  quality: StudioSegmentVisualQuality,
-) =>
-  kind === "character"
-    ? STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST
-    : getSegmentAiPhotoCreditCost(quality);
-
-const getSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
-
-const getSegmentPhotoAnimationCreditCost = (
-  quality: StudioSegmentVisualQuality,
-  durationSeconds: unknown = 5,
-) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
-
-const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
-const cloneStudioCustomMusicFile = (value: StudioCustomMusicFile | null) => (value ? { ...value } : null);
-const cloneWorkspaceMediaAssetRef = (value: WorkspaceMediaAssetRef | null) => (value ? { ...value } : null);
-const getStudioCustomVideoFileIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
-  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
-  if (assetId) {
-    return `asset:${assetId}`;
-  }
-
-  const remoteAssetId = getWorkspaceMediaAssetBaseProxyUrlAssetId(asset?.remoteUrl);
-  if (remoteAssetId) {
-    return `asset:${remoteAssetId}`;
-  }
-
-  const libraryItemKey = String(asset?.libraryItemKey ?? "").trim();
-  if (libraryItemKey) {
-    return `library:${libraryItemKey}`;
-  }
-
-  const remoteUrl = String(asset?.remoteUrl ?? "").trim();
-  return remoteUrl ? `url:${remoteUrl}` : null;
-};
-const areStudioCustomVideoFilesSameIdentity = (
-  left: StudioCustomVideoFile | null | undefined,
-  right: StudioCustomVideoFile | null | undefined,
-) => {
-  const leftIdentity = getStudioCustomVideoFileIdentityKey(left);
-  const rightIdentity = getStudioCustomVideoFileIdentityKey(right);
-  return Boolean(leftIdentity && rightIdentity && leftIdentity === rightIdentity);
-};
-const getWorkspaceSegmentTimelineHistoryKey = (
-  kind: WorkspaceSegmentTimelineHistoryKind,
-  segmentIndex?: number | null,
-) => `${kind}:${kind === "music" ? "global" : Number(segmentIndex ?? -1)}`;
-
-export const restoreWorkspaceSegmentTimelineSnapshot = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  snapshot: WorkspaceSegmentEditorDraftSegment,
-  kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "music">,
-): WorkspaceSegmentEditorDraftSegment => {
-  const restoreVoiceoverState = (
-    nextSegment: WorkspaceSegmentEditorDraftSegment,
-    sourceSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-  ): WorkspaceSegmentEditorDraftSegment => ({
-    ...nextSegment,
-    speechDuration: sourceSegment?.speechDuration ?? null,
-    speechDurationSource: sourceSegment?.speechDurationSource ?? null,
-    speechEndTime: sourceSegment?.speechEndTime ?? null,
-    speechStartTime: sourceSegment?.speechStartTime ?? null,
-    speechWords: sourceSegment?.speechWords.map((word) => ({ ...word })) ?? [],
-    voiceoverAsset: cloneStudioCustomVideoFile(sourceSegment?.voiceoverAsset ?? null),
-    voiceoverLanguage: sourceSegment?.voiceoverLanguage ?? null,
-    voiceoverTextHash: sourceSegment?.voiceoverTextHash ?? null,
-    voiceoverVoiceType: sourceSegment?.voiceoverVoiceType ?? null,
-  });
-
-  if (kind === "text") {
-    return restoreVoiceoverState({
-      ...segment,
-      text: snapshot.text,
-      textByLanguage: { ...snapshot.textByLanguage },
-    }, snapshot);
-  }
-
-  if (kind === "voice") {
-    return restoreVoiceoverState({
-      ...segment,
-      text: snapshot.text,
-      textByLanguage: { ...snapshot.textByLanguage },
-      voiceType: getWorkspaceSegmentVoiceOverrideId(snapshot),
-    }, snapshot);
-  }
-
-  if (kind === "subtitle") {
-    return {
-      ...segment,
-      subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(snapshot),
-      subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(snapshot),
-      subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(snapshot),
-    };
-  }
-
-  if (kind === "sound") {
-    return {
-      ...segment,
-      sceneSoundAsset: cloneStudioCustomVideoFile(snapshot.sceneSoundAsset),
-      sceneSoundGeneratedFromPrompt: snapshot.sceneSoundGeneratedFromPrompt,
-      sceneSoundPrompt: snapshot.sceneSoundPrompt,
-      sceneSoundPromptInitialized: snapshot.sceneSoundPromptInitialized,
-    };
-  }
-
-  return {
-    ...segment,
-    aiPhotoAsset: cloneStudioCustomVideoFile(snapshot.aiPhotoAsset),
-    aiPhotoGeneratedFromPrompt: snapshot.aiPhotoGeneratedFromPrompt,
-    aiPhotoPrompt: snapshot.aiPhotoPrompt,
-    aiPhotoPromptInitialized: snapshot.aiPhotoPromptInitialized,
-    aiVideoAsset: cloneStudioCustomVideoFile(snapshot.aiVideoAsset),
-    aiVideoGeneratedMode: snapshot.aiVideoGeneratedMode,
-    aiVideoGeneratedFromPrompt: snapshot.aiVideoGeneratedFromPrompt,
-    aiVideoPrompt: snapshot.aiVideoPrompt,
-    aiVideoPromptInitialized: snapshot.aiVideoPromptInitialized,
-    currentAsset: cloneWorkspaceMediaAssetRef(snapshot.currentAsset),
-    currentExternalPlaybackUrl: snapshot.currentExternalPlaybackUrl,
-    currentExternalPreviewUrl: snapshot.currentExternalPreviewUrl,
-    currentPlaybackUrl: snapshot.currentPlaybackUrl,
-    currentPosterUrl: snapshot.currentPosterUrl,
-    currentPreviewUrl: snapshot.currentPreviewUrl,
-    currentSourceKind: snapshot.currentSourceKind,
-    customVideo: cloneStudioCustomVideoFile(snapshot.customVideo),
-    durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(snapshot),
-    imageEditAsset: cloneStudioCustomVideoFile(snapshot.imageEditAsset),
-    imageEditGeneratedFromPrompt: snapshot.imageEditGeneratedFromPrompt,
-    imageEditPrompt: snapshot.imageEditPrompt,
-    imageEditPromptInitialized: snapshot.imageEditPromptInitialized,
-    mediaType: snapshot.mediaType,
-    photoAnimationSourceAsset: cloneStudioCustomVideoFile(snapshot.photoAnimationSourceAsset),
-    videoAction: snapshot.videoAction,
-    visualReset: snapshot.visualReset,
-  };
-};
-const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => ({
-  ...project,
-  finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
-  hashtags: [...project.hashtags],
-  youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
-});
-
-const hasWorkspaceCyrillicText = (value: string | null | undefined) => /[А-Яа-яЁё]/.test(String(value ?? ""));
-
-const normalizeWorkspaceLocalizedTextForCompare = (value: string | null | undefined) =>
-  String(value ?? "").replace(/\s+/g, " ").trim();
-
-const isWorkspaceSegmentCachedLanguageTextUsable = (
-  targetText: string | null | undefined,
-  targetLanguage: StudioLanguage,
-  sourceText: string | null | undefined,
-) => {
-  if (typeof targetText !== "string") {
-    return false;
-  }
-
-  if (targetLanguage !== "ru") {
-    return true;
-  }
-
-  const normalizedTargetText = normalizeWorkspaceLocalizedTextForCompare(targetText);
-  const normalizedSourceText = normalizeWorkspaceLocalizedTextForCompare(sourceText);
-
-  if (!normalizedTargetText) {
-    return !normalizedSourceText;
-  }
-
-  if (hasWorkspaceCyrillicText(normalizedTargetText)) {
-    return true;
-  }
-
-  if (normalizedSourceText && !hasWorkspaceCyrillicText(normalizedSourceText)) {
-    return false;
-  }
-
-  return !normalizedSourceText || normalizedTargetText !== normalizedSourceText;
-};
-
-const cloneWorkspaceSegmentEditorLocalizedTextMap = (
-  value: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
-  fallbackText: string,
-  fallbackLanguage: StudioLanguage = "ru",
-): WorkspaceSegmentEditorLocalizedTextMap => {
-  const nextMap: WorkspaceSegmentEditorLocalizedTextMap = {};
-  const hadFallbackLanguage = typeof value?.[fallbackLanguage] === "string";
-
-  (["ru", "en"] as const).forEach((language) => {
-    if (typeof value?.[language] === "string") {
-      nextMap[language] = value[language];
-    }
-  });
-
-  if (typeof nextMap[fallbackLanguage] !== "string") {
-    nextMap[fallbackLanguage] = fallbackText;
-  }
-
-  if (
-    fallbackLanguage === "en" &&
-    typeof nextMap.ru === "string" &&
-    normalizeWorkspaceLocalizedTextForCompare(nextMap.ru) === normalizeWorkspaceLocalizedTextForCompare(nextMap.en) &&
-    !hasWorkspaceCyrillicText(nextMap.ru) &&
-    (!hadFallbackLanguage || nextMap.ru === fallbackText)
-  ) {
-    delete nextMap.ru;
-  }
-
-  return nextMap;
-};
-
-const cloneWorkspaceSegmentEditorDraftSegment = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  fallbackLanguage: StudioLanguage = "ru",
-): WorkspaceSegmentEditorDraftSegment => ({
-  ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-  aiPhotoAsset: cloneStudioCustomVideoFile(segment.aiPhotoAsset),
-  aiPhotoGeneratedFromPrompt:
-    typeof segment.aiPhotoGeneratedFromPrompt === "string" && segment.aiPhotoGeneratedFromPrompt.trim()
-      ? segment.aiPhotoGeneratedFromPrompt
-      : null,
-  aiPhotoPrompt: typeof segment.aiPhotoPrompt === "string" ? segment.aiPhotoPrompt : "",
-  aiPhotoPromptInitialized: Boolean(segment.aiPhotoPromptInitialized),
-  aiVideoAsset: cloneStudioCustomVideoFile(segment.aiVideoAsset),
-  aiVideoGeneratedMode:
-    segment.aiVideoGeneratedMode === "photo_animation" ||
-    segment.aiVideoGeneratedMode === "talking_photo" ||
-    segment.aiVideoGeneratedMode === "ai_video"
-      ? segment.aiVideoGeneratedMode
-      : null,
-  aiVideoGeneratedFromPrompt:
-    typeof segment.aiVideoGeneratedFromPrompt === "string" && segment.aiVideoGeneratedFromPrompt.trim()
-      ? segment.aiVideoGeneratedFromPrompt
-      : null,
-  aiVideoPrompt: typeof segment.aiVideoPrompt === "string" ? segment.aiVideoPrompt : "",
-  aiVideoPromptInitialized: Boolean(segment.aiVideoPromptInitialized),
-  customVideo: cloneStudioCustomVideoFile(segment.customVideo),
-  durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
-  imageEditAsset: cloneStudioCustomVideoFile(segment.imageEditAsset),
-  imageEditGeneratedFromPrompt:
-    typeof segment.imageEditGeneratedFromPrompt === "string" && segment.imageEditGeneratedFromPrompt.trim()
-      ? segment.imageEditGeneratedFromPrompt
-      : null,
-  imageEditPrompt: typeof segment.imageEditPrompt === "string" ? segment.imageEditPrompt : "",
-  imageEditPromptInitialized: Boolean(segment.imageEditPromptInitialized),
-  durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
-  manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-  mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-  originalText: typeof segment.originalText === "string" ? segment.originalText : segment.text,
-  originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
-    segment.originalTextByLanguage,
-    typeof segment.originalText === "string" ? segment.originalText : segment.text,
-    fallbackLanguage,
-  ),
-  photoAnimationSourceAsset: cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
-  sceneSoundAsset: cloneStudioCustomVideoFile(segment.sceneSoundAsset),
-  sceneSoundGeneratedFromPrompt:
-    typeof segment.sceneSoundGeneratedFromPrompt === "string" && segment.sceneSoundGeneratedFromPrompt.trim()
-      ? segment.sceneSoundGeneratedFromPrompt
-      : null,
-  sceneSoundPrompt: typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "",
-  sceneSoundPromptInitialized: Boolean(segment.sceneSoundPromptInitialized),
-  subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
-  subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
-  subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
-  textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text, fallbackLanguage),
-  voiceoverAsset: cloneStudioCustomVideoFile(segment.voiceoverAsset),
-  voiceoverLanguage: typeof segment.voiceoverLanguage === "string" && segment.voiceoverLanguage.trim() ? segment.voiceoverLanguage : null,
-  voiceoverTextHash: typeof segment.voiceoverTextHash === "string" && segment.voiceoverTextHash.trim() ? segment.voiceoverTextHash : null,
-  voiceoverVoiceType: typeof segment.voiceoverVoiceType === "string" && segment.voiceoverVoiceType.trim() ? segment.voiceoverVoiceType : null,
-  voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
-  visualReset: Boolean(segment.visualReset),
-});
-
-export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  snapshot: WorkspaceSegmentEditorDraftSegment,
-  fallbackLanguage: StudioLanguage = "ru",
-): WorkspaceSegmentEditorDraftSegment => ({
-  ...segment,
-  speechDuration: snapshot.speechDuration,
-  speechDurationSource: snapshot.speechDurationSource ?? null,
-  speechEndTime: snapshot.speechEndTime,
-  speechStartTime: snapshot.speechStartTime,
-  speechWords: snapshot.speechWords.map((word) => ({ ...word })),
-  text: snapshot.text,
-  textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
-    snapshot.textByLanguage,
-    snapshot.text,
-    fallbackLanguage,
-  ),
-  voiceoverAsset: cloneStudioCustomVideoFile(snapshot.voiceoverAsset),
-  voiceoverLanguage: snapshot.voiceoverLanguage,
-  voiceoverTextHash: snapshot.voiceoverTextHash,
-  voiceoverVoiceType: snapshot.voiceoverVoiceType,
-});
-
-const areWorkspaceSegmentEditorLocalizedTextMapsEqual = (
-  left: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
-  right: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
-) =>
-  (["ru", "en"] as const).every((language) => {
-    const leftValue = typeof left?.[language] === "string" ? left[language] : undefined;
-    const rightValue = typeof right?.[language] === "string" ? right[language] : undefined;
-    return leftValue === rightValue;
-  });
-
-const normalizeWorkspaceSegmentEditorUrl = (value: unknown) => {
-  const normalized = typeof value === "string" ? value.trim() : "";
-  return normalized || null;
-};
-
-const ADSFLOW_MEDIA_DOWNLOAD_URL_PATTERN = /\/api\/media\/(\d+)\/download(?:[/?#]|$)/i;
-
-const normalizeWorkspaceSegmentMediaAssetProxyUrl = (value: unknown) => {
-  const normalizedUrl = normalizeWorkspaceSegmentEditorUrl(value);
-  if (!normalizedUrl) {
-    return null;
-  }
-
-  const matchedPath = normalizedUrl.match(ADSFLOW_MEDIA_DOWNLOAD_URL_PATTERN);
-  if (matchedPath) {
-    return `/api/workspace/media-assets/${matchedPath[1]}`;
-  }
-
-  try {
-    const resolvedUrl = new URL(normalizedUrl);
-    const matchedAbsolutePath = resolvedUrl.pathname.match(ADSFLOW_MEDIA_DOWNLOAD_URL_PATTERN);
-    if (matchedAbsolutePath) {
-      return `/api/workspace/media-assets/${matchedAbsolutePath[1]}`;
-    }
-  } catch {
-    return normalizedUrl;
-  }
-
-  return normalizedUrl;
-};
-
-const normalizeWorkspaceSegmentSourceKind = (value: unknown): WorkspaceSegmentSourceKind => {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "ai_generated" || normalized === "stock" || normalized === "upload") {
-    return normalized;
-  }
-
-  return "unknown";
-};
-
-const getUniqueWorkspaceSegmentPreviewUrls = (values: Array<string | null | undefined>) =>
-  Array.from(
-    new Set(
-      values
-        .map((value) => normalizeWorkspaceSegmentEditorUrl(value))
-        .filter((value): value is string => Boolean(value)),
-    ),
-  );
-
-const getWorkspaceSegmentStillPreviewUrlsFromValues = (
-  segment: Pick<
-    WorkspaceSegmentEditorDraftSegment,
-    | "currentAsset"
-    | "originalAsset"
-  >,
-  values: Array<string | null | undefined>,
-) =>
-  Array.from(
-    new Set(
-      values
-        .map((value) => String(value ?? "").trim())
-        .filter((value) => {
-          if (!value) {
-            return false;
-          }
-
-          const mediaAssetId = getWorkspaceMediaAssetBaseProxyUrlAssetId(value);
-          if (mediaAssetId !== null) {
-            if (
-              (isWorkspaceVideoMediaAsset(segment.currentAsset) &&
-                isWorkspaceMediaAssetRefAssetId(segment.currentAsset, mediaAssetId)) ||
-              (isWorkspaceVideoMediaAsset(segment.originalAsset) &&
-                isWorkspaceMediaAssetRefAssetId(segment.originalAsset, mediaAssetId))
-            ) {
-              return false;
-            }
-
-            if (
-              (isWorkspacePhotoMediaAsset(segment.currentAsset) &&
-                isWorkspaceMediaAssetRefAssetId(segment.currentAsset, mediaAssetId)) ||
-              (isWorkspacePhotoMediaAsset(segment.originalAsset) &&
-                isWorkspaceMediaAssetRefAssetId(segment.originalAsset, mediaAssetId))
-            ) {
-              return true;
-            }
-          }
-
-          return !isLikelyVideoAssetUrl(value);
-        }),
-    ),
-  );
-
-const getWorkspaceSegmentStillPreviewUrls = (
-  segment: Pick<
-    WorkspaceSegmentEditorDraftSegment,
-    | "currentAsset"
-    | "currentExternalPlaybackUrl"
-    | "currentExternalPreviewUrl"
-    | "currentPlaybackUrl"
-    | "currentPreviewUrl"
-    | "originalAsset"
-    | "originalExternalPlaybackUrl"
-    | "originalExternalPreviewUrl"
-    | "originalPlaybackUrl"
-    | "originalPreviewUrl"
-  >,
-) =>
-  getWorkspaceSegmentStillPreviewUrlsFromValues(segment, [
-    segment.currentExternalPreviewUrl,
-    segment.originalExternalPreviewUrl,
-    segment.currentExternalPlaybackUrl,
-    segment.originalExternalPlaybackUrl,
-    segment.currentPreviewUrl,
-    segment.originalPreviewUrl,
-    segment.currentPlaybackUrl,
-    segment.originalPlaybackUrl,
-  ]);
-
-const getWorkspaceSegmentPreferredStillPreviewUrl = (
-  segment: Pick<
-    WorkspaceSegmentEditorDraftSegment,
-    | "currentAsset"
-    | "currentExternalPlaybackUrl"
-    | "currentExternalPreviewUrl"
-    | "currentPlaybackUrl"
-    | "currentPreviewUrl"
-    | "originalAsset"
-    | "originalExternalPlaybackUrl"
-    | "originalExternalPreviewUrl"
-    | "originalPlaybackUrl"
-    | "originalPreviewUrl"
-  >,
-) => getWorkspaceSegmentStillPreviewUrls(segment)[0] ?? null;
-
-const hasWorkspaceSegmentOriginalVisualReference = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    segment.originalAsset ||
-      segment.originalPlaybackUrl ||
-      segment.originalPreviewUrl ||
-      segment.originalExternalPlaybackUrl ||
-      segment.originalExternalPreviewUrl,
-  );
-
-const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  Boolean(
-    segment.currentAsset ||
-      segment.originalAsset ||
-      segment.currentPlaybackUrl ||
-      segment.currentPosterUrl ||
-      segment.currentPreviewUrl ||
-      segment.currentExternalPlaybackUrl ||
-      segment.currentExternalPreviewUrl ||
-      segment.originalPlaybackUrl ||
-      segment.originalPosterUrl ||
-      segment.originalPreviewUrl ||
-      segment.originalExternalPlaybackUrl ||
-      segment.originalExternalPreviewUrl,
-  );
-
-export const resolveWorkspaceSegmentEditorMediaUploadScope = (
-  session: Pick<WorkspaceSegmentEditorDraftSession, "projectId">,
-  segment: WorkspaceSegmentEditorDraftSegment,
-  options?: {
-    allowStructureChange?: boolean;
-    persistedSegmentIndexes?: readonly number[];
-  },
-): WorkspaceSegmentEditorMediaUploadScope => {
-  const shouldScopeToProjectSegment =
-    !options?.allowStructureChange ||
-    (options.persistedSegmentIndexes
-      ? options.persistedSegmentIndexes.includes(segment.index)
-      : hasWorkspaceSegmentPersistedMediaReference(segment));
-
-  return shouldScopeToProjectSegment
-    ? {
-        projectId: session.projectId,
-        segmentIndex: segment.index,
-      }
-    : {};
-};
-
-export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
-  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) =>
-  Boolean(
-    segment &&
-      !normalizeWorkspaceSegmentEditorTextForCompare(segment.text) &&
-      !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
-      !segment.photoAnimationSourceAsset &&
-      !segment.sceneSoundAsset &&
-      !segment.currentAsset &&
-      !segment.currentPlaybackUrl &&
-      !segment.currentPreviewUrl &&
-      !segment.currentPosterUrl &&
-      !segment.currentExternalPlaybackUrl &&
-      !segment.currentExternalPreviewUrl &&
-      !segment.originalAsset &&
-      !segment.originalPlaybackUrl &&
-      !segment.originalPreviewUrl &&
-      !segment.originalPosterUrl &&
-      !segment.originalExternalPlaybackUrl &&
-      !segment.originalExternalPreviewUrl,
-  );
-
-const getWorkspaceSegmentOriginalMediaType = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentMediaType => {
-  if (isWorkspacePhotoMediaAsset(segment.originalAsset)) {
-    return "photo";
-  }
-
-  if (isWorkspaceVideoMediaAsset(segment.originalAsset)) {
-    return "video";
-  }
-
-  if (filterWorkspaceStillAssetUrls([
-    segment.originalExternalPreviewUrl,
-    segment.originalExternalPlaybackUrl,
-    segment.originalPreviewUrl,
-    segment.originalPlaybackUrl,
-  ]).length > 0) {
-    return "photo";
-  }
-
-  return segment.mediaType;
-};
-
-const isWorkspaceSegmentOriginalProxyUrl = (value: string | null | undefined) => {
-  const normalized = String(value ?? "").trim();
-  return normalized.includes("/api/workspace/project-segment-video") && normalized.includes("source=original");
-};
-
-const isWorkspaceMediaAssetProxyUrl = (value: string | null | undefined) =>
-  /\/api\/workspace\/media-assets\/\d+(?:[/?#]|$)/i.test(String(value ?? "").trim());
-
-const hasWorkspaceSegmentMediaAssetCurrentVisualUrl = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  [
-    segment.currentPlaybackUrl,
-    segment.currentPreviewUrl,
-    segment.currentExternalPlaybackUrl,
-    segment.currentExternalPreviewUrl,
-  ].some(isWorkspaceMediaAssetProxyUrl);
-
-const isWorkspaceSegmentStaleUploadOriginalVisual = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  return (
-    segment.currentSourceKind === "upload" ||
-    segment.originalSourceKind === "upload" ||
-    segment.videoAction === "custom" ||
-    (segment.visualReset && hasWorkspaceSegmentMediaAssetCurrentVisualUrl(segment))
-  );
-};
-
-const shouldRewriteWorkspaceSegmentOriginalProxyOnReset = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  (segment.currentSourceKind === "upload" ||
-    segment.originalSourceKind === "upload" ||
-    (segment.visualReset && hasWorkspaceSegmentMediaAssetCurrentVisualUrl(segment))) &&
-  !hasWorkspaceSegmentOriginalVisualReference(segment);
-
-const isWorkspaceSegmentVisualResetApplied = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (!segment.visualReset) {
-    return false;
-  }
-
-  if (
-    segment.videoAction !== "original" ||
-    segment.customVideo ||
-    segment.aiPhotoAsset ||
-    segment.aiVideoAsset ||
-    segment.imageEditAsset ||
-    segment.photoAnimationSourceAsset
-  ) {
-    return false;
-  }
-
-  const currentAssetIdentity = getWorkspaceMediaAssetIdentityKey(segment.currentAsset);
-  const originalAssetIdentity = getWorkspaceMediaAssetIdentityKey(segment.originalAsset);
-  if (currentAssetIdentity || originalAssetIdentity) {
-    return Boolean(currentAssetIdentity && originalAssetIdentity && currentAssetIdentity === originalAssetIdentity);
-  }
-
-  const currentUrlIdentity =
-    segment.currentPlaybackUrl ??
-    segment.currentPreviewUrl ??
-    segment.currentExternalPlaybackUrl ??
-    segment.currentExternalPreviewUrl ??
-    null;
-  const originalUrlIdentity =
-    segment.originalPlaybackUrl ??
-    segment.originalPreviewUrl ??
-    segment.originalExternalPlaybackUrl ??
-    segment.originalExternalPreviewUrl ??
-    null;
-
-  if (!currentUrlIdentity) {
-    return true;
-  }
-
-  if (!originalUrlIdentity) {
-    return false;
-  }
-
-  return (
-    currentUrlIdentity === originalUrlIdentity ||
-    (isWorkspaceSegmentOriginalProxyUrl(currentUrlIdentity) && isWorkspaceSegmentOriginalProxyUrl(originalUrlIdentity))
-  );
-};
-
-const clearWorkspaceSegmentCurrentVisualReference = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentEditorDraftSegment => ({
-  ...segment,
-  currentAsset: null,
-  currentExternalPlaybackUrl: null,
-  currentExternalPreviewUrl: null,
-  currentPlaybackUrl: null,
-  currentPosterUrl: null,
-  currentPreviewUrl: null,
-  currentSourceKind: "unknown",
-});
-
-const buildWorkspaceSegmentOriginalProxyUrl = (
-  projectId: number,
-  segmentIndex: number,
-  delivery: "playback" | "preview",
-) => {
-  const params = new URLSearchParams({
-    delivery,
-    projectId: String(projectId),
-    segmentIndex: String(segmentIndex),
-    source: "original",
-  });
-  return `/api/workspace/project-segment-video?${params.toString()}`;
-};
-
-const buildWorkspaceProjectMusicAudioProxyUrl = (
-  projectId: number | null | undefined,
-  version?: string | number | null,
-) => {
-  const normalizedProjectId = Number(projectId);
-  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    projectId: String(normalizedProjectId),
-  });
-  const normalizedVersion = String(version ?? "").trim();
-  if (normalizedVersion) {
-    params.set("v", normalizedVersion);
-  }
-
-  return `/api/workspace/project-music-audio?${params.toString()}`;
-};
-
-const buildWorkspaceSegmentVoiceoverAudioProxyUrl = (
-  projectId: number | null | undefined,
-  segmentIndex: number | null | undefined,
-  version?: string | number | null,
-) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId <= 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    projectId: String(normalizedProjectId),
-    segmentIndex: String(normalizedSegmentIndex),
-  });
-  const normalizedVersion = String(version ?? "").trim();
-  if (normalizedVersion) {
-    params.set("v", normalizedVersion);
-  }
-
-  return `/api/workspace/project-segment-voiceover?${params.toString()}`;
-};
-
-type WorkspaceSegmentVoiceoverAudioPreviewSource = {
-  audioUrl: string | null;
-  latestSceneVoiceoverAudioUrl: string | null;
-  previewRange: { endTime: number; startTime: number } | null;
-  projectVoiceoverAudioUrl: string | null;
-  segmentVoiceoverAudioUrl: string | null;
-  shouldClip: boolean;
-  sourceKind: "project" | "scene" | "segment" | null;
-  version: string;
-};
-
-export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
-  isVoiceAudioStale?: boolean;
-  preferSegmentProxy?: boolean;
-  segment: WorkspaceSegmentEditorDraftSegment;
-  session: WorkspaceSegmentEditorDraftSession;
-  voiceEnabled: boolean;
-  voiceOption: StudioVoiceOption | null | undefined;
-}): WorkspaceSegmentVoiceoverAudioPreviewSource => {
-  const { isVoiceAudioStale = false, preferSegmentProxy = false, segment, session, voiceEnabled, voiceOption } = options;
-  const latestSceneVoiceoverAudioUrl = isWorkspaceSegmentProjectVoiceoverAsset(segment, session)
-    ? null
-    : getStudioSceneSoundAssetPreviewUrl(segment.voiceoverAsset);
-  const version = [
-    segment.voiceoverAsset?.assetId ?? "",
-    segment.voiceoverTextHash ?? "",
-    segment.voiceoverVoiceType ?? "",
-    segment.voiceoverLanguage ?? "",
-    session.ttsAssetId ?? "",
-    segment.startTime,
-    segment.endTime,
-    segment.speechStartTime ?? "",
-    segment.speechEndTime ?? "",
-    normalizeWorkspaceSegmentEditorTextForCompare(segment.text),
-    voiceOption?.id ?? "",
-  ].join(":");
-  const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
-  const projectVoiceoverAudioUrl =
-    voiceEnabled && voiceOption && session.ttsAssetId && previewRange
-      ? `${buildWorkspaceMediaAssetProxyUrl(session.ttsAssetId)}?v=${encodeURIComponent(version)}`
-      : null;
-  const segmentVoiceoverAudioUrl =
-    voiceEnabled && voiceOption
-      ? buildWorkspaceSegmentVoiceoverAudioProxyUrl(session.projectId, segment.index, version)
-      : null;
-  const audioUrl =
-    latestSceneVoiceoverAudioUrl ??
-    (!isVoiceAudioStale
-      ? preferSegmentProxy
-        ? segmentVoiceoverAudioUrl ?? projectVoiceoverAudioUrl
-        : projectVoiceoverAudioUrl
-      : null) ??
-    segmentVoiceoverAudioUrl ??
-    projectVoiceoverAudioUrl;
-  const sourceKind =
-    audioUrl === null
-      ? null
-      : audioUrl === latestSceneVoiceoverAudioUrl
-        ? "scene"
-        : audioUrl === projectVoiceoverAudioUrl
-          ? "project"
-          : "segment";
-
-  return {
-    audioUrl,
-    latestSceneVoiceoverAudioUrl,
-    previewRange,
-    projectVoiceoverAudioUrl,
-    segmentVoiceoverAudioUrl,
-    shouldClip: audioUrl !== null && audioUrl === projectVoiceoverAudioUrl,
-    sourceKind,
-    version,
-  };
-};
-
-const rewriteWorkspaceSegmentProjectProxyUrl = (value: string | null | undefined, projectId: number) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized || !normalized.includes("/api/workspace/project-segment-video")) {
-    return value ?? null;
-  }
-
-  try {
-    const url = new URL(normalized, window.location.origin);
-    url.searchParams.set("projectId", String(projectId));
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return normalized.replace(/([?&]projectId=)[^&#]*/i, `$1${projectId}`);
-  }
-};
-
-const ensureWorkspaceSegmentOriginalProxyReference = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  projectId: number | null | undefined,
-  options?: { force?: boolean },
-): WorkspaceSegmentEditorDraftSegment => {
-  const normalizedProjectId = Number(projectId);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId <= 0 ||
-    (!options?.force && (segment.originalPlaybackUrl || segment.originalPreviewUrl))
-  ) {
-    return segment;
-  }
-
-  return {
-    ...segment,
-    originalAsset: options?.force ? null : segment.originalAsset,
-    originalExternalPlaybackUrl: options?.force ? null : segment.originalExternalPlaybackUrl,
-    originalExternalPreviewUrl: options?.force ? null : segment.originalExternalPreviewUrl,
-    originalPlaybackUrl: buildWorkspaceSegmentOriginalProxyUrl(normalizedProjectId, segment.index, "playback"),
-    originalPosterUrl: options?.force ? null : segment.originalPosterUrl,
-    originalPreviewUrl: buildWorkspaceSegmentOriginalProxyUrl(normalizedProjectId, segment.index, "preview"),
-    originalSourceKind: options?.force || segment.originalSourceKind === "upload" ? "unknown" : segment.originalSourceKind,
-  };
-};
-
-export const resetWorkspaceSegmentDraftVisualToOriginal = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  projectId?: number | null,
-): WorkspaceSegmentEditorDraftSegment => {
-  const shouldRewriteOriginalProxy = shouldRewriteWorkspaceSegmentOriginalProxyOnReset(segment);
-  const sourceSegment = shouldRewriteOriginalProxy
-    ? ensureWorkspaceSegmentOriginalProxyReference(segment, projectId, { force: true })
-    : segment;
-  const resetSegment: WorkspaceSegmentEditorDraftSegment = {
-    ...sourceSegment,
-    aiPhotoAsset: null,
-    aiPhotoGeneratedFromPrompt: null,
-    aiPhotoPrompt: "",
-    aiPhotoPromptInitialized: false,
-    aiVideoAsset: null,
-    aiVideoGeneratedMode: null,
-    aiVideoGeneratedFromPrompt: null,
-    aiVideoPrompt: "",
-    aiVideoPromptInitialized: false,
-    customVideo: null,
-    imageEditAsset: null,
-    imageEditGeneratedFromPrompt: null,
-    imageEditPrompt: "",
-    imageEditPromptInitialized: false,
-    photoAnimationSourceAsset: null,
-    videoAction: "original",
-    visualReset: true,
-  };
-
-  if (!hasWorkspaceSegmentOriginalVisualReference(sourceSegment)) {
-    return clearWorkspaceSegmentCurrentVisualReference(resetSegment);
-  }
-
-  if (shouldRewriteOriginalProxy) {
-    const correctedOriginalSegment: WorkspaceSegmentEditorDraftSegment = {
-      ...sourceSegment,
-      originalAsset: null,
-      originalExternalPlaybackUrl: null,
-      originalExternalPreviewUrl: null,
-      originalPosterUrl: null,
-      originalSourceKind: "unknown",
-    };
-
-    if (!sourceSegment.originalPlaybackUrl && !sourceSegment.originalPreviewUrl) {
-      return clearWorkspaceSegmentCurrentVisualReference({
-        ...resetSegment,
-        originalAsset: correctedOriginalSegment.originalAsset,
-        originalExternalPlaybackUrl: correctedOriginalSegment.originalExternalPlaybackUrl,
-        originalExternalPreviewUrl: correctedOriginalSegment.originalExternalPreviewUrl,
-        originalPosterUrl: correctedOriginalSegment.originalPosterUrl,
-        originalSourceKind: correctedOriginalSegment.originalSourceKind,
-      });
-    }
-
-    return {
-      ...resetSegment,
-      currentAsset: null,
-      currentExternalPlaybackUrl: null,
-      currentExternalPreviewUrl: null,
-      currentPlaybackUrl: sourceSegment.originalPlaybackUrl,
-      currentPosterUrl: sourceSegment.originalPosterUrl,
-      currentPreviewUrl: sourceSegment.originalPreviewUrl,
-      currentSourceKind: "unknown",
-      mediaType: getWorkspaceSegmentOriginalMediaType(correctedOriginalSegment),
-      originalAsset: correctedOriginalSegment.originalAsset,
-      originalExternalPlaybackUrl: correctedOriginalSegment.originalExternalPlaybackUrl,
-      originalExternalPreviewUrl: correctedOriginalSegment.originalExternalPreviewUrl,
-      originalSourceKind: correctedOriginalSegment.originalSourceKind,
-    };
-  }
-
-  return {
-    ...resetSegment,
-    currentAsset: cloneWorkspaceMediaAssetRef(sourceSegment.originalAsset),
-    currentExternalPlaybackUrl: sourceSegment.originalExternalPlaybackUrl,
-    currentExternalPreviewUrl: sourceSegment.originalExternalPreviewUrl,
-    currentPlaybackUrl: sourceSegment.originalPlaybackUrl,
-    currentPosterUrl: sourceSegment.originalPosterUrl,
-    currentPreviewUrl: sourceSegment.originalPreviewUrl,
-    currentSourceKind: sourceSegment.originalSourceKind,
-    mediaType: getWorkspaceSegmentOriginalMediaType(sourceSegment),
-  };
-};
-
-const restoreWorkspaceSegmentDraftVisualFromBaseline = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentEditorDraftSegment => ({
-  ...segment,
-  aiPhotoAsset: cloneStudioCustomVideoFile(baselineSegment.aiPhotoAsset),
-  aiPhotoGeneratedFromPrompt: baselineSegment.aiPhotoGeneratedFromPrompt,
-  aiPhotoPrompt: baselineSegment.aiPhotoPrompt,
-  aiPhotoPromptInitialized: baselineSegment.aiPhotoPromptInitialized,
-  aiVideoAsset: cloneStudioCustomVideoFile(baselineSegment.aiVideoAsset),
-  aiVideoGeneratedMode: baselineSegment.aiVideoGeneratedMode,
-  aiVideoGeneratedFromPrompt: baselineSegment.aiVideoGeneratedFromPrompt,
-  aiVideoPrompt: baselineSegment.aiVideoPrompt,
-  aiVideoPromptInitialized: baselineSegment.aiVideoPromptInitialized,
-  currentAsset: cloneWorkspaceMediaAssetRef(baselineSegment.currentAsset),
-  currentExternalPlaybackUrl: baselineSegment.currentExternalPlaybackUrl,
-  currentExternalPreviewUrl: baselineSegment.currentExternalPreviewUrl,
-  currentPlaybackUrl: baselineSegment.currentPlaybackUrl,
-  currentPosterUrl: baselineSegment.currentPosterUrl,
-  currentPreviewUrl: baselineSegment.currentPreviewUrl,
-  currentSourceKind: baselineSegment.currentSourceKind,
-  customVideo: cloneStudioCustomVideoFile(baselineSegment.customVideo),
-  durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(baselineSegment),
-  imageEditAsset: cloneStudioCustomVideoFile(baselineSegment.imageEditAsset),
-  imageEditGeneratedFromPrompt: baselineSegment.imageEditGeneratedFromPrompt,
-  imageEditPrompt: baselineSegment.imageEditPrompt,
-  imageEditPromptInitialized: baselineSegment.imageEditPromptInitialized,
-  mediaType: baselineSegment.mediaType,
-  originalAsset: cloneWorkspaceMediaAssetRef(baselineSegment.originalAsset),
-  originalExternalPlaybackUrl: baselineSegment.originalExternalPlaybackUrl,
-  originalExternalPreviewUrl: baselineSegment.originalExternalPreviewUrl,
-  originalPlaybackUrl: baselineSegment.originalPlaybackUrl,
-  originalPosterUrl: baselineSegment.originalPosterUrl,
-  originalPreviewUrl: baselineSegment.originalPreviewUrl,
-  originalSourceKind: baselineSegment.originalSourceKind,
-  photoAnimationSourceAsset: cloneStudioCustomVideoFile(baselineSegment.photoAnimationSourceAsset),
-  sceneSoundAsset: cloneStudioCustomVideoFile(baselineSegment.sceneSoundAsset),
-  sceneSoundGeneratedFromPrompt: baselineSegment.sceneSoundGeneratedFromPrompt,
-  sceneSoundPrompt: baselineSegment.sceneSoundPrompt,
-  sceneSoundPromptInitialized: baselineSegment.sceneSoundPromptInitialized,
-  voiceoverAsset: cloneStudioCustomVideoFile(baselineSegment.voiceoverAsset),
-  voiceoverLanguage: baselineSegment.voiceoverLanguage,
-  voiceoverTextHash: baselineSegment.voiceoverTextHash,
-  voiceoverVoiceType: baselineSegment.voiceoverVoiceType,
-  videoAction: baselineSegment.videoAction,
-  voiceType: getWorkspaceSegmentVoiceOverrideId(baselineSegment),
-  visualReset: Boolean(baselineSegment.visualReset),
-});
-
-const normalizeWorkspaceSegmentEditorSetting = (value: unknown) => {
-  const normalized = typeof value === "string" ? value.trim() : "";
-  return normalized || undefined;
-};
-
-const normalizeWorkspaceSegmentEditorSegmentUrls = <
-  T extends {
-    currentExternalPlaybackUrl?: string | null;
-    currentExternalPreviewUrl?: string | null;
-    currentPlaybackUrl?: string | null;
-    currentPosterUrl?: string | null;
-    currentPreviewUrl?: string | null;
-    currentVideoUrl?: string | null;
-    currentSourceKind?: WorkspaceSegmentSourceKind | string | null;
-    originalExternalPlaybackUrl?: string | null;
-    originalExternalPreviewUrl?: string | null;
-    originalPlaybackUrl?: string | null;
-    originalPosterUrl?: string | null;
-    originalPreviewUrl?: string | null;
-    originalVideoUrl?: string | null;
-    originalSourceKind?: WorkspaceSegmentSourceKind | string | null;
-  },
->(
-  segment: T,
-) => ({
-  ...segment,
-  currentExternalPlaybackUrl: normalizeWorkspaceSegmentMediaAssetProxyUrl(segment.currentExternalPlaybackUrl),
-  currentExternalPreviewUrl: normalizeWorkspaceSegmentMediaAssetProxyUrl(segment.currentExternalPreviewUrl),
-  currentPlaybackUrl: normalizeWorkspaceSegmentEditorUrl(
-    segment.currentPlaybackUrl ?? segment.currentPreviewUrl ?? segment.currentVideoUrl,
-  ),
-  currentPosterUrl: normalizeWorkspaceSegmentEditorUrl(segment.currentPosterUrl),
-  currentPreviewUrl: normalizeWorkspaceSegmentEditorUrl(
-    segment.currentPreviewUrl ?? segment.currentPlaybackUrl ?? segment.currentVideoUrl,
-  ),
-  currentSourceKind: normalizeWorkspaceSegmentSourceKind(segment.currentSourceKind),
-  originalExternalPlaybackUrl: normalizeWorkspaceSegmentMediaAssetProxyUrl(segment.originalExternalPlaybackUrl),
-  originalExternalPreviewUrl: normalizeWorkspaceSegmentMediaAssetProxyUrl(segment.originalExternalPreviewUrl),
-  originalPlaybackUrl: normalizeWorkspaceSegmentEditorUrl(
-    segment.originalPlaybackUrl ?? segment.originalPreviewUrl ?? segment.originalVideoUrl,
-  ),
-  originalPosterUrl: normalizeWorkspaceSegmentEditorUrl(segment.originalPosterUrl),
-  originalPreviewUrl: normalizeWorkspaceSegmentEditorUrl(
-    segment.originalPreviewUrl ?? segment.originalPlaybackUrl ?? segment.originalVideoUrl,
-  ),
-  originalSourceKind: normalizeWorkspaceSegmentSourceKind(segment.originalSourceKind),
-});
-
-const cloneWorkspaceSegmentEditorDraftSession = (
-  session: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => {
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
-
-  return {
-    ...sanitizeWorkspaceSegmentEditorCustomMusicState(session, {
-      allowEphemeralCustomMusic: true,
-    }),
-    segments: session.segments.map((segment) => cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage)),
-  };
-};
-
-const shouldPreferEstimatedDurationForDraftSegment = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const hasSpeechTiming =
-    (typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0) ||
-    (typeof segment.speechStartTime === "number" && Number.isFinite(segment.speechStartTime)) ||
-    (typeof segment.speechEndTime === "number" && Number.isFinite(segment.speechEndTime)) ||
-    segment.speechWords.length > 0;
-  if (hasSpeechTiming) {
-    return false;
-  }
-
-  if (hasWorkspaceSegmentPersistedMediaReference(segment)) {
-    return false;
-  }
-
-  return getWorkspaceSegmentPreviewKind(segment) === "image";
-};
-
-const getWorkspaceSegmentEffectiveVoiceEnabled = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
-    return false;
-  }
-
-  const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
-  if (voiceOverrideId === "none") {
-    return false;
-  }
-
-  return normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none" || Boolean(voiceOverrideId);
-};
-
-const getWorkspaceSegmentEffectiveVoiceId = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (!getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
-    return null;
-  }
-
-  return getWorkspaceSegmentVoiceOverrideId(segment) ?? normalizeWorkspaceSegmentEditorSetting(session?.voiceType) ?? null;
-};
-
-const isWorkspaceSegmentVoiceoverAssetFresh = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType" | "language"> | null,
-) => {
-  if (!segment.voiceoverAsset) {
-    return false;
-  }
-
-  const sessionLanguage = normalizeStudioLanguageValue(session?.language);
-  const assetLanguage = normalizeStudioLanguageValue(segment.voiceoverLanguage);
-  const language = sessionLanguage ?? assetLanguage ?? "ru";
-  const voiceType = getWorkspaceSegmentEffectiveVoiceId(segment, session);
-  if (!voiceType) {
-    return false;
-  }
-
-  return (
-    segment.voiceoverTextHash === getWorkspaceSegmentVoiceoverTextHash(segment.text) &&
-    normalizeWorkspaceSegmentEditorSetting(segment.voiceoverVoiceType) === normalizeWorkspaceSegmentEditorSetting(voiceType) &&
-    (assetLanguage ?? language) === language
-  );
-};
-
-const getStudioCustomVideoFileDurationSeconds = (asset: StudioCustomVideoFile | null | undefined) =>
-  normalizeWorkspaceSegmentManualDurationSeconds(asset?.durationSeconds);
-
-const isWorkspaceSegmentProjectVoiceoverAsset = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
-) => {
-  const assetId = getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset);
-  const ttsAssetId = getPositiveWorkspaceMediaAssetId(session?.ttsAssetId);
-  return assetId !== null && ttsAssetId !== null && assetId === ttsAssetId;
-};
-
-const getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds = (
-  segment:
-    | Pick<
-        WorkspaceSegmentEditorDraftSegment,
-        "durationExtensionSourceDurationSeconds" | "duration_extension_source_duration_seconds"
-      >
-    | null
-    | undefined,
-) =>
-  normalizeWorkspaceSegmentManualDurationSeconds(
-    segment?.durationExtensionSourceDurationSeconds ?? segment?.duration_extension_source_duration_seconds,
-  );
-
-const getWorkspaceSegmentCanonicalSlotDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-  if (manualDuration !== null) {
-    return manualDuration;
-  }
-
-  const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
-  const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - startTime;
-  const normalizedTimelineDuration = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
-  if (normalizedTimelineDuration !== null) {
-    return normalizedTimelineDuration;
-  }
-
-  return normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
-};
-
-const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
-    return (
-      getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) ??
-      getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment))
-    );
-  }
-
-  const visualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
-  const visualAssetDuration = getStudioCustomVideoFileDurationSeconds(visualAsset);
-  if (visualAssetDuration !== null) {
-    return visualAssetDuration;
-  }
-
-  return getWorkspaceSegmentPreviewKind(segment) === "video"
-    ? normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
-    : null;
-};
-
-export const getWorkspaceSegmentVideoVisualDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  options?: {
-    baselineSegment?: WorkspaceSegmentEditorDraftSegment | null;
-    measuredVisualDurationSeconds?: number | null;
-    session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null;
-  },
-): number | null => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-    return null;
-  }
-
-  const measuredVisualDuration = normalizeWorkspaceSegmentManualDurationSeconds(options?.measuredVisualDurationSeconds);
-  if (measuredVisualDuration !== null) {
-    return roundWorkspaceSegmentTimelineSeconds(measuredVisualDuration);
-  }
-
-  const directVisualDuration =
-    getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  if (directVisualDuration !== null) {
-    return roundWorkspaceSegmentTimelineSeconds(directVisualDuration);
-  }
-
-  const baselineSegment = options?.baselineSegment;
-  const currentVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
-  const baselineVisualIdentity = baselineSegment ? getWorkspaceSegmentCurrentVisualIdentityKey(baselineSegment) : null;
-  if (
-    baselineSegment &&
-    getWorkspaceSegmentSelectedVisualPreviewKind(baselineSegment) === "video" &&
-    currentVisualIdentity &&
-    baselineVisualIdentity &&
-    currentVisualIdentity === baselineVisualIdentity
-  ) {
-    const baselineVisualDuration =
-      getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(baselineSegment)) ??
-      getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(baselineSegment);
-    if (baselineVisualDuration !== null) {
-      return roundWorkspaceSegmentTimelineSeconds(baselineVisualDuration);
-    }
-  }
-
-  return null;
-};
-
-const getWorkspaceSegmentBaselineDurationExtensionSourceDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-) =>
-  getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-  getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ??
-  getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
-  getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) ??
-  normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
-
-type WorkspaceSegmentDurationExtensionSourceOptions = {
-  sourceDurationSeconds?: number | null;
-};
-
-export const getWorkspaceSegmentDurationExtensionPlan = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
-  options?: WorkspaceSegmentDurationExtensionSourceOptions,
-) => {
-  const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
-  if (slotDurationSeconds === null) {
-    return null;
-  }
-
-  const draftVisualAssetDurationSeconds = getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment));
-  const storedDurationExtensionSourceDurationSeconds =
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-  const usableStoredDurationExtensionSourceDurationSeconds =
-    storedDurationExtensionSourceDurationSeconds !== null &&
-    (storedDurationExtensionSourceDurationSeconds < slotDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS ||
-      latestVisualAction === "photo_animation")
-      ? storedDurationExtensionSourceDurationSeconds
-      : null;
-  const baselineVisualDurationSeconds = baselineSegment
-    ? getWorkspaceSegmentBaselineDurationExtensionSourceDurationSeconds(baselineSegment)
-    : null;
-  const explicitSourceDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.sourceDurationSeconds);
-  const sourceDurationSeconds =
-    explicitSourceDurationSeconds ??
-    draftVisualAssetDurationSeconds ??
-    usableStoredDurationExtensionSourceDurationSeconds ??
-    baselineVisualDurationSeconds;
-  if (sourceDurationSeconds === null || slotDurationSeconds <= sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS) {
-    return null;
-  }
-
-  return {
-    canRequestAiExtension: Boolean(getWorkspaceSegmentDurationExtensionStillSourceAsset(segment)),
-    extraDurationSeconds: roundWorkspaceSegmentTimelineSeconds(slotDurationSeconds - sourceDurationSeconds),
-    mode: "cinematic_hold" as const,
-    slotDurationSeconds: roundWorkspaceSegmentTimelineSeconds(slotDurationSeconds),
-    sourceDurationSeconds: roundWorkspaceSegmentTimelineSeconds(sourceDurationSeconds),
-  };
-};
-
-const getWorkspaceSegmentDurationExtensionSourceDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
-  options?: WorkspaceSegmentDurationExtensionSourceOptions,
-) => {
-  const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
-  const storedDurationExtensionSourceDurationSeconds =
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-  const usableStoredDurationExtensionSourceDurationSeconds =
-    storedDurationExtensionSourceDurationSeconds !== null &&
-    (slotDurationSeconds === null ||
-      storedDurationExtensionSourceDurationSeconds < slotDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS ||
-      latestVisualAction === "photo_animation")
-      ? storedDurationExtensionSourceDurationSeconds
-      : null;
-  const explicitSourceDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.sourceDurationSeconds);
-
-  return (
-    explicitSourceDurationSeconds ??
-    getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    usableStoredDurationExtensionSourceDurationSeconds ??
-    (baselineSegment ? getWorkspaceSegmentBaselineDurationExtensionSourceDurationSeconds(baselineSegment) : null) ??
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
-  );
-};
-
-export const resolveWorkspaceSegmentAiDurationExtensionTargetSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
-  currentSlotDurationSeconds?: number | null,
-  options?: {
-    extensionStepSeconds?: number | null;
-    sourceDurationSeconds?: number | null;
-  },
-) => {
-  const sourceDurationSeconds = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(segment, baselineSegment, {
-    sourceDurationSeconds: options?.sourceDurationSeconds,
-  });
-  const currentSlotDuration =
-    normalizeWorkspaceSegmentManualDurationSeconds(currentSlotDurationSeconds) ??
-    getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
-  const extensionStepSeconds =
-    normalizeWorkspaceSegmentManualDurationSeconds(options?.extensionStepSeconds) ??
-    WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS;
-
-  if (
-    sourceDurationSeconds !== null &&
-    currentSlotDuration !== null &&
-    currentSlotDuration > sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
-  ) {
-    return clampWorkspaceSegmentEditorVisualDurationSeconds(currentSlotDuration);
-  }
-
-  const baseDurationSeconds = sourceDurationSeconds ?? currentSlotDuration;
-  if (baseDurationSeconds === null) {
-    return null;
-  }
-
-  return clampWorkspaceSegmentEditorVisualDurationSeconds(baseDurationSeconds + extensionStepSeconds);
-};
-
-export const resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-  targetDurationSeconds: number | null | undefined,
-  options?: {
-    sourceDurationSeconds?: number | null;
-    trimToVoiceover?: boolean;
-    voiceoverDurationSeconds?: number | null;
-  },
-) => {
-  const normalizedTargetDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(targetDurationSeconds);
-  if (normalizedTargetDurationSeconds === null) {
-    return null;
-  }
-
-  const voiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceoverDurationSeconds);
-  if (!options?.trimToVoiceover || voiceoverDurationSeconds === null) {
-    return clampWorkspaceSegmentEditorVisualDurationSeconds(normalizedTargetDurationSeconds);
-  }
-
-  const sourceDurationSeconds = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(segment, baselineSegment, {
-    sourceDurationSeconds: options?.sourceDurationSeconds,
-  });
-  if (
-    sourceDurationSeconds === null ||
-    voiceoverDurationSeconds <= sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
-  ) {
-    return clampWorkspaceSegmentEditorVisualDurationSeconds(normalizedTargetDurationSeconds);
-  }
-
-  return clampWorkspaceSegmentEditorVisualDurationSeconds(
-    Math.min(normalizedTargetDurationSeconds, voiceoverDurationSeconds),
-  );
-};
-
-export const shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-  targetDurationSeconds: number | null | undefined,
-  voiceoverDurationSeconds: number | null | undefined,
-  options?: WorkspaceSegmentDurationExtensionSourceOptions,
-) => {
-  const normalizedTargetDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(targetDurationSeconds);
-  const normalizedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
-  if (normalizedTargetDurationSeconds === null || normalizedVoiceoverDurationSeconds === null) {
-    return false;
-  }
-
-  const sourceDurationSeconds = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(segment, baselineSegment, options);
-  if (sourceDurationSeconds === null) {
-    return false;
-  }
-
-  return (
-    normalizedVoiceoverDurationSeconds > sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS &&
-    normalizedVoiceoverDurationSeconds < normalizedTargetDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
-  );
-};
-
-const resolveWorkspaceSegmentDurationExtensionSourceDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  nextSlotDurationSeconds: number,
-  baselineSegment?: WorkspaceSegmentEditorDraftSegment | null,
-  options?: WorkspaceSegmentDurationExtensionSourceOptions,
-) => {
-  const sourceDurationSeconds = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(segment, baselineSegment, options);
-  if (
-    sourceDurationSeconds === null ||
-    nextSlotDurationSeconds <= sourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
-  ) {
-    return null;
-  }
-
-  return roundWorkspaceSegmentTimelineSeconds(sourceDurationSeconds);
-};
-
-const syncWorkspaceSegmentEmbeddedVisualDuration = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentEditorDraftSegment => {
-  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
-    return segment;
-  }
-
-  const visualDuration = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
-  if (visualDuration === null) {
-    return segment;
-  }
-
-  if (
-    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
-    areWorkspaceSegmentDurationValuesEqual(
-      normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-      visualDuration,
-    )
-  ) {
-    return segment;
-  }
-
-  return {
-    ...segment,
-    durationMode: "manual",
-    manualDurationSeconds: visualDuration,
-  };
-};
-
-const syncWorkspaceSegmentsEmbeddedVisualDurations = (
-  segments: WorkspaceSegmentEditorDraftSegment[],
-): WorkspaceSegmentEditorDraftSegment[] => {
-  let hasChanges = false;
-  const nextSegments = segments.map((segment) => {
-    const nextSegment = syncWorkspaceSegmentEmbeddedVisualDuration(segment);
-    if (nextSegment !== segment) {
-      hasChanges = true;
-    }
-    return nextSegment;
-  });
-
-  return hasChanges ? nextSegments : segments;
-};
-
-const getWorkspaceSegmentManualDurationMinimum = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) =>
-  Math.max(
-    1,
-    getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
-      ? getWorkspaceSegmentEditorSpeechDuration(segment) ?? 1
-      : 1,
-  );
-
-const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
-) => {
-  const isProjectVoiceoverAsset = isWorkspaceSegmentProjectVoiceoverAsset(segment, session);
-  const playableAssetDuration = isProjectVoiceoverAsset
-    ? null
-    : getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
-  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
-  const speechWordsDuration =
-    speechWordsRange !== null ? Math.max(0, speechWordsRange.endTime - speechWordsRange.startTime) : null;
-  const hasStaleSpeechBoundary = hasWorkspaceSegmentStaleSpeechBoundary(segment);
-  const explicitSpeechDuration =
-    !hasStaleSpeechBoundary &&
-    typeof segment.speechDuration === "number" &&
-    Number.isFinite(segment.speechDuration) &&
-    segment.speechDuration > 0
-      ? segment.speechDuration
-      : null;
-  const speechDurationCandidates = [speechWordsDuration, explicitSpeechDuration].filter(
-    (value): value is number => value !== null,
-  );
-  const speechDuration =
-    speechDurationCandidates.length > 0
-      ? normalizeWorkspaceSegmentManualDurationSeconds(Math.max(...speechDurationCandidates))
-      : null;
-  if (speechDuration !== null) {
-    const rawSegmentDuration = Number(segment.duration ?? segment.manualDurationSeconds);
-    const segmentDuration =
-      Number.isFinite(rawSegmentDuration) && rawSegmentDuration > 0
-        ? rawSegmentDuration
-        : null;
-    const isProjectVoiceoverSceneDurationEcho =
-      segment.speechDurationSource !== "audio" &&
-      isProjectVoiceoverAsset &&
-      segmentDuration !== null &&
-      Math.abs(speechDuration - segmentDuration) < 0.04;
-    if (isProjectVoiceoverSceneDurationEcho) {
-      return playableAssetDuration;
-    }
-
-    return roundWorkspaceSegmentTimelineSeconds(Math.max(speechDuration, playableAssetDuration ?? speechDuration));
-  }
-
-  if (isProjectVoiceoverAsset) {
-    return null;
-  }
-
-  return playableAssetDuration;
-};
-
-const getWorkspaceSegmentSpeechTimelineDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-) => {
-  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
-  const speechStartTime = speechRange?.startTime ?? null;
-  const speechEndTime = speechRange?.endTime ?? null;
-  if (speechStartTime === null || speechEndTime === null || speechEndTime <= speechStartTime) {
-    return null;
-  }
-
-  const segmentStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.startTime);
-  const segmentEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.endTime);
-  const speechTimelineDuration = speechEndTime - speechStartTime;
-  if (segment.speechDurationSource === "audio") {
-    return roundWorkspaceSegmentTimelineSeconds(speechTimelineDuration);
-  }
-
-  const rawSegmentDuration = Number(segment.duration ?? segment.manualDurationSeconds);
-  const segmentDuration =
-    Number.isFinite(rawSegmentDuration) && rawSegmentDuration > 0
-      ? rawSegmentDuration
-      : segmentStartTime !== null && segmentEndTime !== null && segmentEndTime > segmentStartTime
-        ? segmentEndTime - segmentStartTime
-        : null;
-  const speechMatchesSegmentRange =
-    (segmentStartTime !== null &&
-      segmentEndTime !== null &&
-      Math.abs(speechStartTime - segmentStartTime) < 0.04 &&
-      Math.abs(speechEndTime - segmentEndTime) < 0.04) ||
-    (segmentDuration !== null &&
-      Math.abs(speechTimelineDuration - segmentDuration) < 0.04 &&
-      (segmentStartTime === null || Math.abs(speechStartTime - segmentStartTime) < 0.04));
-  if (speechMatchesSegmentRange) {
-    return null;
-  }
-
-  return roundWorkspaceSegmentTimelineSeconds(speechTimelineDuration);
-};
-
-export const getWorkspaceSegmentVoiceoverDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
-    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
-) =>
-  getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
-    ? getWorkspaceSegmentExplicitVoiceoverDurationSeconds(segment, session) ??
-      getWorkspaceSegmentSpeechTimelineDurationSeconds(segment)
-    : null;
-
-const getWorkspaceSegmentEstimatedVoiceoverDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) && !getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
-    return null;
-  }
-
-  if (!normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) {
-    return null;
-  }
-
-  return estimateWorkspaceSegmentEditorSpeechDuration(segment.text);
-};
-
-const getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) && !getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
-    return null;
-  }
-
-  const normalizedText = normalizeWorkspaceSegmentBulkSubtitleText(segment.text);
-  if (!normalizedText) {
-    return null;
-  }
-
-  const wordCount = splitWorkspaceSegmentBulkSubtitleWords(normalizedText).length;
-  const inlinePauseCount = normalizedText.match(/[,;:]/g)?.length ?? 0;
-  const sentencePauseCount = normalizedText.match(/[.!?…]+/g)?.length ?? 0;
-  return roundWorkspaceSegmentTimelineSeconds(
-    Math.max(1.8, wordCount * 0.3 + inlinePauseCount * 0.12 + sentencePauseCount * 0.18),
-  );
-};
-
-export const getWorkspaceSegmentTimelineVoiceoverDurationInfo = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
-    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
-  options?: {
-    allowEstimated?: boolean;
-    isStale?: boolean;
-  },
-) => {
-  const embeddedVoiceoverDurationSeconds = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)
-    ? getWorkspaceSegmentKnownVisualDurationSeconds(segment)
-    : null;
-  const knownDurationSeconds = options?.isStale
-    ? null
-    : normalizeWorkspaceSegmentManualDurationSeconds(
-        embeddedVoiceoverDurationSeconds ?? getWorkspaceSegmentVoiceoverDurationSeconds(segment, session),
-      );
-  if (knownDurationSeconds !== null) {
-    return {
-      durationSeconds: roundWorkspaceSegmentTimelineSeconds(knownDurationSeconds),
-      source: "actual" as const,
-    };
-  }
-
-  if (options?.allowEstimated === false) {
-    return null;
-  }
-
-  const estimatedDurationSeconds = getWorkspaceSegmentEstimatedVoiceoverDurationSeconds(segment, session);
-  if (estimatedDurationSeconds === null) {
-    return null;
-  }
-
-  return {
-    durationSeconds: estimatedDurationSeconds,
-    source: "estimated" as const,
-  };
-};
-
-const getWorkspaceSegmentTimelineVoiceoverDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session)?.durationSeconds ?? null;
-
-export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-  options?: {
-    allowEstimatedVoiceover?: boolean;
-    baselineSegment?: WorkspaceSegmentEditorDraftSegment | null;
-    fallbackVisualDurationSeconds?: number | null;
-    includeAnyVideoVisual?: boolean;
-    isVoiceoverStale?: boolean;
-    visualDurationSeconds?: number | null;
-  },
-) => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-    return null;
-  }
-
-  if (!options?.includeAnyVideoVisual && !isWorkspaceSegmentGeneratedVideoVisual(segment)) {
-    return null;
-  }
-
-  const visualDurationSeconds =
-    normalizeWorkspaceSegmentManualDurationSeconds(options?.visualDurationSeconds) ??
-    getWorkspaceSegmentVideoVisualDurationSeconds(segment, {
-      baselineSegment: options?.baselineSegment,
-      session,
-    }) ??
-    normalizeWorkspaceSegmentManualDurationSeconds(options?.fallbackVisualDurationSeconds);
-  const voiceoverDurationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
-    allowEstimated: options?.allowEstimatedVoiceover,
-    isStale: options?.isVoiceoverStale,
-  });
-  if (visualDurationSeconds === null || !voiceoverDurationInfo) {
-    return null;
-  }
-
-  if (voiceoverDurationInfo.durationSeconds <= visualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS) {
-    return null;
-  }
-
-  return {
-    visualDurationSeconds: roundWorkspaceSegmentTimelineSeconds(visualDurationSeconds),
-    voiceoverDurationSeconds: roundWorkspaceSegmentTimelineSeconds(voiceoverDurationInfo.durationSeconds),
-    voiceoverDurationSource: voiceoverDurationInfo.source,
-  };
-};
-
-export const resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null,
-  options?: {
-    baselineSegment?: WorkspaceSegmentEditorDraftSegment | null;
-    includeAnyVideoVisual?: boolean;
-    isGlobalVoiceEdited?: boolean;
-    isVoiceSpanEdited?: boolean;
-    visualDurationSeconds?: number | null;
-  },
-) => {
-  const isVoiceAudioStale =
-    !isWorkspaceSegmentVoiceoverAssetFresh(segment, session) &&
-    (Boolean(options?.isGlobalVoiceEdited) ||
-      Boolean(options?.isVoiceSpanEdited) ||
-      isWorkspaceSegmentDraftTextEdited(segment));
-
-  return getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, session, {
-    allowEstimatedVoiceover: true,
-    baselineSegment: options?.baselineSegment,
-    includeAnyVideoVisual: options?.includeAnyVideoVisual,
-    isVoiceoverStale: isVoiceAudioStale,
-    visualDurationSeconds: options?.visualDurationSeconds,
-  });
-};
-
-const getWorkspaceSegmentVideoVisualDurationSourceSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-    return null;
-  }
-
-  return (
-    getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ??
-    getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) ??
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
-  );
-};
-
-const clearWorkspaceSegmentVoiceoverTiming = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-): WorkspaceSegmentEditorDraftSegment => {
-  const videoVisualDurationSourceSeconds = getWorkspaceSegmentVideoVisualDurationSourceSeconds(segment);
-
-  return {
-    ...segment,
-    durationExtensionSourceDurationSeconds:
-      getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ?? videoVisualDurationSourceSeconds,
-    speechDuration: null,
-    speechDurationSource: null,
-    speechEndTime: null,
-    speechStartTime: null,
-    speechWords: [],
-  };
-};
-
-const normalizeWorkspaceSegmentVoicePreviewTime = (value: unknown) => {
-  if (value === null || typeof value === "undefined" || value === "") {
-    return null;
-  }
-
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
-};
-
-const getWorkspaceSegmentSpeechWordsRange = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
-  const firstSpeechWord = speechWords[0] ?? null;
-  const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
-  const startTime = normalizeWorkspaceSegmentVoicePreviewTime(firstSpeechWord?.startTime);
-  const endTime = normalizeWorkspaceSegmentVoicePreviewTime(lastSpeechWord?.endTime);
-  if (startTime === null || endTime === null || endTime <= startTime) {
-    return null;
-  }
-
-  return { endTime, startTime };
-};
-
-const hasWorkspaceSegmentStaleSpeechBoundary = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
-  const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime);
-  return (
-    speechWordsRange !== null &&
-    speechStartTime !== null &&
-    Math.abs(speechStartTime - speechWordsRange.startTime) > 0.35
-  );
-};
-
-const hasWorkspaceSegmentProjectVoiceoverTimingData = (
-  segment: Pick<
-    WorkspaceSegmentEditorSegment,
-    "speechDuration" | "speechEndTime" | "speechStartTime" | "speechWords"
-  >,
-) => {
-  const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
-  const firstSpeechWord = speechWords[0] ?? null;
-  const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
-  const speechWordsStartTime = normalizeWorkspaceSegmentVoicePreviewTime(firstSpeechWord?.startTime);
-  const speechWordsEndTime = normalizeWorkspaceSegmentVoicePreviewTime(lastSpeechWord?.endTime);
-  if (
-    speechWordsStartTime !== null &&
-    speechWordsEndTime !== null &&
-    speechWordsEndTime > speechWordsStartTime
-  ) {
-    return true;
-  }
-
-  if (normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration) !== null) {
-    return true;
-  }
-
-  const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime);
-  const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime);
-  return speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime;
-};
-
-export const getWorkspaceSegmentVoiceoverPreviewRange = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (!getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
-    return null;
-  }
-
-  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
-  const hasStaleSpeechBoundary = hasWorkspaceSegmentStaleSpeechBoundary(segment);
-  const speechStartTime =
-    speechRange?.startTime ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime) ??
-    normalizeWorkspaceSegmentVoicePreviewTime(segment.startTime) ??
-    0;
-  const rawSpeechDuration = Number(segment.speechDuration);
-  const speechDuration =
-    !hasStaleSpeechBoundary && Number.isFinite(rawSpeechDuration) && rawSpeechDuration > 0
-      ? rawSpeechDuration
-      : getWorkspaceSegmentVoiceoverDurationSeconds(segment, session);
-  const explicitSpeechEndTime =
-    speechDuration !== null && Number.isFinite(speechDuration)
-      ? speechStartTime + speechDuration
-      : null;
-  const speechEndTimeCandidates = [
-    speechRange?.endTime,
-    hasStaleSpeechBoundary ? null : normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime),
-    explicitSpeechEndTime,
-  ].filter((value): value is number => value !== null && typeof value !== "undefined");
-  const speechEndTime =
-    speechEndTimeCandidates.length > 0
-      ? Math.max(...speechEndTimeCandidates)
-      : normalizeWorkspaceSegmentVoicePreviewTime(segment.endTime);
-
-  if (speechEndTime === null || speechEndTime <= speechStartTime) {
-    return null;
-  }
-
-  const startTime = roundWorkspaceSegmentTimelineSeconds(
-    Math.max(0, speechStartTime - WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS),
-  );
-  const endTime = roundWorkspaceSegmentTimelineSeconds(
-    Math.max(
-      startTime + WORKSPACE_SEGMENT_VOICE_PREVIEW_MIN_DURATION_SECONDS,
-      speechEndTime + WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS,
-    ),
-  );
-
-  return {
-    endTime,
-    startTime,
-  };
-};
-
-export const resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange = ({
-  previewRange,
-  segment,
-  timelineEndTime,
-  timelineStartTime,
-}: {
-  previewRange?: { endTime: number; startTime: number } | null;
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "speechDuration" | "speechEndTime" | "speechStartTime" | "speechWords">;
-  timelineEndTime: number;
-  timelineStartTime: number;
-}) => {
-  const normalizedTimelineStartTime = normalizeWorkspaceSegmentVoicePreviewTime(timelineStartTime) ?? 0;
-  const normalizedTimelineEndTime = Math.max(
-    normalizedTimelineStartTime,
-    normalizeWorkspaceSegmentVoicePreviewTime(timelineEndTime) ?? normalizedTimelineStartTime,
-  );
-  const previewStartTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.startTime);
-  const previewEndTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.endTime);
-  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
-  const sourceBoundaryStartTime = previewStartTime ?? speechRange?.startTime ?? null;
-  const hasShiftedSourceTimeline =
-    sourceBoundaryStartTime !== null &&
-    Math.abs(sourceBoundaryStartTime - normalizedTimelineStartTime) >
-      WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS;
-  const sourceStartTime = hasShiftedSourceTimeline ? sourceBoundaryStartTime : normalizedTimelineStartTime;
-  const sourcePreviewDuration =
-    hasShiftedSourceTimeline && previewEndTime !== null && previewEndTime > sourceStartTime
-      ? previewEndTime - sourceStartTime
-      : null;
-  const timelineEndTimeFromShiftedSource =
-    sourcePreviewDuration !== null ? normalizedTimelineStartTime + sourcePreviewDuration : null;
-  const resolvedTimelineEndTime = hasShiftedSourceTimeline
-    ? timelineEndTimeFromShiftedSource ?? normalizedTimelineEndTime
-    : previewEndTime ?? normalizedTimelineEndTime;
-
-  return {
-    sourceStartTime: roundWorkspaceSegmentTimelineSeconds(sourceStartTime),
-    timelineEndTime: roundWorkspaceSegmentTimelineSeconds(
-      Math.max(normalizedTimelineStartTime, resolvedTimelineEndTime),
-    ),
-  };
-};
-
-export const shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-  options?: { hasPriorNonProjectVoiceover?: boolean },
-) => {
-  if (options?.hasPriorNonProjectVoiceover) {
-    return true;
-  }
-
-  const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
-  if (!segmentVoiceOverrideId || segmentVoiceOverrideId === "none") {
-    return false;
-  }
-
-  const sessionVoiceId = normalizeWorkspaceSegmentEditorSetting(session?.voiceType);
-  return segmentVoiceOverrideId !== sessionVoiceId;
-};
-
-const isWorkspaceSegmentProjectVoiceoverTimingFresh = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId" | "voiceType"> | null,
-) => {
-  if (
-    segment.voiceoverAsset ||
-    !getPositiveWorkspaceMediaAssetId(session?.ttsAssetId) ||
-    !hasWorkspaceSegmentProjectVoiceoverTimingData(segment)
-  ) {
-    return false;
-  }
-
-  const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
-  if (!previewRange) {
-    return false;
-  }
-
-  const sessionLanguage = normalizeStudioLanguageValue(session?.language);
-  const voiceoverLanguage = normalizeStudioLanguageValue(segment.voiceoverLanguage);
-  const language = sessionLanguage ?? voiceoverLanguage ?? "ru";
-  const voiceType = getWorkspaceSegmentEffectiveVoiceId(segment, session);
-  if (!voiceType) {
-    return false;
-  }
-
-  return (
-    segment.voiceoverTextHash === getWorkspaceSegmentVoiceoverTextHash(segment.text) &&
-    normalizeWorkspaceSegmentEditorSetting(segment.voiceoverVoiceType) === normalizeWorkspaceSegmentEditorSetting(voiceType) &&
-    (voiceoverLanguage ?? language) === language
-  );
-};
-
-const isWorkspaceSegmentVoiceoverPlaybackFresh = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId" | "voiceType"> | null,
-) =>
-  isWorkspaceSegmentVoiceoverAssetFresh(segment, session) ||
-  isWorkspaceSegmentProjectVoiceoverTimingFresh(segment, session);
-
-export const getWorkspaceSegmentSceneSoundDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  getStudioCustomVideoFileDurationSeconds(segment.sceneSoundAsset);
-
-export const getWorkspaceSegmentSceneSoundRefreshPrompt = (
-  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  if (!segment?.sceneSoundAsset) {
-    return "";
-  }
-
-  return (
-    normalizeWorkspaceSegmentSceneSoundPrompt(segment.sceneSoundGeneratedFromPrompt) ||
-    (segment.sceneSoundPromptInitialized ? normalizeWorkspaceSegmentSceneSoundPrompt(segment.sceneSoundPrompt) : "")
-  );
-};
-
-export const getWorkspaceSegmentRecommendedDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  const candidates = [
-    getWorkspaceSegmentKnownVisualDurationSeconds(segment),
-    getWorkspaceSegmentVoiceoverDurationSeconds(segment, session),
-  ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
-
-  return candidates.length > 0 ? roundWorkspaceSegmentTimelineSeconds(Math.max(...candidates)) : null;
-};
-
-const getWorkspaceSegmentFreshVoiceoverDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null,
-) => {
-  const voiceoverDurationSeconds = isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
-    ? getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)
-    : null;
-  return typeof voiceoverDurationSeconds === "number" && Number.isFinite(voiceoverDurationSeconds) && voiceoverDurationSeconds > 0
-    ? roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds)
-    : null;
-};
-
-export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  voiceoverDurationSeconds: number | null | undefined,
-) => {
-  const normalizedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
-  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-  const storedDurationExtensionSourceDurationSeconds =
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  const hasManualTimelineOverride =
-    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
-    manualDurationSeconds !== null ||
-    storedDurationExtensionSourceDurationSeconds !== null;
-  const isStillVisualSegment =
-    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" ||
-    getWorkspaceSegmentPreviewKind(segment) === "image" ||
-    String(segment.mediaType ?? "").trim().toLowerCase() === "photo";
-
-  return (
-    normalizedVoiceoverDurationSeconds !== null &&
-    hasManualTimelineOverride &&
-    (isStillVisualSegment || storedDurationExtensionSourceDurationSeconds !== null) &&
-    manualDurationSeconds !== null &&
-    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= normalizedVoiceoverDurationSeconds
-  );
-};
-
-const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null,
-): WorkspaceSegmentEditorDraftSegment => {
-  const voiceoverDurationSeconds = getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session);
-  if (voiceoverDurationSeconds === null) {
-    return segment;
-  }
-
-  const currentSpeechDuration = getWorkspaceSegmentEditorSpeechDuration(segment);
-  const shouldFillSpeechDuration = currentSpeechDuration === null;
-  const shouldPreserveManualVisualDuration =
-    shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, voiceoverDurationSeconds);
-
-  if (shouldPreserveManualVisualDuration) {
-    return segment;
-  }
-
-  const hasManualTimelineOverride =
-    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null ||
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) !== null;
-  if (!hasManualTimelineOverride && !shouldFillSpeechDuration) {
-    return segment;
-  }
-
-  return {
-    ...segment,
-    durationExtensionSourceDurationSeconds: null,
-    durationMode: "auto",
-    manualDurationSeconds: null,
-    speechDuration: shouldFillSpeechDuration ? voiceoverDurationSeconds : segment.speechDuration,
-    speechDurationSource: shouldFillSpeechDuration ? "audio" : segment.speechDurationSource ?? null,
-  };
-};
-
-export const resolveWorkspaceSegmentBoundaryTiming = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  requestedBoundaryTime: number,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
-  const currentBoundaryTime = Math.max(segmentStartTime, getWorkspaceSegmentEditorDisplayEndTime(segment));
-  const minimumDuration = getWorkspaceSegmentManualDurationMinimum(segment, session);
-  const minimumBoundaryTime = segmentStartTime + minimumDuration;
-
-  if (!Number.isFinite(requestedBoundaryTime) || requestedBoundaryTime < segmentStartTime) {
-    return {
-      boundaryTime: currentBoundaryTime,
-      duration: Math.max(0, currentBoundaryTime - segmentStartTime),
-      minimumBoundaryTime,
-      minimumDuration,
-      requestedDuration: requestedBoundaryTime - segmentStartTime,
-      segmentStartTime,
-      status: "invalid" as const,
-    };
-  }
-
-  const requestedDuration = requestedBoundaryTime - segmentStartTime;
-  const duration = Math.max(minimumDuration, requestedDuration);
-
-  return {
-    boundaryTime: segmentStartTime + duration,
-    clamped: duration > requestedDuration,
-    duration,
-    minimumBoundaryTime,
-    minimumDuration,
-    requestedDuration,
-    segmentStartTime,
-    status: "valid" as const,
-  };
-};
-
-export const getWorkspaceSegmentVisualGenerationDurationSeconds = (
-  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  if (!segment) {
-    return undefined;
-  }
-
-  const timelineDuration =
-    getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
-  const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-  const timelineDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
-  const segmentDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
-  const manualDurationCandidates = [manualDuration, timelineDurationSeconds, segmentDurationSeconds].filter(
-    (value): value is number => value !== null,
-  );
-  const resolvedDuration =
-    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" && manualDurationCandidates.length > 0
-      ? Math.max(...manualDurationCandidates)
-      : timelineDurationSeconds ?? segmentDurationSeconds;
-
-  return resolvedDuration !== null ? Number(resolvedDuration.toFixed(3)) : undefined;
-};
-
-const doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
-) => {
-  const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(session?.ttsAssetId);
-  if (
-    projectVoiceoverAssetId === null ||
-    !getWorkspaceSegmentEffectiveVoiceEnabled(segment, session) ||
-    !hasWorkspaceSegmentProjectVoiceoverTimingData(segment)
-  ) {
-    return false;
-  }
-
-  const segmentVoiceoverAssetId = getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset);
-  return segmentVoiceoverAssetId === null || segmentVoiceoverAssetId === projectVoiceoverAssetId;
-};
-
-const shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary = (
-  previousSegment: WorkspaceSegmentEditorDraftSegment,
-  nextSegment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
-) => {
-  const previousIsAuto =
-    normalizeWorkspaceSegmentDurationMode(previousSegment.durationMode) !== "manual" &&
-    normalizeWorkspaceSegmentManualDurationSeconds(previousSegment.manualDurationSeconds) === null;
-  const nextIsAuto =
-    normalizeWorkspaceSegmentDurationMode(nextSegment.durationMode) !== "manual" &&
-    normalizeWorkspaceSegmentManualDurationSeconds(nextSegment.manualDurationSeconds) === null;
-
-  return (
-    previousIsAuto &&
-    nextIsAuto &&
-    doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming(previousSegment, session) &&
-    doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming(nextSegment, session)
-  );
-};
-
-const rebuildWorkspaceSegmentEditorDraftTimeline = (
-  segments: WorkspaceSegmentEditorDraftSegment[],
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
-) =>
-  rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments).map((segment) => {
-    const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(segment, session);
-    return segmentWithFreshVoiceoverTiming.voiceoverAsset &&
-      !isWorkspaceSegmentVoiceoverAssetFresh(segmentWithFreshVoiceoverTiming, session)
-      ? {
-          ...segmentWithFreshVoiceoverTiming,
-          speechDuration: null,
-          speechDurationSource: null,
-          speechEndTime: null,
-          speechStartTime: null,
-          speechWords: [],
-        }
-      : segmentWithFreshVoiceoverTiming;
-  }), {
-    preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
-    stillNoTextFallbackDuration: WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
-    subtitleEnabled: (segment) =>
-      getWorkspaceSegmentEffectiveSubtitleSettings(session, segment, {
-        subtitleColorId: fallbackStudioSubtitleColorOption.id,
-        subtitleStyleId: fallbackStudioSubtitleStyleOption.id,
-      }).isEnabled,
-    visualDurationSeconds: (segment) =>
-      getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session) !== null
-        ? null
-        : getWorkspaceSegmentKnownVisualDurationSeconds(segment),
-    visualKind: (segment) => (getWorkspaceSegmentPreviewKind(segment) === "video" ? "video" : "image"),
-    voiceDurationSeconds: (segment) => getWorkspaceSegmentTimelineVoiceoverDurationSeconds(segment, session),
-    voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
-    speechBoundaryEnabled: (previousSegment, nextSegment) =>
-      shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
-    preserveSourceTimelineEnd: true,
-  });
-
-const rebuildWorkspaceSegmentEditorDraftSessionTimeline = (
-  session: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => ({
-  ...session,
-  segments: rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session),
-});
-
-const createWorkspaceSegmentEditorDraftSession = (
-  session: WorkspaceSegmentEditorSession,
-): WorkspaceSegmentEditorDraftSession => {
-  const sourceLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
-
-  return {
-    ...session,
-    segments: rebuildWorkspaceSegmentEditorDraftTimeline(
-      session.segments.map((segment) => {
-        const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
-        const voiceoverAsset = createWorkspaceSegmentVoiceoverAsset(segment, segment.index);
-        const hasProjectVoiceoverTiming =
-          !voiceoverAsset &&
-          getPositiveWorkspaceMediaAssetId(session.ttsAssetId) !== null &&
-          hasWorkspaceSegmentProjectVoiceoverTimingData(segment);
-        const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-
-        return {
-          ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-          aiPhotoAsset: null,
-          aiPhotoGeneratedFromPrompt: null,
-          aiPhotoPrompt: "",
-          aiPhotoPromptInitialized: false,
-          aiVideoAsset: null,
-          aiVideoGeneratedMode: null,
-          aiVideoGeneratedFromPrompt: null,
-          aiVideoPrompt: "",
-          aiVideoPromptInitialized: false,
-          customVideo: null,
-          durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
-          durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
-          imageEditAsset: null,
-          imageEditGeneratedFromPrompt: null,
-          imageEditPrompt: "",
-          imageEditPromptInitialized: false,
-          mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-          manualDurationSeconds,
-          originalText: segment.text,
-          originalTextByLanguage: {
-            [sourceLanguage]: segment.text,
-          },
-          photoAnimationSourceAsset: null,
-          sceneSoundAsset,
-          sceneSoundGeneratedFromPrompt: null,
-          sceneSoundPrompt: "",
-          sceneSoundPromptInitialized: Boolean(sceneSoundAsset),
-          subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
-          subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
-          subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
-          textByLanguage: {
-            [sourceLanguage]: segment.text,
-          },
-          voiceoverAsset,
-          voiceoverLanguage: segment.voiceoverLanguage ?? (voiceoverAsset || hasProjectVoiceoverTiming ? sourceLanguage : null),
-          voiceoverTextHash:
-            segment.voiceoverTextHash ??
-            (voiceoverAsset || hasProjectVoiceoverTiming ? getWorkspaceSegmentVoiceoverTextHash(segment.text) : null),
-          voiceoverVoiceType:
-            segment.voiceoverVoiceType ??
-            (voiceoverAsset || hasProjectVoiceoverTiming
-              ? getWorkspaceSegmentVoiceOverrideId(segment) ?? session.voiceType
-              : null),
-          videoAction: "original",
-          voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
-          visualReset: false,
-        };
-      }),
-      session,
-    ),
-  };
-};
-
-const getWorkspaceSegmentEditorMusicStateKey = (
-  session: Pick<
-    WorkspaceSegmentEditorSession,
-    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
-  >,
-) => {
-  const musicType = normalizeWorkspaceSegmentEditorSetting(session.musicType) ?? "ai";
-  const musicAssetId =
-    Number.isFinite(Number(session.musicAssetId)) && Number(session.musicAssetId) > 0
-      ? String(Math.trunc(Number(session.musicAssetId)))
-      : "";
-  const musicName = String(session.musicName ?? "").replace(/\s+/g, " ").trim();
-  if (musicType !== "custom") {
-    return `${musicType}:${musicAssetId}:${musicName}`;
-  }
-
-  const customMusicAssetId =
-    Number.isFinite(Number(session.customMusicAssetId)) && Number(session.customMusicAssetId) > 0
-      ? String(Math.trunc(Number(session.customMusicAssetId)))
-      : "";
-  const customMusicFileName = String(session.customMusicFileName ?? "").replace(/\s+/g, " ").trim();
-
-  return `${musicType}:${musicAssetId}:${musicName}:${customMusicAssetId}:${customMusicFileName}`;
-};
-
-const areWorkspaceSegmentEditorMusicStatesEqual = (
-  left: Pick<
-    WorkspaceSegmentEditorSession,
-    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
-  >,
-  right: Pick<
-    WorkspaceSegmentEditorSession,
-    "customMusicAssetId" | "customMusicFileName" | "musicAssetId" | "musicName" | "musicType"
-  >,
-) => getWorkspaceSegmentEditorMusicStateKey(left) === getWorkspaceSegmentEditorMusicStateKey(right);
-
-const shouldPromoteFreshServerVideoToPhotoAnimation = (
-  liveSegment: WorkspaceSegmentEditorDraftSegment,
-  freshSegment: WorkspaceSegmentEditorSegment,
-) => {
-  if (freshSegment.mediaType !== "video") {
-    return false;
-  }
-
-  if (!["ai_photo", "image_edit", "original", "photo_animation", "talking_photo"].includes(liveSegment.videoAction)) {
-    return false;
-  }
-
-  const hasPhotoAnimationSource =
-    liveSegment.mediaType === "photo" ||
-    liveSegment.videoAction === "photo_animation" ||
-    liveSegment.videoAction === "talking_photo" ||
-    liveSegment.aiVideoGeneratedMode === "photo_animation" ||
-    liveSegment.aiVideoGeneratedMode === "talking_photo" ||
-    isWorkspacePhotoAnimationMediaAsset(freshSegment.currentAsset) ||
-    isWorkspaceTalkingPhotoMediaAsset(freshSegment.currentAsset) ||
-    getWorkspaceSegmentCustomPreviewKind(liveSegment.aiPhotoAsset) === "image" ||
-    getWorkspaceSegmentCustomPreviewKind(liveSegment.imageEditAsset) === "image" ||
-    getWorkspaceSegmentCustomPreviewKind(liveSegment.photoAnimationSourceAsset) === "image";
-
-  if (!hasPhotoAnimationSource) {
-    return false;
-  }
-
-  return Boolean(
-    freshSegment.currentPlaybackUrl ||
-      freshSegment.currentPreviewUrl ||
-      freshSegment.currentExternalPlaybackUrl ||
-      freshSegment.currentExternalPreviewUrl,
-  );
-};
-
-const shouldPromoteFreshServerVideoToAiVideo = (
-  liveSegment: WorkspaceSegmentEditorDraftSegment,
-  freshSegment: WorkspaceSegmentEditorSegment,
-) => {
-  if (freshSegment.mediaType !== "video") {
-    return false;
-  }
-
-  const expectsAiVideo =
-    liveSegment.videoAction === "ai" ||
-    liveSegment.aiVideoGeneratedMode === "ai_video";
-  if (!expectsAiVideo) {
-    return false;
-  }
-
-  if (isWorkspacePhotoAnimationMediaAsset(freshSegment.currentAsset)) {
-    return false;
-  }
-
-  const hasAiGeneratedSource =
-    freshSegment.currentSourceKind === "ai_generated" ||
-    freshSegment.currentAsset?.sourceKind === "ai_generated";
-  if (!hasAiGeneratedSource) {
-    return false;
-  }
-
-  return Boolean(
-    freshSegment.currentPlaybackUrl ||
-      freshSegment.currentPreviewUrl ||
-      freshSegment.currentExternalPlaybackUrl ||
-      freshSegment.currentExternalPreviewUrl,
-  );
-};
-
-const createWorkspaceSegmentFreshPhotoAnimationAsset = (
-  freshSegment: WorkspaceSegmentEditorSegment,
-): StudioCustomVideoFile | null =>
-  createStudioCustomVideoFileFromWorkspaceMediaAsset(freshSegment.currentAsset, {
-    fallbackFileName: `segment-${freshSegment.index + 1}-animation.mp4`,
-    fallbackMimeType: "video/mp4",
-    fallbackRemoteUrl:
-      freshSegment.currentPlaybackUrl ??
-      freshSegment.currentExternalPlaybackUrl ??
-      freshSegment.currentPreviewUrl ??
-      freshSegment.currentExternalPreviewUrl,
-  });
-
-const createWorkspaceSegmentFreshAiVideoAsset = (
-  freshSegment: WorkspaceSegmentEditorSegment,
-): StudioCustomVideoFile | null =>
-  createStudioCustomVideoFileFromWorkspaceMediaAsset(freshSegment.currentAsset, {
-    fallbackFileName: `segment-${freshSegment.index + 1}-ai-video.mp4`,
-    fallbackMimeType: "video/mp4",
-    fallbackRemoteUrl:
-      freshSegment.currentPlaybackUrl ??
-      freshSegment.currentExternalPlaybackUrl ??
-      freshSegment.currentPreviewUrl ??
-      freshSegment.currentExternalPreviewUrl,
-    posterUrl: buildWorkspaceMediaAssetPosterUrl(freshSegment.currentAsset),
-  });
-
-const shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  segment.visualReset ||
-  segment.videoAction !== "original" ||
-  hasWorkspaceSegmentExplicitDraftVisual(segment) ||
-  isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment);
-
-const isWorkspaceSegmentEditorShortPrefixStructure = (
-  candidateSegmentIndexes: number[],
-  sourceSegmentIndexes: number[],
-) =>
-  candidateSegmentIndexes.length < sourceSegmentIndexes.length &&
-  candidateSegmentIndexes.every((segmentIndex, index) => segmentIndex === sourceSegmentIndexes[index]);
-
-const shouldPreserveWorkspaceSegmentEditorLiveStructureOnRefresh = (
-  liveDraft: WorkspaceSegmentEditorDraftSession,
-  freshSession: WorkspaceSegmentEditorSession,
-  baselineSession?: WorkspaceSegmentEditorSession | null,
-) => {
-  const liveSegmentIndexes = liveDraft.segments.map((segment) => segment.index);
-
-  if (baselineSession) {
-    return hasWorkspaceSegmentEditorStructureChanged(
-      liveSegmentIndexes,
-      baselineSession.segments.map((segment) => segment.index),
-    );
-  }
-
-  const freshSegmentIndexes = freshSession.segments.map((segment) => segment.index);
-  if (isWorkspaceSegmentEditorShortPrefixStructure(liveSegmentIndexes, freshSegmentIndexes)) {
-    return false;
-  }
-
-  return hasWorkspaceSegmentEditorStructureChanged(liveSegmentIndexes, freshSegmentIndexes);
-};
-
-const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
-  liveSegment: WorkspaceSegmentEditorDraftSegment,
-  freshSegment: WorkspaceSegmentEditorSegment,
-  fallbackLanguage: StudioLanguage = "ru",
-  fallbackVoiceType?: string | null,
-  baselineSegment?: WorkspaceSegmentEditorSegment | null,
-): WorkspaceSegmentEditorDraftSegment => {
-  const normalizedFreshSegment = normalizeWorkspaceSegmentEditorSegmentUrls(freshSegment);
-  if (isWorkspaceSegmentEditorDraftSegmentEmpty(liveSegment)) {
-    return cloneWorkspaceSegmentEditorDraftSegment(liveSegment, fallbackLanguage);
-  }
-
-  const shouldUseFreshServerVideo =
-    !liveSegment.visualReset && shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, normalizedFreshSegment);
-  const shouldUseFreshServerAiVideo =
-    !liveSegment.visualReset && shouldPromoteFreshServerVideoToAiVideo(liveSegment, normalizedFreshSegment);
-  const freshServerVideoMode: WorkspaceSegmentAiVideoMode =
-    liveSegment.videoAction === "talking_photo" ||
-    liveSegment.aiVideoGeneratedMode === "talking_photo" ||
-    isWorkspaceTalkingPhotoMediaAsset(normalizedFreshSegment.currentAsset)
-      ? "talking_photo"
-      : "photo_animation";
-  const freshPhotoAnimationAsset = shouldUseFreshServerVideo
-    ? createWorkspaceSegmentFreshPhotoAnimationAsset(normalizedFreshSegment)
-    : null;
-  const freshAiVideoAsset = shouldUseFreshServerAiVideo
-    ? createWorkspaceSegmentFreshAiVideoAsset(normalizedFreshSegment)
-    : null;
-  const freshSceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(normalizedFreshSegment, normalizedFreshSegment.index);
-  const freshVoiceoverAsset = createWorkspaceSegmentVoiceoverAsset(normalizedFreshSegment, normalizedFreshSegment.index);
-  const freshSpeechWordsRange = (() => {
-    const speechWords = Array.isArray(normalizedFreshSegment.speechWords) ? normalizedFreshSegment.speechWords : [];
-    const firstSpeechWord = speechWords[0] ?? null;
-    const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
-    const startTime = normalizeWorkspaceSegmentVoicePreviewTime(firstSpeechWord?.startTime);
-    const endTime = normalizeWorkspaceSegmentVoicePreviewTime(lastSpeechWord?.endTime);
-    return startTime !== null && endTime !== null && endTime > startTime ? { endTime, startTime } : null;
-  })();
-  const freshSpeechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(normalizedFreshSegment.speechStartTime);
-  const freshSpeechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(normalizedFreshSegment.speechEndTime);
-  const hasFreshProjectVoiceoverTiming =
-    !freshVoiceoverAsset && hasWorkspaceSegmentProjectVoiceoverTimingData(normalizedFreshSegment);
-  const freshProjectVoiceoverDuration = hasFreshProjectVoiceoverTiming
-    ? Math.max(
-        ...[
-          normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.duration),
-          normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.speechDuration),
-          freshSpeechWordsRange !== null ? freshSpeechWordsRange.endTime - freshSpeechWordsRange.startTime : null,
-          freshSpeechStartTime !== null && freshSpeechEndTime !== null ? freshSpeechEndTime - freshSpeechStartTime : null,
-        ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0),
-      )
-    : null;
-  const liveDurationMode = normalizeWorkspaceSegmentDurationMode(liveSegment.durationMode);
-  const liveManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(liveSegment.manualDurationSeconds);
-  const shouldPreserveLiveDuration =
-    baselineSegment
-      ? isWorkspaceSegmentDraftDurationEdited(liveSegment, baselineSegment)
-      : liveDurationMode === "manual" || liveManualDurationSeconds !== null;
-  const currentVisualSegment = liveSegment.visualReset ? liveSegment : normalizedFreshSegment;
-  const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
-    ? liveSegment
-    : normalizedFreshSegment;
-
-  return {
-    ...normalizedFreshSegment,
-    aiPhotoAsset: cloneStudioCustomVideoFile(liveSegment.aiPhotoAsset),
-    aiPhotoGeneratedFromPrompt: liveSegment.aiPhotoGeneratedFromPrompt,
-    aiPhotoPrompt: liveSegment.aiPhotoPrompt,
-    aiPhotoPromptInitialized: liveSegment.aiPhotoPromptInitialized,
-    aiVideoAsset: shouldUseFreshServerVideo
-      ? freshPhotoAnimationAsset ?? cloneStudioCustomVideoFile(liveSegment.aiVideoAsset)
-      : shouldUseFreshServerAiVideo
-        ? freshAiVideoAsset ?? cloneStudioCustomVideoFile(liveSegment.aiVideoAsset)
-      : cloneStudioCustomVideoFile(liveSegment.aiVideoAsset),
-    aiVideoGeneratedMode: shouldUseFreshServerVideo
-      ? freshServerVideoMode
-      : shouldUseFreshServerAiVideo
-        ? "ai_video"
-        : liveSegment.aiVideoGeneratedMode,
-    aiVideoGeneratedFromPrompt: liveSegment.aiVideoGeneratedFromPrompt,
-    aiVideoPrompt: liveSegment.aiVideoPrompt,
-    aiVideoPromptInitialized: shouldUseFreshServerVideo || shouldUseFreshServerAiVideo ? true : liveSegment.aiVideoPromptInitialized,
-    customVideo: cloneStudioCustomVideoFile(liveSegment.customVideo),
-    currentAsset: cloneWorkspaceMediaAssetRef(currentVisualSegment.currentAsset),
-    currentExternalPlaybackUrl: currentVisualSegment.currentExternalPlaybackUrl,
-    currentExternalPreviewUrl: currentVisualSegment.currentExternalPreviewUrl,
-    currentPlaybackUrl: currentVisualSegment.currentPlaybackUrl,
-    currentPosterUrl: currentVisualSegment.currentPosterUrl,
-    currentPreviewUrl: currentVisualSegment.currentPreviewUrl,
-    currentSourceKind: currentVisualSegment.currentSourceKind,
-    durationMode: shouldPreserveLiveDuration
-      ? liveDurationMode
-      : normalizeWorkspaceSegmentDurationMode(normalizedFreshSegment.durationMode),
-    durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(liveSegment),
-    imageEditAsset: cloneStudioCustomVideoFile(liveSegment.imageEditAsset),
-    imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
-    imageEditPrompt: liveSegment.imageEditPrompt,
-    imageEditPromptInitialized: liveSegment.imageEditPromptInitialized,
-    manualDurationSeconds: shouldPreserveLiveDuration
-      ? liveManualDurationSeconds
-      : normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.manualDurationSeconds),
-    mediaType: liveSegment.visualReset ? liveSegment.mediaType : normalizedFreshSegment.mediaType,
-    originalText: liveSegment.originalText,
-    originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
-      liveSegment.originalTextByLanguage,
-      liveSegment.originalText,
-      fallbackLanguage,
-    ),
-    originalAsset: cloneWorkspaceMediaAssetRef(originalVisualSegment.originalAsset),
-    originalExternalPlaybackUrl: originalVisualSegment.originalExternalPlaybackUrl,
-    originalExternalPreviewUrl: originalVisualSegment.originalExternalPreviewUrl,
-    originalPlaybackUrl: originalVisualSegment.originalPlaybackUrl,
-    originalPosterUrl: originalVisualSegment.originalPosterUrl,
-    originalPreviewUrl: originalVisualSegment.originalPreviewUrl,
-    originalSourceKind: originalVisualSegment.originalSourceKind,
-    photoAnimationSourceAsset: cloneStudioCustomVideoFile(liveSegment.photoAnimationSourceAsset),
-    sceneSoundAsset: freshSceneSoundAsset ?? cloneStudioCustomVideoFile(liveSegment.sceneSoundAsset),
-    sceneSoundGeneratedFromPrompt: liveSegment.sceneSoundGeneratedFromPrompt,
-    sceneSoundPrompt: liveSegment.sceneSoundPrompt,
-    sceneSoundPromptInitialized: freshSceneSoundAsset ? true : liveSegment.sceneSoundPromptInitialized,
-    speechDuration: freshProjectVoiceoverDuration ?? normalizedFreshSegment.speechDuration,
-    speechDurationSource: freshProjectVoiceoverDuration !== null ? "audio" : normalizedFreshSegment.speechDurationSource ?? null,
-    subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(liveSegment),
-    subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(liveSegment),
-    subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(liveSegment),
-    text: liveSegment.text,
-    textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
-      liveSegment.textByLanguage,
-      liveSegment.text,
-      fallbackLanguage,
-    ),
-    voiceoverAsset: freshVoiceoverAsset ?? (hasFreshProjectVoiceoverTiming ? null : cloneStudioCustomVideoFile(liveSegment.voiceoverAsset)),
-    voiceoverLanguage: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
-      ? normalizedFreshSegment.voiceoverLanguage ?? fallbackLanguage
-      : liveSegment.voiceoverLanguage,
-    voiceoverTextHash: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
-      ? normalizedFreshSegment.voiceoverTextHash ?? getWorkspaceSegmentVoiceoverTextHash(liveSegment.text)
-      : liveSegment.voiceoverTextHash,
-    voiceoverVoiceType: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
-      ? normalizedFreshSegment.voiceoverVoiceType ??
-        getWorkspaceSegmentVoiceOverrideId(liveSegment) ??
-        normalizeWorkspaceSegmentEditorSetting(fallbackVoiceType) ??
-        null
-      : liveSegment.voiceoverVoiceType,
-    videoAction: shouldUseFreshServerVideo
-      ? freshServerVideoMode === "talking_photo"
-        ? "talking_photo"
-        : "photo_animation"
-      : shouldUseFreshServerAiVideo
-        ? "ai"
-        : liveSegment.videoAction,
-    voiceType: getWorkspaceSegmentVoiceOverrideId(liveSegment) ?? getWorkspaceSegmentVoiceOverrideId(normalizedFreshSegment),
-    visualReset: liveSegment.visualReset,
-  };
-};
-
-export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
-  liveDraft: WorkspaceSegmentEditorDraftSession,
-  freshSession: WorkspaceSegmentEditorSession,
-  options?: {
-    baselineSession?: WorkspaceSegmentEditorSession | null;
-    preserveLiveStructure?: boolean;
-  },
-): WorkspaceSegmentEditorDraftSession => {
-  const normalizedFreshSession = normalizeWorkspaceSegmentEditorSession(freshSession);
-  const fallbackLanguage =
-    normalizeStudioLanguageValue(liveDraft.language) ??
-    normalizeStudioLanguageValue(normalizedFreshSession.language) ??
-    getStudioLanguageForVoiceId(liveDraft.voiceType || normalizedFreshSession.voiceType) ??
-    "ru";
-  const normalizedLiveMusicState = sanitizeWorkspaceSegmentEditorCustomMusicState(liveDraft, {
-    allowEphemeralCustomMusic: true,
-  });
-  const normalizedBaselineSession =
-    options?.baselineSession && options.baselineSession.projectId === liveDraft.projectId
-      ? normalizeWorkspaceSegmentEditorSession(options.baselineSession)
-      : null;
-  const shouldPreserveLiveMusicState = normalizedBaselineSession
-    ? !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedBaselineSession)
-    : !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedFreshSession);
-  const nextMusicState = shouldPreserveLiveMusicState ? normalizedLiveMusicState : normalizedFreshSession;
-  const shouldPreserveLiveStructure =
-    Boolean(options?.preserveLiveStructure) ||
-    shouldPreserveWorkspaceSegmentEditorLiveStructureOnRefresh(
-      liveDraft,
-      normalizedFreshSession,
-      normalizedBaselineSession,
-    );
-  const freshSegmentsByIndex = new Map(normalizedFreshSession.segments.map((segment) => [segment.index, segment] as const));
-  const baselineSegmentsByIndex = new Map(
-    (normalizedBaselineSession?.segments ?? []).map((segment) => [segment.index, segment] as const),
-  );
-  const mergedSegments: WorkspaceSegmentEditorDraftSegment[] = [];
-  const handledSegmentIndexes = new Set<number>();
-
-  liveDraft.segments.forEach((segment) => {
-    const freshSegment = freshSegmentsByIndex.get(segment.index);
-    if (!freshSegment) {
-      mergedSegments.push(cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage));
-      return;
-    }
-
-    handledSegmentIndexes.add(segment.index);
-    mergedSegments.push(
-      mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession(
-        segment,
-        freshSegment,
-        fallbackLanguage,
-        liveDraft.voiceType,
-        baselineSegmentsByIndex.get(segment.index) ?? null,
-      ),
-    );
-  });
-
-  if (!shouldPreserveLiveStructure) {
-    normalizedFreshSession.segments.forEach((segment) => {
-      if (handledSegmentIndexes.has(segment.index)) {
-        return;
-      }
-
-      mergedSegments.push(createWorkspaceSegmentEditorDraftSession({
-        ...normalizedFreshSession,
-        segments: [segment],
-      }).segments[0]);
-    });
-  }
-
-  return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-    ...normalizedFreshSession,
-    customMusicAssetId: nextMusicState.customMusicAssetId ?? null,
-    customMusicFileName: nextMusicState.customMusicFileName ?? null,
-    description: liveDraft.description,
-    language: liveDraft.language,
-    musicAssetId: nextMusicState.musicAssetId ?? null,
-    musicName: nextMusicState.musicName ?? null,
-    musicType: nextMusicState.musicType,
-    segments: mergedSegments,
-    subtitleColor: liveDraft.subtitleColor,
-    subtitleStyle: liveDraft.subtitleStyle,
-    subtitleType: liveDraft.subtitleType,
-    title: liveDraft.title,
-    voiceType: liveDraft.voiceType,
-  });
-};
-
-export const createWorkspaceSegmentEditorResetDraftFromBaseline = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  baseline: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => {
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(baseline);
-  const draftSegmentsByIndex = new Map(draft.segments.map((segment) => [segment.index, segment] as const));
-  const nextSession = cloneWorkspaceSegmentEditorDraftSession(baseline);
-
-  return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-    ...nextSession,
-    segments: nextSession.segments.map((baselineSegment) => {
-      const draftSegment = draftSegmentsByIndex.get(baselineSegment.index);
-      if (!draftSegment) {
-        return baselineSegment;
-      }
-
-      const originalText = typeof draftSegment.originalText === "string" ? draftSegment.originalText : baselineSegment.originalText;
-      const originalTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
-        draftSegment.originalTextByLanguage,
-        originalText,
-        fallbackLanguage,
-      );
-      const shouldRestoreOriginalText =
-        baselineSegment.text !== originalText ||
-        !areWorkspaceSegmentEditorLocalizedTextMapsEqual(baselineSegment.textByLanguage, originalTextByLanguage);
-      const segmentWithOriginalText = shouldRestoreOriginalText
-        ? {
-            ...baselineSegment,
-            originalText,
-            originalTextByLanguage,
-            speechDuration: null,
-            speechDurationSource: null,
-            speechEndTime: null,
-            speechStartTime: null,
-            speechWords: [],
-            text: originalText,
-            textByLanguage: originalTextByLanguage,
-            voiceoverAsset: null,
-            voiceoverLanguage: null,
-            voiceoverTextHash: null,
-            voiceoverVoiceType: null,
-          }
-        : {
-            ...baselineSegment,
-            originalText,
-            originalTextByLanguage,
-          };
-
-      if (
-        !isWorkspaceSegmentCurrentVisualDifferentFromOriginal(draftSegment) &&
-        !isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segmentWithOriginalText)
-      ) {
-        return segmentWithOriginalText;
-      }
-
-      return resetWorkspaceSegmentDraftVisualToOriginal(
-        {
-          ...segmentWithOriginalText,
-          originalAsset: cloneWorkspaceMediaAssetRef(draftSegment.originalAsset ?? segmentWithOriginalText.originalAsset),
-          originalExternalPlaybackUrl:
-            draftSegment.originalExternalPlaybackUrl ?? segmentWithOriginalText.originalExternalPlaybackUrl,
-          originalExternalPreviewUrl:
-            draftSegment.originalExternalPreviewUrl ?? segmentWithOriginalText.originalExternalPreviewUrl,
-          originalPlaybackUrl: draftSegment.originalPlaybackUrl ?? segmentWithOriginalText.originalPlaybackUrl,
-          originalPosterUrl: draftSegment.originalPosterUrl ?? segmentWithOriginalText.originalPosterUrl,
-          originalPreviewUrl: draftSegment.originalPreviewUrl ?? segmentWithOriginalText.originalPreviewUrl,
-          originalSourceKind: draftSegment.originalSourceKind ?? segmentWithOriginalText.originalSourceKind,
-        },
-        nextSession.projectId,
-      );
-    }),
-  });
-};
-
-const getWorkspaceSegmentEditorNextSegmentIndex = (
-  segments: WorkspaceSegmentEditorDraftSegment[],
-  reservedSegmentIndexes: readonly number[] = [],
-) => {
-  const maxExistingIndex = [...segments.map((segment) => segment.index), ...reservedSegmentIndexes]
-    .filter((segmentIndex) => Number.isInteger(segmentIndex) && segmentIndex >= 0)
-    .reduce((maxIndex, segmentIndex) => Math.max(maxIndex, segmentIndex), -1);
-
-  return maxExistingIndex + 1;
-};
-
-const getWorkspaceSegmentEditorReservedSegmentIndexes = (
-  ...sessions: Array<Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined>
-) =>
-  Array.from(
-    new Set(
-      sessions
-        .flatMap((session) => session?.segments.map((segment) => segment.index) ?? [])
-        .filter((segmentIndex) => Number.isInteger(segmentIndex) && segmentIndex >= 0),
-    ),
-  );
-
-const getWorkspaceSegmentEditorInsertedSegmentTiming = (
-  segments: WorkspaceSegmentEditorDraftSegment[],
-  insertAt: number,
-) => {
-  const previousSegment = insertAt > 0 ? segments[insertAt - 1] ?? null : null;
-  const nextSegment = segments[insertAt] ?? null;
-  const startTime = previousSegment ? getWorkspaceSegmentEditorDisplayEndTime(previousSegment) : 0;
-  const nextStartTime = nextSegment ? getWorkspaceSegmentEditorDisplayStartTime(nextSegment) : null;
-  const duration =
-    typeof nextStartTime === "number" && nextStartTime > startTime
-      ? nextStartTime - startTime
-      : WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS;
-  const safeDuration = Math.max(1, duration);
-
-  return {
-    duration: safeDuration,
-    endTime: startTime + safeDuration,
-    startTime,
-  };
-};
-
-export const createWorkspaceSegmentEditorInsertedSegment = (options: {
-  draft: WorkspaceSegmentEditorDraftSession;
-  insertAt: number;
-  reservedSegmentIndexes?: readonly number[];
-  sourceSegment?: WorkspaceSegmentEditorDraftSegment | null;
-}): WorkspaceSegmentEditorDraftSegment => {
-  const { draft, insertAt } = options;
-  const nextIndex = getWorkspaceSegmentEditorNextSegmentIndex(draft.segments, options.reservedSegmentIndexes);
-  const baseText = "";
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
-  const textByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, baseText, fallbackLanguage);
-  const { duration, endTime, startTime } = getWorkspaceSegmentEditorInsertedSegmentTiming(draft.segments, insertAt);
-
-  return {
-    aiPhotoAsset: null,
-    aiPhotoGeneratedFromPrompt: null,
-    aiPhotoPrompt: "",
-    aiPhotoPromptInitialized: false,
-    aiVideoAsset: null,
-    aiVideoGeneratedMode: null,
-    aiVideoGeneratedFromPrompt: null,
-    aiVideoPrompt: "",
-    aiVideoPromptInitialized: false,
-    currentAsset: null,
-    currentExternalPlaybackUrl: null,
-    currentExternalPreviewUrl: null,
-    currentPlaybackUrl: null,
-    currentPosterUrl: null,
-    currentPreviewUrl: null,
-    currentSourceKind: "unknown",
-    customVideo: null,
-    duration,
-    durationExtensionSourceDurationSeconds: null,
-    durationMode: "auto",
-    endTime,
-    index: nextIndex,
-    imageEditAsset: null,
-    imageEditGeneratedFromPrompt: null,
-    imageEditPrompt: "",
-    imageEditPromptInitialized: false,
-    manualDurationSeconds: null,
-    mediaType: "video",
-    originalAsset: null,
-    originalExternalPlaybackUrl: null,
-    originalExternalPreviewUrl: null,
-    originalPlaybackUrl: null,
-    originalPosterUrl: null,
-    originalPreviewUrl: null,
-    originalSourceKind: "unknown",
-    originalText: baseText,
-    originalTextByLanguage: { ...textByLanguage },
-    photoAnimationSourceAsset: null,
-    sceneSoundAsset: null,
-    sceneSoundGeneratedFromPrompt: null,
-    sceneSoundPrompt: "",
-    sceneSoundPromptInitialized: false,
-    speechDuration: null,
-    speechDurationSource: null,
-    speechEndTime: null,
-    speechStartTime: null,
-    speechWords: [],
-    startTime,
-    subtitleColor: null,
-    subtitleStyle: null,
-    subtitleType: null,
-    text: baseText,
-    textByLanguage: { ...textByLanguage },
-    voiceoverAsset: null,
-    voiceoverLanguage: null,
-    voiceoverTextHash: null,
-    voiceoverVoiceType: null,
-    videoAction: "original",
-    visualReset: false,
-  };
-};
-
-export const resolveWorkspaceSegmentEditorSegmentsAfterDelete = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  targetSegmentIndex: number,
-  options?: { reservedSegmentIndexes?: readonly number[] },
-): WorkspaceSegmentEditorDraftSegment[] => {
-  const targetSegment = draft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
-  if (!targetSegment) {
-    return draft.segments;
-  }
-
-  if (draft.segments.length <= WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
-    if (isWorkspaceSegmentEditorDraftSegmentEmpty(targetSegment)) {
-      return draft.segments;
-    }
-
-    return [
-      createWorkspaceSegmentEditorInsertedSegment({
-        draft,
-        insertAt: 0,
-        reservedSegmentIndexes: options?.reservedSegmentIndexes,
-      }),
-    ];
-  }
-
-  return draft.segments.filter((segment) => segment.index !== targetSegmentIndex);
-};
-
-export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
-  draft: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => {
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
-  const emptyTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(null, "", fallbackLanguage);
-
-  return {
-    ...draft,
-    customMusicAssetId: null,
-    customMusicFileName: null,
-    musicAssetId: null,
-    musicName: null,
-    musicType: "none",
-    segments: draft.segments.map((segment) => ({
-      ...segment,
-      originalText: "",
-      originalTextByLanguage: { ...emptyTextByLanguage },
-      sceneSoundAsset: null,
-      sceneSoundGeneratedFromPrompt: null,
-      sceneSoundPrompt: "",
-      sceneSoundPromptInitialized: false,
-      speechDuration: null,
-      speechDurationSource: null,
-      speechEndTime: null,
-      speechStartTime: null,
-      speechWords: [],
-      subtitleColor: null,
-      subtitleStyle: null,
-      subtitleType: null,
-      text: "",
-      textByLanguage: { ...emptyTextByLanguage },
-      voiceoverAsset: null,
-      voiceoverLanguage: null,
-      voiceoverTextHash: null,
-      voiceoverVoiceType: null,
-      voiceType: null,
-    })),
-    subtitleColor: fallbackStudioSubtitleColorOption.id,
-    subtitleStyle: fallbackStudioSubtitleStyleOption.id,
-    subtitleType: "none",
-    ttsAssetId: null,
-    voiceType: "none",
-  };
-};
-
-export const shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
-  draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
-) => Boolean(draft?.segments.length === 1 && isWorkspaceSegmentEditorDraftSegmentEmpty(draft.segments[0]));
-
-type WorkspaceSegmentEditorCleanEmptyDraftCandidate = Pick<WorkspaceSegmentEditorDraftSession, "segments"> &
-  Partial<
-    Pick<
-      WorkspaceSegmentEditorDraftSession,
-      | "customMusicAssetId"
-      | "customMusicFileName"
-      | "musicAssetId"
-      | "musicName"
-      | "musicType"
-      | "subtitleType"
-      | "ttsAssetId"
-      | "voiceType"
-    >
-  >;
-
-export const isWorkspaceSegmentEditorCleanEmptyDraft = (
-  draft: WorkspaceSegmentEditorCleanEmptyDraftCandidate | null | undefined,
-) =>
-  Boolean(
-    draft &&
-      draft.segments.length > 0 &&
-      draft.segments.every(
-        (segment) =>
-          isWorkspaceSegmentEditorDraftSegmentEmpty(segment) &&
-          !getWorkspaceSegmentVoiceOverrideId(segment) &&
-          !normalizeWorkspaceSegmentEditorTextForCompare(segment.originalText) &&
-          !normalizeWorkspaceSegmentEditorTextForCompare(segment.sceneSoundPrompt) &&
-          !segment.sceneSoundPromptInitialized &&
-          !segment.speechDuration &&
-          !segment.speechEndTime &&
-          !segment.speechStartTime &&
-          !getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) &&
-          !normalizeWorkspaceSegmentEditorTextForCompare(segment.voiceoverTextHash ?? "") &&
-          !normalizeWorkspaceSegmentEditorTextForCompare(segment.voiceoverVoiceType ?? "") &&
-          !getWorkspaceSegmentSubtitleTypeOverrideId(segment) &&
-          !getWorkspaceSegmentSubtitleStyleOverrideId(segment) &&
-          !getWorkspaceSegmentSubtitleColorOverrideId(segment) &&
-          (segment.speechWords ?? []).length === 0,
-      ) &&
-      (normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "none") === "none" &&
-      !getPositiveWorkspaceMediaAssetId(draft.customMusicAssetId) &&
-      !String(draft.customMusicFileName ?? "").trim() &&
-      !getPositiveWorkspaceMediaAssetId(draft.musicAssetId) &&
-      !String(draft.musicName ?? "").trim() &&
-      ["default", "none"].includes(normalizeWorkspaceSegmentEditorSetting(draft.subtitleType) ?? "default") &&
-      !getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) &&
-      (normalizeWorkspaceSegmentEditorSetting(draft.voiceType) ?? "none") === "none",
-  );
-
-export const shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges = (
-  draft: WorkspaceSegmentEditorCleanEmptyDraftCandidate | null | undefined,
-) =>
-  Boolean(
-    shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene(draft) ||
-      isWorkspaceSegmentEditorCleanEmptyDraft(draft),
-  );
-
-export const getWorkspaceSegmentEditorEffectiveSubtitleSelection = (
-  draft:
-    | (WorkspaceSegmentEditorCleanEmptyDraftCandidate &
-        Pick<WorkspaceSegmentEditorDraftSession, "subtitleColor" | "subtitleStyle">)
-    | null
-    | undefined,
-  fallbackSelection: {
-    subtitleColorId: string;
-    subtitleStyleId: string;
-  },
-) => {
-  if (isWorkspaceSegmentEditorCleanEmptyDraft(draft)) {
-    return {
-      subtitleColorId: fallbackStudioSubtitleColorOption.id,
-      subtitleStyleId: fallbackStudioSubtitleStyleOption.id,
-    };
-  }
-
-  return {
-    subtitleColorId:
-      normalizeWorkspaceSegmentEditorSetting(draft?.subtitleColor) ??
-      normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleColorId) ??
-      fallbackStudioSubtitleColorOption.id,
-    subtitleStyleId:
-      normalizeWorkspaceSegmentEditorSetting(draft?.subtitleStyle) ??
-      normalizeWorkspaceSegmentEditorSetting(fallbackSelection.subtitleStyleId) ??
-      fallbackStudioSubtitleStyleOption.id,
-  };
-};
-
-type WorkspaceSegmentEditorCarouselSlot =
-  | {
-      kind: "segment";
-      offset: -1 | 0 | 1;
-      segmentArrayIndex: number;
-    }
-  | {
-      kind: "add";
-      offset: 1;
-      segmentArrayIndex: number;
-    }
-  | {
-      kind: "empty";
-      offset: -1 | 0 | 1;
-      segmentArrayIndex: number;
-    };
-
-const normalizeWorkspaceSegmentEditorCarouselSegmentCount = (segmentCount: number) =>
-  Number.isFinite(segmentCount) ? Math.max(0, Math.trunc(segmentCount)) : 0;
-
-const normalizeWorkspaceSegmentEditorCarouselActiveIndex = (
-  activeSegmentIndex: number,
-  segmentCount: number,
-) => {
-  const safeSegmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(segmentCount);
-  const safeActiveSegmentIndex = Number.isFinite(activeSegmentIndex) ? Math.trunc(activeSegmentIndex) : 0;
-
-  return safeSegmentCount > 0
-    ? Math.max(0, Math.min(safeActiveSegmentIndex, safeSegmentCount - 1))
-    : 0;
-};
-
-export const getWorkspaceSegmentEditorCarouselNavigation = (options: {
-  activeSegmentIndex: number;
-  segmentCount: number;
-}) => {
-  const segmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(options.segmentCount);
-  const activeSegmentIndex = normalizeWorkspaceSegmentEditorCarouselActiveIndex(
-    options.activeSegmentIndex,
-    segmentCount,
-  );
-
-  return {
-    canNavigateNext: segmentCount > 0 && activeSegmentIndex < segmentCount - 1,
-    canNavigatePrevious: segmentCount > 0 && activeSegmentIndex > 0,
-  };
-};
-
-export const getWorkspaceSegmentEditorCarouselSlots = (options: {
-  activeSegmentIndex: number;
-  canAddSegment: boolean;
-  segmentCount: number;
-}): WorkspaceSegmentEditorCarouselSlot[] => {
-  const segmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(options.segmentCount);
-  const activeSegmentIndex = normalizeWorkspaceSegmentEditorCarouselActiveIndex(
-    options.activeSegmentIndex,
-    segmentCount,
-  );
-
-  return ([-1, 0, 1] as const).map((offset) => {
-    const segmentArrayIndex = activeSegmentIndex + offset;
-    if (segmentArrayIndex >= 0 && segmentArrayIndex < segmentCount) {
-      return {
-        kind: "segment",
-        offset,
-        segmentArrayIndex,
-      };
-    }
-
-    if (offset > 0 && options.canAddSegment && segmentArrayIndex === segmentCount) {
-      return {
-        kind: "add",
-        offset: 1,
-        segmentArrayIndex,
-      };
-    }
-
-    return {
-      kind: "empty",
-      offset,
-      segmentArrayIndex,
-    };
-  });
-};
-
-const normalizeWorkspaceSegmentEditorSession = (
-  session: WorkspaceSegmentEditorSession,
-): WorkspaceSegmentEditorSession => {
-  const sanitizedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(session);
-  const language = getWorkspaceSegmentEditorSessionLanguage(sanitizedSession);
-  return {
-    ...sanitizedSession,
-    language,
-    segments: sanitizedSession.segments.map((segment) => ({
-      ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-      durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
-      manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-      mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-      voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
-    })),
-  };
 };
 
 const WORKSPACE_SEGMENT_EDITOR_SESSION_STORAGE_KEY_PREFIX = "adshorts.segment-editor-session:";
