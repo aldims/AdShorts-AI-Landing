@@ -1,4 +1,4 @@
-import { Fragment, memo, type CSSProperties, type ChangeEvent, type ClipboardEvent as ReactClipboardEvent, type FocusEvent as ReactFocusEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type CSSProperties, type ChangeEvent, type ClipboardEvent as ReactClipboardEvent, type FocusEvent as ReactFocusEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
@@ -20172,7 +20172,17 @@ export function WorkspacePage({
   const [isSegmentEditorPreparingCustomVideo, setIsSegmentEditorPreparingCustomVideo] = useState(false);
   const [segmentEditorPanelHeightLock, setSegmentEditorPanelHeightLock] = useState<number | null>(null);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
-  const [playingSegmentEditorPreviewIndex, setPlayingSegmentEditorPreviewIndex] = useState<number | null>(null);
+  const [playingSegmentEditorPreviewIndex, setPlayingSegmentEditorPreviewIndexState] = useState<number | null>(null);
+  const playingSegmentEditorPreviewIndexRef = useRef<number | null>(null);
+  const setPlayingSegmentEditorPreviewIndex = useCallback((nextValue: SetStateAction<number | null>) => {
+    const resolvedValue =
+      typeof nextValue === "function"
+        ? (nextValue as (currentValue: number | null) => number | null)(playingSegmentEditorPreviewIndexRef.current)
+        : nextValue;
+
+    playingSegmentEditorPreviewIndexRef.current = resolvedValue;
+    setPlayingSegmentEditorPreviewIndexState(resolvedValue);
+  }, []);
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [projectDeleteError, setProjectDeleteError] = useState<string | null>(null);
@@ -26208,10 +26218,10 @@ export function WorkspacePage({
       return (
         queuedSegmentEditorPlaybackIndexRef.current === playbackIndex ||
         pendingSegmentEditorActivatedPlaybackIndexRef.current === playbackIndex ||
-        playingSegmentEditorPreviewIndex === playbackIndex
+        playingSegmentEditorPreviewIndexRef.current === playbackIndex
       );
     },
-    [playingSegmentEditorPreviewIndex],
+    [],
   );
 
   const pauseUnexpectedSegmentEditorCarouselVideo = useCallback(
