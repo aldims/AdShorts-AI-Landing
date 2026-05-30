@@ -1386,3 +1386,641 @@
     ) !important;
   }
 }
+
+/*
+ * ══════════════════════════════════════════════════════════════
+ *  STAGE & TIMELINE LIQUID GLASS — full-page desktop polish
+ *  Ambient aurora + frosted glass panels over a graphite base.
+ * ══════════════════════════════════════════════════════════════
+ */
+
+@keyframes lg-aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.4%, -2%, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes lg-aurora-drift-alt {
+  0%   { transform: translate3d(0, 0, 0) scale(1.04); }
+  50%  { transform: translate3d(-3%, 2.4%, 0) scale(1); }
+  100% { transform: translate3d(0, 0, 0) scale(1.04); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   AMBIENT AURORA — colour the void so the glass has something
+   to refract. Heavily blurred, low-alpha orbs.
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-route.is-segment-editor {
+  --studio-bg: #02040a;
+  background: #02040a;
+}
+
+.studio-canvas-route.is-segment-editor .studio-canvas-main.is-segment-editor {
+  background:
+    radial-gradient(ellipse 74% 50% at 50% 26%, rgba(32, 42, 74, 0.18) 0%, transparent 66%),
+    #02040a;
+}
+
+.studio-canvas-main.is-segment-editor .studio-canvas-bg__gradient {
+  background:
+    radial-gradient(
+      ellipse 56% 46% at 50% 34%,
+      rgba(96, 92, 180, 0.08) 0%,
+      rgba(70, 82, 150, 0.035) 38%,
+      transparent 70%
+    );
+  opacity: 0.62;
+}
+
+.studio-canvas-main.is-segment-editor .studio-canvas-bg::before,
+.studio-canvas-main.is-segment-editor .studio-canvas-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(70px);
+  will-change: transform;
+}
+
+/* Teal orb — bottom left, sits behind the timeline */
+.studio-canvas-main.is-segment-editor .studio-canvas-bg::before {
+  left: -8%;
+  bottom: -14%;
+  width: 56%;
+  height: 60%;
+  background: radial-gradient(
+    circle at 40% 50%,
+    rgba(24, 128, 124, 0.09) 0%,
+    rgba(24, 96, 124, 0.04) 42%,
+    transparent 72%
+  );
+  animation: lg-aurora-drift 20s ease-in-out infinite;
+}
+
+/* Violet / indigo orb — upper right behind the carousel */
+.studio-canvas-main.is-segment-editor .studio-canvas-bg::after {
+  right: -10%;
+  top: -12%;
+  width: 60%;
+  height: 64%;
+  background: radial-gradient(
+    circle at 60% 40%,
+    rgba(108, 82, 190, 0.1) 0%,
+    rgba(56, 76, 160, 0.04) 44%,
+    transparent 74%
+  );
+  animation: lg-aurora-drift-alt 26s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CAROUSEL ARROWS — refined dark glass with hover glow
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__arrow {
+  border: 1px solid rgba(210, 220, 240, 0.14);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 60%),
+    rgba(10, 12, 20, 0.52);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  color: rgba(228, 236, 250, 0.84);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 0.5px rgba(200, 212, 235, 0.10),
+    0 16px 34px -20px rgba(0, 0, 0, 0.88);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    color 0.2s ease,
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__arrow:hover:not(:disabled) {
+  border-color: rgba(180, 200, 255, 0.30);
+  color: rgba(244, 248, 255, 0.98);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 62%),
+    rgba(14, 16, 26, 0.58);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.30),
+    0 0 0 0.5px rgba(190, 206, 255, 0.20),
+    0 18px 40px -18px rgba(0, 0, 0, 0.90),
+    0 0 26px -6px rgba(130, 150, 255, 0.40);
+  transform: scale(1.08);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__arrow:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ACTIVE SCENE CARD — luminous glass frame + depth
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card-media {
+  border-radius: 24px;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card.is-active .studio-segment-editor__card-media {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 2px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 1px rgba(168, 130, 255, 0.28),
+    0 30px 70px -26px rgba(0, 0, 0, 0.92),
+    0 0 60px -14px rgba(140, 110, 255, 0.42),
+    0 0 110px -30px rgba(60, 180, 230, 0.30);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card.is-side .studio-segment-editor__card-media {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 24px 56px -30px rgba(0, 0, 0, 0.86);
+}
+
+/* Scene badge & AI animation pill — frosted glass */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(8, 10, 18, 0.56);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  color: rgba(236, 242, 255, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 0.5px rgba(200, 212, 235, 0.12),
+    0 10px 24px -16px rgba(0, 0, 0, 0.80);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ACTION ROW — preview toggle as teal glass
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-toggle,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-controls {
+  border-color: rgba(64, 224, 208, 0.30);
+  background:
+    linear-gradient(165deg, rgba(64, 224, 208, 0.22) 0%, rgba(255, 255, 255, 0.05) 46%, rgba(10, 14, 22, 0.30) 100%),
+    rgba(8, 12, 18, 0.46);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  color: rgba(214, 255, 248, 0.98);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    0 0 0 0.5px rgba(70, 230, 210, 0.16),
+    0 14px 30px -18px rgba(20, 184, 166, 0.66),
+    0 0 28px -10px rgba(45, 212, 191, 0.42);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-toggle:hover:not(:disabled) {
+  border-color: rgba(94, 240, 224, 0.46);
+  background:
+    linear-gradient(165deg, rgba(74, 240, 224, 0.32) 0%, rgba(255, 255, 255, 0.08) 46%, rgba(12, 16, 24, 0.32) 100%),
+    rgba(10, 14, 20, 0.50);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.30),
+    0 0 0 0.5px rgba(94, 240, 224, 0.26),
+    0 16px 36px -16px rgba(20, 184, 166, 0.80),
+    0 0 36px -8px rgba(45, 212, 191, 0.56);
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TIMELINE PANEL — the signature frosted glass slab
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+  border: 1px solid rgba(200, 212, 236, 0.12);
+  border-radius: 24px;
+  background:
+    radial-gradient(ellipse 70% 26% at 50% 0%, rgba(200, 210, 235, 0.05) 0%, transparent 62%),
+    linear-gradient(168deg, rgba(255, 255, 255, 0.058) 0%, rgba(255, 255, 255, 0.018) 46%, rgba(255, 255, 255, 0.034) 100%),
+    rgba(9, 11, 18, 0.58);
+  backdrop-filter: blur(46px) saturate(155%) brightness(0.98);
+  -webkit-backdrop-filter: blur(46px) saturate(155%) brightness(0.98);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 1px 0 0 rgba(200, 210, 220, 0.045),
+    inset -1px 0 0 rgba(200, 210, 220, 0.03),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+    0 40px 100px -28px rgba(0, 0, 0, 0.88),
+    0 14px 40px -14px rgba(0, 0, 0, 0.62),
+    0 0 0 0.5px rgba(200, 212, 235, 0.08),
+    0 0 90px -34px rgba(90, 120, 180, 0.34);
+}
+
+/* Track ruler timecodes — cooler, crisper */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode {
+  color: rgba(190, 205, 235, 0.62);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode-boundary {
+  color: rgba(150, 224, 255, 0.86);
+}
+
+/* Row label column — frosted glass rail with bright inner edge */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+  border-radius: 12px;
+  background:
+    linear-gradient(100deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 72%),
+    rgba(8, 10, 16, 0.34);
+  color: rgba(208, 220, 244, 0.78);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
+  color: rgba(200, 216, 246, 0.86);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TIMELINE CELLS — frosted glass tiles
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
+  border: 1px solid rgba(200, 212, 236, 0.10);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.052) 0%, rgba(255, 255, 255, 0.012) 55%, rgba(2, 6, 12, 0.18) 100%),
+    rgba(10, 13, 20, 0.30);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.2s ease,
+    transform 0.16s ease;
+}
+
+/* Visual cells keep the thumbnail readable — lighter glass film */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual {
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.0) 40%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:not(.studio-segment-editor__timeline-cell--visual):hover {
+  border-color: rgba(180, 200, 250, 0.20);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.082) 0%, rgba(255, 255, 255, 0.02) 55%, rgba(2, 6, 12, 0.16) 100%),
+    rgba(12, 16, 24, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 8px 20px -14px rgba(0, 0, 0, 0.7);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell.is-active:not(.studio-segment-editor__timeline-cell--visual) {
+  border-color: rgba(168, 130, 255, 0.34);
+  background:
+    radial-gradient(ellipse 90% 120% at 0% 0%, rgba(150, 110, 255, 0.20) 0%, transparent 64%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.022) 56%, rgba(2, 6, 12, 0.16) 100%),
+    rgba(12, 14, 26, 0.40);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 0 0 1px rgba(168, 130, 255, 0.14),
+    0 0 22px -10px rgba(150, 110, 255, 0.50);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ACTIVE SCENE SELECTION FRAME — glossy violet glass
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-selection-frame::before {
+  border: 1.5px solid rgba(178, 130, 255, 0.92);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(178, 130, 255, 0.22),
+    0 0 30px rgba(150, 110, 255, 0.40),
+    0 0 60px -8px rgba(110, 120, 255, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SCENE NUMBER & DURATION BADGES — glass pills
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-number {
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 999px;
+  background:
+    linear-gradient(155deg, rgba(168, 130, 255, 0.62) 0%, rgba(110, 90, 230, 0.46) 100%),
+    rgba(10, 10, 22, 0.5) !important;
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  color: rgba(248, 246, 255, 0.98);
+  font-weight: 800;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+    0 0 0 0.5px rgba(180, 150, 255, 0.24),
+    0 8px 18px -10px rgba(90, 70, 220, 0.7),
+    0 0 18px -6px rgba(150, 110, 255, 0.5);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual.is-active ~ * .studio-segment-editor__timeline-scene-number,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual.is-active .studio-segment-editor__timeline-scene-number {
+  background:
+    linear-gradient(155deg, rgba(188, 150, 255, 0.86) 0%, rgba(130, 100, 250, 0.7) 100%),
+    rgba(20, 14, 40, 0.5) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-duration-badge {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 999px;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(8, 10, 16, 0.5) !important;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  color: rgba(232, 240, 255, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 6px 14px -8px rgba(0, 0, 0, 0.7);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TIMELINE PLAY BUTTONS — small glass discs
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-play {
+  border: 1px solid rgba(210, 222, 245, 0.16);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(10, 13, 20, 0.46);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  color: rgba(232, 240, 255, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 8px 16px -10px rgba(0, 0, 0, 0.78);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.16s ease, box-shadow 0.18s ease;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-play:hover:not(:disabled) {
+  border-color: rgba(150, 224, 255, 0.40);
+  color: rgba(244, 250, 255, 0.99);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 0 18px -6px rgba(120, 200, 255, 0.6);
+  transform: translateY(-50%);
+}
+
+/* Subtitle swatch chip in the text row */
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-subtitle-swatch {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 10px -2px rgba(150, 110, 255, 0.5);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ADD-SCENE RAIL — teal glass with glow
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
+  border: 1px solid rgba(64, 224, 208, 0.28);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 0%, rgba(64, 224, 208, 0.18) 0%, transparent 70%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.014) 100%),
+    rgba(8, 14, 18, 0.40);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  color: rgba(180, 250, 240, 0.92);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 0.5px rgba(70, 230, 210, 0.16),
+    0 14px 30px -18px rgba(20, 184, 166, 0.6);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.22s ease, transform 0.16s ease;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail:hover:not(:disabled),
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail:focus-visible {
+  border-color: rgba(94, 240, 224, 0.46);
+  color: rgba(214, 255, 248, 0.99);
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, rgba(74, 240, 224, 0.28) 0%, transparent 72%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 100%),
+    rgba(10, 16, 20, 0.44);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.26),
+    0 0 0 0.5px rgba(94, 240, 224, 0.26),
+    0 16px 34px -16px rgba(20, 184, 166, 0.74),
+    0 0 30px -8px rgba(45, 212, 191, 0.5);
+  transform: translateY(-1px);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-icon {
+  filter: drop-shadow(0 0 8px rgba(64, 224, 208, 0.5));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SCENE TITLE PILL above the active card — glass pill
+─────────────────────────────────────────────────────────────── */
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-card-main {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.022) 100%),
+    rgba(7, 9, 16, 0.52);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.20),
+    0 0 0 0.5px rgba(200, 212, 235, 0.10),
+    0 12px 28px -18px rgba(0, 0, 0, 0.8);
+}
+
+/* Honor reduced-motion preferences for the ambient drift */
+@media (prefers-reduced-motion: reduce) {
+  .studio-canvas-main.is-segment-editor .studio-canvas-bg::before,
+  .studio-canvas-main.is-segment-editor .studio-canvas-bg::after {
+    animation: none;
+  }
+}
+
+/*
+ * ══════════════════════════════════════════════════════════════
+ *  WORKSPACE HEADER — liquid glass (scoped to the app header only,
+ *  the marketing nav is untouched)
+ * ══════════════════════════════════════════════════════════════
+ */
+
+/* Frosted top bar — the fixed header blurs content scrolling beneath
+   it, then fades out smoothly toward the bottom edge via a mask. */
+.site-header--workspace::before {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 9, 14, 0.74) 0%,
+    rgba(7, 9, 14, 0.40) 58%,
+    rgba(7, 9, 14, 0) 100%
+  );
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+}
+
+.site-header--workspace::after {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(180, 200, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0.6;
+}
+
+/* Brand mark — soft cool glow */
+.site-header--workspace .brand img {
+  box-shadow:
+    0 0 0 0.5px rgba(200, 212, 240, 0.16),
+    0 14px 28px -10px rgba(95, 102, 246, 0.42),
+    0 0 24px -8px rgba(120, 150, 255, 0.40);
+}
+
+/* Nav cluster — frosted glass pill */
+.site-header--workspace .site-nav {
+  border: 1px solid rgba(200, 212, 236, 0.12);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200, 210, 235, 0.06) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.018) 100%),
+    rgba(10, 12, 20, 0.46);
+  backdrop-filter: blur(30px) saturate(155%);
+  -webkit-backdrop-filter: blur(30px) saturate(155%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+    0 0 0 0.5px rgba(200, 212, 235, 0.08),
+    0 18px 40px -22px rgba(0, 0, 0, 0.78),
+    0 0 50px -28px rgba(90, 120, 180, 0.32);
+}
+
+/* Inactive tab — refined ghost + glass hover */
+.site-header--workspace .site-nav__item {
+  color: rgba(196, 208, 232, 0.66);
+}
+
+.site-header--workspace .site-nav__item:hover:not(.site-nav__item--active) {
+  color: rgba(238, 244, 255, 0.96);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.016) 100%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translate3d(0, -1px, 0);
+}
+
+/* Active tab — glossy cool glass */
+.site-header--workspace .site-nav__item--active {
+  color: rgba(244, 248, 255, 0.99);
+  border-color: rgba(190, 206, 255, 0.18);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -30%, rgba(170, 150, 255, 0.22) 0%, transparent 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(14, 16, 28, 0.5);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 0 0 0.5px rgba(190, 206, 255, 0.14),
+    0 8px 20px -12px rgba(0, 0, 0, 0.7),
+    0 0 22px -10px rgba(140, 130, 255, 0.42);
+}
+
+/* Studio count badge inside the active tab */
+.site-header--workspace .site-nav__studio-count {
+  border: 1px solid rgba(180, 150, 255, 0.30);
+  background:
+    linear-gradient(155deg, rgba(168, 130, 255, 0.5) 0%, rgba(110, 90, 230, 0.36) 100%),
+    rgba(12, 12, 24, 0.5);
+  color: rgba(244, 240, 255, 0.98);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+/* Action pills — shared frosted glass treatment */
+.site-header--workspace .site-header__plan,
+.site-header--workspace .language-switcher__trigger {
+  border: 1px solid rgba(200, 212, 236, 0.14);
+  border-radius: 12px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.018) 100%),
+    rgba(10, 12, 20, 0.42);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  color: rgba(214, 224, 246, 0.82);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 0.5px rgba(200, 212, 235, 0.08),
+    0 12px 26px -18px rgba(0, 0, 0, 0.72);
+}
+
+.site-header--workspace .site-header__plan:hover,
+.site-header--workspace .language-switcher__trigger:hover {
+  border-color: rgba(190, 206, 255, 0.26);
+  color: rgba(240, 246, 255, 0.96);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.026) 100%),
+    rgba(12, 14, 24, 0.48);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 0.5px rgba(190, 206, 255, 0.18),
+    0 14px 30px -16px rgba(0, 0, 0, 0.78),
+    0 0 24px -12px rgba(130, 150, 255, 0.4);
+}
+
+/* Credits — amber glass */
+.site-header--workspace .site-header__credits {
+  border: 1px solid rgba(251, 191, 36, 0.30);
+  border-radius: 12px;
+  background:
+    linear-gradient(160deg, rgba(251, 191, 36, 0.20) 0%, rgba(251, 191, 36, 0.04) 100%),
+    rgba(16, 12, 6, 0.40);
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 240, 200, 0.24),
+    0 0 0 0.5px rgba(251, 191, 36, 0.14),
+    0 12px 26px -18px rgba(180, 130, 20, 0.66),
+    0 0 22px -12px rgba(251, 191, 36, 0.4);
+}
+
+.site-header--workspace .site-header__credits:hover {
+  border-color: rgba(251, 191, 36, 0.46);
+  background:
+    linear-gradient(160deg, rgba(251, 191, 36, 0.30) 0%, rgba(251, 191, 36, 0.06) 100%),
+    rgba(18, 14, 7, 0.44);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 240, 200, 0.30),
+    0 0 0 0.5px rgba(251, 191, 36, 0.22),
+    0 14px 30px -16px rgba(180, 130, 20, 0.74),
+    0 0 30px -10px rgba(251, 191, 36, 0.55);
+}
+
+/* Account avatar — keep the brand gradient, add glass rim + cool glow */
+.site-header--workspace .site-header__account {
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 255, 255, 0.30) 0%, transparent 60%),
+    linear-gradient(135deg, #6a72ff 0%, #a06aff 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.34),
+    0 0 0 0.5px rgba(190, 200, 255, 0.18),
+    0 16px 30px -12px rgba(95, 102, 246, 0.5),
+    0 0 26px -8px rgba(150, 110, 255, 0.5);
+}
+
+.site-header--workspace .site-header__account:hover {
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.40),
+    0 0 0 0.5px rgba(200, 210, 255, 0.26),
+    0 20px 38px -12px rgba(95, 102, 246, 0.6),
+    0 0 34px -6px rgba(150, 110, 255, 0.62);
+}

@@ -21343,7 +21343,7 @@ textarea {
 
 .studio-canvas-preview__generated-actions--expanded {
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Отделяем только крестик и прижимаем его ближе к правому краю превью */
@@ -26883,7 +26883,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
 .studio-segment-editor__timeline-play:focus-visible {
   background: transparent;
   color: rgba(255, 255, 255, 0.98);
-  transform: translateY(-50%) translateX(1px);
+  transform: translateY(-50%);
 }
 
 .studio-segment-editor__timeline-play:hover:not(:disabled) svg,
@@ -27481,6 +27481,22 @@ button.studio-segment-editor__timeline-label:focus-visible {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 14px 24px -22px rgba(0, 0, 0, 0.84);
+}
+
+.studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell--voice,
+.studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell--voice.is-active {
+  border-color: rgba(148, 163, 184, 0.14);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.56)),
+    rgba(0, 0, 0, 0.22);
+}
+
+.studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell--voice:hover:not(:disabled),
+.studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell--voice:focus-visible {
+  border-color: rgba(226, 232, 240, 0.24);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.5)),
+    rgba(0, 0, 0, 0.2);
 }
 
 .studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell.is-edited,
