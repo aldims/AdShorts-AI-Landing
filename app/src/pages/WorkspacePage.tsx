@@ -7156,11 +7156,7 @@ const canWorkspaceSegmentAnimatePhoto = (segment: WorkspaceSegmentEditorDraftSeg
   Boolean(segment && getWorkspaceSegmentPhotoAnimationSourceAsset(segment));
 
 const canWorkspaceSegmentUsePhotoAnimationTool = (segment: WorkspaceSegmentEditorDraftSegment | null | undefined) =>
-  Boolean(
-    segment &&
-      getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" &&
-      getWorkspaceSegmentPhotoAnimationSourceAsset(segment),
-  );
+  canWorkspaceSegmentAnimatePhoto(segment);
 
 const canWorkspaceSegmentCreateTalkingPhoto = (segment: WorkspaceSegmentEditorDraftSegment | null | undefined) =>
   Boolean(segment && getWorkspaceSegmentTalkingCharacterSourceAsset(segment));
@@ -7308,6 +7304,33 @@ const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegmentEditorD
     .filter(Boolean);
 
   return markers.some((marker) => marker === "ai_generated" || marker === "ai_video" || marker === "photo_animation");
+};
+
+const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+    return false;
+  }
+
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+
+  if (
+    latestVisualAction === "ai_photo" ||
+    latestVisualAction === "image_edit" ||
+    latestVisualAction === "photo_animation" ||
+    latestVisualAction === "talking_photo"
+  ) {
+    return false;
+  }
+
+  if (latestVisualAction === "ai") {
+    if (segment.aiVideoGeneratedMode) {
+      return segment.aiVideoGeneratedMode === "ai_video";
+    }
+
+    return segment.mediaType === "video";
+  }
+
+  return true;
 };
 
 const isWorkspaceSegmentAiPhotoVisualDurationLimited = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -18161,7 +18184,7 @@ const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPreviewCa
         }}
         onTimeUpdate={(event) => onVideoTimeUpdate?.(event.currentTarget.currentTime)}
       />
-      {canUseResolvedPosterFrame && resolvedPosterUrl && !isVideoPlaying && !isPlaybackRequested && !hasPresentedVideoFrame ? (
+      {canUseResolvedPosterFrame && resolvedPosterUrl && !isVideoPlaying && !hasPresentedVideoFrame ? (
         <img
           className="studio-segment-preview-card-media__poster"
           src={resolvedPosterUrl}
@@ -35570,6 +35593,9 @@ export function WorkspacePage({
       setSegmentEditorPreviewTime(segmentIndex, currentTime);
     };
 
+  const shouldPreserveSegmentEditorPreviewPlaybackState = (segmentIndex: number) =>
+    segmentEditorFullPreviewActiveRef.current && playingSegmentEditorPreviewIndexRef.current === segmentIndex;
+
   const openSegmentEditorVisualPanelFromCard = (
     segmentArrayIndex: number,
     segment: WorkspaceSegmentEditorDraftSegment,
@@ -40020,9 +40046,9 @@ export function WorkspacePage({
     segmentTimelineVisualMenuSegment && segmentEditorDraft
       ? segmentEditorDraft.segments.findIndex((segment) => segment.index === segmentTimelineVisualMenuSegment.index)
       : -1;
-  const isSegmentTimelineVisualMenuVideoVisual =
+  const canSegmentTimelineVisualMenuUseVideoExtension =
     segmentTimelineVisualMenuSegment
-      ? getWorkspaceSegmentSelectedVisualPreviewKind(segmentTimelineVisualMenuSegment) === "video"
+      ? canWorkspaceSegmentUseVideoExtensionTool(segmentTimelineVisualMenuSegment)
       : false;
   const segmentTimelineVisualMenuGroups: Array<{
     key: string;
@@ -40071,13 +40097,13 @@ export function WorkspacePage({
           label: workspaceText(locale, "Изменить текущий", "Edit current"),
           options: [
             {
-              action: isSegmentTimelineVisualMenuVideoVisual ? "video_extension" : undefined,
-              description: isSegmentTimelineVisualMenuVideoVisual
+              action: canSegmentTimelineVisualMenuUseVideoExtension ? "video_extension" : undefined,
+              description: canSegmentTimelineVisualMenuUseVideoExtension
                 ? workspaceText(locale, "Продлить текущий видеофрагмент", "Extend the current video fragment")
                 : workspaceText(locale, "Движение из фото", "Motion from photo"),
-              icon: isSegmentTimelineVisualMenuVideoVisual ? "EXT" : "ANM",
+              icon: canSegmentTimelineVisualMenuUseVideoExtension ? "EXT" : "ANM",
               tab: "photo_animation",
-              title: isSegmentTimelineVisualMenuVideoVisual
+              title: canSegmentTimelineVisualMenuUseVideoExtension
                 ? workspaceText(locale, "ИИ продление", "AI extension")
                 : workspaceText(locale, "ИИ анимация", "AI animation"),
             },
@@ -41922,10 +41948,10 @@ export function WorkspacePage({
   const isPromptVoiceoverMode = false;
   const isPromptLibraryMode = segmentEditorVisualPromptToolTab === "library";
   const isPromptUploadMode = segmentEditorVisualPromptToolTab === "upload";
-  const isActiveSegmentVideoVisual =
-    activeSegment ? getWorkspaceSegmentSelectedVisualPreviewKind(activeSegment) === "video" : false;
+  const canActiveSegmentUseVideoExtension =
+    activeSegment ? canWorkspaceSegmentUseVideoExtensionTool(activeSegment) : false;
   const canExtendActiveSegmentVideo =
-    Boolean(activeSegment && isActiveSegmentVideoVisual) && !isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
+    canActiveSegmentUseVideoExtension && !isWorkspaceSegmentVisualJobBusy(activeSegment?.index);
   const canPromptUseVisualReferences = isPromptAiPhotoMode || isPromptAiVideoMode || isPromptImageEditMode;
   const selectedSegmentReferenceCharacterCount = selectedSegmentReferenceCharacterOptions.length;
   const activeSegmentTalkingCharacterTarget =
@@ -44651,7 +44677,7 @@ export function WorkspacePage({
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--edit">
                 <span className="studio-segment-editor__prompt-section-label">{workspaceText(locale, "Изменить", "Edit")}</span>
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
-                  {isActiveSegmentVideoVisual ? (
+                  {canActiveSegmentUseVideoExtension ? (
                     <button
                       className="studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon"
                       type="button"
@@ -45612,6 +45638,8 @@ export function WorkspacePage({
                                   isActiveCard && mediaKind === "video" && segmentPreviewTime > 0.04;
                                 const canMountSegmentPreviewVideo =
                                   isActiveCard || segmentMediaSurface.mountVideoWhenIdle || shouldKeepPausedVideoMounted;
+                                const shouldMountSegmentPreviewVideoWhenIdle =
+                                  isActiveCard || shouldKeepPausedVideoMounted || segmentMediaSurface.mountVideoWhenIdle;
                                 const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
                                 const segmentSourceLabel = getWorkspaceSegmentDraftSourceLabel(segment);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
@@ -45656,7 +45684,7 @@ export function WorkspacePage({
                                           loop={false}
                                           mediaKey={mediaKey}
                                           mountVideoWhenIdle={
-                                            shouldKeepPausedVideoMounted || segmentMediaSurface.mountVideoWhenIdle
+                                            shouldMountSegmentPreviewVideoWhenIdle
                                           }
                                           muted
                                           posterUrl={segmentMediaSurface.posterUrl}
@@ -45680,6 +45708,9 @@ export function WorkspacePage({
                                             if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segmentPlaybackIndex) {
                                               return;
                                             }
+                                            if (shouldPreserveSegmentEditorPreviewPlaybackState(segmentPlaybackIndex)) {
+                                              return;
+                                            }
 
                                             setPlayingSegmentEditorPreviewIndex((current) =>
                                               current === segmentPlaybackIndex ? null : current,
@@ -45691,6 +45722,9 @@ export function WorkspacePage({
                                               segmentIndex: segment.index,
                                             });
                                             if (segmentEditorSyntheticPlaybackRef.current?.segmentIndex === segmentPlaybackIndex) {
+                                              return;
+                                            }
+                                            if (shouldPreserveSegmentEditorPreviewPlaybackState(segmentPlaybackIndex)) {
                                               return;
                                             }
 
