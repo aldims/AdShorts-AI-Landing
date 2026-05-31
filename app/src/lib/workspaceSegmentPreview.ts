@@ -61,3 +61,13 @@ export const sanitizeWorkspaceSegmentPosterUrl = (
 
   return normalizedPosterUrl;
 };
+
+export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
+  allowVideoPlayback?: boolean;
+  autoplay?: boolean;
+  isPlaybackRequested?: boolean;
+  previewKind: "image" | "video";
+}) =>
+  options.previewKind === "video" &&
+  (options.allowVideoPlayback ?? true) &&
+  Boolean(options.autoplay || options.isPlaybackRequested);

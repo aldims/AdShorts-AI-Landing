@@ -304,6 +304,7 @@ import {
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   persistGeneratedMediaLibraryEntries,
   readStoredGeneratedMediaLibraryEntries,
+  shouldShowWorkspaceMediaLibraryLoadingState,
 } from "../features/workspace/workspace-media-library-helpers";
 import type { WorkspaceGeneratedMediaLibraryEntry } from "../features/workspace/workspace-media-library-helpers";
 import {
@@ -521,6 +522,7 @@ import {
 import {
   getWorkspaceSegmentPausedPreviewTime,
   sanitizeWorkspaceSegmentPosterUrl,
+  shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "../lib/workspaceSegmentPreview";
 import {
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
@@ -623,7 +625,11 @@ export {
   createStudioCustomVideoFileFromMediaLibraryItem,
   getWorkspaceMediaLibraryItemRemoteUrl,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
+  shouldShowWorkspaceMediaLibraryLoadingState,
 } from "../features/workspace/workspace-media-library-helpers";
+export {
+  shouldAllowWorkspaceSegmentPreviewVideoPlayback,
+} from "../lib/workspaceSegmentPreview";
 export {
   clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   getWorkspaceSegmentEditorProjectOpenOptions,
@@ -1782,39 +1788,6 @@ type WorkspaceSegmentPreviewCardMediaProps = {
   previewKind: WorkspaceSegmentPreviewKind;
   previewUrl: string;
   videoRef?: (element: HTMLVideoElement | null) => void;
-};
-
-export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
-  allowVideoPlayback?: boolean;
-  autoplay?: boolean;
-  isPlaybackRequested?: boolean;
-  previewKind: WorkspaceSegmentPreviewKind;
-}) =>
-  options.previewKind === "video" &&
-  (options.allowVideoPlayback ?? true) &&
-  Boolean(options.autoplay || options.isPlaybackRequested);
-
-export const shouldShowWorkspaceMediaLibraryLoadingState = (options: {
-  hasVisibleItems: boolean;
-  isLoading: boolean;
-  isLoadingMore: boolean;
-  hasError: boolean;
-  hasNextCursor: boolean;
-  displayTotalCount: number | null;
-}) => {
-  if (options.hasError || !options.isLoading) {
-    return false;
-  }
-
-  if (options.hasVisibleItems) {
-    return true;
-  }
-
-  if (!options.isLoadingMore) {
-    return true;
-  }
-
-  return options.hasNextCursor && (options.displayTotalCount === null || options.displayTotalCount > 0);
 };
 
 type WorkspaceSegmentSubtitleOverlayProps = {

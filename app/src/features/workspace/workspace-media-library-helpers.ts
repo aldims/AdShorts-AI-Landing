@@ -63,6 +63,29 @@ export type StoredWorkspaceGeneratedMediaLibraryEntry = {
   sourceJobId: string;
 };
 
+export const shouldShowWorkspaceMediaLibraryLoadingState = (options: {
+  hasVisibleItems: boolean;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasError: boolean;
+  hasNextCursor: boolean;
+  displayTotalCount: number | null;
+}) => {
+  if (options.hasError || !options.isLoading) {
+    return false;
+  }
+
+  if (options.hasVisibleItems) {
+    return true;
+  }
+
+  if (!options.isLoadingMore) {
+    return true;
+  }
+
+  return options.hasNextCursor && (options.displayTotalCount === null || options.displayTotalCount > 0);
+};
+
 export const getStudioCustomAssetPosterUrl = (
   asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
 ) => {
