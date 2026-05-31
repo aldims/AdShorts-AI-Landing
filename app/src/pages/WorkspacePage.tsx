@@ -86,6 +86,12 @@ import {
   type WorkspaceReferenceVisualOption,
 } from "../features/workspace/workspace-prompt-helpers";
 import {
+  areWorkspaceProfilesEqual,
+  normalizeWorkspaceBalance,
+  normalizeWorkspacePlan,
+  type WorkspaceProfile,
+} from "../features/workspace/workspace-profile-helpers";
+import {
   applyWorkspaceContentPlanIdeaUpdate,
   formatWorkspaceContentPlanIdeaCount,
   isWorkspaceContentPlanSourceIdeaSynchronized,
@@ -1025,13 +1031,6 @@ const readWorkspaceAudioDurationSeconds = async (sourceUrl: string) => {
   } finally {
     audio.remove();
   }
-};
-
-type WorkspaceProfile = {
-  balance: number;
-  expiresAt: string | null;
-  plan: string;
-  startPlanUsed: boolean;
 };
 
 type WorkspacePackageCheckoutProductId = Extract<CheckoutProductId, "package_10" | "package_50" | "package_100">;
@@ -5480,38 +5479,6 @@ export const getWorkspaceSegmentEditorGenerationOverrides = (
 const isTextInputTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-
-const normalizeWorkspacePlan = (value: unknown) => {
-  const normalized = String(value ?? "").trim().toUpperCase();
-  return normalized || null;
-};
-
-const normalizeWorkspaceBalance = (value: unknown) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
-};
-
-const normalizeWorkspaceExpiry = (value: unknown) => {
-  const normalized = String(value ?? "").trim();
-  return normalized || null;
-};
-
-const normalizeWorkspaceStartPlanUsed = (value: unknown, plan: unknown) => {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
-
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
-  return normalizeWorkspacePlan(plan) === "START";
-};
-
-const areWorkspaceProfilesEqual = (left: WorkspaceProfile | null | undefined, right: WorkspaceProfile | null | undefined) =>
-  normalizeWorkspacePlan(left?.plan) === normalizeWorkspacePlan(right?.plan) &&
-  normalizeWorkspaceBalance(left?.balance) === normalizeWorkspaceBalance(right?.balance) &&
-  normalizeWorkspaceExpiry(left?.expiresAt) === normalizeWorkspaceExpiry(right?.expiresAt) &&
-  normalizeWorkspaceStartPlanUsed(left?.startPlanUsed, left?.plan) ===
-    normalizeWorkspaceStartPlanUsed(right?.startPlanUsed, right?.plan);
 
 const renderWorkspaceMediaLibraryPlayOverlay = (previewKind: WorkspaceMediaLibraryPreviewKind): ReactNode => {
   if (previewKind !== "video") {
