@@ -347,7 +347,6 @@ import {
 } from "../features/workspace/workspace-segment-structure-helpers";
 import {
   buildWorkspaceSegmentEditorPayload,
-  type WorkspaceSegmentEditorPayload,
 } from "../features/workspace/workspace-segment-payload-helpers";
 import {
   buildStudioRouteUrl,
@@ -394,6 +393,141 @@ import {
   studioLanguageOptions,
   type StudioMenuAnchorRect,
 } from "../features/workspace/workspace-selector-chips";
+import {
+  characterPickerIconUrl,
+  workspaceText,
+  STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
+  getStudioGenerationUnavailableMessage,
+  isAbortLikeError,
+  buildWorkspaceBootstrapRequestUrl,
+  mergeWorkspaceMediaLibraryPageItems,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_DUCKED_VOLUME,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_READY_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_LOOKAHEAD_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_PROGRESS_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_DEBUG_STORAGE_KEY,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_DEBUG_EVENTS,
+  WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_NATURAL_END_CLEANUP_DELAY_MS,
+  WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_TAIL_PADDING_SECONDS,
+  hasWorkspaceSegmentVisualRun,
+  hasAnyWorkspaceSegmentVisualRun,
+  clearWorkspaceSegmentVisualRunState,
+  STUDIO_PROMPT_PANEL_BASE_WIDTH,
+  STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH,
+  STUDIO_PROMPT_PANEL_INLINE_BUFFER,
+  WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS,
+  WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS,
+  SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT,
+  SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP,
+  SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS,
+  MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX,
+  normalizeWorkspaceSegmentGenerationJobStatus,
+  isWorkspaceSegmentGenerationJobDoneStatus,
+  isWorkspaceSegmentGenerationJobFailedStatus,
+  studioPromptChips,
+  measureElementChildrenInlineWidth,
+  workspaceLocalExampleGoalOptions,
+  getWorkspaceLocalExampleGoalCopy,
+  PROJECTS_REQUEST_TIMEOUT_MS,
+  MEDIA_LIBRARY_REQUEST_TIMEOUT_MS,
+  SEGMENT_EDITOR_REQUEST_TIMEOUT_MS,
+  SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS,
+  SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS,
+  WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
+  isWorkspaceSegmentEditorNotFoundError,
+  isWorkspaceSegmentEditorPreparingError,
+  waitWorkspaceDelay,
+  isTextInputTarget,
+  renderWorkspaceMediaLibraryPlayOverlay,
+  getVideoDownloadName,
+  tabCopy,
+  workspaceCreditTopupPacks,
+  type WorkspaceTab,
+  type WorkspaceMediaLibraryFilter,
+  type WorkspacePackageCheckoutProductId,
+  type WorkspaceCheckoutResponse,
+  type Props,
+  type WorkspaceGenerateOptions,
+  type WorkspaceCreditTopupPack,
+  type StudioGeneration,
+  type StudioGeneratedVideoActionMode,
+  type StudioGenerationStartResponse,
+  type StudioGenerationAvailabilityResponse,
+  type StudioGenerationStatusResponse,
+  type WorkspaceLocalExampleGoal,
+  type WorkspaceLocalExamplesResponse,
+  type WorkspaceLocalExampleSaveResponse,
+  type WorkspaceBootstrapResponse,
+  type WorkspaceProjectsResponse,
+  type WorkspaceMediaLibraryResponse,
+  type WorkspaceProjectDeleteResponse,
+  type WorkspaceLocalExampleSource,
+  type WorkspaceSegmentVisualModalTab,
+  type WorkspaceSegmentEditorPromptToolTab,
+  type WorkspaceSegmentTimelineVoiceTextEditSnapshot,
+  type WorkspaceSegmentTimelineRedoSnapshot,
+  type WorkspaceSegmentTimelineAudioPreviewTrack,
+  type WorkspaceSegmentEditorFullPreviewStatus,
+  type WorkspaceSegmentEditorFullPreviewAudioTrack,
+  type WorkspaceSegmentEditorFullPreviewDebugWindow,
+  type WorkspaceSegmentEditorResponse,
+  type WorkspaceSegmentAiPhotoJobCreateRequest,
+  type WorkspaceSegmentImageUpscaleRequest,
+  type WorkspaceSegmentImageEditRequest,
+  type WorkspaceSegmentAiPhotoPromptImproveMode,
+  type WorkspaceSegmentPromptImprovementSnapshot,
+  type WorkspaceSegmentAiPhotoPromptImproveRequest,
+  type WorkspaceSegmentAiPhotoPromptImproveResponse,
+  type WorkspaceSegmentTextTranslateRequest,
+  type WorkspaceSegmentTextTranslateResponse,
+  type WorkspaceSegmentAiPhotoJobCreateResponse,
+  type WorkspaceSegmentAiPhotoJobStatusResponse,
+  type WorkspaceSegmentImageUpscaleJobCreateResponse,
+  type WorkspaceSegmentImageUpscaleJobStatusResponse,
+  type WorkspaceSegmentAiVideoJobCreateRequest,
+  type WorkspaceProjectCharacter,
+  type WorkspaceProjectCharactersResponse,
+  type WorkspaceReferenceCreateResponse,
+  type WorkspaceReferenceDeleteResponse,
+  type WorkspaceReferenceUpdateResponse,
+  type WorkspaceSegmentPhotoAnimationJobCreateRequest,
+  type WorkspaceTalkingTargetDragState,
+  type WorkspaceSegmentTalkingPhotoJobCreateRequest,
+  type WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest,
+  type WorkspaceSegmentTalkingPhotoSpeakerPreview,
+  type WorkspaceSegmentSceneSoundJobCreateRequest,
+  type WorkspaceSegmentVoiceoverJobCreateRequest,
+  type WorkspaceSegmentVoiceoverJobStatusResponse,
+  type WorkspaceSegmentAiVideoJobCreateResponse,
+  type WorkspaceSegmentAiVideoJobStatusResponse,
+  type WorkspaceSegmentThumbDragState,
+  type WorkspacePublishBootstrapPayload,
+  type WorkspacePublishBootstrapResponse,
+  type WorkspacePublishStartResponse,
+  type WorkspacePublishJobStatusPayload,
+  type WorkspacePublishJobStatusResponse,
+  type WorkspaceSegmentVisualRunState,
+  type WorkspaceSegmentVisualRunScope,
+  type StudioCreateMode,
+} from "../features/workspace/workspace-page-model";
 import {
   applyPublishScheduleDatePart,
   applyPublishScheduleTimePart,
@@ -476,7 +610,6 @@ import {
   resizeWorkspaceTalkingCharacterTarget,
   WORKSPACE_TALKING_TARGET_RESIZE_HANDLES,
   type WorkspaceTalkingCharacterTarget,
-  type WorkspaceTalkingTargetResizeHandle,
 } from "../features/workspace/workspace-talking-character-helpers";
 import {
   buildWorkspaceSegmentBulkSubtitleText,
@@ -507,13 +640,12 @@ import type {
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorSession,
-  WorkspaceSegmentEditorSpeechWord,
   WorkspaceSegmentPreviewKind,
   WorkspaceSegmentTimelineHistoryKind,
 } from "../features/workspace/workspace-types";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
-import { useLocale, type Locale } from "../lib/i18n";
+import { useLocale } from "../lib/i18n";
 import {
   canPurchaseAddonCredits,
   formatCreditsCountLabel,
@@ -524,7 +656,6 @@ import {
   buildPaymentReturnUrl,
   clearPreCheckoutProfile,
   writePreCheckoutProfile,
-  type CheckoutProductId,
 } from "../lib/payment-return";
 import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
@@ -533,12 +664,10 @@ import {
   dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceProjectDisplayTitle,
-  getWorkspaceVideoDownloadName,
   isWorkspaceMediaLibraryItemHidden,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
   type WorkspaceMediaLibraryItemKind,
-  type WorkspaceMediaLibraryPreviewKind,
 } from "../lib/workspaceMediaLibrary";
 import {
   buildWorkspaceProjectStackGroups,
@@ -588,7 +717,6 @@ import {
 } from "../../shared/studio-credit-costs";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
-import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import type {
   WorkspaceReferenceKind,
   WorkspaceSavedReference,
@@ -767,1030 +895,6 @@ export type {
   WorkspaceSegmentTimelineHistoryKind,
   WorkspaceSegmentVoiceTimelineState,
 } from "../features/workspace/workspace-types";
-
-const characterPickerIconUrl = "/character.png";
-
-type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
-type WorkspaceMediaLibraryFilter = "all" | "photo" | "video" | "characters" | "scenes";
-
-const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
-const STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE = "generation_unavailable";
-const getStudioGenerationUnavailableMessage = (locale: Locale) =>
-  workspaceText(
-    locale,
-    "Генерация временно недоступна. Кредиты не списаны — попробуйте позже.",
-    "Generation is temporarily unavailable. Credits were not charged — try again later.",
-  );
-
-type Session = {
-  displayEmail?: string;
-  name: string;
-  email: string;
-  plan: string;
-};
-
-const isAbortLikeError = (error: unknown) =>
-  error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
-
-type WorkspacePackageCheckoutProductId = Extract<CheckoutProductId, "package_10" | "package_50" | "package_100">;
-
-type WorkspaceCheckoutResponse = {
-  data?: {
-    simulatedPayment?: {
-      addedCredits: number;
-      paymentId: string;
-      productId: CheckoutProductId;
-      profile: WorkspaceProfile;
-    };
-    url?: string;
-    widget?: {
-      confirmationToken: string;
-      paymentId: string;
-      returnUrl: string;
-      url?: string;
-    };
-  };
-  error?: string;
-  warning?: string;
-};
-
-type Props = {
-  defaultTab: WorkspaceTab;
-  initialProfile?: WorkspaceProfile | null;
-  isProfileVerified?: boolean;
-  isGuest?: boolean;
-  session: Session;
-  onLogout: () => void | Promise<void>;
-  onAuthRequired?: () => void;
-  onProfileChange?: (profile: WorkspaceProfile | null) => void;
-};
-
-type WorkspaceGenerateOptions = {
-  addWatermark?: boolean;
-  brandChanged?: boolean;
-  clearBranding?: boolean;
-  brandLogoFile?: StudioBrandLogoFile | null;
-  brandText?: string | null;
-  clearAppliedSegmentEditorOnSuccess?: boolean;
-  editedFromProjectAdId?: number;
-  isRegeneration?: boolean;
-  language?: StudioLanguage | string;
-  musicType?: StudioMusicType | string;
-  projectId?: number;
-  segmentEditor?: WorkspaceSegmentEditorPayload;
-  segmentEditorAllowStructureChange?: boolean;
-  segmentEditorPersistedSegmentIndexes?: readonly number[];
-  segmentEditorSession?: WorkspaceSegmentEditorDraftSession | null;
-  subtitleEnabled?: boolean;
-  subtitleColorId?: string;
-  subtitleStyleId?: string;
-  videoMode?: StudioVideoMode | string;
-  videoModeChanged?: boolean;
-  versionRootProjectAdId?: number;
-  voiceEnabled?: boolean;
-  voiceId?: string;
-};
-
-type WorkspaceCreditTopupPack = {
-  badge?: string;
-  checkoutProductId: WorkspacePackageCheckoutProductId;
-  credits: string;
-  name: string;
-  price: string;
-  subnote: string;
-};
-
-type StudioGeneration = {
-  adId: number | null;
-  aspectRatio: string;
-  description: string;
-  durationLabel: string;
-  finalAsset?: WorkspaceMediaAssetRef | null;
-  generatedAt: string;
-  hashtags: string[];
-  id: string;
-  isReadyForEditor?: boolean | null;
-  modelLabel: string;
-  prefillSettings?: ExamplePrefillStudioSettings | null;
-  prompt: string;
-  projectStatus?: string | null;
-  readyReason?: string | null;
-  title: string;
-  videoFallbackUrl?: string | null;
-  videoUrl: string;
-};
-
-type StudioGeneratedVideoActionMode = "expanded" | "compact";
-
-type StudioGenerationJob = {
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-  title: string;
-};
-
-type StudioGenerationStartResponse = {
-  code?: string;
-  data?: StudioGenerationJob;
-  error?: string;
-};
-
-type StudioGenerationAvailabilityResponse = {
-  code?: string;
-  data?: {
-    available?: boolean;
-  };
-  error?: string;
-};
-
-type StudioGenerationStatusPayload = {
-  error?: string;
-  generation?: StudioGeneration;
-  jobId: string;
-  isReadyForEditor?: boolean | null;
-  projectStatus?: string | null;
-  readyReason?: string | null;
-  status: string;
-};
-
-type StudioGenerationStatusResponse = {
-  data?: StudioGenerationStatusPayload;
-  error?: string;
-};
-
-type WorkspaceLocalExampleGoal = "ads" | "growth" | "expert";
-
-type WorkspaceLocalExamplesResponse = {
-  data?: {
-    canManage?: boolean;
-    enabled: boolean;
-    items?: Array<{
-      id: string;
-    }>;
-  };
-  error?: string;
-};
-
-type WorkspaceLocalExampleSaveResponse = {
-  data?: {
-    item?: {
-      id: string;
-    };
-  };
-  error?: string;
-};
-
-type WorkspaceBootstrapPayload = {
-  latestGeneration?: StudioGenerationStatusPayload | null;
-  profile: WorkspaceProfile;
-  studioOptions: WorkspaceStudioOptionsPayload;
-};
-
-type WorkspaceBootstrapResponse = {
-  data?: WorkspaceBootstrapPayload;
-  error?: string;
-};
-
-const WORKSPACE_REFERRAL_SOURCE_STORAGE_KEY = "adshorts.web-referral-source";
-const WORKSPACE_REFERRAL_SOURCE_PATTERN = /^(?:[A-Za-z0-9_]{2,64}|en\/[A-Za-z0-9_]{2,61})$/;
-
-const normalizeWorkspaceReferralSource = (value: unknown) => {
-  const normalized = String(value ?? "").trim();
-  return WORKSPACE_REFERRAL_SOURCE_PATTERN.test(normalized) ? normalized : "";
-};
-
-const readWorkspaceReferralSourceFromSearch = (search: string) => {
-  const params = new URLSearchParams(search);
-  return normalizeWorkspaceReferralSource(params.get("referral_source") ?? params.get("ref") ?? params.get("referral"));
-};
-
-const readStoredWorkspaceReferralSource = () => {
-  if (typeof window === "undefined") return "";
-
-  try {
-    return normalizeWorkspaceReferralSource(window.localStorage.getItem(WORKSPACE_REFERRAL_SOURCE_STORAGE_KEY));
-  } catch {
-    return "";
-  }
-};
-
-const buildWorkspaceBootstrapRequestUrl = (search: string) => {
-  const referralSource = readWorkspaceReferralSourceFromSearch(search) || readStoredWorkspaceReferralSource();
-  if (!referralSource) return "/api/workspace/bootstrap";
-  return `/api/workspace/bootstrap?${new URLSearchParams({ referral_source: referralSource }).toString()}`;
-};
-
-type WorkspaceProjectsPayload = {
-  projects: WorkspaceProject[];
-};
-
-type WorkspaceProjectsResponse = {
-  data?: WorkspaceProjectsPayload;
-  error?: string;
-};
-
-type WorkspaceMediaLibraryPayload = {
-  items: WorkspaceMediaLibraryItem[];
-  nextCursor: string | null;
-  total: number;
-};
-
-type WorkspaceMediaLibraryResponse = {
-  data?: WorkspaceMediaLibraryPayload;
-  error?: string;
-};
-
-const mergeWorkspaceMediaLibraryPageItems = (
-  currentItems: WorkspaceMediaLibraryItem[],
-  nextItems: WorkspaceMediaLibraryItem[],
-) => {
-  const itemsByKey = new Map<string, WorkspaceMediaLibraryItem>();
-
-  [...currentItems, ...nextItems].forEach((item) => {
-    if (!itemsByKey.has(item.itemKey)) {
-      itemsByKey.set(item.itemKey, item);
-    }
-  });
-
-  return sortWorkspaceMediaLibraryItemsNewestFirst(Array.from(itemsByKey.values()));
-};
-
-type WorkspaceProjectDeletePayload = {
-  projectId: string;
-};
-
-type WorkspaceProjectDeleteResponse = {
-  data?: WorkspaceProjectDeletePayload;
-  error?: string;
-};
-
-type WorkspaceLocalExampleSource = {
-  prefillSettings: ExamplePrefillStudioSettings | null;
-  prompt: string;
-  sourceId: string | null;
-  title: string;
-  videoFallbackUrl?: string | null;
-  videoUrl: string;
-};
-
-type WorkspaceSegmentVisualModalTab =
-  | "ai_video"
-  | "photo_animation"
-  | "talking_photo"
-  | "ai_photo"
-  | "image_edit"
-  | "image_upscale"
-  | "scene_sound"
-  | "voiceover"
-  | "upload"
-  | "library";
-type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab;
-
-type WorkspaceSegmentTimelineVoiceTextEditSnapshot = {
-  segment: WorkspaceSegmentEditorDraftSegment;
-  segmentIndex: number;
-};
-
-type WorkspaceSegmentTimelineRedoSnapshot =
-  | {
-      kind: "music";
-      customMusicAssetId?: number | null;
-      customMusicFileName?: string | null;
-      musicAssetId?: number | null;
-      musicName?: string | null;
-      musicType: string;
-      selectedCustomMusic: StudioCustomMusicFile | null;
-    }
-  | {
-      kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "music">;
-      segment: WorkspaceSegmentEditorDraftSegment;
-      segmentIndex: number;
-    };
-
-type WorkspaceSegmentTimelineAudioPreviewTrack = {
-  durationSeconds?: number | null;
-  endTime?: number | null;
-  mediaKind?: "audio" | "video";
-  startTime?: number | null;
-  url: string;
-};
-
-type WorkspaceSegmentEditorFullPreviewStatus = "idle" | "loading" | "paused" | "playing";
-
-type WorkspaceSegmentEditorFullPreviewAudioTrack = {
-  endGraceSeconds?: number;
-  key: string;
-  kind: "embedded_voice" | "music" | "sound" | "voice";
-  loop?: boolean;
-  mediaKind?: "audio" | "video";
-  sourceKind: "isolated" | "timeline";
-  volume: number;
-  sourceStartTime: number;
-  timelineEndTime: number;
-  timelineStartTime: number;
-  url: string;
-};
-
-type WorkspaceSegmentEditorFullPreviewDebugWindow = Window & {
-  __adshortsFullPreviewTrace?: Array<Record<string, unknown>>;
-  __adshortsVoiceDurationTrace?: Array<Record<string, unknown>>;
-};
-
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME = 0.22;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME = 0.08;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME = 0.35;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_DUCKED_VOLUME = 0.24;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME = 1;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS = 0.09;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_READY_TIMEOUT_MS = 900;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS = 5000;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_LOOKAHEAD_SECONDS = 7.5;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS = 0.6;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS = 0.035;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS = 0.45;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS = 0.75;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS = 2;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS = 8000;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS = 0.04;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS = 0.75;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_PROGRESS_SECONDS = 0.018;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS = 0.045;
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_DEBUG_STORAGE_KEY = "adshortsPreviewDebug";
-const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_DEBUG_EVENTS = [
-  "canplay",
-  "ended",
-  "error",
-  "pause",
-  "play",
-  "seeked",
-  "seeking",
-  "waiting",
-] as const;
-const WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_NATURAL_END_CLEANUP_DELAY_MS = 450;
-const WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_TAIL_PADDING_SECONDS = 0.45;
-
-type WorkspaceSegmentEditorResponse = {
-  data?: WorkspaceSegmentEditorSession;
-  error?: string;
-};
-
-type WorkspaceSegmentAiPhotoJobCreateRequest = {
-  characterContinuityMode?: "auto" | "off" | "force";
-  characterIds?: number[];
-  language: StudioLanguage;
-  preserveCharacters?: boolean;
-  prompt: string;
-  projectId?: number;
-  purpose?: "workspace_reference";
-  billingQuality?: StudioSegmentVisualQuality;
-  quality?: StudioSegmentVisualQuality;
-  referenceKind?: WorkspaceReferenceKind;
-  referenceAssetIds?: number[];
-  sceneReferenceAssetIds?: number[];
-  segmentIndex?: number;
-};
-
-type WorkspaceSegmentImageUpscaleRequest = {
-  imageAssetId?: number;
-  imageDataUrl?: string;
-  imageFileName?: string;
-  language: StudioLanguage;
-  projectId?: number;
-  segmentIndex?: number;
-};
-
-type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleRequest & {
-  characterContinuityMode?: "auto" | "off" | "force";
-  characterIds?: number[];
-  preserveCharacters?: boolean;
-  prompt: string;
-  referenceAssetIds?: number[];
-  sceneReferenceAssetIds?: number[];
-};
-
-type WorkspaceSegmentAiPhotoPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
-
-type WorkspaceSegmentPromptImprovementSnapshot = {
-  mode: WorkspaceSegmentAiPhotoPromptImproveMode;
-  prompt: string;
-  segmentIndex: number | null;
-};
-
-type WorkspaceSegmentAiPhotoPromptImproveRequest = {
-  language: StudioLanguage;
-  mode: WorkspaceSegmentAiPhotoPromptImproveMode;
-  prompt: string;
-};
-
-type WorkspaceSegmentAiPhotoPromptImprovePayload = {
-  prompt: string;
-};
-
-type WorkspaceSegmentAiPhotoPromptImproveResponse = {
-  data?: WorkspaceSegmentAiPhotoPromptImprovePayload;
-  error?: string;
-};
-
-type WorkspaceSegmentTextTranslateRequest = {
-  sourceLanguage: StudioLanguage;
-  targetLanguage: StudioLanguage;
-  texts: string[];
-};
-
-type WorkspaceSegmentTextTranslatePayload = {
-  texts: string[];
-};
-
-type WorkspaceSegmentTextTranslateResponse = {
-  data?: WorkspaceSegmentTextTranslatePayload;
-  error?: string;
-};
-
-type WorkspaceSegmentAiPhotoJobCreatePayload = {
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentAiPhotoJobCreateResponse = {
-  data?: WorkspaceSegmentAiPhotoJobCreatePayload;
-  error?: string;
-};
-
-type WorkspaceSegmentAiPhotoJobStatusPayload = {
-  asset?: StudioCustomVideoFile;
-  error?: string;
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentAiPhotoJobStatusResponse = {
-  data?: WorkspaceSegmentAiPhotoJobStatusPayload;
-  error?: string;
-};
-
-type WorkspaceSegmentImageUpscaleJobCreatePayload = {
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentImageUpscaleJobCreateResponse = {
-  data?: WorkspaceSegmentImageUpscaleJobCreatePayload;
-  error?: string;
-};
-
-type WorkspaceSegmentImageUpscaleJobStatusPayload = {
-  asset?: StudioCustomVideoFile;
-  error?: string;
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentImageUpscaleJobStatusResponse = {
-  data?: WorkspaceSegmentImageUpscaleJobStatusPayload;
-  error?: string;
-};
-
-type WorkspaceSegmentAiVideoJobCreateRequest = {
-  characterContinuityMode?: "auto" | "off" | "force";
-  characterIds?: number[];
-  durationSeconds?: number;
-  imageAssetId?: number;
-  imageDataUrl?: string;
-  imageFileName?: string;
-  imageMimeType?: string;
-  language: StudioLanguage;
-  preserveCharacters?: boolean;
-  prompt: string;
-  projectId?: number;
-  billingQuality?: StudioSegmentVisualQuality;
-  quality?: StudioSegmentVisualQuality;
-  referenceAssetIds?: number[];
-  sceneReferenceAssetIds?: number[];
-  segmentIndex?: number;
-};
-
-type WorkspaceProjectCharacter = {
-  aliases: string[];
-  characterId: number;
-  description: string | null;
-  label: string;
-  referenceAssetIds: number[];
-  sourceSegmentIds: number[];
-};
-
-type WorkspaceProjectCharactersPayload = {
-  characters: WorkspaceProjectCharacter[];
-  projectId: number;
-};
-
-type WorkspaceProjectCharactersResponse = {
-  data?: WorkspaceProjectCharactersPayload;
-  error?: string;
-};
-
-type WorkspaceReferenceCreateResponse = {
-  data?: {
-    reference: WorkspaceSavedReference;
-  };
-  error?: string;
-};
-
-type WorkspaceReferenceDeleteResponse = {
-  data?: {
-    referenceId: string;
-  };
-  error?: string;
-};
-
-type WorkspaceReferenceUpdateResponse = {
-  data?: {
-    reference: WorkspaceSavedReference;
-  };
-  error?: string;
-};
-
-type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiVideoJobCreateRequest & {
-  customVideoAssetId?: number;
-  customVideoFileDataUrl?: string;
-  customVideoFileMimeType?: string;
-  customVideoFileName?: string;
-  durationExtensionBaseDurationSeconds?: number;
-  durationExtensionMode?: "stitch";
-  durationExtensionTailDurationSeconds?: number;
-  durationExtensionTargetDurationSeconds?: number;
-};
-
-type WorkspaceTalkingTargetDragState = {
-  mode: "create" | "move" | "resize";
-  originTarget?: WorkspaceTalkingCharacterTarget;
-  resizeHandle?: WorkspaceTalkingTargetResizeHandle;
-  segmentIndex: number;
-  startX: number;
-  startY: number;
-};
-
-type WorkspaceSegmentTalkingPhotoJobCreateRequest = {
-  customVideoAssetId?: number;
-  customVideoFileDataUrl?: string;
-  customVideoMediaType?: "photo" | "video";
-  customVideoFileMimeType?: string;
-  customVideoFileName?: string;
-  durationSeconds?: number;
-  language: StudioLanguage;
-  projectId?: number;
-  prompt?: string;
-  script: string;
-  segmentIndex?: number;
-  speakerConfirmationToken?: string;
-  speakerTarget?: WorkspaceTalkingCharacterTarget;
-  voiceType?: string | null;
-};
-
-type WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest = {
-  customVideoAssetId?: number;
-  customVideoFileDataUrl?: string;
-  customVideoMediaType?: "photo" | "video";
-  customVideoFileMimeType?: string;
-  customVideoFileName?: string;
-  language: StudioLanguage;
-  projectId?: number;
-  segmentIndex?: number;
-  speakerTarget: WorkspaceTalkingCharacterTarget;
-};
-
-type WorkspaceSegmentTalkingPhotoSpeakerPreview = {
-  confirmationToken: string;
-  expiresInSeconds: number | null;
-  overlay: {
-    box: {
-      height: number;
-      width: number;
-      x: number;
-      y: number;
-    } | null;
-    dataUrl: string;
-    height: number | null;
-    mimeType: string;
-    width: number | null;
-  };
-  projectId: number | null;
-  segmentIndex: number | null;
-  sourceAssetId: number;
-  sourceMediaType: "photo" | "video";
-  speakerTarget: WorkspaceTalkingCharacterTarget;
-};
-
-type WorkspaceSegmentSceneSoundJobCreateRequest = {
-  durationSeconds?: number;
-  language: StudioLanguage;
-  projectId?: number;
-  project_id?: number;
-  prompt: string;
-  segmentIndex?: number;
-  segment_index?: number;
-  source?: "current" | "original";
-  visualMediaAssetId?: number;
-  visualSourceJobId?: string;
-  visualSourceKind?: "segment-ai-video" | "segment-photo-animation" | "segment-talking-photo";
-};
-
-type WorkspaceSegmentVoiceoverJobCreateRequest = {
-  language: StudioLanguage;
-  projectId?: number;
-  project_id?: number;
-  segmentIndex?: number;
-  segment_index?: number;
-  text: string;
-  voiceType?: string;
-  voice_type?: string;
-};
-
-type WorkspaceSegmentVoiceoverJobStatusPayload = WorkspaceSegmentAiPhotoJobStatusPayload & {
-  speechDuration?: number | null;
-  speechDurationSource?: "audio" | null;
-  speechEndTime?: number | null;
-  speechStartTime?: number | null;
-  speechWords?: WorkspaceSegmentEditorSpeechWord[];
-};
-
-type WorkspaceSegmentVoiceoverJobStatusResponse = {
-  data?: WorkspaceSegmentVoiceoverJobStatusPayload;
-  error?: string;
-};
-
-type WorkspaceSegmentAiVideoJobCreatePayload = {
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentAiVideoJobCreateResponse = {
-  data?: WorkspaceSegmentAiVideoJobCreatePayload;
-  error?: string;
-};
-
-type WorkspaceSegmentAiVideoJobStatusPayload = {
-  asset?: StudioCustomVideoFile;
-  error?: string;
-  jobId: string;
-  profile: WorkspaceProfile;
-  status: string;
-};
-
-type WorkspaceSegmentAiVideoJobStatusResponse = {
-  data?: WorkspaceSegmentAiVideoJobStatusPayload;
-  error?: string;
-};
-
-type WorkspaceSegmentThumbDragState = {
-  draggedIndex: number;
-  height: number;
-  offsetX: number;
-  offsetY: number;
-  pointerId: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-type WorkspacePublishChannel = {
-  channelId: string | null;
-  channelName: string;
-  pk: number;
-};
-
-type WorkspacePublishBootstrapPayload = {
-  channels: WorkspacePublishChannel[];
-  defaults: {
-    description: string;
-    hashtags: string;
-    publishAt: string | null;
-    title: string;
-  };
-  publication: WorkspaceProjectYouTubePublication | null;
-  selectedChannelPk: number | null;
-  videoProjectId: number;
-};
-
-type WorkspacePublishBootstrapResponse = {
-  data?: WorkspacePublishBootstrapPayload;
-  error?: string;
-};
-
-type WorkspacePublishJob = {
-  enqueueError?: string | null;
-  jobId: string;
-  status: string;
-  videoProjectId: number;
-};
-
-type WorkspacePublishStartResponse = {
-  data?: WorkspacePublishJob;
-  error?: string;
-};
-
-type WorkspacePublishJobStatusPayload = {
-  error?: string;
-  jobId: string;
-  publication: WorkspaceProjectYouTubePublication | null;
-  status: string;
-  videoProjectId: number | null;
-};
-
-type WorkspacePublishJobStatusResponse = {
-  data?: WorkspacePublishJobStatusPayload;
-  error?: string;
-};
-
-type WorkspaceSegmentVisualRunState = Record<number, number>;
-type WorkspaceSegmentVisualRunScope =
-  | "ai_photo"
-  | "ai_video"
-  | "image_edit"
-  | "image_upscale"
-  | "photo_animation"
-  | "scene_sound"
-  | "talking_photo"
-  | "voiceover";
-
-const hasWorkspaceSegmentVisualRun = (
-  runState: WorkspaceSegmentVisualRunState,
-  segmentIndex: number | null | undefined,
-) => typeof segmentIndex === "number" && Boolean(runState[segmentIndex]);
-
-const hasAnyWorkspaceSegmentVisualRun = (runState: WorkspaceSegmentVisualRunState) =>
-  Object.keys(runState).length > 0;
-
-const clearWorkspaceSegmentVisualRunState = (
-  runState: WorkspaceSegmentVisualRunState,
-  segmentIndex: number,
-  runId?: number,
-): WorkspaceSegmentVisualRunState => {
-  if (!runState[segmentIndex] || (typeof runId === "number" && runState[segmentIndex] !== runId)) {
-    return runState;
-  }
-
-  const nextRunState = { ...runState };
-  delete nextRunState[segmentIndex];
-  return nextRunState;
-};
-
-type WorkspaceStudioOptionsPayload = {
-  subtitleColors: StudioSubtitleColorCatalogOption[];
-  subtitleStyles: StudioSubtitleStyleOption[];
-};
-
-const STUDIO_PROMPT_PANEL_BASE_WIDTH = 620;
-const STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH = 1220;
-const STUDIO_PROMPT_PANEL_INLINE_BUFFER = 8;
-const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
-const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
-const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
-const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
-const WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS = 10 * 60 * 1000;
-const SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT = 12;
-const SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP = 12;
-const SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS = 280;
-const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
-
-const normalizeWorkspaceSegmentGenerationJobStatus = (value: unknown) => String(value ?? "").trim().toLowerCase();
-
-const isWorkspaceSegmentGenerationJobDoneStatus = (value: unknown) =>
-  ["completed", "done", "ready", "success", "succeeded"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
-
-const isWorkspaceSegmentGenerationJobFailedStatus = (value: unknown) =>
-  ["canceled", "cancelled", "error", "failed", "timeout"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
-
-const studioPromptChips = ["Видео", "Субтитры", "Озвучка", "Музыка", "Язык"];
-const measureElementChildrenInlineWidth = (element: HTMLElement, gap: number) => {
-  const childWidths = Array.from(element.children)
-    .map((child) => Math.ceil((child as HTMLElement).getBoundingClientRect().width))
-    .filter((width) => width > 0);
-
-  if (childWidths.length === 0) {
-    return 0;
-  }
-
-  return childWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, childWidths.length - 1);
-};
-
-const workspaceLocalExampleGoalOptions: Array<{
-  description: string;
-  id: WorkspaceLocalExampleGoal;
-  label: string;
-}> = [
-  {
-    description: "Офферы, продажи, продукты и рекламные связки.",
-    id: "ads",
-    label: "📣 Реклама",
-  },
-  {
-    description: "Темы для охватов, удержания, динамичных форматов и роста канала.",
-    id: "growth",
-    label: "📈 Рост канала",
-  },
-  {
-    description: "Факты, разборы, объяснения и обучающие ролики.",
-    id: "expert",
-    label: "🎓 Обучение",
-  },
-];
-const workspaceLocalExampleGoalEnglishCopy: Record<WorkspaceLocalExampleGoal, Pick<(typeof workspaceLocalExampleGoalOptions)[number], "description" | "label">> = {
-  ads: {
-    description: "Offers, sales, products and ad concepts.",
-    label: "📣 Ads",
-  },
-  expert: {
-    description: "Facts, explainers and educational videos.",
-    label: "🎓 Education",
-  },
-  growth: {
-    description: "Reach, retention, dynamic formats and channel growth.",
-    label: "📈 Channel growth",
-  },
-};
-
-const getWorkspaceLocalExampleGoalCopy = (
-  option: (typeof workspaceLocalExampleGoalOptions)[number],
-  locale: Locale,
-) => (locale === "en" ? workspaceLocalExampleGoalEnglishCopy[option.id] ?? option : option);
-const PROJECTS_REQUEST_TIMEOUT_MS = 25_000;
-const MEDIA_LIBRARY_REQUEST_TIMEOUT_MS = 25_000;
-const SEGMENT_EDITOR_REQUEST_TIMEOUT_MS = 90_000;
-const SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS = 1_500;
-const SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS = 8;
-const WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
-
-const isWorkspaceSegmentEditorNotFoundError = (value: string) => {
-  const normalized = value.trim().toLowerCase();
-  return normalized === "not found" || normalized.includes("404");
-};
-
-const isWorkspaceSegmentEditorPreparingError = (value: string) => {
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.includes("пока") ||
-    normalized.includes("not ready") ||
-    normalized.includes("still being prepared") ||
-    normalized.includes("project_not_ready") ||
-    normalized.includes("does not have segment data") ||
-    normalized.includes("segment data")
-  );
-};
-
-const waitWorkspaceDelay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-const isTextInputTarget = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-
-const renderWorkspaceMediaLibraryPlayOverlay = (previewKind: WorkspaceMediaLibraryPreviewKind): ReactNode => {
-  if (previewKind !== "video") {
-    return null;
-  }
-
-  return (
-    <span className="studio-media-library__play-indicator" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M9 7.5v9l7-4.5-7-4.5Z" fill="currentColor" />
-      </svg>
-    </span>
-  );
-};
-
-const getVideoDownloadName = getWorkspaceVideoDownloadName;
-
-const tabCopy: Record<
-  WorkspaceTab,
-  Record<Locale, {
-    eyebrow: string;
-    heading: string;
-    subtitle: string;
-  }>
-> = {
-  overview: {
-    ru: {
-      eyebrow: "Личный кабинет",
-      heading: "Личный кабинет AdShorts AI",
-      subtitle:
-        "Управляйте генерациями, тарифом, каналами публикации и рабочими пресетами из одного workspace.",
-    },
-    en: {
-      eyebrow: "Personal workspace",
-      heading: "AdShorts AI workspace",
-      subtitle: "Manage generations, plan, publishing channels and working presets from one workspace.",
-    },
-  },
-  studio: {
-    ru: {
-      eyebrow: "Студия Shorts",
-      heading: "",
-      subtitle: "",
-    },
-    en: {
-      eyebrow: "Shorts Studio",
-      heading: "",
-      subtitle: "",
-    },
-  },
-  generations: {
-    ru: {
-      eyebrow: "Проекты",
-      heading: "Все проекты аккаунта",
-      subtitle: "Здесь собраны все генерации и готовые Shorts, связанные с вашим аккаунтом в общей БД.",
-    },
-    en: {
-      eyebrow: "Projects",
-      heading: "All account projects",
-      subtitle: "All generations and finished Shorts linked to your account in the shared database.",
-    },
-  },
-  billing: {
-    ru: {
-      eyebrow: "Тариф и кредиты",
-      heading: "Тариф и пополнение",
-      subtitle: "Здесь видно текущий тариф, баланс кредитов и сценарий докупки пакетов для PRO и ULTRA.",
-    },
-    en: {
-      eyebrow: "Plan and credits",
-      heading: "Plan and top-ups",
-      subtitle: "Current plan, credit balance and add-on pack flow for PRO and ULTRA.",
-    },
-  },
-  settings: {
-    ru: {
-      eyebrow: "Настройки",
-      heading: "Настройки workspace",
-      subtitle: "Профиль, интеграции, уведомления и безопасность собраны в одной панели.",
-    },
-    en: {
-      eyebrow: "Settings",
-      heading: "Workspace settings",
-      subtitle: "Profile, integrations, notifications and account security in one panel.",
-    },
-  },
-};
-
-const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopupPack>> = [
-  {
-    ru: {
-      checkoutProductId: "package_10",
-      name: "Pack 100",
-      credits: "100 кредитов",
-      price: "690 ₽",
-      subnote: "До 10 видео",
-    },
-    en: {
-      checkoutProductId: "package_10",
-      name: "Pack 100",
-      credits: "100 credits",
-      price: "690 ₽",
-      subnote: "Up to 10 videos",
-    },
-  },
-  {
-    ru: {
-      checkoutProductId: "package_50",
-      name: "Pack 500",
-      credits: "500 кредитов",
-      price: "2 750 ₽",
-      subnote: "до 50 видео",
-      badge: "Выгодно",
-    },
-    en: {
-      checkoutProductId: "package_50",
-      name: "Pack 500",
-      credits: "500 credits",
-      price: "2 750 ₽",
-      subnote: "Up to 50 videos",
-      badge: "Good value",
-    },
-  },
-  {
-    ru: {
-      checkoutProductId: "package_100",
-      name: "Pack 1000",
-      credits: "1000 кредитов",
-      price: "4 990 ₽",
-      subnote: "до 100 видео",
-    },
-    en: {
-      checkoutProductId: "package_100",
-      name: "Pack 1000",
-      credits: "1000 credits",
-      price: "4 990 ₽",
-      subnote: "Up to 100 videos",
-    },
-  },
-];
-
-type StudioCreateMode = "default" | "segment-editor";
 
 export function WorkspacePage({
   defaultTab,
