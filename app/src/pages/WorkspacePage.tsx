@@ -411,6 +411,13 @@ import {
   WorkspaceSegmentTimelineVoiceMenu,
 } from "../features/workspace/workspace-timeline-menus";
 import {
+  WorkspaceReferenceModalShell,
+  WorkspaceReferenceOptionCard,
+  WorkspaceReferenceSavedSection,
+  WorkspaceReferenceSelectedCard,
+  WorkspaceSegmentVisualReferencesPanel,
+} from "../features/workspace/workspace-references-ui";
+import {
   characterPickerIconUrl,
   workspaceText,
   STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
@@ -23217,124 +23224,47 @@ export function WorkspacePage({
       !isSelected &&
       selectedSegmentReferenceCharacterCount >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT;
     const canUseReference = Boolean(option.assetId || option.videoReferenceUrl || option.source === "project-character");
-    const isDeleting = option.savedReference && deletingReferenceId === option.savedReference.id;
-    const isSavedReferenceCard = Boolean(config?.allowDelete && option.savedReference);
+    const isDeleting = Boolean(option.savedReference && deletingReferenceId === option.savedReference.id);
     const isEditingName = Boolean(option.savedReference && editingReferenceId === option.savedReference.id);
     const isSavingName = Boolean(option.savedReference && savingReferenceNameId === option.savedReference.id);
 
-    if (isSavedReferenceCard && option.savedReference) {
-      return (
-        <div
-          key={`segment-reference-option:${option.kind}:${option.key}`}
-          className={`studio-segment-references__option studio-segment-references__option--saved${isSelected ? " is-selected" : ""}`}
-        >
-          <div className={`studio-segment-references__card studio-segment-references__card--saved${isSelected ? " is-selected" : ""}`}>
-            <button
-              className="studio-segment-references__card-select"
-              type="button"
-              aria-label={option.label}
-              aria-pressed={isSelected}
-              disabled={!canUseReference || isSavingName || isCharacterLimitReached}
-              onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
-            >
-              {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
-              {option.previewKind === "video" && option.videoReferenceUrl ? (
-                <span className="studio-segment-references__badge">{workspaceText(locale, "Кадр", "Frame")}</span>
-              ) : null}
-            </button>
-            <button
-              className="studio-segment-references__delete-icon"
-              type="button"
-              aria-label={workspaceText(locale, "Удалить", "Delete")}
-              disabled={Boolean(deletingReferenceId) || isSavingName}
-              onClick={() => {
-                void handleDeleteSavedReference(option.savedReference!);
-              }}
-            >
-              {isDeleting ? (
-                <span className="studio-ai-photo-modal__action-spinner" aria-hidden="true"></span>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M9 4h6m-9 4h12m-10 0 .7 11h6.6L16 8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
-            <span className="studio-segment-references__card-copy studio-segment-references__card-copy--editable">
-              {isEditingName ? (
-                <input
-                  className="studio-segment-references__name-input"
-                  type="text"
-                  value={editingReferenceName}
-                  disabled={isSavingName}
-                  autoFocus
-                  onChange={(event) => setEditingReferenceName(event.currentTarget.value)}
-                  onBlur={() => {
-                    void finishEditingSavedReferenceName(option.savedReference!);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      setEditingReferenceId(null);
-                      setEditingReferenceName("");
-                    }
-                  }}
-                />
-              ) : (
-                <button
-                  className="studio-segment-references__name-button"
-                  type="button"
-                  onClick={() => startEditingSavedReferenceName(option.savedReference!)}
-                >
-                  {option.label}
-                </button>
-              )}
-            </span>
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div
+      <WorkspaceReferenceOptionCard
+        allowDelete={config?.allowDelete}
+        canUseReference={canUseReference}
+        editingName={editingReferenceName}
+        isCharacterLimitReached={isCharacterLimitReached}
+        isDeleteDisabled={Boolean(deletingReferenceId)}
+        isDeleting={isDeleting}
+        isEditingName={isEditingName}
+        isSavingName={isSavingName}
+        isSelected={isSelected}
         key={`segment-reference-option:${option.kind}:${option.key}`}
-        className={`studio-segment-references__option${isSelected ? " is-selected" : ""}`}
-      >
-        <button
-          className="studio-segment-references__card"
-          type="button"
-          aria-pressed={isSelected}
-          disabled={!canUseReference || isCharacterLimitReached}
-          onClick={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
-        >
-          {renderSegmentReferenceOptionPreview(option, `reference-option:${option.key}`)}
-          {option.previewKind === "video" && option.videoReferenceUrl ? (
-            <span className="studio-segment-references__badge">{workspaceText(locale, "Кадр", "Frame")}</span>
-          ) : null}
-          <span className="studio-segment-references__card-copy">
-            <strong>{option.label}</strong>
-            <small>{option.subtitle}</small>
-          </span>
-        </button>
-        {config?.allowDelete && option.savedReference ? (
-          <div className="studio-segment-references__option-actions">
-            <button
-              type="button"
-              disabled={Boolean(deletingReferenceId)}
-              onClick={() => {
-                if (option.savedReference) {
-                  void handleDeleteSavedReference(option.savedReference);
-                }
-              }}
-            >
-              {isDeleting ? workspaceText(locale, "Удаляем...", "Deleting...") : workspaceText(locale, "Удалить", "Delete")}
-            </button>
-          </div>
-        ) : null}
-      </div>
+        locale={locale}
+        onCancelEditingName={() => {
+          setEditingReferenceId(null);
+          setEditingReferenceName("");
+        }}
+        onDelete={() => {
+          if (option.savedReference) {
+            void handleDeleteSavedReference(option.savedReference);
+          }
+        }}
+        onEditingNameChange={setEditingReferenceName}
+        onFinishEditingName={() => {
+          if (option.savedReference) {
+            void finishEditingSavedReferenceName(option.savedReference);
+          }
+        }}
+        onSelect={config?.onSelect ?? (() => selectSegmentReferenceOption(option))}
+        onStartEditingName={() => {
+          if (option.savedReference) {
+            startEditingSavedReferenceName(option.savedReference);
+          }
+        }}
+        option={option}
+        renderPreview={renderSegmentReferenceOptionPreview}
+      />
     );
   };
   const renderSegmentReferencesModal = () => {
@@ -23379,65 +23309,31 @@ export function WorkspacePage({
           ? workspaceText(locale, "Выбрать персонажей", "Choose characters")
           : workspaceText(locale, "Выбрать персонажа", "Choose character")
         : workspaceText(locale, "Выберите персонажа", "Choose a character");
-    const renderSavedReferenceSection = (
-      title: string,
-      options: WorkspaceReferenceVisualOption[],
-      createLabel: string,
-    ) => (
-      <section className="studio-reference-modal__saved-section">
-        <div className="studio-reference-modal__section-title">
-          <div>
-            <strong>{title}</strong>
-          </div>
-        </div>
-        {isSavedWorkspaceReferencesLoading ? (
-          <div className="studio-segment-references__empty">{workspaceText(locale, "Загружаем", "Loading")}</div>
-        ) : (
-          <div className="studio-segment-references__grid studio-segment-references__grid--saved">
-            {options.map((option) => renderSegmentReferenceOptionCard(option, { allowDelete: true }))}
-            <button
-              className="studio-reference-modal__add-card"
-              type="button"
-              onClick={openWorkspaceReferenceCreator}
-            >
-              <span>+</span>
-              <strong>{createLabel}</strong>
-            </button>
-          </div>
-        )}
-      </section>
+    const savedReferenceSection = (
+      <WorkspaceReferenceSavedSection
+        createLabel={workspaceText(locale, "Создать персонажа", "Create character")}
+        isLoading={isSavedWorkspaceReferencesLoading}
+        loadingLabel={workspaceText(locale, "Загружаем", "Loading")}
+        onCreate={openWorkspaceReferenceCreator}
+        options={savedCharacterReferenceOptions}
+        renderOption={(option) => renderSegmentReferenceOptionCard(option, { allowDelete: true })}
+        title={workspaceText(locale, "Мои персонажи", "My characters")}
+      />
     );
-    const renderSelectedReferenceCard = (
-      title: string,
-      options: WorkspaceReferenceVisualOption[],
-      emptyLabel: string,
-    ) => {
-      const visibleOptions = options.slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT);
-      const selectedLabel = visibleOptions.length > 0
-        ? visibleOptions.map((option) => option.label).join(", ")
-        : emptyLabel;
-
-      return (
-        <div className={`studio-reference-modal__selected-card${visibleOptions.length > 0 ? "" : " is-empty"}${visibleOptions.length > 1 ? " has-multiple" : ""}`}>
-          {visibleOptions.length > 0 ? (
-            <span className="studio-reference-modal__selected-media-stack">
-              {visibleOptions.map((option) => (
-                <span key={`selected-reference-stack:${option.key}`} className="studio-reference-modal__selected-media-item">
-                  {renderSegmentReferenceOptionPreview(option, `selected-reference:${option.key}`)}
-                </span>
-              ))}
-            </span>
-          ) : null}
-          <span>
-            <small>{title}</small>
-            <strong>{selectedLabel}</strong>
-            {visibleOptions.length > 1 ? (
-              <em>{workspaceText(locale, `${visibleOptions.length} персонажа`, `${visibleOptions.length} characters`)}</em>
-            ) : null}
-          </span>
-        </div>
-      );
-    };
+    const selectedReferenceCard = (
+      <WorkspaceReferenceSelectedCard
+        emptyLabel={workspaceText(locale, "Не выбран", "Not selected")}
+        limit={WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT}
+        locale={locale}
+        options={selectedSegmentReferenceCharacterOptions}
+        renderPreview={renderSegmentReferenceOptionPreview}
+        title={workspaceText(
+          locale,
+          selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж",
+          selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character",
+        )}
+      />
+    );
     const renderWorkspaceReferenceCreatorDialog = () => (
       <div
         className="studio-reference-create-backdrop"
@@ -23736,208 +23632,40 @@ export function WorkspacePage({
     );
 
     return (
-      <div className="studio-reference-modal-backdrop" role="presentation" onMouseDown={closeSegmentReferencesModal}>
-        <div
-          className="studio-reference-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={workspaceText(locale, "Персонажи", "Characters")}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <header className="studio-reference-modal__head">
-            <div>
-              <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
-              <span>{workspaceText(locale, "Выберите персонажей или создайте новых.", "Choose characters or create new ones.")}</span>
-            </div>
-            <div className="studio-reference-modal__head-actions">
-              <button
-                className="studio-reference-modal__ghost"
-                type="button"
-                disabled={selectedSegmentReferenceCount === 0}
-                onClick={clearSegmentVisualReferences}
-              >
-                {workspaceText(locale, "Очистить", "Clear")}
-              </button>
-              <button
-                className="studio-reference-modal__close"
-                type="button"
-                aria-label={workspaceText(locale, "Закрыть", "Close")}
-                onClick={closeSegmentReferencesModal}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-          </header>
-
-          <div className="studio-reference-modal__layout studio-reference-modal__layout--library-only">
-            <div className="studio-reference-modal__catalog">
-              {renderSavedReferenceSection(
-                workspaceText(locale, "Мои персонажи", "My characters"),
-                savedCharacterReferenceOptions,
-                workspaceText(locale, "Создать персонажа", "Create character"),
-              )}
-
-              <section className="studio-reference-modal__selected">
-                <div className="studio-reference-modal__section-title">
-                  <div>
-                    <strong>{workspaceText(locale, "Выбрано", "Selected")}</strong>
-                    <span>{segmentReferenceSummary}</span>
-                  </div>
-                </div>
-                <div className="studio-reference-modal__selected-grid studio-reference-modal__selected-grid--characters-only">
-                  {renderSelectedReferenceCard(
-                    workspaceText(locale, selectedSegmentReferenceCharacterCount > 1 ? "Персонажи" : "Персонаж", selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"),
-                    selectedSegmentReferenceCharacterOptions,
-                    workspaceText(locale, "Не выбран", "Not selected"),
-                  )}
-                </div>
-              </section>
-            </div>
-          </div>
-
-          <input
-            ref={referenceCreationFileInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={handleReferenceCreationUploadFileSelect}
-          />
-
-          {!isWorkspaceReferenceCreatorOpen && (segmentProjectCharactersError || savedWorkspaceReferencesError) ? (
-            <div className="studio-segment-references__error" role="alert">
-              {segmentProjectCharactersError || savedWorkspaceReferencesError}
-            </div>
-          ) : null}
-
-          <footer className="studio-reference-modal__footer">
-            <button className="studio-reference-modal__footer-cancel" type="button" onClick={closeSegmentReferencesModal}>
-              {workspaceText(locale, "Отмена", "Cancel")}
-            </button>
-            <button
-              className="studio-reference-modal__footer-submit"
-              type="button"
-              disabled={selectedSegmentReferenceCount === 0}
-              onClick={closeSegmentReferencesModal}
-            >
-              {selectionSubmitLabel}
-            </button>
-          </footer>
-
-          {isWorkspaceReferenceCreatorOpen ? renderWorkspaceReferenceCreatorDialog() : null}
-        </div>
-      </div>
+      <WorkspaceReferenceModalShell
+        creatorDialog={isWorkspaceReferenceCreatorOpen ? renderWorkspaceReferenceCreatorDialog() : null}
+        error={segmentProjectCharactersError || savedWorkspaceReferencesError}
+        fileInputRef={referenceCreationFileInputRef}
+        isCreatorOpen={isWorkspaceReferenceCreatorOpen}
+        locale={locale}
+        onClear={clearSegmentVisualReferences}
+        onClose={closeSegmentReferencesModal}
+        onFileChange={handleReferenceCreationUploadFileSelect}
+        savedSection={savedReferenceSection}
+        selectedCard={selectedReferenceCard}
+        selectedCount={selectedSegmentReferenceCount}
+        segmentReferenceSummary={segmentReferenceSummary}
+        selectionSubmitLabel={selectionSubmitLabel}
+      />
     );
   };
   const renderSegmentVisualReferencesPanel = (variant: "editor" | "modal" = "editor") => (
-    <section className={`studio-segment-references studio-segment-references--${variant}`}>
-      {variant === "editor" ? (
-        <div
-          className="studio-segment-references__compact-row"
-          aria-label={workspaceText(locale, "Персонажи для описания", "Characters for prompt")}
-        >
-          <button
-            className="studio-segment-references__compact-trigger"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={isSegmentReferencesModalOpen}
-            aria-label={workspaceText(locale, "Выбрать персонажей", "Choose characters")}
-            title={workspaceText(locale, "Выбрать персонажей", "Choose characters")}
-            onClick={() => setIsSegmentReferencesModalOpen(true)}
-          >
-            <img
-              className="studio-segment-references__compact-icon"
-              src={characterPickerIconUrl}
-              alt=""
-              width="34"
-              height="34"
-              decoding="async"
-              draggable={false}
-              aria-hidden="true"
-            />
-            <span>{workspaceText(locale, "Персонажи", "Characters")}</span>
-          </button>
-          {selectedSegmentReferenceCharacterOptions.length > 0 ? (
-            <div className="studio-segment-references__mention-icons">
-              {selectedSegmentReferenceCharacterOptions.map((option) => {
-                const isInserted = segmentPromptMentionCharacterKeys.includes(option.key);
-                return (
-                  <span
-                    key={`segment-reference-mention-icon:${option.key}`}
-                    className="studio-segment-references__mention-chip"
-                  >
-                    <button
-                      className={`studio-segment-references__mention-icon${isInserted ? " is-inserted" : ""}`}
-                      type="button"
-                      aria-pressed={isInserted}
-                      aria-label={workspaceText(
-                        locale,
-                        `Добавить ${option.label} в описание`,
-                        `Add ${option.label} to prompt`,
-                      )}
-                      title={workspaceText(
-                        locale,
-                        `Добавить ${option.label} в описание`,
-                        `Add ${option.label} to prompt`,
-                      )}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => handleInsertSegmentPromptCharacterMention(option)}
-                    >
-                      <span className="studio-segment-references__mention-icon-media">
-                        {renderSegmentReferenceOptionPreview(option, `segment-reference-mention-icon:${option.key}`)}
-                      </span>
-                      <span>{option.label}</span>
-                    </button>
-                    <button
-                      className="studio-segment-references__mention-remove"
-                      type="button"
-                      aria-label={workspaceText(locale, `Убрать ${option.label}`, `Remove ${option.label}`)}
-                      title={workspaceText(locale, `Убрать ${option.label}`, `Remove ${option.label}`)}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeSelectedSegmentReferenceCharacter(option);
-                      }}
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <button
-          className="studio-segment-references__summary"
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={isSegmentReferencesModalOpen}
-          onClick={() => setIsSegmentReferencesModalOpen(true)}
-        >
-          <span>
-            <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
-            <small>{segmentReferenceSummary}</small>
-          </span>
-          <em>
-            {selectedSegmentReferenceCount > 0
-              ? workspaceText(locale, `${selectedSegmentReferenceCount} выбрано`, `${selectedSegmentReferenceCount} selected`)
-              : workspaceText(locale, "С нуля", "From scratch")}
-          </em>
-        </button>
-      )}
-      {isSegmentReferencesModalOpen &&
-      typeof document !== "undefined" &&
-      (!isSegmentAiPhotoModalOpen || variant === "modal")
-        ? createPortal(renderSegmentReferencesModal(), document.body)
-        : null}
-    </section>
+    <WorkspaceSegmentVisualReferencesPanel
+      canRenderModal={!isSegmentAiPhotoModalOpen || variant === "modal"}
+      characterPickerIconUrl={characterPickerIconUrl}
+      isModalOpen={isSegmentReferencesModalOpen}
+      locale={locale}
+      mentionCharacterKeys={segmentPromptMentionCharacterKeys}
+      onInsertMention={handleInsertSegmentPromptCharacterMention}
+      onOpen={() => setIsSegmentReferencesModalOpen(true)}
+      onRemoveReference={removeSelectedSegmentReferenceCharacter}
+      renderModalContent={renderSegmentReferencesModal}
+      renderPreview={renderSegmentReferenceOptionPreview}
+      segmentReferenceSummary={segmentReferenceSummary}
+      selectedCount={selectedSegmentReferenceCount}
+      selectedOptions={selectedSegmentReferenceCharacterOptions}
+      variant={variant}
+    />
   );
   const getSegmentTalkingTargetPoint = (
     event: ReactPointerEvent<HTMLElement>,
