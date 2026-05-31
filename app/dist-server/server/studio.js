@@ -373,6 +373,15 @@ export const normalizeStudioVoiceIdForLanguage = (voiceId, language) => {
     const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
     return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
 };
+export const resolveStudioSegmentEditorAdsflowVoiceType = ({ globalVoiceEnabled, globalVoiceId, language, segmentVoiceType, }) => {
+    if (segmentVoiceType === "none") {
+        return "none";
+    }
+    if (segmentVoiceType) {
+        return segmentVoiceType;
+    }
+    return globalVoiceEnabled ? globalVoiceId ?? getDefaultStudioVoiceId(language) : "none";
+};
 const normalizeStudioVoiceId = (voiceId) => {
     const normalizedVoiceId = normalizeGenerationText(voiceId);
     if (!normalizedVoiceId || normalizedVoiceId === "none") {
@@ -571,9 +580,10 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         return undefined;
     }
     const record = value;
-    const projectId = normalizePositiveInteger(record.projectId) ?? fallbackProjectId;
+    const source = normalizeGenerationText(record.source).toLowerCase() === "scratch" ? "scratch" : "project";
+    const projectId = normalizePositiveInteger(record.projectId) ?? fallbackProjectId ?? null;
     const rawSegments = Array.isArray(record.segments) ? record.segments : [];
-    if (!projectId || rawSegments.length === 0) {
+    if ((source === "project" && !projectId) || rawSegments.length === 0) {
         return undefined;
     }
     const segments = [];
@@ -697,6 +707,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         allowStructureChange: Boolean(record.allowStructureChange),
         projectId,
         segments,
+        source,
     };
 };
 const parseJson = (value) => {
@@ -3482,6 +3493,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: isVoiceEnabled });
+    const isScratchSegmentEditorGeneration = normalizedSegmentEditor?.source === "scratch";
     const segmentEditorFinalVoiceCredits = normalizedSegmentEditor
         ? normalizedSegmentEditor.segments.map((segment) => {
             if (segment.voiceoverAssetId) {
@@ -3506,10 +3518,10 @@ export async function createStudioGenerationJob(prompt, user, options) {
     if (normalizedVideoMode === "custom" && !normalizedCustomVideoAssetId && (!normalizedCustomVideoFileName || !normalizedCustomVideoFileDataUrl)) {
         throw new Error("Загрузите своё видео или выберите другой режим видео.");
     }
-    if (normalizedSegmentEditor && !options?.isRegeneration) {
+    if (normalizedSegmentEditor && !isScratchSegmentEditorGeneration && !options?.isRegeneration) {
         throw new Error("Редактор сегментов можно использовать только при перегенерации.");
     }
-    if (normalizedSegmentEditor && !normalizedProjectId) {
+    if (normalizedSegmentEditor && !isScratchSegmentEditorGeneration && !normalizedProjectId) {
         throw new Error("Для перегенерации из редактора сегментов нужен project id.");
     }
     await ensureStudioGenerationWorkersAvailable();
@@ -3545,12 +3557,13 @@ export async function createStudioGenerationJob(prompt, user, options) {
             addWatermarkOverride: options?.addWatermark ?? null,
             brandChangedOverride: options?.brandChanged ?? null,
             clearBrandingOverride: options?.clearBranding ?? null,
-            isRegeneration: Boolean(options?.isRegeneration),
+            isRegeneration: Boolean(options?.isRegeneration && !isScratchSegmentEditorGeneration),
             requestedLanguage,
             resolvedLanguage: normalizedLanguage,
             resolvedVoiceId: normalizedVoiceId ?? null,
             projectId: normalizedProjectId ?? null,
             segmentEditorActive: Boolean(normalizedSegmentEditor),
+            segmentEditorSource: normalizedSegmentEditor?.source ?? null,
         });
         const brandLogoAssetId = normalizedBrandLogoAssetId ?? (normalizedBrandLogoFileDataUrl && normalizedBrandLogoFileName
             ? await uploadStudioMediaAsset(user, {
@@ -3600,9 +3613,18 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
                 projectId: normalizedSegmentEditor.projectId,
                 project_id: normalizedSegmentEditor.projectId,
+                source: normalizedSegmentEditor.source,
                 segments: await Promise.all(normalizedSegmentEditor.segments.map(async (segment) => {
-                    const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange ? undefined : normalizedProjectId;
+                    const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange
+                        ? undefined
+                        : normalizedProjectId ?? undefined;
                     const uploadScopeSegmentIndex = normalizedSegmentEditor.allowStructureChange ? undefined : segment.index;
+                    const adsflowVoiceType = resolveStudioSegmentEditorAdsflowVoiceType({
+                        globalVoiceEnabled: isVoiceEnabled,
+                        globalVoiceId: normalizedVoiceId,
+                        language: normalizedLanguage,
+                        segmentVoiceType: segment.voiceType,
+                    });
                     const segmentAssetId = segment.videoAction === "custom" && segment.customVideoAssetId
                         ? segment.customVideoAssetId
                         : segment.videoAction === "custom" && segment.customVideoFileDataUrl && segment.customVideoFileName
@@ -3652,7 +3674,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         timeline_duration_seconds: durationSeconds,
                         video_action: segment.videoAction,
                         voiceover_asset_id: segment.voiceoverAssetId,
-                        voice_type: segment.voiceType ?? null,
+                        voice_type: adsflowVoiceType,
                     };
                 })),
             }
@@ -3663,6 +3685,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 projectId: normalizedProjectId ?? null,
                 segmentCount: normalizedSegmentEditorAssetPayload.segments.length,
                 segmentOrder: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.index),
+                source: normalizedSegmentEditorAssetPayload.source,
                 segmentTimings: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
                     duration: segment.duration ?? null,
                     durationExtensionSourceDurationSeconds: segment.duration_extension_source_duration_seconds ?? null,
@@ -3672,6 +3695,8 @@ export async function createStudioGenerationJob(prompt, user, options) {
                     manualDurationSeconds: segment.manual_duration_seconds ?? null,
                     startTime: segment.start_time ?? null,
                 })),
+                segmentVoiceTypes: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voice_type ?? null),
+                segmentVoiceoverAssetIds: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voiceover_asset_id ?? null),
             });
         }
         const payload = await fetchAdsflowJson(buildAdsflowUrl("/api/web/generations"), {
@@ -3700,9 +3725,9 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 custom_video_asset_id: normalizedVideoMode === "custom" ? customVideoAssetId : undefined,
                 custom_video_mime_type: normalizedVideoMode === "custom" ? normalizedCustomVideoFileMimeType : undefined,
                 custom_video_original_name: normalizedVideoMode === "custom" ? normalizedCustomVideoFileName : undefined,
-                is_regeneration: Boolean(options?.isRegeneration),
+                is_regeneration: Boolean(options?.isRegeneration && !isScratchSegmentEditorGeneration),
                 music_type: normalizedMusicType,
-                project_id: normalizedProjectId,
+                project_id: normalizedProjectId ?? undefined,
                 segment_editor: normalizedSegmentEditorAssetPayload,
                 custom_music_asset_id: normalizedMusicType === "custom" ? customMusicAssetId : undefined,
                 custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : undefined,

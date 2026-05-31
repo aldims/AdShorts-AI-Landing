@@ -25,6 +25,7 @@ import {
   getWorkspaceSegmentSubtitleTypeOverrideId,
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentDisplayAiVideoAsset,
+  hasWorkspaceSegmentPersistedMediaReference,
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
   isWorkspaceSegmentVoiceoverAssetFresh,
   normalizeWorkspaceSegmentDurationMode,
@@ -75,8 +76,9 @@ export type WorkspaceSegmentEditorPayloadSegment = {
 
 export type WorkspaceSegmentEditorPayload = {
   allowStructureChange?: boolean;
-  projectId: number;
+  projectId?: number | null;
   segments: WorkspaceSegmentEditorPayloadSegment[];
+  source?: "project" | "scratch";
 };
 
 export type WorkspaceSegmentEditorUploadFile = {
@@ -146,14 +148,21 @@ export const buildWorkspaceSegmentEditorPayload = async (
   const segments: WorkspaceSegmentEditorPayloadSegment[] = [];
   const uploads: WorkspaceSegmentEditorUploadFile[] = [];
   const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session);
+  const isScratchSession = !Number.isInteger(session.projectId) || session.projectId <= 0;
   let timelineCursor = 0;
 
   for (const segment of normalizedSegments) {
-    const mediaUploadScope = resolveWorkspaceSegmentEditorMediaUploadScope(session, segment, {
-      allowStructureChange: options.allowStructureChange,
-      persistedSegmentIndexes: options.persistedSegmentIndexes,
-    });
-    const exportAction = resolveWorkspaceSegmentExportVideoAction(segment);
+    const mediaUploadScope = isScratchSession
+      ? {}
+      : resolveWorkspaceSegmentEditorMediaUploadScope(session, segment, {
+          allowStructureChange: options.allowStructureChange,
+          persistedSegmentIndexes: options.persistedSegmentIndexes,
+        });
+    const resolvedExportAction = resolveWorkspaceSegmentExportVideoAction(segment);
+    const exportAction =
+      isScratchSession && resolvedExportAction === "original" && !hasWorkspaceSegmentPersistedMediaReference(segment)
+        ? "ai"
+        : resolvedExportAction;
     const selectedAiVideoAsset =
       exportAction === "ai"
         ? hasWorkspaceSegmentDisplayAiVideoAsset(segment, "ai_video")
@@ -324,8 +333,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
   return {
     payload: {
       allowStructureChange: Boolean(options.allowStructureChange),
-      projectId: session.projectId,
+      ...(isScratchSession ? {} : { projectId: session.projectId }),
       segments,
+      source: isScratchSession ? "scratch" : "project",
     },
     uploads,
   };

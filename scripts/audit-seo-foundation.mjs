@@ -42,6 +42,8 @@ const criticalPages = [
   "en/examples/index.html",
   "press/index.html",
   "en/press/index.html",
+  "contacts/index.html",
+  "en/contact/index.html",
   "shorts-guides/index.html",
   "shorts-ne-nabirayut-prosmotry/index.html",
 ];
@@ -142,6 +144,11 @@ const legalPages = [
   "offer/index.html",
 ];
 
+const trustPages = [
+  "contacts/index.html",
+  "en/contact/index.html",
+];
+
 for (const pagePath of criticalPages) {
   const html = await readRootFile(pagePath);
   assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing useful title`);
@@ -157,6 +164,14 @@ for (const pagePath of legalPages) {
   assert(/<meta\s+name="robots"\s+content="index, follow"/i.test(html), `${pagePath}: legal trust page should be indexable`);
   assert(!/history\.replaceState\(null,\s*null,\s*window\.location\.pathname\.slice\(0,\s*-1\)/.test(html), `${pagePath}: must not rewrite canonical trailing slash in the browser`);
   assert(!/href="\.\/(?:examples|pricing)"/.test(html), `${pagePath}: internal pricing/examples links should use trailing slash`);
+}
+
+for (const pagePath of trustPages) {
+  const html = await readRootFile(pagePath);
+  assert(/<meta\s+name="robots"\s+content="index, follow"/i.test(html), `${pagePath}: trust page should be indexable`);
+  assert(/support@adshortsai\.com/i.test(html), `${pagePath}: missing public support contact`);
+  assert(/"@type"\s*:\s*"Organization"/i.test(html), `${pagePath}: missing Organization schema`);
+  assert(/"areaServed"\s*:\s*\[/i.test(html), `${pagePath}: missing areaServed schema`);
 }
 
 for (const pagePath of organicSprintPages) {
@@ -244,6 +259,8 @@ for (const requiredUrl of [
   `${siteOrigin}/en/examples/`,
   `${siteOrigin}/press/`,
   `${siteOrigin}/en/press/`,
+  `${siteOrigin}/contacts/`,
+  `${siteOrigin}/en/contact/`,
   `${siteOrigin}/shorts-guides/`,
   `${siteOrigin}/privacy/`,
   `${siteOrigin}/en/privacy/`,
@@ -311,11 +328,16 @@ const deployProduction = await readRootFile("deploy-production.sh");
 assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
 assert(/node scripts\/seo-organic-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run organic growth sprint before SEO metadata export");
 assert(/node scripts\/generate-static-press-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate press pages before SEO metadata export");
+assert(/node scripts\/generate-static-contact-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate contact pages before SEO metadata export");
+assert(/node scripts\/update-static-language-switchers\.mjs/.test(deployProduction), "deploy-production.sh: must normalize static language switchers and asset versions before SEO metadata export");
 assert(
-  /@app_routes path \/ \/en\/ \/app\* \/en\/app\* \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
+  /@app_routes path \/ \/en\/ \/app \/app\/ \/app\/studio \/app\/studio\/ \/app\/projects \/app\/projects\/ \/en\/app \/en\/app\/ \/en\/app\/studio \/en\/app\/studio\/ \/en\/app\/projects \/en\/app\/projects\/ \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
   "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
 );
 assert(/header @app_html X-Robots-Tag "noindex, nofollow"/.test(deployProduction), "deploy-production.sh: app shell routes must send X-Robots-Tag noindex");
+assert(!/@app_routes path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* matcher can make nonexistent app URLs return 200");
+assert(!/@app_html path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* noindex matcher can hide route mistakes");
+assert(!/path_regexp referral/.test(deployProduction), "deploy-production.sh: broad referral matcher can make arbitrary missing slugs return soft-404 200");
 assert(/redir \/index\.html \/ 301/.test(deployProduction), "deploy-production.sh: missing /index.html canonical redirect");
 assert(/redir \/en\/index\.html \/en\/ 301/.test(deployProduction), "deploy-production.sh: missing /en/index.html canonical redirect");
 assert(/redir \/pricing \/pricing\/ 301/.test(deployProduction), "deploy-production.sh: missing /pricing trailing-slash redirect");
@@ -324,6 +346,12 @@ assert(/redir \/index\.html https:\/\/adshortsai\.com\/ 301/.test(deployProducti
 assert(/redir \/terms\.html https:\/\/adshortsai\.com\/terms\/ 301/.test(deployProduction), "deploy-production.sh: missing direct www /terms.html redirect");
 assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html \/index\.html/.test(deployProduction), "deploy-production.sh: app routes must prefer generated route shells");
 assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html =404/.test(deployProduction), "deploy-production.sh: static fallback should return real 404");
+assert(/check_status "\$PROD_URL\/app\/nonexistent-yandex-test-404" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for nonexistent app URL 404");
+assert(/check_status "\$PROD_URL\/nonexistent-yandex-test-404\/" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for nonexistent static URL 404");
+assert(/check_status "\$PROD_URL\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary referral-like slug 404");
+assert(/check_status "\$PROD_URL\/en\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary English referral-like slug 404");
+assert(/check_status "\$PROD_URL\/contacts\/" "200"/.test(deployProduction), "deploy-production.sh: missing contacts trust page smoke check");
+assert(/Contacts trust page must be indexable/.test(deployProduction), "deploy-production.sh: missing contacts noindex regression check");
 
 if (errors.length) {
   console.error(errors.join("\n"));

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const cssVersion = 54;
+const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
 
@@ -670,6 +670,7 @@ ${renderHeader(page)}
         <a class="logo" href="${page.locale === "ru" ? "../" : "../../en/"}">AdShorts<span>AI</span></a>
         <div class="footer__links">
           <span style="color: var(--muted);">${page.locale === "ru" ? "Контакты:" : "Contact:"} <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="${page.locale === "ru" ? "../contacts/" : "../../en/contact/"}">${page.locale === "ru" ? "О проекте" : "About"}</a>
           <a href="${page.locale === "ru" ? "../privacy/" : "../../en/privacy/"}">${page.locale === "ru" ? "Политика конфиденциальности" : "Privacy Policy"}</a>
           <a href="${page.locale === "ru" ? "../terms/" : "../../en/terms/"}">${page.locale === "ru" ? "Пользовательское соглашение" : "User Agreement"}</a>
           <a href="${escapeHtml(page.langHref)}" rel="alternate" hreflang="${page.locale === "ru" ? "en" : "ru"}">${escapeHtml(page.langLabel)}</a>

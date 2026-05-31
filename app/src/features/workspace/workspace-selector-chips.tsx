@@ -165,12 +165,17 @@ type StudioVoiceSelectorChipProps = {
   bulkTextValue?: string;
   closeRequestId?: number;
   disabledValueLabel?: string;
+  generateVoiceoverCostLabel?: string;
+  generateVoiceoverDisabledReason?: string | null;
+  generateVoiceoverLabel?: string;
   isProgrammaticOnly?: boolean;
+  isGeneratingVoiceover?: boolean;
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
   onApplyBulkText?: () => boolean | void;
   onBulkTextChange?: (value: string) => void;
+  onGenerateVoiceover?: () => void;
   onOpenChange?: (isOpen: boolean) => void;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
   onSelectLanguage?: (language: StudioLanguage) => void;
@@ -770,12 +775,17 @@ export function StudioVoiceSelectorChip({
   bulkTextValue,
   closeRequestId = 0,
   disabledValueLabel,
+  generateVoiceoverCostLabel,
+  generateVoiceoverDisabledReason = null,
+  generateVoiceoverLabel,
   isProgrammaticOnly = false,
+  isGeneratingVoiceover = false,
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
   onApplyBulkText,
   onBulkTextChange,
+  onGenerateVoiceover,
   onOpenChange,
   onSelect,
   onSelectLanguage,
@@ -806,8 +816,11 @@ export function StudioVoiceSelectorChip({
     typeof bulkTextValue === "string" &&
     typeof onBulkTextChange === "function" &&
     typeof onApplyBulkText === "function";
+  const hasVoiceoverGenerator = typeof onGenerateVoiceover === "function";
   const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
   const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
+  const resolvedGenerateVoiceoverLabel =
+    generateVoiceoverLabel ?? (locale === "en" ? "Generate voiceover" : "Сгенерировать озвучку");
   const getVoiceLanguageLabel = (language: StudioLanguage) =>
     locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getVoiceLanguageDescription = (language: StudioLanguage) =>
@@ -1179,6 +1192,31 @@ export function StudioVoiceSelectorChip({
                   />
                   {bulkTextError ? <p className="studio-voice-selector__bulk-error">{bulkTextError}</p> : null}
                   <div className="studio-voice-selector__bulk-actions">
+                    {hasVoiceoverGenerator ? (
+                      <button
+                        className="studio-voice-selector__bulk-generate"
+                        type="button"
+                        disabled={Boolean(generateVoiceoverDisabledReason)}
+                        aria-busy={isGeneratingVoiceover ? true : undefined}
+                        aria-label={
+                          generateVoiceoverDisabledReason
+                            ? `${resolvedGenerateVoiceoverLabel}. ${generateVoiceoverDisabledReason}`
+                            : resolvedGenerateVoiceoverLabel
+                        }
+                        title={generateVoiceoverDisabledReason ?? undefined}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onGenerateVoiceover?.();
+                        }}
+                      >
+                        {isGeneratingVoiceover ? (
+                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                        ) : null}
+                        <span>{resolvedGenerateVoiceoverLabel}</span>
+                        {generateVoiceoverCostLabel ? <small>{generateVoiceoverCostLabel}</small> : null}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {

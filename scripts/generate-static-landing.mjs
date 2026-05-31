@@ -591,6 +591,7 @@ const renderFooter = (locale, localeConfig, supportedLocales) => {
         <a class="logo" href="#top">AdShorts<span>AI</span></a>
         <div class="footer__links">
           <span style="color: var(--muted);">${text(content.messages.contact, locale, supportedLocales, "messages.contact")} <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="${escapeAttr(legal.contact)}">${text(content.messages.aboutProject, locale, supportedLocales, "messages.aboutProject")}</a>
           <a href="${escapeAttr(legal.offer)}">${text(content.messages.offer, locale, supportedLocales, "messages.offer")}</a>
           <a href="${escapeAttr(legal.termsOfUse)}">${text(content.messages.termsOfUse, locale, supportedLocales, "messages.termsOfUse")}</a>
           <a href="${escapeAttr(legal.terms)}">${text(content.messages.terms, locale, supportedLocales, "messages.terms")}</a>

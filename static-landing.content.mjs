@@ -51,6 +51,7 @@ export const staticLandingContent = {
         footerHreflang: "en",
       },
       legalLinks: {
+        contact: "./contacts/",
         offer: "./offer/",
         termsOfUse: "./terms-of-use/",
         terms: "./terms/",
@@ -86,6 +87,7 @@ export const staticLandingContent = {
         footerHreflang: "ru",
       },
       legalLinks: {
+        contact: "./contact/",
         offer: "../offer/",
         termsOfUse: "./terms-of-use/",
         terms: "./terms/",
@@ -143,6 +145,7 @@ export const staticLandingContent = {
     finalCtaLead: { ru: null, en: "Open Studio and get a ready video in just a minute." },
     finalCtaButton: { ru: "Создать видео бесплатно", en: "Start Free" },
     contact: { ru: "Контакты:", en: "Contact:" },
+    aboutProject: { ru: "О проекте", en: "About" },
     offer: { ru: "Публичная оферта", en: "Public Offer" },
     termsOfUse: { ru: "Условия использования", en: "Terms of Use" },
     terms: { ru: "Пользовательское соглашение", en: "User Agreement" },

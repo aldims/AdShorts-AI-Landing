@@ -596,6 +596,7 @@ type StudioGenerateMultipartSegmentEditor = {
   allowStructureChange?: unknown;
   projectId?: unknown;
   segments?: unknown;
+  source?: unknown;
 };
 
 type AdsflowMediaUploadSessionPayload = {
@@ -917,6 +918,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
               };
             }),
           ),
+          source: segmentEditorRecord.source,
         }
       : undefined;
 

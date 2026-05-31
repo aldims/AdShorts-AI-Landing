@@ -357,6 +357,7 @@ export const removeStoredWorkspaceSegmentEditorSession = (
 };
 
 export const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
+export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-draft:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
@@ -380,6 +381,9 @@ export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRef
 
 const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const getWorkspaceSegmentEditorScratchDraftStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
@@ -1049,6 +1053,81 @@ export const removeStoredWorkspaceSegmentEditorDraft = (
   }
 
   removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId));
+};
+
+export const readStoredWorkspaceSegmentEditorScratchDraft = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorScratchDraftStorageKey(normalizedEmail);
+
+  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
+    try {
+      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
+      if (!canRestoreStoredWorkspaceSegmentEditorDraftSession(normalizedDraft)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      if (candidate.storageName === "sessionStorage") {
+        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedDraft));
+      }
+
+      return normalizedDraft;
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+    }
+  }
+
+  return null;
+};
+
+export const writeStoredWorkspaceSegmentEditorScratchDraft = (
+  email: string | null | undefined,
+  session: WorkspaceSegmentEditorDraftSession | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail || !session) {
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorScratchDraftStorageKey(normalizedEmail),
+    JSON.stringify(normalizeStoredWorkspaceSegmentEditorDraftSession(session)),
+  );
+};
+
+export const removeStoredWorkspaceSegmentEditorScratchDraft = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorScratchDraftStorageKey(normalizedEmail));
 };
 
 export const readStoredWorkspaceSegmentEditorExplicitStructureChange = (

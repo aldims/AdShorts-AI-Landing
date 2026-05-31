@@ -66,6 +66,8 @@ node scripts/generate-static-bofu-pages.mjs
 node scripts/seo-commercial-growth-sprint.mjs
 node scripts/seo-organic-growth-sprint.mjs
 node scripts/generate-static-press-pages.mjs
+node scripts/generate-static-contact-pages.mjs
+node scripts/update-static-language-switchers.mjs
 node scripts/export-seo-url-metadata.mjs
 node scripts/generate-static-landing.mjs --check
 node scripts/check-static-i18n.mjs
@@ -512,16 +514,13 @@ production_blocks = f"""https://adshortsai.com {{
     redir /terms.html /terms/ 301
     redir /terms-of-use.html /terms-of-use/ 301
 
-    @referral_routes {{
-        path_regexp referral ^/(?:en/)?[A-Za-z0-9_]{{2,64}}/?$
-        {reserved_referral_path_matchers}
-    }}
+    @referral_routes path /slr /slr/ /en/slr /en/slr/
 
-    @app_html path /app* /en/app* /rf_* /hero-background-test* /en/hero-background-test*
+    @app_html path /app /app/ /app/studio /app/studio/ /app/projects /app/projects/ /en/app /en/app/ /en/app/studio /en/app/studio/ /en/app/projects /en/app/projects/ /rf_* /hero-background-test* /en/hero-background-test*
     header @app_html X-Robots-Tag "noindex, nofollow"
     header @referral_routes X-Robots-Tag "noindex, nofollow"
 
-    @app_routes path / /en/ /app* /en/app* /rf_* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
+    @app_routes path / /en/ /app /app/ /app/studio /app/studio/ /app/projects /app/projects/ /en/app /en/app/ /en/app/studio /en/app/studio/ /en/app/projects /en/app/projects/ /rf_* /pricing/ /en/pricing/ /examples/ /en/examples/ /hero-background-test /en/hero-background-test
     handle @app_routes {{
         root * {prod_app_dir}/dist
         try_files {{path}} {{path}}/index.html /index.html
@@ -625,7 +624,15 @@ check_status "$PROD_URL/" "200"
 check_status "$PROD_URL/en/" "200"
 check_status "$PROD_URL/pricing/" "200"
 check_status "$PROD_URL/examples/" "200"
+check_status "$PROD_URL/contacts/" "200"
+check_status "$PROD_URL/en/contact/" "200"
 check_status "$PROD_URL/app" "200"
+check_status "$PROD_URL/app/studio" "200"
+check_status "$PROD_URL/app/projects" "200"
+check_status "$PROD_URL/app/nonexistent-yandex-test-404" "404"
+check_status "$PROD_URL/nonexistent-yandex-test-404/" "404"
+check_status "$PROD_URL/zzzzzzzzz999" "404"
+check_status "$PROD_URL/en/zzzzzzzzz999" "404"
 check_status "$PROD_URL/slr" "200"
 check_status "$PROD_URL/kak-sdelat-shorts-na-youtube/" "200"
 check_status "$PROD_URL/index.html" "301"
@@ -645,6 +652,17 @@ fi
 
 if ! curl -fsS "$PROD_URL/pricing/" | grep -q 'data-seo-fallback="true"'; then
   echo "Pricing is missing SEO fallback content." >&2
+  smoke_failed=1
+fi
+
+contacts_robots_header="$(curl -fsSI "$PROD_URL/contacts/" | tr -d '\r' | grep -i '^x-robots-tag:' | head -n 1 || true)"
+if echo "$contacts_robots_header" | grep -qi 'noindex'; then
+  echo "Contacts trust page must be indexable, got X-Robots-Tag: $contacts_robots_header" >&2
+  smoke_failed=1
+fi
+
+if ! curl -fsS "$PROD_URL/contacts/" | grep -q 'Контакты AdShorts AI'; then
+  echo "Contacts trust page is not serving the static SEO page." >&2
   smoke_failed=1
 fi
 

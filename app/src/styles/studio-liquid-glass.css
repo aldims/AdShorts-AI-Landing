@@ -1601,6 +1601,7 @@
 ─────────────────────────────────────────────────────────────── */
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+  --studio-segment-editor-timeline-scrollbar-lane: 16px;
   border: 1px solid rgba(200, 212, 236, 0.12);
   border-radius: 24px;
   background:
@@ -1621,6 +1622,7 @@
     0 0 90px -34px rgba(90, 120, 180, 0.34);
   scrollbar-width: thin;
   scrollbar-color: rgba(128, 148, 176, 0.62) rgba(8, 11, 18, 0.18);
+  scrollbar-gutter: stable;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline::-webkit-scrollbar {
@@ -1676,6 +1678,7 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-playhead {
+  z-index: 32;
   width: 2px;
   border-radius: 2px;
   background: rgba(94, 234, 212, 0.96);
@@ -1717,7 +1720,7 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle {
-  z-index: 24;
+  z-index: 20;
   top: -7px;
   width: 64px;
   height: 28px;
@@ -1727,6 +1730,13 @@
   color: transparent;
   opacity: 1;
   box-shadow: none;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drop-gap {
+  height: calc(
+    var(--studio-segment-editor-timeline-scene-backdrop-height) -
+      var(--studio-segment-editor-timeline-scrollbar-lane, 16px)
+  );
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
@@ -2131,6 +2141,7 @@
 ─────────────────────────────────────────────────────────────── */
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
+  bottom: calc(10px + var(--studio-segment-editor-timeline-scrollbar-lane, 16px));
   border: 1px solid rgba(64, 224, 208, 0.28);
   border-radius: 16px;
   background:

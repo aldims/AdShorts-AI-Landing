@@ -11,7 +11,7 @@ const localeLabels = {
 };
 
 const latestAssetVersions = {
-  css: 54,
+  css: 55,
   script: 8,
 };
 const siteOrigin = "https://adshortsai.com";

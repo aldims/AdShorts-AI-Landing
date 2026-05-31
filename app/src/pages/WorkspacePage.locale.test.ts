@@ -6,6 +6,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   buildWorkspaceSegmentEditorPayload,
+  buildStudioRouteUrl,
   buildWorkspaceSegmentEditorChangeChecklist,
   buildWorkspaceSegmentVisualReferenceRequest,
   canWorkspaceSegmentUseVideoExtensionTool,
@@ -17,6 +18,7 @@ import {
   clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorResetDraftFromBaseline,
+  createWorkspaceSegmentEditorScratchDraftSession,
   distributeWorkspaceSegmentBulkSubtitleText,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspacePromptRichEditorSelectionRange,
@@ -70,6 +72,7 @@ import {
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorProjectOpenOptions,
+  getStudioRouteState,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
@@ -1818,6 +1821,21 @@ describe("WorkspacePage studio route transitions", () => {
       shouldDeferRestore: false,
     });
   });
+
+  it("keeps scene creation mode on the create route only", () => {
+    expect(getStudioRouteState("?mode=scenes")).toEqual(
+      expect.objectContaining({
+        mode: "scenes",
+        projectId: null,
+        section: "create",
+        segmentIndex: null,
+      }),
+    );
+    expect(buildStudioRouteUrl("", "create", { mode: "scenes" })).toBe("/app/studio?mode=scenes");
+    expect(buildStudioRouteUrl("?mode=scenes", "edit", { projectId: 42, segmentIndex: 1 })).toBe(
+      "/app/studio?section=edit&projectId=42&segment=1",
+    );
+  });
 });
 
 describe("WorkspacePage studio locale defaults", () => {
@@ -2473,20 +2491,73 @@ describe("WorkspacePage studio locale defaults", () => {
     );
 
     expect(refreshedDraft.segments[0]).toMatchObject({
-      duration: 5.62,
-      endTime: 5.62,
+      speechDuration: 5.16,
+      speechDurationSource: "audio",
+      speechEndTime: 5.16,
+      speechStartTime: 0,
       startTime: 0,
       voiceoverAsset: null,
       voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("First"),
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
     });
     expect(refreshedDraft.segments[1]).toMatchObject({
-      duration: 5.043,
-      endTime: 10.663,
-      startTime: 5.62,
+      speechDuration: 4.78,
+      speechDurationSource: "audio",
+      speechEndTime: 10.4,
+      speechStartTime: 5.62,
       voiceoverAsset: null,
       voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Second"),
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+  });
+
+  it("does not inflate fresh project voiceover timing to a longer manual scene duration", () => {
+    const liveSegment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 10,
+      speechEndTime: 10,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const freshSegment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 4,
+      speechEndTime: 4,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...createDraftSession(liveSegment),
+        segments: [liveSegment],
+      },
+      {
+        ...createFreshSessionFromDraftSegments([freshSegment]),
+        ttsAssetId: 123,
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      speechDuration: 4,
+      speechDurationSource: "audio",
+      speechEndTime: 4,
+      speechStartTime: 0,
+      startTime: 0,
     });
   });
 
@@ -3310,7 +3381,7 @@ describe("WorkspacePage studio locale defaults", () => {
       }),
     ).toEqual({
       sourceStartTime: 4.22,
-      timelineEndTime: 10.31,
+      timelineEndTime: 9.86,
     });
   });
 
@@ -3340,8 +3411,8 @@ describe("WorkspacePage studio locale defaults", () => {
         timelineStartTime: 5.2,
       }),
     ).toEqual({
-      sourceStartTime: 4.34,
-      timelineEndTime: 11.17,
+      sourceStartTime: 4.42,
+      timelineEndTime: 10.64,
     });
   });
 
@@ -3373,7 +3444,7 @@ describe("WorkspacePage studio locale defaults", () => {
       }),
     ).toEqual({
       sourceStartTime: 0,
-      timelineEndTime: 5.45,
+      timelineEndTime: 5,
     });
   });
 
@@ -3420,6 +3491,31 @@ describe("WorkspacePage studio locale defaults", () => {
         timelineStartTime: 0,
       }),
     ).toBe(true);
+  });
+
+  it("keeps full project voiceover audio when a manual voice pause has a project TTS asset", () => {
+    const segment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 2.8,
+      speechEndTime: 2.8,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
+        hasProjectVoiceoverAsset: true,
+        previewRange,
+        timelineEndTime: 10,
+        timelineStartTime: 0,
+      }),
+    ).toBe(false);
   });
 
   it("uses segment voiceover proxy in full preview when a prior manual scene shifts the project voice source", () => {
@@ -3560,6 +3656,39 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(source.segmentVoiceoverAudioUrl).toBeNull();
   });
 
+  it("does not play stale project voiceover audio after voice or text changes", () => {
+    const segment = createDraftSegment({
+      duration: 4,
+      endTime: 14,
+      index: 1,
+      speechDuration: 4,
+      speechEndTime: 14,
+      speechStartTime: 10,
+      startTime: 10,
+      text: "Updated scene text",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3647,
+      ttsAssetId: 3473,
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: true,
+      preferSegmentProxy: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.audioUrl).toBeNull();
+    expect(source.sourceKind).toBeNull();
+    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.shouldClip).toBe(false);
+  });
+
   it("keeps voiceover preview source URLs stable when only local timeline timing changes", () => {
     const segment = createDraftSegment({
       duration: 4.4,
@@ -3611,7 +3740,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shiftedSource.previewRange).not.toEqual(source.previewRange);
   });
 
-  it("falls back to the segment voiceover proxy when project voiceover is stale", () => {
+  it("does not fall back to the segment voiceover proxy when project voiceover is stale", () => {
     const segment = createDraftSegment({
       index: 2,
       speechDuration: 4.36,
@@ -3634,9 +3763,9 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: studioVoiceOptionsByLanguage.ru[0],
     });
 
-    expect(source.sourceKind).toBe("segment");
-    expect(source.audioUrl).toBe(source.segmentVoiceoverAudioUrl);
-    expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(source.sourceKind).toBeNull();
+    expect(source.audioUrl).toBeNull();
+    expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.shouldClip).toBe(false);
   });
 
@@ -3754,18 +3883,28 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("blocks photo visual duration shorter than the voiceover duration", () => {
+  it("uses voiceover plus pause as the photo visual duration floor", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
-      minimumDurationSeconds: 3.2,
+      minimumDurationSeconds: 3.4,
       requestedDurationSeconds: 2.4,
     });
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.15, 3.2)).toEqual({
-      minimumDurationSeconds: 3.2,
+      minimumDurationSeconds: 3.4,
       requestedDurationSeconds: 3.15,
     });
-    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toBeNull();
-    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.1995, 3.2)).toBeNull();
-    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(4.9, 4.949)).toBeNull();
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2, 3.3)).toEqual({
+      minimumDurationSeconds: 3.5,
+      requestedDurationSeconds: 2,
+    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toEqual({
+      minimumDurationSeconds: 3.4,
+      requestedDurationSeconds: 3.2,
+    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.3995, 3.2)).toBeNull();
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(4.9, 4.949)).toEqual({
+      minimumDurationSeconds: 5.149,
+      requestedDurationSeconds: 4.9,
+    });
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, null)).toBeNull();
   });
 
@@ -4199,7 +4338,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolved.segmentStartTime).toBe(5);
   });
 
-  it("clamps segment boundary timing to the voice-informed minimum duration", () => {
+  it("clamps segment boundary timing to the voiceover plus pause minimum duration", () => {
     const segment = createDraftSegment({
       duration: 4,
       endTime: 9,
@@ -4214,8 +4353,31 @@ describe("WorkspacePage studio locale defaults", () => {
     if (resolved.status === "valid") {
       expect(resolved.clamped).toBe(true);
     }
-    expect(resolved.duration).toBeCloseTo(2.4, 6);
-    expect(resolved.boundaryTime).toBeCloseTo(7.4, 6);
+    expect(resolved.duration).toBeCloseTo(2.6, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(7.6, 6);
+  });
+
+  it("clamps photo visual duration from a shorter manual request to voiceover plus pause", () => {
+    const segment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 3.3,
+      speechEndTime: 3.3,
+      speechStartTime: 0,
+      startTime: 0,
+    });
+
+    const resolved = resolveWorkspaceSegmentBoundaryTiming(segment, 2, createDraftSession(segment));
+
+    expect(resolved.status).toBe("valid");
+    if (resolved.status === "valid") {
+      expect(resolved.clamped).toBe(true);
+    }
+    expect(resolved.duration).toBeCloseTo(3.5, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(3.5, 6);
   });
 
   it("keeps slot timings when a manual photo segment becomes a talking photo video", () => {
@@ -4291,6 +4453,40 @@ describe("WorkspacePage studio locale defaults", () => {
         endTime: 7.2,
         manualDurationSeconds: 7.2,
         startTime: 0,
+      }),
+    );
+  });
+
+  it("exports scratch scene drafts as scene-controlled generation payloads without a project id", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const scratchSceneDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        text: "Крупный план продукта на светлом столе",
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(scratchSceneDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload).toEqual(
+      expect.objectContaining({
+        allowStructureChange: true,
+        source: "scratch",
+      }),
+    );
+    expect(result.payload.projectId).toBeUndefined();
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        index: 0,
+        text: "Крупный план продукта на светлом столе",
+        videoAction: "ai",
       }),
     );
   });

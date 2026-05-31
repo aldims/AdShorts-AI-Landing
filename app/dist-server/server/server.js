@@ -585,6 +585,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     voiceType: segmentRecord.voiceType ?? segmentRecord.voice_type ?? null,
                 };
             })),
+            source: segmentEditorRecord.source,
         }
         : undefined;
     return {

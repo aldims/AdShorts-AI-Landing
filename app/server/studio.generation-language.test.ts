@@ -7,6 +7,7 @@ import {
   getStudioVoiceCreditCost,
   normalizeStudioSegmentEditorPayload,
   normalizeStudioVoiceIdForLanguage,
+  resolveStudioSegmentEditorAdsflowVoiceType,
   resolveAdsflowFinalVideoDownloadPath,
   resolveStudioGenerationLanguage,
 } from "./studio.js";
@@ -86,6 +87,49 @@ describe("studio generation language resolution", () => {
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
+  });
+
+  it("forwards inherited segment editor voices explicitly to AdsFlow", () => {
+    expect(
+      resolveStudioSegmentEditorAdsflowVoiceType({
+        globalVoiceEnabled: true,
+        globalVoiceId: "English_ManWithDeepVoice",
+        language: "ru",
+        segmentVoiceType: null,
+      }),
+    ).toBe("English_ManWithDeepVoice");
+    expect(
+      resolveStudioSegmentEditorAdsflowVoiceType({
+        globalVoiceEnabled: true,
+        globalVoiceId: "English_ManWithDeepVoice",
+        language: "ru",
+        segmentVoiceType: "none",
+      }),
+    ).toBe("none");
+    expect(
+      resolveStudioSegmentEditorAdsflowVoiceType({
+        globalVoiceEnabled: true,
+        globalVoiceId: "English_ManWithDeepVoice",
+        language: "ru",
+        segmentVoiceType: "Aiden",
+      }),
+    ).toBe("Aiden");
+    expect(
+      resolveStudioSegmentEditorAdsflowVoiceType({
+        globalVoiceEnabled: false,
+        globalVoiceId: "English_ManWithDeepVoice",
+        language: "ru",
+        segmentVoiceType: null,
+      }),
+    ).toBe("none");
+    expect(
+      resolveStudioSegmentEditorAdsflowVoiceType({
+        globalVoiceEnabled: true,
+        globalVoiceId: null,
+        language: "ru",
+        segmentVoiceType: null,
+      }),
+    ).toBe("Bys_24000");
   });
 
   it("locks segment editor timeline durations for generation", () => {
@@ -177,6 +221,42 @@ describe("studio generation language resolution", () => {
       { duration: 6.455, endTime: 6.455, manualDurationSeconds: 6.455, startTime: 0 },
       { duration: 6.04, endTime: 12.495, manualDurationSeconds: 6.04, startTime: 6.455 },
     ]);
+  });
+
+  it("accepts scratch scene-editor payloads without a project id", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        allowStructureChange: true,
+        source: "scratch",
+        segments: [
+          {
+            duration: 5,
+            endTime: 5,
+            index: 0,
+            startTime: 0,
+            text: "Opening product shot",
+            videoAction: "ai",
+          },
+        ],
+      },
+      "en",
+    );
+
+    expect(normalized).toEqual(
+      expect.objectContaining({
+        allowStructureChange: true,
+        projectId: null,
+        source: "scratch",
+      }),
+    );
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        duration: 5,
+        index: 0,
+        text: "Opening product shot",
+        videoAction: "ai",
+      }),
+    );
   });
 
   it("keeps per-scene subtitle overrides in normalized segment editor payload", () => {

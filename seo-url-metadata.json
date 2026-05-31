@@ -3004,6 +3004,32 @@
       "target_query": "AdShorts AI Press Kit",
       "title": "AdShorts AI Press Kit: AI Shorts Generator",
       "url": "https://adshortsai.com/en/press/"
+    },
+    {
+      "canonical": "https://adshortsai.com/contacts/",
+      "cluster": "other",
+      "cta_source": "seo_contacts",
+      "description": "Контакты поддержки AdShorts AI: email для связи с командой сервиса.",
+      "h1": "Контакты AdShorts AI",
+      "intent": "informational",
+      "lastmod": "2026-05-31",
+      "locale": "ru",
+      "target_query": "Контакты AdShorts AI",
+      "title": "Контакты — AdShorts AI",
+      "url": "https://adshortsai.com/contacts/"
+    },
+    {
+      "canonical": "https://adshortsai.com/en/contact/",
+      "cluster": "other",
+      "cta_source": "seo_en_contact",
+      "description": "AdShorts AI support contact: email for contacting the service team.",
+      "h1": "Contact AdShorts AI",
+      "intent": "informational",
+      "lastmod": "2026-05-31",
+      "locale": "en",
+      "target_query": "Contact AdShorts AI",
+      "title": "Contact — AdShorts AI",
+      "url": "https://adshortsai.com/en/contact/"
     }
   ]
 }

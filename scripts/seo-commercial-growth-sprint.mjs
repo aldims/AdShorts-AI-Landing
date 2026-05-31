@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
 const dateModified = "2026-05-31";
-const cssVersion = 54;
+const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
 
@@ -1263,6 +1263,7 @@ const renderPage = (page) => {
         faq: "FAQ",
         readAlso: "Read also",
         contact: "Contact:",
+        about: "About",
         offer: "Public Offer",
         termsOfUse: "Terms of Use",
         terms: "User Agreement",
@@ -1291,6 +1292,7 @@ const renderPage = (page) => {
         faq: "FAQ",
         readAlso: "Читайте также",
         contact: "Контакты:",
+        about: "О проекте",
         offer: "Публичная оферта",
         termsOfUse: "Условия использования",
         terms: "Пользовательское соглашение",
@@ -1378,6 +1380,7 @@ ${renderRelated(page.related)}
         <a class="logo" href="${footerHomeHref}">AdShorts<span>AI</span></a>
         <div class="footer__links">
           <span style="color: var(--muted);">${footerLinks.contact} <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="${page.locale === "en" ? "../contact/" : "../contacts/"}">${footerLinks.about}</a>
           <a href="${prefix}offer/">${footerLinks.offer}</a>
           <a href="${page.locale === "en" ? "../terms-of-use/" : "../terms-of-use/"}">${footerLinks.termsOfUse}</a>
           <a href="${page.locale === "en" ? "../terms/" : "../terms/"}">${footerLinks.terms}</a>

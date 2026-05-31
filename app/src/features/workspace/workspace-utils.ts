@@ -4,6 +4,7 @@ import {
 } from "../../lib/workspaceSegmentEditorTimeline";
 import {
   WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS,
+  WORKSPACE_SEGMENT_PHOTO_DURATION_VOICEOVER_PAUSE_SECONDS,
   WORKSPACE_STUDIO_VIDEO_MODE_IDS,
 } from "./workspace-constants";
 import type {
@@ -280,29 +281,42 @@ export const resolveWorkspaceRegenerationVideoMode = (options: {
   wasVideoModeExplicitlyChanged?: boolean;
 }): StudioVideoMode => (options.wasVideoModeExplicitlyChanged ? options.selectedVideoMode : "standard");
 
+export const getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds = (
+  voiceoverDurationSeconds: number | null | undefined,
+) => {
+  const voiceoverDuration = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
+  if (voiceoverDuration === null) {
+    return null;
+  }
+
+  return roundWorkspaceSegmentTimelineSeconds(
+    voiceoverDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_VOICEOVER_PAUSE_SECONDS,
+  );
+};
+
 export const resolveWorkspaceSegmentPhotoDurationVoiceoverGuard = (
   requestedDurationSeconds: number | null | undefined,
   voiceoverDurationSeconds: number | null | undefined,
 ) => {
   const requestedDuration = normalizeWorkspaceSegmentManualDurationSeconds(requestedDurationSeconds);
-  const voiceoverDuration = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
-  if (requestedDuration === null || voiceoverDuration === null) {
+  const minimumDuration = getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(voiceoverDurationSeconds);
+  if (requestedDuration === null || minimumDuration === null) {
     return null;
   }
 
   if (
     formatWorkspaceSegmentDurationInputValue(requestedDuration) ===
-    formatWorkspaceSegmentDurationInputValue(voiceoverDuration)
+    formatWorkspaceSegmentDurationInputValue(minimumDuration)
   ) {
     return null;
   }
 
-  if (requestedDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS >= voiceoverDuration) {
+  if (requestedDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS >= minimumDuration) {
     return null;
   }
 
   return {
-    minimumDurationSeconds: roundWorkspaceSegmentTimelineSeconds(voiceoverDuration),
+    minimumDurationSeconds: minimumDuration,
     requestedDurationSeconds: roundWorkspaceSegmentTimelineSeconds(requestedDuration),
   };
 };

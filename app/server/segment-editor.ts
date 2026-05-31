@@ -797,11 +797,16 @@ const doSegmentEditorGlobalVoicesMatch = (
 const canReuseSourceSegmentEditorProjectTts = (
   payload: AdsflowSegmentEditorResponse,
   sourcePayload: AdsflowSegmentEditorResponse | null | undefined,
-) =>
-  normalizePositiveProjectId(payload.tts_asset_id) === null &&
-  normalizePositiveProjectId(sourcePayload?.tts_asset_id) !== null &&
-  doSegmentEditorGlobalVoicesMatch(payload, sourcePayload) &&
-  doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments);
+) => {
+  const payloadTtsAssetId = normalizePositiveProjectId(payload.tts_asset_id);
+  const sourceTtsAssetId = normalizePositiveProjectId(sourcePayload?.tts_asset_id);
+  return (
+    sourceTtsAssetId !== null &&
+    (payloadTtsAssetId === null || payloadTtsAssetId === sourceTtsAssetId) &&
+    doSegmentEditorGlobalVoicesMatch(payload, sourcePayload) &&
+    doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments)
+  );
+};
 
 const canReuseSourceSegmentEditorMusic = (
   payload: AdsflowSegmentEditorResponse,
@@ -906,31 +911,51 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
       const sourceSegment = sourceSegmentsByIndex.get(index) ?? null;
       const detailRecord = (detailSegment ?? {}) as Record<string, unknown>;
       const sourceRecord = (sourceSegment ?? {}) as Record<string, unknown>;
-      const speechStartTime = pickSegmentEditorNumber(
-        segment.speech_start_time,
-        detailRecord._voice_source_start_time,
-        sourceSegment?.speech_start_time,
-      );
-      const speechEndTime = pickSegmentEditorNumber(
-        segment.speech_end_time,
-        detailRecord._voice_source_end_time,
-        sourceSegment?.speech_end_time,
-      );
+      const speechStartTime = shouldReuseSourceTts
+        ? pickSegmentEditorNumber(
+            detailRecord._voice_source_start_time,
+            sourceSegment?.speech_start_time,
+            segment.speech_start_time,
+          )
+        : pickSegmentEditorNumber(
+            segment.speech_start_time,
+            detailRecord._voice_source_start_time,
+            sourceSegment?.speech_start_time,
+          );
+      const speechEndTime = shouldReuseSourceTts
+        ? pickSegmentEditorNumber(
+            detailRecord._voice_source_end_time,
+            sourceSegment?.speech_end_time,
+            segment.speech_end_time,
+          )
+        : pickSegmentEditorNumber(
+            segment.speech_end_time,
+            detailRecord._voice_source_end_time,
+            sourceSegment?.speech_end_time,
+          );
       const speechDuration =
-        pickSegmentEditorNumber(
-          segment.speech_duration,
-          detailRecord._voice_source_duration,
-          sourceSegment?.speech_duration,
-        ) ??
+        (shouldReuseSourceTts
+          ? pickSegmentEditorNumber(
+              detailRecord._voice_source_duration,
+              sourceSegment?.speech_duration,
+              segment.speech_duration,
+            )
+          : pickSegmentEditorNumber(
+              segment.speech_duration,
+              detailRecord._voice_source_duration,
+              sourceSegment?.speech_duration,
+            )) ??
         (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
       const speechWords =
-        Array.isArray(segment.speech_words) && segment.speech_words.length > 0
-          ? segment.speech_words
-          : Array.isArray(sourceSegment?.speech_words) && sourceSegment.speech_words.length > 0
-            ? sourceSegment.speech_words
-            : Array.isArray(detailSegment?.speech_words) && detailSegment.speech_words.length > 0
-              ? detailSegment.speech_words
-              : null;
+        shouldReuseSourceTts && Array.isArray(sourceSegment?.speech_words) && sourceSegment.speech_words.length > 0
+          ? sourceSegment.speech_words
+          : Array.isArray(segment.speech_words) && segment.speech_words.length > 0
+            ? segment.speech_words
+            : Array.isArray(sourceSegment?.speech_words) && sourceSegment.speech_words.length > 0
+              ? sourceSegment.speech_words
+              : Array.isArray(detailSegment?.speech_words) && detailSegment.speech_words.length > 0
+                ? detailSegment.speech_words
+                : null;
       const hasProjectVoiceoverTiming =
         canHydrateProjectVoiceover &&
         (speechStartTime !== null ||
@@ -1796,7 +1821,13 @@ const shouldLoadSourceSegmentEditorPayload = (
 
   const needsTts = normalizePositiveProjectId(payload.tts_asset_id) === null;
   const needsMusic = normalizePositiveProjectId(payload.music_asset_id) === null;
-  return needsTts || needsMusic ? sourceProjectId : null;
+  const needsSourceVoiceRanges =
+    Boolean(normalizeText(payload.voice_type)) &&
+    (payload.segments ?? []).some((segment) => {
+      const durationMode = normalizeSegmentDurationMode(segment?.duration_mode);
+      return durationMode === "manual" || normalizeManualDurationSeconds(segment?.manual_duration_seconds) !== null;
+    });
+  return needsTts || needsMusic || needsSourceVoiceRanges ? sourceProjectId : null;
 };
 
 const loadSourceSegmentEditorPayload = async (

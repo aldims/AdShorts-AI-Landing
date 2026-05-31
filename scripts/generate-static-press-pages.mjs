@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
 const dateModified = "2026-05-23";
-const cssVersion = 54;
+const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
 
@@ -68,6 +68,7 @@ const pages = [
       guides: "../shorts-guides/",
       pricing: "../pricing/",
       studio: "../app/studio?source=press_ru",
+      contact: "../contacts/",
       language: "../en/press/",
       privacy: "../privacy/",
       terms: "../terms/",
@@ -149,6 +150,7 @@ const pages = [
       guides: "../../en/shorts-guides/",
       pricing: "../../en/pricing/",
       studio: "../../en/app/studio?source=press_en",
+      contact: "../../en/contact/",
       language: "../../press/",
       privacy: "../../en/privacy/",
       terms: "../../en/terms/",
@@ -658,6 +660,7 @@ ${renderCopyCards(page)}
         <p>${escapeHtml(page.footerNote)}</p>
         <div class="press-footer__links">
           <a href="${page.links.home}">AdShorts AI</a>
+          <a href="${page.links.contact}">${page.locale === "ru" ? "О проекте" : "About"}</a>
           <a href="${page.links.privacy}">Privacy</a>
           <a href="${page.links.terms}">Terms</a>
           <a href="${page.links.offer}">Offer</a>
