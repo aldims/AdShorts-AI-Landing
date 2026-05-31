@@ -264,7 +264,6 @@ import {
 import {
   buildWorkspaceSegmentEditorChangeChecklist,
   createWorkspaceSegmentEditorComparableDraftSession,
-  formatWorkspaceSegmentEditorChecklistPreview,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
   getWorkspaceSegmentVoiceOverrideForLanguage,
@@ -414,6 +413,13 @@ import {
   WorkspaceSegmentTimelineVisualMenu,
   WorkspaceSegmentTimelineVoiceMenu,
 } from "../features/workspace/workspace-timeline-menus";
+import {
+  getWorkspaceSegmentTimelineSoundLabel,
+  getWorkspaceSegmentTimelineSubtitleDisplay,
+  getWorkspaceSegmentTimelineVoiceDisplayLabel,
+  getWorkspaceSegmentTimelineVoiceOption,
+  type WorkspaceSegmentTimelineVoiceSettings,
+} from "../features/workspace/workspace-segment-timeline-labels";
 import {
   renderWorkspaceSegmentEditorFullPreviewPlayhead,
   renderWorkspaceSegmentTimelineAudioButton,
@@ -18564,35 +18570,14 @@ export function WorkspacePage({
       : rawDurationSeconds;
     return applySegmentTimelineDurationValue(segmentIndex, nextDurationSeconds);
   };
-  const getSegmentTimelineVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
-    if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
-      return workspaceText(locale, "Добавить озвучку", "Add voiceover");
-    }
-
-    const voiceOverrideOption = getStudioVoiceOptionById(getWorkspaceSegmentVoiceOverrideId(segment));
-    if (!studioSidebarVoiceEnabled && !voiceOverrideOption) {
-      return workspaceText(locale, "Добавить озвучку", "Add voiceover");
-    }
-
-    const voice = voiceOverrideOption ?? selectedVoiceOptions.find((option) => option.id === studioSidebarVoiceId);
-    if (voiceOverrideOption && voiceOverrideOption.id !== studioSidebarVoiceId) {
-      return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
-    }
-
-    return voice?.label ?? workspaceText(locale, "Голос видео", "Video voice");
+  const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
+    getVoiceOptionById: getStudioVoiceOptionById,
+    selectedVoiceOptions,
+    studioSidebarVoiceEnabled,
+    studioSidebarVoiceId,
   };
-  const getSegmentTimelineVoiceOption = (segment: WorkspaceSegmentEditorDraftSegment) => {
-    if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
-      return null;
-    }
-
-    const voiceOverrideOption = getStudioVoiceOptionById(getWorkspaceSegmentVoiceOverrideId(segment));
-    if (!studioSidebarVoiceEnabled && !voiceOverrideOption) {
-      return null;
-    }
-
-    return voiceOverrideOption ?? selectedVoiceOptions.find((option) => option.id === studioSidebarVoiceId) ?? null;
-  };
+  const getSegmentTimelineVoiceOption = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    getWorkspaceSegmentTimelineVoiceOption(segment, segmentTimelineVoiceSettings);
   const writeSegmentEditorVoiceDurationDebugTrace = (event: string, payload: Record<string, unknown> = {}) => {
     if (!isSegmentEditorFullPreviewDebugEnabled() || typeof window === "undefined") {
       return;
@@ -20348,52 +20333,16 @@ export function WorkspacePage({
   const getSegmentTimelineSoundLabel = (
     segment: WorkspaceSegmentEditorDraftSegment,
     options?: { isEmpty?: boolean; isPending?: boolean },
-  ) => {
-    if (options?.isPending) {
-      return workspaceText(locale, "Звук", "Sound");
-    }
-
-    if (options?.isEmpty) {
-      return workspaceText(locale, "Добавить звук", "Add sound");
-    }
-
-    return (
-      formatWorkspaceSegmentEditorChecklistPreview(segment.sceneSoundPrompt || segment.sceneSoundGeneratedFromPrompt || "", 28) ||
-      workspaceText(locale, "Звук сцены", "Scene sound")
-    );
-  };
-  const getSegmentTimelineVoiceTextPreview = (segment: WorkspaceSegmentEditorDraftSegment) =>
-    formatWorkspaceSegmentEditorChecklistPreview(segment.text, 30) || workspaceText(locale, "Текст пуст", "No text");
+  ) => getWorkspaceSegmentTimelineSoundLabel(locale, segment, options);
   const getSegmentTimelineVoiceDisplayLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
-    `${getSegmentTimelineVoiceLabel(segment)} · “${getSegmentTimelineVoiceTextPreview(segment)}”`;
-  const getSegmentTimelineSubtitleDisplay = (segment: WorkspaceSegmentEditorDraftSegment) => {
-    const effectiveSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(segmentEditorDraft, segment, {
-      subtitleColorId: studioSidebarSubtitleColorId,
-      subtitleStyleId: studioSidebarSubtitleStyleId,
+    getWorkspaceSegmentTimelineVoiceDisplayLabel(locale, segment, segmentTimelineVoiceSettings);
+  const getSegmentTimelineSubtitleDisplay = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    getWorkspaceSegmentTimelineSubtitleDisplay(locale, segmentEditorDraft, segment, {
+      studioSidebarSubtitleColorId,
+      studioSidebarSubtitleStyleId,
+      subtitleColorOptions,
+      subtitleStyleOptions,
     });
-
-    if (!effectiveSubtitleSettings.voiceEnabled) {
-      const label = workspaceText(locale, "Нет озвучки", "No voiceover");
-      return { colorAccent: null, label, title: label };
-    }
-
-    if (!effectiveSubtitleSettings.isEnabled) {
-      const label = workspaceText(locale, "Добавить субтитры", "Add subtitles");
-      return { colorAccent: null, label, title: label };
-    }
-
-    const colorOption = subtitleColorOptions.find((color) => color.id === effectiveSubtitleSettings.subtitleColorId);
-    const styleLabel =
-      subtitleStyleOptions.find((style) => style.id === effectiveSubtitleSettings.subtitleStyleId)?.label ??
-      effectiveSubtitleSettings.subtitleStyleId;
-    const colorLabel = colorOption?.label ?? effectiveSubtitleSettings.subtitleColorId;
-
-    return {
-      colorAccent: colorOption?.accent ?? null,
-      label: styleLabel,
-      title: `${styleLabel}: ${colorLabel}`,
-    };
-  };
   const getSegmentTimelineVisualToolDisabledReason = (
     segment: WorkspaceSegmentEditorDraftSegment,
     tab: WorkspaceSegmentVisualModalTab,
