@@ -614,6 +614,239 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.segments[0]?.currentAsset?.assetId).toBe(7788);
   });
 
+  it("does not probe segment voiceover durations without a project TTS asset", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segments/") && url.includes("/voiceover")) {
+        return new Response(null, { status: 500 });
+      }
+
+      if (url.includes("/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            project_id: 3647,
+            segments: [
+              {
+                duration: 10,
+                end_time: 10,
+                index: 0,
+                start_time: 0,
+                text: "First scene.",
+              },
+              {
+                duration: 3.4,
+                end_time: 13.4,
+                index: 1,
+                start_time: 10,
+                text: "Second scene.",
+              },
+            ],
+            title: "No project TTS",
+            tts_asset_id: null,
+            voice_type: "Bys_24000",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3647 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(JSON.stringify({ generation_settings: {}, project_id: 3647 }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3647,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBeNull();
+    expect(session.segments).toHaveLength(2);
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
+    expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
+  });
+
+  it("inherits source project audio and source voice ranges for edited project previews", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/projects/3647/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            music_asset_id: null,
+            music_name: "energetic_7.mp3",
+            music_type: "energetic",
+            project_id: 3647,
+            segments: [
+              {
+                duration: 10,
+                end_time: 10,
+                index: 0,
+                start_time: 0,
+                text: "First scene.",
+              },
+              {
+                duration: 3.3,
+                end_time: 13.3,
+                index: 1,
+                start_time: 10,
+                text: "Second scene.",
+              },
+            ],
+            title: "Edited project",
+            tts_asset_id: null,
+            voice_type: "Bys_24000",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/api/projects/3646/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            music_asset_id: 4468,
+            music_name: "energetic_7.mp3",
+            music_type: "energetic",
+            project_id: 3646,
+            segments: [
+              {
+                duration: 4,
+                end_time: 4,
+                index: 0,
+                speech_duration: 4,
+                speech_end_time: 4,
+                speech_start_time: 0,
+                start_time: 0,
+                text: "First scene.",
+              },
+              {
+                duration: 3.8,
+                end_time: 7.8,
+                index: 1,
+                speech_duration: 3.8,
+                speech_end_time: 7.8,
+                speech_start_time: 4,
+                speech_words: [
+                  {
+                    end_time: 4.4,
+                    start_time: 4,
+                    text: "Second",
+                  },
+                  {
+                    end_time: 7.8,
+                    start_time: 4.5,
+                    text: "scene.",
+                  },
+                ],
+                start_time: 4,
+                text: "Second scene.",
+              },
+            ],
+            tts_asset_id: 4467,
+            voice_type: "Bys_24000",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3647 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          generation_settings: {
+            original_video_segments: [
+              {
+                _voice_source_end_time: 4,
+                _voice_source_start_time: 0,
+                duration: 10,
+                end_time: 10,
+                index: 0,
+                start_time: 0,
+                text: "First scene.",
+              },
+              {
+                _voice_source_end_time: 7.8,
+                _voice_source_start_time: 4,
+                duration: 3.3,
+                end_time: 13.3,
+                index: 1,
+                start_time: 10,
+                text: "Second scene.",
+              },
+            ],
+            source_project_id: 3646,
+          },
+          music_name: "energetic_7.mp3",
+          music_type: "energetic",
+          project_id: 3647,
+          source_project_id: 3646,
+          voice_type: "Bys_24000",
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3647,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBe(4467);
+    expect(session.musicAssetId).toBe(4468);
+    expect(session.musicName).toBe("energetic_7.mp3");
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      endTime: 10,
+      speechEndTime: 4,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceoverTextHash: "first scene.",
+      voiceoverVoiceType: "Bys_24000",
+    }));
+    expect(session.segments[1]).toEqual(expect.objectContaining({
+      endTime: 13.3,
+      speechDuration: 3.8,
+      speechEndTime: 7.8,
+      speechStartTime: 4,
+      startTime: 10,
+      voiceoverTextHash: "second scene.",
+      voiceoverVoiceType: "Bys_24000",
+    }));
+    expect(session.segments[1]?.speechWords).toHaveLength(2);
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(fetchedUrls.some((url) => url.includes("/api/projects/3646/segment-editor"))).toBe(true);
+    expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
+    expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
+  });
+
   it("restores generated music settings from project generation metadata", () => {
     const session = buildWorkspaceSegmentEditorSessionFromPayload(
       42,

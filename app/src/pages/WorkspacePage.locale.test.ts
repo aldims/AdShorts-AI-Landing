@@ -3377,7 +3377,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("uses segment voiceover proxy in full preview after a prior non-project voiceover", () => {
+  it("keeps project voiceover source in full preview after a prior non-project voiceover", () => {
     const segment = createDraftSegment({
       index: 1,
       speechDuration: 5.44,
@@ -3391,7 +3391,7 @@ describe("WorkspacePage studio locale defaults", () => {
       shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
         hasPriorNonProjectVoiceover: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("uses segment voiceover proxy in full preview when a scene voice override differs from the project voice", () => {
@@ -3473,6 +3473,89 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(timelineSource.shouldClip).toBe(false);
   });
 
+  it("does not build segment voiceover proxy without project voiceover audio", () => {
+    const segment = createDraftSegment({
+      duration: 4,
+      endTime: 14,
+      index: 1,
+      speechDuration: 4,
+      speechEndTime: 14,
+      speechStartTime: 10,
+      startTime: 10,
+      text: "Second",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3647,
+      ttsAssetId: null,
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: true,
+      preferSegmentProxy: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.sourceKind).toBeNull();
+    expect(source.audioUrl).toBeNull();
+    expect(source.projectVoiceoverAudioUrl).toBeNull();
+    expect(source.segmentVoiceoverAudioUrl).toBeNull();
+  });
+
+  it("keeps voiceover preview source URLs stable when only local timeline timing changes", () => {
+    const segment = createDraftSegment({
+      duration: 4.4,
+      endTime: 12.4,
+      index: 2,
+      speechDuration: 4.36,
+      speechEndTime: 12.36,
+      speechStartTime: 8,
+      startTime: 8,
+      text: "Этот древний ящер использует свою мощь, чтобы защитить планету от угроз.",
+    });
+    const shiftedSegment = {
+      ...segment,
+      endTime: 16.4,
+      speechEndTime: 16.36,
+      speechStartTime: 12,
+      startTime: 12,
+    };
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3457,
+      segments: [segment],
+      ttsAssetId: 3473,
+    };
+    const shiftedSession = {
+      ...session,
+      segments: [shiftedSegment],
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      preferSegmentProxy: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+    const shiftedSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      preferSegmentProxy: true,
+      segment: shiftedSegment,
+      session: shiftedSession,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(shiftedSource.version).toBe(source.version);
+    expect(shiftedSource.segmentVoiceoverAudioUrl).toBe(source.segmentVoiceoverAudioUrl);
+    expect(shiftedSource.previewRange).not.toEqual(source.previewRange);
+  });
+
   it("falls back to the segment voiceover proxy when project voiceover is stale", () => {
     const segment = createDraftSegment({
       index: 2,
@@ -3518,6 +3601,37 @@ describe("WorkspacePage studio locale defaults", () => {
         allowEstimated: false,
       }),
     ).toBeNull();
+  });
+
+  it("does not treat a non-audio scene duration echo as the voiceover minimum", () => {
+    const segment = createDraftSegment({
+      duration: 8,
+      durationMode: "manual",
+      endTime: 8,
+      manualDurationSeconds: 8,
+      speechDuration: 8,
+      speechDurationSource: null,
+      speechEndTime: 8,
+      speechStartTime: 0,
+      startTime: 0,
+    });
+    const session = createDraftSession(segment);
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
+        allowEstimated: false,
+      }),
+    ).toBeNull();
+
+    const resolved = resolveWorkspaceSegmentBoundaryTiming(segment, 4.9, session);
+
+    expect(resolved.status).toBe("valid");
+    if (resolved.status === "valid") {
+      expect(resolved.clamped).toBe(false);
+    }
+    expect(resolved.duration).toBeCloseTo(4.9, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(4.9, 6);
   });
 
   it("trusts measured audio duration even when it matches the scene boundary", () => {
@@ -3596,6 +3710,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toBeNull();
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.1995, 3.2)).toBeNull();
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(4.9, 4.949)).toBeNull();
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, null)).toBeNull();
   });
 

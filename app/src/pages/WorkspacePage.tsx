@@ -952,6 +952,8 @@ export type {
   WorkspaceSegmentVoiceTimelineState,
 } from "../features/workspace/workspace-types";
 
+const WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID = -1;
+
 export function WorkspacePage({
   defaultTab,
   initialProfile = null,
@@ -1541,7 +1543,6 @@ export function WorkspacePage({
   const segmentTimelineDurationButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineDurationMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineDurationInputRef = useRef<HTMLInputElement | null>(null);
-  const segmentTimelineVisualDurationInputApplyTimerRef = useRef<number | null>(null);
   const segmentTimelineDurationAiPromptRef = useRef<HTMLTextAreaElement | null>(null);
   const segmentTimelineVisualMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineVoiceButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
@@ -2450,9 +2451,6 @@ export function WorkspacePage({
       }
       if (segmentCarouselReleaseTimerRef.current) {
         window.clearTimeout(segmentCarouselReleaseTimerRef.current);
-      }
-      if (segmentTimelineVisualDurationInputApplyTimerRef.current !== null) {
-        window.clearTimeout(segmentTimelineVisualDurationInputApplyTimerRef.current);
       }
       segmentCarouselDragStateRef.current = null;
       segmentEditorRequestAbortRef.current?.abort("segment-editor-dispose");
@@ -6065,10 +6063,14 @@ export function WorkspacePage({
           fileSize: 0,
         } satisfies StudioCustomMusicFile)
       : null);
-  const segmentTimelineProjectMusicPreviewUrl = buildWorkspaceProjectMusicAudioProxyUrl(
-    segmentEditorDraft?.projectId,
-    segmentEditorDraft?.musicAssetId ?? segmentEditorDraft?.musicName ?? studioSidebarMusicType,
-  );
+  const segmentTimelineProjectMusicAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft?.musicAssetId);
+  const segmentTimelineProjectMusicPreviewUrl =
+    segmentTimelineProjectMusicAssetId !== null
+      ? buildWorkspaceMediaAssetProxyUrl(segmentTimelineProjectMusicAssetId)
+      : buildWorkspaceProjectMusicAudioProxyUrl(
+          segmentEditorDraft?.projectId,
+          segmentEditorDraft?.musicName ?? studioSidebarMusicType,
+        );
   const segmentTimelineMusicPreviewUrl =
     studioSidebarMusicType === "custom"
       ? getStudioCustomAssetPreviewUrl(segmentTimelineCustomMusicPreviewAsset) ?? segmentTimelineProjectMusicPreviewUrl
@@ -7664,6 +7666,93 @@ export function WorkspacePage({
       } catch {
         // Ignore capture errors for unsupported pointers.
       }
+
+      startSegmentThumbPointerDrag(
+        {
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerId: event.pointerId,
+        },
+        segmentArrayIndex,
+        event.currentTarget,
+      );
+    };
+  const bindSegmentThumbDocumentMouseListeners = (
+    segmentArrayIndex: number,
+    pointerId = WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
+  ) => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    clearSegmentThumbDocumentPointerListeners();
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const wasHandled = continueSegmentThumbPointerDrag(segmentArrayIndex, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerId,
+        preventDefault: () => event.preventDefault(),
+      });
+      if (wasHandled) {
+        event.stopPropagation();
+      }
+    };
+    const handleMouseUp = (event: MouseEvent) => {
+      const wasHandled = finishSegmentThumbPointerDragForPointer(segmentArrayIndex, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        pointerId,
+        preventDefault: () => event.preventDefault(),
+      });
+      if (wasHandled) {
+        event.stopPropagation();
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove, { capture: true });
+    document.addEventListener("mouseup", handleMouseUp, { capture: true });
+    segmentThumbDocumentPointerCleanupRef.current = () => {
+      document.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      document.removeEventListener("mouseup", handleMouseUp, { capture: true });
+    };
+  };
+  const handleSegmentThumbMouseDown =
+    (segmentArrayIndex: number) =>
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (!isSegmentThumbReorderEnabled || event.button !== 0) {
+        return;
+      }
+
+      const pendingDragState = segmentThumbPendingDragRef.current;
+      if (pendingDragState) {
+        if (pendingDragState.index === segmentArrayIndex && pendingDragState.sourceElement === event.currentTarget) {
+          bindSegmentThumbDocumentMouseListeners(segmentArrayIndex, pendingDragState.pointerId);
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      segmentThumbPendingDragRef.current = {
+        index: segmentArrayIndex,
+        pointerId: WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
+        sourceElement: event.currentTarget,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      bindSegmentThumbDocumentMouseListeners(segmentArrayIndex);
+      startSegmentThumbPointerDrag(
+        {
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerId: WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID,
+        },
+        segmentArrayIndex,
+        event.currentTarget,
+      );
     };
   const handleSegmentThumbPointerMove =
     (segmentArrayIndex: number) =>
@@ -18242,8 +18331,13 @@ export function WorkspacePage({
       return null;
     }
 
+    const isDisplayedDurationClampedToMinimum =
+      timing.clamped &&
+      formatWorkspaceSegmentDurationInputValue(timing.requestedDuration) ===
+        formatWorkspaceSegmentDurationInputValue(timing.minimumDuration);
+
     setSegmentEditorVideoError(
-      timing.clamped
+      timing.clamped && !isDisplayedDurationClampedToMinimum
         ? workspaceText(
             locale,
             `Для уменьшения длины сцены сократите длину озвучки. Минимум ${formatWorkspaceSegmentEditorTime(timing.minimumDuration)}.`,
@@ -18328,14 +18422,6 @@ export function WorkspacePage({
     setActiveSegmentIndex(Math.max(0, Math.min(options.segmentArrayIndex, (segmentEditorDraftRef.current?.segments.length ?? 1) - 1)));
     return formatWorkspaceSegmentEditorDurationBadgeLabel(timing.duration, locale);
   };
-  const clearSegmentTimelineVisualDurationInputApplyTimer = () => {
-    if (segmentTimelineVisualDurationInputApplyTimerRef.current === null) {
-      return;
-    }
-
-    window.clearTimeout(segmentTimelineVisualDurationInputApplyTimerRef.current);
-    segmentTimelineVisualDurationInputApplyTimerRef.current = null;
-  };
   const commitSegmentTimelineVisualDurationInput = (
     input: HTMLInputElement,
     options: {
@@ -18344,27 +18430,8 @@ export function WorkspacePage({
       segmentIndex: number;
     },
   ) => {
-    clearSegmentTimelineVisualDurationInputApplyTimer();
     applySegmentTimelineVisualDurationInputValue(input, options, true);
     setSegmentTimelineVisualDurationInputDraft(null);
-  };
-  const scheduleSegmentTimelineVisualDurationInputCommit = (
-    input: HTMLInputElement,
-    options: {
-      initialValue: string;
-      segmentArrayIndex: number;
-      segmentIndex: number;
-    },
-  ) => {
-    clearSegmentTimelineVisualDurationInputApplyTimer();
-    segmentTimelineVisualDurationInputApplyTimerRef.current = window.setTimeout(() => {
-      segmentTimelineVisualDurationInputApplyTimerRef.current = null;
-      if (!input.isConnected) {
-        return;
-      }
-
-      commitSegmentTimelineVisualDurationInput(input, options);
-    }, 700);
   };
   const handleSegmentTimelineVisualDurationInputElementChange = (
     input: HTMLInputElement,
@@ -18378,7 +18445,6 @@ export function WorkspacePage({
       segmentIndex: options.segmentIndex,
       value: input.value,
     });
-    scheduleSegmentTimelineVisualDurationInputCommit(input, options);
   };
   const handleSegmentTimelineVisualDurationInputChange = (
     event: ChangeEvent<HTMLInputElement> | ReactFormEvent<HTMLInputElement> | ReactKeyboardEvent<HTMLInputElement>,
@@ -18623,9 +18689,7 @@ export function WorkspacePage({
       });
       const latestSceneVoiceoverAudioUrl = voiceoverAudioPreviewSource.latestSceneVoiceoverAudioUrl;
       const measurementUrl =
-        (voiceoverAudioPreviewSource.sourceKind === "scene" || voiceoverAudioPreviewSource.sourceKind === "segment")
-          ? voiceoverAudioPreviewSource.audioUrl
-          : null;
+        voiceoverAudioPreviewSource.sourceKind === "scene" ? voiceoverAudioPreviewSource.audioUrl : null;
       const sourceUrl = normalizeWorkspaceVideoSourceUrl(measurementUrl);
       if (!measurementUrl || !sourceUrl) {
         writeSegmentEditorVoiceDurationDebugTrace("skip.no-source", {
@@ -18635,7 +18699,7 @@ export function WorkspacePage({
         });
         return;
       }
-      const shouldSyncMeasuredVoiceoverDurationToDraft = true;
+      const shouldSyncMeasuredVoiceoverDurationToDraft = voiceoverAudioPreviewSource.sourceKind === "scene";
       writeSegmentEditorVoiceDurationDebugTrace("measure.start", {
         isVoiceAudioStale,
         segmentIndex: segment.index,
@@ -18731,9 +18795,6 @@ export function WorkspacePage({
           segmentIndex: segment.index,
           sourceUrl,
         });
-        if (shouldSyncMeasuredVoiceoverDurationToDraft) {
-          syncMeasuredVoiceoverDurationToDraft(currentEntry.durationSeconds);
-        }
         return;
       }
 
@@ -21200,6 +21261,7 @@ export function WorkspacePage({
                         event.stopPropagation();
                         handleSegmentThumbPointerDown(segmentArrayIndex)(event);
                       }}
+                      onMouseDown={handleSegmentThumbMouseDown(segmentArrayIndex)}
                       onPointerMove={handleSegmentThumbPointerMove(segmentArrayIndex)}
                       onPointerUp={finishSegmentThumbPointerDrag(segmentArrayIndex)}
                       onClick={(event) => {
@@ -21314,8 +21376,12 @@ export function WorkspacePage({
                   : actualVideoVisualDurationSeconds ?? visualAudioDurationMismatch?.visualDurationSeconds ?? null;
               const segmentDurationBadgeLabel =
                 formatWorkspaceSegmentEditorDurationBadgeLabel(segmentSlotDurationSeconds, locale);
+              const segmentDurationInputInitialValue =
+                formatWorkspaceSegmentDurationInputValue(segmentSlotDurationSeconds);
+              const isEditingSegmentDurationInput =
+                segmentTimelineVisualDurationInputDraft?.segmentIndex === segment.index;
               const segmentDurationInputValue =
-                segmentTimelineVisualDurationInputDraft?.segmentIndex === segment.index
+                isEditingSegmentDurationInput
                   ? segmentTimelineVisualDurationInputDraft.value
                   : segmentDurationBadgeLabel;
               const segmentDurationInputLength = Math.max(
@@ -21449,7 +21515,7 @@ export function WorkspacePage({
                           setSegmentEditorVideoError(null);
                           setSegmentTimelineVisualDurationInputDraft({
                             segmentIndex: segment.index,
-                            value: segmentDurationBadgeLabel,
+                            value: segmentDurationInputInitialValue,
                           });
                           previewSegmentTimelineActiveStateByArrayIndex(index);
                           const input = event.currentTarget;
@@ -21457,14 +21523,14 @@ export function WorkspacePage({
                         }}
                         onChange={(event) =>
                           handleSegmentTimelineVisualDurationInputChange(event, {
-                            initialValue: segmentDurationBadgeLabel,
+                            initialValue: segmentDurationInputInitialValue,
                             segmentArrayIndex: index,
                             segmentIndex: segment.index,
                           })
                         }
                         onInput={(event) =>
                           handleSegmentTimelineVisualDurationInputChange(event, {
-                            initialValue: segmentDurationBadgeLabel,
+                            initialValue: segmentDurationInputInitialValue,
                             segmentArrayIndex: index,
                             segmentIndex: segment.index,
                           })
@@ -21475,7 +21541,7 @@ export function WorkspacePage({
                           }
 
                           handleSegmentTimelineVisualDurationInputChange(event, {
-                            initialValue: segmentDurationBadgeLabel,
+                            initialValue: segmentDurationInputInitialValue,
                             segmentArrayIndex: index,
                             segmentIndex: segment.index,
                           });
@@ -21483,7 +21549,7 @@ export function WorkspacePage({
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             commitSegmentTimelineVisualDurationInput(event.currentTarget, {
-                              initialValue: segmentDurationBadgeLabel,
+                              initialValue: segmentDurationInputInitialValue,
                               segmentArrayIndex: index,
                               segmentIndex: segment.index,
                             });
@@ -21492,6 +21558,7 @@ export function WorkspacePage({
                           }
 
                           if (event.key === "Escape") {
+                            event.currentTarget.value = segmentDurationInputInitialValue;
                             setSegmentTimelineVisualDurationInputDraft(null);
                             event.currentTarget.blur();
                             return;
@@ -21504,7 +21571,7 @@ export function WorkspacePage({
                             }
 
                             handleSegmentTimelineVisualDurationInputElementChange(input, {
-                              initialValue: segmentDurationBadgeLabel,
+                              initialValue: segmentDurationInputInitialValue,
                               segmentArrayIndex: index,
                               segmentIndex: segment.index,
                             });
@@ -21512,7 +21579,7 @@ export function WorkspacePage({
                         }}
                         onBlur={(event) =>
                           handleSegmentTimelineVisualDurationInputCommit(event, {
-                            initialValue: segmentDurationBadgeLabel,
+                            initialValue: segmentDurationInputInitialValue,
                             segmentArrayIndex: index,
                             segmentIndex: segment.index,
                           })
@@ -21669,10 +21736,7 @@ export function WorkspacePage({
               });
               const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
               const voiceoverMeasuredDurationSourceUrl =
-                (voiceoverAudioPreviewSource.sourceKind === "scene" ||
-                  voiceoverAudioPreviewSource.sourceKind === "segment")
-                  ? voiceoverAudioPreviewSource.audioUrl
-                  : null;
+                voiceoverAudioPreviewSource.sourceKind === "scene" ? voiceoverAudioPreviewSource.audioUrl : null;
               const measuredVoiceoverDurationSeconds = getSegmentEditorMeasuredVoiceoverDurationSeconds(
                 segment.index,
                 voiceoverMeasuredDurationSourceUrl,

@@ -2473,6 +2473,13 @@ export const buildWorkspaceProjectMusicAudioProxyUrl = (
   const normalizedVersion = String(version ?? "").trim();
   if (normalizedVersion) {
     params.set("v", normalizedVersion);
+    if (
+      !normalizedVersion.includes("/") &&
+      !normalizedVersion.includes("\\") &&
+      /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}\.(?:aac|m4a|mp3|ogg|wav)$/i.test(normalizedVersion)
+    ) {
+      params.set("musicName", normalizedVersion);
+    }
   }
 
   return `/api/workspace/project-music-audio?${params.toString()}`;
@@ -2535,20 +2542,21 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
     segment.voiceoverVoiceType ?? "",
     segment.voiceoverLanguage ?? "",
     session.ttsAssetId ?? "",
-    segment.startTime,
-    segment.endTime,
-    segment.speechStartTime ?? "",
-    segment.speechEndTime ?? "",
     normalizeWorkspaceSegmentEditorTextForCompare(segment.text),
     voiceOption?.id ?? "",
   ].join(":");
   const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
+  const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(session.ttsAssetId);
+  const canUseProjectVoiceoverAudio =
+    voiceEnabled && Boolean(voiceOption) && projectVoiceoverAssetId !== null && previewRange !== null;
+  const canUseSegmentVoiceoverAudioProxy =
+    canUseProjectVoiceoverAudio && hasWorkspaceSegmentProjectVoiceoverTimingData(segment);
   const projectVoiceoverAudioUrl =
-    voiceEnabled && voiceOption && session.ttsAssetId && previewRange
-      ? `${buildWorkspaceMediaAssetProxyUrl(session.ttsAssetId)}?v=${encodeURIComponent(version)}`
+    canUseProjectVoiceoverAudio && projectVoiceoverAssetId !== null
+      ? `${buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)}?v=${encodeURIComponent(version)}`
       : null;
   const segmentVoiceoverAudioUrl =
-    voiceEnabled && voiceOption
+    canUseSegmentVoiceoverAudioProxy
       ? buildWorkspaceSegmentVoiceoverAudioProxyUrl(session.projectId, segment.index, version)
       : null;
   const audioUrl =
@@ -3227,14 +3235,82 @@ export const syncWorkspaceSegmentsEmbeddedVisualDurations = (
 
 export const getWorkspaceSegmentManualDurationMinimum = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
+    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
 ) =>
   Math.max(
     1,
     getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
-      ? getWorkspaceSegmentEditorSpeechDuration(segment) ?? 1
+      ? getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, { allowEstimated: false })?.durationSeconds ?? 1
       : 1,
   );
+
+const getWorkspaceSegmentSceneDurationCandidates = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const rawSegmentStart = Number(segment.startTime);
+  const rawSegmentEnd = Number(segment.endTime);
+  const timelineDuration =
+    Number.isFinite(rawSegmentStart) &&
+    Number.isFinite(rawSegmentEnd) &&
+    rawSegmentEnd > rawSegmentStart
+      ? rawSegmentEnd - rawSegmentStart
+      : null;
+
+  return [
+    timelineDuration,
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.duration),
+  ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
+};
+
+const isWorkspaceSegmentSceneDurationSpeechEcho = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  speechDuration: number,
+) => {
+  if (segment.speechDurationSource === "audio") {
+    return false;
+  }
+
+  const hasManualSceneDuration =
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
+  if (!hasManualSceneDuration || getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image") {
+    return false;
+  }
+
+  const segmentDurationCandidates = getWorkspaceSegmentSceneDurationCandidates(segment);
+  if (
+    segmentDurationCandidates.length === 0 ||
+    !segmentDurationCandidates.some(
+      (duration) => Math.abs(duration - speechDuration) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
+    )
+  ) {
+    return false;
+  }
+
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+  if (!speechRange) {
+    return false;
+  }
+
+  const rawSegmentStart = Number(segment.startTime);
+  const rawSegmentEnd = Number(segment.endTime);
+  const segmentStart = Number.isFinite(rawSegmentStart) ? rawSegmentStart : null;
+  const segmentEnd = Number.isFinite(rawSegmentEnd) ? rawSegmentEnd : null;
+  const speechTimelineDuration = speechRange.endTime - speechRange.startTime;
+  const speechRangeMatchesSegmentBounds =
+    segmentStart !== null &&
+    segmentEnd !== null &&
+    Math.abs(speechRange.startTime - segmentStart) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS &&
+    Math.abs(speechRange.endTime - segmentEnd) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const speechRangeMatchesSegmentDuration =
+    segmentDurationCandidates.some(
+      (duration) => Math.abs(duration - speechTimelineDuration) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
+    ) &&
+    (segmentStart === null ||
+      Math.abs(speechRange.startTime - segmentStart) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS);
+
+  return speechRangeMatchesSegmentBounds || speechRangeMatchesSegmentDuration;
+};
 
 export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -3263,17 +3339,7 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
       ? normalizeWorkspaceSegmentManualDurationSeconds(Math.max(...speechDurationCandidates))
       : null;
   if (speechDuration !== null) {
-    const rawSegmentDuration = Number(segment.duration ?? segment.manualDurationSeconds);
-    const segmentDuration =
-      Number.isFinite(rawSegmentDuration) && rawSegmentDuration > 0
-        ? rawSegmentDuration
-        : null;
-    const isProjectVoiceoverSceneDurationEcho =
-      segment.speechDurationSource !== "audio" &&
-      isProjectVoiceoverAsset &&
-      segmentDuration !== null &&
-      Math.abs(speechDuration - segmentDuration) < 0.04;
-    if (isProjectVoiceoverSceneDurationEcho) {
+    if (isWorkspaceSegmentSceneDurationSpeechEcho(segment, speechDuration)) {
       return playableAssetDuration;
     }
 
@@ -3413,7 +3479,8 @@ export const getWorkspaceSegmentTimelineVoiceoverDurationInfo = (
 
 export const getWorkspaceSegmentTimelineVoiceoverDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
+    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
 ) => getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session)?.durationSeconds ?? null;
 
 export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
@@ -3680,9 +3747,7 @@ export const shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview 
   session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
   options?: { hasPriorNonProjectVoiceover?: boolean },
 ) => {
-  if (options?.hasPriorNonProjectVoiceover) {
-    return true;
-  }
+  void options;
 
   const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (!segmentVoiceOverrideId || segmentVoiceOverrideId === "none") {
@@ -3837,7 +3902,8 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
 export const resolveWorkspaceSegmentBoundaryTiming = (
   segment: WorkspaceSegmentEditorDraftSegment,
   requestedBoundaryTime: number,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
+    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
 ) => {
   const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
   const currentBoundaryTime = Math.max(segmentStartTime, getWorkspaceSegmentEditorDisplayEndTime(segment));

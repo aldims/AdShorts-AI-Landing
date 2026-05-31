@@ -290,6 +290,13 @@ export const resolveWorkspaceSegmentPhotoDurationVoiceoverGuard = (
     return null;
   }
 
+  if (
+    formatWorkspaceSegmentDurationInputValue(requestedDuration) ===
+    formatWorkspaceSegmentDurationInputValue(voiceoverDuration)
+  ) {
+    return null;
+  }
+
   if (requestedDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS >= voiceoverDuration) {
     return null;
   }

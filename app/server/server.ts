@@ -2690,6 +2690,12 @@ app.get("/api/workspace/project-music-audio", async (req, res) => {
 
   try {
     const target = await getWorkspaceProjectMusicAudioProxyTarget(session.user, {
+      musicName:
+        typeof req.query.musicName === "string"
+          ? req.query.musicName
+          : typeof req.query.v === "string"
+            ? req.query.v
+            : null,
       projectId,
     });
     res.setHeader("Cache-Control", "private, no-store");

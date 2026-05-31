@@ -24675,9 +24675,13 @@ textarea {
 }
 
 .studio-segment-editor__arrow:hover:not(:disabled) {
-  transform: translateY(calc(-50% - 1px));
+  transform: translateY(-50%);
   border-color: rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.1);
+}
+
+.studio-segment-editor__arrow:active:not(:disabled) {
+  transform: translateY(-50%);
 }
 
 .studio-segment-editor__arrow:disabled {
