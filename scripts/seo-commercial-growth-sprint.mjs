@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-05-23";
+const dateModified = "2026-05-31";
 const cssVersion = 54;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
@@ -1197,6 +1197,42 @@ const renderRelated = (items) =>
     .map(([href, label]) => `              <li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`)
     .join("\n");
 
+const priorityGrowthLinks = {
+  ru: [
+    ["../ai-generator-shorts/", "AI-генератор Shorts"],
+    ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
+    ["../ai-generator-shorts-dlya-malogo-biznesa/", "Shorts для малого бизнеса"],
+    ["../ai-generator-video-dlya-socsetey/", "AI-видео для соцсетей"],
+    ["../ai-video-maker-dlya-reels-tiktok-i-shorts/", "AI video maker для Reels, TikTok и Shorts"],
+    ["../ai-generator-shorts-dlya-avtorov-youtube/", "Shorts для авторов YouTube"],
+    ["../kak-sdelat-shorts-na-youtube/", "как сделать Shorts на YouTube"],
+    ["../kak-sdelat-huk-v-shorts/", "как сделать хук"],
+    ["../kak-podnyat-uderzhanie-v-shorts/", "как поднять удержание"],
+    ["../cta-v-shorts/", "CTA в Shorts"],
+  ],
+  en: [
+    ["../ai-shorts-generator/", "AI Shorts generator"],
+    ["../youtube-shorts-generator/", "YouTube Shorts generator"],
+    ["../ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
+    ["../ai-video-generator-for-social-media/", "AI video for social media"],
+    ["../ai-video-maker-for-reels-tiktok-and-shorts/", "AI video maker for Reels, TikTok and Shorts"],
+    ["../ai-shorts-generator-for-youtube-creators/", "AI Shorts for YouTube creators"],
+    ["../how-to-make-shorts-on-youtube/", "how to make YouTube Shorts"],
+    ["../how-to-create-a-hook-in-shorts/", "how to create a hook"],
+    ["../how-to-increase-retention-in-shorts/", "increase Shorts retention"],
+    ["../cta-in-youtube-shorts/", "CTA in Shorts"],
+  ],
+};
+
+const renderPriorityGrowthLinks = (page) => {
+  const currentHref = `../${page.slug}/`;
+  return priorityGrowthLinks[page.locale]
+    .filter(([href]) => href !== currentHref)
+    .slice(0, 8)
+    .map(([href, label]) => `              <li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`)
+    .join("\n");
+};
+
 const renderPage = (page) => {
   const prefix = assetPrefix(page);
   const guidesHref = page.locale === "en" ? "../shorts-guides/#ai-generators" : "../shorts-guides/#ai-generators";
@@ -1214,6 +1250,9 @@ const renderPage = (page) => {
         outputText: "9:16 short-form video draft with script, voice and subtitles.",
         metric: "Next metric",
         metricText: "Compare first-second retention, average view duration and CTA clicks.",
+        priorityTitle: "High-intent pages in this cluster",
+        priorityText:
+          "Google is slower to index new pages when they look isolated. These internal routes connect the main generator, business and retention pages into one crawlable topic cluster.",
         who: "Who this is for",
         workflow: "How the workflow works",
         why: "Why use AdShorts AI for this",
@@ -1239,6 +1278,9 @@ const renderPage = (page) => {
         outputText: "9:16 черновик короткого видео со сценарием, голосом и субтитрами.",
         metric: "Следующая метрика",
         metricText: "Сравните удержание в первые секунды, среднюю длительность просмотра и клики по CTA.",
+        priorityTitle: "Приоритетные страницы этого кластера",
+        priorityText:
+          "Google медленнее индексирует новые страницы, если они выглядят изолированными. Эти внутренние маршруты связывают генераторы, бизнес-страницы и гайды по удержанию в один понятный кластер.",
         who: "Кому это подходит",
         workflow: "Как работает workflow",
         why: "Почему AdShorts AI подходит для этого",
@@ -1278,6 +1320,16 @@ ${renderHeader(page)}
             <div class="commercial-snapshot__item"><strong>${footerLinks.output}</strong><p>${footerLinks.outputText}</p></div>
             <div class="commercial-snapshot__item"><strong>${footerLinks.metric}</strong><p>${footerLinks.metricText}</p></div>
           </div>
+
+          <section class="article-index-boost article-index-boost--priority" aria-labelledby="priority-growth-links">
+            <h2 id="priority-growth-links">${footerLinks.priorityTitle}</h2>
+            <p>
+              ${footerLinks.priorityText}
+            </p>
+            <ul>
+${renderPriorityGrowthLinks(page)}
+            </ul>
+          </section>
 
           <h2>${footerLinks.who}</h2>
           <ul>

@@ -4,7 +4,7 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-05-23";
+const dateModified = "2026-05-31";
 
 const priorityRoutes = [
   "/en/faceless-youtube-shorts/",
@@ -315,6 +315,9 @@ const linkSets = {
   ru: {
     base: [
       ["https://adshortsai.com/shorts-guides/", "все гайды по YouTube Shorts"],
+      ["https://adshortsai.com/ai-generator-shorts/", "AI-генератор Shorts"],
+      ["https://adshortsai.com/generator-youtube-shorts/", "генератор YouTube Shorts"],
+      ["https://adshortsai.com/ai-generator-shorts-dlya-malogo-biznesa/", "Shorts для малого бизнеса"],
       ["https://adshortsai.com/examples/", "примеры готовых Shorts"],
       ["https://adshortsai.com/pricing/", "тарифы AdShorts AI"],
     ],
@@ -352,7 +355,9 @@ const linkSets = {
   en: {
     base: [
       ["https://adshortsai.com/en/shorts-guides/", "all YouTube Shorts guides"],
+      ["https://adshortsai.com/en/ai-shorts-generator/", "AI Shorts generator"],
       ["https://adshortsai.com/en/youtube-shorts-generator/", "YouTube Shorts generator"],
+      ["https://adshortsai.com/en/ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
       ["https://adshortsai.com/en/faceless-youtube-shorts-generator/", "faceless Shorts generator"],
       ["https://adshortsai.com/en/examples/", "Shorts examples"],
       ["https://adshortsai.com/en/pricing/", "AdShorts AI pricing"],
@@ -398,7 +403,7 @@ const getLinks = (locale, category, canonical) => {
     if (seen.has(href)) return false;
     seen.add(href);
     return true;
-  }).slice(0, 8);
+  }).slice(0, 10);
 };
 
 const getFaq = ({ locale, h1, category }) => {

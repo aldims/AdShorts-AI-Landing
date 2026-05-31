@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const organicSprintLastmod = "2026-05-23";
-const commercialGrowthLastmod = "2026-05-23";
+const organicSprintLastmod = "2026-05-31";
+const commercialGrowthLastmod = "2026-05-31";
 
 const errors = [];
 
@@ -185,9 +185,15 @@ for (const pagePath of commercialGrowthPages) {
   assert(new RegExp(`"dateModified"\\s*:\\s*"${commercialGrowthLastmod}"`, "i").test(html), `${pagePath}: missing commercial growth dateModified`);
   assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
+  assert(/id="priority-growth-links"/i.test(html), `${pagePath}: missing priority cluster links`);
   assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
   assert(/href="\.\.\/shorts-guides\/#ai-generators"/i.test(html), `${pagePath}: missing commercial guides backlink`);
 }
+
+const rootLanding = await readRootFile("index.html");
+assert(/href="\.\/shorts-guides\/#ai-generators"/i.test(rootLanding), "index.html: missing AI generator cluster link from landing");
+const englishLanding = await readRootFile("en/index.html");
+assert(/href="\.\/shorts-guides\/#ai-generators"/i.test(englishLanding), "en/index.html: missing AI generator cluster link from landing");
 
 const appShell = await readRootFile("app/index.html");
 assert(!/app staging/i.test(appShell), "app/index.html: contains staging description");

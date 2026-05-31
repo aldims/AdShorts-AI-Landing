@@ -317,6 +317,16 @@ export const staticLandingContent = {
   },
   guideTopics: [
     {
+      href: "./shorts-guides/#ai-generators",
+      emoji: "AI",
+      title: { ru: "AI-генераторы", en: "AI generators" },
+      count: { ru: "16 страниц", en: "16 pages" },
+      text: {
+        ru: "Коммерческие страницы под запросы с высоким интентом: генераторы, видео для бизнеса и выбор workflow.",
+        en: "High-intent pages for generators, business videos and choosing a short-form workflow.",
+      },
+    },
+    {
       href: "./shorts-guides/#problems",
       emoji: "🚨",
       title: { ru: "Проблемы и ошибки", en: "Problems & mistakes" },
