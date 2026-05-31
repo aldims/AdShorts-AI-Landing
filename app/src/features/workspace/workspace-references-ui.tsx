@@ -3,6 +3,74 @@ import { createPortal } from "react-dom";
 import type { Locale } from "../../lib/i18n";
 import { workspaceText } from "./workspace-page-model";
 import type { WorkspaceReferenceVisualOption } from "./workspace-prompt-helpers";
+import { WorkspaceSegmentPreviewCardMedia } from "./workspace-preview-components";
+import {
+  getWorkspaceSegmentMediaIdentityKey,
+  getWorkspaceSegmentResolvedMediaSurface,
+} from "./workspace-segment-draft-media-helpers";
+import { buildWorkspaceMediaAssetProxyUrl } from "./workspace-segment-editor";
+import type { WorkspaceSegmentEditorDraftSegment } from "./workspace-types";
+
+export const renderWorkspaceSegmentReferencePreview = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  keyPrefix: string,
+) => {
+  const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-modal-library-tile");
+  return (
+    <span className="studio-segment-references__media">
+      <WorkspaceSegmentPreviewCardMedia
+        allowBrowserPosterCapture={mediaSurface.allowBrowserPosterCapture}
+        allowVideoPlayback={false}
+        autoplay={false}
+        imageLoading="lazy"
+        mediaKey={`${keyPrefix}:${segment.index}:${getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface)}`}
+        mountVideoWhenIdle={mediaSurface.mountVideoWhenIdle}
+        muted
+        posterUrl={mediaSurface.posterUrl}
+        preferPosterFrame={mediaSurface.preferPosterFrame}
+        preload={mediaSurface.previewKind === "video" ? mediaSurface.preloadPolicy : undefined}
+        primePausedFrame={mediaSurface.primePausedFrame}
+        previewKind={mediaSurface.previewKind}
+        previewUrl={mediaSurface.displayUrl ?? ""}
+      />
+    </span>
+  );
+};
+
+export const renderWorkspaceSegmentReferenceOptionPreview = (
+  option: WorkspaceReferenceVisualOption,
+  keyPrefix: string,
+) => {
+  if (option.segment) {
+    return renderWorkspaceSegmentReferencePreview(option.segment, keyPrefix);
+  }
+
+  if (option.assetId) {
+    return (
+      <span className="studio-segment-references__media">
+        <img
+          src={buildWorkspaceMediaAssetProxyUrl(option.assetId)}
+          alt=""
+          loading="lazy"
+        />
+      </span>
+    );
+  }
+
+  return <span className="studio-segment-references__media is-empty" aria-hidden="true"></span>;
+};
+
+export const getWorkspaceSegmentReferenceOptionPromptAvatarUrl = (option: WorkspaceReferenceVisualOption) => {
+  if (option.assetId) {
+    return buildWorkspaceMediaAssetProxyUrl(option.assetId);
+  }
+  if (option.segment) {
+    const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(option.segment, "segment-modal-library-tile");
+    return mediaSurface.posterUrl ?? mediaSurface.displayUrl ?? null;
+  }
+
+  return null;
+};
 
 type WorkspaceReferenceOptionCardProps = {
   allowDelete?: boolean;

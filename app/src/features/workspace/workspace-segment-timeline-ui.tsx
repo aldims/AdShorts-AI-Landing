@@ -5,6 +5,13 @@ import {
   type WorkspaceSegmentTimelineAudioPreviewTrack,
   workspaceText,
 } from "./workspace-page-model";
+import { videoElementUsesWorkspaceSourceUrl } from "./workspace-media-probe-helpers";
+import { WorkspaceSegmentPreviewCardMedia } from "./workspace-preview-components";
+import {
+  getWorkspaceSegmentMediaIdentityKey,
+  getWorkspaceSegmentResolvedMediaSurface,
+  getWorkspaceSegmentVisualDurationMeasurementUrl,
+} from "./workspace-segment-draft-media-helpers";
 import { normalizeWorkspaceSegmentDurationMode } from "./workspace-segment-editor";
 import { formatWorkspaceSegmentEditorTime } from "./workspace-time-formatters";
 import type {
@@ -71,6 +78,11 @@ export type WorkspaceSegmentTimelineBoundaryTimecodeOptions = {
   className?: string;
   segment: WorkspaceSegmentEditorDraftSegment;
   segmentDisplayNumber: number;
+};
+
+export type WorkspaceSegmentTimelineSceneBackdropOptions = {
+  onMeasuredVisualDuration: (segmentIndex: number, sourceUrl: string, durationSeconds: number) => void;
+  segment: WorkspaceSegmentEditorDraftSegment;
 };
 
 export const renderWorkspaceSegmentTimelineAudioButton = (
@@ -256,6 +268,52 @@ export const renderWorkspaceSegmentTimelineBoundaryTimecode = (
       title={label}
     >
       {initialValue}
+    </span>
+  );
+};
+
+export const renderWorkspaceSegmentTimelineSceneBackdrop = ({
+  onMeasuredVisualDuration,
+  segment,
+}: WorkspaceSegmentTimelineSceneBackdropOptions) => {
+  const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+  const previewUrl = mediaSurface.displayUrl;
+
+  return (
+    <span className="studio-segment-editor__timeline-scene-backdrop" aria-hidden="true">
+      {previewUrl ? (
+        <WorkspaceSegmentPreviewCardMedia
+          allowBrowserPosterCapture={mediaSurface.allowBrowserPosterCapture}
+          allowVideoPlayback={false}
+          autoplay={false}
+          fallbackPosterUrl={mediaSurface.fallbackPosterUrl}
+          imageLoading="lazy"
+          loop={false}
+          mediaKey={`timeline-scene-backdrop:${getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface)}`}
+          mountVideoWhenIdle={mediaSurface.mountVideoWhenIdle}
+          muted
+          onLoadedMetadata={(event) => {
+            const element = event.currentTarget;
+            const measurementUrl = getWorkspaceSegmentVisualDurationMeasurementUrl(segment);
+            onMeasuredVisualDuration(
+              segment.index,
+              measurementUrl && videoElementUsesWorkspaceSourceUrl(element, measurementUrl)
+                ? measurementUrl
+                : element.currentSrc || element.src || previewUrl,
+              element.duration,
+            );
+          }}
+          posterUrl={mediaSurface.posterUrl}
+          preferPosterFrame={mediaSurface.preferPosterFrame}
+          preload={mediaSurface.previewKind === "video" ? mediaSurface.preloadPolicy : undefined}
+          primePausedFrame={mediaSurface.primePausedFrame}
+          previewFallbackUrls={mediaSurface.fallbackUrls}
+          previewKind={mediaSurface.previewKind}
+          previewUrl={previewUrl}
+        />
+      ) : (
+        <span className="studio-segment-editor__timeline-scene-backdrop-placeholder"></span>
+      )}
     </span>
   );
 };

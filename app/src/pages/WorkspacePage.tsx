@@ -415,6 +415,7 @@ import {
   renderWorkspaceSegmentTimelineAudioButton,
   renderWorkspaceSegmentTimelineBoundaryTimecode,
   renderWorkspaceSegmentTimelineHistoryButtons,
+  renderWorkspaceSegmentTimelineSceneBackdrop,
   type WorkspaceSegmentTimelineAudioButtonOptions,
   type WorkspaceSegmentTimelineBoundaryTimecodeOptions,
   type WorkspaceSegmentTimelineHistoryButtonsOptions,
@@ -425,6 +426,8 @@ import {
   WorkspaceReferenceSavedSection,
   WorkspaceReferenceSelectedCard,
   WorkspaceSegmentVisualReferencesPanel,
+  getWorkspaceSegmentReferenceOptionPromptAvatarUrl,
+  renderWorkspaceSegmentReferenceOptionPreview,
 } from "../features/workspace/workspace-references-ui";
 import {
   formatSegmentVisualCreditsLabel,
@@ -21241,48 +21244,11 @@ export function WorkspacePage({
     });
   const renderSegmentTimelineBoundaryTimecode = (options: WorkspaceSegmentTimelineBoundaryTimecodeOptions) =>
     renderWorkspaceSegmentTimelineBoundaryTimecode(locale, options);
-  const renderSegmentTimelineSceneBackdrop = (segment: WorkspaceSegmentEditorDraftSegment) => {
-    const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
-    const previewUrl = mediaSurface.displayUrl;
-
-    return (
-      <span className="studio-segment-editor__timeline-scene-backdrop" aria-hidden="true">
-        {previewUrl ? (
-          <WorkspaceSegmentPreviewCardMedia
-            allowBrowserPosterCapture={mediaSurface.allowBrowserPosterCapture}
-            allowVideoPlayback={false}
-            autoplay={false}
-            fallbackPosterUrl={mediaSurface.fallbackPosterUrl}
-            imageLoading="lazy"
-            loop={false}
-            mediaKey={`timeline-scene-backdrop:${getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface)}`}
-            mountVideoWhenIdle={mediaSurface.mountVideoWhenIdle}
-            muted
-            onLoadedMetadata={(event) => {
-              const element = event.currentTarget;
-              const measurementUrl = getWorkspaceSegmentVisualDurationMeasurementUrl(segment);
-              updateSegmentEditorMeasuredVisualDuration(
-                segment.index,
-                measurementUrl && videoElementUsesWorkspaceSourceUrl(element, measurementUrl)
-                  ? measurementUrl
-                  : element.currentSrc || element.src || previewUrl,
-                element.duration,
-              );
-            }}
-            posterUrl={mediaSurface.posterUrl}
-            preferPosterFrame={mediaSurface.preferPosterFrame}
-            preload={mediaSurface.previewKind === "video" ? mediaSurface.preloadPolicy : undefined}
-            primePausedFrame={mediaSurface.primePausedFrame}
-            previewFallbackUrls={mediaSurface.fallbackUrls}
-            previewKind={mediaSurface.previewKind}
-            previewUrl={previewUrl}
-          />
-        ) : (
-          <span className="studio-segment-editor__timeline-scene-backdrop-placeholder"></span>
-        )}
-      </span>
-    );
-  };
+  const renderSegmentTimelineSceneBackdrop = (segment: WorkspaceSegmentEditorDraftSegment) =>
+    renderWorkspaceSegmentTimelineSceneBackdrop({
+      onMeasuredVisualDuration: updateSegmentEditorMeasuredVisualDuration,
+      segment,
+    });
   const segmentEditorTimeline =
     segmentEditorDraft && segmentEditorTracks ? (
       <div
@@ -22355,61 +22321,8 @@ export function WorkspacePage({
     setSelectedSegmentReferenceCharacterAssetKeys([]);
     setSelectedSegmentReferenceSceneKey(null);
   };
-  const renderSegmentReferencePreview = (
-    segment: WorkspaceSegmentEditorDraftSegment,
-    keyPrefix: string,
-  ) => {
-    const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-modal-library-tile");
-    return (
-      <span className="studio-segment-references__media">
-        <WorkspaceSegmentPreviewCardMedia
-          allowBrowserPosterCapture={mediaSurface.allowBrowserPosterCapture}
-          allowVideoPlayback={false}
-          autoplay={false}
-          imageLoading="lazy"
-          mediaKey={`${keyPrefix}:${segment.index}:${getWorkspaceSegmentMediaIdentityKey(segment, mediaSurface)}`}
-          mountVideoWhenIdle={mediaSurface.mountVideoWhenIdle}
-          muted
-          posterUrl={mediaSurface.posterUrl}
-          preferPosterFrame={mediaSurface.preferPosterFrame}
-          preload={mediaSurface.previewKind === "video" ? mediaSurface.preloadPolicy : undefined}
-          primePausedFrame={mediaSurface.primePausedFrame}
-          previewKind={mediaSurface.previewKind}
-          previewUrl={mediaSurface.displayUrl ?? ""}
-        />
-      </span>
-    );
-  };
-  const renderSegmentReferenceOptionPreview = (option: WorkspaceReferenceVisualOption, keyPrefix: string) => {
-    if (option.segment) {
-      return renderSegmentReferencePreview(option.segment, keyPrefix);
-    }
-
-    if (option.assetId) {
-      return (
-        <span className="studio-segment-references__media">
-          <img
-            src={buildWorkspaceMediaAssetProxyUrl(option.assetId)}
-            alt=""
-            loading="lazy"
-          />
-        </span>
-      );
-    }
-
-    return <span className="studio-segment-references__media is-empty" aria-hidden="true"></span>;
-  };
-  const getSegmentReferenceOptionPromptAvatarUrl = (option: WorkspaceReferenceVisualOption) => {
-    if (option.assetId) {
-      return buildWorkspaceMediaAssetProxyUrl(option.assetId);
-    }
-    if (option.segment) {
-      const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(option.segment, "segment-modal-library-tile");
-      return mediaSurface.posterUrl ?? mediaSurface.displayUrl ?? null;
-    }
-
-    return null;
-  };
+  const renderSegmentReferenceOptionPreview = renderWorkspaceSegmentReferenceOptionPreview;
+  const getSegmentReferenceOptionPromptAvatarUrl = getWorkspaceSegmentReferenceOptionPromptAvatarUrl;
   const saveWorkspaceReference = async (options: {
     assetId: number;
     description?: string | null;
