@@ -5441,7 +5441,10 @@ export async function createStudioGenerationJob(
         : undefined;
     const normalizedSegmentEditorAssetPayload = normalizedSegmentEditor
       ? {
+          allowStructureChange: Boolean(normalizedSegmentEditor.allowStructureChange),
           allow_structure_change: Boolean(normalizedSegmentEditor.allowStructureChange),
+          projectId: normalizedSegmentEditor.projectId,
+          project_id: normalizedSegmentEditor.projectId,
           segments: await Promise.all(
             normalizedSegmentEditor.segments.map(async (segment) => {
               const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange ? undefined : normalizedProjectId;
@@ -5461,26 +5464,40 @@ export async function createStudioGenerationJob(
                       projectId: uploadScopeProjectId,
                       role: "segment_source",
                       segmentIndex: uploadScopeSegmentIndex,
-                    })
-                  : undefined;
+                  })
+                : undefined;
+              const durationSeconds = segment.duration ?? null;
+              const manualDurationSeconds = segment.manualDurationSeconds ?? null;
+              const targetDurationSeconds = manualDurationSeconds ?? durationSeconds;
+              const sourceDurationSeconds = segment.durationExtensionSourceDurationSeconds ?? null;
 
               return {
                 custom_video_asset_id: segmentAssetId,
                 custom_video_mime_type: segment.customVideoFileMimeType,
                 custom_video_original_name: segment.customVideoFileName,
                 duration: segment.duration,
-                duration_extension_source_duration_seconds: segment.durationExtensionSourceDurationSeconds ?? null,
+                durationMode: segment.durationMode,
+                durationSeconds,
+                duration_extension_source_duration_seconds: sourceDurationSeconds,
                 duration_mode: segment.durationMode,
+                duration_seconds: durationSeconds,
                 end_time: segment.endTime,
+                endTime: segment.endTime,
                 index: segment.index,
-                manual_duration_seconds: segment.manualDurationSeconds,
+                manualDurationSeconds,
+                manual_duration_seconds: manualDurationSeconds,
                 reset_visual: Boolean(segment.resetVisual),
                 scene_sound_asset_id: segment.sceneSoundAssetId,
+                source_duration_seconds: sourceDurationSeconds,
                 start_time: segment.startTime,
+                startTime: segment.startTime,
                 subtitle_color: segment.subtitleColor ?? null,
                 subtitle_style: segment.subtitleStyle ?? null,
                 subtitle_type: segment.subtitleType ?? null,
+                targetDurationSeconds,
+                target_duration_seconds: targetDurationSeconds,
                 text: segment.text,
+                timeline_duration_seconds: durationSeconds,
                 video_action: segment.videoAction,
                 voiceover_asset_id: segment.voiceoverAssetId,
                 voice_type: segment.voiceType ?? null,

@@ -18958,6 +18958,9 @@ export function WorkspacePage({
           Boolean(voiceoverAudioPreviewSource.segmentVoiceoverAudioUrl) &&
           shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, segmentEditorDraft, {
             hasPriorNonProjectVoiceover,
+            previewRange: voiceoverPreviewRange,
+            timelineEndTime,
+            timelineStartTime,
           });
         const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft.ttsAssetId);
         const fullPreviewVoiceoverAudioUrl = shouldUseSegmentProxyForProjectVoiceover

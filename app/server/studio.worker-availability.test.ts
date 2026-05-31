@@ -251,4 +251,140 @@ describe("studio generation worker availability", () => {
       }),
     );
   });
+
+  it("forwards manual segment timing aliases to AdsFlow generation", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-manual-duration",
+            status: "queued",
+            title: "Manual segment edit",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("A short video about focus", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        isRegeneration: true,
+        language: "en",
+        projectId: 42,
+        segmentEditor: {
+          projectId: 42,
+          segments: [
+            {
+              duration: 10,
+              durationExtensionSourceDurationSeconds: 3.26,
+              durationMode: "manual",
+              endTime: 10,
+              index: 0,
+              manualDurationSeconds: 10,
+              startTime: 0,
+              text: "Manual opening scene",
+              videoAction: "original",
+            },
+            {
+              duration: 4,
+              endTime: 14,
+              index: 1,
+              startTime: 10,
+              text: "Second scene",
+              videoAction: "original",
+            },
+          ],
+        },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-manual-duration",
+        status: "queued",
+      }),
+    );
+
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    expect(generationBody).toEqual(
+      expect.objectContaining({
+        is_regeneration: true,
+        project_id: 42,
+      }),
+    );
+
+    const segmentEditor = generationBody?.segment_editor as {
+      allowStructureChange?: boolean;
+      allow_structure_change?: boolean;
+      projectId?: number;
+      project_id?: number;
+      segments?: Array<Record<string, unknown>>;
+    } | undefined;
+    expect(segmentEditor).toEqual(
+      expect.objectContaining({
+        allowStructureChange: false,
+        allow_structure_change: false,
+        projectId: 42,
+        project_id: 42,
+      }),
+    );
+    expect(segmentEditor?.segments?.[0]).toEqual(
+      expect.objectContaining({
+        duration: 10,
+        durationMode: "manual",
+        durationSeconds: 10,
+        duration_extension_source_duration_seconds: 3.26,
+        duration_mode: "manual",
+        duration_seconds: 10,
+        end_time: 10,
+        endTime: 10,
+        manualDurationSeconds: 10,
+        manual_duration_seconds: 10,
+        source_duration_seconds: 3.26,
+        start_time: 0,
+        startTime: 0,
+        targetDurationSeconds: 10,
+        target_duration_seconds: 10,
+        timeline_duration_seconds: 10,
+      }),
+    );
+    expect(segmentEditor?.segments?.[1]).toEqual(
+      expect.objectContaining({
+        duration: 4,
+        durationSeconds: 4,
+        duration_mode: "manual",
+        duration_seconds: 4,
+        end_time: 14,
+        manual_duration_seconds: 4,
+        start_time: 10,
+        target_duration_seconds: 4,
+        timeline_duration_seconds: 4,
+      }),
+    );
+  });
 });

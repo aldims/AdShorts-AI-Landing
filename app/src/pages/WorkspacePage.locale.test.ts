@@ -3394,6 +3394,61 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(false);
   });
 
+  it("uses segment voiceover proxy in full preview when a manual visual slot creates a voice pause", () => {
+    const segment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      speechDuration: 2.8,
+      speechEndTime: 2.8,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 3.25,
+      startTime: 0,
+    });
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
+        previewRange,
+        timelineEndTime: 10,
+        timelineStartTime: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses segment voiceover proxy in full preview when a prior manual scene shifts the project voice source", () => {
+    const segment = createDraftSegment({
+      duration: 3.5,
+      endTime: 13.5,
+      index: 1,
+      speechDuration: 3.5,
+      speechEndTime: 6.3,
+      speechStartTime: 2.8,
+      speechWords: [{ confidence: 1, endTime: 6.3, startTime: 2.8, text: "Second" }],
+      startTime: 10,
+      text: "Second",
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 6.75,
+      startTime: 2.72,
+    });
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
+        previewRange,
+        timelineEndTime: 13.5,
+        timelineStartTime: 10,
+      }),
+    ).toBe(true);
+  });
+
   it("uses segment voiceover proxy in full preview when a scene voice override differs from the project voice", () => {
     const segment = createDraftSegment({
       index: 0,
