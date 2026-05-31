@@ -620,6 +620,10 @@ import {
   type StudioMusicType,
 } from "../features/workspace/workspace-studio-options";
 import {
+  WorkspaceSegmentEditorBrandAddButton,
+  WorkspaceSegmentEditorBrandOverlay,
+} from "../features/workspace/workspace-brand-ui";
+import {
   clampWorkspaceUnitValue,
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   createWorkspaceTalkingCharacterTargetFromPoints,
@@ -628,9 +632,9 @@ import {
   moveWorkspaceTalkingCharacterTarget,
   normalizeWorkspaceTalkingCharacterTarget,
   resizeWorkspaceTalkingCharacterTarget,
-  WORKSPACE_TALKING_TARGET_RESIZE_HANDLES,
   type WorkspaceTalkingCharacterTarget,
 } from "../features/workspace/workspace-talking-character-helpers";
+import { WorkspaceSegmentTalkingTargetOverlay } from "../features/workspace/workspace-talking-character-ui";
 import {
   buildWorkspaceSegmentBulkSubtitleText,
   distributeWorkspaceSegmentBulkSubtitleText,
@@ -23705,15 +23709,6 @@ export function WorkspacePage({
       return { ...current, [segmentIndex]: target };
     });
   };
-  const getSegmentTalkingTargetStyle = (target: WorkspaceTalkingCharacterTarget | null | undefined) =>
-    target
-      ? ({
-          height: `${target.height * 100}%`,
-          left: `${target.x * 100}%`,
-          top: `${target.y * 100}%`,
-          width: `${target.width * 100}%`,
-        } satisfies CSSProperties)
-      : undefined;
   const beginSegmentTalkingTargetSelection = (event: ReactPointerEvent<HTMLDivElement>, segmentIndex: number) => {
     event.preventDefault();
     event.stopPropagation();
@@ -23831,89 +23826,19 @@ export function WorkspacePage({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
-  const renderSegmentTalkingTargetOverlay = (segment: WorkspaceSegmentEditorDraftSegment) => {
-    const target = segmentTalkingCharacterTargets[segment.index] ?? null;
-    const draftTarget = segmentTalkingCharacterDraftTargets[segment.index] ?? null;
-    const displayTarget = draftTarget ?? target;
-    const isDrawingTarget = Boolean(draftTarget);
-    const targetStyle = getSegmentTalkingTargetStyle(displayTarget);
-
-    return (
-      <div
-        className={`studio-segment-talking-target-overlay${displayTarget ? " has-target" : ""}${isDrawingTarget ? " is-drawing" : ""}`}
-        data-talking-target-segment-index={segment.index}
-        role="application"
-        aria-label={workspaceText(locale, "Выбор говорящего персонажа на сцене", "Speaking character selection on scene")}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-        onPointerCancel={cancelSegmentTalkingTargetSelection}
-        onPointerDown={(event) => beginSegmentTalkingTargetSelection(event, segment.index)}
-        onPointerMove={(event) => updateSegmentTalkingTargetSelection(event, segment.index)}
-        onPointerUp={(event) => finishSegmentTalkingTargetSelection(event, segment.index)}
-      >
-        {targetStyle ? (
-          <span
-            className={`studio-segment-talking-target-overlay__box${isDrawingTarget ? " is-drawing" : ""}`}
-            style={targetStyle}
-            data-talking-target-action={isDrawingTarget ? undefined : "move"}
-          >
-            {isDrawingTarget ? null : (
-              <>
-                <span className="studio-segment-talking-target-overlay__box-grid" aria-hidden="true" />
-                <span className="studio-segment-talking-target-overlay__box-center" aria-hidden="true" />
-                {WORKSPACE_TALKING_TARGET_RESIZE_HANDLES.map((handle) => (
-                  <span
-                    key={handle}
-                    className={`studio-segment-talking-target-overlay__handle studio-segment-talking-target-overlay__handle--${handle}`}
-                    data-talking-target-action={`resize:${handle}`}
-                    aria-hidden="true"
-                  />
-                ))}
-                <button
-                  className="studio-segment-talking-target-overlay__reset"
-                  type="button"
-                  aria-label={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-                  title={workspaceText(locale, "Сбросить выбор говорящего", "Reset speaker selection")}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setSegmentTalkingCharacterTarget(segment.index, null);
-                  }}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M20 11a8 8 0 1 1-2.34-5.66L20 8"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M20 4v4h-4"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              </>
-            )}
-          </span>
-        ) : null}
-        <span className="studio-segment-talking-target-overlay__label">
-          {displayTarget
-            ? workspaceText(locale, "Говорящий", "Speaker")
-            : workspaceText(locale, "Выберите говорящего", "Select speaker")}
-        </span>
-      </div>
-    );
-  };
+  const renderSegmentTalkingTargetOverlay = (segment: WorkspaceSegmentEditorDraftSegment) => (
+    <WorkspaceSegmentTalkingTargetOverlay
+      draftTarget={segmentTalkingCharacterDraftTargets[segment.index] ?? null}
+      locale={locale}
+      onPointerCancel={cancelSegmentTalkingTargetSelection}
+      onPointerDown={(event) => beginSegmentTalkingTargetSelection(event, segment.index)}
+      onPointerMove={(event) => updateSegmentTalkingTargetSelection(event, segment.index)}
+      onPointerUp={(event) => finishSegmentTalkingTargetSelection(event, segment.index)}
+      onReset={() => setSegmentTalkingCharacterTarget(segment.index, null)}
+      segmentIndex={segment.index}
+      target={segmentTalkingCharacterTargets[segment.index] ?? null}
+    />
+  );
   const segmentAiPhotoBillingQuality = resolveSegmentPromptCharacterBillingQuality(
     segmentAiPhotoModalPrompt,
     selectedSegmentAiPhotoQuality,
@@ -24406,102 +24331,26 @@ export function WorkspacePage({
   const renderSegmentEditorBrandOverlay = (
     variant: "card" | "thumb" | "ghost" = "card",
     options?: { editable?: boolean },
-  ) => {
-    if (!hasAppliedSegmentEditorBranding && !hasAppliedSegmentEditorSystemWatermark) {
-      return null;
-    }
-
-    const normalizedBrandText = appliedSegmentEditorBrandSnapshot.brandText.trim();
-    const systemWatermarkText = workspaceText(locale, "Сделано в adshortsai.com", "Made with adshortsai.com");
-    const editBrandLabel = workspaceText(locale, "Изменить бренд", "Edit brand");
-    const brandTitle = [
-      hasAppliedSegmentEditorBranding ? getStudioBrandSummary(appliedSegmentEditorBrandSnapshot) : "",
-      hasAppliedSegmentEditorSystemWatermark ? systemWatermarkText : "",
-    ].filter(Boolean).join(" · ");
-    const isEditable = variant === "card" && Boolean(options?.editable);
-    const brandOverlayBaseClassName = `studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}${
-      appliedSegmentEditorBrandLogoPreviewUrl ? " has-logo" : ""
-    }${normalizedBrandText || hasAppliedSegmentEditorSystemWatermark ? " has-text" : ""}${
-      hasAppliedSegmentEditorSystemWatermark ? " has-system-watermark" : ""
-    }`;
-    const brandOverlayClassName = `${brandOverlayBaseClassName}${
-      isEditable ? " studio-segment-editor__brand-overlay--editable" : ""
-    }`;
-    const renderBrandDisplayContent = () => (
-      <>
-        {appliedSegmentEditorBrandLogoPreviewUrl ? <img src={appliedSegmentEditorBrandLogoPreviewUrl} alt="" /> : null}
-        {normalizedBrandText ? <span className="studio-segment-editor__brand-value">{normalizedBrandText}</span> : null}
-        {hasAppliedSegmentEditorSystemWatermark ? (
-          <span className="studio-segment-editor__brand-value">{systemWatermarkText}</span>
-        ) : null}
-      </>
-    );
-
-    if (isEditable) {
-      return (
-        <>
-          <span
-            className={`${brandOverlayBaseClassName} studio-segment-editor__brand-overlay--backdrop`}
-            title={brandTitle}
-            aria-hidden="true"
-          >
-            {renderBrandDisplayContent()}
-          </span>
-          <button
-            className={`${brandOverlayClassName} studio-segment-editor__brand-overlay--edit-hitbox`}
-            type="button"
-            aria-label={editBrandLabel}
-            title={brandTitle ? `${editBrandLabel}: ${brandTitle}` : editBrandLabel}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleSegmentEditorPromptBrandToolButtonClick(event);
-            }}
-          >
-            {renderBrandDisplayContent()}
-            <span className="studio-segment-editor__brand-edit-label">{editBrandLabel}</span>
-          </button>
-        </>
-      );
-    }
-
-    return (
-      <span
-        className={brandOverlayClassName}
-        title={brandTitle}
-        aria-hidden="true"
-      >
-        {renderBrandDisplayContent()}
-      </span>
-    );
-  };
-  const renderSegmentEditorBrandAddButton = () => {
-    const brandActionLabel = hasAppliedSegmentEditorBranding
-      ? workspaceText(locale, "Изменить бренд", "Edit brand")
-      : workspaceText(locale, "Добавить бренд", "Add brand");
-
-    return (
-      <button
-        className="studio-segment-editor__brand-add"
-        type="button"
-        aria-label={brandActionLabel}
-        title={brandActionLabel}
-        onPointerDown={(event) => {
-          event.stopPropagation();
-        }}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          handleSegmentEditorPromptBrandToolButtonClick(event);
-        }}
-      >
-        {brandActionLabel}
-      </button>
-    );
-  };
+  ) => (
+    <WorkspaceSegmentEditorBrandOverlay
+      brandLogoPreviewUrl={appliedSegmentEditorBrandLogoPreviewUrl}
+      brandSummary={hasAppliedSegmentEditorBranding ? getStudioBrandSummary(appliedSegmentEditorBrandSnapshot) : ""}
+      brandText={appliedSegmentEditorBrandSnapshot.brandText}
+      editable={Boolean(options?.editable)}
+      hasBranding={hasAppliedSegmentEditorBranding}
+      hasSystemWatermark={hasAppliedSegmentEditorSystemWatermark}
+      locale={locale}
+      onEdit={handleSegmentEditorPromptBrandToolButtonClick}
+      variant={variant}
+    />
+  );
+  const renderSegmentEditorBrandAddButton = () => (
+    <WorkspaceSegmentEditorBrandAddButton
+      hasBranding={hasAppliedSegmentEditorBranding}
+      locale={locale}
+      onClick={handleSegmentEditorPromptBrandToolButtonClick}
+    />
+  );
   const activeSegmentSceneSoundUrl = activeSegment ? getStudioSceneSoundAssetPreviewUrl(activeSegment.sceneSoundAsset) : null;
   const activeSegmentEffectiveVoiceIdForGeneration =
     activeSegment && segmentEditorDraft ? getWorkspaceSegmentEffectiveVoiceId(activeSegment, segmentEditorDraft) : null;
