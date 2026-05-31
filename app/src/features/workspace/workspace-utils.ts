@@ -17,6 +17,23 @@ type WorkspaceSegmentBulkSubtitleTextResult = {
   texts: string[];
 };
 
+export const normalizeWorkspaceVideoSourceUrl = (value: string | null | undefined) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  if (typeof window === "undefined") {
+    return normalized;
+  }
+
+  try {
+    return new URL(normalized, window.location.href).href;
+  } catch {
+    return normalized;
+  }
+};
+
 export const normalizeWorkspaceSegmentBulkSubtitleText = (value: string | null | undefined) =>
   String(value ?? "").replace(/\s+/g, " ").trim();
 
