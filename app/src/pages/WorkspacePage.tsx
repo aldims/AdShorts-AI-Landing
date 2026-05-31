@@ -117,7 +117,6 @@ import {
 } from "../features/workspace/workspace-segment-draft-media-helpers";
 import {
   applyWorkspaceContentPlanIdeaUpdate,
-  formatWorkspaceContentPlanIdeaCount,
   isWorkspaceContentPlanSourceIdeaSynchronized,
   persistStudioContentPlanVisibility,
   readStudioContentPlanVisibility,
@@ -381,6 +380,7 @@ import {
   WorkspaceSegmentPreviewCardMedia,
   WorkspaceSegmentSubtitleOverlay,
 } from "../features/workspace/workspace-preview-components";
+import { WorkspaceContentPlanPanel } from "../features/workspace/workspace-content-plan-panel";
 import {
   StudioBrandSelectorChip,
   StudioLanguageSelectorChip,
@@ -528,6 +528,7 @@ import {
   type WorkspaceSegmentVisualRunScope,
   type StudioCreateMode,
 } from "../features/workspace/workspace-page-model";
+import { WorkspacePublishModal } from "../features/workspace/workspace-publish-modal";
 import {
   applyPublishScheduleDatePart,
   applyPublishScheduleTimePart,
@@ -536,19 +537,16 @@ import {
   createDefaultPublishScheduleDate,
   formatDateTimeLocalValue,
   formatProjectDate,
-  formatPublishCalendarMonth,
   formatPublishTimeValue,
   getYouTubePublicationMetaLabel,
   hasConfirmedYouTubePublication,
   isPublishJobFailureStatus,
   isPublishJobProgressStatus,
   isPublishJobSuccessStatus,
-  isSamePublishDay,
   normalizePublishDateTimeInput,
   normalizePublishJobStatus,
   parsePublishDateTimeLocalValue,
   publishCalendarWeekdayLabels,
-  shiftPublishMonth,
   startOfPublishDay,
   startOfPublishMonth,
 } from "../features/workspace/workspace-publish-helpers";
@@ -17589,264 +17587,34 @@ export function WorkspacePage({
       : workspaceText(locale, "Видео отправится в YouTube сразу после подтверждения.", "The video will be sent to YouTube after confirmation.");
   const shouldRenderStudioContentPlanRail = createMode !== "segment-editor";
   const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible && !isGuest;
-  const renderContentPlanIdeaCard = (plan: WorkspaceContentPlan, idea: WorkspaceContentPlanIdea) => {
-    const isSelectedIdea = selectedContentPlanIdeaId === idea.id;
-    const isDeletingIdea = contentPlanDeletingIdeaId === idea.id;
-    const isUpdatingIdea = contentPlanUpdatingIdeaId === idea.id;
-
-    return (
-      <article
-        key={idea.id}
-        className={`studio-content-plan__idea${idea.isUsed ? " is-used" : ""}${isSelectedIdea ? " is-selected" : ""}`}
-      >
-        <div className="studio-content-plan__idea-meta">
-          <button
-            className={`studio-content-plan__idea-status${idea.isUsed ? " is-active" : ""}`}
-            type="button"
-            aria-pressed={idea.isUsed}
-            aria-label={
-              idea.isUsed
-                ? workspaceText(locale, "Пометить как неиспользованную", "Mark as unused")
-                : workspaceText(locale, "Пометить как использованную", "Mark as used")
-            }
-            aria-busy={isUpdatingIdea || isDeletingIdea}
-            disabled={isUpdatingIdea || isDeletingIdea}
-            onClick={() => void handleToggleContentPlanIdeaUsed(plan, idea)}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M3.25 8.25 6.2 11.2l6.55-6.55"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <button
-          className="studio-content-plan__idea-main"
-          type="button"
-          aria-pressed={isSelectedIdea}
-          disabled={isDeletingIdea}
-          onClick={() => handleSelectContentPlanIdea(plan, idea)}
-        >
-          <span className="studio-content-plan__idea-main-copy">
-            <strong>{idea.title}</strong>
-            <p className="studio-content-plan__idea-summary">{idea.summary}</p>
-          </span>
-        </button>
-
-        <div className="studio-content-plan__idea-actions">
-          <button
-            className="studio-content-plan__idea-delete"
-            type="button"
-            aria-label={workspaceText(locale, `Удалить идею ${idea.title}`, `Delete idea ${idea.title}`)}
-            disabled={isDeletingIdea}
-            onClick={() => void handleDeleteContentPlanIdea(plan, idea)}
-          >
-            {isDeletingIdea ? (
-              <span className="studio-canvas-prompt__btn-spinner" aria-hidden="true"></span>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                <path d="M4 7h16" strokeLinecap="round" />
-                <path d="M9.5 4h5l1 2h4" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M8 7l.8 11a2 2 0 0 0 2 1.86h2.4a2 2 0 0 0 2-1.86L16 7" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M10 10.5v5.5M14 10.5v5.5" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </article>
-    );
-  };
-  const renderContentPlanSection = (plan: WorkspaceContentPlan) => {
-    const planIdeas = plan.ideas.slice().sort((left, right) => left.position - right.position);
-    const unusedIdeas = planIdeas.filter((idea) => !idea.isUsed);
-    const usedIdeas = planIdeas.filter((idea) => idea.isUsed);
-    const isExpandedPlan = activeContentPlanId === plan.id;
-    const isUsedIdeasExpanded = expandedContentPlanUsedIdeasPlanId === plan.id;
-
-    return (
-      <section key={plan.id} className={`studio-content-plan__plan${isExpandedPlan ? " is-expanded" : ""}`}>
-        <button
-          className={`studio-content-plan__plan-toggle${isExpandedPlan ? " is-expanded" : ""}`}
-          type="button"
-          aria-expanded={isExpandedPlan}
-          onClick={() => setActiveContentPlanId((current) => (current === plan.id ? null : plan.id))}
-        >
-          <span className="studio-content-plan__plan-toggle-copy">
-            <strong>{plan.query}</strong>
-            <span>{formatProjectDate(plan.updatedAt, locale)}</span>
-          </span>
-          <span className="studio-content-plan__plan-toggle-meta">
-            <span className="studio-content-plan__plan-toggle-stats">
-              {workspaceText(locale, `${unusedIdeas.length}/${plan.ideas.length} новых`, `${unusedIdeas.length}/${plan.ideas.length} new`)}
-            </span>
-            <span className={`studio-content-plan__plan-chevron${isExpandedPlan ? " is-expanded" : ""}`} aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="m4.25 6.25 3.75 3.75 3.75-3.75"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </span>
-        </button>
-
-        {isExpandedPlan ? (
-          <div className="studio-content-plan__plan-panel">
-            <div className="studio-content-plan__ideas-group">
-              {unusedIdeas.length > 0 ? (
-                <div className="studio-content-plan__ideas">
-                  {unusedIdeas.map((idea) => renderContentPlanIdeaCard(plan, idea))}
-                </div>
-              ) : (
-                <div className="studio-content-plan__state is-compact">
-                  <p>
-                    {workspaceText(
-                      locale,
-                      "В этом плане не осталось новых идей. Можно открыть использованные ниже или сгенерировать ещё.",
-                      "This plan has no new ideas left. Open used ideas below or generate more.",
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {usedIdeas.length > 0 ? (
-              <section className={`studio-content-plan__used-group${isUsedIdeasExpanded ? " is-expanded" : ""}`}>
-                <button
-                  className={`studio-content-plan__used-toggle${isUsedIdeasExpanded ? " is-expanded" : ""}`}
-                  type="button"
-                  aria-expanded={isUsedIdeasExpanded}
-                  onClick={() =>
-                    setExpandedContentPlanUsedIdeasPlanId((current) => (current === plan.id ? null : plan.id))
-                  }
-                >
-                  <span>{workspaceText(locale, "Использованные", "Used")}</span>
-                  <span>{formatWorkspaceContentPlanIdeaCount(usedIdeas.length, locale)}</span>
-                </button>
-
-                {isUsedIdeasExpanded ? (
-                  <div className="studio-content-plan__ideas">
-                    {usedIdeas.map((idea) => renderContentPlanIdeaCard(plan, idea))}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-
-            <div className="studio-content-plan__plan-actions studio-content-plan__plan-actions--footer">
-              <button
-                className="studio-content-plan__ghost-btn"
-                type="button"
-                disabled={contentPlanDeletingPlanId === plan.id || isContentPlanGenerating}
-                onClick={() => void handleRegenerateContentPlan(plan)}
-              >
-                {isContentPlanGenerating
-                  ? workspaceText(locale, "Создаём...", "Creating...")
-                  : workspaceText(locale, "Создать еще", "Create more")}
-              </button>
-              <button
-                className="studio-content-plan__ghost-btn is-danger"
-                type="button"
-                disabled={contentPlanDeletingPlanId === plan.id}
-                onClick={() => void handleDeleteContentPlan(plan)}
-              >
-                {contentPlanDeletingPlanId === plan.id
-                  ? workspaceText(locale, "Удаляем...", "Deleting...")
-                  : workspaceText(locale, "Удалить", "Delete")}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
-    );
-  };
   const contentPlanPanel = shouldRenderStudioContentPlanRail ? (
-    <aside
-      ref={contentPlanPanelRef}
-      className={`studio-content-plan${isStudioContentPlanRailVisible ? " is-visible" : ""}`}
-      aria-label={workspaceText(locale, "Контент-план", "Content plan")}
-      aria-hidden={!isStudioContentPlanRailVisible}
-    >
-      <div className="studio-content-plan__header">
-        <div className="studio-content-plan__copy">
-          <strong>{workspaceText(locale, "Контент-план", "Content plan")}</strong>
-        </div>
-        <button
-          className="studio-content-plan__collapse-btn"
-          type="button"
-          aria-label={workspaceText(locale, "Скрыть контент-план", "Hide content plan")}
-          onClick={handleToggleContentPlanVisibility}
-        >
-          <span aria-hidden="true">−</span>
-        </button>
-      </div>
-
-      <div className="studio-content-plan__composer">
-        <div className="studio-content-plan__composer-row">
-          <input
-            id="studio-content-plan-query"
-            className="studio-content-plan__input"
-            type="text"
-            placeholder={workspaceText(locale, "Введите тему для контент-плана", "Enter a topic for the content plan")}
-            value={contentPlanQueryInput}
-            onChange={handleContentPlanQueryInputChange}
-          />
-          <button
-            className="studio-content-plan__primary-btn"
-            type="button"
-            aria-label={workspaceText(locale, "Создать контент-план", "Create content plan")}
-            disabled={isContentPlanGenerating || isContentPlansLoading}
-            onClick={() => void handleGenerateContentPlan()}
-          >
-            {isContentPlanGenerating ? (
-              <span className="studio-canvas-prompt__btn-spinner" aria-hidden="true"></span>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {contentPlansError ? (
-        <div className="studio-content-plan__error">
-          <p className="studio-content-plan__notice is-error" role="alert">
-            {contentPlansError}
-          </p>
-          <button className="studio-content-plan__ghost-btn" type="button" onClick={handleRetryContentPlansLoad}>
-            {workspaceText(locale, "Повторить", "Retry")}
-          </button>
-        </div>
-      ) : null}
-
-      <div className="studio-content-plan__body">
-        {isContentPlansLoading ? (
-          <div className="studio-content-plan__state">
-            <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-            <p>{workspaceText(locale, "Загружаем контент-планы...", "Loading content plans...")}</p>
-          </div>
-        ) : contentPlans.length === 0 ? (
-          <div className="studio-content-plan__state">
-            <strong>{workspaceText(locale, "Планов пока нет", "No plans yet")}</strong>
-            <p>{workspaceText(locale, "Введите тему и получите готовые идеи для Shorts.", "Enter a topic and get ready-made ideas for Shorts.")}</p>
-          </div>
-        ) : (
-          <section className="studio-content-plan__section">
-            <div className="studio-content-plan__plans-list">
-              {contentPlans.map((plan) => renderContentPlanSection(plan))}
-            </div>
-          </section>
-        )}
-      </div>
-    </aside>
+    <WorkspaceContentPlanPanel
+      activePlanId={activeContentPlanId}
+      contentPlans={contentPlans}
+      deletingIdeaId={contentPlanDeletingIdeaId}
+      deletingPlanId={contentPlanDeletingPlanId}
+      error={contentPlansError}
+      expandedUsedIdeasPlanId={expandedContentPlanUsedIdeasPlanId}
+      isGenerating={isContentPlanGenerating}
+      isLoading={isContentPlansLoading}
+      isVisible={isStudioContentPlanRailVisible}
+      locale={locale}
+      onDeleteIdea={handleDeleteContentPlanIdea}
+      onDeletePlan={handleDeleteContentPlan}
+      onGenerate={handleGenerateContentPlan}
+      onQueryInputChange={handleContentPlanQueryInputChange}
+      onRegeneratePlan={handleRegenerateContentPlan}
+      onRetryLoad={handleRetryContentPlansLoad}
+      onSelectIdea={handleSelectContentPlanIdea}
+      onToggleIdeaUsed={handleToggleContentPlanIdeaUsed}
+      onToggleVisibility={handleToggleContentPlanVisibility}
+      panelRef={contentPlanPanelRef}
+      queryInput={contentPlanQueryInput}
+      selectedIdeaId={selectedContentPlanIdeaId}
+      setActivePlanId={setActiveContentPlanId}
+      setExpandedUsedIdeasPlanId={setExpandedContentPlanUsedIdeasPlanId}
+      updatingIdeaId={contentPlanUpdatingIdeaId}
+    />
   ) : null;
   const handlePublishModeChange = (nextMode: "now" | "schedule") => {
     setPublishMode(nextMode);
@@ -29710,362 +29478,55 @@ export function WorkspacePage({
             </div>
           </div>
         ) : null}
-        {isPublishModalOpen ? (
-          <div className="studio-publish-modal" role="dialog" aria-modal="true" aria-labelledby="studio-publish-modal-title">
-            <button className="studio-publish-modal__backdrop route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={closePublishModal} />
-            <div className="studio-publish-modal__panel" role="document">
-              <button className="studio-publish-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={closePublishModal}>
-                ×
-              </button>
-
-              <div className="studio-publish-modal__header">
-                <div className="studio-publish-modal__header-copy">
-                  <p className="studio-publish-modal__eyebrow">{workspaceText(locale, "Публикация в YouTube", "YouTube publishing")}</p>
-                  <strong id="studio-publish-modal-title">{publishTargetTitle || workspaceText(locale, "Готово к публикации", "Ready to publish")}</strong>
-                </div>
-              </div>
-
-              {isPublishBootstrapLoading && !publishBootstrap ? (
-                <div className="studio-publish-modal__loading">
-                  <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                  <p>{workspaceText(locale, "Загружаем настройки публикации...", "Loading publishing settings...")}</p>
-                </div>
-              ) : publishBootstrapError && !publishBootstrap ? (
-                <div className="studio-publish-modal__error">
-                  <strong>{workspaceText(locale, "Не удалось открыть публикацию", "Could not open publishing")}</strong>
-                  <p>{publishBootstrapError}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="studio-publish-modal__body">
-                    <div className="studio-publish-modal__main">
-                      {publishError ? (
-                        <div className="studio-publish-modal__inline-state is-error">
-                          <div>
-                            <strong>{workspaceText(locale, "Ошибка публикации", "Publishing error")}</strong>
-                            <p>{publishError}</p>
-                          </div>
-                        </div>
-                      ) : null}
-                      {publishSuccessNotice ? (
-                        <div className="studio-publish-modal__inline-state is-success">
-                          <div>
-                            <strong>{publishSuccessNotice.title}</strong>
-                            <p>{publishSuccessNotice.text}</p>
-                            {publishSuccessNotice.link ? (
-                              <a href={publishSuccessNotice.link} target="_blank" rel="noopener noreferrer">
-                                {workspaceText(locale, "Открыть на YouTube", "Open on YouTube")}
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                      ) : null}
-                      <section className="studio-publish-modal__section">
-                        <div className="studio-publish-modal__section-head">
-                          <div>
-                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Канал", "Channel")}</span>
-                          </div>
-                          <div className="studio-publish-modal__section-tools">
-                            {selectedPublishChannel ? (
-                              <button
-                                className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
-                                type="button"
-                                disabled={isDisconnectingPublishChannel || isPublishInFlight}
-                                aria-label={workspaceText(locale, "Отключить канал", "Disconnect channel")}
-                                title={workspaceText(locale, "Отключить канал", "Disconnect channel")}
-                                onClick={() => void handleDisconnectPublishChannel()}
-                              >
-                                {isDisconnectingPublishChannel ? "…" : "−"}
-                              </button>
-                            ) : null}
-                            {publishChannels.length ? (
-                              <button
-                                className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
-                                type="button"
-                                disabled={isDisconnectingPublishChannel || isPublishInFlight}
-                                aria-label={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
-                                title={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
-                                onClick={() => void handleStartYouTubeConnect()}
-                              >
-                                +
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-
-                          {publishChannels.length ? (
-                          <div className="studio-publish-modal__channel-grid" role="radiogroup" aria-label={workspaceText(locale, "Канал YouTube", "YouTube channel")}>
-                            {publishChannels.map((channel) => {
-                              const isSelected = channel.pk === selectedPublishChannelPk;
-
-                              return (
-                                <button
-                                  key={channel.pk}
-                                  className={`studio-publish-modal__channel-card${isSelected ? " is-selected" : ""}`}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={isSelected}
-                                  onClick={() => setSelectedPublishChannelPk(channel.pk)}
-                                >
-                                  <span className="studio-publish-modal__channel-avatar" aria-hidden="true">
-                                    {channel.channelName.trim().slice(0, 1).toUpperCase() || "Y"}
-                                  </span>
-                                  <span className="studio-publish-modal__channel-copy">
-                                    <strong>{channel.channelName}</strong>
-                                  </span>
-                                  <span className="studio-publish-modal__channel-indicator" aria-hidden="true" />
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : isPublishBootstrapLoading ? (
-                          <div className="studio-publish-modal__inline-state">
-                            <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
-                            <div>
-                              <strong>{workspaceText(locale, "Синхронизируем каналы", "Syncing channels")}</strong>
-                              <p>{workspaceText(locale, "Окно уже готово, список подключённых YouTube-каналов подтягивается фоном.", "The dialog is ready while connected YouTube channels load in the background.")}</p>
-                            </div>
-                          </div>
-                        ) : publishBootstrapError ? (
-                          <div className="studio-publish-modal__inline-state is-error">
-                            <div>
-                              <strong>{workspaceText(locale, "Не удалось получить каналы", "Could not load channels")}</strong>
-                              <p>{publishBootstrapError}</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="studio-publish-modal__empty-state">
-                            <div className="studio-publish-modal__empty-icon" aria-hidden="true">
-                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                                <path d="M8 6h8m-8 6h8m-8 6h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                                <path d="M19 8v8M15 12h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                              </svg>
-                            </div>
-                            <div className="studio-publish-modal__empty-copy">
-                              <strong>{workspaceText(locale, "Канал ещё не подключён", "No channel connected yet")}</strong>
-                              <p>{workspaceText(locale, "Подключите YouTube-канал и публикуйте Shorts прямо из студии.", "Connect a YouTube channel and publish Shorts directly from the studio.")}</p>
-                            </div>
-                            <button className="studio-publish-modal__primary-btn" type="button" onClick={() => void handleStartYouTubeConnect()}>
-                              {workspaceText(locale, "Подключить YouTube", "Connect YouTube")}
-                            </button>
-                          </div>
-                        )}
-                      </section>
-
-                      <section className="studio-publish-modal__section">
-                        <div className="studio-publish-modal__section-head">
-                          <div>
-                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "НАСТРОЙКИ ПУБЛИКАЦИИ", "PUBLISHING SETTINGS")}</span>
-                          </div>
-                        </div>
-
-                        <div className="studio-publish-modal__field-grid">
-                          <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishTitleFieldId}>
-                            <span className="studio-publish-modal__field-label">
-                              <span>{workspaceText(locale, "Заголовок", "Title")}</span>
-                              <small>{publishTitle.length}/100</small>
-                            </span>
-                            <input
-                              id={publishTitleFieldId}
-                              value={publishTitle}
-                              onChange={(event) => setPublishTitle(event.target.value)}
-                              maxLength={100}
-                              placeholder={workspaceText(locale, "Например: 3 секрета viral Shorts", "For example: 3 secrets of viral Shorts")}
-                            />
-                          </label>
-
-                          <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishDescriptionFieldId}>
-                            <span className="studio-publish-modal__field-label">
-                              <span>{workspaceText(locale, "Описание", "Description")}</span>
-                              <small>{publishDescription.length}/5000</small>
-                            </span>
-                            <textarea
-                              id={publishDescriptionFieldId}
-                              value={publishDescription}
-                              onChange={(event) => setPublishDescription(event.target.value)}
-                              rows={5}
-                              maxLength={5000}
-                              placeholder={workspaceText(locale, "Добавьте описание ролика, CTA и полезный контекст.", "Add a video description, CTA and useful context.")}
-                            />
-                          </label>
-
-                          <label className="studio-publish-modal__field studio-publish-modal__field--full" htmlFor={publishHashtagsFieldId}>
-                            <span className="studio-publish-modal__field-label">
-                              <span>{workspaceText(locale, "Хэштеги", "Hashtags")}</span>
-                            </span>
-                            <input
-                              id={publishHashtagsFieldId}
-                              value={publishHashtags}
-                              onChange={(event) => setPublishHashtags(event.target.value)}
-                              placeholder="#shorts #adsflow"
-                            />
-                          </label>
-                        </div>
-                      </section>
-
-                      <section className="studio-publish-modal__section">
-                        <div className="studio-publish-modal__section-head">
-                          <div>
-                            <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Планирование", "Scheduling")}</span>
-                          </div>
-                        </div>
-
-                        <div className="studio-publish-modal__mode-grid">
-                          <button
-                            className={`studio-publish-modal__mode-card${publishMode === "now" ? " is-active" : ""}`}
-                            type="button"
-                            onClick={() => handlePublishModeChange("now")}
-                          >
-                            <span>{workspaceText(locale, "Сразу", "Now")}</span>
-                            <strong>{workspaceText(locale, "Опубликовать сейчас", "Publish now")}</strong>
-                            <p>{workspaceText(locale, "Shorts уйдёт в канал сразу после подтверждения.", "The Shorts will go to the channel right after confirmation.")}</p>
-                          </button>
-                          <button
-                            className={`studio-publish-modal__mode-card${publishMode === "schedule" ? " is-active" : ""}`}
-                            type="button"
-                            onClick={() => handlePublishModeChange("schedule")}
-                          >
-                            <span>{workspaceText(locale, "По расписанию", "Schedule")}</span>
-                            <strong>{workspaceText(locale, "Запланировать публикацию", "Schedule publication")}</strong>
-                            <p>{workspaceText(locale, "Выберите день и точное время выхода в ленту.", "Choose the exact date and time for publishing.")}</p>
-                          </button>
-                        </div>
-
-                        {publishMode === "schedule" ? (
-                          <>
-                            <div className="studio-publish-modal__schedule-inline">
-                              <div className="studio-publish-modal__schedule-preview">
-                                <span>{workspaceText(locale, "Дата и время", "Date and time")}</span>
-                                <strong>{publishScheduleSummary}</strong>
-                              </div>
-                              <button
-                                ref={publishPlannerTriggerRef}
-                                className={`studio-publish-modal__planner-toggle${isPublishPlannerOpen ? " is-open" : ""}`}
-                                type="button"
-                                aria-haspopup="dialog"
-                                aria-expanded={isPublishPlannerOpen}
-                                aria-controls={publishPlannerPopoverId}
-                                onClick={() => setIsPublishPlannerOpen((open) => !open)}
-                              >
-                                <span>
-                                  {isPublishPlannerOpen
-                                    ? workspaceText(locale, "Скрыть календарь", "Hide calendar")
-                                    : workspaceText(locale, "Открыть календарь", "Open calendar")}
-                                </span>
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                                  <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </button>
-                            </div>
-
-                            {isPublishPlannerOpen && publishPlannerStyle && typeof document !== "undefined"
-                              ? createPortal(
-                                  <div
-                                    ref={publishPlannerPopoverRef}
-                                    className="studio-publish-modal__planner-popover"
-                                    id={publishPlannerPopoverId}
-                                    role="dialog"
-                                    aria-label={workspaceText(locale, "Календарь публикации", "Publication calendar")}
-                                    style={publishPlannerStyle}
-                                  >
-                                    <div className="studio-publish-modal__planner-popover-grid">
-                                      <div className="studio-publish-modal__calendar-card">
-                                        <div className="studio-publish-modal__calendar-toolbar">
-                                          <button
-                                            className="studio-publish-modal__calendar-nav"
-                                            type="button"
-                                            aria-label={workspaceText(locale, "Предыдущий месяц", "Previous month")}
-                                            onClick={() => setPublishCalendarMonth((currentMonth) => shiftPublishMonth(currentMonth, -1))}
-                                          >
-                                            ‹
-                                          </button>
-                                          <strong>{formatPublishCalendarMonth(publishCalendarMonth, locale)}</strong>
-                                          <button
-                                            className="studio-publish-modal__calendar-nav"
-                                            type="button"
-                                            aria-label={workspaceText(locale, "Следующий месяц", "Next month")}
-                                            onClick={() => setPublishCalendarMonth((currentMonth) => shiftPublishMonth(currentMonth, 1))}
-                                          >
-                                            ›
-                                          </button>
-                                        </div>
-
-                                        <div className="studio-publish-modal__calendar-weekdays" aria-hidden="true">
-                                          {publishWeekdayLabels.map((weekday) => (
-                                            <span key={weekday}>{weekday}</span>
-                                          ))}
-                                        </div>
-
-                                        <div className="studio-publish-modal__calendar-grid">
-                                          {publishCalendarDays.map((day) => {
-                                            const isSelected = isSamePublishDay(day.date, publishScheduledDate);
-
-                                            return (
-                                              <button
-                                                key={day.date.toISOString()}
-                                                className={`studio-publish-modal__calendar-day${day.isCurrentMonth ? "" : " is-outside"}${day.isToday ? " is-today" : ""}${isSelected ? " is-selected" : ""}`}
-                                                type="button"
-                                                disabled={day.isPast}
-                                                onClick={() => handlePublishCalendarDaySelect(day.date)}
-                                              >
-                                                <span>{day.date.getDate()}</span>
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-
-                                      <div className="studio-publish-modal__time-card">
-                                        <label className="studio-publish-modal__field studio-publish-modal__field--time" htmlFor={publishTimeFieldId}>
-                                          <span className="studio-publish-modal__field-label">
-                                            <span>{workspaceText(locale, "Время публикации", "Publication time")}</span>
-                                          </span>
-                                          <input
-                                            aria-label={workspaceText(locale, "Время публикации", "Publication time")}
-                                            id={publishTimeFieldId}
-                                            type="time"
-                                            step={300}
-                                            value={publishTimeValue}
-                                            onChange={(event) => handlePublishTimeSelect(event.target.value)}
-                                          />
-                                        </label>
-
-                                        <button className="studio-publish-modal__utility-btn" type="button" onClick={() => setIsPublishPlannerOpen(false)}>
-                                          {workspaceText(locale, "Готово", "Done")}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>,
-                                  document.body,
-                                )
-                              : null}
-                          </>
-                        ) : null}
-                      </section>
-                    </div>
-
-                  </div>
-
-                  <div className="studio-publish-modal__footer">
-                    <div className="studio-publish-modal__actions">
-                      <button className="studio-publish-modal__secondary-btn" type="button" onClick={closePublishModal}>
-                        {workspaceText(locale, "Отмена", "Cancel")}
-                      </button>
-                      <button
-                        className="studio-publish-modal__primary-btn"
-                        type="button"
-                        disabled={!publishCanSubmit || !publishChannels.length}
-                        onClick={() => void handleSubmitPublish()}
-                      >
-                        {isPublishInFlight ? workspaceText(locale, "Публикуем...", "Publishing...") : publishPrimaryActionLabel}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ) : null}
+        <WorkspacePublishModal
+          bootstrap={publishBootstrap}
+          bootstrapError={publishBootstrapError}
+          calendarDays={publishCalendarDays}
+          calendarMonth={publishCalendarMonth}
+          canSubmit={publishCanSubmit}
+          channels={publishChannels}
+          description={publishDescription}
+          descriptionFieldId={publishDescriptionFieldId}
+          hashtags={publishHashtags}
+          hashtagsFieldId={publishHashtagsFieldId}
+          isBootstrapLoading={isPublishBootstrapLoading}
+          isDisconnectingChannel={isDisconnectingPublishChannel}
+          isInFlight={isPublishInFlight}
+          isOpen={isPublishModalOpen}
+          isPlannerOpen={isPublishPlannerOpen}
+          locale={locale}
+          mode={publishMode}
+          onCalendarDaySelect={handlePublishCalendarDaySelect}
+          onClose={closePublishModal}
+          onDescriptionChange={setPublishDescription}
+          onDisconnectChannel={handleDisconnectPublishChannel}
+          onHashtagsChange={setPublishHashtags}
+          onModeChange={handlePublishModeChange}
+          onStartYouTubeConnect={handleStartYouTubeConnect}
+          onSubmit={handleSubmitPublish}
+          onTimeSelect={handlePublishTimeSelect}
+          onTitleChange={setPublishTitle}
+          plannerPopoverId={publishPlannerPopoverId}
+          plannerPopoverRef={publishPlannerPopoverRef}
+          plannerStyle={publishPlannerStyle}
+          plannerTriggerRef={publishPlannerTriggerRef}
+          primaryActionLabel={publishPrimaryActionLabel}
+          publishError={publishError}
+          scheduleSummary={publishScheduleSummary}
+          scheduledDate={publishScheduledDate}
+          selectedChannel={selectedPublishChannel}
+          selectedChannelPk={selectedPublishChannelPk}
+          setCalendarMonth={setPublishCalendarMonth}
+          setIsPlannerOpen={setIsPublishPlannerOpen}
+          setSelectedChannelPk={setSelectedPublishChannelPk}
+          successNotice={publishSuccessNotice}
+          targetTitle={publishTargetTitle}
+          timeFieldId={publishTimeFieldId}
+          timeValue={publishTimeValue}
+          title={publishTitle}
+          titleFieldId={publishTitleFieldId}
+          weekdayLabels={publishWeekdayLabels}
+        />
       </div>
       <div className="route-page workspace-route" hidden={isStudioRouteVisible}>
       <header className="site-header site-header--workspace">
