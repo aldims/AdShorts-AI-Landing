@@ -380,6 +380,10 @@ import {
   WorkspaceSegmentPreviewCardMedia,
   WorkspaceSegmentSubtitleOverlay,
 } from "../features/workspace/workspace-preview-components";
+import {
+  WorkspaceMediaLibraryPreviewModal,
+  WorkspaceVideoPreviewModal,
+} from "../features/workspace/workspace-preview-modals";
 import { WorkspaceContentPlanPanel } from "../features/workspace/workspace-content-plan-panel";
 import {
   StudioBrandSelectorChip,
@@ -29253,231 +29257,53 @@ export function WorkspacePage({
               document.body,
             )
           : null}
-        {mediaLibraryPreviewModal ? (
-          <div
-            className="studio-video-modal is-open"
-            role="dialog"
-            aria-modal="true"
-            aria-label={workspaceText(locale, "Просмотр медиа из медиатеки", "Media library preview")}
-          >
-            <button
-              className="studio-video-modal__backdrop route-close"
-              type="button"
-              aria-label={workspaceText(locale, "Закрыть просмотр визуала", "Close visual preview")}
-              onClick={closePreviewModals}
-            />
-            <div className="studio-video-modal__panel studio-video-modal__panel--video-only" role="document">
-              <button className="studio-video-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть просмотр визуала", "Close visual preview")} onClick={closePreviewModals}>
-                ×
-              </button>
-              <div className="studio-video-modal__layout studio-video-modal__layout--video-only">
-                <div className="studio-video-modal__player-slot">
-                  {mediaLibraryPreviewModalSurface?.previewKind === "image" ? (
-                    <div className="studio-video-modal__player is-image is-cover-media">
-                      <img
-                        src={mediaLibraryPreviewModalSurface.displayUrl ?? mediaLibraryPreviewModal.previewUrl}
-                        alt={mediaLibraryPreviewModalTitle}
-                        draggable={false}
-                      />
-                    </div>
-                  ) : (
-                    <WorkspaceModalVideoPlayer
-                      autoPlay
-                      fitMode="cover"
-                      poster={mediaLibraryPreviewModalSurface?.posterUrl ?? mediaLibraryPreviewModalPosterUrl ?? undefined}
-                      preload={mediaLibraryPreviewModalSurface?.preloadPolicy ?? "auto"}
-                      preferMutedAutoplay={mediaLibraryPreviewModalSurface?.preferMutedAutoplay ?? true}
-                      src={mediaLibraryPreviewModalSurface?.viewerUrl ?? mediaLibraryPreviewModal.previewUrl}
-                      topActions={
-                        <a
-                          className="studio-video-modal__top-action"
-                          href={mediaLibraryPreviewModal.downloadUrl ?? mediaLibraryPreviewModal.previewUrl}
-                          download={mediaLibraryPreviewModal.downloadName}
-                          aria-label={workspaceText(locale, "Скачать визуал", "Download visual")}
-                          title={workspaceText(locale, "Скачать визуал", "Download visual")}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path
-                              d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
-                              stroke="currentColor"
-                              strokeWidth="1.9"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </a>
-                      }
-                      videoKey={`media-library-preview:${mediaLibraryPreviewModal.itemKey}:${mediaLibraryPreviewModalSurface?.viewerUrl ?? mediaLibraryPreviewModal.previewUrl}`}
-                      videoRef={(element) => {
-                        mediaLibraryPreviewVideoRef.current = element;
-                      }}
-                      volume={studioPreviewVolume}
-                      onVolumeChange={setStudioPreviewVolume}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {previewModalVideoPlaybackUrl ? (
-          <div
-            className={`studio-video-modal${isAnyPreviewModalOpen ? " is-open" : ""}`}
-            role="dialog"
-            aria-hidden={!isAnyPreviewModalOpen}
-            aria-modal={isAnyPreviewModalOpen ? "true" : undefined}
-            aria-labelledby={isProjectPreviewModalOpen ? undefined : "studio-video-modal-title"}
-            aria-label={isProjectPreviewModalOpen ? workspaceText(locale, "Просмотр видео проекта", "Project video preview") : undefined}
-          >
-            <button
-              className="studio-video-modal__backdrop route-close"
-              type="button"
-              aria-label={workspaceText(locale, "Закрыть превью", "Close preview")}
-              onClick={closePreviewModals}
-            />
-            <div
-              className={`studio-video-modal__panel${isProjectPreviewModalOpen ? " studio-video-modal__panel--video-only" : ""}`}
-              role="document"
-              style={projectPreviewModalPanelStyle}
-            >
-              <button className="studio-video-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть превью", "Close preview")} onClick={closePreviewModals}>
-                ×
-              </button>
-              <div className={`studio-video-modal__layout${isProjectPreviewModalOpen ? " studio-video-modal__layout--video-only" : ""}`}>
-                <div className="studio-video-modal__player-slot">
-                  <WorkspaceModalVideoPlayer
-                    autoPlay={isAnyPreviewModalOpen}
-                    errorOverlay={
-                      previewModalPlaybackError ? (
-                        <div className="studio-video-modal__error" role="alert">
-                          <p>{previewModalPlaybackError}</p>
-                          <div className="studio-video-modal__error-actions">
-                            <button className="studio-video-modal__error-btn" type="button" onClick={handleRetryPreviewModalPlayback}>
-                              {workspaceText(locale, "Повторить", "Retry")}
-                            </button>
-                            <a
-                              className="studio-video-modal__error-btn"
-                              href={previewModalVideoPlaybackUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {workspaceText(locale, "Открыть напрямую", "Open directly")}
-                            </a>
-                          </div>
-                        </div>
-                      ) : null
-                    }
-                    onCanPlay={handlePreviewModalVideoCanPlay}
-                    onError={handlePreviewModalVideoError}
-                    onLoadedData={handlePreviewModalVideoLoadedData}
-                    onLoadedMetadata={handlePreviewModalVideoLoadedMetadata}
-                    onPlay={handlePreviewModalVideoPlay}
-                    preload="metadata"
-                    src={previewModalVideoPlaybackUrl}
-                    topActions={
-                      isProjectPreviewModalOpen ? null : (
-                        <a
-                          className="studio-video-modal__top-action"
-                          href={previewModalVideoPlaybackUrl}
-                          download={previewModalDownloadName}
-                          aria-label={workspaceText(locale, "Скачать видео", "Download video")}
-                          title={workspaceText(locale, "Скачать видео", "Download video")}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path
-                              d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
-                              stroke="currentColor"
-                              strokeWidth="1.9"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </a>
-                      )
-                    }
-                    videoKey={`${isProjectPreviewModalOpen ? projectPreviewModal?.id ?? "project" : generatedVideo?.id ?? "generated"}-${previewModalSourceKey}-${previewModalOpenToken || previewModalUpdatedAt || "modal"}`}
-                    videoRef={handlePreviewModalVideoRef}
-                    volume={studioPreviewVolume}
-                    onVolumeChange={setStudioPreviewVolume}
-                  />
-                </div>
-
-                {isProjectPreviewModalOpen ? null : (
-                <div className="studio-video-modal__sidebar">
-                  <div className="studio-video-modal__section studio-video-modal__section--hero">
-                    <div className="studio-video-modal__title-block">
-                      <p className="studio-video-modal__eyebrow">{workspaceText(locale, "Готово к публикации", "Ready to publish")}</p>
-                      <strong id="studio-video-modal-title">{previewModalTitle}</strong>
-                    </div>
-                    {previewModalStatusLink ? (
-                      <a
-                        className={`studio-video-modal__header-status is-clickable is-${previewModalStatusTone}`}
-                        href={previewModalStatusLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <span className="studio-video-modal__header-status-label">{previewModalStatusLabel}</span>
-                        <small>{previewModalStatusMeta}</small>
-                      </a>
-                    ) : (
-                      <div className={`studio-video-modal__header-status is-${previewModalStatusTone}`}>
-                        <span className="studio-video-modal__header-status-label">{previewModalStatusLabel}</span>
-                        <small>{previewModalStatusMeta}</small>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="studio-video-modal__section">
-                    <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">{workspaceText(locale, "Тема", "Topic")}</span>
-                      <p className="studio-video-modal__description">{previewModalTopic || workspaceText(locale, "Без темы", "No topic")}</p>
-                    </div>
-                    <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">{workspaceText(locale, "Заголовок", "Title")}</span>
-                      <p className="studio-video-modal__description">{previewModalTitle}</p>
-                    </div>
-                    {hasPreviewModalDescription ? (
-                      <div className="studio-video-modal__meta">
-                        <span className="studio-video-modal__label">{workspaceText(locale, "Описание", "Description")}</span>
-                        <p className="studio-video-modal__description">{previewModalDescription}</p>
-                      </div>
-                    ) : null}
-                    <div className="studio-video-modal__meta">
-                      <span className="studio-video-modal__label">{workspaceText(locale, "Хэштеги", "Hashtags")}</span>
-                      {hasPreviewModalHashtags ? (
-                        <div className="studio-video-modal__hashtags" aria-label={workspaceText(locale, "Хэштеги", "Hashtags")}>
-                          {previewModalHashtags.map((tag) => (
-                            <span key={tag}>{tag}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="studio-video-modal__description studio-video-modal__description--subtle">
-                          {workspaceText(locale, "Хэштеги не добавлены", "No hashtags added")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="studio-video-modal__actions" aria-label={workspaceText(locale, "Действия с видео", "Video actions")}>
-                        <button
-                          className="studio-video-modal__action studio-video-modal__action--primary route-button"
-                          type="button"
-                          disabled={!canPublishPreviewModalVideo}
-                          title={canPublishPreviewModalVideo ? workspaceText(locale, "Опубликовать", "Publish") : generatedVideoProjectPreparingTitle}
-                          onClick={() => void handlePublishPreview()}
-                        >
-                          {workspaceText(locale, "Опубликовать", "Publish")}
-                        </button>
-                        <button className="studio-video-modal__action route-button" type="button" onClick={() => void handleRegeneratePreview()}>
-                          {workspaceText(locale, "Перегенерировать", "Regenerate")}
-                        </button>
-                  </div>
-                </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <WorkspaceMediaLibraryPreviewModal
+          item={mediaLibraryPreviewModal}
+          locale={locale}
+          onClose={closePreviewModals}
+          onVideoRef={(element) => {
+            mediaLibraryPreviewVideoRef.current = element;
+          }}
+          posterUrl={mediaLibraryPreviewModalPosterUrl}
+          surface={mediaLibraryPreviewModalSurface}
+          title={mediaLibraryPreviewModalTitle}
+          volume={studioPreviewVolume}
+          onVolumeChange={setStudioPreviewVolume}
+        />
+        <WorkspaceVideoPreviewModal
+          canPublish={canPublishPreviewModalVideo}
+          description={previewModalDescription}
+          downloadName={previewModalDownloadName}
+          error={previewModalPlaybackError}
+          hasDescription={hasPreviewModalDescription}
+          hasHashtags={hasPreviewModalHashtags}
+          hashtags={previewModalHashtags}
+          isOpen={isAnyPreviewModalOpen}
+          isProjectPreview={isProjectPreviewModalOpen}
+          locale={locale}
+          onCanPlay={handlePreviewModalVideoCanPlay}
+          onClose={closePreviewModals}
+          onError={handlePreviewModalVideoError}
+          onLoadedData={handlePreviewModalVideoLoadedData}
+          onLoadedMetadata={handlePreviewModalVideoLoadedMetadata}
+          onPlay={handlePreviewModalVideoPlay}
+          onPublish={handlePublishPreview}
+          onRegenerate={handleRegeneratePreview}
+          onRetryPlayback={handleRetryPreviewModalPlayback}
+          onVideoRef={handlePreviewModalVideoRef}
+          panelStyle={projectPreviewModalPanelStyle}
+          preparingTitle={generatedVideoProjectPreparingTitle}
+          sourceUrl={previewModalVideoPlaybackUrl}
+          statusLabel={previewModalStatusLabel}
+          statusLink={previewModalStatusLink}
+          statusMeta={previewModalStatusMeta}
+          statusTone={previewModalStatusTone}
+          title={previewModalTitle}
+          topic={previewModalTopic}
+          videoKey={`${isProjectPreviewModalOpen ? projectPreviewModal?.id ?? "project" : generatedVideo?.id ?? "generated"}-${previewModalSourceKey}-${previewModalOpenToken || previewModalUpdatedAt || "modal"}`}
+          volume={studioPreviewVolume}
+          onVolumeChange={setStudioPreviewVolume}
+        />
         <WorkspacePublishModal
           bootstrap={publishBootstrap}
           bootstrapError={publishBootstrapError}
