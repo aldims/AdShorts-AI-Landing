@@ -157,7 +157,6 @@ import {
 } from "../features/workspace/workspace-brand-helpers";
 import {
   areWorkspaceSegmentDurationValuesEqual,
-  areWorkspaceSegmentEditorLocalizedTextMapsEqual,
   buildWorkspaceMediaAssetProxyUrl,
   buildWorkspaceProjectMusicAudioProxyUrl,
   canWorkspaceSegmentUseVideoExtensionTool,
@@ -167,12 +166,9 @@ import {
   cloneStudioCustomVideoFile,
   cloneWorkspaceSegmentEditorDraftSegment,
   cloneWorkspaceSegmentEditorDraftSession,
-  cloneWorkspaceSegmentEditorLocalizedTextMap,
   createWorkspaceSegmentEditorDraftSession,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorResetDraftFromBaseline,
-  createWorkspaceSegmentSceneSoundAsset,
-  createWorkspaceSegmentVoiceoverAsset,
   doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio,
   fallbackStudioSubtitleColorCatalogOption,
   fallbackStudioSubtitleColorOption,
@@ -213,7 +209,6 @@ import {
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
   getWorkspaceSegmentSelectedVisualPreviewKind,
-  getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
   getWorkspaceSegmentSubtitleTypeOverrideId,
@@ -233,14 +228,13 @@ import {
   isWorkspaceSegmentImageFile,
   isWorkspaceSegmentVoiceoverAssetFresh,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
+  normalizeLegacyWorkspaceSegmentEditorDraftSession,
   normalizeStudioLanguageValue,
   normalizeWorkspaceSegmentAiPhotoPrompt,
   normalizeWorkspaceSegmentDurationMode,
-  normalizeWorkspaceSegmentEditorSegmentUrls,
   normalizeWorkspaceSegmentEditorSession,
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentEditorTextForCompare,
-  normalizeWorkspaceSegmentMediaType,
   normalizeWorkspaceSegmentSceneSoundPrompt,
   normalizeWorkspaceSegmentVoicePreviewTime,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
@@ -460,7 +454,6 @@ import type {
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorSession,
   WorkspaceSegmentEditorSpeechWord,
-  WorkspaceSegmentEditorVideoAction,
   WorkspaceSegmentPreviewKind,
   WorkspaceSegmentTimelineHistoryKind,
 } from "../features/workspace/workspace-types";
@@ -712,7 +705,6 @@ export type {
   WorkspaceSegmentEditorMediaUploadScope,
   WorkspaceSegmentEditorSegment,
   WorkspaceSegmentEditorSession,
-  WorkspaceSegmentEditorVideoAction,
   WorkspaceSegmentMediaType,
   WorkspaceSegmentPreviewKind,
   WorkspaceSegmentSourceKind,
@@ -2095,284 +2087,6 @@ const getStudioCompactMenuStyle = ({
     maxHeight: `${availableAbove}px`,
     transform: "translateY(-100%)",
   };
-};
-
-const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
-  session: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => {
-  let hasChanges = false;
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
-
-  const segments = session.segments.map((segment) => {
-    const normalizedSegment = normalizeWorkspaceSegmentEditorSegmentUrls(segment);
-    const normalizedOriginalText =
-      typeof segment.originalText === "string" && segment.originalText.trim() ? segment.originalText : segment.text;
-    const normalizedVideoAction: WorkspaceSegmentEditorVideoAction =
-      segment.videoAction === "ai" ||
-      segment.videoAction === "ai_photo" ||
-      segment.videoAction === "custom" ||
-      segment.videoAction === "image_edit" ||
-      segment.videoAction === "talking_photo" ||
-      segment.videoAction === "photo_animation"
-        ? segment.videoAction
-        : "original";
-    const normalizedAiPhotoPrompt = typeof segment.aiPhotoPrompt === "string" ? segment.aiPhotoPrompt : "";
-    const normalizedAiPhotoGeneratedFromPrompt =
-      typeof segment.aiPhotoGeneratedFromPrompt === "string" && segment.aiPhotoGeneratedFromPrompt.trim()
-        ? segment.aiPhotoGeneratedFromPrompt
-        : null;
-    const normalizedAiPhotoPromptInitialized =
-      Boolean(segment.aiPhotoPromptInitialized) ||
-      Boolean(normalizedAiPhotoPrompt) ||
-      Boolean(normalizedAiPhotoGeneratedFromPrompt);
-    const normalizedAiVideoPrompt = typeof segment.aiVideoPrompt === "string" ? segment.aiVideoPrompt : "";
-    const normalizedAiVideoGeneratedFromPrompt =
-      typeof segment.aiVideoGeneratedFromPrompt === "string" && segment.aiVideoGeneratedFromPrompt.trim()
-        ? segment.aiVideoGeneratedFromPrompt
-        : null;
-    const normalizedAiVideoGeneratedMode =
-      segment.aiVideoGeneratedMode === "photo_animation" ||
-      segment.aiVideoGeneratedMode === "talking_photo" ||
-      segment.aiVideoGeneratedMode === "ai_video"
-        ? segment.aiVideoGeneratedMode
-        : null;
-    const normalizedAiVideoPromptInitialized =
-      Boolean(segment.aiVideoPromptInitialized) ||
-      Boolean(normalizedAiVideoPrompt) ||
-      Boolean(normalizedAiVideoGeneratedFromPrompt);
-    const normalizedImageEditPrompt = typeof segment.imageEditPrompt === "string" ? segment.imageEditPrompt : "";
-    const normalizedImageEditGeneratedFromPrompt =
-      typeof segment.imageEditGeneratedFromPrompt === "string" && segment.imageEditGeneratedFromPrompt.trim()
-        ? segment.imageEditGeneratedFromPrompt
-        : null;
-    const normalizedImageEditPromptInitialized =
-      Boolean(segment.imageEditPromptInitialized) ||
-      Boolean(normalizedImageEditPrompt) ||
-      Boolean(normalizedImageEditGeneratedFromPrompt);
-    const normalizedSceneSoundAsset =
-      cloneStudioCustomVideoFile(segment.sceneSoundAsset) ??
-      createWorkspaceSegmentSceneSoundAsset(normalizedSegment, normalizedSegment.index);
-    const normalizedVoiceoverAsset =
-      cloneStudioCustomVideoFile(segment.voiceoverAsset) ??
-      createWorkspaceSegmentVoiceoverAsset(normalizedSegment, normalizedSegment.index);
-    const normalizedVoiceoverTextHash =
-      typeof segment.voiceoverTextHash === "string" && segment.voiceoverTextHash.trim()
-        ? segment.voiceoverTextHash
-        : normalizedVoiceoverAsset
-          ? getWorkspaceSegmentVoiceoverTextHash(segment.text)
-          : null;
-    const normalizedVoiceoverVoiceType =
-      typeof segment.voiceoverVoiceType === "string" && segment.voiceoverVoiceType.trim()
-        ? segment.voiceoverVoiceType
-        : normalizedVoiceoverAsset
-          ? getWorkspaceSegmentVoiceOverrideId(segment) ?? normalizeWorkspaceSegmentEditorSetting(session.voiceType) ?? null
-          : null;
-    const normalizedVoiceoverLanguage =
-      typeof segment.voiceoverLanguage === "string" && segment.voiceoverLanguage.trim()
-        ? segment.voiceoverLanguage
-        : normalizedVoiceoverAsset
-          ? getWorkspaceSegmentEditorSessionLanguage(session)
-          : null;
-    const normalizedSceneSoundPrompt = typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "";
-    const normalizedSceneSoundGeneratedFromPrompt =
-      typeof segment.sceneSoundGeneratedFromPrompt === "string" && segment.sceneSoundGeneratedFromPrompt.trim()
-        ? segment.sceneSoundGeneratedFromPrompt
-        : null;
-    const normalizedSceneSoundPromptInitialized =
-      Boolean(segment.sceneSoundPromptInitialized) ||
-      Boolean(normalizedSceneSoundPrompt) ||
-      Boolean(normalizedSceneSoundGeneratedFromPrompt) ||
-      Boolean(normalizedSceneSoundAsset);
-    const normalizedSubtitleColor = getWorkspaceSegmentSubtitleColorOverrideId(segment);
-    const normalizedSubtitleStyle = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
-    const normalizedSubtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
-    const normalizedVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
-    const normalizedMediaType = normalizeWorkspaceSegmentMediaType(segment.mediaType);
-    const normalizedDurationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
-    const normalizedManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-    const normalizedDurationExtensionSourceDurationSeconds =
-      getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-    const normalizedTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
-      segment.textByLanguage,
-      segment.text,
-      fallbackLanguage,
-    );
-    const normalizedOriginalTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
-      segment.originalTextByLanguage,
-      normalizedOriginalText,
-      fallbackLanguage,
-    );
-    const hasUrlChanges =
-      normalizedSegment.currentExternalPlaybackUrl !== segment.currentExternalPlaybackUrl ||
-      normalizedSegment.currentExternalPreviewUrl !== segment.currentExternalPreviewUrl ||
-      normalizedSegment.currentPlaybackUrl !== segment.currentPlaybackUrl ||
-      normalizedSegment.currentPosterUrl !== segment.currentPosterUrl ||
-      normalizedSegment.currentPreviewUrl !== segment.currentPreviewUrl ||
-      normalizedSegment.currentSourceKind !== segment.currentSourceKind ||
-      normalizedSegment.originalExternalPlaybackUrl !== segment.originalExternalPlaybackUrl ||
-      normalizedSegment.originalExternalPreviewUrl !== segment.originalExternalPreviewUrl ||
-      normalizedSegment.originalPlaybackUrl !== segment.originalPlaybackUrl ||
-      normalizedSegment.originalPosterUrl !== segment.originalPosterUrl ||
-      normalizedSegment.originalPreviewUrl !== segment.originalPreviewUrl ||
-      normalizedSegment.originalSourceKind !== segment.originalSourceKind;
-    const hasOriginalTextChanges = normalizedOriginalText !== segment.originalText;
-    const hasLocalizedTextChanges =
-      !areWorkspaceSegmentEditorLocalizedTextMapsEqual(normalizedTextByLanguage, segment.textByLanguage) ||
-      !areWorkspaceSegmentEditorLocalizedTextMapsEqual(normalizedOriginalTextByLanguage, segment.originalTextByLanguage);
-    const hasAiPhotoChanges =
-      normalizedAiPhotoPrompt !== segment.aiPhotoPrompt ||
-      normalizedAiPhotoGeneratedFromPrompt !== segment.aiPhotoGeneratedFromPrompt ||
-      normalizedAiPhotoPromptInitialized !== segment.aiPhotoPromptInitialized ||
-      normalizedAiVideoPrompt !== segment.aiVideoPrompt ||
-      normalizedAiVideoGeneratedFromPrompt !== segment.aiVideoGeneratedFromPrompt ||
-      normalizedAiVideoGeneratedMode !== segment.aiVideoGeneratedMode ||
-      normalizedAiVideoPromptInitialized !== segment.aiVideoPromptInitialized ||
-      normalizedImageEditPrompt !== segment.imageEditPrompt ||
-      normalizedImageEditGeneratedFromPrompt !== segment.imageEditGeneratedFromPrompt ||
-      normalizedImageEditPromptInitialized !== segment.imageEditPromptInitialized ||
-      Boolean(normalizedSceneSoundAsset) !== Boolean(segment.sceneSoundAsset) ||
-      normalizedSceneSoundPrompt !== segment.sceneSoundPrompt ||
-      normalizedSceneSoundGeneratedFromPrompt !== segment.sceneSoundGeneratedFromPrompt ||
-      normalizedSceneSoundPromptInitialized !== segment.sceneSoundPromptInitialized ||
-      Boolean(normalizedVoiceoverAsset) !== Boolean(segment.voiceoverAsset) ||
-      normalizedVoiceoverTextHash !== segment.voiceoverTextHash ||
-      normalizedVoiceoverVoiceType !== segment.voiceoverVoiceType ||
-      normalizedVoiceoverLanguage !== segment.voiceoverLanguage ||
-      normalizedSubtitleColor !== (segment.subtitleColor ?? null) ||
-      normalizedSubtitleStyle !== (segment.subtitleStyle ?? null) ||
-      normalizedSubtitleType !== (segment.subtitleType ?? null) ||
-      normalizedVoiceType !== getWorkspaceSegmentVoiceOverrideId(segment) ||
-      normalizedVideoAction !== segment.videoAction ||
-      normalizedMediaType !== segment.mediaType ||
-          normalizedDurationMode !== segment.durationMode ||
-          !areWorkspaceSegmentDurationValuesEqual(
-            normalizedManualDurationSeconds,
-            normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-          ) ||
-          !areWorkspaceSegmentDurationValuesEqual(
-            normalizedDurationExtensionSourceDurationSeconds,
-            getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
-          );
-
-    if (
-      segment.customVideo ||
-      segment.aiPhotoAsset ||
-      segment.aiVideoAsset ||
-      segment.imageEditAsset ||
-      segment.photoAnimationSourceAsset ||
-      segment.sceneSoundAsset ||
-      normalizedSceneSoundAsset ||
-      normalizedVideoAction === "original" ||
-      normalizedVideoAction === "ai" ||
-      normalizedVideoAction === "custom" ||
-      normalizedVideoAction === "ai_photo" ||
-      normalizedVideoAction === "image_edit" ||
-      normalizedVideoAction === "talking_photo" ||
-      normalizedVideoAction === "photo_animation"
-    ) {
-      if (!hasUrlChanges && !hasOriginalTextChanges && !hasLocalizedTextChanges && !hasAiPhotoChanges) {
-        return segment;
-      }
-
-      hasChanges = true;
-      return {
-        ...normalizedSegment,
-        aiPhotoAsset: cloneStudioCustomVideoFile(segment.aiPhotoAsset),
-        aiPhotoGeneratedFromPrompt: normalizedAiPhotoGeneratedFromPrompt,
-        aiPhotoPrompt: normalizedAiPhotoPrompt,
-        aiPhotoPromptInitialized: normalizedAiPhotoPromptInitialized,
-        aiVideoAsset: cloneStudioCustomVideoFile(segment.aiVideoAsset),
-        aiVideoGeneratedMode: normalizedAiVideoGeneratedMode,
-        aiVideoGeneratedFromPrompt: normalizedAiVideoGeneratedFromPrompt,
-        aiVideoPrompt: normalizedAiVideoPrompt,
-        aiVideoPromptInitialized: normalizedAiVideoPromptInitialized,
-        customVideo: cloneStudioCustomVideoFile(segment.customVideo),
-        durationExtensionSourceDurationSeconds: normalizedDurationExtensionSourceDurationSeconds,
-        durationMode: normalizedDurationMode,
-        imageEditAsset: cloneStudioCustomVideoFile(segment.imageEditAsset),
-        imageEditGeneratedFromPrompt: normalizedImageEditGeneratedFromPrompt,
-        imageEditPrompt: normalizedImageEditPrompt,
-        imageEditPromptInitialized: normalizedImageEditPromptInitialized,
-        manualDurationSeconds: normalizedManualDurationSeconds,
-        mediaType: normalizedMediaType,
-        originalText: normalizedOriginalText,
-        originalTextByLanguage: normalizedOriginalTextByLanguage,
-        photoAnimationSourceAsset: cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
-        sceneSoundAsset: normalizedSceneSoundAsset,
-        sceneSoundGeneratedFromPrompt: normalizedSceneSoundGeneratedFromPrompt,
-        sceneSoundPrompt: normalizedSceneSoundPrompt,
-        sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
-        subtitleColor: normalizedSubtitleColor,
-        subtitleStyle: normalizedSubtitleStyle,
-        subtitleType: normalizedSubtitleType,
-        textByLanguage: normalizedTextByLanguage,
-        voiceoverAsset: normalizedVoiceoverAsset,
-        voiceoverLanguage: normalizedVoiceoverLanguage,
-        voiceoverTextHash: normalizedVoiceoverTextHash,
-        voiceoverVoiceType: normalizedVoiceoverVoiceType,
-        videoAction: normalizedVideoAction,
-        voiceType: normalizedVoiceType,
-        visualReset: Boolean(segment.visualReset),
-      };
-    }
-
-    hasChanges = true;
-    return {
-      ...normalizedSegment,
-      aiPhotoAsset: null,
-      aiPhotoGeneratedFromPrompt: normalizedAiPhotoGeneratedFromPrompt,
-      aiPhotoPrompt: normalizedAiPhotoPrompt,
-      aiPhotoPromptInitialized: normalizedAiPhotoPromptInitialized,
-      aiVideoAsset: null,
-      aiVideoGeneratedMode: normalizedAiVideoGeneratedMode,
-      aiVideoGeneratedFromPrompt: normalizedAiVideoGeneratedFromPrompt,
-      aiVideoPrompt: normalizedAiVideoPrompt,
-      aiVideoPromptInitialized: normalizedAiVideoPromptInitialized,
-      durationExtensionSourceDurationSeconds: normalizedDurationExtensionSourceDurationSeconds,
-      durationMode: normalizedDurationMode,
-      imageEditAsset: null,
-      imageEditGeneratedFromPrompt: normalizedImageEditGeneratedFromPrompt,
-      imageEditPrompt: normalizedImageEditPrompt,
-      imageEditPromptInitialized: normalizedImageEditPromptInitialized,
-      manualDurationSeconds: normalizedManualDurationSeconds,
-      mediaType: normalizedMediaType,
-      originalText: normalizedOriginalText,
-      originalTextByLanguage: normalizedOriginalTextByLanguage,
-      photoAnimationSourceAsset: null,
-      sceneSoundAsset: normalizedSceneSoundAsset,
-      sceneSoundGeneratedFromPrompt: normalizedSceneSoundGeneratedFromPrompt,
-      sceneSoundPrompt: normalizedSceneSoundPrompt,
-      sceneSoundPromptInitialized: normalizedSceneSoundPromptInitialized,
-      subtitleColor: normalizedSubtitleColor,
-      subtitleStyle: normalizedSubtitleStyle,
-      subtitleType: normalizedSubtitleType,
-      textByLanguage: normalizedTextByLanguage,
-      voiceoverAsset: normalizedVoiceoverAsset,
-      voiceoverLanguage: normalizedVoiceoverLanguage,
-      voiceoverTextHash: normalizedVoiceoverTextHash,
-      voiceoverVoiceType: normalizedVoiceoverVoiceType,
-      videoAction: "original" as const,
-      voiceType: normalizedVoiceType,
-      visualReset: Boolean(segment.visualReset),
-    };
-  });
-
-  const visualResetSegments = segments.map((segment) => {
-    if (!segment.visualReset) {
-      return segment;
-    }
-
-    hasChanges = true;
-    return resetWorkspaceSegmentDraftVisualToOriginal(segment, session.projectId);
-  });
-  const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(visualResetSegments, session);
-
-  return hasChanges || normalizedSegments !== visualResetSegments
-    ? {
-        ...session,
-        segments: normalizedSegments,
-      }
-    : session;
 };
 
 const isWorkspaceSegmentEditorNotFoundError = (value: string) => {
