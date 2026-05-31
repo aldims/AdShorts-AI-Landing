@@ -5486,6 +5486,8 @@ export async function createStudioGenerationJob(
                 language: normalizedLanguage,
                 segmentVoiceType: segment.voiceType,
               });
+              const segmentVoiceTypeForPayload =
+                segment.voiceType === null || segment.voiceType === undefined ? undefined : adsflowVoiceType;
               const segmentAssetId =
                 segment.videoAction === "custom" && segment.customVideoAssetId
                   ? segment.customVideoAssetId
@@ -5537,7 +5539,8 @@ export async function createStudioGenerationJob(
                 timeline_duration_seconds: durationSeconds,
                 video_action: segment.videoAction,
                 voiceover_asset_id: segment.voiceoverAssetId,
-                voice_type: adsflowVoiceType,
+                effective_voice_type: adsflowVoiceType,
+                voice_type: segmentVoiceTypeForPayload,
               };
             }),
           ),
