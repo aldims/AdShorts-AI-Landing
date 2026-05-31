@@ -34,6 +34,11 @@ export const normalizeWorkspaceVideoSourceUrl = (value: string | null | undefine
   }
 };
 
+export const formatWorkspaceSegmentDurationInputValue = (value: number | null | undefined) => {
+  const normalizedValue = normalizeWorkspaceSegmentManualDurationSeconds(value);
+  return normalizedValue === null ? "" : String(Number(normalizedValue.toFixed(1)));
+};
+
 export const normalizeWorkspaceSegmentBulkSubtitleText = (value: string | null | undefined) =>
   String(value ?? "").replace(/\s+/g, " ").trim();
 

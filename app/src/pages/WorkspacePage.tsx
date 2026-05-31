@@ -107,7 +107,6 @@ import {
   isWorkspacePhotoMediaAsset,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
-  isWorkspaceSegmentDraftDurationEdited,
   isWorkspaceSegmentDraftTextEdited,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
@@ -165,6 +164,25 @@ import {
   WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
 } from "../features/workspace/workspace-segment-editor";
 import {
+  areWorkspaceSegmentEditorSegmentOrdersEqual,
+  buildWorkspaceSegmentEditorChangeChecklist,
+  createWorkspaceSegmentEditorComparableDraftSession,
+  formatWorkspaceSegmentEditorChecklistPreview,
+  getWorkspaceSegmentDraftVisualStatus,
+  getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
+  getWorkspaceSegmentSceneSoundAssetId,
+  getWorkspaceSegmentVoiceOverrideForLanguage,
+  isWorkspaceSegmentAppliedVisualResetChange,
+  isWorkspaceSegmentDraftSceneSoundEdited,
+  isWorkspaceSegmentDraftSubtitleEdited,
+  isWorkspaceSegmentDraftVisualChangedFromBaseline,
+  isWorkspaceSegmentDraftVisualResettable,
+  isWorkspaceSegmentDraftVoiceEdited,
+  reorderWorkspaceSegmentEditorSegmentsByIndex,
+  resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
+} from "../features/workspace/workspace-segment-editor-checklist";
+import type { WorkspaceSegmentEditorChecklistItem } from "../features/workspace/workspace-segment-editor-checklist";
+import {
   clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   getWorkspaceSegmentEditorBrandStorageKey,
   getWorkspaceSegmentEditorProjectOpenOptions,
@@ -206,8 +224,15 @@ import type {
   StoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
 import {
+  getStudioMusicOptionCopy,
+  studioMusicOptions,
+  studioMusicStyleOptions,
+  type StudioMusicType,
+} from "../features/workspace/workspace-studio-options";
+import {
   buildWorkspaceSegmentBulkSubtitleText,
   distributeWorkspaceSegmentBulkSubtitleText,
+  formatWorkspaceSegmentDurationInputValue,
   getWorkspaceSegmentVoiceoverTextHash,
   normalizeWorkspaceVideoSourceUrl,
   resolveWorkspaceGenerationEffectiveVideoMode,
@@ -390,6 +415,13 @@ export {
   studioVoiceOptionsByLanguage,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
 } from "../features/workspace/workspace-segment-editor";
+export {
+  buildWorkspaceSegmentEditorChangeChecklist,
+  getWorkspaceSegmentDraftVisualStatus,
+  isWorkspaceSegmentDraftVisualChangedFromBaseline,
+  isWorkspaceSegmentDraftVisualResettable,
+  resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
+} from "../features/workspace/workspace-segment-editor-checklist";
 export {
   clearStoredWorkspaceSegmentEditorTemporaryStateExcept,
   getWorkspaceSegmentEditorProjectOpenOptions,
@@ -1823,26 +1855,6 @@ type StudioLanguageOption = {
   label: string;
 };
 
-type StudioMusicType =
-  | "ai"
-  | "business"
-  | "calm"
-  | "custom"
-  | "dramatic"
-  | "energetic"
-  | "fun"
-  | "inspirational"
-  | "luxury"
-  | "none"
-  | "tech"
-  | "upbeat";
-
-type StudioMusicOption = {
-  description: string;
-  id: StudioMusicType;
-  label: string;
-};
-
 type WorkspaceSegmentVisualRunState = Record<number, number>;
 type WorkspaceSegmentVisualRunScope =
   | "ai_photo"
@@ -1936,11 +1948,6 @@ const SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS = 280;
 const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
 
 const normalizeWorkspaceSegmentGenerationJobStatus = (value: unknown) => String(value ?? "").trim().toLowerCase();
-
-const formatWorkspaceSegmentDurationInputValue = (value: number | null | undefined) => {
-  const normalizedValue = normalizeWorkspaceSegmentManualDurationSeconds(value);
-  return normalizedValue === null ? "" : String(Number(normalizedValue.toFixed(1)));
-};
 
 const isWorkspaceSegmentGenerationJobDoneStatus = (value: unknown) =>
   ["completed", "done", "ready", "success", "succeeded"].includes(normalizeWorkspaceSegmentGenerationJobStatus(value));
@@ -2644,731 +2651,6 @@ const buildWorkspaceSegmentSubtitlePreviewLines = ({
   }
 };
 
-const isWorkspaceSegmentDraftSubtitleEdited = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  if (!baselineSegment) {
-    return Boolean(
-      getWorkspaceSegmentSubtitleTypeOverrideId(segment) ||
-        getWorkspaceSegmentSubtitleStyleOverrideId(segment) ||
-        getWorkspaceSegmentSubtitleColorOverrideId(segment),
-    );
-  }
-
-  return (
-    getWorkspaceSegmentSubtitleTypeOverrideId(segment) !== getWorkspaceSegmentSubtitleTypeOverrideId(baselineSegment) ||
-    getWorkspaceSegmentSubtitleStyleOverrideId(segment) !== getWorkspaceSegmentSubtitleStyleOverrideId(baselineSegment) ||
-    getWorkspaceSegmentSubtitleColorOverrideId(segment) !== getWorkspaceSegmentSubtitleColorOverrideId(baselineSegment)
-  );
-};
-
-const isWorkspaceSegmentDraftVisualEdited = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (isWorkspaceSegmentServerPhotoAnimationOverride(segment)) {
-    return true;
-  }
-
-  if (segment.videoAction === "ai" || segment.videoAction === "photo_animation" || segment.videoAction === "talking_photo") {
-    return Boolean(segment.aiVideoAsset);
-  }
-
-  if (segment.videoAction === "image_edit") {
-    return Boolean(segment.imageEditAsset);
-  }
-
-  if (segment.videoAction === "ai_photo") {
-    return Boolean(segment.aiPhotoAsset);
-  }
-
-  if (segment.videoAction === "custom") {
-    return Boolean(segment.customVideo) || isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment);
-  }
-
-  if (isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)) {
-    return true;
-  }
-
-  if (
-    segment.currentSourceKind !== "unknown" &&
-    segment.originalSourceKind !== "unknown" &&
-    segment.currentSourceKind !== segment.originalSourceKind
-  ) {
-    return true;
-  }
-
-  return segment.currentSourceKind === "upload" && segment.originalSourceKind !== "upload";
-};
-
-export const isWorkspaceSegmentDraftVisualResettable = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (isWorkspaceSegmentVisualResetApplied(segment)) {
-    return false;
-  }
-
-  if (segment.visualReset) {
-    return true;
-  }
-
-  if (hasWorkspaceSegmentExplicitDraftVisual(segment)) {
-    return true;
-  }
-
-  if (segment.videoAction !== "original") {
-    return true;
-  }
-
-  return isWorkspaceSegmentDraftVisualEdited(segment);
-};
-
-const getWorkspaceSegmentDraftVisualChangeIdentity = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  JSON.stringify([
-    getWorkspaceSegmentCurrentVisualIdentityKey(segment),
-    segment.currentSourceKind,
-    segment.mediaType,
-    segment.videoAction,
-    segment.aiVideoGeneratedMode ?? null,
-    getWorkspaceSegmentCustomAssetIdentityKey(segment.customVideo),
-    getWorkspaceSegmentCustomAssetIdentityKey(segment.aiPhotoAsset),
-    getWorkspaceSegmentCustomAssetIdentityKey(segment.aiVideoAsset),
-    getWorkspaceSegmentCustomAssetIdentityKey(segment.imageEditAsset),
-    getWorkspaceSegmentCustomAssetIdentityKey(segment.photoAnimationSourceAsset),
-    Boolean(segment.visualReset && !isWorkspaceSegmentVisualResetApplied(segment)),
-  ]);
-
-export const isWorkspaceSegmentDraftVisualChangedFromBaseline = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  if (!baselineSegment) {
-    return isWorkspaceSegmentDraftVisualResettable(segment);
-  }
-
-  if (isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)) {
-    return false;
-  }
-
-  return getWorkspaceSegmentDraftVisualChangeIdentity(segment) !== getWorkspaceSegmentDraftVisualChangeIdentity(baselineSegment);
-};
-
-export const getWorkspaceSegmentDraftVisualStatus = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-): "changed" | "reset" | "none" => {
-  if (isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment)) {
-    return "reset";
-  }
-
-  return isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment) ? "changed" : "none";
-};
-
-const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  baseline?: WorkspaceSegmentEditorDraftSession | null,
-) => {
-  if (!baseline) {
-    return new Set<number>();
-  }
-
-  const baselineSegmentIndices = new Set(baseline.segments.map((segment) => segment.index));
-  const pendingSegmentIndices = new Set<number>();
-
-  draft.segments.forEach((segment) => {
-    if (baselineSegmentIndices.has(segment.index)) {
-      return;
-    }
-
-    if (
-      !isWorkspaceSegmentDraftTextEdited(segment) &&
-      !isWorkspaceSegmentDraftSubtitleEdited(segment, null) &&
-      !isWorkspaceSegmentDraftVisualEdited(segment) &&
-      !isWorkspaceSegmentDraftDurationEdited(segment, null)
-    ) {
-      pendingSegmentIndices.add(segment.index);
-    }
-  });
-
-  return pendingSegmentIndices;
-};
-
-const createWorkspaceSegmentEditorComparableDraftSession = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  baseline?: WorkspaceSegmentEditorDraftSession | null,
-) => {
-  const pendingInsertedSegmentIndices = getWorkspaceSegmentEditorPendingInsertedSegmentIndices(draft, baseline);
-  if (pendingInsertedSegmentIndices.size === 0) {
-    return draft;
-  }
-
-  return {
-    ...draft,
-    segments: draft.segments.filter((segment) => !pendingInsertedSegmentIndices.has(segment.index)),
-  };
-};
-
-type WorkspaceSegmentEditorChecklistSettingId = "music" | "subtitle" | "voice";
-
-type WorkspaceSegmentEditorChecklistItem =
-  | {
-      key: string;
-      kind: "segment";
-      label: string;
-      resetDuration: boolean;
-      resetText: boolean;
-      resetSubtitle: boolean;
-      resetSceneSound: boolean;
-      resetVoice: boolean;
-      resetVisual: boolean;
-      restoreVisual: boolean;
-      segmentIndex: number;
-    }
-  | {
-      key: string;
-      kind: "global";
-      label: string;
-      resetOrder: boolean;
-      resetSettingIds: WorkspaceSegmentEditorChecklistSettingId[];
-    }
-  | {
-      key: string;
-      kind: "brand";
-      label: string;
-    };
-
-type WorkspaceSegmentEditorChecklistBuildOptions = {
-  subtitleColorOptions?: StudioSubtitleColorOption[];
-  subtitleStyleOptions?: StudioSubtitleStyleOption[];
-};
-
-const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEditorDraftSession | null) => {
-  const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
-  const subtitleEnabled = voiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
-  const musicType = normalizeWorkspaceSegmentEditorSetting(session?.musicType) ?? "ai";
-  const customMusicAssetId =
-    musicType === "custom" && Number.isFinite(Number(session?.customMusicAssetId)) && Number(session?.customMusicAssetId) > 0
-      ? Math.trunc(Number(session?.customMusicAssetId))
-      : null;
-  const customMusicFileName =
-    musicType === "custom" ? String(session?.customMusicFileName ?? "").replace(/\s+/g, " ").trim() || null : null;
-
-  return {
-    customMusicAssetId,
-    customMusicFileName,
-    musicType,
-    subtitleColorId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ?? "purple" : null,
-    subtitleEnabled,
-    subtitleStyleId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ?? "modern" : null,
-    voiceEnabled,
-    voiceId: voiceEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.voiceType) ?? "" : null,
-  };
-};
-
-const formatWorkspaceSegmentEditorChecklistPreview = (value: string, maxChars = 52) => {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  if (!normalized) {
-    return "";
-  }
-
-  if (normalized.length <= maxChars) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
-};
-
-const getWorkspaceSegmentEditorChecklistVoiceLabel = (voiceId?: string | null) => {
-  const safeVoiceId = normalizeWorkspaceSegmentEditorSetting(voiceId);
-  if (!safeVoiceId) {
-    return "выключена";
-  }
-
-  for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
-    const matchedVoice = voiceOptions.find((voice) => voice.id === safeVoiceId);
-    if (matchedVoice) {
-      return `голос ${matchedVoice.label}`;
-    }
-  }
-
-  return `голос ${safeVoiceId}`;
-};
-
-const getWorkspaceSegmentEditorChecklistMusicLabel = (musicType?: string | null) => {
-  const safeMusicType = normalizeWorkspaceSegmentEditorSetting(musicType) ?? "ai";
-  return studioMusicOptions.find((option) => option.id === safeMusicType)?.label ?? safeMusicType;
-};
-
-const getWorkspaceSegmentEditorChecklistSubtitleStyleLabel = (
-  styleId: string | null,
-  styleOptions?: StudioSubtitleStyleOption[],
-) => {
-  const safeStyleId = normalizeWorkspaceSegmentEditorSetting(styleId);
-  if (!safeStyleId) {
-    return "без стиля";
-  }
-
-  return styleOptions?.find((style) => style.id === safeStyleId)?.label ?? safeStyleId;
-};
-
-const getWorkspaceSegmentEditorChecklistSubtitleColorLabel = (
-  colorId: string | null,
-  colorOptions?: StudioSubtitleColorOption[],
-) => {
-  const safeColorId = normalizeWorkspaceSegmentEditorSetting(colorId);
-  if (!safeColorId) {
-    return "без цвета";
-  }
-
-  return colorOptions?.find((color) => color.id === safeColorId)?.label ?? safeColorId;
-};
-
-const getWorkspaceSegmentEditorChecklistTextLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (!formatWorkspaceSegmentEditorChecklistPreview(segment.text)) {
-    return "текст очищен";
-  }
-
-  return "обновлен текст";
-};
-
-const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  if (segment.visualReset && isWorkspaceSegmentVisualResetApplied(segment)) {
-    return "сброшен визуал";
-  }
-
-  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
-
-  if (latestVisualAction === "ai") {
-    return "обновлено видео";
-  }
-
-  if (latestVisualAction === "photo_animation") {
-    return "добавлено движение в фото";
-  }
-
-  if (latestVisualAction === "talking_photo") {
-    return "добавлен говорящий персонаж";
-  }
-
-  if (latestVisualAction === "custom") {
-    return segment.customVideo?.source === "media-library"
-      ? "выбран визуал из медиатеки"
-      : "добавлен свой визуал";
-  }
-
-  if (latestVisualAction === "image_edit") {
-    return "отредактировано фото";
-  }
-
-  if (latestVisualAction === "ai_photo") {
-    return "обновлено изображение";
-  }
-
-  return "обновлен визуал";
-};
-
-const getWorkspaceSegmentCustomAssetIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
-  if (!asset) {
-    return null;
-  }
-
-  const record = asset as StudioCustomVideoFile & {
-    downloadUrl?: unknown;
-    download_url?: unknown;
-    file_name?: unknown;
-    mime_type?: unknown;
-    remote_url?: unknown;
-    url?: unknown;
-  };
-  const assetId = getWorkspaceSegmentCustomAssetId(asset);
-  if (assetId) {
-    return `asset:${assetId}`;
-  }
-
-  const sourceUrl = [
-    asset.remoteUrl,
-    record.remote_url,
-    record.url,
-    record.downloadUrl,
-    record.download_url,
-    asset.dataUrl,
-    asset.objectUrl,
-  ]
-    .map((value) => String(value ?? "").trim())
-    .find(Boolean);
-  if (sourceUrl) {
-    return `url:${sourceUrl}`;
-  }
-
-  const fallbackIdentity = [asset.fileName, record.file_name, asset.mimeType, record.mime_type]
-    .map((value) => String(value ?? "").trim())
-    .filter(Boolean)
-    .join(":");
-  return fallbackIdentity || null;
-};
-
-const getWorkspaceSegmentSceneSoundIdentityKey = getWorkspaceSegmentCustomAssetIdentityKey;
-const getWorkspaceSegmentSceneSoundAssetId = getWorkspaceSegmentCustomAssetId;
-
-const getWorkspaceSegmentSceneSoundGenerationKey = (
-  segment:
-    | Pick<WorkspaceSegmentEditorDraftSegment, "sceneSoundGeneratedFromPrompt">
-    | null
-    | undefined,
-) => {
-  const generatedPrompt =
-    typeof segment?.sceneSoundGeneratedFromPrompt === "string"
-      ? normalizeWorkspaceSegmentEditorTextForCompare(segment.sceneSoundGeneratedFromPrompt)
-      : "";
-
-  return generatedPrompt || null;
-};
-
-const isWorkspaceSegmentDraftSceneSoundEdited = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment.sceneSoundAsset);
-  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment?.sceneSoundAsset);
-
-  if (currentIdentity !== baselineIdentity) {
-    return true;
-  }
-
-  if (!currentIdentity) {
-    return false;
-  }
-
-  return (
-    getWorkspaceSegmentSceneSoundGenerationKey(segment) !==
-    getWorkspaceSegmentSceneSoundGenerationKey(baselineSegment)
-  );
-};
-
-const normalizeWorkspaceSegmentVoiceOverrideForLanguage = (
-  voiceId: string | null | undefined,
-  language: StudioLanguage,
-) => {
-  const normalizedVoiceId = normalizeWorkspaceSegmentEditorSetting(voiceId);
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
-    return null;
-  }
-
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
-  return (
-    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === normalizedVoiceKey)?.id ?? null
-  );
-};
-
-const getWorkspaceSegmentVoiceOverrideForLanguage = (
-  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
-  language: StudioLanguage,
-) => normalizeWorkspaceSegmentVoiceOverrideForLanguage(getWorkspaceSegmentVoiceOverrideId(segment), language);
-
-const isWorkspaceSegmentDraftVoiceEdited = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) =>
-  getWorkspaceSegmentVoiceOverrideId(segment) !== getWorkspaceSegmentVoiceOverrideId(baselineSegment) ||
-  getStudioCustomVideoFileIdentityKey(segment.voiceoverAsset) !==
-    getStudioCustomVideoFileIdentityKey(baselineSegment?.voiceoverAsset) ||
-  segment.voiceoverTextHash !== baselineSegment?.voiceoverTextHash ||
-  segment.voiceoverVoiceType !== baselineSegment?.voiceoverVoiceType ||
-  segment.voiceoverLanguage !== baselineSegment?.voiceoverLanguage;
-
-const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => {
-  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment.sceneSoundAsset);
-  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment?.sceneSoundAsset);
-
-  if (currentIdentity && !baselineIdentity) {
-    return "добавлен звук сцены";
-  }
-
-  if (!currentIdentity && baselineIdentity) {
-    return "удален звук сцены";
-  }
-
-  return "обновлен звук сцены";
-};
-
-const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
-  const voiceId = getWorkspaceSegmentVoiceOverrideId(segment);
-  if (segment.voiceoverAsset) {
-    return "озвучка сгенерирована";
-  }
-  if (!voiceId) {
-    return "озвучка как в видео";
-  }
-
-  return `озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId)}`;
-};
-
-const getWorkspaceSegmentEditorChecklistSceneSubtitleLabel = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  options?: WorkspaceSegmentEditorChecklistBuildOptions,
-) => {
-  const subtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
-  const subtitleStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
-  const subtitleColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
-
-  if (subtitleType === "none") {
-    return "субтитры выключены";
-  }
-
-  const changes: string[] = [];
-  if (subtitleStyleId) {
-    changes.push(
-      `стиль ${getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(subtitleStyleId, options?.subtitleStyleOptions)}`,
-    );
-  }
-
-  if (subtitleColorId) {
-    changes.push(
-      `цвет ${getWorkspaceSegmentEditorChecklistSubtitleColorLabel(subtitleColorId, options?.subtitleColorOptions)}`,
-    );
-  }
-
-  return changes.length > 0 ? `субтитры: ${changes.join(", ")}` : "субтитры: глобальные настройки";
-};
-
-const getWorkspaceSegmentEditorChecklistDurationLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  `длина: ${formatWorkspaceSegmentDurationInputValue(segment.manualDurationSeconds || segment.duration)} сек`;
-
-const lowerCaseWorkspaceChecklistLabelPrefix = (value: string) => {
-  const normalized = value.trim();
-  if (!normalized) {
-    return "";
-  }
-
-  return `${normalized.charAt(0).toLowerCase()}${normalized.slice(1)}`;
-};
-
-const getWorkspaceSegmentEditorChecklistSubtitleLabel = (
-  draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
-  baselineSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
-  options?: WorkspaceSegmentEditorChecklistBuildOptions,
-) => {
-  if (!baselineSettings.subtitleEnabled && !draftSettings.subtitleEnabled) {
-    return "Субтитры: выключены";
-  }
-
-  if (!draftSettings.subtitleEnabled) {
-    return "Субтитры: выключены";
-  }
-
-  const nextStyleLabel = getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(
-    draftSettings.subtitleStyleId,
-    options?.subtitleStyleOptions,
-  );
-  const nextColorLabel = getWorkspaceSegmentEditorChecklistSubtitleColorLabel(
-    draftSettings.subtitleColorId,
-    options?.subtitleColorOptions,
-  );
-
-  if (!baselineSettings.subtitleEnabled) {
-    return `Субтитры: включены, стиль ${nextStyleLabel}, цвет ${nextColorLabel}`;
-  }
-
-  const changes: string[] = [];
-  if (draftSettings.subtitleStyleId !== baselineSettings.subtitleStyleId) {
-    changes.push(`стиль ${nextStyleLabel}`);
-  }
-
-  if (draftSettings.subtitleColorId !== baselineSettings.subtitleColorId) {
-    changes.push(`цвет ${nextColorLabel}`);
-  }
-
-  return changes.length > 0 ? `Субтитры: ${changes.join(", ")}` : `Субтитры: стиль ${nextStyleLabel}, цвет ${nextColorLabel}`;
-};
-
-const getWorkspaceSegmentEditorChecklistVoiceSettingsLabel = (
-  draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
-) =>
-  `Озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(draftSettings.voiceId)}`;
-
-const getWorkspaceSegmentEditorChecklistMusicSettingsLabel = (
-  draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
-) => {
-  const musicLabel = getWorkspaceSegmentEditorChecklistMusicLabel(draftSettings.musicType);
-  return draftSettings.musicType === "custom" && draftSettings.customMusicFileName
-    ? `Музыка: ${musicLabel} (${formatWorkspaceSegmentEditorChecklistPreview(draftSettings.customMusicFileName, 32)})`
-    : `Музыка: ${musicLabel}`;
-};
-
-const getWorkspaceSegmentEditorChecklistOrderLabel = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  baseline: WorkspaceSegmentEditorDraftSession,
-) => {
-  const baselineSegmentIds = baseline.segments.map((segment) => segment.index).sort((left, right) => left - right);
-  const draftSegmentIds = draft.segments.map((segment) => segment.index).sort((left, right) => left - right);
-  const hasSameSegmentSet =
-    baselineSegmentIds.length === draftSegmentIds.length &&
-    baselineSegmentIds.every((segmentIndex, index) => segmentIndex === draftSegmentIds[index]);
-
-  if (!hasSameSegmentSet) {
-    return `Сегменты: было ${baseline.segments.length}, стало ${draft.segments.length}`;
-  }
-
-  return "Сегменты: изменен порядок";
-};
-
-const isWorkspaceSegmentAppliedVisualResetChange = (
-  segment: WorkspaceSegmentEditorDraftSegment,
-  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) =>
-  Boolean(
-    baselineSegment &&
-      segment.visualReset &&
-      isWorkspaceSegmentVisualResetApplied(segment) &&
-      isWorkspaceSegmentDraftVisualResettable(baselineSegment),
-  );
-
-export const buildWorkspaceSegmentEditorChangeChecklist = (
-  draft: WorkspaceSegmentEditorDraftSession,
-  baseline?: WorkspaceSegmentEditorDraftSession | null,
-  options?: WorkspaceSegmentEditorChecklistBuildOptions,
-) => {
-  const pendingInsertedSegmentIndices = getWorkspaceSegmentEditorPendingInsertedSegmentIndices(draft, baseline);
-  const comparableDraft = createWorkspaceSegmentEditorComparableDraftSession(draft, baseline);
-  const baselineSegmentsByIndex = new Map((baseline?.segments ?? []).map((segment) => [segment.index, segment] as const));
-  const items: WorkspaceSegmentEditorChecklistItem[] = [];
-
-  draft.segments.forEach((segment, index) => {
-    if (pendingInsertedSegmentIndices.has(segment.index)) {
-      return;
-    }
-
-    const segmentNumber = index + 1;
-    const segmentChanges: string[] = [];
-    let resetDuration = false;
-    let resetText = false;
-    let resetVisual = false;
-    let restoreVisual = false;
-    let resetSceneSound = false;
-    let resetSubtitle = false;
-    let resetVoice = false;
-    const baselineSegment = baselineSegmentsByIndex.get(segment.index);
-
-    if (isWorkspaceSegmentDraftTextEdited(segment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistTextLabel(segment));
-      resetText = true;
-    }
-
-    const isVisualEdited = isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment);
-    const isVisualResetChange = isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment);
-    if (isVisualEdited || isVisualResetChange) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
-      resetVisual = isVisualEdited;
-      restoreVisual = isVisualResetChange;
-    }
-
-    if (isWorkspaceSegmentDraftSceneSoundEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneSoundLabel(segment, baselineSegment));
-      resetSceneSound = true;
-    }
-
-    if (isWorkspaceSegmentDraftVoiceEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneVoiceLabel(segment));
-      resetVoice = true;
-    }
-
-    if (isWorkspaceSegmentDraftSubtitleEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneSubtitleLabel(segment, options));
-      resetSubtitle = true;
-    }
-
-    if (isWorkspaceSegmentDraftDurationEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistDurationLabel(segment));
-      resetDuration = true;
-    }
-
-    if (segmentChanges.length > 0) {
-      items.push({
-        key: `segment-change:${segment.index}`,
-        kind: "segment",
-        label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
-        resetDuration,
-        resetSceneSound,
-        resetSubtitle,
-        resetText,
-        resetVoice,
-        resetVisual,
-        restoreVisual,
-        segmentIndex: segment.index,
-      });
-    }
-  });
-
-  const draftSettings = getWorkspaceSegmentEditorSettingsSnapshot(draft);
-  const baselineSettings = getWorkspaceSegmentEditorSettingsSnapshot(baseline);
-  const globalChanges: string[] = [];
-  const resetSettingIds: WorkspaceSegmentEditorChecklistSettingId[] = [];
-  let resetOrder = false;
-
-  if (
-    draftSettings.subtitleEnabled !== baselineSettings.subtitleEnabled ||
-    draftSettings.subtitleStyleId !== baselineSettings.subtitleStyleId ||
-    draftSettings.subtitleColorId !== baselineSettings.subtitleColorId
-  ) {
-    globalChanges.push(
-      lowerCaseWorkspaceChecklistLabelPrefix(
-        getWorkspaceSegmentEditorChecklistSubtitleLabel(draftSettings, baselineSettings, options),
-      ),
-    );
-    resetSettingIds.push("subtitle");
-  }
-
-  if (draftSettings.voiceEnabled !== baselineSettings.voiceEnabled || draftSettings.voiceId !== baselineSettings.voiceId) {
-    globalChanges.push(
-      lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistVoiceSettingsLabel(draftSettings)),
-    );
-    resetSettingIds.push("voice");
-  }
-
-  if (
-    draftSettings.musicType !== baselineSettings.musicType ||
-    (draftSettings.musicType === "custom" &&
-      (draftSettings.customMusicAssetId !== baselineSettings.customMusicAssetId ||
-        draftSettings.customMusicFileName !== baselineSettings.customMusicFileName))
-  ) {
-    globalChanges.push(
-      lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistMusicSettingsLabel(draftSettings)),
-    );
-    resetSettingIds.push("music");
-  }
-
-  if (baseline && !areWorkspaceSegmentEditorSegmentOrdersEqual(comparableDraft, baseline)) {
-    globalChanges.push(lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistOrderLabel(comparableDraft, baseline)));
-    resetOrder = true;
-  }
-
-  if (globalChanges.length > 0) {
-    items.push({
-      key: "segment-settings:global",
-      kind: "global",
-      label: `Общее: ${globalChanges.join(", ")}`,
-      resetOrder,
-      resetSettingIds,
-    });
-  }
-
-  return items;
-};
-
-export const resolveWorkspaceSegmentEditorChangeDisplayBaselineSession = (
-  draft: WorkspaceSegmentEditorDraftSession | null | undefined,
-  baseline: WorkspaceSegmentEditorDraftSession | null | undefined,
-) => {
-  if (!draft) {
-    return null;
-  }
-
-  if (baseline?.projectId === draft.projectId && baseline.segments.length > 0) {
-    return baseline;
-  }
-
-  return draft;
-};
-
 const studioLanguageOptions: StudioLanguageOption[] = [
   {
     id: "ru",
@@ -3492,90 +2774,6 @@ export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {
     voiceId,
   };
 };
-
-const studioMusicOptions: StudioMusicOption[] = [
-  {
-    id: "ai",
-    label: "Авто",
-    description: "AI подберет музыку под ролик",
-  },
-  {
-    id: "energetic",
-    label: "Энергичная",
-    description: "Для динамичных и продажных Shorts",
-  },
-  {
-    id: "calm",
-    label: "Спокойная",
-    description: "Для экспертной подачи и размеренного темпа",
-  },
-  {
-    id: "business",
-    label: "Деловая",
-    description: "Для продуктов, сервисов и B2B-подачи",
-  },
-  {
-    id: "upbeat",
-    label: "Оптимистичная",
-    description: "Для легких продающих и lifestyle роликов",
-  },
-  {
-    id: "inspirational",
-    label: "Вдохновляющая",
-    description: "Для историй, роста и мотивационных тем",
-  },
-  {
-    id: "dramatic",
-    label: "Драматичная",
-    description: "Для сильного хука и эмоционального накала",
-  },
-  {
-    id: "tech",
-    label: "Технологичная",
-    description: "Для AI, SaaS и цифровых продуктов",
-  },
-  {
-    id: "luxury",
-    label: "Люксовая",
-    description: "Для премиальных брендов и дорогой подачи",
-  },
-  {
-    id: "fun",
-    label: "Веселая",
-    description: "Для UGC, мемов и вирусных форматов",
-  },
-  {
-    id: "custom",
-    label: "Своя музыка",
-    description: "Загрузите свой .mp3, .wav или .m4a",
-  },
-  {
-    id: "none",
-    label: "Без музыки",
-    description: "Оставить только голос и видео",
-  },
-];
-const studioMusicStyleOptions = studioMusicOptions.filter(
-  (option): option is StudioMusicOption & { id: Exclude<StudioMusicType, "ai" | "custom" | "none"> } =>
-    !["ai", "custom", "none"].includes(option.id),
-);
-const studioMusicOptionEnglishCopy: Record<StudioMusicType, Pick<StudioMusicOption, "description" | "label">> = {
-  ai: { label: "Auto", description: "AI picks music for the video" },
-  business: { label: "Business", description: "For products, services and B2B delivery" },
-  calm: { label: "Calm", description: "For expert delivery and a measured pace" },
-  custom: { label: "Custom music", description: "Upload your .mp3, .wav or .m4a" },
-  dramatic: { label: "Dramatic", description: "For a strong hook and emotional intensity" },
-  energetic: { label: "Energetic", description: "For dynamic and sales-oriented Shorts" },
-  fun: { label: "Fun", description: "For UGC, memes and viral formats" },
-  inspirational: { label: "Inspirational", description: "For stories, growth and motivational topics" },
-  luxury: { label: "Luxury", description: "For premium brands and expensive positioning" },
-  none: { label: "No music", description: "Keep only voice and video" },
-  tech: { label: "Tech", description: "For AI, SaaS and digital products" },
-  upbeat: { label: "Upbeat", description: "For light sales and lifestyle videos" },
-};
-
-const getStudioMusicOptionCopy = (option: StudioMusicOption, locale: string) =>
-  locale === "en" ? studioMusicOptionEnglishCopy[option.id] ?? option : option;
 
 const STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST =
   STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST - STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
@@ -5983,33 +5181,6 @@ const getVisibleInsertIndexForDraggedItem = (
   const boundedInsertIndex = Math.max(0, Math.min(insertIndex, itemCount));
   const adjustedInsertIndex = boundedInsertIndex > draggedIndex ? boundedInsertIndex - 1 : boundedInsertIndex;
   return adjustedInsertIndex === draggedIndex ? null : boundedInsertIndex;
-};
-
-const reorderWorkspaceSegmentEditorSegmentsByIndex = (
-  segments: WorkspaceSegmentEditorDraftSegment[],
-  orderedSegmentIndices: number[],
-) => {
-  if (segments.length !== orderedSegmentIndices.length) {
-    return segments;
-  }
-
-  const segmentsByIndex = new Map(segments.map((segment) => [segment.index, segment]));
-  const nextSegments = orderedSegmentIndices
-    .map((segmentIndex) => segmentsByIndex.get(segmentIndex))
-    .filter((segment): segment is WorkspaceSegmentEditorDraftSegment => Boolean(segment));
-
-  return nextSegments.length === segments.length ? nextSegments : segments;
-};
-
-const areWorkspaceSegmentEditorSegmentOrdersEqual = (
-  left?: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null,
-  right?: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null,
-) => {
-  if (!left || !right || left.segments.length !== right.segments.length) {
-    return false;
-  }
-
-  return left.segments.every((segment, index) => segment.index === right.segments[index]?.index);
 };
 
 type WorkspaceSegmentEditorStructureSnapshot = Pick<WorkspaceSegmentEditorDraftSession, "segments">;
