@@ -388,6 +388,8 @@ import { WorkspaceContentPlanPanel } from "../features/workspace/workspace-conte
 import {
   WorkspaceLocalExampleModal,
   WorkspaceProjectDeleteModal,
+  WorkspaceSegmentEditorDeleteConfirmModal,
+  WorkspaceSegmentEditorResetConfirmModal,
 } from "../features/workspace/workspace-dialogs";
 import {
   StudioBrandSelectorChip,
@@ -5472,6 +5474,17 @@ export function WorkspacePage({
     segmentEditorDraft && segmentEditorPendingDeleteSegment
       ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segmentEditorPendingDeleteSegment.index)
       : null;
+  const segmentEditorPendingDeleteSummary = segmentEditorPendingDeleteSegment
+    ? `${workspaceText(
+        locale,
+        `Сцена ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
+        `Scene ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
+      )} · ${formatWorkspaceSegmentEditorSegmentTimeRange(
+        getWorkspaceSegmentEditorDisplayStartTime(segmentEditorPendingDeleteSegment),
+        getWorkspaceSegmentEditorDisplayEndTime(segmentEditorPendingDeleteSegment),
+        { isFirstSegment: segmentEditorPendingDeleteDisplayNumber === 1 },
+      )}`
+    : "";
   const segmentSubtitleBulkTextDefault = segmentEditorDraft
     ? buildWorkspaceSegmentBulkSubtitleText(segmentEditorDraft.segments)
     : "";
@@ -27971,169 +27984,26 @@ export function WorkspacePage({
           source={localExampleSource}
         />
 
-        {isSegmentEditorResetConfirmOpen && typeof document !== "undefined"
-          ? createPortal(
-              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Сброс изменений", "Reset changes")}>
-                <button
-                  className="workspace-confirm-modal__backdrop route-close"
-                  type="button"
-                  aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
-                  onClick={closeSegmentEditorResetModal}
-                />
-                <div className="workspace-confirm-modal__panel workspace-confirm-modal__panel--reset" role="document">
-                  <button
-                    className="workspace-confirm-modal__close route-close"
-                    type="button"
-                    aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
-                    onClick={closeSegmentEditorResetModal}
-                  >
-                    ×
-                  </button>
+        <WorkspaceSegmentEditorResetConfirmModal
+          changeItems={segmentEditorResetChangeItems}
+          changesCount={segmentEditorResetChangesCount}
+          hasResettableChanges={hasSegmentEditorResettableChanges}
+          isBusy={isSegmentEditorStructureActionBusy}
+          isOpen={isSegmentEditorResetConfirmOpen}
+          locale={locale}
+          onClose={closeSegmentEditorResetModal}
+          onConfirm={confirmResetSegmentEditorChanges}
+        />
 
-                  <div className="workspace-confirm-modal__header">
-                    <div className="workspace-confirm-modal__icon" aria-hidden="true">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-                        <path d="M20 11a8 8 0 1 1-2.34-5.66L20 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M20 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <div className="workspace-confirm-modal__copy">
-                      <h2 className="workspace-confirm-modal__title">
-                        {workspaceText(locale, "Сбросить все изменения?", "Reset all changes?")}
-                      </h2>
-                      <p className="workspace-confirm-modal__message">
-                        {workspaceText(
-                          locale,
-                          "Черновик вернётся к состоянию исходного видео. Текст, визуалы, порядок сцен, настройки и бренд будут восстановлены.",
-                          "The draft will return to the original video's state. Text, visuals, scene order, settings, and branding will be restored.",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="workspace-confirm-modal__project">
-                    {workspaceText(
-                      locale,
-                      `Будет отменено изменений: ${segmentEditorResetChangesCount}`,
-                      `${segmentEditorResetChangesCount} changes will be reset`,
-                    )}
-                  </p>
-
-                  <div className="workspace-confirm-modal__change-list">
-                    <span className="workspace-confirm-modal__change-list-title">
-                      {workspaceText(locale, "Список изменений", "Changes")}
-                    </span>
-                    <ul>
-                      {segmentEditorResetChangeItems.map((item) => (
-                        <li key={item.key}>
-                          <span aria-hidden="true"></span>
-                          <strong>{item.label}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="workspace-confirm-modal__actions">
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
-                      type="button"
-                      onClick={closeSegmentEditorResetModal}
-                    >
-                      {workspaceText(locale, "Отмена", "Cancel")}
-                    </button>
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
-                      type="button"
-                      onClick={confirmResetSegmentEditorChanges}
-                      disabled={isSegmentEditorStructureActionBusy || !hasSegmentEditorResettableChanges}
-                    >
-                      {workspaceText(locale, "Сбросить", "Reset")}
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body,
-            )
-          : null}
-
-        {segmentEditorPendingDeleteSegment && typeof document !== "undefined"
-          ? createPortal(
-              <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Удаление сцены", "Scene deletion")}>
-                <button
-                  className="workspace-confirm-modal__backdrop route-close"
-                  type="button"
-                  aria-label={workspaceText(locale, "Закрыть подтверждение удаления сцены", "Close scene deletion confirmation")}
-                  onClick={closeSegmentEditorDeleteModal}
-                />
-                <div className="workspace-confirm-modal__panel" role="document">
-                  <button
-                    className="workspace-confirm-modal__close route-close"
-                    type="button"
-                    aria-label={workspaceText(locale, "Закрыть подтверждение удаления сцены", "Close scene deletion confirmation")}
-                    onClick={closeSegmentEditorDeleteModal}
-                  >
-                    ×
-                  </button>
-
-                  <div className="workspace-confirm-modal__header">
-                    <div className="workspace-confirm-modal__icon" aria-hidden="true">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-                        <path d="M4 7h16" strokeLinecap="round" />
-                        <path d="M9 3h6" strokeLinecap="round" />
-                        <path d="M10 11v6" strokeLinecap="round" />
-                        <path d="M14 11v6" strokeLinecap="round" />
-                        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <div className="workspace-confirm-modal__copy">
-                      <h2 className="workspace-confirm-modal__title">
-                        {workspaceText(locale, "Удалить сцену?", "Delete scene?")}
-                      </h2>
-                      <p className="workspace-confirm-modal__message">
-                        {workspaceText(
-                          locale,
-                          "Сцена исчезнет из текущего монтажа, а тайминг следующих сцен пересчитается.",
-                          "The scene will be removed from the current edit and following scene timing will be recalculated.",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="workspace-confirm-modal__project">
-                    {workspaceText(
-                      locale,
-                      `Сцена ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
-                      `Scene ${segmentEditorPendingDeleteDisplayNumber ?? segmentEditorPendingDeleteSegment.index + 1}`,
-                    )}{" "}
-                    · {formatWorkspaceSegmentEditorSegmentTimeRange(
-                      getWorkspaceSegmentEditorDisplayStartTime(segmentEditorPendingDeleteSegment),
-                      getWorkspaceSegmentEditorDisplayEndTime(segmentEditorPendingDeleteSegment),
-                      { isFirstSegment: segmentEditorPendingDeleteDisplayNumber === 1 },
-                    )}
-                  </p>
-
-                  <div className="workspace-confirm-modal__actions">
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
-                      type="button"
-                      onClick={closeSegmentEditorDeleteModal}
-                    >
-                      {workspaceText(locale, "Отмена", "Cancel")}
-                    </button>
-                    <button
-                      className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
-                      type="button"
-                      onClick={confirmDeleteSegmentEditorSegment}
-                      disabled={isSegmentEditorStructureActionBusy || !canDeleteSegmentEditorSegment}
-                    >
-                      {workspaceText(locale, "Удалить", "Delete")}
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body,
-            )
-          : null}
+        <WorkspaceSegmentEditorDeleteConfirmModal
+          canDelete={canDeleteSegmentEditorSegment}
+          isBusy={isSegmentEditorStructureActionBusy}
+          isOpen={Boolean(segmentEditorPendingDeleteSegment)}
+          locale={locale}
+          onClose={closeSegmentEditorDeleteModal}
+          onConfirm={confirmDeleteSegmentEditorSegment}
+          segmentSummary={segmentEditorPendingDeleteSummary}
+        />
 
         <WorkspaceProjectDeleteModal
           error={projectDeleteError}
