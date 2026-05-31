@@ -411,6 +411,15 @@ import {
   WorkspaceSegmentTimelineVoiceMenu,
 } from "../features/workspace/workspace-timeline-menus";
 import {
+  renderWorkspaceSegmentEditorFullPreviewPlayhead,
+  renderWorkspaceSegmentTimelineAudioButton,
+  renderWorkspaceSegmentTimelineBoundaryTimecode,
+  renderWorkspaceSegmentTimelineHistoryButtons,
+  type WorkspaceSegmentTimelineAudioButtonOptions,
+  type WorkspaceSegmentTimelineBoundaryTimecodeOptions,
+  type WorkspaceSegmentTimelineHistoryButtonsOptions,
+} from "../features/workspace/workspace-segment-timeline-ui";
+import {
   WorkspaceReferenceModalShell,
   WorkspaceReferenceOptionCard,
   WorkspaceReferenceSavedSection,
@@ -18888,64 +18897,13 @@ export function WorkspacePage({
   ]);
   const getSegmentTimelineAudioPlaybackStatus = (audioKey: string) =>
     segmentTimelineAudioPlayback?.key === audioKey ? segmentTimelineAudioPlayback.status : null;
-  const renderSegmentTimelineAudioButton = (options: {
-    audioKey: string;
-    className?: string;
-    disabledReason?: string;
-    durationSeconds?: number | null;
-    endTime?: number | null;
-    label: string;
-    mediaKind?: "audio" | "video";
-    startTime?: number | null;
-    tracks?: WorkspaceSegmentTimelineAudioPreviewTrack[];
-    url: string | null;
-  }) => {
-    const playbackStatus = getSegmentTimelineAudioPlaybackStatus(options.audioKey);
-    const isLoading = playbackStatus === "loading";
-    const isPlaying = playbackStatus === "playing";
-    const disabledReason = options.disabledReason ?? workspaceText(locale, "Превью недоступно", "Preview unavailable");
-    const hasPreviewAudio = Boolean(options.url || options.tracks?.some((track) => track.url.trim()));
-    const ariaLabel = !hasPreviewAudio
-      ? disabledReason
-      : isPlaying || isLoading
-        ? workspaceText(locale, `Остановить: ${options.label}`, `Stop: ${options.label}`)
-        : workspaceText(locale, `Прослушать: ${options.label}`, `Listen: ${options.label}`);
-
-    return (
-      <button
-        className={`studio-segment-editor__timeline-play${isPlaying ? " is-playing" : ""}${
-          isLoading ? " is-loading" : ""
-        }${options.className ? ` ${options.className}` : ""}`}
-        type="button"
-        disabled={!hasPreviewAudio}
-        aria-label={ariaLabel}
-        title={ariaLabel}
-        onClick={(event) =>
-          void handleSegmentTimelineAudioPreview(event, {
-            endTime: options.endTime,
-            key: options.audioKey,
-            mediaKind: options.mediaKind,
-            durationSeconds: options.durationSeconds,
-            startTime: options.startTime,
-            tracks: options.tracks,
-            url: options.url,
-          })
-        }
-      >
-        {isLoading ? (
-          <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>
-        ) : isPlaying ? (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="4.35" y="4.35" width="7.3" height="7.3" rx="1.55" fill="currentColor" />
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M5.15 3.55v8.9L12.1 8 5.15 3.55Z" fill="currentColor" />
-          </svg>
-        )}
-      </button>
+  const renderSegmentTimelineAudioButton = (options: WorkspaceSegmentTimelineAudioButtonOptions) =>
+    renderWorkspaceSegmentTimelineAudioButton(
+      locale,
+      getSegmentTimelineAudioPlaybackStatus(options.audioKey),
+      options,
+      handleSegmentTimelineAudioPreview,
     );
-  };
   const getSegmentEditorFullPreviewSegmentSpan = (arrayIndex: number) =>
     segmentEditorTimelineVisualRow?.spans.find((span) => span.arrayIndex === arrayIndex) ?? null;
   const getSegmentEditorFullPreviewSegments = (): WorkspaceSegmentEditorFullPreviewSegment[] => {
@@ -20482,91 +20440,11 @@ export function WorkspacePage({
       stopSegmentEditorFullPreview({ resetTime: true, status: "idle" });
     }
   }, [segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, segmentEditorTracks?.totalDuration]);
-  const renderSegmentTimelineHistoryButtons = (options: {
-    canBack: boolean;
-    canDelete?: boolean;
-    canForward: boolean;
-    deleteLabel?: string;
-    kind: WorkspaceSegmentTimelineHistoryKind;
-    label: string;
-    onDelete?: () => void;
-    segmentIndex?: number | null;
-    withPlay?: boolean;
-  }) => {
-    if (!options.canBack && !options.canForward && !options.canDelete) {
-      return null;
-    }
-
-    const isActionDisabled = isSegmentEditorStructureActionBusy;
-    const backLabel = workspaceText(locale, `Откатить: ${options.label}`, `Revert: ${options.label}`);
-    const forwardLabel = workspaceText(locale, `Вернуть: ${options.label}`, `Restore: ${options.label}`);
-    const deleteLabel = options.deleteLabel ?? workspaceText(locale, `Удалить: ${options.label}`, `Delete: ${options.label}`);
-
-    return (
-      <span
-        className={`studio-segment-editor__timeline-history${
-          options.canBack || options.canForward ? " is-history-active" : ""
-        }${options.withPlay ? " studio-segment-editor__timeline-history--before-play" : ""}`}
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        {options.canDelete && options.onDelete ? (
-          <button
-            className="studio-segment-editor__timeline-history-button studio-segment-editor__timeline-history-button--delete"
-            type="button"
-            disabled={isActionDisabled}
-            aria-label={deleteLabel}
-            title={deleteLabel}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              options.onDelete?.();
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M9 7V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="m9 11 .4 6M15 11l-.4 6M7.5 7l.8 12h7.4l.8-12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        ) : null}
-        <button
-          className="studio-segment-editor__timeline-history-button"
-          type="button"
-          disabled={isActionDisabled || !options.canBack}
-          aria-label={backLabel}
-          title={backLabel}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleSegmentTimelineHistoryBack(options.kind, options.segmentIndex);
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M10 7 5 12l5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M5.5 12H19" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button
-          className="studio-segment-editor__timeline-history-button"
-          type="button"
-          disabled={isActionDisabled || !options.canForward}
-          aria-label={forwardLabel}
-          title={forwardLabel}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleSegmentTimelineHistoryForward(options.kind, options.segmentIndex);
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="m14 7 5 5-5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M5 12h13.5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-          </svg>
-        </button>
-      </span>
-    );
-  };
+  const renderSegmentTimelineHistoryButtons = (options: WorkspaceSegmentTimelineHistoryButtonsOptions) =>
+    renderWorkspaceSegmentTimelineHistoryButtons(locale, isSegmentEditorStructureActionBusy, options, {
+      onBack: handleSegmentTimelineHistoryBack,
+      onForward: handleSegmentTimelineHistoryForward,
+    });
   const getSegmentTimelineSoundLabel = (
     segment: WorkspaceSegmentEditorDraftSegment,
     options?: { isEmpty?: boolean; isPending?: boolean },
@@ -21353,55 +21231,16 @@ export function WorkspacePage({
     segmentEditorFullPreviewStatus !== "idle" || segmentEditorFullPreviewTime > 0;
   const segmentEditorFullPreviewTimeLabel = formatWorkspaceSegmentEditorTime(segmentEditorFullPreviewTime);
   const renderSegmentEditorFullPreviewPlayhead = (options?: { showBubble?: boolean }) =>
-    shouldShowSegmentEditorFullPreviewPlayhead ? (
-      <span
-        className={`studio-segment-editor__timeline-playhead${options?.showBubble ? " has-bubble" : ""}${
-          segmentEditorFullPreviewStatus === "playing" ? " is-playing" : " is-paused"
-        }`}
-        style={
-          {
-            "--studio-segment-editor-full-preview-ratio": segmentEditorFullPreviewRatio,
-            "--studio-segment-editor-full-preview-bubble-translate": segmentEditorFullPreviewBubbleTranslate,
-          } as CSSProperties
-        }
-        aria-hidden="true"
-      >
-        {options?.showBubble ? (
-          <span className="studio-segment-editor__timeline-playhead-bubble">
-            {segmentEditorFullPreviewTimeLabel}
-          </span>
-        ) : null}
-      </span>
-    ) : null;
-  const renderSegmentTimelineBoundaryTimecode = (options: {
-    boundaryTime: number;
-    className?: string;
-    segment: WorkspaceSegmentEditorDraftSegment;
-    segmentDisplayNumber: number;
-  }) => {
-    const initialValue = formatWorkspaceSegmentEditorTime(options.boundaryTime);
-    const isManualDuration = normalizeWorkspaceSegmentDurationMode(options.segment.durationMode) === "manual";
-    const label = workspaceText(
-      locale,
-      `Конец сцены ${options.segmentDisplayNumber}`,
-      `Scene ${options.segmentDisplayNumber} end time`,
-    );
-
-    return (
-      <span
-        className={`studio-segment-editor__timeline-timecode studio-segment-editor__timeline-timecode-boundary${
-          isManualDuration ? " is-manual" : ""
-        }${
-          options.className ? ` ${options.className}` : ""
-        }`}
-        key={`timeline-boundary:${options.segment.index}:${initialValue}:${isManualDuration ? "manual" : "auto"}`}
-        aria-label={label}
-        title={label}
-      >
-        {initialValue}
-      </span>
-    );
-  };
+    renderWorkspaceSegmentEditorFullPreviewPlayhead({
+      bubbleTranslate: segmentEditorFullPreviewBubbleTranslate,
+      ratio: segmentEditorFullPreviewRatio,
+      shouldShow: shouldShowSegmentEditorFullPreviewPlayhead,
+      showBubble: options?.showBubble,
+      status: segmentEditorFullPreviewStatus,
+      timeLabel: segmentEditorFullPreviewTimeLabel,
+    });
+  const renderSegmentTimelineBoundaryTimecode = (options: WorkspaceSegmentTimelineBoundaryTimecodeOptions) =>
+    renderWorkspaceSegmentTimelineBoundaryTimecode(locale, options);
   const renderSegmentTimelineSceneBackdrop = (segment: WorkspaceSegmentEditorDraftSegment) => {
     const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
     const previewUrl = mediaSurface.displayUrl;
