@@ -384,6 +384,10 @@ import {
   WorkspaceMediaLibraryPreviewModal,
   WorkspaceVideoPreviewModal,
 } from "../features/workspace/workspace-preview-modals";
+import {
+  renderWorkspaceStudioInlinePreviewActions,
+  renderWorkspaceStudioShortsGenerationStatus,
+} from "../features/workspace/workspace-studio-preview-ui";
 import { WorkspaceContentPlanPanel } from "../features/workspace/workspace-content-plan-panel";
 import {
   WorkspaceLocalExampleModal,
@@ -4400,126 +4404,19 @@ export function WorkspacePage({
       } as CSSProperties)
     : undefined;
   const studioInlinePreviewDownloadName = getVideoDownloadName(generatedVideoModalTitle);
-  const renderStudioInlinePreviewActions = () => {
-    if (!visibleGeneratedVideoPlaybackUrl) {
-      return null;
-    }
-
-    return isGeneratedVideoPrimaryActionExpanded ? (
-      <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--expanded">
-        <button
-          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-          type="button"
-          aria-label={workspaceText(locale, "Улучшить", "Improve")}
-          title={
-            isGeneratedVideoProjectReadyForActions
-              ? workspaceText(locale, "Улучшить", "Improve")
-              : generatedVideoProjectPreparingTitle
-          }
-          disabled={!isGeneratedVideoProjectReadyForActions || isSegmentEditorLoading}
-          onClick={() => void handleOpenSegmentEditor()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-            <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          <span>{workspaceText(locale, "Улучшить", "Improve")}</span>
-        </button>
-        <button
-          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-          type="button"
-          aria-label={workspaceText(locale, "Опубликовать", "Publish")}
-          title={isGeneratedVideoProjectReadyForActions ? workspaceText(locale, "Опубликовать", "Publish") : generatedVideoProjectPreparingTitle}
-          disabled={!isGeneratedVideoProjectReadyForActions}
-          onClick={() => void handlePublishPreview()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 19V5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="m6.5 10.5 5.5-5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
-        </button>
-        <a
-          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
-          href={visibleGeneratedVideoPlaybackUrl}
-          download={studioInlinePreviewDownloadName}
-          aria-label={workspaceText(locale, "Скачать", "Download")}
-          title={workspaceText(locale, "Скачать", "Download")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>{workspaceText(locale, "Скачать", "Download")}</span>
-        </a>
-        <button
-          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
-          type="button"
-          aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
-          title={workspaceText(locale, "Закрыть видео", "Close video")}
-          onClick={handleDismissStudioPreview}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-    ) : (
-      <div className="studio-canvas-preview__generated-actions studio-canvas-preview__generated-actions--compact">
-        <button
-          className="studio-canvas-preview__quick-action"
-          type="button"
-          aria-label={workspaceText(locale, "Редактировать сцены", "Edit scenes")}
-          title={
-            isGeneratedVideoProjectReadyForActions
-              ? workspaceText(locale, "Редактировать сцены", "Edit scenes")
-              : generatedVideoProjectPreparingTitle
-          }
-          disabled={!isGeneratedVideoProjectReadyForActions || isSegmentEditorLoading}
-          onClick={() => void handleOpenSegmentEditor()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-            <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </button>
-        <button
-          className="studio-canvas-preview__quick-action"
-          type="button"
-          aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
-          title={isGeneratedVideoProjectReadyForActions ? workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube") : generatedVideoProjectPreparingTitle}
-          disabled={!isGeneratedVideoProjectReadyForActions}
-          onClick={() => void handlePublishPreview()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 19V5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="m6.5 10.5 5.5-5.5 5.5 5.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <a
-          className="studio-canvas-preview__quick-action"
-          href={visibleGeneratedVideoPlaybackUrl}
-          download={studioInlinePreviewDownloadName}
-          aria-label={workspaceText(locale, "Скачать", "Download")}
-          title={workspaceText(locale, "Скачать", "Download")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </a>
-        <button
-          className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--close"
-          type="button"
-          aria-label={workspaceText(locale, "Закрыть видео", "Close video")}
-          title={workspaceText(locale, "Закрыть видео", "Close video")}
-          onClick={handleDismissStudioPreview}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-    );
-  };
+  const renderStudioInlinePreviewActions = () =>
+    renderWorkspaceStudioInlinePreviewActions({
+      downloadName: studioInlinePreviewDownloadName,
+      isExpanded: isGeneratedVideoPrimaryActionExpanded,
+      isProjectReadyForActions: isGeneratedVideoProjectReadyForActions,
+      isSegmentEditorLoading,
+      locale,
+      onDismiss: handleDismissStudioPreview,
+      onOpenSegmentEditor: handleOpenSegmentEditor,
+      onPublish: handlePublishPreview,
+      playbackUrl: visibleGeneratedVideoPlaybackUrl,
+      projectPreparingTitle: generatedVideoProjectPreparingTitle,
+    });
   const mediaLibraryPreviewModalSurface = mediaLibraryPreviewModal
     ? getWorkspaceMediaLibraryResolvedMediaSurface(mediaLibraryPreviewModal, "media-viewer")
     : null;
@@ -24981,13 +24878,7 @@ export function WorkspacePage({
       ) : null}
     </aside>
   );
-  const renderStudioShortsGenerationStatus = () => (
-    <div className="studio-canvas-preview__generation-status">
-      <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
-      <strong>{locale === "en" ? "Generating Shorts" : "Генерируем Shorts"}</strong>
-      <span>{locale === "en" ? "Assembling segments into a video" : "Собираем сегменты в видео"}</span>
-    </div>
-  );
+  const renderStudioShortsGenerationStatus = () => renderWorkspaceStudioShortsGenerationStatus(locale);
 
   return (
     <>
