@@ -1197,6 +1197,14 @@ const buildStudioSegmentVoiceoverJobAudioProxyUrl = (jobId) => {
     const proxyUrl = new URL(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
+const buildStudioProjectVoiceoverJobAudioProxyUrl = (jobId) => {
+    const normalizedJobId = normalizeGenerationText(jobId);
+    if (!normalizedJobId) {
+        return null;
+    }
+    const proxyUrl = new URL(`/api/studio/project-voiceover/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
+    return `${proxyUrl.pathname}${proxyUrl.search}`;
+};
 const buildStudioPlaybackUrl = (jobId, version) => {
     const normalizedJobId = normalizeGenerationText(jobId);
     if (!normalizedJobId) {
@@ -2345,6 +2353,19 @@ const normalizeAdsflowSegmentVoiceoverAsset = (jobId, payload) => {
         remoteUrl,
     };
 };
+const normalizeAdsflowProjectVoiceoverAsset = (jobId, payload) => {
+    const remoteUrl = buildStudioProjectVoiceoverJobAudioProxyUrl(jobId);
+    if (!remoteUrl) {
+        throw new Error("Generated project voiceover is unavailable.");
+    }
+    return {
+        assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        fileName: normalizeGenerationText(payload?.file_name) || `project-voiceover-${jobId}.wav`,
+        fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        mimeType: normalizeGenerationText(payload?.mime_type) || "audio/wav",
+        remoteUrl,
+    };
+};
 const normalizeSegmentVoiceoverSpeechWords = (value) => {
     if (!Array.isArray(value)) {
         return [];
@@ -3322,6 +3343,18 @@ const fetchAdsflowSegmentVoiceoverJobStatus = async (jobId, user) => {
     }
     const externalUserId = await resolveStudioExternalUserId(user);
     return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowProjectVoiceoverJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/project-voiceover/jobs/${encodeURIComponent(safeJobId)}`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     }));
@@ -4792,6 +4825,75 @@ export async function createStudioSegmentVoiceoverJob(text, user, options) {
         status: String(payload.status ?? "queued"),
     };
 }
+export async function createStudioProjectVoiceoverJob(text, user, options) {
+    assertAdsflowConfigured();
+    const normalizedText = normalizeGenerationText(text);
+    if (!normalizedText) {
+        throw new Error("Voiceover text is required.");
+    }
+    const normalizedLanguage = normalizeStudioLanguage(options?.language);
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
+    const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+    const segments = (options?.segments ?? [])
+        .map((segment, index) => {
+        const segmentText = normalizeGenerationText(segment.text);
+        if (!segmentText) {
+            return null;
+        }
+        return {
+            duration: normalizeNumber(segment.targetDurationSeconds),
+            segment_index: normalizeNonNegativeInteger(segment.segmentIndex) ?? index,
+            target_duration: normalizeNumber(segment.targetDurationSeconds),
+            text: segmentText,
+        };
+    })
+        .filter((segment) => Boolean(segment));
+    if (!normalizedProjectId) {
+        throw new Error("Project id is required for project voiceover generation.");
+    }
+    if (!normalizedVoiceType || normalizedVoiceType === "none") {
+        throw new Error("Voice type is required for project voiceover generation.");
+    }
+    if (segments.length === 0) {
+        throw new Error("At least one voiceover segment is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    let payload;
+    try {
+        payload = await postAdsflowJson("/api/web/project-voiceover/jobs", {
+            admin_token: env.adsflowAdminToken,
+            credit_cost: requiredCredits,
+            external_user_id: externalUserId,
+            language: normalizedLanguage,
+            project_id: normalizedProjectId,
+            segments,
+            text: normalizedText,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+            voice_type: normalizedVoiceType,
+        }, {
+            retryDelaysMs: [],
+            timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+        });
+    }
+    catch (error) {
+        if (isAdsflowHttpStatusError(error, 404)) {
+            throw new Error("AdsFlow project voiceover endpoint is not deployed. Deploy /api/web/project-voiceover/jobs before enabling whole-video voiceover generation.");
+        }
+        throw error;
+    }
+    const jobId = String(payload.job_id ?? "").trim();
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a project voiceover job id.");
+    }
+    return {
+        jobId,
+        profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
+        status: String(payload.status ?? "queued"),
+    };
+}
 export async function getStudioSegmentAiPhotoJobStatus(jobId, user) {
     const safeJobId = String(jobId ?? "").trim();
     const waveSpeedPredictionId = parseWaveSpeedSegmentAiPhotoPredictionId(safeJobId);
@@ -4988,6 +5090,29 @@ export async function getStudioSegmentVoiceoverJobStatus(jobId, user) {
     const status = String(payload.status ?? "queued").trim() || "queued";
     const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
     const asset = payload.asset ? normalizeAdsflowSegmentVoiceoverAsset(resolvedJobId, payload.asset) : undefined;
+    const speechStartTime = normalizeNumber(payload.speech_start_time);
+    const speechEndTime = normalizeNumber(payload.speech_end_time);
+    const speechDuration = normalizeNumber(payload.speech_duration) ??
+        (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: resolvedJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
+        speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
+        speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
+        speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
+        status,
+    };
+}
+export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
+    const payload = await fetchAdsflowProjectVoiceoverJobStatus(jobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+    const asset = payload.asset ? normalizeAdsflowProjectVoiceoverAsset(resolvedJobId, payload.asset) : undefined;
     const speechStartTime = normalizeNumber(payload.speech_start_time);
     const speechEndTime = normalizeNumber(payload.speech_end_time);
     const speechDuration = normalizeNumber(payload.speech_duration) ??
@@ -5561,6 +5686,18 @@ export async function getStudioSegmentVoiceoverJobFileProxyTarget(jobId, user) {
     assertAdsflowConfigured();
     const externalUserId = await resolveStudioExternalUserId(user);
     return buildAdsflowUrl(`/api/web/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}/file`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    });
+}
+export async function getStudioProjectVoiceoverJobFileProxyTarget(jobId, user) {
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    assertAdsflowConfigured();
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return buildAdsflowUrl(`/api/web/project-voiceover/jobs/${encodeURIComponent(safeJobId)}/file`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     });

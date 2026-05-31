@@ -9,11 +9,13 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
+  isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
@@ -253,6 +255,35 @@ describe("workspace segment editor full preview", () => {
       { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
     ]);
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);
+  });
+
+  it("requires active music and all remaining non-music audio before starting full preview", () => {
+    const tracks = [
+      { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
+      { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 3.5, timelineStartTime: 0 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 12, timelineStartTime: 8 },
+      { key: "old-sound", kind: "sound", timelineEndTime: 1, timelineStartTime: 0 },
+    ];
+    const activeTracks = [
+      { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 3.5, timelineStartTime: 0 },
+    ];
+
+    expect(
+      selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(tracks, activeTracks, 2),
+    ).toEqual([
+      { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
+      { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 3.5, timelineStartTime: 0 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 12, timelineStartTime: 8 },
+    ]);
+  });
+
+  it("treats preview audio as ready only at or above the required media ready state", () => {
+    expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(3, 3)).toBe(true);
+    expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(2, 3)).toBe(false);
+    expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(Number.NaN, 3)).toBe(false);
   });
 
   it("ignores old voice starts outside the startup gate window", () => {

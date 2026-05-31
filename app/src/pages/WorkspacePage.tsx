@@ -572,6 +572,8 @@ import {
   type WorkspaceSegmentTalkingPhotoSpeakerPreviewCreateRequest,
   type WorkspaceSegmentTalkingPhotoSpeakerPreview,
   type WorkspaceSegmentSceneSoundJobCreateRequest,
+  type WorkspaceProjectVoiceoverJobCreateRequest,
+  type WorkspaceProjectVoiceoverJobStatusResponse,
   type WorkspaceSegmentVoiceoverJobCreateRequest,
   type WorkspaceSegmentVoiceoverJobStatusResponse,
   type WorkspaceSegmentAiVideoJobCreateResponse,
@@ -745,12 +747,14 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   getWorkspaceSegmentEditorFullPreviewPlaybackEndTime,
+  isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
@@ -9649,8 +9653,16 @@ export function WorkspacePage({
     segment: WorkspaceSegmentEditorDraftSegment,
     language: StudioLanguage,
     voiceType: string,
+    session?: WorkspaceSegmentEditorDraftSession | null,
   ) => {
-    if (!segment.voiceoverAsset) {
+    const sessionForVoice = session
+      ? {
+          ...session,
+          language,
+          voiceType,
+        }
+      : null;
+    if (!isWorkspaceSegmentVoiceoverPlaybackFresh(segment, sessionForVoice)) {
       return false;
     }
 
@@ -12437,6 +12449,69 @@ export function WorkspacePage({
           options.runId,
         );
       }
+    }
+  };
+
+  const pollSegmentEditorProjectVoiceoverJob = async (
+    jobId: string,
+    initialStatus = "queued",
+    options: {
+      initialSegmentIndex: number;
+      language: StudioLanguage;
+      projectId: number;
+      voiceType: string;
+    },
+  ) => {
+    const safeJobId = jobId.trim();
+
+    if (!safeJobId) {
+      throw new Error("Не удалось запустить задачу озвучки видео.");
+    }
+
+    let latestStatus = initialStatus;
+    const startedAt = Date.now();
+
+    while (true) {
+      if (Date.now() - startedAt >= WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS) {
+        throw new Error("Озвучка видео генерируется слишком долго. Попробуйте запустить ещё раз.");
+      }
+
+      const response = await fetch(`/api/studio/project-voiceover/jobs/${encodeURIComponent(safeJobId)}`);
+      const payload = (await response.json().catch(() => null)) as WorkspaceProjectVoiceoverJobStatusResponse | null;
+
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error ?? "Не удалось получить статус генерации озвучки видео.");
+      }
+
+      latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
+      applyWorkspaceProfile(payload.data.profile);
+
+      if (payload.data.asset || isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+        selectedVoiceIdByLanguageRef.current[options.language] = options.voiceType;
+        setSelectedVoiceId(options.voiceType);
+        setSelectedLanguage(options.language);
+        setSegmentTimelineGlobalVoiceDraft({
+          isEnabled: true,
+          language: options.language,
+          voiceId: options.voiceType,
+        });
+        await ensureSegmentEditorDraftForProject(options.projectId, {
+          bypassCache: true,
+          discardLocalDraft: true,
+          forceRefresh: true,
+          initialSegmentIndex: options.initialSegmentIndex,
+          initialSegmentMode: "route",
+          openDraft: false,
+          syncRoute: false,
+        });
+        return;
+      }
+
+      if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+        throw new Error(payload.data.error ?? "Не удалось сгенерировать озвучку видео.");
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
     }
   };
 
@@ -18200,10 +18275,10 @@ export function WorkspacePage({
     }
 
     const targetsToGenerate = targets.filter(
-      (segment) => !isSegmentEditorVoiceoverFreshForVoice(segment, voiceDraft.language, voiceType),
+      (segment) => !isSegmentEditorVoiceoverFreshForVoice(segment, voiceDraft.language, voiceType, currentDraft),
     );
-    const perSegmentCost = getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
-    const requiredCredits = perSegmentCost * targetsToGenerate.length;
+    const voiceoverCost = getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
+    const requiredCredits = targetsToGenerate.length > 0 ? voiceoverCost : 0;
     if (workspaceBalance !== null && requiredCredits > 0 && workspaceBalance < requiredCredits) {
       setSegmentEditorVideoError(null);
       openInsufficientCreditsModal("segment_voiceover", requiredCredits);
@@ -18215,32 +18290,80 @@ export function WorkspacePage({
     setInsufficientCreditsContext(null);
 
     try {
-      const results = await Promise.all(
-        targetsToGenerate.map((segment) =>
-          handleSegmentEditorVoiceoverGenerate({
-            language: voiceDraft.language,
-            segmentIndex: segment.index,
-            voiceType,
-          }),
-        ),
-      );
+      if (targetsToGenerate.length > 0) {
+        const projectId = currentDraft.projectId;
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+          throw new Error(workspaceText(locale, "Озвучку видео можно создать только для сохраненного проекта.", "Whole-video voiceover can be generated only for a saved project."));
+        }
 
-      if (!results.every(Boolean)) {
-        return;
+        const voiceoverSegments = targets.map((segment) => ({
+          segmentIndex: segment.index,
+          segment_index: segment.index,
+          targetDuration:
+            getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
+            getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds(segment, currentDraft) ??
+            null,
+          target_duration:
+            getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
+            getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds(segment, currentDraft) ??
+            null,
+          text: normalizeWorkspaceSegmentEditorTextForCompare(segment.text),
+        }));
+        const voiceoverText = voiceoverSegments.map((segment) => segment.text).join(" ").trim();
+        const response = await fetch("/api/studio/project-voiceover/jobs", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            language: voiceDraft.language,
+            projectId,
+            project_id: projectId,
+            segments: voiceoverSegments,
+            text: voiceoverText,
+            voiceType,
+            voice_type: voiceType,
+          } satisfies WorkspaceProjectVoiceoverJobCreateRequest),
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
+
+        if (response.status === 402) {
+          openInsufficientCreditsModal("segment_voiceover", requiredCredits);
+          return;
+        }
+
+        if (!response.ok || !payload?.data?.jobId) {
+          throw new Error(payload?.error ?? "Не удалось запустить генерацию озвучки видео.");
+        }
+
+        applyWorkspaceProfile(payload.data.profile);
+        await pollSegmentEditorProjectVoiceoverJob(payload.data.jobId, payload.data.status, {
+          initialSegmentIndex: activeSegment?.index ?? targets[0]?.index ?? 0,
+          language: voiceDraft.language,
+          projectId,
+          voiceType,
+        });
+      } else {
+        updateSegmentEditorDraft((draft) =>
+          applyGeneratedSegmentEditorGlobalVoiceToAllSegments(draft, voiceType, voiceDraft.language),
+        );
       }
 
       selectedVoiceIdByLanguageRef.current[voiceDraft.language] = voiceType;
       setSelectedVoiceId(voiceType);
       setSelectedLanguage(voiceDraft.language);
-      updateSegmentEditorDraft((draft) =>
-        applyGeneratedSegmentEditorGlobalVoiceToAllSegments(draft, voiceType, voiceDraft.language),
-      );
       setSegmentTimelineGlobalVoiceDraft({
         isEnabled: true,
         language: voiceDraft.language,
         voiceId: voiceType,
       });
       showStudioToast(workspaceText(locale, "Озвучка всего видео готова.", "Whole-video voiceover is ready."));
+    } catch (error) {
+      setSegmentEditorVideoError(
+        error instanceof Error
+          ? error.message
+          : workspaceText(locale, "Не удалось сгенерировать озвучку видео.", "Failed to generate whole-video voiceover."),
+      );
     } finally {
       setIsSegmentEditorGeneratingGlobalVoiceover(false);
     }
@@ -20126,8 +20249,13 @@ export function WorkspacePage({
 
       const minimumReadyState = options?.minimumReadyState ?? HTMLMediaElement.HAVE_CURRENT_DATA;
       const timeoutMs = options?.timeoutMs ?? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_READY_TIMEOUT_MS;
-      if (element.readyState >= minimumReadyState) {
+      if (isWorkspaceSegmentEditorFullPreviewAudioReadyState(element.readyState, minimumReadyState)) {
         resolve(true);
+        return;
+      }
+
+      if (element.error) {
+        resolve(false);
         return;
       }
 
@@ -20150,7 +20278,7 @@ export function WorkspacePage({
         resolve(result);
       };
       const handlePotentialReady = () => {
-        if (element.readyState >= minimumReadyState) {
+        if (isWorkspaceSegmentEditorFullPreviewAudioReadyState(element.readyState, minimumReadyState)) {
           settle(true);
         }
       };
@@ -20158,7 +20286,7 @@ export function WorkspacePage({
         settle(false);
       };
       const timeoutId = window.setTimeout(() => {
-        settle(element.readyState >= minimumReadyState);
+        settle(isWorkspaceSegmentEditorFullPreviewAudioReadyState(element.readyState, minimumReadyState));
       }, timeoutMs);
 
       element.addEventListener("loadedmetadata", handlePotentialReady);
@@ -20315,9 +20443,9 @@ export function WorkspacePage({
       unlockSegmentEditorFullPreviewAudioElement(track, element);
     });
   };
-  const prepareSegmentEditorFullPreviewAudioAtTime = async (currentTime: number, token: number) => {
+  const prepareSegmentEditorFullPreviewAudioAtTime = async (currentTime: number, token: number): Promise<boolean> => {
     if (typeof document === "undefined" || typeof window === "undefined") {
-      return;
+      return false;
     }
 
     const tracks = segmentEditorFullPreviewAudioTracksRef.current.filter(
@@ -20331,9 +20459,16 @@ export function WorkspacePage({
           segmentEditorFullPreviewAudioRefs.current[track.key],
         )
       ),
+      {
+        audioElements: segmentEditorFullPreviewAudioRefs.current,
+        currentTime,
+      },
     );
-    const requiredReadyTracks = tracks.filter(
-      (track) => track.kind !== "music" && track.timelineEndTime > currentTime,
+    const startMinimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+    const requiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
+      tracks,
+      activeTracks,
+      currentTime,
     );
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.start", {
       activeTrackCount: activeTracks.length,
@@ -20346,7 +20481,7 @@ export function WorkspacePage({
     tracks.forEach((track) => {
       const element = ensureSegmentEditorFullPreviewAudioElement(track);
       element.volume = 0;
-      ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+      ensureSegmentEditorFullPreviewMediaElementLoading(element, startMinimumReadyState);
       seekSegmentEditorFullPreviewPreparedAudioElement(track, element, currentTime);
     });
 
@@ -20361,23 +20496,56 @@ export function WorkspacePage({
       });
 
     if (requiredReadyTracks.length > 0) {
-      await Promise.race([
-        Promise.all(
-          requiredReadyTracks.map((track) =>
-            waitForSegmentEditorFullPreviewMediaElementReady(ensureSegmentEditorFullPreviewAudioElement(track), {
-              minimumReadyState: HTMLMediaElement.HAVE_CURRENT_DATA,
-              timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
-            }),
+      const readyResults = await Promise.all(
+        requiredReadyTracks.map(async (track) => {
+          const element = ensureSegmentEditorFullPreviewAudioElement(track);
+          const isReady = await waitForSegmentEditorFullPreviewMediaElementReady(element, {
+            minimumReadyState: startMinimumReadyState,
+            timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
+          });
+          return { element, isReady, track };
+        }),
+      );
+
+      if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
+        return false;
+      }
+
+      const unreadyTracks = readyResults.filter(
+        ({ isReady, track }) => !isReady || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+      );
+      if (unreadyTracks.length > 0) {
+        writeSegmentEditorFullPreviewDebugTrace("audio.prepare.unready", {
+          currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+          minimumReadyState: startMinimumReadyState,
+          tracks: unreadyTracks.map(({ element, track }) =>
+            getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
           ),
-        ),
-        new Promise((resolve) =>
-          window.setTimeout(resolve, WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS),
-        ),
-      ]);
+        });
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.full-preview.audio-not-ready",
+          {
+            currentTime,
+            failedTrackCount: unreadyTracks.length,
+            minimumReadyState: startMinimumReadyState,
+            tracks: unreadyTracks.map(({ element, track }) => ({
+              key: track.key,
+              kind: track.kind,
+              networkState: element.networkState,
+              readyState: element.readyState,
+              timelineEndTime: track.timelineEndTime,
+              timelineStartTime: track.timelineStartTime,
+              url: track.url,
+            })),
+          },
+          { level: "warn" },
+        );
+        return false;
+      }
     }
 
     if (activeTracks.length === 0) {
-      return;
+      return true;
     }
 
     const hasActiveVoiceTrack = activeTracks.some(isSegmentEditorFullPreviewVoiceAudioTrack);
@@ -20399,33 +20567,90 @@ export function WorkspacePage({
     });
     const readyPromises = activeElements.map(({ element }) =>
       waitForSegmentEditorFullPreviewMediaElementReady(element, {
-        minimumReadyState: HTMLMediaElement.HAVE_CURRENT_DATA,
+        minimumReadyState: startMinimumReadyState,
         timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
       }),
     );
-    const playPromises = activeElements.map(({ element, track }) =>
-      element.play().then(
-        () => {
-          segmentEditorFullPreviewAudioPlayingKeysRef.current.add(track.key);
-          return true;
-        },
-        () => false,
+    const activeReadyResults = await Promise.all(readyPromises);
+    if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
+      activeElements.forEach(({ element }) => {
+        element.pause();
+      });
+      return false;
+    }
+
+    const unreadyActiveElements = activeElements.filter(
+      ({ track }, index) =>
+        !activeReadyResults[index] || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+    );
+    if (unreadyActiveElements.length > 0) {
+      writeSegmentEditorFullPreviewDebugTrace("audio.prepare.active-unready", {
+        currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+        minimumReadyState: startMinimumReadyState,
+        tracks: unreadyActiveElements.map(({ element, track }) =>
+          getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
+        ),
+      });
+      return false;
+    }
+
+    const playResults = await Promise.all(
+      activeElements.map(
+        ({ element, track }) =>
+          new Promise<boolean>((resolve) => {
+            let settled = false;
+            let timeoutId: number | null = null;
+            const settle = (result: boolean) => {
+              if (settled) {
+                return;
+              }
+
+              settled = true;
+              if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+              }
+              resolve(result);
+            };
+            timeoutId = window.setTimeout(
+              () => settle(false),
+              WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
+            );
+            void element.play().then(
+              () => {
+                segmentEditorFullPreviewAudioPlayingKeysRef.current.add(track.key);
+                settle(true);
+              },
+              () => settle(false),
+            );
+          }),
       ),
     );
-    await Promise.race([
-      Promise.all([...readyPromises, ...playPromises]),
-      new Promise((resolve) =>
-        window.setTimeout(resolve, WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS),
-      ),
-    ]);
+    const rejectedPlayElements = activeElements.filter((_, index) => !playResults[index]);
+    if (rejectedPlayElements.length > 0) {
+      rejectedPlayElements.forEach(({ track }) => {
+        segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
+      });
+      writeSegmentEditorFullPreviewDebugTrace("audio.prepare.play-rejected", {
+        currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+        tracks: rejectedPlayElements.map(({ element, track }) =>
+          getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
+        ),
+      });
+      return false;
+    }
 
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
       activeElements.forEach(({ element }) => {
         element.pause();
       });
-      return;
+      return false;
     }
 
+    activeElements.forEach(({ element, track }) => {
+      if (!element.paused) {
+        segmentEditorFullPreviewAudioPlayingKeysRef.current.add(track.key);
+      }
+    });
     const hasPendingVoiceStart = hasSegmentEditorFullPreviewPendingVoiceStart(activeTracks, currentTime);
     const audibleActiveKeys = new Set(
       selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, hasPendingVoiceStart).map(
@@ -20458,6 +20683,7 @@ export function WorkspacePage({
         getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
       ),
     });
+    return true;
   };
   const syncSegmentEditorFullPreviewAudio = (currentTime: number) => {
     if (typeof document === "undefined") {
@@ -20709,8 +20935,24 @@ export function WorkspacePage({
     setSegmentEditorFullPreviewPlaybackTime(startTime);
     syncSegmentEditorFullPreviewVisual(startTime, { playVideo: false });
     primeSegmentEditorFullPreviewAudioTracks(startTime);
-    await prepareSegmentEditorFullPreviewAudioAtTime(startTime, token);
+    const isAudioPrepared = await prepareSegmentEditorFullPreviewAudioAtTime(startTime, token);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
+      return;
+    }
+    if (!isAudioPrepared) {
+      stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
+      setSegmentEditorFullPreviewPlaybackTime(startTime);
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Не удалось подготовить аудио предпросмотра. Проверьте озвучку и попробуйте снова.",
+          "Could not prepare preview audio. Check the voiceover and try again.",
+        ),
+      );
+      writeSegmentEditorFullPreviewDebugTrace("start.audio-not-ready", {
+        audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
+        startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
+      });
       return;
     }
 
@@ -24322,14 +24564,15 @@ export function WorkspacePage({
         segment,
         effectiveSegmentTimelineGlobalVoiceDraft.language,
         segmentTimelineGlobalVoiceId,
+        segmentEditorDraft,
       ),
   );
-  const segmentTimelineGlobalVoicePerSegmentCost =
+  const segmentTimelineGlobalVoiceCost =
     effectiveSegmentTimelineGlobalVoiceDraft.isEnabled && segmentTimelineGlobalVoiceId
       ? getStudioSegmentVoiceoverCreditCost(segmentTimelineGlobalVoiceId) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST
       : 0;
   const segmentTimelineGlobalVoiceoverCost =
-    segmentTimelineGlobalVoicePerSegmentCost * segmentTimelineGlobalVoiceTargetsToGenerate.length;
+    segmentTimelineGlobalVoiceTargetsToGenerate.length > 0 ? segmentTimelineGlobalVoiceCost : 0;
   const segmentTimelineGlobalVoiceGenerateDisabledReason =
     !segmentEditorDraft
       ? workspaceText(locale, "Откройте проект для редактирования.", "Open a project for editing.")

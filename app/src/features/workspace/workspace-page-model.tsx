@@ -372,7 +372,7 @@ export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_DUCKED_VOLUME = 0.24;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME = 1;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS = 0.09;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_READY_TIMEOUT_MS = 900;
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS = 5000;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS = 12000;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_LOOKAHEAD_SECONDS = 7.5;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS = 0.6;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS = 0.035;
@@ -678,6 +678,25 @@ export type WorkspaceSegmentVoiceoverJobCreateRequest = {
   voice_type?: string;
 };
 
+export type WorkspaceProjectVoiceoverSegmentRequest = {
+  duration?: number | null;
+  segmentIndex?: number;
+  segment_index?: number;
+  targetDuration?: number | null;
+  target_duration?: number | null;
+  text: string;
+};
+
+export type WorkspaceProjectVoiceoverJobCreateRequest = {
+  language: StudioLanguage;
+  projectId?: number;
+  project_id?: number;
+  segments: WorkspaceProjectVoiceoverSegmentRequest[];
+  text: string;
+  voiceType?: string;
+  voice_type?: string;
+};
+
 export type WorkspaceSegmentVoiceoverJobStatusPayload = WorkspaceSegmentAiPhotoJobStatusPayload & {
   speechDuration?: number | null;
   speechDurationSource?: "audio" | null;
@@ -690,6 +709,8 @@ export type WorkspaceSegmentVoiceoverJobStatusResponse = {
   data?: WorkspaceSegmentVoiceoverJobStatusPayload;
   error?: string;
 };
+
+export type WorkspaceProjectVoiceoverJobStatusResponse = WorkspaceSegmentVoiceoverJobStatusResponse;
 
 export type WorkspaceSegmentAiVideoJobCreatePayload = {
   jobId: string;

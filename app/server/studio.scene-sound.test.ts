@@ -224,6 +224,81 @@ describe("studio segment voiceover jobs", () => {
     );
   });
 
+  it("forwards one project voiceover job with scene texts and one voiceover credit cost", async () => {
+    const { createStudioProjectVoiceoverJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/project-voiceover/jobs") {
+          return jsonResponse({
+            job_id: "project-voiceover-job-1",
+            status: "queued",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioProjectVoiceoverJob("First scene Second scene", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      language: "ru",
+      projectId: 3657,
+      segments: [
+        { segmentIndex: 0, targetDurationSeconds: 3.5, text: "First scene" },
+        { segmentIndex: 1, targetDurationSeconds: 4.1, text: "Second scene" },
+      ],
+      voiceType: "Liam",
+    });
+
+    expect(job).toEqual(expect.objectContaining({
+      jobId: "project-voiceover-job-1",
+      status: "queued",
+    }));
+    expect(calls.find((call) => call.pathname === "/api/web/project-voiceover/jobs")?.body).toEqual(
+      expect.objectContaining({
+        admin_token: "admin-token",
+        credit_cost: 5,
+        external_user_id: "email:alex@example.test",
+        language: "ru",
+        project_id: 3657,
+        text: "First scene Second scene",
+        voice_type: "Liam",
+      }),
+    );
+    expect(calls.find((call) => call.pathname === "/api/web/project-voiceover/jobs")?.body.segments).toEqual([
+      {
+        duration: 3.5,
+        segment_index: 0,
+        target_duration: 3.5,
+        text: "First scene",
+      },
+      {
+        duration: 4.1,
+        segment_index: 1,
+        target_duration: 4.1,
+        text: "Second scene",
+      },
+    ]);
+  });
+
   it("normalizes speech metadata from AdsFlow status responses", async () => {
     const { getStudioSegmentVoiceoverJobStatus } = await loadStudioModule();
 

@@ -303,6 +303,30 @@ export const selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks = <
   ];
 };
 
+export const selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart = <
+  Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
+>(
+  tracks: Track[],
+  activeTracks: Track[],
+  currentTime: number,
+): Track[] => {
+  const safeCurrentTime = normalizePreviewTime(currentTime) ?? 0;
+  const activeKeys = new Set(activeTracks.map((track) => track.key));
+
+  return tracks.filter((track) => {
+    if (activeKeys.has(track.key)) {
+      return true;
+    }
+
+    if (track.kind === "music") {
+      return false;
+    }
+
+    const timelineEndTime = normalizePreviewTime(track.timelineEndTime);
+    return timelineEndTime !== null && timelineEndTime > safeCurrentTime;
+  });
+};
+
 export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks = <
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
 >(
@@ -382,6 +406,14 @@ export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed = (
 
   return currentSourceTime >= expectedSourceTime + minimumProgressSeconds;
 };
+
+export const isWorkspaceSegmentEditorFullPreviewAudioReadyState = (
+  readyState: number,
+  minimumReadyState: number,
+) =>
+  Number.isFinite(readyState) &&
+  Number.isFinite(minimumReadyState) &&
+  readyState >= Math.max(0, minimumReadyState);
 
 export const getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime = (
   track: WorkspaceSegmentEditorFullPreviewAudioClockTrack,
