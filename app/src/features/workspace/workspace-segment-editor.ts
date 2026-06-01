@@ -34,6 +34,7 @@ import type {
   WorkspaceSegmentEditorMediaUploadScope,
   WorkspaceSegmentEditorSegment,
   WorkspaceSegmentEditorSession,
+  WorkspaceSegmentSceneSoundPayload,
   WorkspaceSegmentEditorVideoAction,
   WorkspaceSegmentMediaType,
   WorkspaceSegmentPreviewKind,
@@ -1867,6 +1868,70 @@ export const getWorkspaceSegmentTimelineHistoryKey = (
   segmentIndex?: number | null,
 ) => `${kind}:${kind === "music" ? "global" : Number(segmentIndex ?? -1)}`;
 
+const cloneWorkspaceSegmentSceneSoundPayload = (
+  payload: WorkspaceSegmentSceneSoundPayload | null | undefined,
+): WorkspaceSegmentSceneSoundPayload | null => (payload ? { ...payload } : null);
+
+const getWorkspaceSegmentSceneSoundStateAssetId = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  getPositiveWorkspaceMediaAssetId(segment?.sceneSoundAsset?.assetId) ??
+  getPositiveWorkspaceMediaAssetId(segment?.sceneSound?.assetId) ??
+  getPositiveWorkspaceMediaAssetId(segment?.sceneSoundAssetId) ??
+  getPositiveWorkspaceMediaAssetId(segment?.scene_sound?.media_asset_id) ??
+  getPositiveWorkspaceMediaAssetId(segment?.scene_sound_asset_id);
+
+export const clearWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentEditorDraftSegment>(segment: T): T =>
+  ({
+    ...segment,
+    sceneSound: null,
+    sceneSoundAsset: null,
+    sceneSoundAssetId: null,
+    scene_sound: null,
+    scene_sound_asset_id: null,
+    sceneSoundGeneratedFromPrompt: null,
+    sceneSoundPrompt: "",
+    sceneSoundPromptInitialized: false,
+  }) as T;
+
+export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentEditorDraftSegment>(
+  segment: T,
+  source: WorkspaceSegmentEditorDraftSegment | null | undefined,
+): T => {
+  if (!source) {
+    return clearWorkspaceSegmentSceneSoundState(segment);
+  }
+
+  const sceneSoundAsset = cloneStudioCustomVideoFile(source.sceneSoundAsset);
+  const sceneSoundAssetId = getWorkspaceSegmentSceneSoundStateAssetId(source);
+  const sceneSoundGeneratedFromPrompt =
+    typeof source.sceneSoundGeneratedFromPrompt === "string" && source.sceneSoundGeneratedFromPrompt.trim()
+      ? source.sceneSoundGeneratedFromPrompt
+      : null;
+  const sceneSoundPrompt = typeof source.sceneSoundPrompt === "string" ? source.sceneSoundPrompt : "";
+
+  return {
+    ...segment,
+    sceneSound: cloneStudioCustomVideoFile(source.sceneSound ?? null),
+    sceneSoundAsset,
+    sceneSoundAssetId,
+    scene_sound: cloneWorkspaceSegmentSceneSoundPayload(source.scene_sound),
+    scene_sound_asset_id:
+      getPositiveWorkspaceMediaAssetId(source.scene_sound_asset_id) ??
+      getPositiveWorkspaceMediaAssetId(source.scene_sound?.media_asset_id) ??
+      sceneSoundAssetId,
+    sceneSoundGeneratedFromPrompt,
+    sceneSoundPrompt,
+    sceneSoundPromptInitialized: Boolean(
+      source.sceneSoundPromptInitialized ||
+        sceneSoundPrompt ||
+        sceneSoundGeneratedFromPrompt ||
+        sceneSoundAsset ||
+        sceneSoundAssetId,
+    ),
+  } as T;
+};
+
 export const restoreWorkspaceSegmentTimelineSnapshot = (
   segment: WorkspaceSegmentEditorDraftSegment,
   snapshot: WorkspaceSegmentEditorDraftSegment,
@@ -1915,13 +1980,7 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
   }
 
   if (kind === "sound") {
-    return {
-      ...segment,
-      sceneSoundAsset: cloneStudioCustomVideoFile(snapshot.sceneSoundAsset),
-      sceneSoundGeneratedFromPrompt: snapshot.sceneSoundGeneratedFromPrompt,
-      sceneSoundPrompt: snapshot.sceneSoundPrompt,
-      sceneSoundPromptInitialized: snapshot.sceneSoundPromptInitialized,
-    };
+    return restoreWorkspaceSegmentSceneSoundState(segment, snapshot);
   }
 
   return {
@@ -4770,7 +4829,11 @@ export const createWorkspaceSegmentEditorInsertedSegment = (options: {
     originalText: baseText,
     originalTextByLanguage: { ...textByLanguage },
     photoAnimationSourceAsset: null,
+    sceneSound: null,
     sceneSoundAsset: null,
+    sceneSoundAssetId: null,
+    scene_sound: null,
+    scene_sound_asset_id: null,
     sceneSoundGeneratedFromPrompt: null,
     sceneSoundPrompt: "",
     sceneSoundPromptInitialized: false,
@@ -4885,7 +4948,11 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
       ...segment,
       originalText: "",
       originalTextByLanguage: { ...emptyTextByLanguage },
+      sceneSound: null,
       sceneSoundAsset: null,
+      sceneSoundAssetId: null,
+      scene_sound: null,
+      scene_sound_asset_id: null,
       sceneSoundGeneratedFromPrompt: null,
       sceneSoundPrompt: "",
       sceneSoundPromptInitialized: false,

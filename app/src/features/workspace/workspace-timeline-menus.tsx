@@ -7,6 +7,7 @@ import type {
 import { createPortal } from "react-dom";
 import type { Locale } from "../../lib/i18n";
 import { workspaceText } from "./workspace-page-model";
+import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
 import type { WorkspaceSegmentVisualModalTab } from "./workspace-segment-visual-helpers";
 import type {
   StudioLanguage,
@@ -720,10 +721,14 @@ export function WorkspaceSegmentTimelineSoundMenu({
           <button
             type="button"
             disabled={isActionDisabled}
+            aria-busy={isPending ? "true" : undefined}
             onClick={() => onGenerate(segment.index, prompt)}
           >
             {isPending ? (
-              <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+              <>
+                <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                <span>{workspaceText(locale, "Генерируем", "Generating")}</span>
+              </>
             ) : (
               <>
                 <span>
@@ -880,7 +885,7 @@ export function WorkspaceSegmentTimelineSubtitleMenu({
               disabled={!settings.voiceEnabled}
               onClick={() => onStyleSelect(segment.index, styleOption.id)}
             >
-              <span>{styleOption.label}</span>
+              <span>{getStudioSubtitleStyleDisplayLabel(locale, styleOption)}</span>
             </button>
           ))}
         </div>

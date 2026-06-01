@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ExamplePrefillStudioSettings } from "../../../shared/example-prefill";
+import type { Locale } from "../../lib/i18n";
 import {
   getWorkspaceSegmentEditorDisplayStartTime,
   getWorkspaceSegmentEditorPlaybackDuration,
@@ -38,6 +39,46 @@ export type WorkspaceSegmentSubtitleCaretPoint = {
 
 const STUDIO_SUBTITLE_PREVIEW_MAX_CHARS_PER_LINE = 20;
 const STUDIO_SUBTITLE_PREVIEW_MAX_WORDS_PER_LINE = 4;
+
+const studioSubtitleStyleLabelsRu: Record<string, string> = {
+  cinema: "Кино",
+  editorial: "Редакционный",
+  impact: "Акцент",
+  karaoke: "Караоке",
+  modern: "Современный",
+  story: "История",
+};
+
+const studioSubtitleStyleDescriptionsRu: Record<string, string> = {
+  cinema: "Чистые субтитры без цветовой подсветки.",
+  editorial: "Спокойный стиль для сцен с большим количеством текста.",
+  impact: "Крупные яркие субтитры с плотным контуром.",
+  karaoke: "Фразы с подсветкой активного слова.",
+  modern: "Универсальный стиль для Shorts.",
+  story: "Мягкий стиль для разговорных роликов.",
+};
+
+export const getStudioSubtitleStyleDisplayLabel = (
+  locale: Locale,
+  style: Pick<StudioSubtitleStyleOption, "id" | "label"> | null | undefined,
+) => {
+  if (!style) {
+    return "";
+  }
+
+  return locale === "ru" ? studioSubtitleStyleLabelsRu[style.id] ?? style.label : style.label;
+};
+
+export const getStudioSubtitleStyleDisplayDescription = (
+  locale: Locale,
+  style: Pick<StudioSubtitleStyleOption, "id" | "description"> | null | undefined,
+) => {
+  if (!style) {
+    return "";
+  }
+
+  return locale === "ru" ? studioSubtitleStyleDescriptionsRu[style.id] ?? style.description : style.description;
+};
 
 export const buildStudioSubtitleColorOptions = (
   colorCatalog: StudioSubtitleColorCatalogOption[],
@@ -139,7 +180,20 @@ export const studioSubtitleExampleOptions: StudioSubtitleExampleOption[] = [
 const getStudioSubtitlePreviewFontFamily = (value: string) =>
   value === "Manrope" ? '"Manrope", "Avenir Next", "Segoe UI", sans-serif' : '"DejaVu Sans", "Trebuchet MS", sans-serif';
 
-export const getStudioSubtitleLogicLabel = (style: StudioSubtitleStyleOption) => {
+export const getStudioSubtitleLogicLabel = (style: StudioSubtitleStyleOption, locale: Locale = "en") => {
+  if (locale === "ru") {
+    switch (style.logicMode) {
+      case "crossfade":
+        return "Плавная смена";
+      case "phrase":
+        return "По фразам";
+      case "sliding":
+        return "Лента";
+      default:
+        return "Блок";
+    }
+  }
+
   switch (style.logicMode) {
     case "crossfade":
       return "Crossfade";
@@ -152,7 +206,24 @@ export const getStudioSubtitleLogicLabel = (style: StudioSubtitleStyleOption) =>
   }
 };
 
-export const getStudioSubtitleTransitionLabel = (style: StudioSubtitleStyleOption) => {
+export const getStudioSubtitleTransitionLabel = (style: StudioSubtitleStyleOption, locale: Locale = "en") => {
+  if (locale === "ru") {
+    switch (style.transitionMode) {
+      case "hard_cut":
+        return "Без анимации";
+      case "slide_up":
+        return "Снизу вверх";
+      case "soft_crossfade":
+        return "Плавно";
+      case "soft_fade":
+        return "Мягко";
+      case "karaoke_follow":
+        return "По словам";
+      default:
+        return style.transitionMode || "Переход";
+    }
+  }
+
   switch (style.transitionMode) {
     case "hard_cut":
       return "Hard cut";

@@ -11,6 +11,7 @@ import {
   buildWorkspaceSegmentEditorChangeChecklist,
   buildWorkspaceSegmentVisualReferenceRequest,
   canWorkspaceSegmentUseVideoExtensionTool,
+  clearWorkspaceSegmentSceneSoundState,
   createStudioCustomVideoFileFromMediaLibraryItem,
   createWorkspaceSegmentEditorProjectBrandState,
   buildWorkspaceReferenceAiPrompt,
@@ -49,6 +50,7 @@ import {
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
   getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
+  restoreWorkspaceSegmentSceneSoundState,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
@@ -1189,6 +1191,70 @@ describe("WorkspacePage segment editor draft persistence", () => {
 
     expect(checklist.map((item) => item.label)).not.toContain("Сегмент 1: добавлен звук сцены");
     expect(checklist).toHaveLength(0);
+  });
+
+  it("clears scene sound ids when deleting a sound from the timeline", () => {
+    const segment = createDraftSegment({
+      index: 0,
+      sceneSound: {
+        assetId: 303,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      sceneSoundAsset: {
+        assetId: 303,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/303",
+      },
+      sceneSoundAssetId: 303,
+      scene_sound: {
+        media_asset_id: 303,
+        remote_url: "/api/workspace/media-assets/303",
+      },
+      scene_sound_asset_id: 303,
+      sceneSoundGeneratedFromPrompt: "busy cafe ambience",
+      sceneSoundPrompt: "busy cafe ambience",
+      sceneSoundPromptInitialized: true,
+    });
+
+    const cleared = clearWorkspaceSegmentSceneSoundState(segment);
+    const tracks = buildWorkspaceSegmentEditorTracks([cleared], [], null, null, {
+      isSoundEdited: () => false,
+    });
+
+    expect(cleared.sceneSoundAsset).toBeNull();
+    expect(cleared.sceneSoundAssetId).toBeNull();
+    expect(cleared.scene_sound).toBeNull();
+    expect(cleared.scene_sound_asset_id).toBeNull();
+    expect(tracks.rows.find((row) => row.kind === "sound")?.spans[0]?.isEmpty).toBe(true);
+  });
+
+  it("restores scene sound ids from a timeline snapshot", () => {
+    const currentSegment = clearWorkspaceSegmentSceneSoundState(createDraftSegment({ index: 0 }));
+    const snapshotSegment = createDraftSegment({
+      index: 0,
+      sceneSoundAsset: {
+        assetId: 404,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/404",
+      },
+      sceneSoundGeneratedFromPrompt: "soft rain",
+      sceneSoundPrompt: "soft rain",
+      sceneSoundPromptInitialized: true,
+    });
+
+    const restored = restoreWorkspaceSegmentSceneSoundState(currentSegment, snapshotSegment);
+
+    expect(restored.sceneSoundAsset?.assetId).toBe(404);
+    expect(restored.sceneSoundAssetId).toBe(404);
+    expect(restored.scene_sound_asset_id).toBe(404);
+    expect(restored.sceneSoundPrompt).toBe("soft rain");
   });
 
   it("treats a manual photo duration change as a Shorts edit", () => {

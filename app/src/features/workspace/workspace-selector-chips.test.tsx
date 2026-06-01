@@ -4,7 +4,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "../../lib/i18n";
-import { StudioVoiceSelectorChip } from "./workspace-selector-chips";
+import {
+  fallbackStudioSubtitleColorOption,
+  fallbackStudioSubtitleStyleOption,
+} from "./workspace-segment-editor";
+import { StudioSubtitleSelectorChip, StudioVoiceSelectorChip } from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
   it("passes the selected visible voice to whole-video generation", async () => {
@@ -52,5 +56,34 @@ describe("StudioVoiceSelectorChip", () => {
       language: "ru",
       voiceId: "Bys_24000",
     });
+  });
+});
+
+describe("StudioSubtitleSelectorChip", () => {
+  it("shows a Russian label for the default subtitle style", () => {
+    render(
+      <LocaleProvider locale="ru">
+        <StudioSubtitleSelectorChip
+          isEnabled
+          onSelectColor={vi.fn()}
+          onSelectExample={vi.fn()}
+          onSelectStyle={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          selectedColorId="purple"
+          selectedExampleId="hook"
+          selectedStyleId="modern"
+          subtitleColorOptions={[fallbackStudioSubtitleColorOption]}
+          subtitleStyleOptions={[fallbackStudioSubtitleStyleOption]}
+        />
+      </LocaleProvider>,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Субтитры\s*Современный/ });
+    expect(trigger).toBeTruthy();
+    expect(screen.queryByText("Modern")).toBeNull();
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("button", { name: /Современный\s*Универсальный стиль для Shorts\./ })).toBeTruthy();
   });
 });

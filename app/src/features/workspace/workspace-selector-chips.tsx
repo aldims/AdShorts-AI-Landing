@@ -32,6 +32,8 @@ import {
   buildStudioSubtitlePreviewLines,
   getStudioSubtitleLogicLabel,
   getStudioSubtitlePreviewStyle,
+  getStudioSubtitleStyleDisplayDescription,
+  getStudioSubtitleStyleDisplayLabel,
   getStudioSubtitleTransitionLabel,
   studioSubtitleExampleOptions,
   studioSubtitleStyleUsesAccentColor,
@@ -282,14 +284,15 @@ export function StudioSubtitleSelectorChip({
   const safeColorOptions = subtitleColorOptions.length ? subtitleColorOptions : [fallbackStudioSubtitleColorOption];
   const selectedStyle = safeStyleOptions.find((style) => style.id === selectedStyleId) ?? safeStyleOptions[0];
   const selectedColor = safeColorOptions.find((color) => color.id === selectedColorId) ?? safeColorOptions[0];
+  const selectedStyleLabel = getStudioSubtitleStyleDisplayLabel(locale, selectedStyle);
   const previewStyle = getStudioSubtitlePreviewStyle(selectedStyle, selectedColor);
   const previewColorLabel = studioSubtitleStyleUsesAccentColor(selectedStyle)
     ? selectedColor.label
     : locale === "en"
       ? "White text"
       : "Белый текст";
-  const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle);
-  const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle);
+  const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle, locale);
+  const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle, locale);
   const isSidebarVariant = variant === "sidebar";
   const resolvedDisabledReason =
     disabledReason ?? (locale === "en" ? "Turn voiceover on before using subtitles" : "Включите озвучку, чтобы использовать субтитры");
@@ -444,7 +447,7 @@ export function StudioSubtitleSelectorChip({
             </span>
             <span className="studio-sidebar__item-copy">
               <strong>{locale === "en" ? "Subtitles" : "Субтитры"}</strong>
-              <span className="studio-sidebar__item-value">{isEnabled ? selectedStyle.label : locale === "en" ? "Off" : "Выкл"}</span>
+              <span className="studio-sidebar__item-value">{isEnabled ? selectedStyleLabel : locale === "en" ? "Off" : "Выкл"}</span>
             </span>
             <svg
               className="studio-subtitle-selector__icon studio-subtitle-selector__icon--sidebar"
@@ -460,7 +463,7 @@ export function StudioSubtitleSelectorChip({
         ) : (
           <>
             <span className="studio-subtitle-selector__label">{locale === "en" ? "Subtitles" : "Субтитры"}</span>
-            <strong className="studio-subtitle-selector__value">{isEnabled ? selectedStyle.label : locale === "en" ? "Off" : "Выкл"}</strong>
+            <strong className="studio-subtitle-selector__value">{isEnabled ? selectedStyleLabel : locale === "en" ? "Off" : "Выкл"}</strong>
             <svg className="studio-subtitle-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -519,8 +522,8 @@ export function StudioSubtitleSelectorChip({
                         onSelectStyle(style.id);
                       }}
                     >
-                      <span>{style.label}</span>
-                      <small>{style.description}</small>
+                      <span>{getStudioSubtitleStyleDisplayLabel(locale, style)}</span>
+                      <small>{getStudioSubtitleStyleDisplayDescription(locale, style)}</small>
                     </button>
                 ))}
                 </div>
@@ -570,7 +573,7 @@ export function StudioSubtitleSelectorChip({
                           aria-hidden="true"
                         >
                           <div className="studio-subtitle-selector__example-video-meta">
-                            <span>{selectedStyle.label}</span>
+                            <span>{selectedStyleLabel}</span>
                             <span>{previewColorLabel}</span>
                           </div>
                           <div

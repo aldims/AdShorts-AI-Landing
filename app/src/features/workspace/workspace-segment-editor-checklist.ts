@@ -17,6 +17,7 @@ import {
   normalizeWorkspaceSegmentEditorTextForCompare,
   studioVoiceOptionsByLanguage,
 } from "./workspace-segment-editor";
+import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
 import { studioMusicOptions } from "./workspace-studio-options";
 import { formatWorkspaceSegmentDurationInputValue } from "./workspace-utils";
 import type {
@@ -316,7 +317,8 @@ const getWorkspaceSegmentEditorChecklistSubtitleStyleLabel = (
     return "без стиля";
   }
 
-  return styleOptions?.find((style) => style.id === safeStyleId)?.label ?? safeStyleId;
+  const styleOption = styleOptions?.find((style) => style.id === safeStyleId);
+  return getStudioSubtitleStyleDisplayLabel("ru", styleOption) || safeStyleId;
 };
 
 const getWorkspaceSegmentEditorChecklistSubtitleColorLabel = (

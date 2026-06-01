@@ -5,6 +5,7 @@ import {
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentVoiceOverrideId,
 } from "./workspace-segment-editor";
+import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
 import type {
   StudioSubtitleColorOption,
   StudioSubtitleStyleOption,
@@ -71,7 +72,7 @@ export const getWorkspaceSegmentTimelineSoundLabel = (
   options?: { isEmpty?: boolean; isPending?: boolean },
 ) => {
   if (options?.isPending) {
-    return workspaceText(locale, "Звук", "Sound");
+    return workspaceText(locale, "Создаём звук", "Creating sound");
   }
 
   if (options?.isEmpty) {
@@ -126,8 +127,9 @@ export const getWorkspaceSegmentTimelineSubtitleDisplay = (
   }
 
   const colorOption = options.subtitleColorOptions.find((color) => color.id === effectiveSubtitleSettings.subtitleColorId);
+  const styleOption = options.subtitleStyleOptions.find((style) => style.id === effectiveSubtitleSettings.subtitleStyleId);
   const styleLabel =
-    options.subtitleStyleOptions.find((style) => style.id === effectiveSubtitleSettings.subtitleStyleId)?.label ??
+    getStudioSubtitleStyleDisplayLabel(locale, styleOption) ||
     effectiveSubtitleSettings.subtitleStyleId;
   const colorLabel = colorOption?.label ?? effectiveSubtitleSettings.subtitleColorId;
 

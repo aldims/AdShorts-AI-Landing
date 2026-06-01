@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WorkspaceSegmentTimelineVoiceMenu } from "./workspace-timeline-menus";
+import { WorkspaceSegmentTimelineSoundMenu, WorkspaceSegmentTimelineVoiceMenu } from "./workspace-timeline-menus";
 
 const baseProps = {
   effectiveVoiceId: "ru_alexey",
@@ -80,5 +80,46 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
     });
 
     expect(button.getAttribute("aria-busy")).toBe("true");
+  });
+});
+
+describe("WorkspaceSegmentTimelineSoundMenu", () => {
+  const baseSoundProps = {
+    canDelete: true,
+    creditLabel: "1 ⚡",
+    isActionDisabled: false,
+    isPending: false,
+    isStructureActionBusy: false,
+    locale: "ru" as const,
+    menuRef: { current: null },
+    onClose: vi.fn(),
+    onDelete: vi.fn(),
+    onGenerate: vi.fn(),
+    onPromptChange: vi.fn(),
+    placeholder: "Описание звука",
+    previewUrl: null,
+    prompt: "тихий городской фон",
+    segment: { index: 0 } as any,
+    segmentArrayIndex: 0,
+    span: null,
+    spanLabel: "",
+    style: { left: 0, top: 0 },
+    textareaRef: { current: null },
+  };
+
+  it("keeps the generate button readable and busy while scene sound is generating", () => {
+    render(
+      <WorkspaceSegmentTimelineSoundMenu
+        {...baseSoundProps}
+        isActionDisabled
+        isPending
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Генерируем" });
+
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("status").textContent).toContain("Генерируем звук сцены");
+    expect(screen.queryByText("1 ⚡")).toBeNull();
   });
 });
