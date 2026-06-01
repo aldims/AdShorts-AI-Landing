@@ -1819,6 +1819,26 @@ export const getWorkspaceSegmentEditorGenerationRequiredCredits = (
   return STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getWorkspaceSegmentEditorVoiceCreditCost(session);
 };
 
+export const getWorkspaceGenerationRequiredCredits = (
+  videoMode: StudioVideoMode,
+  options?: {
+    isSegmentEditorGeneration?: boolean;
+    segmentEditorSession?: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null;
+    voiceEnabled?: boolean;
+    voiceId?: string | null;
+  },
+) => {
+  if (options?.segmentEditorSession) {
+    return getWorkspaceSegmentEditorGenerationRequiredCredits(options.segmentEditorSession);
+  }
+
+  return getStudioGenerationRequiredCredits(videoMode, {
+    isSegmentEditorGeneration: options?.isSegmentEditorGeneration,
+    voiceEnabled: options?.voiceEnabled,
+    voiceId: options?.voiceId,
+  });
+};
+
 export const getSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 

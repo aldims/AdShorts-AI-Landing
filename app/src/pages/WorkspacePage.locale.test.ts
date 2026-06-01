@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
+import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -27,6 +28,7 @@ import {
   getWorkspaceMediaLibraryItemRemoteUrl,
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
+  getWorkspaceGenerationRequiredCredits,
   getNextWorkspaceReferenceDefaultName,
   buildWorkspaceReferenceGenerationMediaScope,
   formatWorkspaceSegmentEditorSegmentDurationLabel,
@@ -303,6 +305,24 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
 const createFreshSessionFromDraftSegments = (segments: DraftSegment[]): FreshSession => ({
   ...createFreshSession(segments[0] ?? createDraftSegment()),
   segments: segments.map((segment) => createFreshSession(segment).segments[0]!),
+});
+
+describe("WorkspacePage generation credits", () => {
+  it("uses segment-editor scene voice overrides for the final generation cost", () => {
+    const draft = {
+      ...createDraftSession(createDraftSegment({ voiceType: "Liam" })),
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      getWorkspaceGenerationRequiredCredits("standard", {
+        isSegmentEditorGeneration: true,
+        segmentEditorSession: draft,
+        voiceEnabled: true,
+        voiceId: DEFAULT_STUDIO_VOICE_ID.ru,
+      }),
+    ).toBe(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getStudioVoiceCreditCost("Liam"));
+  });
 });
 
 const createGeneratedMediaLibraryEntry = (

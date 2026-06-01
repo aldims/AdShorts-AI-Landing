@@ -182,6 +182,7 @@ import {
   getStudioGenerationRequiredCredits,
   getStudioLanguageForVoiceId,
   getStudioSceneSoundAssetPreviewUrl,
+  getWorkspaceGenerationRequiredCredits,
   getWorkspaceMediaAssetResolvedPreviewUrl,
   getWorkspaceReferenceGenerationCreditCost,
   getWorkspaceSegmentCustomPreviewKind,
@@ -822,6 +823,7 @@ export {
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
+  getWorkspaceGenerationRequiredCredits,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentRecommendedDurationSeconds,
@@ -16050,8 +16052,9 @@ export function WorkspacePage({
           selectedVoiceIdByLanguageRef.current[effectiveLanguage],
         )
       : undefined;
-    const requiredCredits = getStudioGenerationRequiredCredits(effectiveVideoMode, {
+    const requiredCredits = getWorkspaceGenerationRequiredCredits(effectiveVideoMode, {
       isSegmentEditorGeneration,
+      segmentEditorSession: options?.segmentEditorSession,
       voiceEnabled: effectiveVoiceEnabled,
       voiceId: effectiveVoiceId,
     });
