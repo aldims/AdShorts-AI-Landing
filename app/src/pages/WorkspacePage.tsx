@@ -182,6 +182,7 @@ import {
   getStudioCustomVideoFileIdentityKey,
   getStudioGenerationRequiredCredits,
   getStudioLanguageForVoiceId,
+  getStudioSceneSoundAssetPreviewMediaKind,
   getStudioSceneSoundAssetPreviewUrl,
   getWorkspaceGenerationRequiredCredits,
   getWorkspaceMediaAssetResolvedPreviewUrl,
@@ -6688,20 +6689,22 @@ export function WorkspacePage({
       segmentTimelineAudioRef.current = previewAudios;
 
       try {
-        await Promise.all(previewAudios.map(waitForPreviewAudioMetadata));
+        const metadataPromises = previewAudios.map(waitForPreviewAudioMetadata);
+        const playbackPromises = previewAudios.map((previewAudio, trackIndex) =>
+          previewAudio.play().then(() => {
+            if (isCurrentPreview()) {
+              schedulePreviewAudioEnd(previewAudio, trackIndex);
+            }
+          })
+        );
+        await Promise.all(metadataPromises);
         previewAudios.forEach((previewAudio, trackIndex) => {
           const track = previewTracks[trackIndex];
           if (track) {
             seekPreviewAudioToStart(previewAudio, track);
           }
         });
-        await Promise.all(previewAudios.map((previewAudio, trackIndex) =>
-          previewAudio.play().then(() => {
-            if (isCurrentPreview()) {
-              schedulePreviewAudioEnd(previewAudio, trackIndex);
-            }
-          })
-        ));
+        await Promise.all(playbackPromises);
         if (isCurrentPreview()) {
           setSegmentTimelineAudioPlayback({ key: options.key, status: "playing" });
         }
@@ -22992,6 +22995,7 @@ export function WorkspacePage({
                 segment.index,
               );
               const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segment.sceneSoundAsset);
+              const soundPreviewMediaKind = getStudioSceneSoundAssetPreviewMediaKind(segment.sceneSoundAsset);
               const soundAudioKey = `timeline:sound:${segment.index}:${soundPreviewUrl ?? "empty"}`;
               const soundLabel = getSegmentTimelineSoundLabel(segment, {
                 isEmpty: span.isEmpty,
@@ -23053,6 +23057,7 @@ export function WorkspacePage({
                       ? workspaceText(locale, "Дождитесь генерации звука", "Wait for sound generation")
                       : workspaceText(locale, "Сначала добавьте звук сцены", "Add scene sound first"),
                     label: soundLabel,
+                    mediaKind: soundPreviewMediaKind,
                     url: isSoundGenerationPending ? null : soundPreviewUrl,
                   })}
                 </div>
@@ -27301,24 +27306,11 @@ export function WorkspacePage({
                           previewUrl={ghostPreviewUrl}
                         />
                       ) : (
-                        <span className="studio-segment-editor__thumb-placeholder">
-                          {getSegmentVisualPlaceholderLabel(segmentThumbDragSegment.index)}
-                        </span>
+                        <span className="studio-segment-editor__thumb-placeholder"></span>
                       )}
-                      {renderSegmentEditorBrandOverlay("ghost")}
                     </span>
                   );
                 })()}
-                <span className="studio-segment-editor__thumb-copy">
-                  <strong>{workspaceText(locale, `Сцена ${segmentThumbDragState.draggedIndex + 1}`, `Scene ${segmentThumbDragState.draggedIndex + 1}`)}</strong>
-                  <small>
-                    {formatWorkspaceSegmentEditorSegmentTimeRange(
-                      getWorkspaceSegmentEditorDisplayStartTime(segmentThumbDragSegment),
-                      getWorkspaceSegmentEditorDisplayEndTime(segmentThumbDragSegment),
-                      { isFirstSegment: segmentThumbDragState.draggedIndex === 0 },
-                    )}
-                  </small>
-                </span>
               </div>,
               document.body,
             )

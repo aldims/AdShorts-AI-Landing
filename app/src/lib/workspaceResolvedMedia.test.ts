@@ -119,6 +119,21 @@ describe("workspace resolved media surface", () => {
     expect(surface.allowBrowserPosterCapture).toBe(true);
   });
 
+  it("mounts drag ghost videos without stable posters so the dragged scene keeps its visual", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "segment-drag-ghost",
+      displayUrl: "/api/workspace/project-segment-video?projectId=3678&segmentIndex=0",
+      previewKind: "video",
+      viewerUrl: "/api/workspace/project-segment-video?projectId=3678&segmentIndex=0",
+    });
+
+    expect(surface.mountVideoWhenIdle).toBe(true);
+    expect(surface.preloadPolicy).toBe("metadata");
+    expect(surface.preferPosterFrame).toBe(true);
+    expect(surface.primePausedFrame).toBe(true);
+    expect(surface.allowBrowserPosterCapture).toBe(true);
+  });
+
   it("keeps media-library video tiles poster-only when a stable poster exists", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "media-library-tile",

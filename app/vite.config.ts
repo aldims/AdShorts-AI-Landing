@@ -82,4 +82,9 @@ export default defineConfig({
     strictPort: true,
     proxy: apiProxy,
   },
+  build: {
+    // The studio is route-level lazy-loaded; keep the limit close to the current
+    // production chunk so future growth still fails visibly in build output.
+    chunkSizeWarningLimit: 850,
+  },
 });

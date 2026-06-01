@@ -107,9 +107,12 @@ export const resolveWorkspaceMediaSurface = (
         break;
       }
       case "segment-drag-ghost": {
-        mountVideoWhenIdle = false;
-        preloadPolicy = "none";
+        const hasStablePosterFrame = Boolean(posterUrl || fallbackPosterUrl);
+        mountVideoWhenIdle = !hasStablePosterFrame;
+        preloadPolicy = hasStablePosterFrame ? "none" : "metadata";
         preferPosterFrame = true;
+        primePausedFrame = !hasStablePosterFrame;
+        allowBrowserPosterCapture = !hasStablePosterFrame;
         break;
       }
       case "segment-visual-preview": {

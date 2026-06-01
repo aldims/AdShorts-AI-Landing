@@ -189,6 +189,56 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.scene_sound?.file_name).toBe("rain.wav");
   });
 
+  it("restores scene sound metadata from final project generation settings", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3678,
+      {
+        project_id: 3678,
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 5,
+            end_time: 5,
+            index: 0,
+            start_time: 0,
+            text: "First scene.",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            segment_scene_sounds: [
+              {
+                download_url: "/api/media/4651/download",
+                library_kind: "scene_sound",
+                media_asset_id: 4651,
+                media_type: "audio",
+                mime_type: "video/mp4",
+                segment_index: 0,
+                source_kind: "ai_scene_sound",
+              },
+            ],
+          },
+          project_id: 3678,
+          source_project_id: 3677,
+        },
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 3678,
+        },
+      },
+    );
+
+    expect(session.segments[0]?.sceneSoundAssetId).toBe(4651);
+    expect(session.segments[0]?.scene_sound).toEqual(expect.objectContaining({
+      download_url: "/api/media/4651/download",
+      media_asset_id: 4651,
+      mime_type: "video/mp4",
+    }));
+  });
+
   it("restores scene voiceover asset and speech metadata into the editor segment", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

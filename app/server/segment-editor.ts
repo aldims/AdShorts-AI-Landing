@@ -128,6 +128,7 @@ type AdsflowProjectGenerationSettingsPayload = {
   original_videos?: AdsflowProjectMediaEntryPayload[] | null;
   project_title?: string | null;
   requested_language?: string | null;
+  segment_scene_sounds?: AdsflowProjectMediaEntryPayload[] | null;
   source_project_id?: number | string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
   subtitle_color?: string | null;
@@ -2049,8 +2050,13 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     loaded: false,
     projectId: sessionProjectId,
   };
+  const generationSettings =
+    projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+      ? projectDetailsPayload.generation_settings
+      : null;
   const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
+  const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
   const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
   const segments = (payload.segments ?? [])
     .map((segment) =>
@@ -2060,6 +2066,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
         projectMediaLoaded: projectMediaEnvelope.loaded,
         projectMediaByAssetId,
         originalEntries,
+        sceneSoundEntries,
       }),
     )
     .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
@@ -2077,10 +2084,6 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   }
 
   const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
-  const generationSettings =
-    projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
-      ? projectDetailsPayload.generation_settings
-      : null;
   const musicAssetId =
     normalizePositiveProjectId(payload.music_asset_id) ??
     normalizePositiveProjectId(projectDetailsPayload?.music_asset_id) ??
@@ -2129,6 +2132,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     projectMediaLoaded?: boolean;
     projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>;
     originalEntries: AdsflowProjectMediaEntryPayload[];
+    sceneSoundEntries?: AdsflowProjectMediaEntryPayload[];
   },
 ): WorkspaceSegmentEditorSegment | null => {
   const index = normalizeInteger(payload.index);
@@ -2183,6 +2187,7 @@ export const buildWorkspaceSegmentEditorSegment = (
   const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
   const projectSceneSoundEntry = findProjectSceneSoundMediaEntry(
     [
+      ...(projectSources?.sceneSoundEntries ?? []),
       ...(projectSources?.currentEntries ?? []),
       ...(projectSources?.originalEntries ?? []),
     ],

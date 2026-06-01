@@ -662,6 +662,14 @@ export const getStudioSceneSoundAssetPreviewUrl = (
   return getStudioCustomAssetPreviewUrl(asset);
 };
 
+export const getStudioSceneSoundAssetPreviewMediaKind = (
+  asset: Pick<StudioCustomVideoFile, "fileName" | "mimeType"> | null | undefined,
+): "audio" | "video" => {
+  const fileName = String(asset?.fileName ?? "").trim();
+  const mimeType = String(asset?.mimeType ?? "").trim().toLowerCase();
+  return mimeType.startsWith("video/") || WORKSPACE_VIDEO_FILE_NAME_PATTERN.test(fileName) ? "video" : "audio";
+};
+
 export const getWorkspaceMediaAssetFileName = (asset: WorkspaceMediaAssetRef | null | undefined, fallbackName: string) => {
   const storageFileName = String(asset?.storageKey ?? "").split("/").pop()?.trim();
   const downloadFileName = String(asset?.downloadPath ?? asset?.downloadUrl ?? asset?.playbackUrl ?? "").split("/").pop()?.split("?")[0]?.trim();

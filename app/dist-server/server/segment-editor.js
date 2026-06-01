@@ -1313,8 +1313,12 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         loaded: false,
         projectId: sessionProjectId,
     };
+    const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+        ? projectDetailsPayload.generation_settings
+        : null;
     const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
     const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
+    const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
     const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
     const segments = (payload.segments ?? [])
         .map((segment) => buildWorkspaceSegmentEditorSegment(sessionProjectId, segment, {
@@ -1323,6 +1327,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         projectMediaLoaded: projectMediaEnvelope.loaded,
         projectMediaByAssetId,
         originalEntries,
+        sceneSoundEntries,
     }))
         .filter((segment) => Boolean(segment))
         .sort((left, right) => left.index - right.index);
@@ -1333,9 +1338,6 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         throw new WorkspaceSegmentEditorError(`Редактор сегментов пока поддерживает проекты до ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`, 409);
     }
     const customMusicMetadata = resolveWorkspaceSegmentEditorCustomMusicMetadata(projectDetailsPayload);
-    const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
-        ? projectDetailsPayload.generation_settings
-        : null;
     const musicAssetId = normalizePositiveProjectId(payload.music_asset_id) ??
         normalizePositiveProjectId(projectDetailsPayload?.music_asset_id) ??
         normalizePositiveProjectId(generationSettings?.music_asset_id) ??
@@ -1417,6 +1419,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     });
     const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
     const projectSceneSoundEntry = findProjectSceneSoundMediaEntry([
+        ...(projectSources?.sceneSoundEntries ?? []),
         ...(projectSources?.currentEntries ?? []),
         ...(projectSources?.originalEntries ?? []),
     ], index);
