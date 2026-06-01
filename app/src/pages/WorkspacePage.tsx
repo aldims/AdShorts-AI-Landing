@@ -310,6 +310,7 @@ import {
   getDefaultStudioVoiceId,
   getStudioVoiceOptionById,
   getWorkspaceInitialStudioDefaults,
+  resolveWorkspaceGenerationVoiceRequest,
   resolveStudioVoiceIdForLanguage,
   resolveWorkspaceExamplePrefillInitialStudioState,
 } from "../features/workspace/workspace-studio-defaults-helpers";
@@ -952,6 +953,7 @@ export {
 export {
   getDefaultStudioVoiceId,
   getWorkspaceInitialStudioDefaults,
+  resolveWorkspaceGenerationVoiceRequest,
   resolveStudioVoiceIdForLanguage,
   resolveWorkspaceExamplePrefillInitialStudioState,
 } from "../features/workspace/workspace-studio-defaults-helpers";
@@ -1024,6 +1026,10 @@ export function WorkspacePage({
   const activeExamplePrefillSettingsRef = useRef<ExamplePrefillStudioSettings | null>(
     initialExamplePrefillRef.current?.settings ?? null,
   );
+  const latestExplicitStudioVoiceSelectionRef = useRef<{
+    language: StudioLanguage;
+    voiceId: StudioVoiceOption["id"];
+  } | null>(null);
   const examplePrefillInitialStudioState = resolveWorkspaceExamplePrefillInitialStudioState({
     prefillSettings: initialExamplePrefillRef.current?.settings ?? null,
     routeDefaults: routeStudioDefaults,
@@ -4644,6 +4650,7 @@ export function WorkspacePage({
     if (typeof settings.voiceEnabled === "boolean") {
       setIsVoiceoverEnabled(settings.voiceEnabled);
       if (!settings.voiceEnabled) {
+        latestExplicitStudioVoiceSelectionRef.current = null;
         setAreSubtitlesEnabled(false);
       }
     }
@@ -8396,6 +8403,9 @@ export function WorkspacePage({
   };
 
   const handleVoiceToggle = (enabled: boolean) => {
+    latestExplicitStudioVoiceSelectionRef.current = enabled
+      ? { language: selectedLanguage, voiceId: resolvedSelectedVoiceId }
+      : null;
     setIsVoiceoverEnabled(enabled);
     if (!enabled) {
       setAreSubtitlesEnabled(false);
@@ -8403,8 +8413,10 @@ export function WorkspacePage({
   };
 
   const handleVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
+    const voiceLanguage = getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage;
+    latestExplicitStudioVoiceSelectionRef.current = { language: voiceLanguage, voiceId };
     setIsVoiceoverEnabled(true);
-    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage] = voiceId;
+    selectedVoiceIdByLanguageRef.current[voiceLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
   };
 
@@ -10317,11 +10329,16 @@ export function WorkspacePage({
 
   const handleSegmentEditorVoiceToggle = (enabled: boolean) => {
     const nextVoiceType = enabled ? studioSidebarVoiceId || resolvedSelectedVoiceId : "none";
+    latestExplicitStudioVoiceSelectionRef.current = enabled
+      ? { language: getStudioLanguageForVoiceId(nextVoiceType) ?? selectedLanguage, voiceId: nextVoiceType }
+      : null;
     updateSegmentEditorDraft((currentDraft) => applySegmentEditorGlobalVoiceToAllSegments(currentDraft, nextVoiceType));
   };
 
   const handleSegmentEditorVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
-    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage] = voiceId;
+    const voiceLanguage = getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage;
+    latestExplicitStudioVoiceSelectionRef.current = { language: voiceLanguage, voiceId };
+    selectedVoiceIdByLanguageRef.current[voiceLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
     updateSegmentEditorDraft((currentDraft) => applySegmentEditorGlobalVoiceToAllSegments(currentDraft, voiceId));
   };
@@ -16044,14 +16061,24 @@ export function WorkspacePage({
     preserveExamplePrefillRef.current = false;
     const safeTopic = nextTopic.trim();
     const effectiveLanguage = normalizeStudioLanguageValue(options?.language) ?? selectedLanguage;
-    const effectiveVoiceEnabled = options?.voiceEnabled ?? isVoiceoverEnabled;
-    const effectiveVoiceId = effectiveVoiceEnabled
-      ? resolveStudioVoiceIdForLanguage(
-          effectiveLanguage,
-          options?.voiceId ?? (effectiveLanguage === selectedLanguage ? resolvedSelectedVoiceId : undefined),
-          selectedVoiceIdByLanguageRef.current[effectiveLanguage],
-        )
-      : undefined;
+    const effectiveVoiceRequest = resolveWorkspaceGenerationVoiceRequest({
+      currentLanguage: selectedLanguage,
+      currentVoiceEnabled: isVoiceoverEnabled,
+      explicitVoiceSelection: latestExplicitStudioVoiceSelectionRef.current,
+      generationLanguage: effectiveLanguage,
+      requestedVoiceEnabled: options?.voiceEnabled,
+      requestedVoiceId: options?.voiceId,
+      selectedVoiceId: resolvedSelectedVoiceId,
+      selectedVoiceIdForLanguage: selectedVoiceIdByLanguageRef.current[effectiveLanguage],
+    });
+    const effectiveVoiceEnabled = effectiveVoiceRequest.voiceEnabled;
+    const effectiveVoiceId = effectiveVoiceRequest.voiceId;
+    console.info("[studio] generate.voice-request", {
+      effectiveVoiceEnabled,
+      effectiveVoiceId: effectiveVoiceId ?? null,
+      requestedVoiceEnabled: options?.voiceEnabled ?? null,
+      requestedVoiceId: options?.voiceId ?? null,
+    });
     const requiredCredits = getWorkspaceGenerationRequiredCredits(effectiveVideoMode, {
       isSegmentEditorGeneration,
       segmentEditorSession: options?.segmentEditorSession,
@@ -18320,13 +18347,18 @@ export function WorkspacePage({
     };
   };
   const handleSegmentTimelineGlobalVoiceToggle = (isEnabled: boolean) => {
+    const currentVoiceDraft = getCurrentSegmentTimelineGlobalVoiceDraft();
+    latestExplicitStudioVoiceSelectionRef.current = isEnabled
+      ? { language: currentVoiceDraft.language, voiceId: currentVoiceDraft.voiceId }
+      : null;
     updateSegmentTimelineGlobalVoiceDraft((current) => ({
-      ...(current ?? getCurrentSegmentTimelineGlobalVoiceDraft()),
+      ...(current ?? currentVoiceDraft),
       isEnabled,
     }));
   };
   const handleSegmentTimelineGlobalVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
     const nextLanguage = getStudioLanguageForVoiceId(voiceId) ?? segmentTimelineGlobalVoiceDraft?.language ?? selectedLanguage;
+    latestExplicitStudioVoiceSelectionRef.current = { language: nextLanguage, voiceId };
     updateSegmentTimelineGlobalVoiceDraft((current) => ({
       ...(current ?? getCurrentSegmentTimelineGlobalVoiceDraft()),
       isEnabled: true,
@@ -18350,6 +18382,7 @@ export function WorkspacePage({
       language,
       voiceId: nextVoiceId,
     });
+    latestExplicitStudioVoiceSelectionRef.current = { language, voiceId: nextVoiceId };
   };
   const getSegmentEditorGlobalVoiceoverTargets = (draft: WorkspaceSegmentEditorDraftSession) =>
     draft.segments.filter(

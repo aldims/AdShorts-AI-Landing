@@ -3368,6 +3368,8 @@ app.post("/api/studio/generate", async (req, res) => {
     brandChangedOverride: brandChanged ?? null,
     clearBrandingOverride: clearBranding ?? null,
     voiceId: voiceId || null,
+    voiceEnabled,
+    subtitleEnabled,
   });
 
   if (!prompt) {

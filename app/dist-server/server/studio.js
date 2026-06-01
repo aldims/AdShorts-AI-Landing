@@ -88,6 +88,17 @@ export class StudioGenerationUnavailableError extends Error {
         this.name = "StudioGenerationUnavailableError";
     }
 }
+export const resolveStudioSegmentEditorGenerationMediaFlags = (options) => {
+    const segmentEditorHasVoice = options.segmentEditor?.segments.some((segment) => Boolean(segment.voiceoverAssetId) ||
+        Boolean(segment.voiceType && segment.voiceType !== "none")) ?? false;
+    const segmentEditorHasSubtitles = options.segmentEditor?.segments.some((segment) => Boolean(segment.subtitleType && segment.subtitleType !== "none")) ?? false;
+    const voiceEnabled = options.requestedVoiceEnabled || segmentEditorHasVoice;
+    const subtitleEnabled = voiceEnabled && (options.requestedSubtitleEnabled !== false || segmentEditorHasSubtitles);
+    return {
+        subtitleEnabled,
+        voiceEnabled,
+    };
+};
 const studioSupportedMusicTypes = new Set([
     "ai",
     "business",
@@ -3503,10 +3514,18 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const requestedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
     const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
-    const isVoiceEnabled = options?.voiceEnabled !== false;
-    const normalizedVoiceId = isVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
+    const requestedVoiceEnabled = options?.voiceEnabled !== false;
+    const normalizedVoiceId = requestedVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
     const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
-    const isSubtitleEnabled = isVoiceEnabled && options?.subtitleEnabled !== false;
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: requestedVoiceEnabled });
+    const mediaFlags = resolveStudioSegmentEditorGenerationMediaFlags({
+        requestedSubtitleEnabled: options?.subtitleEnabled,
+        requestedVoiceEnabled,
+        segmentEditor: normalizedSegmentEditor,
+    });
+    const isVoiceEnabled = mediaFlags.voiceEnabled;
+    const isSubtitleEnabled = mediaFlags.subtitleEnabled;
     const normalizedSubtitleStyleId = isSubtitleEnabled ? normalizeStudioSubtitleStyle(options?.subtitleStyleId) : undefined;
     const normalizedSubtitleColorId = isSubtitleEnabled && normalizedSubtitleStyleId
         ? normalizeStudioSubtitleColor(options?.subtitleColorId, getDefaultStudioSubtitleColorForStyle(normalizedSubtitleStyleId))
@@ -3524,8 +3543,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
     const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
     const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
-    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
-    const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: isVoiceEnabled });
     const isScratchSegmentEditorGeneration = normalizedSegmentEditor?.source === "scratch";
     const segmentEditorFinalVoiceCredits = normalizedSegmentEditor
         ? normalizedSegmentEditor.segments.map((segment) => {
@@ -3594,6 +3611,8 @@ export async function createStudioGenerationJob(prompt, user, options) {
             requestedLanguage,
             resolvedLanguage: normalizedLanguage,
             resolvedVoiceId: normalizedVoiceId ?? null,
+            voiceEnabled: isVoiceEnabled,
+            subtitleEnabled: isSubtitleEnabled,
             projectId: normalizedProjectId ?? null,
             segmentEditorActive: Boolean(normalizedSegmentEditor),
             segmentEditorSource: normalizedSegmentEditor?.source ?? null,

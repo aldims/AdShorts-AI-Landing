@@ -12,11 +12,15 @@ import {
   getWorkspacePhotoAnimationSourcePosterUrl,
 } from "./workspace-media-library-helpers";
 import {
+  fallbackStudioSubtitleColorOption,
+  fallbackStudioSubtitleStyleOption,
   buildWorkspaceMediaAssetPlaybackUrl,
   getPositiveWorkspaceMediaAssetId,
   getStudioCustomAssetPreviewUrl,
   getStudioLanguageForVoiceId,
   getUniqueWorkspaceSegmentPreviewUrls,
+  getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentEffectiveVoiceEnabled,
   getWorkspaceSegmentCurrentPosterUrl,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomPreviewKind,
@@ -35,6 +39,7 @@ import {
   isWorkspaceSegmentServerPhotoAnimationOverride,
   isWorkspaceSegmentStaleUploadOriginalVisual,
   isWorkspaceSegmentVisualResetApplied,
+  isWorkspaceSegmentVoiceoverAssetFresh,
   normalizeStudioLanguageValue,
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentSourceKind,
@@ -818,17 +823,39 @@ export const getWorkspaceSegmentDraftSourceDisplayLabel = (sourceLabel: string, 
 export const getWorkspaceSegmentEditorGenerationOverrides = (
   session?: WorkspaceSegmentEditorDraftSession | null,
 ) => {
-  const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
-  const subtitleEnabled = voiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
+  const normalizedGlobalVoiceType = normalizeWorkspaceSegmentEditorSetting(session?.voiceType);
+  const globalVoiceEnabled = normalizedGlobalVoiceType !== "none";
+  const hasSceneVoice = Boolean(
+    session?.segments?.some(
+      (segment) =>
+        getWorkspaceSegmentEffectiveVoiceEnabled(segment, session) ||
+        isWorkspaceSegmentVoiceoverAssetFresh(segment, session),
+    ),
+  );
+  const voiceEnabled = globalVoiceEnabled || hasSceneVoice;
+  const globalSubtitleEnabled = globalVoiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
+  const hasSceneSubtitle = Boolean(
+    session?.segments?.some((segment) =>
+      getWorkspaceSegmentEffectiveSubtitleSettings(session, segment, {
+        subtitleColorId: fallbackStudioSubtitleColorOption.id,
+        subtitleStyleId: fallbackStudioSubtitleStyleOption.id,
+      }).isEnabled,
+    ),
+  );
+  const subtitleEnabled = voiceEnabled && (globalSubtitleEnabled || hasSceneSubtitle);
 
   return {
     language:
       normalizeStudioLanguageValue(session?.language) ?? getStudioLanguageForVoiceId(session?.voiceType) ?? undefined,
     musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType),
     subtitleEnabled,
-    subtitleColorId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) : undefined,
-    subtitleStyleId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) : undefined,
+    subtitleColorId: subtitleEnabled
+      ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ?? fallbackStudioSubtitleColorOption.id
+      : undefined,
+    subtitleStyleId: subtitleEnabled
+      ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ?? fallbackStudioSubtitleStyleOption.id
+      : undefined,
     voiceEnabled,
-    voiceId: voiceEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.voiceType) : undefined,
+    voiceId: globalVoiceEnabled ? normalizedGlobalVoiceType : undefined,
   };
 };

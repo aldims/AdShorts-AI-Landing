@@ -7,6 +7,7 @@ import {
   getStudioVoiceCreditCost,
   normalizeStudioSegmentEditorPayload,
   normalizeStudioVoiceIdForLanguage,
+  resolveStudioSegmentEditorGenerationMediaFlags,
   resolveStudioSegmentEditorAdsflowVoiceType,
   resolveAdsflowFinalVideoDownloadPath,
   resolveStudioGenerationLanguage,
@@ -130,6 +131,32 @@ describe("studio generation language resolution", () => {
         segmentVoiceType: null,
       }),
     ).toBe("Bys_24000");
+  });
+
+  it("keeps generation media enabled when segment editor scenes carry voice overrides", () => {
+    expect(
+      resolveStudioSegmentEditorGenerationMediaFlags({
+        requestedSubtitleEnabled: false,
+        requestedVoiceEnabled: false,
+        segmentEditor: {
+          projectId: 42,
+          source: "project",
+          segments: [
+            {
+              duration: 3,
+              index: 0,
+              subtitleType: "default",
+              text: "Scene voice",
+              videoAction: "original",
+              voiceType: "male-qn-jingying",
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      subtitleEnabled: true,
+      voiceEnabled: true,
+    });
   });
 
   it("locks segment editor timeline durations for generation", () => {

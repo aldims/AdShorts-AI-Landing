@@ -50,6 +50,48 @@ export const resolveStudioVoiceIdForLanguage = (
   );
 };
 
+export type WorkspaceExplicitStudioVoiceSelection = {
+  language: StudioLanguage;
+  voiceId: StudioVoiceOption["id"];
+};
+
+export const resolveWorkspaceGenerationVoiceRequest = (options: {
+  currentLanguage: StudioLanguage;
+  currentVoiceEnabled: boolean;
+  explicitVoiceSelection?: WorkspaceExplicitStudioVoiceSelection | null;
+  generationLanguage: StudioLanguage;
+  requestedVoiceEnabled?: boolean;
+  requestedVoiceId?: string | null;
+  selectedVoiceId: string | null | undefined;
+  selectedVoiceIdForLanguage?: string | null;
+}): { voiceEnabled: boolean; voiceId?: StudioVoiceOption["id"] } => {
+  const explicitVoiceSelection =
+    options.explicitVoiceSelection?.language === options.generationLanguage &&
+    getStudioLanguageForVoiceId(options.explicitVoiceSelection.voiceId) === options.generationLanguage
+      ? options.explicitVoiceSelection
+      : null;
+  const voiceEnabled =
+    typeof options.requestedVoiceEnabled === "boolean"
+      ? options.requestedVoiceEnabled
+      : explicitVoiceSelection
+        ? true
+        : options.currentVoiceEnabled;
+  const voiceId = voiceEnabled
+    ? resolveStudioVoiceIdForLanguage(
+        options.generationLanguage,
+        options.requestedVoiceId ??
+          explicitVoiceSelection?.voiceId ??
+          (options.generationLanguage === options.currentLanguage ? options.selectedVoiceId : undefined),
+        options.selectedVoiceIdForLanguage,
+      )
+    : undefined;
+
+  return {
+    voiceEnabled,
+    voiceId,
+  };
+};
+
 export const getWorkspaceInitialStudioDefaults = (
   locale: Locale,
 ): { language: StudioLanguage; voiceId: StudioVoiceOption["id"] } => {

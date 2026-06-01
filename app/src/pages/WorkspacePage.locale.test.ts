@@ -103,6 +103,7 @@ import {
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentThumbFinalInsertIndex,
+  resolveWorkspaceGenerationVoiceRequest,
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
@@ -2068,6 +2069,39 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
+  it("keeps a just-selected voice enabled for generation even when old state was silent", () => {
+    const voiceRequest = resolveWorkspaceGenerationVoiceRequest({
+      currentLanguage: "ru",
+      currentVoiceEnabled: false,
+      explicitVoiceSelection: { language: "ru", voiceId: "male-qn-jingying" },
+      generationLanguage: "ru",
+      selectedVoiceId: DEFAULT_STUDIO_VOICE_ID.ru,
+      selectedVoiceIdForLanguage: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(voiceRequest).toEqual({
+      voiceEnabled: true,
+      voiceId: "male-qn-jingying",
+    });
+  });
+
+  it("keeps voice disabled when the user explicitly requests a silent generation", () => {
+    const voiceRequest = resolveWorkspaceGenerationVoiceRequest({
+      currentLanguage: "ru",
+      currentVoiceEnabled: true,
+      explicitVoiceSelection: { language: "ru", voiceId: "male-qn-jingying" },
+      generationLanguage: "ru",
+      requestedVoiceEnabled: false,
+      selectedVoiceId: "male-qn-jingying",
+      selectedVoiceIdForLanguage: "male-qn-jingying",
+    });
+
+    expect(voiceRequest).toEqual({
+      voiceEnabled: false,
+      voiceId: undefined,
+    });
+  });
+
   it("uses bundled voice preview files instead of generated API previews", () => {
     for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
       for (const voice of voiceOptions) {
@@ -2101,6 +2135,25 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(overrides.subtitleColorId).toBeUndefined();
     expect(overrides.subtitleStyleId).toBeUndefined();
     expect(overrides.voiceEnabled).toBe(false);
+  });
+
+  it("keeps segment editor voice and subtitles enabled when a scene has its own voice", () => {
+    const overrides = getWorkspaceSegmentEditorGenerationOverrides({
+      ...createDraftSession(
+        createDraftSegment({
+          subtitleType: "default",
+          voiceType: "male-qn-jingying",
+        }),
+      ),
+      subtitleType: "none",
+      voiceType: "none",
+    });
+
+    expect(overrides.voiceEnabled).toBe(true);
+    expect(overrides.voiceId).toBeUndefined();
+    expect(overrides.subtitleEnabled).toBe(true);
+    expect(overrides.subtitleColorId).toBe("purple");
+    expect(overrides.subtitleStyleId).toBe("modern");
   });
 
   it("preserves existing visuals for regeneration until the video mode is explicitly changed", () => {
