@@ -318,6 +318,7 @@ export type WorkspaceSegmentEditorPromptToolTab = WorkspaceSegmentVisualModalTab
 export type WorkspaceSegmentTimelineVoiceTextEditSnapshot = {
   segment: WorkspaceSegmentEditorDraftSegment;
   segmentIndex: number;
+  ttsAssetId: WorkspaceSegmentEditorDraftSession["ttsAssetId"];
 };
 
 export type WorkspaceSegmentTimelineRedoSnapshot =

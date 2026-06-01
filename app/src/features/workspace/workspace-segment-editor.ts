@@ -2174,6 +2174,36 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
   voiceoverVoiceType: snapshot.voiceoverVoiceType,
 });
 
+export const restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  snapshot: {
+    segment: WorkspaceSegmentEditorDraftSegment;
+    segmentIndex: number;
+    ttsAssetId: WorkspaceSegmentEditorDraftSession["ttsAssetId"];
+  },
+  fallbackLanguage: StudioLanguage = "ru",
+): WorkspaceSegmentEditorDraftSession | null => {
+  let didRestore = false;
+  const nextSegments = draft.segments.map((segment) => {
+    if (segment.index !== snapshot.segmentIndex) {
+      return segment;
+    }
+
+    didRestore = true;
+    return restoreWorkspaceSegmentVoiceTextDraftSnapshot(segment, snapshot.segment, fallbackLanguage);
+  });
+
+  if (!didRestore) {
+    return null;
+  }
+
+  return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+    ...draft,
+    segments: nextSegments,
+    ttsAssetId: snapshot.ttsAssetId,
+  });
+};
+
 export const areWorkspaceSegmentEditorLocalizedTextMapsEqual = (
   left: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
   right: WorkspaceSegmentEditorLocalizedTextMap | null | undefined,
@@ -3375,9 +3405,8 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
 ) => {
   const isProjectVoiceoverAsset = isWorkspaceSegmentProjectVoiceoverAsset(segment, session);
-  const playableAssetDuration = isProjectVoiceoverAsset
-    ? null
-    : getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
+  const assetDuration = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
+  const playableAssetDuration = isProjectVoiceoverAsset ? null : assetDuration;
   const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
   const speechWordsDuration =
     speechWordsRange !== null ? Math.max(0, speechWordsRange.endTime - speechWordsRange.startTime) : null;
@@ -3397,6 +3426,16 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
       ? normalizeWorkspaceSegmentManualDurationSeconds(Math.max(...speechDurationCandidates))
       : null;
   if (speechDuration !== null) {
+    const sceneDurationCandidates = getWorkspaceSegmentSceneDurationCandidates(segment);
+    const isProjectAssetDurationLeakingIntoScene =
+      isProjectVoiceoverAsset &&
+      assetDuration !== null &&
+      Math.abs(speechDuration - assetDuration) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS &&
+      sceneDurationCandidates.some((duration) => duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < assetDuration);
+    if (isProjectAssetDurationLeakingIntoScene) {
+      return null;
+    }
+
     if (isWorkspaceSegmentSceneDurationSpeechEcho(segment, speechDuration)) {
       return playableAssetDuration;
     }
@@ -3409,6 +3448,24 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   }
 
   return playableAssetDuration;
+};
+
+const isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null | undefined,
+  durationSeconds: number | null | undefined,
+) => {
+  const normalizedDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
+  const assetDuration = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
+  return Boolean(
+    normalizedDurationSeconds !== null &&
+      isWorkspaceSegmentProjectVoiceoverAsset(segment, session) &&
+      assetDuration !== null &&
+      Math.abs(normalizedDurationSeconds - assetDuration) <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS &&
+      getWorkspaceSegmentSceneDurationCandidates(segment).some(
+        (duration) => duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < assetDuration,
+      ),
+  );
 };
 
 export const getWorkspaceSegmentSpeechTimelineDurationSeconds = (
@@ -3454,11 +3511,21 @@ export const getWorkspaceSegmentVoiceoverDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
     Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
-) =>
-  getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
-    ? getWorkspaceSegmentExplicitVoiceoverDurationSeconds(segment, session) ??
-      getWorkspaceSegmentSpeechTimelineDurationSeconds(segment)
-    : null;
+) => {
+  if (!getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
+    return null;
+  }
+
+  const explicitDurationSeconds = getWorkspaceSegmentExplicitVoiceoverDurationSeconds(segment, session);
+  if (explicitDurationSeconds !== null) {
+    return explicitDurationSeconds;
+  }
+
+  const speechTimelineDurationSeconds = getWorkspaceSegmentSpeechTimelineDurationSeconds(segment);
+  return isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(segment, session, speechTimelineDurationSeconds)
+    ? null
+    : speechTimelineDurationSeconds;
+};
 
 export const getWorkspaceSegmentEstimatedVoiceoverDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,

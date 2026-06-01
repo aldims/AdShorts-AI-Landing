@@ -251,6 +251,7 @@ import {
   restoreWorkspaceSegmentDraftVisualFromBaseline,
   restoreWorkspaceSegmentSceneSoundState,
   restoreWorkspaceSegmentTimelineSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   rewriteWorkspaceSegmentProjectProxyUrl,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
@@ -853,6 +854,7 @@ export {
   resolveWorkspaceSegmentVisualDurationMaxGuard,
   restoreWorkspaceSegmentSceneSoundState,
   restoreWorkspaceSegmentTimelineSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
@@ -1665,20 +1667,13 @@ export function WorkspacePage({
       return;
     }
 
-    let didRestore = false;
-    const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-      ...currentDraft,
-      segments: currentDraft.segments.map((segment) => {
-        if (segment.index !== snapshot.segmentIndex) {
-          return segment;
-        }
+    const nextDraft = restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot(
+      currentDraft,
+      snapshot,
+      currentDraft.language || selectedLanguage,
+    );
 
-        didRestore = true;
-        return restoreWorkspaceSegmentVoiceTextDraftSnapshot(segment, snapshot.segment, currentDraft.language || selectedLanguage);
-      }),
-    });
-
-    if (!didRestore) {
+    if (!nextDraft) {
       return;
     }
 
@@ -18710,6 +18705,8 @@ export function WorkspacePage({
       segmentTimelineVoiceTextEditSnapshotRef.current = {
         segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
         segmentIndex,
+        ttsAssetId:
+          (segmentEditorDraftRef.current ?? segmentEditorDraft)?.ttsAssetId ?? null,
       };
     }
 

@@ -111,6 +111,7 @@ import {
   resolveWorkspaceSegmentVisualDurationMaxGuard,
   resolveWorkspaceSegmentVoiceTimelineState,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentTimelineSnapshot,
   resolveStudioVoiceIdForLanguage,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
@@ -4054,6 +4055,37 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("does not stretch one scene to the full project voiceover duration", () => {
+    const segment = createDraftSegment({
+      duration: 5.2,
+      endTime: 5.2,
+      speechDuration: 27.4,
+      speechDurationSource: "audio",
+      speechEndTime: 27.4,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      voiceoverAsset: {
+        assetId: 503,
+        durationSeconds: 27.4,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/503",
+      },
+    });
+    const session = {
+      ...createDraftSession(segment),
+      ttsAssetId: 503,
+    };
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)).toBeNull();
+    expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session)).toEqual({
+      durationSeconds: 5.19,
+      source: "estimated",
+    });
+  });
+
   it("uses voiceover plus pause as the photo visual duration floor", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
       minimumDurationSeconds: 3.4,
@@ -4866,6 +4898,52 @@ describe("WorkspacePage studio locale defaults", () => {
         voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(originalText),
       }),
     );
+  });
+
+  it("restores the project voiceover id when reverting ungenerated voice text edits", () => {
+    const originalText = "Исходный текст озвучки";
+    const editedText = "Новый текст без генерации озвучки";
+    const snapshotSegment = createDraftSegment({
+      index: 0,
+      speechDuration: 6.4,
+      text: originalText,
+      textByLanguage: { ru: originalText },
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 6.4,
+        fileName: "baseline-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/777/playback",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(originalText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const editedSegment = {
+      ...snapshotSegment,
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      text: editedText,
+      textByLanguage: { ru: editedText },
+    };
+    const restoredDraft = restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot(
+      {
+        ...createDraftSession(editedSegment),
+        ttsAssetId: null,
+      },
+      {
+        segment: snapshotSegment,
+        segmentIndex: 0,
+        ttsAssetId: 777,
+      },
+    );
+
+    expect(restoredDraft?.ttsAssetId).toBe(777);
+    expect(restoredDraft?.segments[0]?.text).toBe(originalText);
+    expect(restoredDraft?.segments[0]?.voiceoverAsset?.assetId).toBe(777);
   });
 
   it("keeps a visible voice duration after text changes make generated voiceover stale", () => {
