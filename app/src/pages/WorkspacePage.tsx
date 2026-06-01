@@ -20076,6 +20076,25 @@ export function WorkspacePage({
 
       return !isSegmentEditorFullPreviewAudioTrackPlaybackStarted(track, currentTime, element);
     });
+  const markSegmentEditorFullPreviewAudioTrackFailed = (
+    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
+    element?: HTMLMediaElement | null,
+    options?: { clearRef?: boolean },
+  ) => {
+    segmentEditorFullPreviewFailedAudioKeysRef.current.add(track.key);
+    segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
+    segmentEditorFullPreviewAudioStartReleasedKeysRef.current.delete(track.key);
+    delete segmentEditorFullPreviewAudioStartGateSinceRef.current[track.key];
+    if (element) {
+      element.pause();
+      element.muted = true;
+      element.defaultMuted = true;
+      element.volume = 0;
+    }
+    if (options?.clearRef && segmentEditorFullPreviewAudioRefs.current[track.key] === element) {
+      delete segmentEditorFullPreviewAudioRefs.current[track.key];
+    }
+  };
   const prepareSegmentEditorFullPreviewAudioStartGateTrack = (
     track: WorkspaceSegmentEditorFullPreviewAudioTrack,
     holdTime: number,
@@ -20181,9 +20200,7 @@ export function WorkspacePage({
       waitedMs > WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS &&
       !isSegmentEditorFullPreviewAudioTrackPlaybackStarted(track, gate.holdTime, element)
     ) {
-      segmentEditorFullPreviewFailedAudioKeysRef.current.add(track.key);
-      segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
-      delete segmentEditorFullPreviewAudioStartGateSinceRef.current[track.key];
+      markSegmentEditorFullPreviewAudioTrackFailed(track, element);
       writeSegmentEditorFullPreviewDebugTrace("audio.start-gate.timeout", {
         ...getSegmentEditorFullPreviewAudioDebugPayload(track, element, gate.holdTime),
         waitedMs: Math.round(waitedMs),
@@ -20368,12 +20385,7 @@ export function WorkspacePage({
     element.onerror = () => {
       const isOptionalProjectMusicTrack =
         track.kind === "music" && track.url.includes("/api/workspace/project-music-audio");
-      segmentEditorFullPreviewFailedAudioKeysRef.current.add(track.key);
-      segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
-      segmentEditorFullPreviewAudioStartReleasedKeysRef.current.delete(track.key);
-      delete segmentEditorFullPreviewAudioStartGateSinceRef.current[track.key];
-      element.pause();
-      delete segmentEditorFullPreviewAudioRefs.current[track.key];
+      markSegmentEditorFullPreviewAudioTrackFailed(track, element, { clearRef: true });
       logSegmentEditorDiagnostics(
         isOptionalProjectMusicTrack
           ? "client.segment-editor.full-preview.music-unavailable"
@@ -20711,6 +20723,9 @@ export function WorkspacePage({
         ({ isReady, track }) => !isReady || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
       );
       if (unreadyTracks.length > 0) {
+        unreadyTracks.forEach(({ element, track }) => {
+          markSegmentEditorFullPreviewAudioTrackFailed(track, element);
+        });
         writeSegmentEditorFullPreviewDebugTrace("audio.prepare.unready", {
           currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
           minimumReadyState: startMinimumReadyState,
@@ -20736,16 +20751,17 @@ export function WorkspacePage({
           },
           { level: "warn" },
         );
-        return false;
       }
     }
 
-    if (activeTracks.length === 0) {
+    const playableActiveTracks = activeTracks.filter(
+      (track) => !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+    );
+    if (playableActiveTracks.length === 0) {
       return true;
     }
 
-    const voiceDuckingStrength = getSegmentEditorFullPreviewVoiceDuckingStrength(currentTime);
-    const activeElements = activeTracks.map((track) => {
+    const activeElements = playableActiveTracks.map((track) => {
       const element = ensureSegmentEditorFullPreviewAudioElement(track);
       const sourceTime = getSegmentEditorFullPreviewTrackSourceTime(track, currentTime, element);
       element.muted = true;
@@ -20780,6 +20796,9 @@ export function WorkspacePage({
         !activeReadyResults[index] || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
     );
     if (unreadyActiveElements.length > 0) {
+      unreadyActiveElements.forEach(({ element, track }) => {
+        markSegmentEditorFullPreviewAudioTrackFailed(track, element);
+      });
       writeSegmentEditorFullPreviewDebugTrace("audio.prepare.active-unready", {
         currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
         minimumReadyState: startMinimumReadyState,
@@ -20787,11 +20806,19 @@ export function WorkspacePage({
           getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
         ),
       });
-      return false;
+    }
+
+    const readyActiveElements = activeElements.filter(
+      ({ track }, index) =>
+        Boolean(activeReadyResults[index]) &&
+        !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+    );
+    if (readyActiveElements.length === 0) {
+      return true;
     }
 
     const playResults = await Promise.all(
-      activeElements.map(
+      readyActiveElements.map(
         ({ element, track }) =>
           new Promise<boolean>((resolve) => {
             let settled = false;
@@ -20821,10 +20848,10 @@ export function WorkspacePage({
           }),
       ),
     );
-    const rejectedPlayElements = activeElements.filter((_, index) => !playResults[index]);
+    const rejectedPlayElements = readyActiveElements.filter((_, index) => !playResults[index]);
     if (rejectedPlayElements.length > 0) {
-      rejectedPlayElements.forEach(({ track }) => {
-        segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
+      rejectedPlayElements.forEach(({ element, track }) => {
+        markSegmentEditorFullPreviewAudioTrackFailed(track, element);
       });
       writeSegmentEditorFullPreviewDebugTrace("audio.prepare.play-rejected", {
         currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
@@ -20832,7 +20859,15 @@ export function WorkspacePage({
           getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
         ),
       });
-      return false;
+    }
+
+    const playingActiveElements = readyActiveElements.filter(
+      ({ track }, index) =>
+        Boolean(playResults[index]) &&
+        !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+    );
+    if (playingActiveElements.length === 0) {
+      return true;
     }
 
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -20842,19 +20877,21 @@ export function WorkspacePage({
       return false;
     }
 
-    activeElements.forEach(({ element, track }) => {
+    playingActiveElements.forEach(({ element, track }) => {
       if (!element.paused) {
         segmentEditorFullPreviewAudioPlayingKeysRef.current.add(track.key);
       }
     });
-    const hasPendingVoiceStart = hasSegmentEditorFullPreviewPendingVoiceStart(activeTracks, currentTime);
+    const playingActiveTracks = playingActiveElements.map(({ track }) => track);
+    const hasPendingVoiceStart = hasSegmentEditorFullPreviewPendingVoiceStart(playingActiveTracks, currentTime);
     const audibleActiveKeys = new Set(
-      selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, hasPendingVoiceStart).map(
+      selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(playingActiveTracks, hasPendingVoiceStart).map(
         (track) => track.key,
       ),
     );
+    const voiceDuckingStrength = getSegmentEditorFullPreviewVoiceDuckingStrength(currentTime);
 
-    activeElements.forEach(({ element, sourceTime, track }) => {
+    playingActiveElements.forEach(({ element, sourceTime, track }) => {
       if (Number.isFinite(sourceTime)) {
         try {
           element.currentTime = sourceTime;
@@ -20874,10 +20911,11 @@ export function WorkspacePage({
       }
     });
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.done", {
-      activeTrackCount: activeTracks.length,
+      activeTrackCount: playingActiveTracks.length,
       currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
       hasPendingVoiceStart,
-      tracks: activeElements.map(({ element, track }) =>
+      skippedActiveTrackCount: activeTracks.length - playingActiveTracks.length,
+      tracks: playingActiveElements.map(({ element, track }) =>
         getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
       ),
     });

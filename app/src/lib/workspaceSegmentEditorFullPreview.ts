@@ -416,26 +416,10 @@ export const selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks = <
 export const selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart = <
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
 >(
-  tracks: Track[],
+  _tracks: Track[],
   activeTracks: Track[],
-  currentTime: number,
-): Track[] => {
-  const safeCurrentTime = normalizePreviewTime(currentTime) ?? 0;
-  const activeKeys = new Set(activeTracks.map((track) => track.key));
-
-  return tracks.filter((track) => {
-    if (activeKeys.has(track.key)) {
-      return true;
-    }
-
-    if (track.kind === "music") {
-      return false;
-    }
-
-    const timelineEndTime = normalizePreviewTime(track.timelineEndTime);
-    return timelineEndTime !== null && timelineEndTime > safeCurrentTime;
-  });
-};
+  _currentTime: number,
+): Track[] => activeTracks;
 
 export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks = <
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,

@@ -327,7 +327,7 @@ describe("workspace segment editor full preview", () => {
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);
   });
 
-  it("requires active music and all remaining non-music audio before starting full preview", () => {
+  it("requires only active audio before starting full preview", () => {
     const tracks = [
       { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
       { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
@@ -344,9 +344,7 @@ describe("workspace segment editor full preview", () => {
       selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(tracks, activeTracks, 2),
     ).toEqual([
       { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
-      { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
       { key: "voice-1", kind: "voice", timelineEndTime: 3.5, timelineStartTime: 0 },
-      { key: "voice-2", kind: "voice", timelineEndTime: 12, timelineStartTime: 8 },
     ]);
   });
 
