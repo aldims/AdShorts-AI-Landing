@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 import type { ExamplePrefillStudioSettings } from "../../../shared/example-prefill";
-import { getWorkspaceSegmentEditorPlaybackDuration } from "../../lib/workspaceSegmentEditorTimeline";
+import {
+  getWorkspaceSegmentEditorDisplayStartTime,
+  getWorkspaceSegmentEditorPlaybackDuration,
+  getWorkspaceSegmentTimelineSpeechRange,
+} from "../../lib/workspaceSegmentEditorTimeline";
 import {
   createStudioSubtitleColorOption,
   fallbackStudioSubtitleColorOption,
@@ -641,8 +645,24 @@ const resolveWorkspaceSegmentSyntheticActiveWordIndex = (
     return 0;
   }
 
-  const effectiveDuration = getWorkspaceSegmentEditorPlaybackDuration(segment, wordCount);
-  const progress = Math.min(0.999, Math.max(0, clipCurrentTime) / Math.max(0.001, effectiveDuration));
+  const explicitSpeechDuration =
+    typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0
+      ? segment.speechDuration
+      : null;
+  const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+  const displayStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const localSpeechStartTime =
+    speechRange !== null ? Math.max(0, speechRange.startTime - displayStartTime) : 0;
+  const speechRangeDuration =
+    speechRange !== null && speechRange.endTime > speechRange.startTime
+      ? speechRange.endTime - speechRange.startTime
+      : null;
+  const effectiveDuration =
+    explicitSpeechDuration ??
+    speechRangeDuration ??
+    getWorkspaceSegmentEditorPlaybackDuration(segment, wordCount, { preferEstimatedDuration: true });
+  const speechCurrentTime = Math.max(0, clipCurrentTime - localSpeechStartTime);
+  const progress = Math.min(0.999, speechCurrentTime / Math.max(0.001, effectiveDuration));
   return Math.min(wordCount - 1, Math.floor(progress * wordCount));
 };
 

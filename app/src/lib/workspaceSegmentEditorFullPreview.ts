@@ -40,6 +40,12 @@ export type WorkspaceSegmentEditorFullPreviewAudibleAudioTrack = {
   timelineStartTime: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewVolumeEnvelopeTrack = {
+  loop?: boolean;
+  timelineEndTime: number;
+  timelineStartTime: number;
+};
+
 export type WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions = {
   audioSeekToleranceSeconds: number;
   currentSourceTime: number;
@@ -168,6 +174,110 @@ export const getWorkspaceSegmentEditorFullPreviewPlaybackEndTime = (
   );
 
   return Math.max(safeVisualDuration, audioEndTime);
+};
+
+const clampWorkspaceSegmentEditorFullPreviewUnitValue = (value: number) =>
+  Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+
+export const getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier = (
+  track: WorkspaceSegmentEditorFullPreviewVolumeEnvelopeTrack,
+  currentTime: number,
+  options?: {
+    fadeInSeconds?: number;
+    fadeOutSeconds?: number;
+    fadeSeconds?: number;
+  },
+) => {
+  const timelineStartTime = normalizePreviewTime(track.timelineStartTime) ?? 0;
+  const timelineEndTime = Math.max(
+    timelineStartTime,
+    normalizePreviewTime(track.timelineEndTime) ?? timelineStartTime,
+  );
+  const safeCurrentTime = normalizePreviewTime(currentTime);
+  if (safeCurrentTime === null || safeCurrentTime < timelineStartTime || safeCurrentTime >= timelineEndTime) {
+    return 0;
+  }
+
+  const duration = timelineEndTime - timelineStartTime;
+  const requestedFadeSeconds = normalizePreviewTime(options?.fadeSeconds) ?? 0;
+  const requestedFadeInSeconds = normalizePreviewTime(options?.fadeInSeconds) ?? requestedFadeSeconds;
+  const requestedFadeOutSeconds = normalizePreviewTime(options?.fadeOutSeconds) ?? requestedFadeSeconds;
+  const fadeInSeconds = Math.min(requestedFadeInSeconds, duration / 2);
+  const fadeOutSeconds = Math.min(requestedFadeOutSeconds, duration / 2);
+  if (track.loop || (fadeInSeconds <= 0 && fadeOutSeconds <= 0)) {
+    return 1;
+  }
+
+  const fadeIn =
+    fadeInSeconds > 0
+      ? clampWorkspaceSegmentEditorFullPreviewUnitValue(
+          (safeCurrentTime - timelineStartTime) / fadeInSeconds,
+        )
+      : 1;
+  const fadeOut =
+    fadeOutSeconds > 0
+      ? clampWorkspaceSegmentEditorFullPreviewUnitValue(
+          (timelineEndTime - safeCurrentTime) / fadeOutSeconds,
+        )
+      : 1;
+  return Math.min(fadeIn, fadeOut);
+};
+
+export const getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength = <
+  Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
+>(
+  tracks: Track[],
+  currentTime: number,
+  options?: {
+    attackSeconds?: number;
+    releaseSeconds?: number;
+  },
+) => {
+  const safeCurrentTime = normalizePreviewTime(currentTime) ?? 0;
+  const attackSeconds = normalizePreviewTime(options?.attackSeconds) ?? 0;
+  const releaseSeconds = normalizePreviewTime(options?.releaseSeconds) ?? 0;
+
+  return tracks.reduce((strength, track) => {
+    if (track.kind !== "voice" && track.kind !== "embedded_voice") {
+      return strength;
+    }
+
+    const timelineStartTime = normalizePreviewTime(track.timelineStartTime);
+    const timelineEndTime = normalizePreviewTime(track.timelineEndTime);
+    if (timelineStartTime === null || timelineEndTime === null || timelineEndTime <= timelineStartTime) {
+      return strength;
+    }
+
+    let trackStrength = 0;
+    if (safeCurrentTime >= timelineStartTime && safeCurrentTime < timelineEndTime) {
+      trackStrength = 1;
+    } else if (
+      attackSeconds > 0 &&
+      safeCurrentTime >= timelineStartTime - attackSeconds &&
+      safeCurrentTime < timelineStartTime
+    ) {
+      trackStrength = 1 - (timelineStartTime - safeCurrentTime) / attackSeconds;
+    } else if (
+      releaseSeconds > 0 &&
+      safeCurrentTime >= timelineEndTime &&
+      safeCurrentTime < timelineEndTime + releaseSeconds
+    ) {
+      trackStrength = 1 - (safeCurrentTime - timelineEndTime) / releaseSeconds;
+    }
+
+    return Math.max(strength, clampWorkspaceSegmentEditorFullPreviewUnitValue(trackStrength));
+  }, 0);
+};
+
+export const getWorkspaceSegmentEditorFullPreviewDuckedVolume = (options: {
+  baseVolume: number;
+  duckedVolume: number;
+  duckingStrength: number;
+}) => {
+  const baseVolume = Math.max(0, Number.isFinite(options.baseVolume) ? options.baseVolume : 0);
+  const duckedVolume = Math.max(0, Number.isFinite(options.duckedVolume) ? options.duckedVolume : 0);
+  const duckingStrength = clampWorkspaceSegmentEditorFullPreviewUnitValue(options.duckingStrength);
+  return baseVolume + (duckedVolume - baseVolume) * duckingStrength;
 };
 
 export const resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime = (options: {

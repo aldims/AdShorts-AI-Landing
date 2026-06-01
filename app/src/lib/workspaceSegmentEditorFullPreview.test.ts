@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
+  getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier,
+  getWorkspaceSegmentEditorFullPreviewDuckedVolume,
   getWorkspaceSegmentEditorFullPreviewDuration,
   getWorkspaceSegmentEditorFullPreviewPlaybackEndTime,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
+  getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
@@ -49,6 +52,73 @@ describe("workspace segment editor full preview", () => {
         { finalVoiceGraceSeconds: 0.45 },
       ),
     ).toBeCloseTo(9.7, 6);
+  });
+
+  it("fades finite audio tracks at their preview boundaries", () => {
+    const track = { key: "sound-1", kind: "sound", timelineEndTime: 5, timelineStartTime: 1 };
+
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 0.9, { fadeSeconds: 0.4 })).toBe(0);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 1, { fadeSeconds: 0.4 })).toBe(0);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 1.2, { fadeSeconds: 0.4 })).toBeCloseTo(0.5, 6);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 2, { fadeSeconds: 0.4 })).toBe(1);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 4.8, { fadeSeconds: 0.4 })).toBeCloseTo(0.5, 6);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 5, { fadeSeconds: 0.4 })).toBe(0);
+  });
+
+  it("keeps looped music at stable volume inside the preview window", () => {
+    const track = { key: "music", kind: "music", loop: true, timelineEndTime: 10, timelineStartTime: 0 };
+
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 0, { fadeSeconds: 0.4 })).toBe(1);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 9.95, { fadeSeconds: 0.4 })).toBe(1);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 10, { fadeSeconds: 0.4 })).toBe(0);
+  });
+
+  it("supports a shorter voice fade-in while preserving the longer fade-out", () => {
+    const track = { key: "voice-1", kind: "voice", timelineEndTime: 5, timelineStartTime: 1 };
+    const options = { fadeInSeconds: 0.05, fadeOutSeconds: 0.2 };
+
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 1.025, options)).toBeCloseTo(0.5, 6);
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 4.9, options)).toBeCloseTo(0.5, 6);
+  });
+
+  it("ramps music ducking before and after voice instead of jumping at scene boundaries", () => {
+    const tracks = [
+      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 1 },
+      { key: "voice-2", kind: "voice", timelineEndTime: 8, timelineStartTime: 5 },
+    ];
+    const options = { attackSeconds: 0.2, releaseSeconds: 0.5 };
+
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 0.7, options)).toBe(0);
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 0.9, options)).toBeCloseTo(0.5, 6);
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 2, options)).toBe(1);
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 4.25, options)).toBeCloseTo(0.5, 6);
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 4.75, options)).toBe(0);
+    expect(getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength(tracks, 4.9, options)).toBeCloseTo(0.5, 6);
+  });
+
+  it("interpolates ducked preview volume by ducking strength", () => {
+    expect(
+      getWorkspaceSegmentEditorFullPreviewDuckedVolume({
+        baseVolume: 0.22,
+        duckedVolume: 0.08,
+        duckingStrength: 0,
+      }),
+    ).toBeCloseTo(0.22, 6);
+    expect(
+      getWorkspaceSegmentEditorFullPreviewDuckedVolume({
+        baseVolume: 0.22,
+        duckedVolume: 0.08,
+        duckingStrength: 0.5,
+      }),
+    ).toBeCloseTo(0.15, 6);
+    expect(
+      getWorkspaceSegmentEditorFullPreviewDuckedVolume({
+        baseVolume: 0.22,
+        duckedVolume: 0.08,
+        duckingStrength: 1,
+      }),
+    ).toBeCloseTo(0.08, 6);
   });
 
   it("ends an isolated voice track by voice duration when the visual slot is longer", () => {

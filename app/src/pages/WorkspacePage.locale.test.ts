@@ -108,6 +108,7 @@ import {
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   restoreWorkspaceSegmentTimelineSnapshot,
   resolveStudioVoiceIdForLanguage,
+  shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldAllowWorkspaceSegmentEditorStructureChange,
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
@@ -1577,6 +1578,52 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(resolveWorkspaceSegmentEditorSegmentsAfterDelete(draft, emptySegment.index)).toBe(draft.segments);
   });
 
+  it("does not require delete confirmation for a blank segment", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: createDraftSession(sourceSegment),
+      insertAt: 1,
+    });
+    const draft = {
+      ...createDraftSession(sourceSegment),
+      segments: [sourceSegment, emptySegment],
+    };
+
+    expect(shouldConfirmWorkspaceSegmentEditorSegmentDelete(draft, emptySegment.index)).toBe(false);
+  });
+
+  it("does not require delete confirmation for a segment without a visual", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const textOnlySegment = createDraftSegment({
+      index: 1,
+      originalText: "Voiceover draft",
+      text: "Voiceover draft",
+      textByLanguage: { ru: "Voiceover draft" },
+    });
+    const draft = {
+      ...createDraftSession(sourceSegment),
+      segments: [sourceSegment, textOnlySegment],
+    };
+
+    expect(shouldConfirmWorkspaceSegmentEditorSegmentDelete(draft, textOnlySegment.index)).toBe(false);
+  });
+
+  it("requires delete confirmation for a segment with content", () => {
+    const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
+    const contentSegment = createDraftSegment({
+      currentAsset: createMediaAsset(202, { mediaType: "video" }),
+      currentPlaybackUrl: "/api/workspace/media-assets/202",
+      index: 1,
+      text: "Segment with content",
+    });
+    const draft = {
+      ...createDraftSession(sourceSegment),
+      segments: [sourceSegment, contentSegment],
+    };
+
+    expect(shouldConfirmWorkspaceSegmentEditorSegmentDelete(draft, contentSegment.index)).toBe(true);
+  });
+
   it("allocates new blank segments outside reserved project segment indexes", () => {
     const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
     const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
@@ -2508,6 +2555,61 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceoverAsset: null,
       voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Second"),
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+  });
+
+  it("adopts the fresh project voice after whole-video voiceover generation", () => {
+    const staleLiveSegment = createDraftSegment({
+      duration: 5,
+      endTime: 5,
+      index: 0,
+      speechDuration: 4.6,
+      speechEndTime: 4.6,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("First"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const freshSegment = createDraftSegment({
+      duration: 5.2,
+      endTime: 5.2,
+      index: 0,
+      speechDuration: 4.9,
+      speechEndTime: 4.9,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const baseline = {
+      ...createDraftSession(staleLiveSegment),
+      ttsAssetId: 100,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      {
+        ...baseline,
+        segments: [staleLiveSegment],
+      },
+      {
+        ...createFreshSession(freshSegment),
+        ttsAssetId: 200,
+        voiceType: "Tur_24000",
+      },
+      {
+        baselineSession: baseline,
+      },
+    );
+
+    expect(refreshedDraft.voiceType).toBe("Tur_24000");
+    expect(refreshedDraft.ttsAssetId).toBe(200);
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      speechDuration: 4.9,
+      speechDurationSource: "audio",
+      speechEndTime: 4.9,
+      voiceoverAsset: null,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("First"),
+      voiceoverVoiceType: "Tur_24000",
     });
   });
 

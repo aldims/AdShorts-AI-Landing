@@ -173,7 +173,6 @@ type StudioVoiceSelectorChipProps = {
   isEnabled: boolean;
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
-  onApplyBulkText?: () => boolean | void;
   onBulkTextChange?: (value: string) => void;
   onGenerateVoiceover?: () => void;
   onOpenChange?: (isOpen: boolean) => void;
@@ -783,7 +782,6 @@ export function StudioVoiceSelectorChip({
   isEnabled,
   openAnchorRect = null,
   openRequestId = 0,
-  onApplyBulkText,
   onBulkTextChange,
   onGenerateVoiceover,
   onOpenChange,
@@ -814,8 +812,7 @@ export function StudioVoiceSelectorChip({
   const hasLanguageSelector = Boolean(selectedLanguage && onSelectLanguage);
   const hasBulkTextEditor =
     typeof bulkTextValue === "string" &&
-    typeof onBulkTextChange === "function" &&
-    typeof onApplyBulkText === "function";
+    typeof onBulkTextChange === "function";
   const hasVoiceoverGenerator = typeof onGenerateVoiceover === "function";
   const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
   const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
@@ -1183,16 +1180,13 @@ export function StudioVoiceSelectorChip({
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                         event.preventDefault();
-                        const applied = onApplyBulkText?.();
-                        if (applied !== false) {
-                          setIsOpen(false);
-                        }
+                        setIsOpen(false);
                       }
                     }}
                   />
                   {bulkTextError ? <p className="studio-voice-selector__bulk-error">{bulkTextError}</p> : null}
-                  <div className="studio-voice-selector__bulk-actions">
-                    {hasVoiceoverGenerator ? (
+                  {hasVoiceoverGenerator ? (
+                    <div className="studio-voice-selector__bulk-actions">
                       <button
                         className="studio-voice-selector__bulk-generate"
                         type="button"
@@ -1216,19 +1210,8 @@ export function StudioVoiceSelectorChip({
                         <span>{resolvedGenerateVoiceoverLabel}</span>
                         {generateVoiceoverCostLabel ? <small>{generateVoiceoverCostLabel}</small> : null}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const applied = onApplyBulkText?.();
-                        if (applied !== false) {
-                          setIsOpen(false);
-                        }
-                      }}
-                    >
-                      {locale === "en" ? "Apply text" : "Применить текст"}
-                    </button>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>,

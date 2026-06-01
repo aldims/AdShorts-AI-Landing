@@ -679,6 +679,84 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
+  it("uses current project voice metadata when project TTS replaces stale scene voice metadata", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/projects/3661/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            language: "ru",
+            project_id: 3661,
+            segments: [
+              {
+                duration: 10,
+                end_time: 10,
+                index: 0,
+                speech_duration: 3.4,
+                speech_end_time: 3.4,
+                speech_start_time: 0,
+                start_time: 0,
+                text: "First scene.",
+                voiceover_language: "ru",
+                voiceover_text_hash: "old-scene-hash",
+                voiceover_voice_type: "Boris",
+              },
+            ],
+            title: "Project voice changed",
+            tts_asset_id: 9001,
+            voice_type: "Gleb",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3661 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          generation_settings: {
+            tts_asset_id: 9001,
+            voice_type: "Gleb",
+          },
+          language: "ru",
+          project_id: 3661,
+          voice_type: "Gleb",
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3661,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBe(9001);
+    expect(session.voiceType).toBe("Gleb");
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: 3.4,
+      speechEndTime: 3.4,
+      speechStartTime: 0,
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: "first scene.",
+      voiceoverVoiceType: "Gleb",
+    }));
+  });
+
   it("inherits source project audio and source voice ranges for edited project previews", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

@@ -483,6 +483,9 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                     speechDuration !== null ||
                     (Array.isArray(speechWords) && speechWords.length > 0));
             const segmentText = pickSegmentEditorText(segment.text, detailSegment?.text, sourceSegment?.text);
+            const projectVoiceoverTextHash = hasProjectVoiceoverTiming
+                ? getSegmentEditorVoiceoverTextHash(segmentText)
+                : "";
             return {
                 ...segment,
                 speech_duration: speechDuration,
@@ -490,9 +493,44 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                 speech_start_time: speechStartTime,
                 speech_words: speechWords,
                 text: segmentText,
-                voiceover_language: pickSegmentEditorText(segment.voiceover_language, detailSegment?.voiceover_language, sourceSegment?.voiceover_language, hasProjectVoiceoverTiming ? effectiveLanguage : ""),
-                voiceover_text_hash: pickSegmentEditorText(segment.voiceover_text_hash, detailSegment?.voiceover_text_hash, hasProjectVoiceoverTiming ? sourceSegment?.voiceover_text_hash : "", hasProjectVoiceoverTiming ? getSegmentEditorVoiceoverTextHash(segmentText) : ""),
-                voiceover_voice_type: pickSegmentEditorText(segment.voiceover_voice_type, detailSegment?.voiceover_voice_type, hasProjectVoiceoverTiming ? sourceRecord.voiceoverVoiceType : "", hasProjectVoiceoverTiming ? effectiveVoiceType : ""),
+                voiceover_language: pickSegmentEditorText(...(hasProjectVoiceoverTiming
+                    ? [
+                        effectiveLanguage,
+                        detailSegment?.voiceover_language,
+                        sourceSegment?.voiceover_language,
+                        segment.voiceover_language,
+                    ]
+                    : [
+                        segment.voiceover_language,
+                        detailSegment?.voiceover_language,
+                        sourceSegment?.voiceover_language,
+                    ])),
+                voiceover_text_hash: pickSegmentEditorText(...(hasProjectVoiceoverTiming
+                    ? [
+                        projectVoiceoverTextHash,
+                        detailSegment?.voiceover_text_hash,
+                        sourceSegment?.voiceover_text_hash,
+                        segment.voiceover_text_hash,
+                    ]
+                    : [
+                        segment.voiceover_text_hash,
+                        detailSegment?.voiceover_text_hash,
+                        sourceSegment?.voiceover_text_hash,
+                    ])),
+                voiceover_voice_type: pickSegmentEditorText(...(hasProjectVoiceoverTiming
+                    ? [
+                        effectiveVoiceType,
+                        detailSegment?.voiceover_voice_type,
+                        sourceSegment?.voiceover_voice_type,
+                        sourceRecord.voiceoverVoiceType,
+                        segment.voiceover_voice_type,
+                    ]
+                    : [
+                        segment.voiceover_voice_type,
+                        detailSegment?.voiceover_voice_type,
+                        sourceSegment?.voiceover_voice_type,
+                        sourceRecord.voiceoverVoiceType,
+                    ])),
             };
         }),
         tts_asset_id: inheritedTtsAssetId ?? payload.tts_asset_id,

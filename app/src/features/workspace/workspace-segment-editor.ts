@@ -2284,6 +2284,16 @@ export const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSeg
       segment.originalExternalPreviewUrl,
   );
 
+const isWorkspaceSegmentEditorDraftSegmentVisualEmpty = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  Boolean(
+    segment &&
+      !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
+      !segment.photoAnimationSourceAsset &&
+      !hasWorkspaceSegmentPersistedMediaReference(segment),
+  );
+
 export const resolveWorkspaceSegmentEditorMediaUploadScope = (
   session: Pick<WorkspaceSegmentEditorDraftSession, "projectId">,
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -2312,21 +2322,8 @@ export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
   Boolean(
     segment &&
       !normalizeWorkspaceSegmentEditorTextForCompare(segment.text) &&
-      !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
-      !segment.photoAnimationSourceAsset &&
-      !segment.sceneSoundAsset &&
-      !segment.currentAsset &&
-      !segment.currentPlaybackUrl &&
-      !segment.currentPreviewUrl &&
-      !segment.currentPosterUrl &&
-      !segment.currentExternalPlaybackUrl &&
-      !segment.currentExternalPreviewUrl &&
-      !segment.originalAsset &&
-      !segment.originalPlaybackUrl &&
-      !segment.originalPreviewUrl &&
-      !segment.originalPosterUrl &&
-      !segment.originalExternalPlaybackUrl &&
-      !segment.originalExternalPreviewUrl,
+      isWorkspaceSegmentEditorDraftSegmentVisualEmpty(segment) &&
+      !segment.sceneSoundAsset,
   );
 
 export const getWorkspaceSegmentOriginalMediaType = (
@@ -4501,6 +4498,22 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     options?.baselineSession && options.baselineSession.projectId === liveDraft.projectId
       ? normalizeWorkspaceSegmentEditorSession(options.baselineSession)
       : null;
+  const liveVoiceType = normalizeWorkspaceSegmentEditorSetting(liveDraft.voiceType) ?? "";
+  const freshVoiceType = normalizeWorkspaceSegmentEditorSetting(normalizedFreshSession.voiceType) ?? "";
+  const baselineVoiceType = normalizeWorkspaceSegmentEditorSetting(normalizedBaselineSession?.voiceType) ?? "";
+  const freshTtsAssetId = getPositiveWorkspaceMediaAssetId(normalizedFreshSession.ttsAssetId);
+  const baselineTtsAssetId = getPositiveWorkspaceMediaAssetId(normalizedBaselineSession?.ttsAssetId);
+  const hasFreshProjectVoiceoverTiming =
+    freshTtsAssetId !== null && normalizedFreshSession.segments.some(hasWorkspaceSegmentProjectVoiceoverTimingData);
+  const hasLiveVoiceEdit = Boolean(normalizedBaselineSession) && liveVoiceType !== baselineVoiceType;
+  const hasFreshVoiceUpdate =
+    Boolean(freshVoiceType) &&
+    (hasFreshProjectVoiceoverTiming ||
+      freshTtsAssetId !== baselineTtsAssetId ||
+      (Boolean(normalizedBaselineSession) && freshVoiceType !== baselineVoiceType));
+  const shouldAdoptFreshVoiceState = hasFreshVoiceUpdate && !hasLiveVoiceEdit;
+  const nextVoiceType = shouldAdoptFreshVoiceState ? normalizedFreshSession.voiceType : liveDraft.voiceType;
+  const nextLanguage = shouldAdoptFreshVoiceState ? normalizedFreshSession.language : liveDraft.language;
   const shouldPreserveLiveMusicState = normalizedBaselineSession
     ? !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedBaselineSession)
     : !areWorkspaceSegmentEditorMusicStatesEqual(normalizedLiveMusicState, normalizedFreshSession);
@@ -4532,7 +4545,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
         segment,
         freshSegment,
         fallbackLanguage,
-        liveDraft.voiceType,
+        nextVoiceType,
         baselineSegmentsByIndex.get(segment.index) ?? null,
       ),
     );
@@ -4556,7 +4569,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     customMusicAssetId: nextMusicState.customMusicAssetId ?? null,
     customMusicFileName: nextMusicState.customMusicFileName ?? null,
     description: liveDraft.description,
-    language: liveDraft.language,
+    language: nextLanguage,
     musicAssetId: nextMusicState.musicAssetId ?? null,
     musicName: nextMusicState.musicName ?? null,
     musicType: nextMusicState.musicType,
@@ -4565,7 +4578,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
     subtitleStyle: liveDraft.subtitleStyle,
     subtitleType: liveDraft.subtitleType,
     title: liveDraft.title,
-    voiceType: liveDraft.voiceType,
+    voiceType: nextVoiceType,
   });
 };
 
@@ -4822,6 +4835,18 @@ export const resolveWorkspaceSegmentEditorSegmentsAfterDelete = (
   }
 
   return draft.segments.filter((segment) => segment.index !== targetSegmentIndex);
+};
+
+export const shouldConfirmWorkspaceSegmentEditorSegmentDelete = (
+  draft: WorkspaceSegmentEditorDraftSession | null | undefined,
+  targetSegmentIndex: number | null | undefined,
+) => {
+  if (!draft || typeof targetSegmentIndex !== "number") {
+    return false;
+  }
+
+  const targetSegment = draft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+  return Boolean(targetSegment && !isWorkspaceSegmentEditorDraftSegmentVisualEmpty(targetSegment));
 };
 
 export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
