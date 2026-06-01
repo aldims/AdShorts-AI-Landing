@@ -250,9 +250,12 @@ export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
     canForward,
     hasHistory: canBack || canForward,
     historyKind,
-    isEdited: options.isGeneratedVoiceoverEdited,
+    isEdited: options.isGeneratedVoiceoverEdited || options.isVoiceSettingsEdited,
   };
 };
+
+export const resolveWorkspaceProjectVoiceoverPendingSegments = <T>(targets: T[], targetsToGenerate: T[]) =>
+  targetsToGenerate.length > 0 ? targets : [];
 
 const workspaceStudioVideoModeIds = new Set<StudioVideoMode>(WORKSPACE_STUDIO_VIDEO_MODE_IDS);
 

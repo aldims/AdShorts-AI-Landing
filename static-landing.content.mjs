@@ -5,7 +5,7 @@ export const staticLandingContent = {
     "x-default": "https://adshortsai.com/",
   },
   assets: {
-    css: "styles.css?v=54",
+    css: "styles.css?v=55",
     script: "script.js?v=8",
     logo: "logo.png?v=2",
     favicon: {

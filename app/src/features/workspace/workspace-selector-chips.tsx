@@ -159,6 +159,12 @@ type StudioLanguageSelectorChipProps = {
   variant?: "chip" | "sidebar";
 };
 
+export type StudioVoiceSelectorGenerationSelection = {
+  isEnabled: boolean;
+  language: StudioLanguage | null;
+  voiceId: StudioVoiceOption["id"] | null;
+};
+
 type StudioVoiceSelectorChipProps = {
   bulkTextError?: string | null;
   bulkTextSegmentCount?: number;
@@ -174,7 +180,7 @@ type StudioVoiceSelectorChipProps = {
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
   onBulkTextChange?: (value: string) => void;
-  onGenerateVoiceover?: () => void;
+  onGenerateVoiceover?: (selection: StudioVoiceSelectorGenerationSelection) => void;
   onOpenChange?: (isOpen: boolean) => void;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
   onSelectLanguage?: (language: StudioLanguage) => void;
@@ -1201,7 +1207,11 @@ export function StudioVoiceSelectorChip({
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          onGenerateVoiceover?.();
+                          onGenerateVoiceover?.({
+                            isEnabled,
+                            language: selectedLanguage ?? null,
+                            voiceId: isEnabled ? selectedVoice?.id ?? selectedVoiceId ?? null : null,
+                          });
                         }}
                       >
                         {isGeneratingVoiceover ? (

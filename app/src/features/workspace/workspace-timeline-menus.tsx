@@ -342,8 +342,8 @@ type WorkspaceSegmentTimelineVoiceLanguageOption = {
 };
 
 type WorkspaceSegmentTimelineVoiceMenuProps = {
-  defaultVoiceoverCreditCost: number;
   effectiveVoiceId: StudioVoiceOption["id"] | null;
+  generateCostLabel: string | null;
   generateDisabledReason: string | null;
   generateLabel: string;
   isGeneratingVoiceover: boolean;
@@ -366,7 +366,6 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   textAreaId: string;
   visualAudioWarningText: string | null;
   voiceOptions: StudioVoiceOption[];
-  voiceoverCost: number;
 };
 
 const getWorkspaceSegmentTimelineVoiceLanguageLabel = (locale: Locale, language: StudioLanguage) =>
@@ -382,8 +381,8 @@ const getWorkspaceSegmentTimelineVoiceLanguageDescription = (locale: Locale, lan
       : "Русскоязычные голоса";
 
 export function WorkspaceSegmentTimelineVoiceMenu({
-  defaultVoiceoverCreditCost,
   effectiveVoiceId,
+  generateCostLabel,
   generateDisabledReason,
   generateLabel,
   isGeneratingVoiceover,
@@ -406,7 +405,6 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   textAreaId,
   visualAudioWarningText,
   voiceOptions,
-  voiceoverCost,
 }: WorkspaceSegmentTimelineVoiceMenuProps) {
   if (!segment || !style || typeof document === "undefined") {
     return null;
@@ -583,6 +581,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
             className="studio-segment-editor__timeline-voice-text-generate"
             type="button"
             disabled={Boolean(generateDisabledReason)}
+            aria-busy={isGeneratingVoiceover ? true : undefined}
             aria-label={
               generateDisabledReason
                 ? `${generateLabel}. ${generateDisabledReason}`
@@ -595,7 +594,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
               <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
             ) : null}
             <span>{generateLabel}</span>
-            <small>{voiceoverCost || defaultVoiceoverCreditCost} ⚡</small>
+            {generateCostLabel ? <small>{generateCostLabel}</small> : null}
           </button>
         </div>
       </div>

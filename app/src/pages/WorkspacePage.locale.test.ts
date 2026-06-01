@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
+  applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceSegmentEditorPayload,
   buildStudioRouteUrl,
   buildWorkspaceSegmentEditorChangeChecklist,
@@ -102,6 +103,8 @@ import {
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveWorkspaceSegmentGeneratedVoiceoverEdited,
+  resolveWorkspaceProjectVoiceoverPendingSegments,
+  rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
   resolveWorkspaceSegmentVisualDurationMaxGuard,
   resolveWorkspaceSegmentVoiceTimelineState,
@@ -4608,6 +4611,13 @@ describe("WorkspacePage studio locale defaults", () => {
       isTextEdited: false,
       isVoiceSettingsEdited: true,
     });
+    const voiceSettingsState = resolveWorkspaceSegmentVoiceTimelineState({
+      canForwardText: false,
+      canForwardVoice: false,
+      isGeneratedVoiceoverEdited: false,
+      isTextEdited: false,
+      isVoiceSettingsEdited: true,
+    });
 
     expect(textOnlyState).toMatchObject({
       canBack: true,
@@ -4620,6 +4630,79 @@ describe("WorkspacePage studio locale defaults", () => {
       hasHistory: true,
       historyKind: "voice",
       isEdited: true,
+    });
+    expect(voiceSettingsState).toMatchObject({
+      canBack: true,
+      hasHistory: true,
+      historyKind: "voice",
+      isEdited: true,
+    });
+  });
+
+  it("shows project voiceover progress on every segment sent to generation", () => {
+    const targets = [{ index: 0 }, { index: 1 }, { index: 2 }];
+
+    expect(resolveWorkspaceProjectVoiceoverPendingSegments(targets, [targets[1]])).toEqual(targets);
+    expect(resolveWorkspaceProjectVoiceoverPendingSegments(targets, [])).toEqual([]);
+  });
+
+  it("keeps project voiceover timing when a scene voice is toggled off and back on", () => {
+    const text = "Речь идет о полноценном нейроинтерфейсе.";
+    const segment = createDraftSegment({
+      duration: 4.3,
+      endTime: 4.3,
+      speechDuration: 4.3,
+      speechDurationSource: "audio",
+      speechEndTime: 4.3,
+      speechStartTime: 0,
+      speechWords: [{ confidence: 1, endTime: 4.3, startTime: 0, text }],
+      text,
+      textByLanguage: { ru: text },
+      voiceoverAsset: {
+        assetId: 777,
+        durationSeconds: 31.7,
+        fileName: "project-voiceover.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/777",
+        source: "media-library",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const draft = {
+      ...createDraftSession(segment),
+      ttsAssetId: 777,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+    const staleSceneVoiceDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      applyWorkspaceSegmentEditorSceneVoiceOverride(draft, segment.index, "English_ManWithDeepVoice"),
+    );
+    const disabledDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      applyWorkspaceSegmentEditorSceneVoiceOverride(staleSceneVoiceDraft, segment.index, "none", {
+        subtitleType: "none",
+      }),
+    );
+    const restoredDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      applyWorkspaceSegmentEditorSceneVoiceOverride(disabledDraft, segment.index, null),
+    );
+    const staleSceneVoiceSegment = staleSceneVoiceDraft.segments[0]!;
+    const restoredSegment = restoredDraft.segments[0]!;
+
+    expect(disabledDraft.ttsAssetId).toBe(777);
+    expect(staleSceneVoiceSegment.speechDuration).toBe(4.3);
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(staleSceneVoiceSegment, staleSceneVoiceDraft, {
+        isStale: true,
+      }),
+    ).toMatchObject({
+      source: "estimated",
+    });
+    expect(restoredSegment.speechDuration).toBe(4.3);
+    expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(restoredSegment, restoredDraft)).toMatchObject({
+      durationSeconds: 4.3,
+      source: "actual",
     });
   });
 

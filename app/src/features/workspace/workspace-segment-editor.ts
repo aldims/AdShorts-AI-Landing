@@ -3584,6 +3584,24 @@ export const clearWorkspaceSegmentVoiceoverTiming = (
   };
 };
 
+export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  segmentIndex: number,
+  voiceType: string | null,
+  options?: { subtitleType?: string | null },
+): WorkspaceSegmentEditorDraftSession => ({
+  ...draft,
+  segments: draft.segments.map((segment) =>
+    segment.index === segmentIndex
+      ? {
+          ...segment,
+          ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
+          voiceType,
+        }
+      : segment,
+  ),
+});
+
 export const normalizeWorkspaceSegmentVoicePreviewTime = (value: unknown) => {
   if (value === null || typeof value === "undefined" || value === "") {
     return null;
@@ -4037,6 +4055,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments).map((segment) => {
     const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(segment, session);
     return segmentWithFreshVoiceoverTiming.voiceoverAsset &&
+      !isWorkspaceSegmentProjectVoiceoverAsset(segmentWithFreshVoiceoverTiming, session) &&
       !isWorkspaceSegmentVoiceoverAssetFresh(segmentWithFreshVoiceoverTiming, session)
       ? {
           ...segmentWithFreshVoiceoverTiming,

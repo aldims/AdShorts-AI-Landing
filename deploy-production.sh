@@ -638,19 +638,24 @@ check_status "$PROD_URL/kak-sdelat-shorts-na-youtube/" "200"
 check_status "$PROD_URL/index.html" "301"
 check_status "$PROD_URL/en/index.html" "301"
 
-root_title="$(curl -fsS "$PROD_URL/" | grep -o '<title>[^<]*' | head -n 1 || true)"
-pricing_title="$(curl -fsS "$PROD_URL/pricing/" | grep -o '<title>[^<]*' | head -n 1 || true)"
+root_html="$(curl -fsS "$PROD_URL/" || true)"
+pricing_html="$(curl -fsS "$PROD_URL/pricing/" || true)"
+examples_html="$(curl -fsS "$PROD_URL/examples/" || true)"
+contacts_html="$(curl -fsS "$PROD_URL/contacts/" || true)"
+
+root_title="$(printf '%s' "$root_html" | grep -o '<title>[^<]*' | head -n 1 || true)"
+pricing_title="$(printf '%s' "$pricing_html" | grep -o '<title>[^<]*' | head -n 1 || true)"
 if echo "$root_title $pricing_title" | grep -q "AdShorts AI App"; then
   echo "SEO static pages are still serving the SPA shell." >&2
   smoke_failed=1
 fi
 
-if ! curl -fsS "$PROD_URL/pricing/" | grep -q '<div id="app">'; then
+if [[ "$pricing_html" != *'<div id="app">'* ]]; then
   echo "Pricing is not serving the SPA shell." >&2
   smoke_failed=1
 fi
 
-if ! curl -fsS "$PROD_URL/pricing/" | grep -q 'data-seo-fallback="true"'; then
+if [[ "$pricing_html" != *'data-seo-fallback="true"'* ]]; then
   echo "Pricing is missing SEO fallback content." >&2
   smoke_failed=1
 fi
@@ -661,18 +666,18 @@ if echo "$contacts_robots_header" | grep -qi 'noindex'; then
   smoke_failed=1
 fi
 
-if ! curl -fsS "$PROD_URL/contacts/" | grep -q 'Контакты AdShorts AI'; then
+if [[ "$contacts_html" != *'Контакты AdShorts AI'* ]]; then
   echo "Contacts trust page is not serving the static SEO page." >&2
   smoke_failed=1
 fi
 
-pricing_canonical="$(curl -fsS "$PROD_URL/pricing/" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
+pricing_canonical="$(printf '%s' "$pricing_html" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
 if [ "$pricing_canonical" != 'rel="canonical" href="https://adshortsai.com/pricing/' ]; then
   echo "Unexpected pricing canonical: $pricing_canonical" >&2
   smoke_failed=1
 fi
 
-examples_canonical="$(curl -fsS "$PROD_URL/examples/" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
+examples_canonical="$(printf '%s' "$examples_html" | grep -o 'rel="canonical" href="[^"]*' | head -n 1 || true)"
 if [ "$examples_canonical" != 'rel="canonical" href="https://adshortsai.com/examples/' ]; then
   echo "Unexpected examples canonical: $examples_canonical" >&2
   smoke_failed=1
