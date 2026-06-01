@@ -9652,21 +9652,27 @@ export function WorkspacePage({
   const updateSegmentEditorDraftSegmentByIndex = (
     targetSegmentIndex: number,
     updater: (segment: WorkspaceSegmentEditorDraftSegment) => WorkspaceSegmentEditorDraftSegment,
+    options?: {
+      preserveSourceTimelineEnd?: boolean;
+    },
   ) => {
     updateSegmentEditorDraft((currentDraft) => ({
       ...currentDraft,
       segments: currentDraft.segments.map((segment) =>
         segment.index === targetSegmentIndex ? updater(segment) : segment,
       ),
-    }));
+    }), options);
   };
 
   const updateSegmentEditorDraft = (
     updater: (draft: WorkspaceSegmentEditorDraftSession) => WorkspaceSegmentEditorDraftSession,
+    options?: {
+      preserveSourceTimelineEnd?: boolean;
+    },
   ) => {
     const draftFromRef = segmentEditorDraftRef.current;
     if (draftFromRef) {
-      const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(draftFromRef));
+      const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(draftFromRef), options);
       segmentEditorDraftRef.current = nextDraft;
       setSegmentEditorDraft(nextDraft);
       return;
@@ -9678,7 +9684,7 @@ export function WorkspacePage({
         return currentDraft;
       }
 
-      const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(currentDraft));
+      const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(currentDraft), options);
       segmentEditorDraftRef.current = nextDraft;
       return nextDraft;
     });
@@ -11113,11 +11119,20 @@ export function WorkspacePage({
   };
 
   const resetSegmentEditorDurationByIndex = (targetSegmentIndex: number) => {
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (segment) => segment.index === targetSegmentIndex,
+    );
+
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
-      durationMode: "auto",
-      manualDurationSeconds: null,
+      duration: baselineSegment?.duration ?? segment.duration,
+      durationExtensionSourceDurationSeconds:
+        baselineSegment?.durationExtensionSourceDurationSeconds ?? segment.durationExtensionSourceDurationSeconds ?? null,
+      durationMode: normalizeWorkspaceSegmentDurationMode(baselineSegment?.durationMode) ?? "auto",
+      endTime: baselineSegment?.endTime ?? segment.endTime,
+      manualDurationSeconds: baselineSegment?.manualDurationSeconds ?? null,
+      startTime: baselineSegment?.startTime ?? segment.startTime,
     }));
   };
 
@@ -19100,10 +19115,13 @@ export function WorkspacePage({
     );
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
+      duration: timing.duration,
       durationExtensionSourceDurationSeconds,
       durationMode: "manual",
+      endTime: timing.boundaryTime,
       manualDurationSeconds: timing.duration,
-    }));
+      startTime: timing.segmentStartTime,
+    }), { preserveSourceTimelineEnd: false });
     return timing;
   };
   const applySegmentTimelineManualDuration = (segmentIndex: number, requestedDurationSeconds: number) => {

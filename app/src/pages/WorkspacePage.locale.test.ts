@@ -1298,6 +1298,55 @@ describe("WorkspacePage segment editor draft persistence", () => {
     ]);
   });
 
+  it("treats an automatic photo duration change as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 9.7,
+      durationMode: "auto",
+      endTime: 9.7,
+      index: 0,
+      manualDurationSeconds: null,
+      mediaType: "photo",
+      startTime: 0,
+    });
+    const draftSegment = createDraftSegment({
+      ...baselineSegment,
+      duration: 8.7,
+      endTime: 8.7,
+    });
+
+    expect(
+      buildWorkspaceSegmentEditorChangeChecklist(
+        createDraftSession(draftSegment),
+        createDraftSession(baselineSegment),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        kind: "segment",
+        label: "Сегмент 1: длина: 8.7 сек",
+        resetDuration: true,
+        segmentIndex: 0,
+      }),
+    ]);
+  });
+
+  it("does not treat a blank inserted segment duration as a Shorts edit", () => {
+    const baselineSegment = createDraftSegment({ index: 0 });
+    const baselineSession = {
+      ...createDraftSession(baselineSegment),
+      segments: [baselineSegment],
+    };
+    const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: baselineSession,
+      insertAt: 1,
+    });
+    const draftSession = {
+      ...baselineSession,
+      segments: [baselineSegment, insertedSegment],
+    };
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draftSession, baselineSession)).toEqual([]);
+  });
+
   it("treats a scene voice override as a Shorts edit", () => {
     const baselineSegment = createDraftSegment({ index: 0, voiceType: null });
     const draftSegment = createDraftSegment({ index: 0, voiceType: "Liam" });

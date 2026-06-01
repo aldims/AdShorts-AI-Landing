@@ -216,6 +216,7 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   options?: {
     fallbackDuration?: number | null;
     preferEstimatedDuration?: boolean;
+    preserveExistingStillDuration?: boolean;
     stillNoTextFallbackDuration?: number | null;
     subtitleEnabled?: boolean;
     visualDurationSeconds?: number | null;
@@ -239,12 +240,33 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
   const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
+  const timelineDuration =
+    getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const existingStillDuration =
+    visualKind === "image"
+      ? normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration) ??
+        normalizeWorkspaceSegmentManualDurationSeconds(visualDuration) ??
+        normalizeWorkspaceSegmentManualDurationSeconds(segment.duration) ??
+        normalizeWorkspaceSegmentManualDurationSeconds(options?.fallbackDuration)
+      : null;
 
   if (segment.durationMode === "manual" && manualDuration !== null) {
-    return Math.max(minimumDuration, manualDuration);
+    return Math.max(
+      minimumDuration,
+      manualDuration,
+      options?.preserveExistingStillDuration && existingStillDuration !== null ? existingStillDuration : 0,
+    );
   }
 
   if (voiceDuration !== null) {
+    if (options?.preserveExistingStillDuration && existingStillDuration !== null) {
+      return Math.max(
+        WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+        voiceDuration,
+        existingStillDuration,
+      );
+    }
+
     return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
   }
 
@@ -283,6 +305,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     voiceEnabled?: boolean | ((segment: T) => boolean);
     speechBoundaryEnabled?: boolean | ((previousSegment: T, nextSegment: T) => boolean);
     preserveSourceTimelineEnd?: boolean;
+    preserveExistingStillDurations?: boolean | ((segment: T) => boolean);
   },
 ) => {
   let cursor = 0;
@@ -293,9 +316,14 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       typeof options?.voiceEnabled === "function" ? options.voiceEnabled(segment) : options?.voiceEnabled;
     const subtitleEnabled =
       typeof options?.subtitleEnabled === "function" ? options.subtitleEnabled(segment) : options?.subtitleEnabled;
+    const preserveExistingStillDuration =
+      typeof options?.preserveExistingStillDurations === "function"
+        ? options.preserveExistingStillDurations(segment)
+        : options?.preserveExistingStillDurations;
     const duration = roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
       fallbackDuration: segment.duration,
       preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
+      preserveExistingStillDuration: preserveExistingStillDuration ?? false,
       stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
       subtitleEnabled,
       visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,

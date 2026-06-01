@@ -258,12 +258,22 @@ export const areWorkspaceSegmentDurationValuesEqual = (left: number | null, righ
 };
 
 export const isWorkspaceSegmentDraftDurationEdited = (
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "durationMode" | "manualDurationSeconds">,
-  baselineSegment: Pick<WorkspaceSegmentEditorDraftSegment, "durationMode" | "manualDurationSeconds"> | null | undefined,
+  segment: Pick<WorkspaceSegmentEditorDraftSegment, "duration" | "durationMode" | "manualDurationSeconds">,
+  baselineSegment: Pick<WorkspaceSegmentEditorDraftSegment, "duration" | "durationMode" | "manualDurationSeconds"> | null | undefined,
 ) => {
   const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+  if (!baselineSegment) {
+    return durationMode === "manual" && normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
+  }
+
   const baselineDurationMode = normalizeWorkspaceSegmentDurationMode(baselineSegment?.durationMode);
+  const duration = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+  const baselineDuration = normalizeWorkspaceSegmentManualDurationSeconds(baselineSegment?.duration);
   if (durationMode !== baselineDurationMode) {
+    return true;
+  }
+
+  if (!areWorkspaceSegmentDurationValuesEqual(duration, baselineDuration)) {
     return true;
   }
 
@@ -4177,6 +4187,9 @@ export const shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary = (
 export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
+  options?: {
+    preserveSourceTimelineEnd?: boolean;
+  },
 ) =>
   rebuildWorkspaceSegmentEditorTimeline(syncWorkspaceSegmentsEmbeddedVisualDurations(segments).map((segment) => {
     const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(segment, session);
@@ -4209,14 +4222,18 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
     speechBoundaryEnabled: (previousSegment, nextSegment) =>
       shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
-    preserveSourceTimelineEnd: true,
+    preserveSourceTimelineEnd: options?.preserveSourceTimelineEnd ?? true,
+    preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
   });
 
 export const rebuildWorkspaceSegmentEditorDraftSessionTimeline = (
   session: WorkspaceSegmentEditorDraftSession,
+  options?: {
+    preserveSourceTimelineEnd?: boolean;
+  },
 ): WorkspaceSegmentEditorDraftSession => ({
   ...session,
-  segments: rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session),
+  segments: rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session, options),
 });
 
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID = 0;

@@ -177,6 +177,180 @@ describe("workspace segment editor timeline", () => {
     expect(getWorkspaceSegmentEditorPlaybackDuration(segment)).toBeCloseTo(3.2, 6);
   });
 
+  it("keeps another still scene duration when one scene is edited manually", () => {
+    const editedSegment = createSegment({
+      duration: 4.4,
+      durationMode: "manual",
+      endTime: 4.4,
+      manualDurationSeconds: 5.4,
+      mediaType: "photo",
+      startTime: 0,
+      text: "edited scene",
+    });
+    const trailingStillSegment = createSegment({
+      duration: 9.7,
+      endTime: 14.1,
+      mediaType: "photo",
+      speechDuration: 3.8,
+      speechEndTime: 8.2,
+      speechStartTime: 4.4,
+      startTime: 4.4,
+      text: "short voiceover in a longer still scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([editedSegment, trailingStillSegment], {
+      preserveExistingStillDurations: true,
+      preserveSourceTimelineEnd: true,
+      speechBoundaryEnabled: true,
+      visualKind: () => "image",
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 5.4,
+      endTime: 5.4,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 9.7,
+      endTime: 15.1,
+      startTime: 5.4,
+    }));
+  });
+
+  it("keeps another manual still scene duration when its stored manual value is stale", () => {
+    const editedSegment = createSegment({
+      duration: 5.4,
+      durationMode: "manual",
+      endTime: 5.4,
+      manualDurationSeconds: 5.4,
+      mediaType: "photo",
+      startTime: 0,
+      text: "edited scene",
+    });
+    const trailingStillSegment = createSegment({
+      duration: 9.7,
+      durationMode: "manual",
+      endTime: 14.1,
+      manualDurationSeconds: 3.8,
+      mediaType: "photo",
+      speechDuration: 3.8,
+      speechEndTime: 8.2,
+      speechStartTime: 4.4,
+      startTime: 4.4,
+      text: "manual value is older than the displayed still duration",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([editedSegment, trailingStillSegment], {
+      preserveExistingStillDurations: true,
+      preserveSourceTimelineEnd: true,
+      speechBoundaryEnabled: true,
+      visualKind: () => "image",
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 5.4,
+      endTime: 5.4,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 9.7,
+      endTime: 15.1,
+      startTime: 5.4,
+    }));
+  });
+
+  it("allows an edited still scene to shrink when its timeline already matches the new manual duration", () => {
+    const segment = createSegment({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "photo",
+      speechDuration: 3.8,
+      speechEndTime: 3.8,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "shorter edited still",
+    });
+
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        preserveExistingStillDuration: true,
+        visualKind: "image",
+        voiceEnabled: true,
+      }),
+    ).toBe(5);
+  });
+
+  it("does not preserve the old source end when a manual edit shortens a timeline without later speech", () => {
+    const firstSegment = createSegment({
+      duration: 10,
+      endTime: 10,
+      mediaType: "photo",
+      startTime: 0,
+    });
+    const middleVideo = createSegment({
+      duration: 3.8,
+      endTime: 13.8,
+      mediaType: "video",
+      startTime: 10,
+    });
+    const editedSegment = createSegment({
+      duration: 5.6,
+      durationMode: "manual",
+      endTime: 23.6,
+      manualDurationSeconds: 5.6,
+      mediaType: "photo",
+      startTime: 18,
+      text: "shortened scene",
+    });
+    const followingStill = createSegment({
+      duration: 4.8,
+      endTime: 29.4,
+      mediaType: "photo",
+      startTime: 24.6,
+    });
+    const lastStill = createSegment({
+      duration: 3.8,
+      durationMode: "manual",
+      endTime: 33.2,
+      manualDurationSeconds: 3.8,
+      mediaType: "photo",
+      startTime: 29.4,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline(
+      [
+        firstSegment,
+        middleVideo,
+        createSegment({ duration: 4.2, endTime: 18, mediaType: "video", startTime: 13.8 }),
+        editedSegment,
+        followingStill,
+        lastStill,
+      ],
+      {
+        preserveExistingStillDurations: true,
+        preserveSourceTimelineEnd: false,
+        speechBoundaryEnabled: true,
+        visualKind: (segment) => segment.mediaType === "video" ? "video" : "image",
+        voiceEnabled: true,
+      },
+    );
+
+    expect(rebuilt[3]).toEqual(expect.objectContaining({
+      duration: 5.6,
+      endTime: 23.6,
+      startTime: 18,
+    }));
+    expect(rebuilt[5]).toEqual(expect.objectContaining({
+      duration: 3.8,
+      endTime: 32.2,
+      startTime: 28.4,
+    }));
+  });
+
   it("uses known video duration when voice is disabled", () => {
     const segment = createSegment({
       duration: 8,
