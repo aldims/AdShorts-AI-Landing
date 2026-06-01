@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
+import { getWorkspaceSegmentLatestVisualAction } from "../features/workspace/workspace-segment-editor";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -2530,6 +2531,45 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedDraft.musicType).toBe("custom");
     expect(refreshedDraft.customMusicAssetId).toBeNull();
     expect(refreshedDraft.customMusicFileName).toBe("new-track.mp3");
+  });
+
+  it("preserves a local scene sound when a fresh project voiceover arrives", () => {
+    const baselineSegment = createDraftSegment({ index: 0, text: "Voiceover scene" });
+    const liveSegment = createDraftSegment({
+      ...baselineSegment,
+      sceneSoundAsset: {
+        assetId: 4636,
+        fileName: "segment-sound.mp3",
+        fileSize: 0,
+        mimeType: "audio/mpeg",
+        remoteUrl: "/api/workspace/media-assets/4636",
+      },
+      sceneSoundGeneratedFromPrompt: "soft wind",
+      sceneSoundPrompt: "soft wind",
+      sceneSoundPromptInitialized: true,
+    });
+    const freshSegment = createDraftSegment({
+      ...baselineSegment,
+      speechDuration: 3.2,
+      speechEndTime: 3.2,
+      speechStartTime: 0,
+    });
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(liveSegment),
+      {
+        ...createFreshSession(freshSegment),
+        ttsAssetId: 801,
+        voiceType: "Boris",
+      },
+      {
+        baselineSession: createFreshSession(baselineSegment),
+      },
+    );
+
+    expect(refreshedDraft.ttsAssetId).toBe(801);
+    expect(refreshedDraft.voiceType).toBe("Boris");
+    expect(refreshedDraft.segments[0]?.sceneSoundAsset).toEqual(liveSegment.sceneSoundAsset);
+    expect(refreshedDraft.segments[0]?.sceneSoundPrompt).toBe("soft wind");
   });
 
   it("preserves manual segment timing during a fresh session refresh", () => {
@@ -5741,6 +5781,33 @@ describe("WorkspacePage studio locale defaults", () => {
       customVideoAssetId: undefined,
       videoAction: "original",
     });
+  });
+
+  it("keeps an explicit AI video action ahead of stale photo animation asset metadata", () => {
+    const staleAnimationAsset = {
+      ...createMediaAsset(7001, {
+        mediaType: "video",
+        sourceKind: "ai_generated",
+      }),
+      libraryKind: "photo_animation",
+    };
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 7002,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/7002/playback",
+      },
+      aiVideoGeneratedMode: "ai_video",
+      currentAsset: staleAnimationAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/7001/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/7001/playback",
+      mediaType: "video",
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentLatestVisualAction(segment)).toBe("ai");
   });
 
   it("preserves an already-applied AI animation while adding scene sound", async () => {

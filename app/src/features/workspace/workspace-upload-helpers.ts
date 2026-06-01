@@ -270,6 +270,23 @@ export const uploadStudioMediaFileViaDirectSession = async (
   }
 };
 
+export const abortStudioMediaFileUpload = async (assetId: number, reason: string) => {
+  const abortResponse = await fetch("/api/studio/media-upload/abort", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assetId,
+      reason,
+    }),
+  });
+  const abortPayload = (await abortResponse.json().catch(() => null)) as StudioDirectMediaUploadResponse | null;
+  if (!abortResponse.ok) {
+    throw new Error(abortPayload?.error ?? "Не удалось отменить upload.");
+  }
+};
+
 export const completeStudioMediaFileUpload = async (
   assetId: number,
   options: {
@@ -314,7 +331,19 @@ const uploadStudioMediaFileToStorage = async (
   },
 ) => {
   const session = await initializeStudioMediaFileUpload(file, options);
-  await uploadStudioMediaFileViaDirectSession(file, session);
+  try {
+    await uploadStudioMediaFileViaDirectSession(file, session);
+  } catch (error) {
+    try {
+      await abortStudioMediaFileUpload(
+        session.assetId,
+        error instanceof Error ? error.message : "Direct storage upload failed.",
+      );
+    } catch (abortError) {
+      console.warn("[workspace] Failed to abort incomplete direct media upload.", abortError);
+    }
+    throw error;
+  }
   return completeStudioMediaFileUpload(session.assetId, options);
 };
 
@@ -358,6 +387,32 @@ export const ensureStudioUploadedAssetId = async (
     role: options.role,
     segmentIndex: options.segmentIndex,
   });
+};
+
+export const ensureStudioUploadedAssetIdWithInlineFallback = async (
+  asset: StudioUploadableAsset | null | undefined,
+  options: Parameters<typeof ensureStudioUploadedAssetId>[1],
+) => {
+  try {
+    return {
+      assetId: await ensureStudioUploadedAssetId(asset, options),
+      dataUrl: undefined,
+    };
+  } catch (uploadError) {
+    try {
+      const dataUrl = await resolveStudioCustomAssetDataUrl(asset);
+      if (dataUrl) {
+        return {
+          assetId: null,
+          dataUrl,
+        };
+      }
+    } catch (fallbackError) {
+      console.warn("[workspace] Failed to prepare inline media upload fallback.", fallbackError);
+    }
+
+    throw uploadError;
+  }
 };
 
 export const WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE = "image/jpeg";

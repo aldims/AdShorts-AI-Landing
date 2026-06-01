@@ -36,6 +36,52 @@ export const videoElementUsesWorkspaceSourceUrl = (element: HTMLVideoElement, so
     .some((candidate) => candidate === normalizedSourceUrl);
 };
 
+export const waitForWorkspaceAttachedVideoElement = (
+  resolveElement: () => HTMLVideoElement | null,
+  sourceUrl: string,
+  options?: {
+    timeoutMs?: number;
+  },
+) =>
+  new Promise<HTMLVideoElement | null>((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(null);
+      return;
+    }
+
+    const timeoutMs = options?.timeoutMs ?? WORKSPACE_SEGMENT_GENERATED_VIDEO_WARMUP_ATTACH_TIMEOUT_MS;
+    let settled = false;
+    let animationFrameId = 0;
+    const timeoutId = window.setTimeout(() => {
+      finish(null);
+    }, timeoutMs);
+
+    const finish = (element: HTMLVideoElement | null) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      window.clearTimeout(timeoutId);
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      resolve(element);
+    };
+
+    const tryResolve = () => {
+      const candidate = resolveElement();
+      if (candidate && videoElementUsesWorkspaceSourceUrl(candidate, sourceUrl)) {
+        finish(candidate);
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(tryResolve);
+    };
+
+    tryResolve();
+  });
+
 export const disposeWorkspaceDetachedVideoElement = (element: HTMLVideoElement | null | undefined) => {
   if (!element) {
     return;

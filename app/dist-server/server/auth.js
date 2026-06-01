@@ -4,6 +4,7 @@ import { database } from "./database.js";
 import { normalizeEmailLoginAddress } from "./email-code.js";
 import { authProviderStatus, env } from "./env.js";
 import { sendAppEmail } from "./mail.js";
+import { getTrustedAuthOrigins } from "./origins.js";
 const appName = "AdShorts AI";
 const BETTER_AUTH_SESSION_COOKIE_BASE_NAME = "better-auth.session_token";
 const BETTER_AUTH_LEGACY_SESSION_COOKIE_PATHS = ["/", "/api/auth"];
@@ -42,23 +43,7 @@ export const setBetterAuthSessionCookie = (res, sessionToken, expiresAt) => {
         path: "/",
     });
 };
-const normalizeOrigin = (value) => {
-    if (!value) {
-        return null;
-    }
-    try {
-        return new URL(value).origin;
-    }
-    catch {
-        return null;
-    }
-};
-const trustedOrigins = Array.from(new Set([
-    normalizeOrigin(env.appUrl),
-    normalizeOrigin(env.authBaseUrl),
-    env.isProduction ? null : "http://localhost:4174",
-    env.isProduction ? null : "http://127.0.0.1:4174",
-].filter((value) => Boolean(value))));
+const trustedOrigins = getTrustedAuthOrigins(env.appUrl, env.authBaseUrl, env.isProduction);
 export const auth = betterAuth({
     baseURL: env.authBaseUrl,
     database,

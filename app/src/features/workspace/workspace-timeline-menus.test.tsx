@@ -48,6 +48,15 @@ afterEach(() => {
 });
 
 describe("WorkspaceSegmentTimelineVoiceMenu", () => {
+  it("exposes an explicit save action for scene text edits", () => {
+    const onClose = vi.fn();
+    render(<WorkspaceSegmentTimelineVoiceMenu {...baseProps} onClose={onClose} />);
+
+    screen.getByRole("button", { name: "Сохранить текст" }).click();
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("does not show a credit cost when the scene voiceover is already ready", () => {
     render(
       <WorkspaceSegmentTimelineVoiceMenu

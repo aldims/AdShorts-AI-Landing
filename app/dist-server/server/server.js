@@ -9,6 +9,7 @@ import { authDatabaseConfig } from "./database.js";
 import { createEmailLoginCode, EMAIL_LOGIN_CODE_TTL_MINUTES, normalizeEmailLoginAddress, verifyEmailLoginCode, } from "./email-code.js";
 import { authProviderStatus, env } from "./env.js";
 import { getLastDevEmailPreview, getMailStatus, sendAppEmail } from "./mail.js";
+import { getConfiguredOrigins, isAllowedCorsOrigin, isLoopbackHostname } from "./origins.js";
 import { appendWorkspaceContentPlanIdeas, createWorkspaceContentPlan, deleteWorkspaceContentPlanIdea, deleteWorkspaceContentPlan, getWorkspaceContentPlan, listWorkspaceContentPlans, updateWorkspaceContentPlanIdeaUsedState, } from "./content-plans.js";
 import { disconnectWorkspaceYoutubeChannel, getWorkspacePublishBootstrap, getWorkspacePublishJobStatus, getWorkspaceYoutubeConnectUrl, isWorkspacePublishSuccessStatus, startWorkspaceYoutubePublish, } from "./publish.js";
 import { deleteWorkspaceProject, getWorkspaceProjectPlaybackAsset, getWorkspaceProjectPlaybackProxyTarget, getWorkspaceProjectPosterPath, getWorkspaceProjectVideoProxyTarget, getWorkspaceProjects, invalidateWorkspaceProjectsCacheByIdentityFragments, invalidateWorkspaceProjectsCache, WorkspaceProjectNotFoundError, } from "./projects.js";
@@ -88,17 +89,12 @@ const normalizeWebDeviceId = (value) => {
     const normalized = String(value ?? "").trim();
     return /^[A-Za-z0-9._:-]{16,160}$/.test(normalized) ? normalized : "";
 };
-const allowedCorsOrigins = Array.from(new Set([
-    env.appUrl,
-    env.authBaseUrl,
-    env.isProduction ? null : "http://localhost:4174",
-    env.isProduction ? null : "http://127.0.0.1:4174",
-].filter((value) => Boolean(value))));
+const allowedCorsOrigins = getConfiguredOrigins(env.appUrl, env.authBaseUrl, env.isProduction);
 app.set("trust proxy", true);
 app.use(cors({
     credentials: true,
     origin(origin, callback) {
-        if (!origin || allowedCorsOrigins.includes(origin)) {
+        if (isAllowedCorsOrigin(origin, allowedCorsOrigins, !env.isProduction)) {
             callback(null, true);
             return;
         }
@@ -448,10 +444,6 @@ const buildMultipartFileDataUrl = async (file) => {
     const buffer = Buffer.from(await file.arrayBuffer());
     const mimeType = file.type.trim() || "application/octet-stream";
     return `data:${mimeType};base64,${buffer.toString("base64")}`;
-};
-const isLoopbackHostname = (hostname) => {
-    const normalized = hostname.trim().toLowerCase();
-    return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
 };
 const isSameOriginOrEquivalentLoopback = (left, right) => {
     if (left.origin === right.origin) {
@@ -2458,6 +2450,42 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
         console.error("[studio] Failed to complete media upload", error);
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to complete media upload.",
+        });
+    }
+});
+app.post("/api/studio/media-upload/abort", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const assetId = normalizeRequestPositiveInteger(req.body?.assetId);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!assetId) {
+        res.status(400).json({ error: "assetId is required." });
+        return;
+    }
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const data = await postAdsflowJson("/api/media/uploads/abort", {
+            admin_token: env.adsflowAdminToken,
+            asset_id: assetId,
+            external_user_id: externalUserId,
+            reason: reason || undefined,
+            user_email: session.user.email ?? undefined,
+            user_name: session.user.name ?? undefined,
+        }, upstreamPolicies.adsflowMutation, {
+            assetKind: "media-upload",
+            endpoint: "media.uploads.abort",
+        });
+        res.json({ data });
+    }
+    catch (error) {
+        console.error("[studio] Failed to abort media upload", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to abort media upload.",
         });
     }
 });

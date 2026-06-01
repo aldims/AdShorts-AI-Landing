@@ -579,6 +579,13 @@ export function WorkspaceSegmentTimelineVoiceMenu({
         />
         <div className="studio-voice-selector__bulk-actions studio-segment-editor__timeline-voice-text-actions">
           <button
+            className="studio-segment-editor__timeline-voice-text-save"
+            type="button"
+            onClick={onClose}
+          >
+            {workspaceText(locale, "Сохранить текст", "Save text")}
+          </button>
+          <button
             className="studio-segment-editor__timeline-voice-text-generate"
             type="button"
             disabled={Boolean(generateDisabledReason)}

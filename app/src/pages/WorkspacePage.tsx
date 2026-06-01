@@ -41,6 +41,7 @@ import {
   appendStudioFormValue,
   completeStudioMediaFileUpload,
   ensureStudioUploadedAssetId,
+  ensureStudioUploadedAssetIdWithInlineFallback,
   extractWorkspaceVideoFrameDataUrl,
   initializeStudioMediaFileUpload,
   readFileAsDataUrl,
@@ -371,8 +372,8 @@ import {
   readWorkspaceAudioDurationSeconds,
   readWorkspaceVideoDurationSeconds,
   videoElementUsesWorkspaceSourceUrl,
+  waitForWorkspaceAttachedVideoElement,
   waitForWorkspaceVideoElementReady,
-  WORKSPACE_SEGMENT_GENERATED_VIDEO_WARMUP_ATTACH_TIMEOUT_MS,
 } from "../features/workspace/workspace-media-probe-helpers";
 import {
   AccountProjectListCard,
@@ -7493,35 +7494,10 @@ export function WorkspacePage({
         return false;
       }
 
-      const attachedPreviewVideo = await new Promise<HTMLVideoElement | null>((resolve) => {
-        const startedAt = window.performance.now();
-        let animationFrameId = 0;
-
-        const finish = (element: HTMLVideoElement | null) => {
-          if (animationFrameId) {
-            window.cancelAnimationFrame(animationFrameId);
-          }
-
-          resolve(element);
-        };
-
-        const tryResolve = () => {
-          const candidate = segmentEditorPreviewVideoRefs.current[segmentIndex] ?? null;
-          if (candidate && videoElementUsesWorkspaceSourceUrl(candidate, normalizedPreviewUrl)) {
-            finish(candidate);
-            return;
-          }
-
-          if (window.performance.now() - startedAt >= WORKSPACE_SEGMENT_GENERATED_VIDEO_WARMUP_ATTACH_TIMEOUT_MS) {
-            finish(null);
-            return;
-          }
-
-          animationFrameId = window.requestAnimationFrame(tryResolve);
-        };
-
-        tryResolve();
-      });
+      const attachedPreviewVideo = await waitForWorkspaceAttachedVideoElement(
+        () => segmentEditorPreviewVideoRefs.current[segmentIndex] ?? null,
+        normalizedPreviewUrl,
+      );
 
       if (attachedPreviewVideo) {
         return waitForWorkspaceVideoElementReady(attachedPreviewVideo);
@@ -12589,7 +12565,6 @@ export function WorkspacePage({
         });
         const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
           bypassCache: true,
-          discardLocalDraft: true,
           forceRefresh: true,
           initialSegmentIndex: options.initialSegmentIndex,
           initialSegmentMode: "route",
@@ -13363,14 +13338,14 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const customVideoFileDataUrl = generationQuality === "premium" && photoAnimationSourceAsset
+      const premiumCustomVideoFileDataUrl = generationQuality === "premium" && photoAnimationSourceAsset
         ? await resolveStudioCustomAssetDataUrl(photoAnimationSourceAsset)
         : undefined;
-      if (generationQuality === "premium" && !customVideoFileDataUrl) {
+      if (generationQuality === "premium" && !premiumCustomVideoFileDataUrl) {
         throw new Error("Не удалось подготовить исходное фото для премиум ИИ анимации.");
       }
-      const customVideoAssetId = generationQuality === "standard" && photoAnimationUploadSourceAsset
-        ? await ensureStudioUploadedAssetId(photoAnimationUploadSourceAsset, {
+      const standardUpload = generationQuality === "standard" && photoAnimationUploadSourceAsset
+        ? await ensureStudioUploadedAssetIdWithInlineFallback(photoAnimationUploadSourceAsset, {
             fallbackFileName: photoAnimationUploadSourceAsset.fileName || `segment-photo-${targetSegmentIndex + 1}.jpg`,
             fallbackMimeType: photoAnimationUploadSourceAsset.mimeType,
             kind: "segment_source",
@@ -13381,10 +13356,12 @@ export function WorkspacePage({
             segmentIndex: visualJobBinding.segmentIndex,
           })
         : null;
+      const customVideoAssetId = standardUpload?.assetId ?? null;
+      const customVideoFileDataUrl = premiumCustomVideoFileDataUrl ?? standardUpload?.dataUrl;
       const customVideoFileMimeType = photoAnimationUploadSourceAsset?.mimeType;
       const customVideoFileName = photoAnimationUploadSourceAsset?.fileName;
 
-      if (generationQuality === "standard" && photoAnimationUploadSourceAsset && !customVideoAssetId) {
+      if (generationQuality === "standard" && photoAnimationUploadSourceAsset && !customVideoAssetId && !customVideoFileDataUrl) {
         logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.empty-source-data", {
           sourceMimeType: photoAnimationUploadSourceAsset?.mimeType ?? null,
           sourceRemoteUrl: photoAnimationUploadSourceAsset?.remoteUrl ?? null,
@@ -13707,8 +13684,8 @@ export function WorkspacePage({
     let pollStarted = false;
 
     try {
-      const customVideoAssetId = talkingPhotoUploadSourceAsset
-        ? await ensureStudioUploadedAssetId(talkingPhotoUploadSourceAsset, {
+      const talkingPhotoUpload = talkingPhotoUploadSourceAsset
+        ? await ensureStudioUploadedAssetIdWithInlineFallback(talkingPhotoUploadSourceAsset, {
             fallbackFileName:
               talkingPhotoUploadSourceAsset.fileName ||
               (talkingPhotoSourceMediaType === "video"
@@ -13723,13 +13700,16 @@ export function WorkspacePage({
             segmentIndex: visualJobBinding.segmentIndex,
           })
         : null;
+      const customVideoAssetId = talkingPhotoUpload?.assetId ?? null;
+      const customVideoFileDataUrl = talkingPhotoUpload?.dataUrl;
 
-      if (talkingPhotoUploadSourceAsset && !customVideoAssetId) {
+      if (talkingPhotoUploadSourceAsset && !customVideoAssetId && !customVideoFileDataUrl) {
         throw new Error("Не удалось подготовить выбранное фото или видео для говорящего персонажа.");
       }
 
       const speakerPreview = await createSegmentTalkingSpeakerPreview({
         customVideoAssetId: customVideoAssetId ?? undefined,
+        customVideoFileDataUrl,
         customVideoMediaType: talkingPhotoSourceMediaType,
         customVideoFileMimeType: talkingPhotoUploadSourceAsset?.mimeType,
         customVideoFileName: talkingPhotoUploadSourceAsset?.fileName,
@@ -21973,7 +21953,10 @@ export function WorkspacePage({
       languageOptions={studioLanguageOptions}
       locale={locale}
       menuRef={segmentTimelineVoiceMenuRef}
-      onClose={() => setSegmentTimelineVoiceMenuSegmentIndex(null)}
+      onClose={() => {
+        clearSegmentTimelineVoiceTextEditSnapshot();
+        setSegmentTimelineVoiceMenuSegmentIndex(null);
+      }}
       onGenerateVoiceover={() => {
         if (!segmentTimelineVoiceMenuSegment) {
           return;

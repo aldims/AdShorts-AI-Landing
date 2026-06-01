@@ -1667,6 +1667,10 @@ export const getWorkspaceSegmentLatestVisualAction = (
     return "talking_photo";
   }
 
+  if (segment.videoAction === "ai") {
+    return "ai";
+  }
+
   if (segment.aiVideoGeneratedMode === "photo_animation" && hasWorkspaceSegmentPlayableVideoUrl(segment)) {
     return "photo_animation";
   }
