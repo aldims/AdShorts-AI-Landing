@@ -6363,6 +6363,7 @@ export function WorkspacePage({
         startTime?: number | null;
         tracks?: WorkspaceSegmentTimelineAudioPreviewTrack[];
         url: string | null;
+        volume?: number | null;
       },
     ) => {
       event.preventDefault();
@@ -6378,6 +6379,7 @@ export function WorkspacePage({
                 mediaKind: options.mediaKind,
                 startTime: options.startTime,
                 url: options.url,
+                volume: options.volume,
               },
             ]
           : []
@@ -6452,6 +6454,8 @@ export function WorkspacePage({
             : document.createElement("audio");
         previewAudio.src = track.url;
         previewAudio.preload = "auto";
+        const requestedVolume = track.volume === null || typeof track.volume === "undefined" ? NaN : Number(track.volume);
+        previewAudio.volume = Number.isFinite(requestedVolume) ? Math.min(1, Math.max(0, requestedVolume)) : 1;
         previewAudio.style.position = "fixed";
         previewAudio.style.left = "-9999px";
         previewAudio.style.top = "0";
@@ -23059,6 +23063,7 @@ export function WorkspacePage({
                     label: soundLabel,
                     mediaKind: soundPreviewMediaKind,
                     url: isSoundGenerationPending ? null : soundPreviewUrl,
+                    volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME,
                   })}
                 </div>
               );
@@ -23142,6 +23147,7 @@ export function WorkspacePage({
                   disabledReason: segmentTimelineMusicPreviewDisabledReason,
                   label: segmentTimelineMusicLabel,
                   url: segmentTimelineMusicPreviewUrl,
+                  volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME,
                 })}
               </div>
               );

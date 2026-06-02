@@ -343,6 +343,7 @@ export type WorkspaceSegmentTimelineAudioPreviewTrack = {
   mediaKind?: "audio" | "video";
   startTime?: number | null;
   url: string;
+  volume?: number | null;
 };
 
 export type WorkspaceSegmentEditorFullPreviewStatus = "idle" | "loading" | "paused" | "playing";
@@ -366,10 +367,10 @@ export type WorkspaceSegmentEditorFullPreviewDebugWindow = Window & {
   __adshortsVoiceDurationTrace?: Array<Record<string, unknown>>;
 };
 
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME = 0.22;
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME = 0.08;
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME = 0.35;
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_DUCKED_VOLUME = 0.24;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME = 0.16;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME = 0.06;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_VOLUME = 0.25;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_SOUND_DUCKED_VOLUME = 0.14;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME = 1;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_FADE_SECONDS = 0.08;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_DUCK_ATTACK_SECONDS = 0.22;

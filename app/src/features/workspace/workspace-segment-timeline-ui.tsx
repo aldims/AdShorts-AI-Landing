@@ -32,6 +32,7 @@ export type WorkspaceSegmentTimelineAudioButtonOptions = {
   startTime?: number | null;
   tracks?: WorkspaceSegmentTimelineAudioPreviewTrack[];
   url: string | null;
+  volume?: number | null;
 };
 
 export type WorkspaceSegmentTimelineAudioPreviewHandler = (
@@ -44,6 +45,7 @@ export type WorkspaceSegmentTimelineAudioPreviewHandler = (
     startTime?: number | null;
     tracks?: WorkspaceSegmentTimelineAudioPreviewTrack[];
     url: string | null;
+    volume?: number | null;
   },
 ) => void | Promise<void>;
 
@@ -119,6 +121,7 @@ export const renderWorkspaceSegmentTimelineAudioButton = (
           startTime: options.startTime,
           tracks: options.tracks,
           url: options.url,
+          volume: options.volume,
         })
       }
     >
