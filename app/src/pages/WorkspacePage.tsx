@@ -1500,6 +1500,7 @@ export function WorkspacePage({
   const segmentEditorLanguageTranslateRunRef = useRef(0);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
+  const suppressProjectFallbackPreviewRef = useRef(false);
   const createdVideoAnalyticsJobIdsRef = useRef<Set<string>>(new Set());
   const pendingGeneratedVideoActionModeRef = useRef<StudioGeneratedVideoActionMode>("expanded");
   const hasDisplayedGeneratedVideoActionsRef = useRef(false);
@@ -3775,6 +3776,10 @@ export function WorkspacePage({
     }
 
     if (generatedVideo?.videoUrl && !isStudioVideoMarkedFailed(generatedVideo.videoUrl)) {
+      return;
+    }
+
+    if (suppressProjectFallbackPreviewRef.current) {
       return;
     }
 
@@ -15585,29 +15590,71 @@ export function WorkspacePage({
       let latestStatus = initialStatus;
       let doneWithoutPreviewAttempts = 0;
       const maxDoneWithoutPreviewAttempts = 4;
+      let statusFetchFailureAttempts = 0;
+      const maxStatusFetchFailureAttempts = 24;
 
       while (generationRunRef.current === runId) {
-        const statusResponse = await fetch(`/api/studio/generations/${encodeURIComponent(safeJobId)}`);
-        const statusPayload = (await statusResponse.json().catch(() => null)) as StudioGenerationStatusResponse | null;
+        let statusPayload: StudioGenerationStatusResponse | null = null;
 
-        if (!statusResponse.ok || !statusPayload?.data) {
-          throw new Error(statusPayload?.error ?? "Failed to fetch generation status.");
+        try {
+          const statusResponse = await fetch(`/api/studio/generations/${encodeURIComponent(safeJobId)}`);
+          statusPayload = (await statusResponse.json().catch(() => null)) as StudioGenerationStatusResponse | null;
+
+          if (!statusResponse.ok || !statusPayload?.data) {
+            const statusError = new Error(statusPayload?.error ?? "Failed to fetch generation status.") as Error & {
+              statusCode?: number;
+            };
+            statusError.statusCode = statusResponse.status;
+            throw statusError;
+          }
+        } catch (error) {
+          const statusCode =
+            error instanceof Error && "statusCode" in error
+              ? Number((error as { statusCode?: unknown }).statusCode)
+              : null;
+          const isRetryableStatusError =
+            statusCode === null ||
+            !Number.isFinite(statusCode) ||
+            ![401, 403, 404].includes(statusCode);
+
+          if (isRetryableStatusError && statusFetchFailureAttempts < maxStatusFetchFailureAttempts) {
+            statusFetchFailureAttempts += 1;
+            console.warn("[workspace] Generation status polling failed, retrying", {
+              attempt: statusFetchFailureAttempts,
+              error: error instanceof Error ? error.message : "Unknown status polling error.",
+              jobId: safeJobId,
+              latestStatus,
+              statusCode,
+            });
+            setStatus(workspaceText(locale, "Проверяем статус...", "Checking status..."));
+            await new Promise((resolve) => window.setTimeout(resolve, 2500));
+            continue;
+          }
+
+          throw error;
         }
 
-        latestStatus = statusPayload.data.status;
+        if (!statusPayload?.data) {
+          throw new Error("Failed to fetch generation status.");
+        }
+
+        const statusData = statusPayload.data;
+        statusFetchFailureAttempts = 0;
+        latestStatus = statusData.status;
         setStatus(getStudioStatusLabel(latestStatus, locale));
 
-        if (statusPayload.data.generation) {
+        if (statusData.generation) {
           doneWithoutPreviewAttempts = 0;
-          setGeneratedVideo(statusPayload.data.generation);
+          suppressProjectFallbackPreviewRef.current = false;
+          setGeneratedVideo(statusData.generation);
           if (
             options?.projectBrandStateOnSuccess &&
-            typeof statusPayload.data.generation.adId === "number" &&
-            statusPayload.data.generation.adId > 0
+            typeof statusData.generation.adId === "number" &&
+            statusData.generation.adId > 0
           ) {
             writeStoredWorkspaceSegmentEditorBrandSnapshot(
               session.email,
-              statusPayload.data.generation.adId,
+              statusData.generation.adId,
               {
                 applied: options.projectBrandStateOnSuccess,
                 baseline: options.projectBrandStateOnSuccess,
@@ -15619,13 +15666,13 @@ export function WorkspacePage({
           if (!createdVideoAnalyticsJobIdsRef.current.has(safeJobId)) {
             createdVideoAnalyticsJobIdsRef.current.add(safeJobId);
             void logClientEvent(readyProjectsCount === 0 ? "first_video_created" : "video_created", {
-              adId: statusPayload.data.generation.adId ?? null,
+              adId: statusData.generation.adId ?? null,
               isFirstReadyVideo: readyProjectsCount === 0,
               jobId: safeJobId,
               lang: locale,
               path: `${location.pathname}${location.search}`,
-              projectId: statusPayload.data.generation.id ?? null,
-              status: statusPayload.data.status,
+              projectId: statusData.generation.id ?? null,
+              status: statusData.status,
             });
           }
           setGeneratedVideoActionMode(pendingGeneratedVideoActionModeRef.current);
@@ -15633,7 +15680,7 @@ export function WorkspacePage({
           showStudioToast(workspaceText(locale, "✅ Видео готово", "✅ Video ready"));
           setTopicInput("");
           updateDismissedStudioPreviewKey(null);
-          setGenerateError(statusPayload.data.error ?? null);
+          setGenerateError(statusData.error ?? null);
           if (options?.invalidateSegmentEditorOnSuccess) {
             setSegmentEditorLoadedSession(null);
           }
@@ -15675,11 +15722,11 @@ export function WorkspacePage({
             continue;
           }
 
-          throw new Error(statusPayload.data.error ?? "Готовое видео недоступно для встроенного превью.");
+          throw new Error(statusData.error ?? "Готовое видео недоступно для встроенного превью.");
         }
 
         if (latestStatus === "failed") {
-          throw new Error(statusPayload.data.error ?? "Generation failed.");
+          throw new Error(statusData.error ?? "Generation failed.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
@@ -15701,6 +15748,7 @@ export function WorkspacePage({
       const errorMessage = error instanceof Error ? error.message : "Failed to generate task.";
       setStatus("Generation failed");
       setGenerateError(errorMessage);
+      setHasLoadedProjects(false);
       if (options?.showSegmentEditorGenerationError) {
         setSegmentEditorVideoError(errorMessage);
       }
@@ -16244,6 +16292,7 @@ export function WorkspacePage({
       stopPreviewModalVideoElement(previewModalVideoRef.current);
       setTopicInput("");
       updateDismissedStudioPreviewKey(null);
+      suppressProjectFallbackPreviewRef.current = true;
       if (composerSourceIdea) {
         setComposerSourceIdea(null);
         setSelectedContentPlanIdeaId((current) => (current === composerSourceIdea.ideaId ? null : current));
@@ -17793,6 +17842,7 @@ export function WorkspacePage({
         if (!latestGeneration) return;
 
         if (latestGeneration.generation) {
+          suppressProjectFallbackPreviewRef.current = false;
           setGeneratedVideo(latestGeneration.generation);
           setGenerateError(latestGeneration.error ?? null);
         }
