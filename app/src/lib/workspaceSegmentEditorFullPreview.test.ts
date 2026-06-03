@@ -18,6 +18,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
@@ -248,6 +249,21 @@ describe("workspace segment editor full preview", () => {
         { endTime: 9.92, sourceStartTime: 4.02, startTime: 4.02, url: "/project-voice.mp3" },
       ]),
     ).toEqual([{ endTime: 9.92, sourceStartTime: 0, startTime: 0, url: "/project-voice.mp3" }]);
+  });
+
+  it("serializes overlapping project voiceover ranges when a visual slot is shorter than speech", () => {
+    const serializedRanges = serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges([
+      { endTime: 29.2, sourceStartTime: 24.06, startTime: 23.8, url: "/project-voice.mp3" },
+      { endTime: 34.36, sourceStartTime: 29.46, startTime: 28.7, url: "/project-voice.mp3" },
+    ]);
+
+    expect(serializedRanges).toEqual([
+      { endTime: 29.2, sourceStartTime: 24.06, startTime: 23.8, url: "/project-voice.mp3" },
+      { endTime: 34.86, sourceStartTime: 29.46, startTime: 29.2, url: "/project-voice.mp3" },
+    ]);
+    expect(mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(serializedRanges)).toEqual([
+      { endTime: 34.86, sourceStartTime: 24.06, startTime: 23.8, url: "/project-voice.mp3" },
+    ]);
   });
 
   it("holds the playhead at a voice segment boundary until audio starts", () => {

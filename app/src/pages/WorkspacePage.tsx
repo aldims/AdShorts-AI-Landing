@@ -770,6 +770,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
@@ -19867,7 +19868,9 @@ export function WorkspacePage({
       }
     });
 
-    mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(projectVoiceoverAudioRanges).forEach((range, rangeIndex) => {
+    mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(
+      serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(projectVoiceoverAudioRanges),
+    ).forEach((range, rangeIndex) => {
       tracks.push({
         endGraceSeconds: 0,
         key: `full-preview:voice:project:${rangeIndex}:${range.url}`,

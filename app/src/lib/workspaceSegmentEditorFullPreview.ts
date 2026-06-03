@@ -83,6 +83,8 @@ const normalizePreviewTime = (value: unknown) => {
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
 };
 
+const roundPreviewTime = (value: number) => Number(value.toFixed(3));
+
 export const clampWorkspaceSegmentEditorFullPreviewTime = (
   currentTime: number,
   duration: number,
@@ -296,6 +298,73 @@ export const resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTim
   }
 
   return timelineStartTime + voiceDurationSeconds;
+};
+
+export const serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
+  ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
+  overlapToleranceSeconds = 0.05,
+): WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] => {
+  const tolerance = normalizePreviewTime(overlapToleranceSeconds) ?? 0;
+  const normalizedRanges = ranges
+    .flatMap((range): Array<WorkspaceSegmentEditorFullPreviewAudioTimelineRange & { sourceStartTime: number }> => {
+      const startTime = normalizePreviewTime(range.startTime);
+      const endTime = normalizePreviewTime(range.endTime);
+      const sourceStartTime = normalizePreviewTime(range.sourceStartTime) ?? startTime;
+      const url = range.url.trim();
+
+      return startTime !== null && endTime !== null && endTime > startTime && url
+        ? [{ endTime, sourceStartTime: sourceStartTime ?? startTime, startTime, url }]
+        : [];
+    })
+    .sort((left, right) => left.startTime - right.startTime || left.endTime - right.endTime);
+
+  const serializedRanges: Array<WorkspaceSegmentEditorFullPreviewAudioTimelineRange & { sourceStartTime: number }> = [];
+  const lastRangeByUrl = new Map<string, WorkspaceSegmentEditorFullPreviewAudioTimelineRange & { sourceStartTime: number }>();
+
+  normalizedRanges.forEach((range) => {
+    const previousRange = lastRangeByUrl.get(range.url);
+    const previousSourceOffset = previousRange ? previousRange.sourceStartTime - previousRange.startTime : null;
+    const nextSourceOffset = range.sourceStartTime - range.startTime;
+    const duration = range.endTime - range.startTime;
+    const shouldMoveAfterPrevious =
+      previousRange &&
+      range.startTime < previousRange.endTime - tolerance &&
+      previousSourceOffset !== null &&
+      Math.abs(previousSourceOffset - nextSourceOffset) > tolerance;
+    const startTime = shouldMoveAfterPrevious ? previousRange.endTime : range.startTime;
+    const serializedRange = {
+      ...range,
+      endTime: roundPreviewTime(startTime + duration),
+      sourceStartTime: roundPreviewTime(range.sourceStartTime),
+      startTime: roundPreviewTime(startTime),
+    };
+    serializedRanges.push(serializedRange);
+
+    const cursorRange = lastRangeByUrl.get(serializedRange.url);
+    if (!cursorRange) {
+      lastRangeByUrl.set(serializedRange.url, serializedRange);
+      return;
+    }
+
+    const cursorSourceOffset = cursorRange.sourceStartTime - cursorRange.startTime;
+    const serializedSourceOffset = serializedRange.sourceStartTime - serializedRange.startTime;
+    if (
+      serializedRange.startTime <= cursorRange.endTime + tolerance &&
+      Math.abs(cursorSourceOffset - serializedSourceOffset) <= tolerance
+    ) {
+      lastRangeByUrl.set(serializedRange.url, {
+        ...cursorRange,
+        endTime: Math.max(cursorRange.endTime, serializedRange.endTime),
+      });
+      return;
+    }
+
+    if (serializedRange.endTime >= cursorRange.endTime) {
+      lastRangeByUrl.set(serializedRange.url, serializedRange);
+    }
+  });
+
+  return serializedRanges;
 };
 
 export const mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
