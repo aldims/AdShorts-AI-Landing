@@ -5,6 +5,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
 import { getWorkspaceSegmentLatestVisualAction } from "../features/workspace/workspace-segment-editor";
+import {
+  readStoredWorkspaceSegmentImageEditJobs,
+  readStoredWorkspaceSegmentTalkingPhotoJobs,
+  upsertStoredWorkspaceSegmentImageEditJob,
+  upsertStoredWorkspaceSegmentTalkingPhotoJob,
+} from "../features/workspace/workspace-segment-editor-storage";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -1004,6 +1010,71 @@ describe("WorkspacePage segment editor draft persistence", () => {
       }
       if (originalSessionStorage) {
         Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
+  });
+
+  it("persists pending visual jobs for scratch drafts", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: createMemoryStorage() });
+      upsertStoredWorkspaceSegmentTalkingPhotoJob("Scratch@Example.test", {
+        createdAt: Date.now(),
+        jobId: "scratch-talking",
+        projectId: 0,
+        script: "scratch script",
+        segmentIndex: 1,
+        sourceAsset: null,
+        status: "queued",
+      });
+      upsertStoredWorkspaceSegmentImageEditJob("Scratch@Example.test", {
+        createdAt: Date.now(),
+        jobId: "scratch-image-edit",
+        projectId: 0,
+        prompt: "add milk",
+        segmentIndex: 3,
+        status: "queued",
+      });
+
+      expect(readStoredWorkspaceSegmentTalkingPhotoJobs("scratch@example.test")).toEqual([
+        expect.objectContaining({
+          jobId: "scratch-talking",
+          projectId: 0,
+          script: "scratch script",
+          segmentIndex: 1,
+          status: "queued",
+        }),
+      ]);
+      expect(readStoredWorkspaceSegmentImageEditJobs("scratch@example.test")).toEqual([
+        expect.objectContaining({
+          jobId: "scratch-image-edit",
+          projectId: 0,
+          prompt: "add milk",
+          segmentIndex: 3,
+          status: "queued",
+        }),
+      ]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
       }
     }
   });

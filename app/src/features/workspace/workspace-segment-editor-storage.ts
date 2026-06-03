@@ -50,6 +50,15 @@ export type StoredWorkspaceSegmentTalkingPhotoJob = {
   status: string;
 };
 
+export type StoredWorkspaceSegmentImageEditJob = {
+  createdAt: number;
+  jobId: string;
+  projectId: number;
+  prompt: string;
+  segmentIndex: number;
+  status: string;
+};
+
 export type StoredWorkspaceSegmentAiPhotoJob = {
   createdAt: number;
   jobId: string;
@@ -368,6 +377,8 @@ const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_STORAGE_KEY_PREFIX = "adshorts.s
 const WORKSPACE_SEGMENT_PHOTO_ANIMATION_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_TALKING_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-talking-photo-pending:";
 const WORKSPACE_SEGMENT_TALKING_PHOTO_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-image-edit-pending:";
+const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRefresh?: boolean }) => {
   const forceRefresh = Boolean(options?.forceRefresh);
@@ -399,6 +410,9 @@ const getWorkspaceSegmentPhotoAnimationPendingStorageKey = (email: string) =>
 
 const getWorkspaceSegmentTalkingPhotoPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_TALKING_PHOTO_PENDING_STORAGE_KEY_PREFIX}${email}`;
+
+const getWorkspaceSegmentImageEditPendingStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_STORAGE_KEY_PREFIX}${email}`;
 
 const isWorkspaceSegmentEditorPersistableRemoteUrl = (value: string) => {
   const normalized = value.trim().toLowerCase();
@@ -648,6 +662,146 @@ export const removeStoredWorkspaceSegmentAiPhotoJobsForSegment = (
   writeStoredWorkspaceSegmentAiPhotoJobs(email, jobs);
 };
 
+const isStoredWorkspaceSegmentImageEditJob = (value: unknown): value is StoredWorkspaceSegmentImageEditJob => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Partial<StoredWorkspaceSegmentImageEditJob>;
+  return (
+    typeof payload.jobId === "string" &&
+    payload.jobId.trim().length > 0 &&
+    Number.isInteger(Number(payload.projectId)) &&
+    Number(payload.projectId) >= 0 &&
+    Number.isInteger(Number(payload.segmentIndex)) &&
+    Number(payload.segmentIndex) >= 0
+  );
+};
+
+const normalizeStoredWorkspaceSegmentImageEditJob = (
+  value: StoredWorkspaceSegmentImageEditJob,
+): StoredWorkspaceSegmentImageEditJob => ({
+  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  jobId: String(value.jobId ?? "").trim(),
+  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
+  prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
+  segmentIndex: Math.trunc(Number(value.segmentIndex)),
+  status: String(value.status ?? "queued").trim() || "queued",
+});
+
+export const readStoredWorkspaceSegmentImageEditJobs = (
+  email: string | null | undefined,
+): StoredWorkspaceSegmentImageEditJob[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const storageKey = getWorkspaceSegmentImageEditPendingStorageKey(normalizedEmail);
+  const candidate = readWorkspaceSegmentEditorStorageCandidates(storageKey)[0];
+  if (!candidate) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+    const rawJobs = Array.isArray(parsedValue) ? parsedValue : [];
+    const now = Date.now();
+    const jobs = rawJobs
+      .filter(isStoredWorkspaceSegmentImageEditJob)
+      .map(normalizeStoredWorkspaceSegmentImageEditJob)
+      .filter((job) => now - job.createdAt <= WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_TTL_MS);
+
+    if (jobs.length !== rawJobs.length || candidate.storageName === "sessionStorage") {
+      writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(jobs));
+    }
+
+    return jobs;
+  } catch {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return [];
+  }
+};
+
+const writeStoredWorkspaceSegmentImageEditJobs = (
+  email: string | null | undefined,
+  jobs: StoredWorkspaceSegmentImageEditJob[],
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  const storageKey = getWorkspaceSegmentImageEditPendingStorageKey(normalizedEmail);
+  const normalizedJobs = jobs
+    .filter(isStoredWorkspaceSegmentImageEditJob)
+    .map(normalizeStoredWorkspaceSegmentImageEditJob)
+    .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_TTL_MS);
+
+  if (!normalizedJobs.length) {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedJobs));
+};
+
+export const upsertStoredWorkspaceSegmentImageEditJob = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentImageEditJob,
+) => {
+  const normalizedJob = normalizeStoredWorkspaceSegmentImageEditJob(job);
+  const jobs = readStoredWorkspaceSegmentImageEditJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
+  writeStoredWorkspaceSegmentImageEditJobs(email, [normalizedJob, ...jobs]);
+};
+
+export const removeStoredWorkspaceSegmentImageEditJob = (
+  email: string | null | undefined,
+  jobId: string | null | undefined,
+) => {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentImageEditJobs(email).filter((job) => job.jobId !== safeJobId);
+  writeStoredWorkspaceSegmentImageEditJobs(email, jobs);
+};
+
+export const removeStoredWorkspaceSegmentImageEditJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId < 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentImageEditJobs(email).filter(
+    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+  );
+  writeStoredWorkspaceSegmentImageEditJobs(email, jobs);
+};
+
 const isStoredWorkspaceSegmentPhotoAnimationJob = (value: unknown): value is StoredWorkspaceSegmentPhotoAnimationJob => {
   if (!value || typeof value !== "object") {
     return false;
@@ -779,7 +933,7 @@ const isStoredWorkspaceSegmentTalkingPhotoJob = (value: unknown): value is Store
     typeof payload.jobId === "string" &&
     payload.jobId.trim().length > 0 &&
     Number.isInteger(Number(payload.projectId)) &&
-    Number(payload.projectId) > 0 &&
+    Number(payload.projectId) >= 0 &&
     Number.isInteger(Number(payload.segmentIndex)) &&
     Number(payload.segmentIndex) >= 0
   );
@@ -790,7 +944,7 @@ const normalizeStoredWorkspaceSegmentTalkingPhotoJob = (
 ): StoredWorkspaceSegmentTalkingPhotoJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
   jobId: String(value.jobId ?? "").trim(),
-  projectId: Math.trunc(Number(value.projectId)),
+  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   script: normalizeWorkspaceSegmentAiPhotoPrompt(value.script),
   segmentIndex: Math.trunc(Number(value.segmentIndex)),
   sourceAsset: normalizePersistedStudioCustomVideoFile(value.sourceAsset),
@@ -897,7 +1051,7 @@ export const removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment = (
   const normalizedSegmentIndex = Number(segmentIndex);
   if (
     !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId <= 0 ||
+    normalizedProjectId < 0 ||
     !Number.isInteger(normalizedSegmentIndex) ||
     normalizedSegmentIndex < 0
   ) {
@@ -1243,6 +1397,15 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
     return shouldKeep;
   });
   writeStoredWorkspaceSegmentPhotoAnimationJobs(normalizedEmail, nextPhotoAnimationJobs);
+
+  const nextImageEditJobs = readStoredWorkspaceSegmentImageEditJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentImageEditJobs(normalizedEmail, nextImageEditJobs);
 
   const nextTalkingPhotoJobs = readStoredWorkspaceSegmentTalkingPhotoJobs(normalizedEmail).filter((job) => {
     const shouldKeep = keptProjectIds.has(job.projectId);

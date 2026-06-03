@@ -633,6 +633,7 @@ import {
   readStoredWorkspaceSegmentEditorExplicitStructureChange,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorSession,
+  readStoredWorkspaceSegmentImageEditJobs,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   readWorkspaceSegmentVisualDurationCache,
@@ -642,10 +643,13 @@ import {
   removeStoredWorkspaceSegmentEditorExplicitStructureChange,
   removeStoredWorkspaceSegmentEditorScratchDraft,
   removeStoredWorkspaceSegmentEditorSession,
+  removeStoredWorkspaceSegmentImageEditJob,
+  removeStoredWorkspaceSegmentImageEditJobsForSegment,
   removeStoredWorkspaceSegmentPhotoAnimationJob,
   removeStoredWorkspaceSegmentTalkingPhotoJob,
   removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment,
   upsertStoredWorkspaceSegmentAiPhotoJob,
+  upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
   writeStoredWorkspaceSegmentEditorDraft,
@@ -658,6 +662,7 @@ import {
 } from "../features/workspace/workspace-segment-editor-storage";
 import type {
   StoredWorkspaceSegmentAiPhotoJob,
+  StoredWorkspaceSegmentImageEditJob,
   StoredWorkspaceSegmentPhotoAnimationJob,
   StoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
@@ -1515,6 +1520,7 @@ export function WorkspacePage({
   const segmentTalkingTargetDragRef = useRef<WorkspaceTalkingTargetDragState | null>(null);
   const segmentPhotoAnimationActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentImageEditActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentVoiceoverRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -1861,6 +1867,7 @@ export function WorkspacePage({
     segmentAiPhotoActiveJobIdsRef.current.clear();
     segmentPhotoAnimationActiveJobIdsRef.current.clear();
     segmentTalkingPhotoActiveJobIdsRef.current.clear();
+    segmentImageEditActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
     setSegmentEditorGeneratingAiVideoRunIds({});
     setSegmentEditorGeneratingPhotoAnimationRunIds({});
@@ -5713,6 +5720,7 @@ export function WorkspacePage({
     hasActiveSegmentEditorVisualRunScope("talking_photo") ||
     isSegmentEditorGeneratingImageEdit ||
     hasActiveSegmentEditorVisualRunScope("image_edit") ||
+    segmentImageEditActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorUpscalingImage ||
     hasActiveSegmentEditorVisualRunScope("image_upscale") ||
     isSegmentEditorGeneratingSceneSound ||
@@ -5759,7 +5767,11 @@ export function WorkspacePage({
       return "talking_photo";
     }
 
-    if (isSegmentEditorGeneratingImageEdit || hasActiveSegmentEditorVisualRunScope("image_edit")) {
+    if (
+      isSegmentEditorGeneratingImageEdit ||
+      hasActiveSegmentEditorVisualRunScope("image_edit") ||
+      segmentImageEditActiveJobIdsRef.current.size > 0
+    ) {
       return "image_edit";
     }
 
@@ -10629,6 +10641,9 @@ export function WorkspacePage({
   };
 
   const cancelPendingSegmentImageEditRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentImageEditJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, targetSegmentIndex)) {
       return;
     }
@@ -11664,6 +11679,8 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
+      projectId?: number;
       prompt: string;
       runId: number;
       segmentIndex: number;
@@ -11676,7 +11693,9 @@ export function WorkspacePage({
     }
 
     let latestStatus = initialStatus;
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    segmentImageEditActiveJobIdsRef.current.add(safeJobId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
@@ -11684,12 +11703,40 @@ export function WorkspacePage({
           throw new Error("Дорисовка фото занимает слишком много времени. Попробуйте ещё раз.");
         }
 
-        const response = await fetch(`/api/studio/segment-image-edit/jobs/${encodeURIComponent(safeJobId)}`);
-        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
+        let response: Response;
+        let payload: WorkspaceSegmentAiPhotoJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-image-edit/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics("client.segment-editor.image-edit.status.transient-fetch-failed", {
+            error: error instanceof Error ? { message: error.message, name: error.name } : String(error),
+            failures: transientStatusFailures,
+            jobId: safeJobId,
+            targetSegmentIndex: options.segmentIndex,
+          }, { level: "warn" });
+          await new Promise((resolve) => window.setTimeout(resolve, 3500));
+          continue;
+        }
 
         if (!response.ok || !payload?.data) {
-          throw new Error(payload?.error ?? "Не удалось получить статус дорисовки фото.");
+          const statusError = payload?.error ?? "Не удалось получить статус дорисовки фото.";
+          if (response.status >= 500) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics("client.segment-editor.image-edit.status.transient-server-failed", {
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+              statusCode: response.status,
+              targetSegmentIndex: options.segmentIndex,
+            }, { level: "warn" });
+            await new Promise((resolve) => window.setTimeout(resolve, 3500));
+            continue;
+          }
+
+          throw new Error(statusError);
         }
+        transientStatusFailures = 0;
 
         if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
           return;
@@ -11697,8 +11744,19 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
+          upsertStoredWorkspaceSegmentImageEditJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            prompt: options.prompt,
+            segmentIndex: options.segmentIndex,
+            status: latestStatus,
+          });
+        }
 
         if (payload.data.asset) {
+          const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
             imageEditAsset: payload.data!.asset!,
@@ -11712,24 +11770,43 @@ export function WorkspacePage({
           upsertGeneratedMediaLibraryEntry({
             asset: payload.data.asset,
             kind: "image_edit",
-            projectId: segmentEditorDraft?.projectId ?? 0,
+            projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
           });
+          removeStoredWorkspaceSegmentImageEditJob(session.email, safeJobId);
           return;
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentImageEditJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Не удалось завершить дорисовку фото.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          if (options.projectId && options.projectId > 0) {
+            const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
+              bypassCache: true,
+              initialSegmentIndex: options.segmentIndex,
+              initialSegmentMode: "route",
+              openDraft: false,
+              syncRoute: false,
+            });
+            const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+            if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "image_edit") {
+              removeStoredWorkspaceSegmentImageEditJob(session.email, safeJobId);
+              return;
+            }
+          }
+
+          removeStoredWorkspaceSegmentImageEditJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Изображение после дорисовки недоступно.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2000));
       }
     } finally {
+      segmentImageEditActiveJobIdsRef.current.delete(safeJobId);
       if (isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(segmentImageEditRunRef, setSegmentEditorGeneratingImageEditRunIds, options.segmentIndex, options.runId);
       }
@@ -12165,7 +12242,7 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
-        if (options.projectId) {
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
           upsertStoredWorkspaceSegmentTalkingPhotoJob(session.email, {
             createdAt: startedAt,
             jobId: safeJobId,
@@ -13067,8 +13144,22 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      const pendingJobCreatedAt = Date.now();
+      const pendingProjectId = visualJobBinding.projectId ?? segmentEditorDraftRef.current?.projectId ?? segmentEditorDraft.projectId ?? 0;
+      if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
+        upsertStoredWorkspaceSegmentImageEditJob(session.email, {
+          createdAt: pendingJobCreatedAt,
+          jobId: payload.data.jobId,
+          projectId: pendingProjectId,
+          prompt: normalizedPrompt,
+          segmentIndex: targetSegmentIndex,
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorImageEditJob(payload.data.jobId, payload.data.status, {
+        createdAt: pendingJobCreatedAt,
+        projectId: pendingProjectId,
         prompt: normalizedPrompt,
         runId,
         segmentIndex: targetSegmentIndex,
@@ -13084,6 +13175,111 @@ export function WorkspacePage({
       }
     }
   };
+
+  const resumePendingSegmentImageEditJob = (job: StoredWorkspaceSegmentImageEditJob) => {
+    if (segmentImageEditActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+    if (!targetSegment) {
+      removeStoredWorkspaceSegmentImageEditJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (
+      targetSegment.imageEditGeneratedFromPrompt === job.prompt &&
+      getWorkspaceSegmentLatestVisualAction(targetSegment) === "image_edit"
+    ) {
+      removeStoredWorkspaceSegmentImageEditJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(job.segmentIndex)) {
+      return false;
+    }
+
+    const runId = startSegmentVisualRun(
+      segmentImageEditRunRef,
+      setSegmentEditorGeneratingImageEditRunIds,
+      job.segmentIndex,
+    );
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+      ...segment,
+      imageEditPrompt: job.prompt || segment.imageEditPrompt,
+      imageEditPromptInitialized: Boolean(job.prompt || segment.imageEditPrompt),
+      visualReset: false,
+    }));
+    logSegmentEditorDiagnostics("client.segment-editor.image-edit.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      targetSegmentIndex: job.segmentIndex,
+    });
+
+    void pollSegmentEditorImageEditJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      prompt: job.prompt,
+      runId,
+      segmentIndex: job.segmentIndex,
+    }).catch((error) => {
+      if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, job.segmentIndex, runId)) {
+        return;
+      }
+
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось выполнить дорисовку фото.");
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingImageEdit = () => {
+      if (segmentImageEditActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentImageEditJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentImageEditJob(pendingJob);
+    };
+
+    tryResumePendingImageEdit();
+    const intervalId = window.setInterval(tryResumePendingImageEdit, 30_000);
+    const handleFocus = () => tryResumePendingImageEdit();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingImageEdit();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const handleSegmentEditorAiVideoGenerate = async (
     options?: {
@@ -13791,11 +13987,12 @@ export function WorkspacePage({
 
       applyWorkspaceProfile(payload.data.profile);
       const pendingJobCreatedAt = Date.now();
-      if (visualJobBinding.projectId) {
+      const pendingProjectId = visualJobBinding.projectId ?? segmentEditorDraftRef.current?.projectId ?? segmentEditorDraft.projectId ?? 0;
+      if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
         upsertStoredWorkspaceSegmentTalkingPhotoJob(session.email, {
           createdAt: pendingJobCreatedAt,
           jobId: payload.data.jobId,
-          projectId: visualJobBinding.projectId,
+          projectId: pendingProjectId,
           script,
           segmentIndex: targetSegmentIndex,
           sourceAsset: cloneStudioCustomVideoFile(talkingPhotoSourceAsset),
@@ -13805,7 +14002,7 @@ export function WorkspacePage({
       pollStarted = true;
       await pollSegmentEditorTalkingPhotoJob(payload.data.jobId, payload.data.status, {
         createdAt: pendingJobCreatedAt,
-        projectId: visualJobBinding.projectId,
+        projectId: pendingProjectId,
         runId,
         script,
         segmentIndex: targetSegmentIndex,
