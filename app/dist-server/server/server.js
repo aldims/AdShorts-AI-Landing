@@ -3756,10 +3756,6 @@ app.post("/api/studio/segment-voiceover/jobs", async (req, res) => {
         res.status(400).json({ error: "Voiceover text is required." });
         return;
     }
-    if (!projectId) {
-        res.status(400).json({ error: "Project id is required for segment voiceover generation." });
-        return;
-    }
     if (segmentIndex === null) {
         res.status(400).json({ error: "Segment index is required for segment voiceover generation." });
         return;

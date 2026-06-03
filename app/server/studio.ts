@@ -7037,10 +7037,6 @@ export async function createStudioSegmentVoiceoverJob(
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
   const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
 
-  if (!normalizedProjectId) {
-    throw new Error("Project id is required for segment voiceover generation.");
-  }
-
   if (normalizedSegmentIndex === null) {
     throw new Error("Segment index is required for segment voiceover generation.");
   }
@@ -7059,7 +7055,7 @@ export async function createStudioSegmentVoiceoverJob(
       credit_cost: requiredCredits,
       external_user_id: externalUserId,
       language: normalizedLanguage,
-      project_id: normalizedProjectId,
+      project_id: normalizedProjectId ?? undefined,
       segment_index: normalizedSegmentIndex,
       text: normalizedText,
       user_email: user.email ?? undefined,

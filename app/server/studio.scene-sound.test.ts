@@ -114,23 +114,61 @@ describe("studio segment voiceover jobs", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires a project id before contacting AdsFlow", async () => {
+  it("allows a draft segment voiceover without a project id", async () => {
     const { createStudioSegmentVoiceoverJob } = await loadStudioModule();
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
 
-    await expect(
-      createStudioSegmentVoiceoverJob("Subscribe to the channel", {
-        email: "alex@example.test",
-        name: "Alex",
-      }, {
-        language: "en",
-        segmentIndex: 0,
-        voiceType: "Boris",
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-voiceover/jobs") {
+          return jsonResponse({
+            job_id: "segment-voiceover-draft-job-1",
+            status: "queued",
+            user: {
+              balance: 7,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
       }),
-    ).rejects.toThrow("Project id is required for segment voiceover generation.");
+    );
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    const job = await createStudioSegmentVoiceoverJob("Subscribe to the channel", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      language: "en",
+      segmentIndex: 0,
+      voiceType: "Boris",
+    });
+
+    expect(job).toEqual(expect.objectContaining({
+      jobId: "segment-voiceover-draft-job-1",
+      status: "queued",
+    }));
+    expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body).toEqual(
+      expect.objectContaining({
+        admin_token: "admin-token",
+        external_user_id: "email:alex@example.test",
+        language: "en",
+        segment_index: 0,
+        text: "Subscribe to the channel",
+        voice_type: "Aiden",
+      }),
+    );
+    expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body).not.toHaveProperty("project_id");
   });
 
   it("requires text and a real voice before contacting AdsFlow", async () => {

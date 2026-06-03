@@ -14514,17 +14514,11 @@ export function WorkspacePage({
     }
 
     const voiceJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
-    if (!voiceJobBinding.isPersisted) {
+    const voiceProjectId = getPositiveWorkspaceMediaAssetId(voiceJobBinding.projectId ?? currentDraft.projectId) ?? undefined;
+    const voiceSegmentIndex = voiceJobBinding.segmentIndex ?? targetSegmentIndex;
+    if (typeof voiceSegmentIndex !== "number") {
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
-      setSegmentEditorVideoError("Озвучку сцены можно создать после сохранения новой структуры сегментов.");
-      return false;
-    }
-
-    const voiceProjectId = getPositiveWorkspaceMediaAssetId(voiceJobBinding.projectId);
-    const voiceSegmentIndex = voiceJobBinding.segmentIndex;
-    if (!voiceProjectId || typeof voiceSegmentIndex !== "number") {
-      clearSegmentEditorVoiceoverError(targetSegmentIndex);
-      setSegmentEditorVideoError("Озвучку можно добавить только к сохраненному сегменту.");
+      setSegmentEditorVideoError("Не удалось определить сегмент для озвучки.");
       return false;
     }
 
