@@ -38,13 +38,18 @@ export const setBetterAuthSessionCookie = (res, sessionToken, expiresAt) => {
     }
     res.cookie(activeCookieName, signBetterAuthSessionCookieValue(sessionToken), {
         ...baseCookieOptions,
-        encode: String,
         expires: expiresAt,
         path: "/",
     });
 };
 const trustedOrigins = getTrustedAuthOrigins(env.appUrl, env.authBaseUrl, env.isProduction);
 export const auth = betterAuth({
+    account: {
+        accountLinking: {
+            enabled: true,
+            trustedProviders: ["google"],
+        },
+    },
     baseURL: env.authBaseUrl,
     database,
     emailAndPassword: {

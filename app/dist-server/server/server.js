@@ -19,7 +19,7 @@ import { createWorkspaceSavedReference, deleteWorkspaceSavedReference, listWorks
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
-import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
+import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
@@ -792,7 +792,8 @@ const TELEGRAM_AUTH_MESSAGE_TYPE = "adshorts.telegramAuth";
 const resolveTelegramAuthOrigin = (req) => {
     const queryOrigin = typeof req.query.origin === "string" ? req.query.origin.trim() : "";
     const originHeader = req.get("origin")?.trim() ?? "";
-    const candidates = [queryOrigin, originHeader, env.appUrl];
+    const requestOrigin = getRequestOriginUrl(req)?.origin ?? "";
+    const candidates = [queryOrigin, originHeader, requestOrigin, env.appUrl];
     for (const candidate of candidates) {
         try {
             const parsed = new URL(candidate);
@@ -808,6 +809,10 @@ const resolveTelegramAuthOrigin = (req) => {
     return new URL(env.appUrl).origin;
 };
 const getTelegramOidcRedirectUri = (origin) => `${origin}/api/auth/telegram/oidc/callback`;
+const setTelegramOidcCookies = (res, session) => {
+    res.cookie(TELEGRAM_OIDC_SESSION_COOKIE_NAME, serializeTelegramOidcSession(session), getTelegramOidcSessionCookieOptions());
+    res.cookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, serializeTelegramLoginNonce(session.nonce), getTelegramOidcSessionCookieOptions());
+};
 const buildTelegramOidcAuthorizationUrl = (session, codeChallenge) => {
     const params = new URLSearchParams({
         client_id: env.telegramBotId ?? "",
@@ -876,13 +881,14 @@ app.get("/api/auth/telegram/config", (req, res) => {
     }
     const origin = resolveTelegramAuthOrigin(req);
     const { codeChallenge, session } = createTelegramOidcSession(getTelegramOidcRedirectUri(origin));
-    res.cookie(TELEGRAM_OIDC_SESSION_COOKIE_NAME, serializeTelegramOidcSession(session), getTelegramOidcSessionCookieOptions());
+    setTelegramOidcCookies(res, session);
     res.json({
         authorizationUrl: buildTelegramOidcAuthorizationUrl(session, codeChallenge),
         botId: env.telegramBotId,
         botUsername: env.telegramBotUsername ?? "",
         clientId: env.telegramBotId,
         flow: "code",
+        nonce: session.nonce,
         requestAccess: ["write"],
     });
 });
@@ -893,7 +899,7 @@ app.get("/api/auth/telegram/login", (req, res) => {
     }
     const origin = resolveTelegramAuthOrigin(req);
     const { codeChallenge, session } = createTelegramOidcSession(getTelegramOidcRedirectUri(origin));
-    res.cookie(TELEGRAM_OIDC_SESSION_COOKIE_NAME, serializeTelegramOidcSession(session), getTelegramOidcSessionCookieOptions());
+    setTelegramOidcCookies(res, session);
     res.redirect(buildTelegramOidcAuthorizationUrl(session, codeChallenge));
 });
 app.get("/api/auth/telegram/oidc/callback", async (req, res) => {
@@ -916,6 +922,7 @@ app.get("/api/auth/telegram/oidc/callback", async (req, res) => {
     const state = readTelegramLoginField(req.query.state).trim();
     const session = parseTelegramOidcSession(getRequestCookie(req, TELEGRAM_OIDC_SESSION_COOKIE_NAME));
     res.clearCookie(TELEGRAM_OIDC_SESSION_COOKIE_NAME, getTelegramNonceCookieBaseOptions());
+    res.clearCookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, getTelegramNonceCookieBaseOptions());
     if (!code || !state || !session || session.state !== state) {
         sendTelegramAuthPopupResult(res, {
             error: "Invalid Telegram login session.",

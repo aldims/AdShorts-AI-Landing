@@ -34,4 +34,17 @@ describe("server origins", () => {
       "http://localhost:*",
     );
   });
+
+  it("trusts apex and www variants of configured production domains", () => {
+    const productionOrigins = getConfiguredOrigins(
+      "https://adshortsai.com",
+      "https://auth.adshortsai.com",
+      true,
+    );
+
+    expect(productionOrigins).toContain("https://adshortsai.com");
+    expect(productionOrigins).toContain("https://www.adshortsai.com");
+    expect(productionOrigins).toContain("https://auth.adshortsai.com");
+    expect(productionOrigins).not.toContain("https://www.auth.adshortsai.com");
+  });
 });

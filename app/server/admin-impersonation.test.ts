@@ -62,13 +62,13 @@ describe("admin impersonation tokens", () => {
       getBetterAuthSessionCookieName(),
       signBetterAuthSessionCookieValue("session-token"),
       expect.objectContaining({
-        encode: String,
         expires: new Date("2026-05-09T12:00:00.000Z"),
         httpOnly: true,
         path: "/",
         sameSite: "lax",
       }),
     );
+    expect(vi.mocked(res.cookie).mock.calls[0]?.[2]).not.toHaveProperty("encode");
     expect(signBetterAuthSessionCookieValue("session-token")).not.toBe("session-token");
     expect(res.clearCookie).toHaveBeenCalledWith(
       "better-auth.session_token",

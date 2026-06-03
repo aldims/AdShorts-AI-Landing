@@ -83,6 +83,7 @@ import {
   getTelegramUserProfileFromIdToken,
   parseTelegramOidcSession,
   parseTelegramLoginNonce,
+  serializeTelegramLoginNonce,
   serializeTelegramOidcSession,
   TELEGRAM_LOGIN_NONCE_COOKIE_NAME,
   TELEGRAM_LOGIN_NONCE_MAX_AGE_MS,
@@ -1153,7 +1154,8 @@ const TELEGRAM_AUTH_MESSAGE_TYPE = "adshorts.telegramAuth";
 const resolveTelegramAuthOrigin = (req: express.Request) => {
   const queryOrigin = typeof req.query.origin === "string" ? req.query.origin.trim() : "";
   const originHeader = req.get("origin")?.trim() ?? "";
-  const candidates = [queryOrigin, originHeader, env.appUrl];
+  const requestOrigin = getRequestOriginUrl(req)?.origin ?? "";
+  const candidates = [queryOrigin, originHeader, requestOrigin, env.appUrl];
 
   for (const candidate of candidates) {
     try {
@@ -1171,6 +1173,22 @@ const resolveTelegramAuthOrigin = (req: express.Request) => {
 };
 
 const getTelegramOidcRedirectUri = (origin: string) => `${origin}/api/auth/telegram/oidc/callback`;
+
+const setTelegramOidcCookies = (
+  res: express.Response,
+  session: ReturnType<typeof createTelegramOidcSession>["session"],
+) => {
+  res.cookie(
+    TELEGRAM_OIDC_SESSION_COOKIE_NAME,
+    serializeTelegramOidcSession(session),
+    getTelegramOidcSessionCookieOptions(),
+  );
+  res.cookie(
+    TELEGRAM_LOGIN_NONCE_COOKIE_NAME,
+    serializeTelegramLoginNonce(session.nonce),
+    getTelegramOidcSessionCookieOptions(),
+  );
+};
 
 const buildTelegramOidcAuthorizationUrl = (session: ReturnType<typeof createTelegramOidcSession>["session"], codeChallenge: string) => {
   const params = new URLSearchParams({
@@ -1257,17 +1275,14 @@ app.get("/api/auth/telegram/config", (req, res) => {
 
   const origin = resolveTelegramAuthOrigin(req);
   const { codeChallenge, session } = createTelegramOidcSession(getTelegramOidcRedirectUri(origin));
-  res.cookie(
-    TELEGRAM_OIDC_SESSION_COOKIE_NAME,
-    serializeTelegramOidcSession(session),
-    getTelegramOidcSessionCookieOptions(),
-  );
+  setTelegramOidcCookies(res, session);
   res.json({
     authorizationUrl: buildTelegramOidcAuthorizationUrl(session, codeChallenge),
     botId: env.telegramBotId,
     botUsername: env.telegramBotUsername ?? "",
     clientId: env.telegramBotId,
     flow: "code",
+    nonce: session.nonce,
     requestAccess: ["write"],
   });
 });
@@ -1280,11 +1295,7 @@ app.get("/api/auth/telegram/login", (req, res) => {
 
   const origin = resolveTelegramAuthOrigin(req);
   const { codeChallenge, session } = createTelegramOidcSession(getTelegramOidcRedirectUri(origin));
-  res.cookie(
-    TELEGRAM_OIDC_SESSION_COOKIE_NAME,
-    serializeTelegramOidcSession(session),
-    getTelegramOidcSessionCookieOptions(),
-  );
+  setTelegramOidcCookies(res, session);
   res.redirect(buildTelegramOidcAuthorizationUrl(session, codeChallenge));
 });
 
@@ -1310,6 +1321,7 @@ app.get("/api/auth/telegram/oidc/callback", async (req, res) => {
   const state = readTelegramLoginField(req.query.state).trim();
   const session = parseTelegramOidcSession(getRequestCookie(req, TELEGRAM_OIDC_SESSION_COOKIE_NAME));
   res.clearCookie(TELEGRAM_OIDC_SESSION_COOKIE_NAME, getTelegramNonceCookieBaseOptions());
+  res.clearCookie(TELEGRAM_LOGIN_NONCE_COOKIE_NAME, getTelegramNonceCookieBaseOptions());
 
   if (!code || !state || !session || session.state !== state) {
     sendTelegramAuthPopupResult(res, {
