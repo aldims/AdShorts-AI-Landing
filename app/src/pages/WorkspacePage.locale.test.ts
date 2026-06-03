@@ -7,8 +7,10 @@ import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-cr
 import { getWorkspaceSegmentLatestVisualAction } from "../features/workspace/workspace-segment-editor";
 import {
   readStoredWorkspaceSegmentImageEditJobs,
+  readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   upsertStoredWorkspaceSegmentImageEditJob,
+  upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
@@ -1071,6 +1073,55 @@ describe("WorkspacePage segment editor draft persistence", () => {
           prompt: "add milk",
           segmentIndex: 3,
           status: "queued",
+        }),
+      ]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+    }
+  });
+
+  it("preserves requested duration for pending photo animation jobs", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: createMemoryStorage() });
+      upsertStoredWorkspaceSegmentPhotoAnimationJob("Photo-Duration@Example.test", {
+        createdAt: Date.now(),
+        durationSeconds: 5,
+        jobId: "photo-animation-duration",
+        projectId: 901,
+        prompt: "animate pancakes",
+        segmentIndex: 2,
+        sourceAsset: null,
+        status: "processing",
+      });
+
+      expect(readStoredWorkspaceSegmentPhotoAnimationJobs("photo-duration@example.test")).toEqual([
+        expect.objectContaining({
+          durationSeconds: 5,
+          jobId: "photo-animation-duration",
+          projectId: 901,
+          segmentIndex: 2,
+          status: "processing",
         }),
       ]);
     } finally {

@@ -32,6 +32,7 @@ export type StoredWorkspaceSegmentPhotoAnimationJob = {
   createdAt: number;
   durationExtensionSourceDurationSeconds?: number | null;
   durationExtensionTargetDurationSeconds?: number | null;
+  durationSeconds?: number | null;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -828,6 +829,7 @@ const normalizeStoredWorkspaceSegmentPhotoAnimationJob = (
   durationExtensionTargetDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(
     value.durationExtensionTargetDurationSeconds,
   ),
+  durationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(value.durationSeconds),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.trunc(Number(value.projectId)),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),

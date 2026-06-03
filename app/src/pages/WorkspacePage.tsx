@@ -11922,6 +11922,7 @@ export function WorkspacePage({
     options: {
       durationExtensionSourceDurationSeconds?: number | null;
       durationExtensionTargetDurationSeconds?: number | null;
+      durationSeconds?: number | null;
       projectId?: number;
       prompt: string;
       refreshSceneSoundPrompt?: string | null;
@@ -12011,6 +12012,7 @@ export function WorkspacePage({
             createdAt: startedAt,
             durationExtensionSourceDurationSeconds: options.durationExtensionSourceDurationSeconds ?? null,
             durationExtensionTargetDurationSeconds: options.durationExtensionTargetDurationSeconds ?? null,
+            durationSeconds: options.durationSeconds ?? null,
             jobId: safeJobId,
             projectId: options.projectId,
             prompt: options.prompt,
@@ -12050,11 +12052,22 @@ export function WorkspacePage({
           const durationExtensionTargetDurationSeconds = clampWorkspaceSegmentEditorVisualDurationSeconds(
             options.durationExtensionTargetDurationSeconds,
           );
+          const generatedDurationSeconds = clampWorkspaceSegmentEditorVisualDurationSeconds(
+            durationExtensionTargetDurationSeconds ??
+              options.durationSeconds ??
+              getStudioCustomVideoFileDurationSeconds(nextPhotoAnimationAsset),
+          );
+          const nextPhotoAnimationAssetWithDuration = generatedDurationSeconds !== null
+            ? {
+                ...nextPhotoAnimationAsset,
+                durationSeconds: generatedDurationSeconds,
+              }
+            : nextPhotoAnimationAsset;
           const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
-            aiVideoAsset: nextPhotoAnimationAsset,
+            aiVideoAsset: nextPhotoAnimationAssetWithDuration,
             aiVideoGeneratedMode: "photo_animation",
             aiVideoGeneratedFromPrompt: options.prompt,
             aiVideoPrompt: options.prompt,
@@ -12062,8 +12075,8 @@ export function WorkspacePage({
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
             durationExtensionSourceDurationSeconds: options.durationExtensionSourceDurationSeconds ?? null,
-            durationMode: durationExtensionTargetDurationSeconds !== null ? "manual" : segment.durationMode,
-            manualDurationSeconds: durationExtensionTargetDurationSeconds ?? segment.manualDurationSeconds,
+            durationMode: generatedDurationSeconds !== null ? "manual" : segment.durationMode,
+            manualDurationSeconds: generatedDurationSeconds ?? segment.manualDurationSeconds,
             visualReset: false,
             videoAction: "photo_animation",
           }));
@@ -12079,7 +12092,7 @@ export function WorkspacePage({
           const didQueuePlayback = queueActiveSegmentEditorPlayback(segmentPlaybackIndex);
           const didWarmVideoPlayback = await warmSegmentEditorGeneratedVideoForPlayback(
             segmentPlaybackIndex,
-            getStudioCustomAssetPreviewUrl(nextPhotoAnimationAsset),
+            getStudioCustomAssetPreviewUrl(nextPhotoAnimationAssetWithDuration),
           );
           logSegmentEditorDiagnostics("client.segment-editor.photo-animation.warmup", {
             didQueuePlayback,
@@ -12089,7 +12102,7 @@ export function WorkspacePage({
             targetSegmentIndex: options.segmentIndex,
           });
           upsertGeneratedMediaLibraryEntry({
-            asset: nextPhotoAnimationAsset,
+            asset: nextPhotoAnimationAssetWithDuration,
             kind: "photo_animation",
             projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -13652,6 +13665,7 @@ export function WorkspacePage({
           createdAt: Date.now(),
           durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds ?? null,
           durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds ?? null,
+          durationSeconds,
           jobId: payload.data.jobId,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
@@ -13664,6 +13678,7 @@ export function WorkspacePage({
       await pollSegmentEditorPhotoAnimationJob(payload.data.jobId, payload.data.status, {
         durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds,
         durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
+        durationSeconds,
         projectId: visualJobBinding.projectId,
         prompt: normalizedPrompt,
         refreshSceneSoundPrompt: options?.refreshSceneSoundPrompt,
@@ -14192,6 +14207,7 @@ export function WorkspacePage({
     void pollSegmentEditorPhotoAnimationJob(job.jobId, job.status || "queued", {
       durationExtensionSourceDurationSeconds: job.durationExtensionSourceDurationSeconds,
       durationExtensionTargetDurationSeconds: job.durationExtensionTargetDurationSeconds,
+      durationSeconds: job.durationSeconds,
       projectId: job.projectId,
       prompt: job.prompt,
       runId,
