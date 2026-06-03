@@ -87,6 +87,7 @@ import {
   getStudioRouteState,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
+  buildWorkspaceGeneratedMediaLibraryEntry,
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   readStoredWorkspaceSegmentEditorBrandSnapshot,
@@ -5612,6 +5613,49 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(hydratedDraft?.segments[0]?.aiPhotoAsset?.assetId).toBe(3553);
     expect(hydratedDraft?.segments[0]?.aiPhotoAsset?.remoteUrl).toBe("/api/workspace/media-assets/3553");
+  });
+
+  it("builds generated image edit media entries for scratch drafts", () => {
+    const scratchProject: Parameters<typeof buildWorkspaceGeneratedMediaLibraryEntry>[0]["project"] = {
+      adId: 0,
+      createdAt: "2026-06-03T00:00:00.000Z",
+      description: "",
+      editedFromProjectAdId: null,
+      finalAsset: null,
+      generatedAt: null,
+      hashtags: [],
+      id: "scratch",
+      jobId: null,
+      posterUrl: null,
+      prompt: "",
+      source: "project",
+      status: "draft",
+      title: "Scratch",
+      updatedAt: "2026-06-03T00:00:00.000Z",
+      versionRootProjectAdId: null,
+      videoFallbackUrl: null,
+      videoUrl: null,
+      youtubePublication: null,
+    };
+
+    const entry = buildWorkspaceGeneratedMediaLibraryEntry({
+      asset: {
+        dataUrl: "data:image/png;base64,abc",
+        fileName: "segment-image-edit.png",
+        fileSize: 3,
+        mimeType: "image/png",
+      },
+      kind: "image_edit",
+      project: scratchProject,
+      segment: createDraftSegment({ index: 3 }),
+      segmentListIndex: 2,
+      sourceJobId: "scratch-image-edit-job",
+    });
+
+    expect(entry?.item.projectId).toBe(0);
+    expect(entry?.item.kind).toBe("image_edit");
+    expect(entry?.item.previewUrl).toBe("data:image/png;base64,abc");
+    expect(entry?.item.itemKey).toBe("live:image_edit:job:scratch-image-edit-job");
   });
 
   it("exports distinct AI photo asset ids for multiple edited segments", async () => {

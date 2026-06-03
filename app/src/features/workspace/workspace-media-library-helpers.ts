@@ -456,7 +456,7 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
     .forEach((entry) => {
       const projectId = Number(entry.item.projectId);
       const segmentIndex = Number(entry.item.segmentIndex);
-      if (!Number.isInteger(projectId) || projectId <= 0 || !Number.isInteger(segmentIndex) || segmentIndex < 0) {
+      if (!Number.isInteger(projectId) || projectId < 0 || !Number.isInteger(segmentIndex) || segmentIndex < 0) {
         return;
       }
 
@@ -940,7 +940,7 @@ export const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
 
   const project = cloneWorkspaceProject(options.project);
   const projectId = project.adId ?? 0;
-  if (!projectId) {
+  if (!Number.isInteger(projectId) || projectId < 0) {
     return null;
   }
 

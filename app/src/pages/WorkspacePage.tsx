@@ -893,6 +893,7 @@ export {
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
 } from "../features/workspace/workspace-segment-structure-helpers";
 export {
+  buildWorkspaceGeneratedMediaLibraryEntry,
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   createStudioCustomVideoFileFromMediaLibraryItem,
   getWorkspaceMediaLibraryItemRemoteUrl,

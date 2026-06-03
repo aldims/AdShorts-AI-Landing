@@ -4106,9 +4106,7 @@ export async function getStudioSegmentImageEditJobStatus(jobId, user) {
     const payload = await fetchAdsflowSegmentImageEditJobStatus(jobId, user);
     const status = String(payload.status ?? "queued").trim() || "queued";
     const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
-    const asset = payload.asset
-        ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset, { preferPortableResult: true })
-        : undefined;
+    const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
     const error = normalizeGenerationText(payload.error) || undefined;
     if (error || status === "failed") {
         console.warn("[studio] segment-image-edit job status has error", JSON.stringify({
