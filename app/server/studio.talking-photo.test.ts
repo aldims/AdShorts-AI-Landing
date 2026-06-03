@@ -164,4 +164,72 @@ describe("studio talking photo speaker confirmation", () => {
       }),
     );
   });
+
+  it("recovers a completed talking photo job when status omits the asset", async () => {
+    const { getStudioSegmentTalkingPhotoJobStatus } = await loadStudioModule();
+    const calls: Array<{ pathname: string; range: string | null }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        calls.push({
+          pathname: url.pathname,
+          range: init?.headers instanceof Headers
+            ? init.headers.get("range")
+            : typeof init?.headers === "object" && init.headers
+              ? String((init.headers as Record<string, string>).range ?? "")
+              : null,
+        });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-talking-photo/jobs/talking-job-ready") {
+          return jsonResponse({
+            job_id: "talking-job-ready",
+            status: "done",
+            user: {
+              balance: 40,
+              plan: "START",
+              start_plan_used: true,
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        if (url.pathname === "/api/web/segment-talking-photo/jobs/talking-job-ready/file") {
+          return new Response("x", {
+            headers: { "Content-Type": "video/mp4" },
+            status: 206,
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioSegmentTalkingPhotoJobStatus("talking-job-ready", {
+      email: "alexmamondi@gmail.com",
+    });
+
+    expect(status).toEqual(expect.objectContaining({
+      jobId: "talking-job-ready",
+      status: "ready",
+    }));
+    expect(status.asset).toEqual(expect.objectContaining({
+      fileName: "segment-talking-photo-talking-job-ready.mp4",
+      mimeType: "video/mp4",
+      remoteUrl: "/api/studio/segment-talking-photo/jobs/talking-job-ready/video",
+    }));
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pathname: "/api/web/segment-talking-photo/jobs/talking-job-ready/file",
+          range: "bytes=0-0",
+        }),
+      ]),
+    );
+  });
 });

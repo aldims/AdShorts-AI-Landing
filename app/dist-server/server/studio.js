@@ -5059,18 +5059,34 @@ export async function getStudioSegmentTalkingPhotoJobStatus(jobId, user) {
         const payload = await fetchAdsflowSegmentTalkingPhotoJobStatus(jobId, user);
         const status = String(payload.status ?? "queued").trim() || "queued";
         const resolvedJobId = String(payload.job_id ?? jobId).trim() || safeJobId;
+        const profile = await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        });
         const asset = payload.asset ? normalizeAdsflowSegmentTalkingPhotoAsset(resolvedJobId, payload.asset) : undefined;
         if (asset) {
             warmStudioGeneratedVideoPlayback("segment-talking-photo", resolvedJobId, user);
             warmStudioGeneratedVideoPoster("segment-talking-photo", resolvedJobId, user);
+            return {
+                asset,
+                error: normalizeGenerationText(payload.error) || undefined,
+                jobId: resolvedJobId,
+                profile,
+                status,
+            };
+        }
+        if (isStudioGeneratedVideoReadyStatus(status)) {
+            console.warn("[studio] Segment talking character status completed without asset, probing file endpoint", {
+                jobId: resolvedJobId,
+                status,
+            });
+            return recoverStudioSegmentGeneratedVideoJobStatus("segment-talking-photo", resolvedJobId, user, {
+                fallbackError: "Говорящий персонаж завершился, но файл недоступен. Попробуйте ещё раз.",
+            });
         }
         return {
-            asset,
             error: normalizeGenerationText(payload.error) || undefined,
             jobId: resolvedJobId,
-            profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
-                rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
-            }),
+            profile,
             status,
         };
     }
@@ -5619,6 +5635,14 @@ const recoverStudioSegmentGeneratedVideoJobStatus = async (kind, jobId, user, op
         profile,
         status: "failed",
     };
+};
+const isStudioGeneratedVideoReadyStatus = (status) => {
+    const normalizedStatus = normalizeGenerationText(status).toLowerCase();
+    return (normalizedStatus === "completed" ||
+        normalizedStatus === "done" ||
+        normalizedStatus === "ready" ||
+        normalizedStatus === "succeeded" ||
+        normalizedStatus === "success");
 };
 export async function getStudioSegmentAiVideoJobFileProxyTarget(jobId, user) {
     const safeJobId = normalizeGenerationText(jobId);
