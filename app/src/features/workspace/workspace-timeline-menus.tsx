@@ -51,6 +51,10 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   subtitle: string | null;
   title: string;
   trimToVoiceover: boolean;
+  trimToVoiceoverLabels: {
+    fullDurationLabel: string;
+    voiceoverDurationLabel: string;
+  } | null;
 };
 
 export function WorkspaceSegmentTimelineDurationMenu({
@@ -82,6 +86,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
   subtitle,
   title,
   trimToVoiceover,
+  trimToVoiceoverLabels,
 }: WorkspaceSegmentTimelineDurationMenuProps) {
   if (!segment || isPhoto || segmentArrayIndex < 0 || typeof document === "undefined") {
     return null;
@@ -166,19 +171,62 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </div>
           </div>
         ) : null}
-        {canTrimToVoiceover ? (
-          <div className="studio-segment-editor__timeline-duration-options">
+        {canTrimToVoiceover && trimToVoiceoverLabels ? (
+          <div
+            className="studio-segment-editor__timeline-duration-menu-modes"
+            role="radiogroup"
+            aria-label={workspaceText(locale, "Как синхронизировать видео и озвучку", "How to sync video and voiceover")}
+          >
             <button
-              className={`studio-segment-editor__timeline-duration-switch${
+              className={`studio-segment-editor__timeline-duration-menu-mode${
+                !trimToVoiceover ? " is-selected" : ""
+              }`}
+              type="button"
+              role="radio"
+              aria-checked={!trimToVoiceover}
+              onClick={() => {
+                if (trimToVoiceover) {
+                  onTrimToVoiceoverToggle();
+                }
+              }}
+            >
+              <strong>
+                {workspaceText(
+                  locale,
+                  `Видео ${trimToVoiceoverLabels.fullDurationLabel}`,
+                  `Video ${trimToVoiceoverLabels.fullDurationLabel}`,
+                )}
+              </strong>
+              <small>{workspaceText(locale, "озвучка закончится, видео доиграет", "voice ends, video keeps playing")}</small>
+            </button>
+            <button
+              className={`studio-segment-editor__timeline-duration-menu-mode${
                 trimToVoiceover ? " is-selected" : ""
               }`}
               type="button"
-              role="switch"
+              role="radio"
               aria-checked={trimToVoiceover}
-              onClick={onTrimToVoiceoverToggle}
+              onClick={() => {
+                if (!trimToVoiceover) {
+                  onTrimToVoiceoverToggle();
+                }
+              }}
             >
-              <span>{workspaceText(locale, "Обрезать под озвучку", "Trim to voiceover")}</span>
-              <i aria-hidden="true"></i>
+              <strong>
+                {workspaceText(
+                  locale,
+                  `Озвучка ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                  `Voice ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                )}
+              </strong>
+              <small>{workspaceText(locale, "обрезать видео по озвучке", "trim video to voiceover")}</small>
+            </button>
+          </div>
+        ) : null}
+        {canTrimToVoiceover && trimToVoiceoverLabels && hasExtensionPlan ? (
+          <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
+            <button type="button" onClick={applyDuration}>
+              {workspaceText(locale, "Сохранить длину", "Save duration")}
             </button>
           </div>
         ) : null}

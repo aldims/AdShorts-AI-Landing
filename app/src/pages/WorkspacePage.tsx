@@ -19661,23 +19661,37 @@ export function WorkspacePage({
       currentSegment && segmentTimelineDurationSourceOverride?.segmentIndex === currentSegment.index
         ? segmentTimelineDurationSourceOverride.durationSeconds
         : null;
-    const nextDurationSeconds = currentSegment
-      ? resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(currentSegment, baselineSegment, rawDurationSeconds, {
+    const sourceDurationSeconds = currentSegment
+      ? getWorkspaceSegmentDurationExtensionSourceDurationSeconds(currentSegment, baselineSegment, {
           sourceDurationSeconds: sourceOverrideDurationSeconds,
-          trimToVoiceover:
-            segmentTimelineDurationTrimToVoiceover &&
-            shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
-              currentSegment,
-              baselineSegment,
-              rawDurationSeconds,
-              getWorkspaceSegmentVoiceoverDurationSeconds(currentSegment, currentDraft),
-              {
-                sourceDurationSeconds: sourceOverrideDurationSeconds,
-              },
-            ),
-          voiceoverDurationSeconds: getWorkspaceSegmentVoiceoverDurationSeconds(currentSegment, currentDraft),
         })
-      : rawDurationSeconds;
+      : null;
+    const voiceoverDurationSeconds = currentSegment
+      ? getWorkspaceSegmentVoiceoverDurationSeconds(currentSegment, currentDraft)
+      : null;
+    const canMatchVideoOrVoiceover =
+      currentSegment &&
+      shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
+        currentSegment,
+        baselineSegment,
+        rawDurationSeconds,
+        voiceoverDurationSeconds,
+        {
+          sourceDurationSeconds: sourceOverrideDurationSeconds,
+        },
+      );
+    const nextDurationSeconds =
+      currentSegment && canMatchVideoOrVoiceover
+        ? segmentTimelineDurationTrimToVoiceover
+          ? voiceoverDurationSeconds
+          : sourceDurationSeconds
+        : currentSegment
+          ? resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(currentSegment, baselineSegment, rawDurationSeconds, {
+              sourceDurationSeconds: sourceOverrideDurationSeconds,
+              trimToVoiceover: false,
+              voiceoverDurationSeconds,
+            })
+          : rawDurationSeconds;
     return applySegmentTimelineDurationValue(segmentIndex, nextDurationSeconds);
   };
   const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
@@ -21739,16 +21753,23 @@ export function WorkspacePage({
         },
       ),
   );
+  const segmentTimelineDurationMenuMatchedInputSeconds =
+    segmentTimelineDurationMenuCanTrimToVoiceover
+      ? segmentTimelineDurationTrimToVoiceover
+        ? segmentTimelineDurationMenuVoiceoverSeconds
+        : segmentTimelineDurationMenuSourceSeconds
+      : null;
   const segmentTimelineDurationMenuEffectiveInputSeconds = segmentTimelineDurationMenuSegment
     ? isSegmentTimelineDurationMenuPhoto
       ? segmentTimelineDurationMenuInputSeconds
-      : resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(
+      : segmentTimelineDurationMenuMatchedInputSeconds ??
+        resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(
           segmentTimelineDurationMenuSegment,
           segmentTimelineDurationMenuBaselineSegment,
           segmentTimelineDurationMenuRequestedInputSeconds,
           {
             sourceDurationSeconds: segmentTimelineDurationMenuSourceOverrideSeconds,
-            trimToVoiceover: segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationTrimToVoiceover,
+            trimToVoiceover: false,
             voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverSeconds,
           },
         )
@@ -21769,10 +21790,30 @@ export function WorkspacePage({
           manualDurationSeconds: segmentTimelineDurationMenuEffectiveInputSeconds,
         }
       : segmentTimelineDurationMenuSegment;
+  const segmentTimelineDurationMenuAiExtensionInputSeconds =
+    !isSegmentTimelineDurationMenuPhoto && segmentTimelineDurationMenuSourceSeconds !== null
+      ? segmentTimelineDurationMenuRequestedInputSeconds
+      : segmentTimelineDurationMenuEffectiveInputSeconds;
+  const segmentTimelineDurationMenuAiExtensionPreviewSegment: WorkspaceSegmentEditorDraftSegment | null =
+    segmentTimelineDurationMenuSegment && segmentTimelineDurationMenuAiExtensionInputSeconds !== null
+      ? {
+          ...segmentTimelineDurationMenuSegment,
+          durationExtensionSourceDurationSeconds: resolveWorkspaceSegmentDurationExtensionSourceDurationSeconds(
+            segmentTimelineDurationMenuSegment,
+            segmentTimelineDurationMenuAiExtensionInputSeconds,
+            segmentTimelineDurationMenuBaselineSegment,
+            {
+              sourceDurationSeconds: segmentTimelineDurationMenuSourceOverrideSeconds,
+            },
+          ),
+          durationMode: "manual",
+          manualDurationSeconds: segmentTimelineDurationMenuAiExtensionInputSeconds,
+        }
+      : segmentTimelineDurationMenuPreviewSegment;
   const segmentTimelineDurationMenuExtensionPlan =
-    segmentTimelineDurationMenuPreviewSegment && !isSegmentTimelineDurationMenuPhoto
+    segmentTimelineDurationMenuAiExtensionPreviewSegment && !isSegmentTimelineDurationMenuPhoto
       ? getWorkspaceSegmentDurationExtensionPlan(
-          segmentTimelineDurationMenuPreviewSegment,
+          segmentTimelineDurationMenuAiExtensionPreviewSegment,
           segmentTimelineDurationMenuBaselineSegment,
           {
             sourceDurationSeconds: segmentTimelineDurationMenuSourceOverrideSeconds,
@@ -21804,6 +21845,47 @@ export function WorkspacePage({
             : Math.round(segmentTimelineDurationMenuExtensionSeconds * 10) / 10,
         ).replace(".", ",")
       : "5";
+  const segmentTimelineDurationMenuRequestedExtensionSeconds =
+    !isSegmentTimelineDurationMenuPhoto &&
+    segmentTimelineDurationMenuSourceSeconds !== null &&
+    segmentTimelineDurationMenuRequestedInputSeconds !== null
+      ? roundWorkspaceSegmentTimelineSeconds(
+          Math.max(0, segmentTimelineDurationMenuRequestedInputSeconds - segmentTimelineDurationMenuSourceSeconds),
+        )
+      : null;
+  const segmentTimelineDurationMenuRequestedExtensionSecondsLabel =
+    segmentTimelineDurationMenuRequestedExtensionSeconds !== null
+      ? String(
+          Number.isInteger(segmentTimelineDurationMenuRequestedExtensionSeconds)
+            ? segmentTimelineDurationMenuRequestedExtensionSeconds
+            : Math.round(segmentTimelineDurationMenuRequestedExtensionSeconds * 10) / 10,
+        ).replace(".", ",")
+      : segmentTimelineDurationMenuExtensionSecondsLabel;
+  const segmentTimelineDurationMenuFullDurationLabel =
+    segmentTimelineDurationMenuSourceSeconds !== null
+      ? formatWorkspaceSegmentEditorSegmentDurationLabel(
+          0,
+          segmentTimelineDurationMenuSourceSeconds,
+          locale,
+        ).replace(/\s+/g, "")
+      : null;
+  const segmentTimelineDurationMenuVoiceoverDurationLabel =
+    segmentTimelineDurationMenuVoiceoverSeconds !== null
+      ? formatWorkspaceSegmentEditorSegmentDurationLabel(
+          0,
+          segmentTimelineDurationMenuVoiceoverSeconds,
+          locale,
+        ).replace(/\s+/g, "")
+      : null;
+  const segmentTimelineDurationMenuTrimLabels =
+    segmentTimelineDurationMenuCanTrimToVoiceover &&
+    segmentTimelineDurationMenuFullDurationLabel &&
+    segmentTimelineDurationMenuVoiceoverDurationLabel
+      ? {
+          fullDurationLabel: segmentTimelineDurationMenuFullDurationLabel,
+          voiceoverDurationLabel: segmentTimelineDurationMenuVoiceoverDurationLabel,
+        }
+      : null;
   const segmentTimelineDurationMenuRangeLabel =
     segmentTimelineDurationMenuCurrentSeconds !== null && segmentTimelineDurationMenuTargetSeconds !== null
       ? `${formatWorkspaceSegmentEditorSegmentDurationLabel(
@@ -21830,16 +21912,35 @@ export function WorkspacePage({
   const shouldShowSegmentTimelineManualDurationInput =
     Boolean(segmentTimelineDurationMenuSegment) &&
     !isSegmentTimelineDurationMenuPhoto &&
-    !segmentTimelineDurationMenuExtensionPlan;
-  const segmentTimelineDurationMenuTitle = isSegmentTimelineDurationMenuPhoto
-    ? workspaceText(locale, "Длительность фото", "Photo duration")
-    : segmentTimelineDurationMenuExtensionPlan
-      ? workspaceText(
-          locale,
-          `Продлить видео на ${segmentTimelineDurationMenuExtensionSecondsLabel} секунд`,
-          `Extend video by ${segmentTimelineDurationMenuExtensionSecondsLabel} seconds`,
-        )
-      : workspaceText(locale, "Длительность сцены", "Scene duration");
+    !segmentTimelineDurationMenuExtensionPlan &&
+    !segmentTimelineDurationMenuCanTrimToVoiceover;
+  const segmentTimelineDurationMenuTitle = (() => {
+    if (isSegmentTimelineDurationMenuPhoto) {
+      return workspaceText(locale, "Длительность фото", "Photo duration");
+    }
+
+    if (segmentTimelineDurationMenuExtensionPlan) {
+      return workspaceText(
+        locale,
+        `Продлить видео на ${segmentTimelineDurationMenuRequestedExtensionSecondsLabel} секунд`,
+        `Extend video by ${segmentTimelineDurationMenuRequestedExtensionSecondsLabel} seconds`,
+      );
+    }
+
+    if (segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationTrimToVoiceover) {
+      return segmentTimelineDurationMenuVoiceoverSeconds !== null &&
+        segmentTimelineDurationMenuSourceSeconds !== null &&
+        segmentTimelineDurationMenuVoiceoverSeconds > segmentTimelineDurationMenuSourceSeconds
+        ? workspaceText(locale, "Продлить видео до озвучки", "Extend video to voiceover")
+        : workspaceText(locale, "Обрезать видео по озвучке", "Trim video to voiceover");
+    }
+
+    if (segmentTimelineDurationMenuCanTrimToVoiceover) {
+      return workspaceText(locale, "Длительность текущего видео", "Current video duration");
+    }
+
+    return workspaceText(locale, "Длительность сцены", "Scene duration");
+  })();
   const segmentTimelineDurationMenuSubtitle = isSegmentTimelineDurationMenuPhoto
     ? segmentTimelineDurationMenuInputSeconds !== null
       ? workspaceText(
@@ -21948,6 +22049,7 @@ export function WorkspacePage({
       subtitle={segmentTimelineDurationMenuSubtitle}
       title={segmentTimelineDurationMenuTitle}
       trimToVoiceover={segmentTimelineDurationTrimToVoiceover}
+      trimToVoiceoverLabels={segmentTimelineDurationMenuTrimLabels}
     />
   );
   const segmentTimelineVisualMenuSegment =

@@ -3,7 +3,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WorkspaceSegmentTimelineSoundMenu, WorkspaceSegmentTimelineVoiceMenu } from "./workspace-timeline-menus";
+import {
+  WorkspaceSegmentTimelineDurationMenu,
+  WorkspaceSegmentTimelineSoundMenu,
+  WorkspaceSegmentTimelineVoiceMenu,
+} from "./workspace-timeline-menus";
 
 const baseProps = {
   effectiveVoiceId: "ru_alexey",
@@ -89,6 +93,66 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
     });
 
     expect(button.getAttribute("aria-busy")).toBe("true");
+  });
+});
+
+describe("WorkspaceSegmentTimelineDurationMenu", () => {
+  const baseDurationProps = {
+    aiPrompt: "extend the shot",
+    aiPromptRef: { current: null },
+    canRequestAiExtension: true,
+    canTrimToVoiceover: true,
+    durationSwitch: null,
+    extensionCreditLabel: "1 ⚡",
+    hasExtensionPlan: true,
+    inputId: "duration-input",
+    inputRef: { current: null },
+    inputValue: "5",
+    isExtensionDisabled: false,
+    isExtensionPending: false,
+    isPhoto: false,
+    locale: "ru" as const,
+    menuRef: { current: null },
+    onAiExtensionClick: vi.fn(),
+    onAiPromptChange: vi.fn(),
+    onApplyDuration: vi.fn(),
+    onClose: vi.fn(),
+    onInputValueChange: vi.fn(),
+    onTrimToVoiceoverToggle: vi.fn(),
+    qualitySwitch: null,
+    segment: {
+      index: 0,
+      text: "Текст сцены",
+    } as any,
+    segmentArrayIndex: 0,
+    shouldShowManualDurationInput: false,
+    subtitle: "0с -> 5с",
+    title: "Продлить видео на 5 секунд",
+    trimToVoiceover: true,
+    trimToVoiceoverLabels: {
+      fullDurationLabel: "5с",
+      voiceoverDurationLabel: "3с",
+    },
+  };
+
+  it("lets the user choose full video duration or trim to voiceover", () => {
+    const onTrimToVoiceoverToggle = vi.fn();
+
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        onTrimToVoiceoverToggle={onTrimToVoiceoverToggle}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /Видео 5с/ }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("radio", { name: /Озвучка 3с/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: /Сохранить длину/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Продлить/ })).toBeTruthy();
+
+    screen.getByRole("radio", { name: /Видео 5с/ }).click();
+
+    expect(onTrimToVoiceoverToggle).toHaveBeenCalledOnce();
   });
 });
 
