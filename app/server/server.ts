@@ -584,6 +584,15 @@ type StudioGenerateMultipartSegment = {
   subtitle_type?: unknown;
   text?: unknown;
   videoAction?: unknown;
+  voiceSourceDuration?: unknown;
+  voiceSourceEndTime?: unknown;
+  voiceSourceStartTime?: unknown;
+  voice_source_duration?: unknown;
+  voice_source_end_time?: unknown;
+  voice_source_start_time?: unknown;
+  _voice_source_duration?: unknown;
+  _voice_source_end_time?: unknown;
+  _voice_source_start_time?: unknown;
   voiceType?: unknown;
   voice_type?: unknown;
 };
@@ -905,6 +914,18 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                 subtitleType: segmentRecord.subtitleType ?? segmentRecord.subtitle_type ?? null,
                 text: segmentRecord.text,
                 videoAction: segmentRecord.videoAction,
+                voiceSourceDuration:
+                  segmentRecord.voiceSourceDuration ??
+                  segmentRecord.voice_source_duration ??
+                  segmentRecord._voice_source_duration,
+                voiceSourceEndTime:
+                  segmentRecord.voiceSourceEndTime ??
+                  segmentRecord.voice_source_end_time ??
+                  segmentRecord._voice_source_end_time,
+                voiceSourceStartTime:
+                  segmentRecord.voiceSourceStartTime ??
+                  segmentRecord.voice_source_start_time ??
+                  segmentRecord._voice_source_start_time,
                 voiceType: segmentRecord.voiceType ?? segmentRecord.voice_type ?? null,
               };
             }),

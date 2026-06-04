@@ -574,6 +574,15 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     subtitleType: segmentRecord.subtitleType ?? segmentRecord.subtitle_type ?? null,
                     text: segmentRecord.text,
                     videoAction: segmentRecord.videoAction,
+                    voiceSourceDuration: segmentRecord.voiceSourceDuration ??
+                        segmentRecord.voice_source_duration ??
+                        segmentRecord._voice_source_duration,
+                    voiceSourceEndTime: segmentRecord.voiceSourceEndTime ??
+                        segmentRecord.voice_source_end_time ??
+                        segmentRecord._voice_source_end_time,
+                    voiceSourceStartTime: segmentRecord.voiceSourceStartTime ??
+                        segmentRecord.voice_source_start_time ??
+                        segmentRecord._voice_source_start_time,
                     voiceType: segmentRecord.voiceType ?? segmentRecord.voice_type ?? null,
                 };
             })),

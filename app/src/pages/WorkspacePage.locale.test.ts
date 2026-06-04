@@ -8,12 +8,15 @@ import {
   createWorkspaceSegmentEditorDraftSession,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentVoiceOverrideId,
+  hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
 } from "../features/workspace/workspace-segment-editor";
 import {
   readStoredWorkspaceSegmentImageEditJobs,
+  readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
+  writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
@@ -244,6 +247,7 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   sceneSoundPrompt: "",
   sceneSoundPromptInitialized: false,
   speechDuration: null,
+  speechDurationSource: null,
   speechEndTime: null,
   speechStartTime: null,
   speechWords: [],
@@ -254,6 +258,9 @@ const createDraftSegment = (overrides: Partial<DraftSegment> = {}): DraftSegment
   voiceoverLanguage: null,
   voiceoverTextHash: null,
   voiceoverVoiceType: null,
+  voiceSourceDuration: null,
+  voiceSourceEndTime: null,
+  voiceSourceStartTime: null,
   videoAction: "original",
   visualReset: false,
   ...overrides,
@@ -304,11 +311,15 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
       originalPreviewUrl: segment.originalPreviewUrl,
       originalSourceKind: segment.originalSourceKind,
       speechDuration: segment.speechDuration,
+      speechDurationSource: segment.speechDurationSource ?? null,
       speechEndTime: segment.speechEndTime,
       speechStartTime: segment.speechStartTime,
       speechWords: segment.speechWords,
       startTime: segment.startTime,
       text: segment.text,
+      voiceSourceDuration: segment.voiceSourceDuration ?? null,
+      voiceSourceEndTime: segment.voiceSourceEndTime ?? null,
+      voiceSourceStartTime: segment.voiceSourceStartTime ?? null,
     },
   ],
   subtitleColor: "purple",
@@ -1020,6 +1031,72 @@ describe("WorkspacePage segment editor draft persistence", () => {
         Object.defineProperty(window, "sessionStorage", originalSessionStorage);
       }
     }
+  });
+
+  it("marks a source project as consumed after Shorts creation starts", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const localStorageMock = createMemoryStorage();
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+
+      expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("Consumed@Example.test", 3727)).toBe(false);
+      writeStoredWorkspaceSegmentEditorConsumedSourceProject("Consumed@Example.test", 3727);
+
+      expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3727)).toBe(true);
+      expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3728)).toBe(false);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+    }
+  });
+
+  it("detects projects that already generated child Shorts", () => {
+    expect(
+      hasWorkspaceSegmentEditorGeneratedShortsFromProject(
+        [
+          { adId: 3727, editedFromProjectAdId: null, versionRootProjectAdId: null },
+          { adId: 3728, editedFromProjectAdId: 3727, versionRootProjectAdId: 3727 },
+        ],
+        3727,
+      ),
+    ).toBe(true);
+    expect(
+      hasWorkspaceSegmentEditorGeneratedShortsFromProject(
+        [
+          { adId: 3727, editedFromProjectAdId: null, versionRootProjectAdId: null },
+          { adId: 3728, editedFromProjectAdId: null, versionRootProjectAdId: 3727 },
+        ],
+        3727,
+      ),
+    ).toBe(true);
+    expect(
+      hasWorkspaceSegmentEditorGeneratedShortsFromProject(
+        [
+          { adId: 3727, editedFromProjectAdId: null, versionRootProjectAdId: 3727 },
+          { adId: 3729, editedFromProjectAdId: 3728, versionRootProjectAdId: 3728 },
+        ],
+        3727,
+      ),
+    ).toBe(false);
   });
 
   it("persists pending visual jobs for scratch drafts", () => {
@@ -2759,6 +2836,44 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("adopts fresh manual timing during refresh when no baseline is available", () => {
+    const staleLiveSegment = createDraftSegment({
+      duration: 13.6,
+      durationMode: "manual",
+      endTime: 13.6,
+      index: 0,
+      manualDurationSeconds: 13.6,
+      startTime: 0,
+      text: "Manual segment",
+    });
+    const freshSegment = createDraftSegment({
+      duration: 13.04,
+      durationMode: "manual",
+      endTime: 13.04,
+      index: 0,
+      manualDurationSeconds: 13.04,
+      startTime: 0,
+      text: "Manual segment",
+    });
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(staleLiveSegment),
+      createFreshSession(freshSegment),
+      {
+        baselineSession: null,
+        preserveUnbaselinedManualDuration: false,
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 13.04,
+      durationMode: "manual",
+      endTime: 13.04,
+      manualDurationSeconds: 13.04,
+      startTime: 0,
+    });
+  });
+
   it("adopts fresh auto timing during refresh even when no stored baseline is available", () => {
     const staleLiveSegments = [
       createDraftSegment({
@@ -3907,6 +4022,71 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toEqual({
       sourceStartTime: 0,
       timelineEndTime: 5,
+    });
+  });
+
+  it("uses exact project voice source window before stale visible speech boundaries", () => {
+    const segment = createDraftSegment({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 18.6,
+      index: 1,
+      manualDurationSeconds: 5,
+      speechDuration: 5,
+      speechEndTime: 18.6,
+      speechStartTime: 13.6,
+      startTime: 13.6,
+      text: "Second",
+      voiceSourceEndTime: 16.12,
+      voiceSourceStartTime: 13.04,
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, createDraftSession(segment))).toBe(3.08);
+    expect(previewRange).toEqual({
+      endTime: 16.12,
+      startTime: 13.04,
+    });
+    expect(
+      resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+        previewRange,
+        segment,
+        timelineEndTime: 18.6,
+        timelineStartTime: 13.6,
+      }),
+    ).toEqual({
+      sourceStartTime: 13.04,
+      timelineEndTime: 16.68,
+    });
+  });
+
+  it("normalizes project voice source aliases from fresh segment refreshes", () => {
+    const segment = createDraftSegment({
+      duration: 5,
+      endTime: 18.6,
+      index: 1,
+      startTime: 13.6,
+      text: "Second",
+    });
+    const freshSession = createFreshSession(segment);
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(segment),
+      {
+        ...freshSession,
+        segments: [
+          {
+            ...freshSession.segments[0]!,
+            voice_source_end_time: 16.12,
+            voice_source_start_time: 13.04,
+          },
+        ],
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      voiceSourceDuration: 3.08,
+      voiceSourceEndTime: 16.12,
+      voiceSourceStartTime: 13.04,
     });
   });
 

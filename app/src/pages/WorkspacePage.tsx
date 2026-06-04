@@ -218,6 +218,7 @@ import {
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceOverrideId,
+  hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasStudioBranding,
   hasWorkspaceSegmentPersistedMediaReference,
   isWorkspaceSegmentCachedLanguageTextUsable,
@@ -628,6 +629,7 @@ import {
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   normalizeWorkspaceSegmentEditorStorageEmail,
   readStoredWorkspaceSegmentAiPhotoJobs,
+  readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
   readStoredWorkspaceSegmentEditorExplicitStructureChange,
@@ -653,6 +655,7 @@ import {
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
   writeStoredWorkspaceSegmentEditorDraft,
+  writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorExplicitStructureChange,
   writeStoredWorkspaceSegmentEditorScratchDraft,
   writeStoredWorkspaceSegmentEditorSession,
@@ -845,6 +848,7 @@ export {
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
+  hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentEditorScratchDraft,
@@ -8926,6 +8930,21 @@ export function WorkspacePage({
     session.email,
   ]);
 
+  const isSegmentEditorConsumedSourceProject = useCallback(
+    (projectId: number | null | undefined) => {
+      const normalizedProjectId = getPositiveWorkspaceMediaAssetId(projectId);
+      if (!normalizedProjectId) {
+        return false;
+      }
+
+      return (
+        hasWorkspaceSegmentEditorGeneratedShortsFromProject(projects, normalizedProjectId) ||
+        readStoredWorkspaceSegmentEditorConsumedSourceProject(session.email, normalizedProjectId)
+      );
+    },
+    [projects, session.email],
+  );
+
   const ensureSegmentEditorDraftForProject = async (
     projectId: number,
     options?: {
@@ -8940,7 +8959,8 @@ export function WorkspacePage({
     },
   ) => {
     const requestedSegmentIndex = options?.initialSegmentIndex ?? 0;
-    const shouldDiscardLocalDraft = Boolean(options?.discardLocalDraft || options?.forceRefresh);
+    const isConsumedSourceProject = isSegmentEditorConsumedSourceProject(projectId);
+    const shouldDiscardLocalDraft = Boolean(options?.discardLocalDraft || options?.forceRefresh || isConsumedSourceProject);
     segmentEditorRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
 
     logSegmentEditorDiagnostics("client.segment-editor.load.start", {
@@ -8968,6 +8988,9 @@ export function WorkspacePage({
       if (segmentEditorLoadedSession?.projectId === projectId) {
         setSegmentEditorLoadedSession(null);
       }
+      if (currentAppliedSegmentEditorSession?.projectId === projectId) {
+        setSegmentEditorAppliedSession(null);
+      }
     }
 
     if (options?.syncRoute !== false) {
@@ -8978,7 +9001,7 @@ export function WorkspacePage({
       });
     }
 
-    if (segmentEditorDraft?.projectId === projectId && !options?.forceRefresh && !options?.bypassCache) {
+    if (segmentEditorDraft?.projectId === projectId && !shouldDiscardLocalDraft && !options?.forceRefresh && !options?.bypassCache) {
       logSegmentEditorDiagnostics("client.segment-editor.load.reuse-active-draft", {
         projectId,
         requestedSegmentIndex,
@@ -9053,6 +9076,7 @@ export function WorkspacePage({
     if (
       !restoredDetachedDraft &&
       !restoredStoredDraft &&
+      !shouldDiscardLocalDraft &&
       !options?.forceRefresh &&
       !options?.bypassCache &&
       currentAppliedSegmentEditorSession?.projectId === projectId
@@ -9080,6 +9104,7 @@ export function WorkspacePage({
     if (
       !restoredDetachedDraft &&
       !restoredStoredDraft &&
+      !shouldDiscardLocalDraft &&
       !options?.forceRefresh &&
       !options?.bypassCache &&
       segmentEditorLoadedSession?.projectId === projectId
@@ -9180,8 +9205,9 @@ export function WorkspacePage({
                 originalPreviewUrl: rewriteWorkspaceSegmentProjectProxyUrl(segment.originalPreviewUrl, projectId),
               })),
             };
-      const existingBaselineSession =
-        segmentEditorLoadedSession?.projectId === projectId
+      const existingBaselineSession = isConsumedSourceProject
+        ? null
+        : segmentEditorLoadedSession?.projectId === projectId
           ? segmentEditorLoadedSession
           : readStoredWorkspaceSegmentEditorSession(session.email, projectId);
       const normalizedSession = preserveWorkspaceSegmentEditorOriginalVisualReferences(
@@ -9195,10 +9221,13 @@ export function WorkspacePage({
       setSegmentEditorLoadedSession(loadedBaselineSession);
       const nextDraft = createWorkspaceSegmentEditorDraftSession(normalizedSession);
       const liveDraft = segmentEditorDraftRef.current;
+      const existingBaselineForRefresh =
+        existingBaselineSession?.projectId === projectId ? existingBaselineSession : null;
 
       if (liveDraft?.projectId === projectId && !shouldDiscardLocalDraft) {
         const refreshedLiveDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, normalizedSession, {
-          baselineSession: loadedBaselineSession,
+          baselineSession: existingBaselineForRefresh,
+          preserveUnbaselinedManualDuration: Boolean(existingBaselineForRefresh),
           preserveLiveStructure: segmentEditorExplicitStructureChangeProjectIdsRef.current.has(projectId),
         });
         logSegmentEditorDiagnostics(
@@ -9473,7 +9502,22 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
       segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
     }
-    const storedDraftForRoute = readStoredWorkspaceSegmentEditorDraft(session.email, routeProjectId);
+    const shouldResetConsumedRouteState = isSegmentEditorConsumedSourceProject(routeProjectId);
+    if (shouldResetConsumedRouteState) {
+      clearPersistedSegmentEditorStateForProject(routeProjectId);
+      if (segmentEditorDraftRef.current?.projectId === routeProjectId) {
+        segmentEditorDraftRef.current = null;
+      }
+      if (segmentEditorLoadedSession?.projectId === routeProjectId) {
+        setSegmentEditorLoadedSession(null);
+      }
+      if (segmentEditorDraft?.projectId === routeProjectId) {
+        setSegmentEditorDraft(null);
+      }
+    }
+    const storedDraftForRoute = shouldResetConsumedRouteState
+      ? null
+      : readStoredWorkspaceSegmentEditorDraft(session.email, routeProjectId);
 
     logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
       requestedProjectId: routeProjectId,
@@ -9535,6 +9579,7 @@ export function WorkspacePage({
     }
 
     const isSegmentEditorRouteAlreadyOpen =
+      !shouldResetConsumedRouteState &&
       activeTab === "studio" &&
       studioView === "create" &&
       createMode === "segment-editor" &&
@@ -9550,7 +9595,7 @@ export function WorkspacePage({
       return;
     }
 
-    if (segmentEditorDraft?.projectId === routeProjectId) {
+    if (!shouldResetConsumedRouteState && segmentEditorDraft?.projectId === routeProjectId) {
       if (createMode !== "segment-editor") {
         segmentEditorRouteRestoreKeyRef.current = restoreKey;
         segmentEditorHandledRouteRestoreKeyRef.current = restoreKey;
@@ -9575,8 +9620,9 @@ export function WorkspacePage({
     }
 
     const storedDraft = storedDraftForRoute;
-    const storedSession =
-      segmentEditorLoadedSession?.projectId === routeProjectId
+    const storedSession = shouldResetConsumedRouteState
+      ? null
+      : segmentEditorLoadedSession?.projectId === routeProjectId
         ? segmentEditorLoadedSession
         : readStoredWorkspaceSegmentEditorSession(session.email, routeProjectId);
 
@@ -9624,6 +9670,7 @@ export function WorkspacePage({
     activeTab,
     studioView,
     isSegmentEditorLoading,
+    isSegmentEditorConsumedSourceProject,
     location.pathname,
     routeStudioState.projectId,
     routeStudioState.section,
@@ -15235,6 +15282,31 @@ export function WorkspacePage({
     }
   };
 
+  const markSegmentEditorSourceProjectConsumed = (segmentEditorSession: WorkspaceSegmentEditorDraftSession | null | undefined) => {
+    if (!segmentEditorSession || isWorkspaceSegmentEditorScratchDraft(segmentEditorSession)) {
+      return;
+    }
+
+    const sourceProjectId = getPositiveWorkspaceMediaAssetId(segmentEditorSession.projectId);
+    if (!sourceProjectId) {
+      return;
+    }
+
+    writeStoredWorkspaceSegmentEditorConsumedSourceProject(session.email, sourceProjectId);
+    clearPersistedSegmentEditorStateForProject(sourceProjectId);
+    clearSegmentEditorExplicitStructureChange(sourceProjectId);
+    if (segmentEditorDraftRef.current?.projectId === sourceProjectId) {
+      segmentEditorDraftRef.current = null;
+    }
+    setSegmentEditorLoadedSession((currentSession) =>
+      currentSession?.projectId === sourceProjectId ? null : currentSession,
+    );
+    setSegmentEditorAppliedSession((currentSession) =>
+      currentSession?.projectId === sourceProjectId ? null : currentSession,
+    );
+    setSegmentEditorDraft((currentDraft) => (currentDraft?.projectId === sourceProjectId ? null : currentDraft));
+  };
+
   const clearTemporarySegmentEditorState = (keepProjectIds: readonly (number | null | undefined)[] = []) => {
     const clearedProjectIds = clearStoredWorkspaceSegmentEditorTemporaryStateExcept(
       session.email,
@@ -16758,6 +16830,9 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      if (isSegmentEditorGeneration) {
+        markSegmentEditorSourceProjectConsumed(options?.segmentEditorSession);
+      }
       if (currentComposerSourceIdea) {
         const sourcePlan = contentPlans.find((plan) => plan.id === currentComposerSourceIdea.planId) ?? null;
         const sourceIdea = sourcePlan?.ideas.find((idea) => idea.id === currentComposerSourceIdea.ideaId) ?? null;

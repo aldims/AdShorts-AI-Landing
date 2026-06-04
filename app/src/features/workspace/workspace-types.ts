@@ -115,6 +115,15 @@ export type WorkspaceSegmentEditorSegment = {
   speechStartTime: number | null;
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
+  voice_source_duration?: number | null;
+  voice_source_end_time?: number | null;
+  voice_source_start_time?: number | null;
+  _voice_source_duration?: number | null;
+  _voice_source_end_time?: number | null;
+  _voice_source_start_time?: number | null;
   subtitleColor?: string | null;
   subtitle_color?: string | null;
   subtitleStyle?: string | null;

@@ -23,6 +23,9 @@ import {
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
   getWorkspaceSegmentSubtitleTypeOverrideId,
+  getWorkspaceSegmentVoiceSourceDurationSeconds,
+  getWorkspaceSegmentVoiceSourceEndTime,
+  getWorkspaceSegmentVoiceSourceStartTime,
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentDisplayAiVideoAsset,
   hasWorkspaceSegmentPersistedMediaReference,
@@ -71,6 +74,9 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   text: string;
   videoAction: WorkspaceSegmentEditorPayloadVideoAction;
   voiceoverAssetId?: number;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
   voiceType?: string | null;
 };
 
@@ -302,6 +308,16 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const voiceoverAssetId = isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
       ? getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) ?? undefined
       : undefined;
+    const shouldPreserveProjectVoiceSource = !voiceoverAssetId;
+    const voiceSourceDuration = shouldPreserveProjectVoiceSource
+      ? getWorkspaceSegmentVoiceSourceDurationSeconds(segment)
+      : null;
+    const voiceSourceEndTime = shouldPreserveProjectVoiceSource
+      ? getWorkspaceSegmentVoiceSourceEndTime(segment)
+      : null;
+    const voiceSourceStartTime = shouldPreserveProjectVoiceSource
+      ? getWorkspaceSegmentVoiceSourceStartTime(segment)
+      : null;
 
     segments.push({
       customVideoAssetId,
@@ -326,6 +342,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
       text: segment.text,
       videoAction: payloadVideoActionForSegment,
       voiceoverAssetId,
+      ...(voiceSourceDuration !== null ? { voiceSourceDuration } : {}),
+      ...(voiceSourceEndTime !== null ? { voiceSourceEndTime } : {}),
+      ...(voiceSourceStartTime !== null ? { voiceSourceStartTime } : {}),
       voiceType: segmentVoiceType,
     });
   }

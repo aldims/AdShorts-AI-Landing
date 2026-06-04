@@ -32,17 +32,21 @@ export const getWorkspaceSegmentTimelineVoiceLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   settings: WorkspaceSegmentTimelineVoiceSettings,
 ) => {
-  if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
+  const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
+  if (voiceOverrideId === "none") {
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
 
-  const voiceOverrideOption = settings.getVoiceOptionById(getWorkspaceSegmentVoiceOverrideId(segment));
-  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption) {
+  const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
+  const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
+  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption && !voiceoverVoiceOption) {
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
 
   const voice =
-    voiceOverrideOption ?? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId);
+    voiceOverrideOption ??
+    voiceoverVoiceOption ??
+    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId);
   if (voiceOverrideOption && voiceOverrideOption.id !== settings.studioSidebarVoiceId) {
     return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
   }
@@ -54,16 +58,23 @@ export const getWorkspaceSegmentTimelineVoiceOption = (
   segment: WorkspaceSegmentEditorDraftSegment,
   settings: WorkspaceSegmentTimelineVoiceSettings,
 ) => {
-  if (getWorkspaceSegmentVoiceOverrideId(segment) === "none") {
+  const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
+  if (voiceOverrideId === "none") {
     return null;
   }
 
-  const voiceOverrideOption = settings.getVoiceOptionById(getWorkspaceSegmentVoiceOverrideId(segment));
-  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption) {
+  const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
+  const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
+  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption && !voiceoverVoiceOption) {
     return null;
   }
 
-  return voiceOverrideOption ?? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ?? null;
+  return (
+    voiceOverrideOption ??
+    voiceoverVoiceOption ??
+    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+    null
+  );
 };
 
 export const getWorkspaceSegmentTimelineSoundLabel = (

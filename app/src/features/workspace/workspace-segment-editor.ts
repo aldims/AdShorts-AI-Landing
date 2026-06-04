@@ -541,6 +541,28 @@ export const WORKSPACE_VIDEO_FILE_NAME_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)
 export const getPositiveWorkspaceMediaAssetId = (value: unknown) =>
   Number.isFinite(Number(value)) && Number(value) > 0 ? Math.trunc(Number(value)) : null;
 
+export const hasWorkspaceSegmentEditorGeneratedShortsFromProject = (
+  projects: ReadonlyArray<Pick<WorkspaceProject, "adId" | "editedFromProjectAdId" | "versionRootProjectAdId">>,
+  projectId: number | null | undefined,
+) => {
+  const sourceProjectId = getPositiveWorkspaceMediaAssetId(projectId);
+  if (!sourceProjectId) {
+    return false;
+  }
+
+  return projects.some((project) => {
+    const currentProjectId = getPositiveWorkspaceMediaAssetId(project.adId);
+    if (!currentProjectId || currentProjectId === sourceProjectId) {
+      return false;
+    }
+
+    return (
+      getPositiveWorkspaceMediaAssetId(project.editedFromProjectAdId) === sourceProjectId ||
+      getPositiveWorkspaceMediaAssetId(project.versionRootProjectAdId) === sourceProjectId
+    );
+  });
+};
+
 export const getWorkspaceMediaAssetResolvedPreviewUrl = (
   asset:
     | {
@@ -1989,6 +2011,9 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
     speechEndTime: sourceSegment?.speechEndTime ?? null,
     speechStartTime: sourceSegment?.speechStartTime ?? null,
     speechWords: sourceSegment?.speechWords.map((word) => ({ ...word })) ?? [],
+    voiceSourceDuration: sourceSegment?.voiceSourceDuration ?? null,
+    voiceSourceEndTime: sourceSegment?.voiceSourceEndTime ?? null,
+    voiceSourceStartTime: sourceSegment?.voiceSourceStartTime ?? null,
     voiceoverAsset: cloneStudioCustomVideoFile(sourceSegment?.voiceoverAsset ?? null),
     voiceoverLanguage: sourceSegment?.voiceoverLanguage ?? null,
     voiceoverTextHash: sourceSegment?.voiceoverTextHash ?? null,
@@ -2185,6 +2210,9 @@ export const cloneWorkspaceSegmentEditorDraftSegment = (
   subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
   subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
   textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(segment.textByLanguage, segment.text, fallbackLanguage),
+  voiceSourceDuration: getWorkspaceSegmentVoiceSourceDurationSeconds(segment),
+  voiceSourceEndTime: getWorkspaceSegmentVoiceSourceEndTime(segment),
+  voiceSourceStartTime: getWorkspaceSegmentVoiceSourceStartTime(segment),
   voiceoverAsset: cloneStudioCustomVideoFile(segment.voiceoverAsset),
   voiceoverLanguage: typeof segment.voiceoverLanguage === "string" && segment.voiceoverLanguage.trim() ? segment.voiceoverLanguage : null,
   voiceoverTextHash: typeof segment.voiceoverTextHash === "string" && segment.voiceoverTextHash.trim() ? segment.voiceoverTextHash : null,
@@ -2204,6 +2232,9 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
   speechEndTime: snapshot.speechEndTime,
   speechStartTime: snapshot.speechStartTime,
   speechWords: snapshot.speechWords.map((word) => ({ ...word })),
+  voiceSourceDuration: snapshot.voiceSourceDuration ?? null,
+  voiceSourceEndTime: snapshot.voiceSourceEndTime ?? null,
+  voiceSourceStartTime: snapshot.voiceSourceStartTime ?? null,
   text: snapshot.text,
   textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
     snapshot.textByLanguage,
@@ -2955,6 +2986,8 @@ export const shouldPreferEstimatedDurationForDraftSegment = (segment: WorkspaceS
     (typeof segment.speechDuration === "number" && Number.isFinite(segment.speechDuration) && segment.speechDuration > 0) ||
     (typeof segment.speechStartTime === "number" && Number.isFinite(segment.speechStartTime)) ||
     (typeof segment.speechEndTime === "number" && Number.isFinite(segment.speechEndTime)) ||
+    getWorkspaceSegmentVoiceSourceRange(segment) !== null ||
+    getWorkspaceSegmentVoiceSourceDurationSeconds(segment) !== null ||
     segment.speechWords.length > 0;
   if (hasSpeechTiming) {
     return false;
@@ -3477,6 +3510,13 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   const isProjectVoiceoverAsset = isWorkspaceSegmentProjectVoiceoverAsset(segment, session);
   const assetDuration = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
   const playableAssetDuration = isProjectVoiceoverAsset ? null : assetDuration;
+  const voiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+  if (voiceSourceDuration !== null) {
+    return roundWorkspaceSegmentTimelineSeconds(
+      Math.max(voiceSourceDuration, playableAssetDuration ?? voiceSourceDuration),
+    );
+  }
+
   const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
   const speechWordsDuration =
     speechWordsRange !== null ? Math.max(0, speechWordsRange.endTime - speechWordsRange.startTime) : null;
@@ -3777,6 +3817,9 @@ export const clearWorkspaceSegmentVoiceoverTiming = (
     speechEndTime: null,
     speechStartTime: null,
     speechWords: [],
+    voiceSourceDuration: null,
+    voiceSourceEndTime: null,
+    voiceSourceStartTime: null,
   };
 };
 
@@ -3807,6 +3850,78 @@ export const normalizeWorkspaceSegmentVoicePreviewTime = (value: unknown) => {
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
 };
 
+type WorkspaceSegmentVoiceSourceTimingFields = Pick<
+  WorkspaceSegmentEditorSegment,
+  | "voiceSourceDuration"
+  | "voiceSourceEndTime"
+  | "voiceSourceStartTime"
+  | "voice_source_duration"
+  | "voice_source_end_time"
+  | "voice_source_start_time"
+  | "_voice_source_duration"
+  | "_voice_source_end_time"
+  | "_voice_source_start_time"
+>;
+
+const normalizeWorkspaceSegmentVoiceSourceDurationSeconds = (value: unknown) => {
+  const normalized = normalizeWorkspaceSegmentVoicePreviewTime(value);
+  return normalized !== null && normalized > 0 ? roundWorkspaceSegmentTimelineSeconds(normalized) : null;
+};
+
+export const getWorkspaceSegmentVoiceSourceStartTime = (
+  segment: WorkspaceSegmentVoiceSourceTimingFields,
+) =>
+  normalizeWorkspaceSegmentVoicePreviewTime(
+    segment.voiceSourceStartTime ?? segment.voice_source_start_time ?? segment._voice_source_start_time,
+  );
+
+export const getWorkspaceSegmentVoiceSourceEndTime = (
+  segment: WorkspaceSegmentVoiceSourceTimingFields,
+) =>
+  normalizeWorkspaceSegmentVoicePreviewTime(
+    segment.voiceSourceEndTime ?? segment.voice_source_end_time ?? segment._voice_source_end_time,
+  );
+
+export const getWorkspaceSegmentVoiceSourceDurationSeconds = (
+  segment: WorkspaceSegmentVoiceSourceTimingFields,
+) => {
+  const explicitDuration = normalizeWorkspaceSegmentVoiceSourceDurationSeconds(
+    segment.voiceSourceDuration ?? segment.voice_source_duration ?? segment._voice_source_duration,
+  );
+  if (explicitDuration !== null) {
+    return explicitDuration;
+  }
+
+  const startTime = getWorkspaceSegmentVoiceSourceStartTime(segment);
+  const endTime = getWorkspaceSegmentVoiceSourceEndTime(segment);
+  return startTime !== null && endTime !== null && endTime > startTime
+    ? roundWorkspaceSegmentTimelineSeconds(endTime - startTime)
+    : null;
+};
+
+export const getWorkspaceSegmentVoiceSourceRange = (
+  segment: WorkspaceSegmentVoiceSourceTimingFields,
+) => {
+  const startTime = getWorkspaceSegmentVoiceSourceStartTime(segment);
+  const endTime = getWorkspaceSegmentVoiceSourceEndTime(segment);
+  if (startTime !== null && endTime !== null && endTime > startTime) {
+    return {
+      endTime: roundWorkspaceSegmentTimelineSeconds(endTime),
+      startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
+    };
+  }
+
+  const durationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+  if (startTime !== null && durationSeconds !== null) {
+    return {
+      endTime: roundWorkspaceSegmentTimelineSeconds(startTime + durationSeconds),
+      startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
+    };
+  }
+
+  return null;
+};
+
 export const getWorkspaceSegmentSpeechWordsRange = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
   const firstSpeechWord = speechWords[0] ?? null;
@@ -3833,9 +3948,29 @@ export const hasWorkspaceSegmentStaleSpeechBoundary = (segment: WorkspaceSegment
 export const hasWorkspaceSegmentProjectVoiceoverTimingData = (
   segment: Pick<
     WorkspaceSegmentEditorSegment,
-    "speechDuration" | "speechEndTime" | "speechStartTime" | "speechWords"
+    | "speechDuration"
+    | "speechEndTime"
+    | "speechStartTime"
+    | "speechWords"
+    | "voiceSourceDuration"
+    | "voiceSourceEndTime"
+    | "voiceSourceStartTime"
+    | "voice_source_duration"
+    | "voice_source_end_time"
+    | "voice_source_start_time"
+    | "_voice_source_duration"
+    | "_voice_source_end_time"
+    | "_voice_source_start_time"
   >,
 ) => {
+  if (getWorkspaceSegmentVoiceSourceRange(segment) !== null) {
+    return true;
+  }
+
+  if (getWorkspaceSegmentVoiceSourceDurationSeconds(segment) !== null) {
+    return true;
+  }
+
   const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
   const firstSpeechWord = speechWords[0] ?? null;
   const lastSpeechWord = speechWords[speechWords.length - 1] ?? null;
@@ -3864,6 +3999,11 @@ export const getWorkspaceSegmentVoiceoverPreviewRange = (
 ) => {
   if (!getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
     return null;
+  }
+
+  const voiceSourceRange = getWorkspaceSegmentVoiceSourceRange(segment);
+  if (voiceSourceRange !== null) {
+    return voiceSourceRange;
   }
 
   const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
@@ -3919,7 +4059,22 @@ export const resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange = ({
   timelineStartTime,
 }: {
   previewRange?: { endTime: number; startTime: number } | null;
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "speechDuration" | "speechEndTime" | "speechStartTime" | "speechWords">;
+  segment: Pick<
+    WorkspaceSegmentEditorDraftSegment,
+    | "speechDuration"
+    | "speechEndTime"
+    | "speechStartTime"
+    | "speechWords"
+    | "voiceSourceDuration"
+    | "voiceSourceEndTime"
+    | "voiceSourceStartTime"
+    | "voice_source_duration"
+    | "voice_source_end_time"
+    | "voice_source_start_time"
+    | "_voice_source_duration"
+    | "_voice_source_end_time"
+    | "_voice_source_start_time"
+  >;
   timelineEndTime: number;
   timelineStartTime: number;
 }) => {
@@ -3930,11 +4085,12 @@ export const resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange = ({
   );
   const previewStartTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.startTime);
   const previewEndTime = normalizeWorkspaceSegmentVoicePreviewTime(previewRange?.endTime);
+  const voiceSourceRange = getWorkspaceSegmentVoiceSourceRange(segment);
   const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
   const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(speechRange?.startTime);
   const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(speechRange?.endTime);
-  const sourceBoundaryStartTime = speechStartTime ?? previewStartTime ?? null;
-  const sourceBoundaryEndTime = speechEndTime ?? previewEndTime;
+  const sourceBoundaryStartTime = voiceSourceRange?.startTime ?? speechStartTime ?? previewStartTime ?? null;
+  const sourceBoundaryEndTime = voiceSourceRange?.endTime ?? speechEndTime ?? previewEndTime;
   const hasShiftedSourceTimeline =
     sourceBoundaryStartTime !== null &&
     Math.abs(sourceBoundaryStartTime - normalizedTimelineStartTime) >
@@ -4356,6 +4512,9 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
           speechEndTime: null,
           speechStartTime: null,
           speechWords: [],
+          voiceSourceDuration: null,
+          voiceSourceEndTime: null,
+          voiceSourceStartTime: null,
         }
       : segmentWithFreshVoiceoverTiming;
   }), {
@@ -4648,6 +4807,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   fallbackVoiceType?: string | null,
   fallbackTtsAssetId?: number | null,
   baselineSegment?: WorkspaceSegmentEditorSegment | null,
+  options?: { preserveUnbaselinedManualDuration?: boolean },
 ): WorkspaceSegmentEditorDraftSegment => {
   const normalizedFreshSegment = normalizeWorkspaceSegmentEditorSegmentUrls(freshSegment);
   if (isWorkspaceSegmentEditorDraftSegmentEmpty(liveSegment)) {
@@ -4682,10 +4842,14 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   })();
   const freshSpeechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(normalizedFreshSegment.speechStartTime);
   const freshSpeechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(normalizedFreshSegment.speechEndTime);
+  const freshVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(normalizedFreshSegment);
+  const freshVoiceSourceStartTime = getWorkspaceSegmentVoiceSourceStartTime(normalizedFreshSegment);
+  const freshVoiceSourceEndTime = getWorkspaceSegmentVoiceSourceEndTime(normalizedFreshSegment);
   const hasFreshProjectVoiceoverTiming =
     !freshVoiceoverAsset && hasWorkspaceSegmentProjectVoiceoverTimingData(normalizedFreshSegment);
   const freshProjectVoiceoverDurationCandidates = hasFreshProjectVoiceoverTiming
     ? [
+        freshVoiceSourceDuration,
         normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.speechDuration),
         freshSpeechWordsRange !== null ? freshSpeechWordsRange.endTime - freshSpeechWordsRange.startTime : null,
         freshSpeechStartTime !== null && freshSpeechEndTime !== null ? freshSpeechEndTime - freshSpeechStartTime : null,
@@ -4700,7 +4864,8 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const shouldPreserveLiveDuration =
     baselineSegment
       ? isWorkspaceSegmentDraftDurationEdited(liveSegment, baselineSegment)
-      : liveDurationMode === "manual" || liveManualDurationSeconds !== null;
+      : options?.preserveUnbaselinedManualDuration !== false &&
+        (liveDurationMode === "manual" || liveManualDurationSeconds !== null);
   const currentVisualSegment = liveSegment.visualReset ? liveSegment : normalizedFreshSegment;
   const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
     ? liveSegment
@@ -4779,6 +4944,9 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     sceneSoundPromptInitialized: freshSceneSoundAsset ? true : liveSegment.sceneSoundPromptInitialized,
     speechDuration: freshProjectVoiceoverDuration ?? normalizedFreshSegment.speechDuration,
     speechDurationSource: freshProjectVoiceoverDuration !== null ? "audio" : normalizedFreshSegment.speechDurationSource ?? null,
+    voiceSourceDuration: freshVoiceSourceDuration,
+    voiceSourceEndTime: freshVoiceSourceEndTime,
+    voiceSourceStartTime: freshVoiceSourceStartTime,
     subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(liveSegment),
     subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(liveSegment),
     subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(liveSegment),
@@ -4818,6 +4986,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
   freshSession: WorkspaceSegmentEditorSession,
   options?: {
     baselineSession?: WorkspaceSegmentEditorSession | null;
+    preserveUnbaselinedManualDuration?: boolean;
     preserveLiveStructure?: boolean;
   },
 ): WorkspaceSegmentEditorDraftSession => {
@@ -4884,6 +5053,9 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
         nextVoiceType,
         normalizedFreshSession.ttsAssetId,
         baselineSegmentsByIndex.get(segment.index) ?? null,
+        {
+          preserveUnbaselinedManualDuration: options?.preserveUnbaselinedManualDuration,
+        },
       ),
     );
   });
@@ -4954,6 +5126,9 @@ export const createWorkspaceSegmentEditorResetDraftFromBaseline = (
             speechEndTime: null,
             speechStartTime: null,
             speechWords: [],
+            voiceSourceDuration: null,
+            voiceSourceEndTime: null,
+            voiceSourceStartTime: null,
             text: originalText,
             textByLanguage: originalTextByLanguage,
             voiceoverAsset: null,
@@ -5101,6 +5276,9 @@ export const createWorkspaceSegmentEditorInsertedSegment = (options: {
     speechEndTime: null,
     speechStartTime: null,
     speechWords: [],
+    voiceSourceDuration: null,
+    voiceSourceEndTime: null,
+    voiceSourceStartTime: null,
     startTime,
     subtitleColor: null,
     subtitleStyle: null,
@@ -5220,6 +5398,9 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
       speechEndTime: null,
       speechStartTime: null,
       speechWords: [],
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
       subtitleColor: null,
       subtitleStyle: null,
       subtitleType: null,
@@ -5274,6 +5455,9 @@ export const isWorkspaceSegmentEditorCleanEmptyDraft = (
           !segment.speechDuration &&
           !segment.speechEndTime &&
           !segment.speechStartTime &&
+          !segment.voiceSourceDuration &&
+          !segment.voiceSourceEndTime &&
+          !segment.voiceSourceStartTime &&
           !getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) &&
           !normalizeWorkspaceSegmentEditorTextForCompare(segment.voiceoverTextHash ?? "") &&
           !normalizeWorkspaceSegmentEditorTextForCompare(segment.voiceoverVoiceType ?? "") &&
@@ -5423,13 +5607,19 @@ export const normalizeWorkspaceSegmentEditorSession = (
   return {
     ...sanitizedSession,
     language,
-    segments: sanitizedSession.segments.map((segment) => ({
-      ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
-      durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
-      manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-      mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
-      voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
-    })),
+    segments: sanitizedSession.segments.map((segment) => {
+      const normalizedSegment = normalizeWorkspaceSegmentEditorSegmentUrls(segment);
+      return {
+        ...normalizedSegment,
+        durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
+        manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+        mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
+        voiceSourceDuration: getWorkspaceSegmentVoiceSourceDurationSeconds(segment),
+        voiceSourceEndTime: getWorkspaceSegmentVoiceSourceEndTime(segment),
+        voiceSourceStartTime: getWorkspaceSegmentVoiceSourceStartTime(segment),
+        voiceType: getWorkspaceSegmentVoiceOverrideId(segment),
+      };
+    }),
   };
 };
 
@@ -5528,6 +5718,9 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
     const normalizedManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
     const normalizedDurationExtensionSourceDurationSeconds =
       getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+    const normalizedVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+    const normalizedVoiceSourceEndTime = getWorkspaceSegmentVoiceSourceEndTime(segment);
+    const normalizedVoiceSourceStartTime = getWorkspaceSegmentVoiceSourceStartTime(segment);
     const normalizedTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
       segment.textByLanguage,
       segment.text,
@@ -5580,15 +5773,18 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedVoiceType !== getWorkspaceSegmentVoiceOverrideId(segment) ||
       normalizedVideoAction !== segment.videoAction ||
       normalizedMediaType !== segment.mediaType ||
-          normalizedDurationMode !== segment.durationMode ||
-          !areWorkspaceSegmentDurationValuesEqual(
-            normalizedManualDurationSeconds,
-            normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
-          ) ||
-          !areWorkspaceSegmentDurationValuesEqual(
-            normalizedDurationExtensionSourceDurationSeconds,
-            getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
-          );
+      !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceDuration, segment.voiceSourceDuration ?? null) ||
+      !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceEndTime, segment.voiceSourceEndTime ?? null) ||
+      !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceStartTime, segment.voiceSourceStartTime ?? null) ||
+      normalizedDurationMode !== segment.durationMode ||
+      !areWorkspaceSegmentDurationValuesEqual(
+        normalizedManualDurationSeconds,
+        normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+      ) ||
+      !areWorkspaceSegmentDurationValuesEqual(
+        normalizedDurationExtensionSourceDurationSeconds,
+        getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
+      );
 
     if (
       segment.customVideo ||
@@ -5642,6 +5838,9 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         subtitleStyle: normalizedSubtitleStyle,
         subtitleType: normalizedSubtitleType,
         textByLanguage: normalizedTextByLanguage,
+        voiceSourceDuration: normalizedVoiceSourceDuration,
+        voiceSourceEndTime: normalizedVoiceSourceEndTime,
+        voiceSourceStartTime: normalizedVoiceSourceStartTime,
         voiceoverAsset: normalizedVoiceoverAsset,
         voiceoverLanguage: normalizedVoiceoverLanguage,
         voiceoverTextHash: normalizedVoiceoverTextHash,
@@ -5683,6 +5882,9 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       subtitleStyle: normalizedSubtitleStyle,
       subtitleType: normalizedSubtitleType,
       textByLanguage: normalizedTextByLanguage,
+      voiceSourceDuration: normalizedVoiceSourceDuration,
+      voiceSourceEndTime: normalizedVoiceSourceEndTime,
+      voiceSourceStartTime: normalizedVoiceSourceStartTime,
       voiceoverAsset: normalizedVoiceoverAsset,
       voiceoverLanguage: normalizedVoiceoverLanguage,
       voiceoverTextHash: normalizedVoiceoverTextHash,

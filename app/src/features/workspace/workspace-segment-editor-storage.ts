@@ -370,6 +370,7 @@ export const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segme
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-draft:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
+const WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-consumed-source:";
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
 export const WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS = 0.1;
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-ai-photo-pending:";
@@ -402,6 +403,9 @@ const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, pro
 
 export const getWorkspaceSegmentEditorBrandStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const getWorkspaceSegmentEditorConsumedSourceStorageKey = (email: string, projectId: number) =>
+  `${WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
 
 const getWorkspaceSegmentAiPhotoPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX}${email}`;
@@ -1340,6 +1344,44 @@ export const removeStoredWorkspaceSegmentEditorExplicitStructureChange = (
 
   removeWorkspaceSegmentEditorStorageValue(
     getWorkspaceSegmentEditorExplicitStructureStorageKey(normalizedEmail, normalizedProjectId),
+  );
+};
+
+export const readStoredWorkspaceSegmentEditorConsumedSourceProject = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return false;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorConsumedSourceStorageKey(normalizedEmail, normalizedProjectId);
+  return readWorkspaceSegmentEditorStorageCandidates(storageKey).some((candidate) => candidate.rawValue === "1");
+};
+
+export const writeStoredWorkspaceSegmentEditorConsumedSourceProject = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorConsumedSourceStorageKey(normalizedEmail, normalizedProjectId),
+    "1",
   );
 };
 

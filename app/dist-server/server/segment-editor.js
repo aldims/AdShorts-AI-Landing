@@ -24,6 +24,9 @@ const normalizeInteger = (value) => {
     return rounded >= 0 ? rounded : null;
 };
 const normalizeNumber = (value) => {
+    if (value === null || typeof value === "undefined" || value === "") {
+        return null;
+    }
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 };
@@ -415,6 +418,9 @@ const pickSegmentEditorNumber = (...values) => {
     }
     return null;
 };
+const pickSegmentEditorVoiceSourceStartTime = (record) => pickSegmentEditorNumber(record?._voice_source_start_time, record?.voice_source_start_time, record?.voiceSourceStartTime);
+const pickSegmentEditorVoiceSourceEndTime = (record) => pickSegmentEditorNumber(record?._voice_source_end_time, record?.voice_source_end_time, record?.voiceSourceEndTime);
+const pickSegmentEditorVoiceSourceDuration = (record) => pickSegmentEditorNumber(record?._voice_source_duration, record?.voice_source_duration, record?.voiceSourceDuration);
 const pickSegmentEditorText = (...values) => {
     for (const value of values) {
         const normalized = normalizeText(value);
@@ -456,17 +462,39 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
             const index = getSegmentEditorSegmentIndex(segment, slot);
             const detailSegment = detailSegmentsByIndex.get(index) ?? null;
             const sourceSegment = sourceSegmentsByIndex.get(index) ?? null;
+            const segmentRecord = segment;
             const detailRecord = (detailSegment ?? {});
             const sourceRecord = (sourceSegment ?? {});
+            const segmentVoiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(segmentRecord);
+            const segmentVoiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(segmentRecord);
+            const segmentVoiceSourceDuration = pickSegmentEditorVoiceSourceDuration(segmentRecord);
+            const detailVoiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(detailRecord);
+            const detailVoiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(detailRecord);
+            const detailVoiceSourceDuration = pickSegmentEditorVoiceSourceDuration(detailRecord);
+            const sourceVoiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(sourceRecord);
+            const sourceVoiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(sourceRecord);
+            const sourceVoiceSourceDuration = pickSegmentEditorVoiceSourceDuration(sourceRecord);
+            const voiceSourceStartTime = shouldReuseSourceTts
+                ? pickSegmentEditorNumber(detailVoiceSourceStartTime, sourceVoiceSourceStartTime, sourceSegment?.speech_start_time, segmentVoiceSourceStartTime)
+                : pickSegmentEditorNumber(segmentVoiceSourceStartTime, detailVoiceSourceStartTime, sourceVoiceSourceStartTime);
+            const voiceSourceEndTime = shouldReuseSourceTts
+                ? pickSegmentEditorNumber(detailVoiceSourceEndTime, sourceVoiceSourceEndTime, sourceSegment?.speech_end_time, segmentVoiceSourceEndTime)
+                : pickSegmentEditorNumber(segmentVoiceSourceEndTime, detailVoiceSourceEndTime, sourceVoiceSourceEndTime);
+            const voiceSourceDuration = (shouldReuseSourceTts
+                ? pickSegmentEditorNumber(detailVoiceSourceDuration, sourceVoiceSourceDuration, sourceSegment?.speech_duration, segmentVoiceSourceDuration)
+                : pickSegmentEditorNumber(segmentVoiceSourceDuration, detailVoiceSourceDuration, sourceVoiceSourceDuration)) ??
+                (voiceSourceStartTime !== null && voiceSourceEndTime !== null
+                    ? Math.max(0, voiceSourceEndTime - voiceSourceStartTime)
+                    : null);
             const speechStartTime = shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailRecord._voice_source_start_time, sourceSegment?.speech_start_time, segment.speech_start_time)
-                : pickSegmentEditorNumber(segment.speech_start_time, detailRecord._voice_source_start_time, sourceSegment?.speech_start_time);
+                ? pickSegmentEditorNumber(voiceSourceStartTime, sourceSegment?.speech_start_time, segment.speech_start_time)
+                : pickSegmentEditorNumber(segment.speech_start_time, voiceSourceStartTime, sourceSegment?.speech_start_time);
             const speechEndTime = shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailRecord._voice_source_end_time, sourceSegment?.speech_end_time, segment.speech_end_time)
-                : pickSegmentEditorNumber(segment.speech_end_time, detailRecord._voice_source_end_time, sourceSegment?.speech_end_time);
+                ? pickSegmentEditorNumber(voiceSourceEndTime, sourceSegment?.speech_end_time, segment.speech_end_time)
+                : pickSegmentEditorNumber(segment.speech_end_time, voiceSourceEndTime, sourceSegment?.speech_end_time);
             const speechDuration = (shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailRecord._voice_source_duration, sourceSegment?.speech_duration, segment.speech_duration)
-                : pickSegmentEditorNumber(segment.speech_duration, detailRecord._voice_source_duration, sourceSegment?.speech_duration)) ??
+                ? pickSegmentEditorNumber(voiceSourceDuration, sourceSegment?.speech_duration, segment.speech_duration)
+                : pickSegmentEditorNumber(segment.speech_duration, voiceSourceDuration, sourceSegment?.speech_duration)) ??
                 (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
             const speechWords = shouldReuseSourceTts && Array.isArray(sourceSegment?.speech_words) && sourceSegment.speech_words.length > 0
                 ? sourceSegment.speech_words
@@ -488,6 +516,9 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                 : "";
             return {
                 ...segment,
+                _voice_source_duration: voiceSourceDuration,
+                _voice_source_end_time: voiceSourceEndTime,
+                _voice_source_start_time: voiceSourceStartTime,
                 speech_duration: speechDuration,
                 speech_end_time: speechEndTime,
                 speech_start_time: speechStartTime,
@@ -575,13 +606,16 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             normalizePositiveProjectId(record.voiceoverAssetId) ??
             voiceover?.media_asset_id ??
             null;
+        const voiceSourceDuration = pickSegmentEditorVoiceSourceDuration(record);
+        const voiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(record);
+        const voiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(record);
         if (!text && duration === null && !currentEntry && !originalEntry) {
             return null;
         }
         return {
-            _voice_source_duration: normalizeNumber(record._voice_source_duration),
-            _voice_source_end_time: normalizeNumber(record._voice_source_end_time),
-            _voice_source_start_time: normalizeNumber(record._voice_source_start_time),
+            _voice_source_duration: voiceSourceDuration,
+            _voice_source_end_time: voiceSourceEndTime,
+            _voice_source_start_time: voiceSourceStartTime,
             current_video: getProjectSegmentMarker(currentEntry, `project:${projectId}:segment:${index}:current`),
             duration,
             duration_mode: normalizeText(record.duration_mode),
@@ -592,9 +626,9 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
             scene_sound: sceneSound,
             scene_sound_asset_id: sceneSoundAssetId,
-            speech_duration: normalizeNumber(record.speech_duration) ?? normalizeNumber(record._voice_source_duration),
-            speech_end_time: normalizeNumber(record.speech_end_time) ?? normalizeNumber(record._voice_source_end_time),
-            speech_start_time: normalizeNumber(record.speech_start_time) ?? normalizeNumber(record._voice_source_start_time),
+            speech_duration: normalizeNumber(record.speech_duration) ?? voiceSourceDuration,
+            speech_end_time: normalizeNumber(record.speech_end_time) ?? voiceSourceEndTime,
+            speech_start_time: normalizeNumber(record.speech_start_time) ?? voiceSourceStartTime,
             speech_words: Array.isArray(record.speech_words) ? record.speech_words : null,
             start_time: startTime,
             subtitle_color: normalizeText(record.subtitle_color),
@@ -1386,6 +1420,14 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     const speechEndTime = normalizeNumber(payload.speech_end_time);
     const speechDuration = normalizeNumber(payload.speech_duration) ??
         (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    const payloadRecord = payload;
+    const voiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(payloadRecord);
+    const voiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(payloadRecord);
+    const voiceSourceDuration = pickSegmentEditorVoiceSourceDuration(payloadRecord) ??
+        (voiceSourceStartTime !== null && voiceSourceEndTime !== null
+            ? Math.max(0, voiceSourceEndTime - voiceSourceStartTime)
+            : null);
+    const normalizedVoiceSourceDuration = voiceSourceDuration !== null ? Math.max(0, Number(voiceSourceDuration.toFixed(3))) : null;
     const speechWords = normalizeSpeechWords(payload.speech_words);
     const currentVideoMarker = normalizeText(payload.current_video);
     const originalVideoMarker = normalizeText(payload.original_video);
@@ -1482,6 +1524,11 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
         speechWords,
         startTime,
+        voiceSourceDuration: normalizedVoiceSourceDuration,
+        voiceSourceEndTime: voiceSourceStartTime !== null && voiceSourceEndTime !== null
+            ? Math.max(voiceSourceStartTime, voiceSourceEndTime)
+            : null,
+        voiceSourceStartTime: voiceSourceStartTime !== null ? Math.max(0, voiceSourceStartTime) : null,
         subtitleColor: normalizeText(payload.subtitle_color) || null,
         subtitleStyle: normalizeText(payload.subtitle_style) || null,
         subtitleType: normalizeText(payload.subtitle_type) || null,

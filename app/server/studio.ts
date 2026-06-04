@@ -765,6 +765,9 @@ export type StudioSegmentEditorSegment = {
   text: string;
   videoAction: StudioSegmentEditorVideoAction;
   voiceoverAssetId?: number;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
   voiceType?: string | null;
 };
 
@@ -1543,6 +1546,15 @@ export const normalizeStudioSegmentEditorPayload = (
       videoAction?: unknown;
       voiceoverAssetId?: unknown;
       voiceover_asset_id?: unknown;
+      voiceSourceDuration?: unknown;
+      voiceSourceEndTime?: unknown;
+      voiceSourceStartTime?: unknown;
+      voice_source_duration?: unknown;
+      voice_source_end_time?: unknown;
+      voice_source_start_time?: unknown;
+      _voice_source_duration?: unknown;
+      _voice_source_end_time?: unknown;
+      _voice_source_start_time?: unknown;
       voiceType?: unknown;
       voice_type?: unknown;
     };
@@ -1563,6 +1575,27 @@ export const normalizeStudioSegmentEditorPayload = (
     const rawDurationExtensionSourceDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
       segmentRecord.durationExtensionSourceDurationSeconds ?? segmentRecord.duration_extension_source_duration_seconds,
     );
+    const voiceSourceStartTime = normalizeNumber(
+      segmentRecord.voiceSourceStartTime ??
+        segmentRecord.voice_source_start_time ??
+        segmentRecord._voice_source_start_time,
+    );
+    const voiceSourceEndTime = normalizeNumber(
+      segmentRecord.voiceSourceEndTime ??
+        segmentRecord.voice_source_end_time ??
+        segmentRecord._voice_source_end_time,
+    );
+    const explicitVoiceSourceDuration = normalizeNumber(
+      segmentRecord.voiceSourceDuration ??
+        segmentRecord.voice_source_duration ??
+        segmentRecord._voice_source_duration,
+    );
+    const voiceSourceDuration =
+      explicitVoiceSourceDuration !== null
+        ? Math.max(0, roundStudioTimelineSeconds(explicitVoiceSourceDuration))
+        : voiceSourceStartTime !== null && voiceSourceEndTime !== null && voiceSourceEndTime > voiceSourceStartTime
+          ? roundStudioTimelineSeconds(voiceSourceEndTime - voiceSourceStartTime)
+          : null;
     const rawManualDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
       segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
     );
@@ -1648,6 +1681,12 @@ export const normalizeStudioSegmentEditorPayload = (
       videoAction,
       voiceoverAssetId:
         normalizePositiveInteger(segmentRecord.voiceoverAssetId ?? segmentRecord.voiceover_asset_id) ?? undefined,
+      voiceSourceDuration,
+      voiceSourceEndTime:
+        voiceSourceStartTime !== null && voiceSourceEndTime !== null
+          ? Math.max(voiceSourceStartTime, voiceSourceEndTime)
+          : null,
+      voiceSourceStartTime: voiceSourceStartTime !== null ? Math.max(0, voiceSourceStartTime) : null,
       voiceType: segmentVoiceType,
     });
   });
@@ -5598,8 +5637,14 @@ export async function createStudioGenerationJob(
               const manualDurationSeconds = segment.manualDurationSeconds ?? null;
               const targetDurationSeconds = manualDurationSeconds ?? durationSeconds;
               const sourceDurationSeconds = segment.durationExtensionSourceDurationSeconds ?? null;
+              const voiceSourceDuration = segment.voiceSourceDuration ?? null;
+              const voiceSourceEndTime = segment.voiceSourceEndTime ?? null;
+              const voiceSourceStartTime = segment.voiceSourceStartTime ?? null;
 
               return {
+                _voice_source_duration: voiceSourceDuration,
+                _voice_source_end_time: voiceSourceEndTime,
+                _voice_source_start_time: voiceSourceStartTime,
                 custom_video_asset_id: segmentAssetId,
                 custom_video_mime_type: segment.customVideoFileMimeType,
                 custom_video_original_name: segment.customVideoFileName,
@@ -5628,6 +5673,9 @@ export async function createStudioGenerationJob(
                 timeline_duration_seconds: durationSeconds,
                 video_action: segment.videoAction,
                 voiceover_asset_id: segment.voiceoverAssetId,
+                voice_source_duration: voiceSourceDuration,
+                voice_source_end_time: voiceSourceEndTime,
+                voice_source_start_time: voiceSourceStartTime,
                 effective_voice_type: adsflowVoiceType,
                 voice_type: segmentVoiceTypeForPayload,
               };
@@ -5651,6 +5699,8 @@ export async function createStudioGenerationJob(
           index: segment.index,
           manualDurationSeconds: segment.manual_duration_seconds ?? null,
           startTime: segment.start_time ?? null,
+          voiceSourceEndTime: segment._voice_source_end_time ?? null,
+          voiceSourceStartTime: segment._voice_source_start_time ?? null,
         })),
         segmentVoiceTypes: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voice_type ?? null),
         segmentVoiceoverAssetIds: normalizedSegmentEditorAssetPayload.segments.map(

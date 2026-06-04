@@ -956,6 +956,9 @@ describe("segment editor asset lifecycle mapping", () => {
       speechEndTime: 4,
       speechStartTime: 0,
       startTime: 0,
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
       voiceoverTextHash: "first scene.",
       voiceoverVoiceType: "Bys_24000",
     }));
@@ -965,6 +968,9 @@ describe("segment editor asset lifecycle mapping", () => {
       speechEndTime: 7.8,
       speechStartTime: 4,
       startTime: 10,
+      voiceSourceDuration: 3.8,
+      voiceSourceEndTime: 7.8,
+      voiceSourceStartTime: 4,
       voiceoverTextHash: "second scene.",
       voiceoverVoiceType: "Bys_24000",
     }));
@@ -1114,6 +1120,9 @@ describe("segment editor asset lifecycle mapping", () => {
       speechEndTime: 4,
       speechStartTime: 0,
       startTime: 0,
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
     }));
     expect(session.segments[1]).toEqual(expect.objectContaining({
       endTime: 13.3,
@@ -1121,6 +1130,9 @@ describe("segment editor asset lifecycle mapping", () => {
       speechEndTime: 7.8,
       speechStartTime: 4,
       startTime: 10,
+      voiceSourceDuration: 3.8,
+      voiceSourceEndTime: 7.8,
+      voiceSourceStartTime: 4,
     }));
     expect(session.segments[1]?.speechWords).toHaveLength(2);
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
@@ -1162,6 +1174,40 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.musicAssetId).toBe(649);
     expect(session.musicName).toBe("upbeat_10.mp3");
     expect(session.musicType).toBe("upbeat");
+  });
+
+  it("normalizes public project voice source aliases from segment payloads", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      42,
+      {
+        project_id: 42,
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 5,
+            end_time: 18.6,
+            index: 0,
+            start_time: 13.6,
+            text: "Segment",
+            voice_source_end_time: 16.12,
+            voice_source_start_time: 13.04,
+          },
+        ],
+      },
+      {
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 42,
+        },
+      },
+    );
+
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      voiceSourceDuration: 3.08,
+      voiceSourceEndTime: 16.12,
+      voiceSourceStartTime: 13.04,
+    }));
   });
 
   it("keeps legacy explicit custom music metadata even when music type is absent", () => {
