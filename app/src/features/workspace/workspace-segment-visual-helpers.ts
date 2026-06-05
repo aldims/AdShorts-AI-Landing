@@ -91,10 +91,43 @@ export const getWorkspaceSegmentSceneSoundVisualAssetId = (
     return undefined;
   }
 
+  const getAssetIdFromMediaUrl = (value: unknown) => {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) {
+      return null;
+    }
+
+    const workspaceMatch = normalized.match(/\/api\/workspace\/media-assets\/(\d+)(?:[/?#]|$)/i);
+    if (workspaceMatch) {
+      return getPositiveWorkspaceMediaAssetId(workspaceMatch[1]);
+    }
+
+    const adsflowMatch = normalized.match(/\/api\/media\/(\d+)\/download(?:[/?#]|$)/i);
+    if (adsflowMatch) {
+      return getPositiveWorkspaceMediaAssetId(adsflowMatch[1]);
+    }
+
+    return null;
+  };
+
+  const getAssetIdFromMediaUrls = (...values: unknown[]) => {
+    for (const value of values) {
+      const assetId = getAssetIdFromMediaUrl(value);
+      if (assetId) {
+        return assetId;
+      }
+    }
+    return null;
+  };
+
   const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
   const draftVisualAssetId = getPositiveWorkspaceMediaAssetId(draftVisualAsset?.assetId);
   if (draftVisualAssetId) {
     return draftVisualAssetId;
+  }
+  const draftVisualUrlAssetId = getAssetIdFromMediaUrls(draftVisualAsset?.remoteUrl, draftVisualAsset?.objectUrl);
+  if (draftVisualUrlAssetId) {
+    return draftVisualUrlAssetId;
   }
   if (draftVisualAsset) {
     return undefined;
@@ -104,8 +137,33 @@ export const getWorkspaceSegmentSceneSoundVisualAssetId = (
   if (currentAssetId) {
     return currentAssetId;
   }
+  const currentUrlAssetId = getAssetIdFromMediaUrls(
+    segment.currentAsset?.playbackUrl,
+    segment.currentAsset?.downloadUrl,
+    segment.currentAsset?.downloadPath,
+    segment.currentPlaybackUrl,
+    segment.currentPreviewUrl,
+    segment.currentExternalPlaybackUrl,
+    segment.currentExternalPreviewUrl,
+  );
+  if (currentUrlAssetId) {
+    return currentUrlAssetId;
+  }
 
-  return getPositiveWorkspaceMediaAssetId(segment.originalAsset?.assetId) ?? undefined;
+  const originalAssetId = getPositiveWorkspaceMediaAssetId(segment.originalAsset?.assetId);
+  if (originalAssetId) {
+    return originalAssetId;
+  }
+
+  return getAssetIdFromMediaUrls(
+    segment.originalAsset?.playbackUrl,
+    segment.originalAsset?.downloadUrl,
+    segment.originalAsset?.downloadPath,
+    segment.originalPlaybackUrl,
+    segment.originalPreviewUrl,
+    segment.originalExternalPlaybackUrl,
+    segment.originalExternalPreviewUrl,
+  ) ?? undefined;
 };
 
 export const getWorkspaceSegmentSceneSoundVisualJobSource = (

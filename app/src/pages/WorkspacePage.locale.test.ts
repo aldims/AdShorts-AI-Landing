@@ -7141,6 +7141,80 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("uploads generated scene sound audio before building the generation payload when asset id is missing", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchCalls: Array<{ body?: BodyInit | null; url: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      fetchCalls.push({ body: init?.body ?? null, url });
+
+      if (url === "/api/studio/segment-scene-sound/jobs/job-scene/audio") {
+        return new Response(new Blob(["wav-data"], { type: "audio/wav" }), { status: 200 });
+      }
+
+      if (url === "/api/studio/media-upload/init") {
+        return new Response(
+          JSON.stringify({
+            data: {
+              asset: { id: 8803 },
+              upload: { headers: {}, method: "PUT", url: "https://uploads.test/scene-sound" },
+            },
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 200 },
+        );
+      }
+
+      if (url === "https://uploads.test/scene-sound") {
+        return new Response(null, { status: 200 });
+      }
+
+      if (url === "/api/studio/media-upload/complete") {
+        return new Response(
+          JSON.stringify({
+            data: {
+              asset: { id: 8803 },
+            },
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const segment = createDraftSegment({
+        index: 1,
+        sceneSoundAsset: {
+          fileName: "segment-scene-sound.wav",
+          fileSize: 0,
+          mimeType: "audio/wav",
+          remoteUrl: "/api/studio/segment-scene-sound/jobs/job-scene/audio",
+        },
+      });
+      const scratchSession = {
+        ...createDraftSession(segment),
+        projectId: 0,
+      };
+
+      const result = await buildWorkspaceSegmentEditorPayload(scratchSession, { language: "ru" });
+
+      expect(result.payload.segments[0]).toMatchObject({
+        sceneSoundAssetId: 8803,
+      });
+      const initBody = JSON.parse(String(fetchCalls.find((call) => call.url === "/api/studio/media-upload/init")?.body));
+      expect(initBody).toMatchObject({
+        kind: "segment_sound",
+        mediaType: "audio",
+        role: "segment_sound",
+      });
+      expect(initBody.projectId).toBeUndefined();
+      expect(initBody.segmentIndex).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("keeps the latest AI photo visible while image edit is pending", () => {
     const segment = createDraftSegment({
       aiPhotoAsset: {

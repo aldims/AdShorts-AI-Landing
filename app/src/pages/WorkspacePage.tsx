@@ -10861,7 +10861,12 @@ export function WorkspacePage({
     }
 
     if (baselineSession && baselineSession.projectId === currentDraft.projectId) {
-      return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
+      if (baselineSession.segments.some((segment) => segment.index === targetSegmentIndex)) {
+        return true;
+      }
+
+      const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+      return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
     }
 
     const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
@@ -14601,8 +14606,8 @@ export function WorkspacePage({
     const sceneSoundProjectId = getPositiveWorkspaceMediaAssetId(visualJobBinding.projectId ?? currentDraft.projectId);
     const sceneSoundSegmentIndex =
       typeof visualJobBinding.segmentIndex === "number" ? visualJobBinding.segmentIndex : targetSegmentIndex;
-    if (!sceneSoundProjectId || typeof sceneSoundSegmentIndex !== "number") {
-      setSegmentEditorVideoError("Звук можно добавить только к сохраненному сегменту.");
+    if (typeof sceneSoundSegmentIndex !== "number") {
+      setSegmentEditorVideoError("Не удалось определить сегмент для звука сцены.");
       return;
     }
 
@@ -14643,7 +14648,7 @@ export function WorkspacePage({
           kind: "segment_source",
           language: selectedLanguage,
           mediaType: getWorkspaceSegmentCustomPreviewKind(draftVisualAsset) === "image" ? "photo" : "video",
-          projectId: sceneSoundProjectId,
+          projectId: sceneSoundProjectId ?? undefined,
           role: "segment_source",
           segmentIndex: sceneSoundSegmentIndex,
         })) ?? undefined;
@@ -14659,6 +14664,10 @@ export function WorkspacePage({
         throw new Error("Звук сцены можно добавить после выбора или сохранения визуала сегмента.");
       }
 
+      if (!sceneSoundProjectId && !visualMediaAssetId && !visualJobSource) {
+        throw new Error("Звук сцены можно добавить только к сохраненному сегменту или выбранному визуалу.");
+      }
+
       const response = await fetch("/api/studio/segment-scene-sound/jobs", {
         method: "POST",
         headers: {
@@ -14667,8 +14676,8 @@ export function WorkspacePage({
         body: JSON.stringify({
           durationSeconds,
           language: selectedLanguage,
-          projectId: sceneSoundProjectId,
-          project_id: sceneSoundProjectId,
+          projectId: sceneSoundProjectId ?? undefined,
+          project_id: sceneSoundProjectId ?? undefined,
           prompt: normalizedPrompt,
           segmentIndex: sceneSoundSegmentIndex,
           segment_index: sceneSoundSegmentIndex,

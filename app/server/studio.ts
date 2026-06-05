@@ -7020,9 +7020,10 @@ export async function createStudioSegmentSceneSoundJob(
     normalizedVisualSourceKind === "segment-talking-photo"
       ? normalizedVisualSourceKind
       : undefined;
+  const hasExplicitVisualSource = Boolean(normalizedVisualMediaAssetId || (normalizedVisualSourceJobId && visualSourceKind));
 
-  if (!normalizedProjectId) {
-    throw new Error("Project id is required for scene sound generation.");
+  if (!normalizedProjectId && !hasExplicitVisualSource) {
+    throw new Error("Project id or visual source is required for scene sound generation.");
   }
 
   const externalUserId = await resolveStudioExternalUserId(user);
@@ -7034,7 +7035,7 @@ export async function createStudioSegmentSceneSoundJob(
     external_user_id: externalUserId,
     language: normalizedLanguage,
     ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
-    project_id: normalizedProjectId,
+    project_id: normalizedProjectId ?? undefined,
     prompt: upstreamPrompt,
     segment_index: normalizedSegmentIndex,
     source: normalizedSource,

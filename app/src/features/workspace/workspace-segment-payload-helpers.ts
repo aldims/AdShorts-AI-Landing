@@ -204,7 +204,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
     let customVideoAssetId: number | undefined;
     let customVideoFileUploadKey: string | undefined;
     let customVideoRemoteUrl: string | undefined;
-    const sceneSoundAssetId = getWorkspaceSegmentSceneSoundAssetId(segment.sceneSoundAsset) ?? undefined;
+    let sceneSoundAssetId = getWorkspaceSegmentSceneSoundAssetId(segment.sceneSoundAsset) ?? undefined;
     const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
       payloadVideoAction === "custom" &&
       isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
@@ -239,6 +239,19 @@ export const buildWorkspaceSegmentEditorPayload = async (
       } else {
         customVideoFileDataUrl = customVideoAssetId ? undefined : await resolveStudioCustomAssetDataUrl(customVisualAsset);
       }
+    }
+
+    if (!sceneSoundAssetId && segment.sceneSoundAsset) {
+      sceneSoundAssetId = (await ensureStudioUploadedAssetId(segment.sceneSoundAsset, {
+        fallbackFileName: segment.sceneSoundAsset.fileName || `segment-${segment.index + 1}-scene-sound.wav`,
+        fallbackMimeType: segment.sceneSoundAsset.mimeType || "audio/wav",
+        kind: "segment_sound",
+        language: options.language,
+        mediaType: "audio",
+        projectId: mediaUploadScope.projectId,
+        role: "segment_sound",
+        segmentIndex: mediaUploadScope.segmentIndex,
+      })) ?? undefined;
     }
 
     const durationMode =

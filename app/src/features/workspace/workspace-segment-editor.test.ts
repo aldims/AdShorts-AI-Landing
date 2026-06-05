@@ -11,7 +11,10 @@ import {
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
 } from "./workspace-segment-editor";
-import { applyWorkspaceSegmentSceneSoundVisualAssetId } from "./workspace-segment-visual-helpers";
+import {
+  applyWorkspaceSegmentSceneSoundVisualAssetId,
+  getWorkspaceSegmentSceneSoundVisualAssetId,
+} from "./workspace-segment-visual-helpers";
 import type {
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
@@ -117,6 +120,16 @@ describe("workspace segment editor scene sound preview", () => {
       fileName: "scene-sound.mp4",
       mimeType: "video/mp4",
     })).toBe("video");
+  });
+
+  it("resolves the visual asset id from durable workspace media urls", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/media-assets/4984/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/4984/poster",
+      mediaType: "video",
+    });
+
+    expect(getWorkspaceSegmentSceneSoundVisualAssetId(segment)).toBe(4984);
   });
 
   it("keeps regular audio scene sound assets on an audio element", () => {

@@ -4466,14 +4466,15 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
       : typeof req.body?.visual_source_kind === "string"
         ? req.body.visual_source_kind.trim()
         : "";
+  const hasExplicitVisualSource = Boolean(visualMediaAssetId || (visualSourceJobId && visualSourceKind));
 
   if (!prompt) {
     res.status(400).json({ error: "Prompt is required." });
     return;
   }
 
-  if (!projectId) {
-    res.status(400).json({ error: "Project id is required for scene sound generation." });
+  if (!projectId && !hasExplicitVisualSource) {
+    res.status(400).json({ error: "Project id or visual source is required for scene sound generation." });
     return;
   }
 

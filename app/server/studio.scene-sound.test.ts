@@ -25,7 +25,7 @@ describe("studio scene sound jobs", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires a project id before contacting AdsFlow", async () => {
+  it("requires a project id or explicit visual source before contacting AdsFlow", async () => {
     const { createStudioSegmentSceneSoundJob } = await loadStudioModule();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -38,9 +38,65 @@ describe("studio scene sound jobs", () => {
         language: "en",
         segmentIndex: 0,
       }),
-    ).rejects.toThrow("Project id is required for scene sound generation.");
+    ).rejects.toThrow("Project id or visual source is required for scene sound generation.");
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a scratch scene sound job with an explicit visual asset", async () => {
+    const { createStudioSegmentSceneSoundJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-scene-sound/jobs") {
+          return jsonResponse({
+            job_id: "scratch-scene-sound-job-1",
+            status: "queued",
+            user: {
+              balance: 11,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioSegmentSceneSoundJob("quiet kitchen ambience", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      durationSeconds: 5,
+      language: "en",
+      segmentIndex: 1,
+      visualMediaAssetId: 909,
+    });
+
+    expect(job).toEqual(expect.objectContaining({
+      jobId: "scratch-scene-sound-job-1",
+      status: "queued",
+    }));
+
+    const sceneSoundCall = calls.find((call) => call.pathname === "/api/web/segment-scene-sound/jobs");
+    expect(sceneSoundCall?.body).toEqual(
+      expect.objectContaining({
+        segment_index: 1,
+        visual_media_asset_id: 909,
+      }),
+    );
+    expect(sceneSoundCall?.body).not.toHaveProperty("project_id");
   });
 
   it("forwards project id and visual source data to AdsFlow", async () => {
