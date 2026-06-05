@@ -86,6 +86,54 @@ export const resolveWorkspaceSegmentEditorPendingRouteSync = (
   };
 };
 
+export const shouldResetWorkspaceSegmentEditorConsumedSourceProject = (
+  projectId: number | null | undefined,
+  isConsumedSourceProject: boolean,
+  alreadyResetProjectIds: ReadonlySet<number>,
+) => {
+  const normalizedProjectId = Number(projectId);
+  if (!isConsumedSourceProject || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return false;
+  }
+
+  return !alreadyResetProjectIds.has(normalizedProjectId);
+};
+
+export const shouldSkipWorkspaceSegmentEditorActiveDraftReopen = (
+  projectId: number | null | undefined,
+  requestedSegmentIndex: number | null | undefined,
+  currentRouteProjectId: number | null | undefined,
+  currentRouteSegmentIndex: number | null | undefined,
+  routeRestoreKey: string | null,
+  handledRouteRestoreKey: string | null,
+  isDraftOpenInState: boolean,
+  isSegmentEditorMode: boolean,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(requestedSegmentIndex ?? 0);
+  if (
+    !isDraftOpenInState ||
+    !isSegmentEditorMode ||
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId <= 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return false;
+  }
+
+  const restoreKey = `${normalizedProjectId}:${normalizedSegmentIndex}`;
+  const normalizedRouteProjectId = Number(currentRouteProjectId);
+  const normalizedRouteSegmentIndex = Number(currentRouteSegmentIndex ?? 0);
+  const isRequestedDraftCurrentRoute =
+    Number.isInteger(normalizedRouteProjectId) &&
+    normalizedRouteProjectId === normalizedProjectId &&
+    Number.isInteger(normalizedRouteSegmentIndex) &&
+    normalizedRouteSegmentIndex === normalizedSegmentIndex;
+
+  return isRequestedDraftCurrentRoute || (routeRestoreKey === restoreKey && handledRouteRestoreKey === restoreKey);
+};
+
 export const buildStudioRouteUrl = (
   search: string,
   section: StudioEntryIntentSection,

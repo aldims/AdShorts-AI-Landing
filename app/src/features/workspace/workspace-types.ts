@@ -145,6 +145,9 @@ export type WorkspaceSegmentEditorSession = {
   customMusicAssetId?: number | null;
   customMusicFileName?: string | null;
   description: string;
+  finalVideoAssetId?: number | null;
+  finalVideoInvalidatedAt?: string | null;
+  finalVideoStale?: boolean;
   language?: StudioLanguage | "";
   musicAssetId?: number | null;
   musicName?: string | null;
@@ -176,6 +179,7 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   imageEditGeneratedFromPrompt: string | null;
   imageEditPrompt: string;
   imageEditPromptInitialized: boolean;
+  durationSyncMode?: "voiceover" | "visual" | null;
   durationExtensionSourceDurationSeconds?: number | null;
   originalText: string;
   originalTextByLanguage: WorkspaceSegmentEditorLocalizedTextMap;

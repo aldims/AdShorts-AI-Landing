@@ -6,6 +6,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
 import {
   createWorkspaceSegmentEditorDraftSession,
+  getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
@@ -16,11 +17,13 @@ import {
   readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
+  removeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
+import { isWorkspaceSegmentDraftVoiceEdited } from "../features/workspace/workspace-segment-editor-checklist";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -61,6 +64,7 @@ import {
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentDurationExtensionPlan,
+  getWorkspaceSegmentDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentDraftSourceLabel,
   getWorkspaceSegmentDraftSourceDisplayLabel,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
@@ -114,6 +118,8 @@ import {
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
@@ -125,6 +131,7 @@ import {
   resolveWorkspaceExamplePrefillSubtitleSelection,
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
+  resolveWorkspaceSegmentDurationMenuTrimLabels,
   resolveWorkspaceSegmentGeneratedVoiceoverEdited,
   resolveWorkspaceProjectVoiceoverPendingSegments,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
@@ -1062,6 +1069,9 @@ describe("WorkspacePage segment editor draft persistence", () => {
 
       expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3727)).toBe(true);
       expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3728)).toBe(false);
+
+      removeStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3727);
+      expect(readStoredWorkspaceSegmentEditorConsumedSourceProject("consumed@example.test", 3727)).toBe(false);
     } finally {
       if (originalLocalStorage) {
         Object.defineProperty(window, "localStorage", originalLocalStorage);
@@ -1591,6 +1601,139 @@ describe("WorkspacePage segment editor draft persistence", () => {
         segmentIndex: 0,
       }),
     ]);
+  });
+
+  it("does not treat recovered project TTS metadata as a scene voice edit", () => {
+    const text = "Сегодня покажу рецепт";
+    const baselineSegment = createDraftSegment({
+      index: 0,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      text,
+      textByLanguage: { ru: text },
+      voiceType: null,
+      voiceoverAsset: null,
+      voiceoverLanguage: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const draftSegment = createDraftSegment({
+      ...baselineSegment,
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineSegment.text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(isWorkspaceSegmentDraftVoiceEdited(draftSegment, baselineSegment)).toBe(false);
+    expect(
+      buildWorkspaceSegmentEditorChangeChecklist(
+        createDraftSession(draftSegment),
+        createDraftSession(baselineSegment),
+      ),
+    ).toEqual([]);
+  });
+
+  it("infers the project voice from a recovered project TTS asset", () => {
+    const text = "Сегодня покажу рецепт";
+    const projectVoiceSegment = createDraftSegment({
+      index: 0,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      text,
+      textByLanguage: { ru: text },
+      voiceType: null,
+      voiceoverAsset: {
+        assetId: 4946,
+        fileName: "project-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/4946",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const baselineSession = {
+      ...createDraftSession(projectVoiceSegment),
+      ttsAssetId: 4946,
+      voiceType: "",
+    };
+
+    expect(getWorkspaceSegmentEditorProjectVoiceType(baselineSession)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+  });
+
+  it("treats a uniform legacy segment voice_type as the project voice baseline", () => {
+    const firstSegment = createFreshSession(createDraftSegment({
+      duration: 3,
+      endTime: 3,
+      index: 0,
+      text: "Первый сегмент.",
+    })).segments[0]!;
+    const secondSegment = createFreshSession(createDraftSegment({
+      duration: 2,
+      endTime: 5,
+      index: 1,
+      startTime: 3,
+      text: "Второй сегмент.",
+    })).segments[0]!;
+    const session = {
+      ...createFreshSession(createDraftSegment()),
+      segments: [
+        { ...firstSegment, voice_type: "Russian_BrightHeroine" },
+        { ...secondSegment, voice_type: "Russian_BrightHeroine" },
+      ],
+      voiceType: "Bys_24000",
+    } satisfies FreshSession;
+
+    const draft = createWorkspaceSegmentEditorDraftSession(session);
+
+    expect(draft.voiceType).toBe("Russian_BrightHeroine");
+    expect(draft.segments.map((segment) => getWorkspaceSegmentVoiceOverrideId(segment))).toEqual([null, null]);
+    expect(draft.segments.map((segment) => segment.voiceType)).toEqual([null, null]);
+    expect(draft.segments.map((segment) => segment.voice_type ?? null)).toEqual([null, null]);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, draft)).toEqual([]);
+  });
+
+  it("ignores stale baseline voice_type when it matches the inherited project voice", () => {
+    const text = "Сегодня покажу рецепт";
+    const draftSegment = createDraftSegment({
+      index: 0,
+      originalText: text,
+      text,
+      voiceType: null,
+      voice_type: null,
+      voiceoverAsset: {
+        assetId: 4946,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/4946",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: "Russian_BrightHeroine",
+    });
+    const baselineSegment = createDraftSegment({
+      ...draftSegment,
+      voiceType: null,
+      voice_type: "Russian_BrightHeroine",
+    });
+    const draftSession = {
+      ...createDraftSession(draftSegment),
+      ttsAssetId: 4946,
+      voiceType: "Russian_BrightHeroine",
+    };
+    const baselineSession = {
+      ...createDraftSession(baselineSegment),
+      ttsAssetId: 4946,
+      voiceType: "Russian_BrightHeroine",
+    };
+
+    expect(
+      isWorkspaceSegmentDraftVoiceEdited(draftSegment, baselineSegment, {
+        baselineSession,
+        draftSession,
+      }),
+    ).toBe(false);
   });
 
   it("uses the server baseline for structure changes even when an applied draft already matches", () => {
@@ -2213,6 +2356,35 @@ describe("WorkspacePage studio route transitions", () => {
       nextPendingRouteSyncKey: null,
       shouldDeferRestore: false,
     });
+  });
+
+  it("resets a consumed source project once so edit-route restoration cannot loop", () => {
+    const resetProjectIds = new Set<number>();
+
+    expect(shouldResetWorkspaceSegmentEditorConsumedSourceProject(3731, true, resetProjectIds)).toBe(true);
+
+    resetProjectIds.add(3731);
+
+    expect(shouldResetWorkspaceSegmentEditorConsumedSourceProject(3731, true, resetProjectIds)).toBe(false);
+    expect(shouldResetWorkspaceSegmentEditorConsumedSourceProject(3732, false, resetProjectIds)).toBe(false);
+  });
+
+  it("does not reopen an already handled active edit-route draft", () => {
+    expect(
+      shouldSkipWorkspaceSegmentEditorActiveDraftReopen(3731, 1, 3731, 1, null, null, true, true),
+    ).toBe(true);
+    expect(
+      shouldSkipWorkspaceSegmentEditorActiveDraftReopen(3731, 1, null, null, "3731:1", "3731:1", true, true),
+    ).toBe(true);
+    expect(
+      shouldSkipWorkspaceSegmentEditorActiveDraftReopen(3731, 2, 3731, 1, "3731:1", "3731:1", true, true),
+    ).toBe(false);
+    expect(
+      shouldSkipWorkspaceSegmentEditorActiveDraftReopen(3731, 1, 3731, 1, "3731:1", "3731:1", false, true),
+    ).toBe(false);
+    expect(
+      shouldSkipWorkspaceSegmentEditorActiveDraftReopen(3731, 1, 3731, 1, "3731:1", "3731:1", true, false),
+    ).toBe(false);
   });
 
   it("keeps scene creation mode on the create route only", () => {
@@ -3625,6 +3797,37 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(JSON.stringify(normalized)).not.toContain("data:image/png");
   });
 
+  it("persists uploaded custom video drafts with a durable playback route", () => {
+    const largeDataUrl = `data:video/mp4;base64,${"a".repeat(900_000)}`;
+    const segment = createDraftSegment({
+      customVideo: {
+        assetId: 404,
+        dataUrl: largeDataUrl,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 700_000,
+        mimeType: "video/mp4",
+        objectUrl: "blob:http://localhost/uploaded-scene",
+        remoteUrl: "blob:http://localhost/uploaded-scene",
+        source: "upload",
+      },
+      mediaType: "video",
+      videoAction: "custom",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+    const normalizedSegment = normalized.segments[0];
+    const asset = normalizedSegment?.customVideo;
+
+    expect(asset?.assetId).toBe(404);
+    expect(asset?.dataUrl).toBeUndefined();
+    expect(asset?.objectUrl).toBeUndefined();
+    expect(asset?.remoteUrl).toBe("/api/workspace/media-assets/404/playback");
+    expect(normalizedSegment && getWorkspaceSegmentDraftVideoUrl(normalizedSegment)).toBe("/api/workspace/media-assets/404/playback");
+    expect(JSON.stringify(normalized)).not.toContain("blob:http://localhost/uploaded-scene");
+    expect(JSON.stringify(normalized)).not.toContain("data:video/mp4");
+  });
+
   it("preserves manual duration in stored drafts and rebuilds the draft timeline", () => {
     const firstSegment = createDraftSegment({
       duration: 4,
@@ -4260,10 +4463,91 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: studioVoiceOptionsByLanguage.ru[0],
     });
 
-    expect(timelineSource.sourceKind).toBe("segment");
-    expect(timelineSource.audioUrl).toBe(timelineSource.segmentVoiceoverAudioUrl);
-    expect(timelineSource.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(timelineSource.shouldClip).toBe(false);
+    expect(timelineSource.sourceKind).toBe("project");
+    expect(timelineSource.audioUrl).toBe(timelineSource.projectVoiceoverAudioUrl);
+    expect(timelineSource.audioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(timelineSource.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
+    expect(timelineSource.shouldClip).toBe(true);
+  });
+
+  it("allows segment voiceover preview from project TTS timing even when the voice option is legacy", () => {
+    const text = "Жарьте на хорошо разогретой сковороде.";
+    const segment = createDraftSegment({
+      duration: 5.3,
+      endTime: 38.5,
+      index: 6,
+      speechDuration: 5.28,
+      speechEndTime: 38.48,
+      speechStartTime: 33.2,
+      startTime: 33.2,
+      text,
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: "Tim",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3727,
+      ttsAssetId: 4946,
+      voiceType: "Tim",
+    };
+
+    expect(isWorkspaceSegmentVoiceoverPlaybackFresh(segment, session)).toBe(true);
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, session),
+      preferSegmentProxy: true,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: null,
+    });
+
+    expect(source.sourceKind).toBe("project");
+    expect(source.audioUrl).toContain("/api/workspace/media-assets/4946?v=");
+    expect(source.segmentVoiceoverAudioUrl).toContain("projectId=3727");
+    expect(source.segmentVoiceoverAudioUrl).toContain("segmentIndex=6");
+    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/4946?v=");
+    expect(source.shouldClip).toBe(true);
+  });
+
+  it("does not play the full project TTS asset as a scene voiceover without timing", () => {
+    const text = "Сегодня покажу вам рецепт очень вкусных блинов.";
+    const segment = createDraftSegment({
+      duration: 6.2,
+      endTime: 6.2,
+      index: 0,
+      text,
+      voiceoverAsset: {
+        assetId: 4946,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/4946",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: "Russian_BrightHeroine",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      ttsAssetId: 4946,
+      voiceType: "Russian_BrightHeroine",
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, session),
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru.find((voice) => voice.id === "Russian_BrightHeroine"),
+    });
+
+    expect(isWorkspaceSegmentVoiceoverPlaybackFresh(segment, session)).toBe(false);
+    expect(source.sourceKind).toBeNull();
+    expect(source.audioUrl).toBeNull();
+    expect(source.projectVoiceoverAudioUrl).toBeNull();
+    expect(source.segmentVoiceoverAudioUrl).toBeNull();
   });
 
   it("keeps project voiceover in full preview when loaded segments have stale scene voice overrides", () => {
@@ -4343,6 +4627,39 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(source.sourceKind).toBeNull();
     expect(source.audioUrl).toBeNull();
+    expect(source.projectVoiceoverAudioUrl).toBeNull();
+    expect(source.segmentVoiceoverAudioUrl).toBeNull();
+  });
+
+  it("does not build project voiceover audio from scene boundaries without exact timing", () => {
+    const segment = createDraftSegment({
+      duration: 13.6,
+      endTime: 13.6,
+      index: 0,
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      startTime: 0,
+      text: "Сегодня покажу вам рецепт очень вкусных блинов.",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3727,
+      ttsAssetId: 4946,
+      voiceType: "Bys_24000",
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.audioUrl).toBeNull();
+    expect(source.sourceKind).toBeNull();
     expect(source.projectVoiceoverAudioUrl).toBeNull();
     expect(source.segmentVoiceoverAudioUrl).toBeNull();
   });
@@ -4739,7 +5056,6 @@ describe("WorkspacePage studio locale defaults", () => {
     const voiceText = "Озвучка короче ручной длительности фото";
     const segment = createDraftSegment({
       duration: 10,
-      durationExtensionSourceDurationSeconds: 5.2,
       durationMode: "manual",
       endTime: 10,
       manualDurationSeconds: 10,
@@ -4788,7 +5104,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 12.1)).toBe(false);
   });
 
-  it("keeps a generated video duration when voiceover is shorter than the AI animation", () => {
+  it("trims a generated video duration to a freshly generated shorter voiceover", () => {
     const voiceText = "Короткая озвучка";
     const segment = createDraftSegment({
       aiVideoAsset: {
@@ -4824,15 +5140,369 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
     });
 
-    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(true);
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(false);
 
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 3,
+      durationMode: "auto",
+      endTime: 3,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("resets a stale extended video duration to a freshly generated voiceover", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const firstSegment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 9,
+      index: 0,
+      manualDurationSeconds: 9,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 0,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 880,
+        durationSeconds: 2.3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/880",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const secondSegment = createDraftSegment({
+      duration: 4,
+      endTime: 13,
+      index: 1,
+      startTime: 9,
+      text: "Следующая сцена",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      endTime: 2.3,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 2.3,
+    }));
+  });
+
+  it("resets a stale extended video duration from project voiceover timing", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const firstSegment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 9,
+      index: 0,
+      manualDurationSeconds: 9,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 0,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: null,
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: null,
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const secondSegment = createDraftSegment({
+      duration: 4,
+      endTime: 13,
+      index: 1,
+      startTime: 9,
+      text: "Следующая сцена",
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+      ttsAssetId: 8800,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      endTime: 2.3,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 2.3,
+    }));
+  });
+
+  it("does not restore the stale timeline tail after resetting the last extended video scene", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const firstSegment = createDraftSegment({
+      duration: 11.4,
+      endTime: 11.4,
+      index: 0,
+      startTime: 0,
+      text: "Первая сцена",
+    });
+    const secondSegment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 20.4,
+      index: 1,
+      manualDurationSeconds: 9,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 11.4,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 880,
+        durationSeconds: 2.3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/880",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      endTime: 13.7,
+      manualDurationSeconds: null,
+      startTime: 11.4,
+    }));
+  });
+
+  it("does not preserve a stale auto timeline tail when voiceover duration is shorter", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const firstSegment = createDraftSegment({
+      duration: 11.4,
+      endTime: 11.4,
+      index: 0,
+      startTime: 0,
+      text: "Первая сцена",
+    });
+    const secondSegment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 9,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      endTime: 20.4,
+      index: 1,
+      manualDurationSeconds: null,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 11.4,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 880,
+        durationSeconds: 2.3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/880",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 2.3,
+      endTime: 13.7,
+      startTime: 11.4,
+    }));
+  });
+
+  it("preserves a user-selected full video duration over a shorter voiceover", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const firstSegment = createDraftSegment({
+      duration: 11.4,
+      endTime: 11.4,
+      index: 0,
+      startTime: 0,
+      text: "Первая сцена",
+    });
+    const secondSegment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationSyncMode: "visual",
+      durationMode: "manual",
+      endTime: 16.4,
+      index: 1,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 11.4,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 880,
+        durationSeconds: 2.3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/880",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(firstSegment),
+      segments: [firstSegment, secondSegment],
+    });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
       duration: 5,
       durationMode: "manual",
-      endTime: 5,
+      durationSyncMode: "visual",
+      endTime: 16.4,
       manualDurationSeconds: 5,
+      startTime: 11.4,
+    }));
+  });
+
+  it("trims a voiceover-selected video duration back to the shorter voiceover", () => {
+    const voiceText = "Взбейте яйца с сахаром и солью.";
+    const segment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationSyncMode: "voiceover",
+      durationMode: "manual",
+      endTime: 5,
+      index: 0,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 2.3,
+      speechDurationSource: "audio",
+      speechEndTime: 2.3,
+      speechStartTime: 0,
+      startTime: 0,
+      text: voiceText,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 880,
+        durationSeconds: 2.3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/880",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.3,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.3,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
@@ -5039,6 +5709,41 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(15);
   });
 
+  it("applies full-video duration mode from the current source video, not the AI extension target", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 5,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 10,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      mediaType: "photo",
+      speechDuration: 2.5,
+      videoAction: "photo_animation",
+    });
+    const sourceDuration = getWorkspaceSegmentDurationExtensionSourceDurationSeconds(videoSegment);
+
+    expect(sourceDuration).toBe(5);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, sourceDuration, {
+        trimToVoiceover: false,
+        voiceoverDurationSeconds: 2.5,
+      }),
+    ).toBe(5);
+    expect(
+      resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds(videoSegment, null, 10, {
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 2.5,
+      }),
+    ).toBe(2.5);
+  });
+
   it("keeps an effective AI duration extension target within the maximum visual duration", () => {
     const videoSegment = createDraftSegment({
       aiVideoAsset: {
@@ -5100,8 +5805,60 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(3.2);
     expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 13)).toBe(true);
     expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 15)).toBe(true);
-    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 8)).toBe(false);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, 8)).toBe(true);
+    expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 8, 8)).toBe(false);
     expect(shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(videoSegment, null, 13, null)).toBe(false);
+  });
+
+  it("labels the video trim mode with the current video duration, not the AI extension target", () => {
+    const currentVideoDurationSeconds = 5;
+    const aiExtensionTargetSeconds = 10;
+    const labels = resolveWorkspaceSegmentDurationMenuTrimLabels({
+      currentVideoDurationSeconds,
+      locale: "ru",
+      voiceoverDurationSeconds: 2.4,
+      voiceoverDurationSource: "actual",
+    });
+
+    expect(labels).toEqual({
+      fullDurationLabel: "5с",
+      voiceoverDurationLabel: "2.4с",
+    });
+    expect(labels?.fullDurationLabel).not.toBe(
+      formatWorkspaceSegmentEditorSegmentDurationLabel(0, aiExtensionTargetSeconds, "ru").replace(/\s+/g, ""),
+    );
+  });
+
+  it("shows AI extension voiceover trim from estimated voiceover duration while audio duration is not measured yet", () => {
+    const videoSegment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 2.4,
+        fileName: "segment.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-photo-animation/jobs/job/video",
+      },
+      duration: 2.4,
+      endTime: 2.4,
+      mediaType: "photo",
+      text: "Взбейте яйца с сахаром и солью.",
+      videoAction: "photo_animation",
+    });
+    const voiceoverDurationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(
+      videoSegment,
+      createDraftSession(videoSegment),
+    );
+
+    expect(voiceoverDurationInfo?.source).toBe("estimated");
+    expect(
+      shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
+        videoSegment,
+        null,
+        7.4,
+        voiceoverDurationInfo?.durationSeconds ?? null,
+        { sourceDurationSeconds: 2.4 },
+      ),
+    ).toBe(true);
   });
 
   it("rejects segment boundary timing before the edited segment start", () => {
@@ -5775,6 +6532,54 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(getWorkspaceSegmentVisualGenerationDurationSeconds(segment)).toBe(13);
+  });
+
+  it("exports the editor-selected manual duration even when the stored media duration is stale", async () => {
+    const firstSegment = createDraftSegment({
+      duration: 13,
+      durationMode: "manual",
+      endTime: 13,
+      index: 0,
+      manualDurationSeconds: 13,
+      mediaType: "video",
+      speechDuration: 10.7,
+      startTime: 0,
+      text: "сегодня покажу вам рецепт очень вкусных блинов",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("сегодня покажу вам рецепт очень вкусных блинов"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const shortenedSegment = createDraftSegment({
+      duration: 10,
+      durationMode: "manual",
+      endTime: 18,
+      index: 1,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 2.5,
+      startTime: 13,
+      text: "Взбейте яйца с сахаром и солью.",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Взбейте яйца с сахаром и солью."),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const result = await buildWorkspaceSegmentEditorPayload(
+      {
+        ...createDraftSession(firstSegment),
+        segments: [firstSegment, shortenedSegment],
+        ttsAssetId: 4980,
+        voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      },
+      { language: "ru" },
+    );
+
+    expect(result.payload.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 18,
+      manualDurationSeconds: 5,
+      startTime: 13,
+      text: "Взбейте яйца с сахаром и солью.",
+    }));
+    expect(result.payload.segments[1]?.voiceoverAssetId).toBeUndefined();
   });
 
   it("exports talking photo with embedded audio and canonical slot duration", async () => {

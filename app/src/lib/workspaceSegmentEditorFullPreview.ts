@@ -57,6 +57,19 @@ export type WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions = {
   voicePausedSeekToleranceSeconds: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioStartGateSeekOptions = {
+  currentSourceTime: number;
+  expectedSourceTime: number;
+  isPaused: boolean;
+  syncToleranceSeconds: number;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioStartGateHoldOptions = {
+  gateHoldTime: number;
+  runStartTime: number;
+  toleranceSeconds: number;
+};
+
 export type WorkspaceSegmentEditorFullPreviewAudioPlaybackStartOptions = {
   currentSourceTime: number;
   expectedSourceTime: number;
@@ -69,6 +82,14 @@ export type WorkspaceSegmentEditorFullPreviewAudioPlaybackStartOptions = {
   minimumReadyState: number;
   readyState: number;
   syncToleranceSeconds: number;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioPreparationResult = "ready" | "not-ready" | "unlock-required";
+
+export type WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions = {
+  activeTrackCount: number;
+  isAudioUnlockRequired: boolean;
+  rejectedPlayTrackCount: number;
 };
 
 export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
@@ -510,16 +531,8 @@ export const selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart =
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
 >(
   activeTracks: Track[],
-  hasPendingVoiceStart: boolean,
-): Track[] => {
-  if (!hasPendingVoiceStart) {
-    return activeTracks;
-  }
-
-  return activeTracks.filter(
-    (track) => track.kind === "music" || track.kind === "voice" || track.kind === "embedded_voice",
-  );
-};
+  _hasPendingVoiceStart: boolean,
+): Track[] => activeTracks;
 
 export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
   options: WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions,
@@ -536,6 +549,34 @@ export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
   const toleranceSeconds =
     options.trackKind === "music" ? options.musicSeekToleranceSeconds : options.audioSeekToleranceSeconds;
   return driftSeconds > toleranceSeconds;
+};
+
+export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack = (
+  options: WorkspaceSegmentEditorFullPreviewAudioStartGateSeekOptions,
+) => {
+  if (!Number.isFinite(options.expectedSourceTime)) {
+    return false;
+  }
+
+  if (options.isPaused || !Number.isFinite(options.currentSourceTime)) {
+    return true;
+  }
+
+  const toleranceSeconds = normalizePreviewTime(options.syncToleranceSeconds) ?? 0;
+  return Math.abs(options.currentSourceTime - options.expectedSourceTime) > toleranceSeconds;
+};
+
+export const shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate = (
+  options: WorkspaceSegmentEditorFullPreviewAudioStartGateHoldOptions,
+) => {
+  const gateHoldTime = normalizePreviewTime(options.gateHoldTime);
+  const runStartTime = normalizePreviewTime(options.runStartTime);
+  if (gateHoldTime === null || runStartTime === null) {
+    return false;
+  }
+
+  const toleranceSeconds = normalizePreviewTime(options.toleranceSeconds) ?? 0;
+  return Math.abs(gateHoldTime - runStartTime) <= toleranceSeconds;
 };
 
 export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed = (
@@ -577,6 +618,18 @@ export const isWorkspaceSegmentEditorFullPreviewAudioReadyState = (
   Number.isFinite(readyState) &&
   Number.isFinite(minimumReadyState) &&
   readyState >= Math.max(0, minimumReadyState);
+
+export const resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult = ({
+  activeTrackCount,
+  isAudioUnlockRequired,
+  rejectedPlayTrackCount,
+}: WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions): WorkspaceSegmentEditorFullPreviewAudioPreparationResult => {
+  if (activeTrackCount > 0 && rejectedPlayTrackCount > 0 && isAudioUnlockRequired) {
+    return "unlock-required";
+  }
+
+  return "ready";
+};
 
 export const getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime = (
   track: WorkspaceSegmentEditorFullPreviewAudioClockTrack,

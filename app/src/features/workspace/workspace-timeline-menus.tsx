@@ -40,10 +40,10 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   menuRef: RefObject<HTMLDivElement | null>;
   onAiExtensionClick: () => void;
   onAiPromptChange: (value: string) => void;
-  onApplyDuration: (segmentIndex: number) => unknown;
+  onApplyDuration: (segmentIndex: number, options?: { trimToVoiceover?: boolean }) => unknown;
   onClose: () => void;
   onInputValueChange: (value: string) => void;
-  onTrimToVoiceoverToggle: () => void;
+  onTrimToVoiceoverToggle: (trimToVoiceover: boolean) => void;
   qualitySwitch: ReactNode;
   segment: WorkspaceSegmentEditorDraftSegment | null;
   segmentArrayIndex: number;
@@ -94,6 +94,16 @@ export function WorkspaceSegmentTimelineDurationMenu({
 
   const applyDuration = () => {
     const timing = onApplyDuration(segment.index);
+    if (timing) {
+      onClose();
+    }
+  };
+  const selectDurationMode = (nextTrimToVoiceover: boolean) => {
+    if (trimToVoiceover !== nextTrimToVoiceover) {
+      onTrimToVoiceoverToggle(nextTrimToVoiceover);
+    }
+
+    const timing = onApplyDuration(segment.index, { trimToVoiceover: nextTrimToVoiceover });
     if (timing) {
       onClose();
     }
@@ -185,9 +195,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
               role="radio"
               aria-checked={!trimToVoiceover}
               onClick={() => {
-                if (trimToVoiceover) {
-                  onTrimToVoiceoverToggle();
-                }
+                selectDurationMode(false);
               }}
             >
               <strong>
@@ -207,9 +215,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
               role="radio"
               aria-checked={trimToVoiceover}
               onClick={() => {
-                if (!trimToVoiceover) {
-                  onTrimToVoiceoverToggle();
-                }
+                selectDurationMode(true);
               }}
             >
               <strong>

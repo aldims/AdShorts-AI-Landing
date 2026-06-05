@@ -18,10 +18,13 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
+  shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
 } from "./workspaceSegmentEditorFullPreview";
 
@@ -329,18 +332,32 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
-  it("keeps music audible and sound muted while an active voice track is still starting", () => {
+  it("keeps music and scene sound audible while an active voice track is still starting", () => {
     const activeTracks = [
       { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
       { key: "sound-1", kind: "sound", timelineEndTime: 4, timelineStartTime: 0 },
       { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
     ];
 
-    expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, true)).toEqual([
-      { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
-      { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
-    ]);
+    expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, true)).toEqual(activeTracks);
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);
+  });
+
+  it("holds the audio start gate only for the preview run start, not later scene boundaries", () => {
+    expect(
+      shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate({
+        gateHoldTime: 10.6,
+        runStartTime: 0,
+        toleranceSeconds: 0.04,
+      }),
+    ).toBe(false);
+    expect(
+      shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate({
+        gateHoldTime: 10.6,
+        runStartTime: 10.62,
+        toleranceSeconds: 0.04,
+      }),
+    ).toBe(true);
   });
 
   it("requires only active audio before starting full preview", () => {
@@ -368,6 +385,24 @@ describe("workspace segment editor full preview", () => {
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(3, 3)).toBe(true);
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(2, 3)).toBe(false);
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(Number.NaN, 3)).toBe(false);
+  });
+
+  it("does not treat a browser audio-unlock rejection as a ready full preview", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult({
+        activeTrackCount: 2,
+        isAudioUnlockRequired: true,
+        rejectedPlayTrackCount: 1,
+      }),
+    ).toBe("unlock-required");
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult({
+        activeTrackCount: 2,
+        isAudioUnlockRequired: false,
+        rejectedPlayTrackCount: 1,
+      }),
+    ).toBe("ready");
   });
 
   it("ignores old voice starts outside the startup gate window", () => {
@@ -427,6 +462,25 @@ describe("workspace segment editor full preview", () => {
         nextSourceTime: 3,
         trackKind: "voice",
         voicePausedSeekToleranceSeconds: 0.5,
+      }),
+    ).toBe(false);
+  });
+
+  it("re-seeks a pre-armed voice track that is ahead of the expected start source time", () => {
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack({
+        currentSourceTime: 1.2,
+        expectedSourceTime: 0,
+        isPaused: false,
+        syncToleranceSeconds: 0.04,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack({
+        currentSourceTime: 0.02,
+        expectedSourceTime: 0,
+        isPaused: false,
+        syncToleranceSeconds: 0.04,
       }),
     ).toBe(false);
   });

@@ -140,6 +140,42 @@ export const getWorkspaceSegmentSceneSoundVisualJobSource = (
   }
 };
 
+export const applyWorkspaceSegmentSceneSoundVisualAssetId = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  assetId: number | null | undefined,
+): WorkspaceSegmentEditorDraftSegment => {
+  const normalizedAssetId = getPositiveWorkspaceMediaAssetId(assetId);
+  if (!normalizedAssetId) {
+    return segment;
+  }
+
+  const attachAssetId = (asset: StudioCustomVideoFile | null): StudioCustomVideoFile | null =>
+    asset ? { ...asset, assetId: normalizedAssetId } : asset;
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+
+  if (latestVisualAction === "custom") {
+    return { ...segment, customVideo: attachAssetId(segment.customVideo) };
+  }
+
+  if (latestVisualAction === "ai_photo") {
+    return { ...segment, aiPhotoAsset: attachAssetId(segment.aiPhotoAsset) };
+  }
+
+  if (latestVisualAction === "image_edit") {
+    return { ...segment, imageEditAsset: attachAssetId(segment.imageEditAsset) };
+  }
+
+  if (
+    latestVisualAction === "ai" ||
+    latestVisualAction === "photo_animation" ||
+    latestVisualAction === "talking_photo"
+  ) {
+    return { ...segment, aiVideoAsset: attachAssetId(segment.aiVideoAsset) };
+  }
+
+  return segment;
+};
+
 export const getWorkspaceSegmentCurrentVideoSourceAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): StudioCustomVideoFile | null => {

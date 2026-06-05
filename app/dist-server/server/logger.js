@@ -10,6 +10,7 @@ const getLoggerState = () => {
         return existingState;
     }
     const nextState = {
+        consoleOutputEnabled: true,
         initialized: false,
         originalConsole: {
             debug: console.debug.bind(console),
@@ -37,6 +38,50 @@ const sanitizeConsoleArgument = (value) => {
         return value;
     }
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, sanitizeConsoleArgument(entry)]));
+};
+const isConsoleWriteError = (error) => {
+    let current = error;
+    const visited = new Set();
+    while (current && typeof current === "object" && !visited.has(current)) {
+        visited.add(current);
+        const code = "code" in current ? String(current.code ?? "") : "";
+        const message = "message" in current ? String(current.message ?? "").toLowerCase() : "";
+        if (code === "EPIPE" ||
+            code === "ERR_STREAM_DESTROYED" ||
+            code === "ERR_STREAM_WRITE_AFTER_END" ||
+            message.includes("write epipe")) {
+            return true;
+        }
+        current = "cause" in current ? current.cause : null;
+    }
+    return false;
+};
+const callOriginalConsoleMethod = (method, args) => {
+    const state = getLoggerState();
+    if (!state.consoleOutputEnabled) {
+        return;
+    }
+    try {
+        method(...args);
+    }
+    catch (error) {
+        if (!isConsoleWriteError(error)) {
+            throw error;
+        }
+        state.consoleOutputEnabled = false;
+    }
+};
+const installConsoleStreamErrorGuard = () => {
+    const state = getLoggerState();
+    const handleConsoleStreamError = (error) => {
+        if (isConsoleWriteError(error)) {
+            state.consoleOutputEnabled = false;
+            return;
+        }
+        writeConsoleLogRecord("error", ["[process] console stream error", error]);
+    };
+    process.stdout.on("error", handleConsoleStreamError);
+    process.stderr.on("error", handleConsoleStreamError);
 };
 const writeConsoleLogRecord = (level, args) => {
     const state = getLoggerState();
@@ -72,20 +117,21 @@ export const initServerLogging = () => {
         const originalMethod = state.originalConsole[level];
         console[level] = ((...args) => {
             writeConsoleLogRecord(level, args);
-            originalMethod(...args);
+            callOriginalConsoleMethod(originalMethod, args);
         });
     };
     patchConsoleMethod("debug");
     patchConsoleMethod("info");
     patchConsoleMethod("warn");
     patchConsoleMethod("error");
+    installConsoleStreamErrorGuard();
     process.on("uncaughtException", (error) => {
         writeConsoleLogRecord("error", ["[process] uncaughtException", error]);
-        state.originalConsole.error("[process] uncaughtException", error);
+        callOriginalConsoleMethod(state.originalConsole.error, ["[process] uncaughtException", error]);
     });
     process.on("unhandledRejection", (reason) => {
         writeConsoleLogRecord("error", ["[process] unhandledRejection", reason]);
-        state.originalConsole.error("[process] unhandledRejection", reason);
+        callOriginalConsoleMethod(state.originalConsole.error, ["[process] unhandledRejection", reason]);
     });
     state.initialized = true;
     console.info(`[server] Runtime log file: ${logFilePath}`);

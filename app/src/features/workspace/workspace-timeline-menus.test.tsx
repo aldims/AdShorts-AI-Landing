@@ -135,12 +135,16 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     },
   };
 
-  it("lets the user choose full video duration or trim to voiceover", () => {
+  it("applies the selected full video duration or voiceover trim mode", () => {
     const onTrimToVoiceoverToggle = vi.fn();
+    const onApplyDuration = vi.fn(() => ({ duration: 5 }));
+    const onClose = vi.fn();
 
     render(
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
+        onApplyDuration={onApplyDuration}
+        onClose={onClose}
         onTrimToVoiceoverToggle={onTrimToVoiceoverToggle}
       />,
     );
@@ -152,7 +156,9 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
 
     screen.getByRole("radio", { name: /Видео 5с/ }).click();
 
-    expect(onTrimToVoiceoverToggle).toHaveBeenCalledOnce();
+    expect(onTrimToVoiceoverToggle).toHaveBeenCalledWith(false);
+    expect(onApplyDuration).toHaveBeenCalledWith(0, { trimToVoiceover: false });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
 

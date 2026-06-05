@@ -1385,6 +1385,25 @@ export const writeStoredWorkspaceSegmentEditorConsumedSourceProject = (
   );
 };
 
+export const removeStoredWorkspaceSegmentEditorConsumedSourceProject = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorConsumedSourceStorageKey(normalizedEmail, normalizedProjectId),
+  );
+};
+
 export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
   email: string | null | undefined,
   keepProjectIds: readonly (number | null | undefined)[] = [],

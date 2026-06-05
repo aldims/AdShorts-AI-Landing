@@ -12,6 +12,16 @@ export class WorkspaceSegmentEditorError extends Error {
     }
 }
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeBooleanFlag = (value) => {
+    if (value === true) {
+        return true;
+    }
+    if (value === false || value === null || value === undefined) {
+        return false;
+    }
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+};
 const normalizeWorkspaceSegmentEditorLanguage = (value) => {
     const normalized = normalizeText(value).toLowerCase();
     return normalized === "en" || normalized === "ru" ? normalized : "";
@@ -361,6 +371,35 @@ const getSegmentEditorSegmentIndex = (segment, fallbackIndex) => {
 };
 const normalizeSegmentEditorComparableText = (value) => normalizeText(value).toLowerCase();
 const getSegmentEditorVoiceoverTextHash = (value) => normalizeSegmentEditorComparableText(value);
+const segmentEditorDisabledVoiceTypes = new Set(["none", "silent", "no_voice"]);
+const inferSegmentEditorPayloadProjectVoiceType = (payload, fallbackVoiceType) => {
+    const segments = payload.segments ?? [];
+    if (segments.length === 0) {
+        return fallbackVoiceType;
+    }
+    const candidateCounts = new Map();
+    for (const segment of segments) {
+        const candidate = normalizeText(segment.voice_type);
+        if (!candidate) {
+            continue;
+        }
+        const candidateKey = candidate.toLowerCase();
+        if (segmentEditorDisabledVoiceTypes.has(candidateKey)) {
+            continue;
+        }
+        const existing = candidateCounts.get(candidateKey);
+        candidateCounts.set(candidateKey, {
+            count: (existing?.count ?? 0) + 1,
+            value: existing?.value ?? candidate,
+        });
+    }
+    if (candidateCounts.size !== 1) {
+        return fallbackVoiceType;
+    }
+    const [{ count, value }] = Array.from(candidateCounts.values());
+    const minimumCount = Math.max(1, Math.ceil(segments.length * 0.6));
+    return count >= minimumCount ? value : fallbackVoiceType;
+};
 const getSegmentEditorSegmentTextFingerprint = (segments) => (segments ?? []).map((segment) => normalizeSegmentEditorComparableText(segment?.text)).join("\n");
 const doSegmentEditorSegmentTextsMatch = (leftSegments, rightSegments) => {
     const left = leftSegments ?? [];
@@ -446,7 +485,8 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
     const sourceSegmentsByIndex = shouldReuseSourceTts
         ? getSegmentEditorSegmentMapByIndex(sourcePayload?.segments)
         : new Map();
-    const effectiveVoiceType = pickSegmentEditorText(payload.voice_type, projectDetailsPayload?.voice_type, generationSettings?.voice_type, sourcePayload?.voice_type);
+    const rawEffectiveVoiceType = pickSegmentEditorText(payload.voice_type, projectDetailsPayload?.voice_type, generationSettings?.voice_type, sourcePayload?.voice_type);
+    const effectiveVoiceType = inferSegmentEditorPayloadProjectVoiceType(payload, rawEffectiveVoiceType);
     const effectiveLanguage = normalizeWorkspaceSegmentEditorLanguage(payload.language) ||
         normalizeWorkspaceSegmentEditorLanguage(generationSettings?.content_language) ||
         normalizeWorkspaceSegmentEditorLanguage(generationSettings?.requested_language) ||
@@ -514,6 +554,12 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
             const projectVoiceoverTextHash = hasProjectVoiceoverTiming
                 ? getSegmentEditorVoiceoverTextHash(segmentText)
                 : "";
+            const rawSegmentVoiceType = normalizeText(segment.voice_type);
+            const segmentVoiceType = rawSegmentVoiceType &&
+                effectiveVoiceType &&
+                normalizeSegmentEditorComparableText(rawSegmentVoiceType) === normalizeSegmentEditorComparableText(effectiveVoiceType)
+                ? null
+                : rawSegmentVoiceType || null;
             return {
                 ...segment,
                 _voice_source_duration: voiceSourceDuration,
@@ -524,6 +570,7 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                 speech_start_time: speechStartTime,
                 speech_words: speechWords,
                 text: segmentText,
+                voice_type: segmentVoiceType,
                 voiceover_language: pickSegmentEditorText(...(hasProjectVoiceoverTiming
                     ? [
                         effectiveLanguage,
@@ -565,7 +612,7 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
             };
         }),
         tts_asset_id: inheritedTtsAssetId ?? payload.tts_asset_id,
-        voice_type: pickSegmentEditorText(payload.voice_type, projectDetailsPayload?.voice_type, generationSettings?.voice_type, sourcePayload?.voice_type),
+        voice_type: effectiveVoiceType,
     };
 };
 const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload) => {
@@ -776,6 +823,15 @@ const getSegmentEditorSpeechWordsRange = (segment) => {
     return { endTime, startTime };
 };
 const hasSegmentEditorAuthoritativeSpeechTiming = (segment) => {
+    const voiceSourceStartTime = normalizeNumber(segment.voiceSourceStartTime);
+    const voiceSourceEndTime = normalizeNumber(segment.voiceSourceEndTime);
+    if (voiceSourceStartTime !== null && voiceSourceEndTime !== null && voiceSourceEndTime > voiceSourceStartTime) {
+        return true;
+    }
+    const voiceSourceDuration = normalizeNumber(segment.voiceSourceDuration);
+    if (voiceSourceStartTime !== null && voiceSourceDuration !== null && voiceSourceDuration > 0) {
+        return true;
+    }
     const speechWordsRange = getSegmentEditorSpeechWordsRange(segment);
     if (speechWordsRange) {
         return true;
@@ -890,7 +946,7 @@ const readWavDurationSeconds = (buffer) => {
     }
     let offset = 12;
     let byteRate = null;
-    let dataSize = null;
+    let dataSize = 0;
     while (offset + 8 <= buffer.length) {
         const chunkId = buffer.toString("ascii", offset, offset + 4);
         const chunkSize = buffer.readUInt32LE(offset + 4);
@@ -902,15 +958,17 @@ const readWavDurationSeconds = (buffer) => {
             byteRate = buffer.readUInt32LE(chunkStart + 8);
         }
         else if (chunkId === "data") {
-            dataSize = chunkSize;
+            dataSize += chunkSize;
         }
         offset = chunkStart + chunkSize + (chunkSize % 2);
     }
-    return byteRate && dataSize !== null && byteRate > 0 ? dataSize / byteRate : null;
+    return byteRate && dataSize > 0 && byteRate > 0 ? dataSize / byteRate : null;
 };
 export const readWorkspaceAudioDurationSecondsFromBuffer = (buffer) => {
-    const durationSeconds = readMp3DurationSeconds(buffer) ??
-        readWavDurationSeconds(buffer);
+    const isWav = buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WAVE";
+    const durationSeconds = isWav
+        ? readWavDurationSeconds(buffer) ?? readMp3DurationSeconds(buffer)
+        : readMp3DurationSeconds(buffer) ?? readWavDurationSeconds(buffer);
     return durationSeconds !== null && Number.isFinite(durationSeconds) && durationSeconds > 0
         ? Math.round(durationSeconds * 1000) / 1000
         : null;
@@ -1014,6 +1072,7 @@ const setCachedSegmentEditorSession = (user, projectId, session) => {
     });
 };
 const getSegmentEditorVoiceoverDurationCacheKey = (projectId, segmentIndex) => `${projectId}:${segmentIndex}`;
+const getSegmentEditorVoiceoverAssetDurationCacheKey = (assetId) => `asset:${assetId}`;
 const readCachedSegmentEditorVoiceoverDuration = (projectId, segmentIndex) => {
     const cachedEntry = segmentEditorVoiceoverDurationCache.get(getSegmentEditorVoiceoverDurationCacheKey(projectId, segmentIndex));
     if (!cachedEntry) {
@@ -1025,8 +1084,25 @@ const readCachedSegmentEditorVoiceoverDuration = (projectId, segmentIndex) => {
     }
     return cachedEntry.durationSeconds;
 };
+const readCachedSegmentEditorVoiceoverAssetDuration = (assetId) => {
+    const cachedEntry = segmentEditorVoiceoverDurationCache.get(getSegmentEditorVoiceoverAssetDurationCacheKey(assetId));
+    if (!cachedEntry) {
+        return null;
+    }
+    if (cachedEntry.expiresAt <= Date.now()) {
+        segmentEditorVoiceoverDurationCache.delete(getSegmentEditorVoiceoverAssetDurationCacheKey(assetId));
+        return null;
+    }
+    return cachedEntry.durationSeconds;
+};
 const writeCachedSegmentEditorVoiceoverDuration = (projectId, segmentIndex, durationSeconds) => {
     segmentEditorVoiceoverDurationCache.set(getSegmentEditorVoiceoverDurationCacheKey(projectId, segmentIndex), {
+        durationSeconds,
+        expiresAt: Date.now() + SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS,
+    });
+};
+const writeCachedSegmentEditorVoiceoverAssetDuration = (assetId, durationSeconds) => {
+    segmentEditorVoiceoverDurationCache.set(getSegmentEditorVoiceoverAssetDurationCacheKey(assetId), {
         durationSeconds,
         expiresAt: Date.now() + SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS,
     });
@@ -1056,20 +1132,55 @@ const fetchWorkspaceProjectSegmentVoiceoverDuration = async (projectId, segmentI
     }
     return durationSeconds;
 };
+const fetchWorkspaceVoiceoverAssetDuration = async (assetId, projectId) => {
+    const cachedDurationSeconds = readCachedSegmentEditorVoiceoverAssetDuration(assetId);
+    if (cachedDurationSeconds !== null) {
+        return cachedDurationSeconds;
+    }
+    const response = await fetchUpstreamResponse(buildAdsflowUrl(`/api/media/${assetId}/download`, {
+        admin_token: env.adsflowAdminToken ?? "",
+    }), {
+        signal: AbortSignal.timeout(SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS),
+    }, upstreamPolicies.proxyInteractive, {
+        assetKind: "segment-voiceover-asset-duration",
+        endpoint: "segment-editor.segment-voiceover-asset-duration",
+        projectId,
+    });
+    if (!response.ok) {
+        void response.body?.cancel();
+        return null;
+    }
+    const durationSeconds = readWorkspaceAudioDurationSecondsFromBuffer(Buffer.from(await response.arrayBuffer()));
+    if (durationSeconds !== null) {
+        writeCachedSegmentEditorVoiceoverAssetDuration(assetId, durationSeconds);
+    }
+    return durationSeconds;
+};
 export async function getWorkspaceProjectSegmentVoiceoverDuration(user, options) {
     assertAdsflowConfigured();
     await assertWorkspaceProjectAccess(user, options.projectId);
     return fetchWorkspaceProjectSegmentVoiceoverDuration(options.projectId, options.segmentIndex);
 }
 const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session) => {
-    if (!session.segments.length || !session.voiceType || session.voiceType === "none" || session.ttsAssetId === null) {
+    if (!session.segments.length) {
         return session;
     }
-    const segmentsNeedingMeasurement = session.segments.filter((segment) => !hasSegmentEditorAuthoritativeSpeechTiming(segment));
-    if (segmentsNeedingMeasurement.length === 0) {
+    const projectVoiceoverSegmentsNeedingMeasurement = !session.voiceType || session.voiceType === "none" || session.ttsAssetId === null
+        ? []
+        : session.segments.filter((segment) => (hasSegmentEditorAuthoritativeSpeechTiming(segment) &&
+            normalizeNumber(segment.speechDuration) === null));
+    const voiceoverAssetSegmentsNeedingMeasurement = session.segments.filter((segment) => {
+        const assetId = normalizePositiveProjectId(segment.voiceoverAssetId ?? segment.voiceover?.media_asset_id);
+        return (assetId !== null &&
+            assetId !== session.ttsAssetId &&
+            segment.voiceover !== null &&
+            normalizeText(segment.voiceover.mime_type).toLowerCase().startsWith("audio/") &&
+            segment.speechDurationSource !== "audio");
+    });
+    if (projectVoiceoverSegmentsNeedingMeasurement.length === 0 && voiceoverAssetSegmentsNeedingMeasurement.length === 0) {
         return session;
     }
-    const measuredDurations = await Promise.all(segmentsNeedingMeasurement.map(async (segment) => {
+    const measuredProjectVoiceoverDurations = await Promise.all(projectVoiceoverSegmentsNeedingMeasurement.map(async (segment) => {
         try {
             const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(session.projectId, segment.index);
             return [segment.index, durationSeconds];
@@ -1083,7 +1194,29 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
             return [segment.index, null];
         }
     }));
-    const durationBySegmentIndex = new Map(measuredDurations.filter((entry) => entry[1] !== null));
+    const measuredVoiceoverAssetDurations = await Promise.all(voiceoverAssetSegmentsNeedingMeasurement.map(async (segment) => {
+        const assetId = normalizePositiveProjectId(segment.voiceoverAssetId ?? segment.voiceover?.media_asset_id);
+        if (assetId === null) {
+            return [segment.index, null];
+        }
+        try {
+            const durationSeconds = await fetchWorkspaceVoiceoverAssetDuration(assetId, session.projectId);
+            return [segment.index, durationSeconds];
+        }
+        catch (error) {
+            console.warn("[segment-editor] Failed to measure segment voiceover asset duration", {
+                assetId,
+                error: error instanceof Error ? error.message : String(error),
+                projectId: session.projectId,
+                segmentIndex: segment.index,
+            });
+            return [segment.index, null];
+        }
+    }));
+    const durationBySegmentIndex = new Map([
+        ...measuredProjectVoiceoverDurations,
+        ...measuredVoiceoverAssetDurations,
+    ].filter((entry) => entry[1] !== null));
     if (durationBySegmentIndex.size === 0) {
         return session;
     }
@@ -1094,13 +1227,19 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
             if (!durationSeconds) {
                 return segment;
             }
-            const speechStartTime = segment.speechStartTime ?? segment.startTime;
+            const speechWordsRange = getSegmentEditorSpeechWordsRange(segment);
+            const speechStartTime = normalizeNumber(segment.voiceSourceStartTime) ??
+                normalizeNumber(segment.speechStartTime) ??
+                speechWordsRange?.startTime ??
+                segment.startTime;
+            const voiceSourceDuration = Math.max(normalizeNumber(segment.voiceSourceDuration) ?? 0, durationSeconds);
             return {
                 ...segment,
                 speechDuration: durationSeconds,
                 speechDurationSource: "audio",
                 speechEndTime: speechStartTime + durationSeconds,
                 speechStartTime,
+                voiceSourceDuration,
             };
         }),
     };
@@ -1385,10 +1524,17 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
         normalizePositiveProjectId(generationSettings?.tts_asset_id) ??
         null;
+    const finalVideoAssetId = normalizePositiveProjectId(projectDetailsPayload?.final_video_asset_id) ??
+        normalizePositiveProjectId(generationSettings?.final_video_asset_id) ??
+        normalizePositiveProjectId(generationSettings?.final_asset_id) ??
+        null;
     return {
         customMusicAssetId: customMusicMetadata.customMusicAssetId,
         customMusicFileName: customMusicMetadata.customMusicFileName,
         description: normalizeText(payload.description),
+        finalVideoAssetId,
+        finalVideoInvalidatedAt: normalizeText(generationSettings?.final_video_invalidated_at) || null,
+        finalVideoStale: normalizeBooleanFlag(generationSettings?.final_video_stale),
         language: resolveWorkspaceSegmentEditorLanguage(payload, projectDetailsPayload),
         musicAssetId,
         musicName: normalizeText(payload.music_name) ||

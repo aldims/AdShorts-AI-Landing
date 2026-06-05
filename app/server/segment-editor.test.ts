@@ -14,6 +14,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const createPcmWavBuffer = (durationSeconds: number) => {
+  const sampleRate = 24_000;
+  const channels = 1;
+  const bitsPerSample = 16;
+  const bytesPerSample = bitsPerSample / 8;
+  const dataSize = Math.max(1, Math.round(durationSeconds * sampleRate * channels * bytesPerSample));
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  buffer.writeUInt16LE(channels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bitsPerSample, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataSize, 40);
+
+  return buffer;
+};
+
 describe("segment editor audio duration parser", () => {
   it("counts MP3 frames instead of relying on rounded metadata", () => {
     const frameCount = 114;
@@ -31,6 +56,16 @@ describe("segment editor audio duration parser", () => {
     }
 
     expect(readWorkspaceAudioDurationSecondsFromBuffer(buffer)).toBe(4.104);
+  });
+
+  it("prefers WAV container duration even when PCM data contains MP3-like bytes", () => {
+    const buffer = createPcmWavBuffer(2.25);
+    buffer[44] = 0xff;
+    buffer[45] = 0xfb;
+    buffer[46] = 0x98;
+    buffer[47] = 0xc0;
+
+    expect(readWorkspaceAudioDurationSecondsFromBuffer(buffer)).toBe(2.25);
   });
 });
 
@@ -729,6 +764,94 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
+  it("does not use segment timeline bounds as project TTS ranges when exact voice timing is missing", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segments/") && url.includes("/voiceover")) {
+        return new Response(null, { status: 500 });
+      }
+
+      if (url.includes("/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            project_id: 3727,
+            segments: [
+              {
+                duration: 13.6,
+                end_time: 13.6,
+                index: 0,
+                start_time: 0,
+                text: "First scene with no authoritative speech timing.",
+                voice_type: "Bys_24000",
+              },
+              {
+                duration: 3.2,
+                end_time: 16.8,
+                index: 1,
+                start_time: 13.6,
+                text: "Second scene.",
+                voice_type: "Bys_24000",
+              },
+            ],
+            title: "Project TTS without segment timing",
+            tts_asset_id: 4946,
+            voice_type: "Bys_24000",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3727 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(JSON.stringify({ generation_settings: {}, project_id: 3727 }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3727,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBe(4946);
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceType: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    }));
+    expect(session.segments[1]).toEqual(expect.objectContaining({
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceType: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    }));
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
+    expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
+  });
+
   it("uses current project voice metadata when project TTS replaces stale scene voice metadata", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -805,6 +928,208 @@ describe("segment editor asset lifecycle mapping", () => {
       voiceoverTextHash: "first scene.",
       voiceoverVoiceType: "Gleb",
     }));
+  });
+
+  it("does not measure the project TTS asset as a per-scene voiceover duration", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/media/4980/download")) {
+        return new Response(createPcmWavBuffer(11.859), {
+          headers: { "Content-Type": "audio/x-wav" },
+          status: 200,
+        });
+      }
+
+      if (url.includes("/api/projects/3732/media")) {
+        return new Response(
+          JSON.stringify({
+            assets: [
+              {
+                download_path: "/api/media/4980/download",
+                id: 4980,
+                kind: "tts",
+                media_type: "audio",
+                mime_type: "audio/x-wav",
+                project_id: 3732,
+                role: "tts",
+                segment_index: 0,
+                status: "ready",
+                storage_key: "users/1/assets/4980/tts/4980-voice.wav",
+              },
+            ],
+            project_id: 3732,
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/api/projects/3732/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            language: "ru",
+            project_id: 3732,
+            segments: [
+              {
+                duration: 12.957,
+                duration_mode: "manual",
+                end_time: 12.957,
+                index: 0,
+                manual_duration_seconds: 12.957,
+                speech_duration: 10.739,
+                start_time: 0,
+                text: "сегодня покажу вам рецепт очень вкусных блинов",
+                voiceover_text_hash: "сегодня покажу вам рецепт очень вкусных блинов",
+                voiceover_voice_type: "Russian_BrightHeroine",
+              },
+              {
+                duration: 2.508,
+                end_time: 15.465,
+                index: 1,
+                speech_duration: 2.508,
+                start_time: 12.957,
+                text: "Взбейте яйца с сахаром и солью.",
+              },
+            ],
+            title: "Segment indexed TTS",
+            tts_asset_id: 4980,
+            voice_type: "Russian_BrightHeroine",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          generation_settings: {
+            tts_asset_id: 4980,
+            voice_type: "Russian_BrightHeroine",
+          },
+          language: "ru",
+          project_id: 3732,
+          voice_type: "Russian_BrightHeroine",
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3732,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBe(4980);
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: 10.739,
+      speechDurationSource: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      voiceSourceDuration: null,
+      voiceoverAssetId: 4980,
+    }));
+    expect(session.segments[1]).toEqual(expect.objectContaining({
+      speechDuration: 2.508,
+      speechDurationSource: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      voiceSourceDuration: null,
+      voiceoverAssetId: null,
+    }));
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(fetchedUrls.some((url) => url.includes("/api/media/4980/download"))).toBe(false);
+  });
+
+  it("treats a uniform segment voice as the project baseline voice", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/projects/3727/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            language: "ru",
+            project_id: 3727,
+            segments: [
+              {
+                duration: 5,
+                end_time: 5,
+                index: 0,
+                speech_duration: 3.1,
+                speech_end_time: 3.1,
+                speech_start_time: 0,
+                start_time: 0,
+                text: "Первый сегмент.",
+                voice_type: "Russian_BrightHeroine",
+              },
+              {
+                duration: 4,
+                end_time: 9,
+                index: 1,
+                speech_duration: 2.2,
+                speech_end_time: 5.3,
+                speech_start_time: 3.1,
+                start_time: 5,
+                text: "Второй сегмент.",
+                voice_type: "Russian_BrightHeroine",
+              },
+            ],
+            title: "Uniform segment voice",
+            tts_asset_id: 4946,
+            voice_type: "Bys_24000",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 3727 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          generation_settings: {
+            voice_type: "Bys_24000",
+          },
+          language: "ru",
+          project_id: 3727,
+          voice_type: "Bys_24000",
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      3727,
+      { bypassCache: true },
+    );
+
+    expect(session.voiceType).toBe("Russian_BrightHeroine");
+    expect(session.segments.map((segment) => segment.voiceType)).toEqual([null, null]);
+    expect(session.segments.map((segment) => segment.voiceoverVoiceType)).toEqual([
+      "Russian_BrightHeroine",
+      "Russian_BrightHeroine",
+    ]);
   });
 
   it("inherits source project audio and source voice ranges for edited project previews", async () => {

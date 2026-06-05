@@ -478,13 +478,51 @@ export const getWorkspaceSegmentVoiceOverrideForLanguage = (
 export const isWorkspaceSegmentDraftVoiceEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) =>
-  getWorkspaceSegmentVoiceOverrideId(segment) !== getWorkspaceSegmentVoiceOverrideId(baselineSegment) ||
-  getStudioCustomVideoFileIdentityKey(segment.voiceoverAsset) !==
-    getStudioCustomVideoFileIdentityKey(baselineSegment?.voiceoverAsset) ||
-  segment.voiceoverTextHash !== baselineSegment?.voiceoverTextHash ||
-  segment.voiceoverVoiceType !== baselineSegment?.voiceoverVoiceType ||
-  segment.voiceoverLanguage !== baselineSegment?.voiceoverLanguage;
+  options?: {
+    baselineSession?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null;
+    draftSession?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null;
+  },
+) => {
+  const normalizeInheritedVoiceOverride = (
+    voiceId: string | null,
+    session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  ) => {
+    const sessionVoiceId = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) ?? null;
+    return voiceId && sessionVoiceId && voiceId === sessionVoiceId ? null : voiceId;
+  };
+  const voiceOverrideChanged =
+    normalizeInheritedVoiceOverride(getWorkspaceSegmentVoiceOverrideId(segment), options?.draftSession) !==
+    normalizeInheritedVoiceOverride(getWorkspaceSegmentVoiceOverrideId(baselineSegment), options?.baselineSession);
+  const getSceneVoiceoverAssetKey = (
+    asset: WorkspaceSegmentEditorDraftSegment["voiceoverAsset"],
+    session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
+  ) => {
+    const assetId = getWorkspaceSegmentCustomAssetId(asset);
+    const ttsAssetId = Number(session?.ttsAssetId);
+    if (assetId !== null && Number.isFinite(ttsAssetId) && ttsAssetId > 0 && assetId === Math.trunc(ttsAssetId)) {
+      return "";
+    }
+
+    return getStudioCustomVideoFileIdentityKey(asset);
+  };
+  const currentVoiceoverAssetKey = getSceneVoiceoverAssetKey(segment.voiceoverAsset, options?.draftSession);
+  const baselineVoiceoverAssetKey = getSceneVoiceoverAssetKey(baselineSegment?.voiceoverAsset ?? null, options?.baselineSession);
+  const voiceoverAssetChanged = currentVoiceoverAssetKey !== baselineVoiceoverAssetKey;
+
+  if (voiceOverrideChanged || voiceoverAssetChanged) {
+    return true;
+  }
+
+  if (!currentVoiceoverAssetKey && !baselineVoiceoverAssetKey) {
+    return false;
+  }
+
+  return (
+    segment.voiceoverTextHash !== baselineSegment?.voiceoverTextHash ||
+    segment.voiceoverVoiceType !== baselineSegment?.voiceoverVoiceType ||
+    segment.voiceoverLanguage !== baselineSegment?.voiceoverLanguage
+  );
+};
 
 const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
