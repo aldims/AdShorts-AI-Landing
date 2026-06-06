@@ -233,6 +233,7 @@ import {
   normalizeStudioLanguageValue,
   normalizeWorkspaceSegmentAiPhotoPrompt,
   normalizeWorkspaceSegmentDurationMode,
+  normalizeWorkspaceSegmentDurationSyncMode,
   normalizeWorkspaceSegmentEditorSession,
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentEditorTextForCompare,
@@ -252,6 +253,7 @@ import {
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange,
   resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
+  resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   resolveWorkspaceSegmentVisualDurationMaxGuard,
   restoreWorkspaceSegmentDraftVisualFromBaseline,
   restoreWorkspaceSegmentSceneSoundState,
@@ -262,6 +264,7 @@ import {
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
+  shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
@@ -269,9 +272,9 @@ import {
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
+  WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
-  WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS,
 } from "../features/workspace/workspace-segment-editor";
 import {
   buildWorkspaceSegmentEditorChangeChecklist,
@@ -4839,6 +4842,33 @@ export function WorkspacePage({
   }
 
   const segmentEditorChecklistBaseSession = segmentEditorServerChecklistBaseSession ?? segmentEditorFallbackChecklistBaseSession;
+  const isSegmentEditorVideoVisualDurationPending = useCallback(
+    (segment: WorkspaceSegmentEditorDraftSegment) => {
+      if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+        return false;
+      }
+
+      const measuredVisualDurationSeconds = getSegmentEditorMeasuredVisualDurationSeconds(segment);
+      const baselineSegment =
+        segmentEditorChecklistBaseSession?.segments.find((item) => item.index === segment.index) ?? null;
+      const knownVideoVisualDurationSeconds =
+        measuredVisualDurationSeconds ??
+        getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
+        (baselineSegment ? getWorkspaceSegmentKnownVisualDurationSeconds(baselineSegment) : null);
+      if (knownVideoVisualDurationSeconds !== null || !getWorkspaceSegmentVisualDurationMeasurementUrl(segment)) {
+        return false;
+      }
+
+      return (
+        normalizeWorkspaceSegmentDurationMode(segment.durationMode) !== "manual" ||
+        normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual"
+      );
+    },
+    [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorChecklistBaseSession, segmentEditorDraft],
+  );
+  const hasSegmentEditorPendingVisualDurationMeasurements = Boolean(
+    segmentEditorDraft?.segments.some(isSegmentEditorVideoVisualDurationPending),
+  );
   const segmentEditorChangeDisplayBaseSession = resolveWorkspaceSegmentEditorChangeDisplayBaselineSession(
     segmentEditorDraft,
     segmentEditorChecklistBaseSession,
@@ -18697,6 +18727,7 @@ export function WorkspacePage({
     : workspaceText(locale, "Нет изменений для обновления", "No changes to update");
   const isSegmentEditorCreateShortsDisabled =
     !hasSegmentEditorCreateShortsInput ||
+    hasSegmentEditorPendingVisualDurationMeasurements ||
     isSegmentEditorBrandDirty ||
     isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo ||
@@ -19682,7 +19713,10 @@ export function WorkspacePage({
   const applySegmentTimelineManualBoundaryTime = (
     segmentIndex: number,
     requestedBoundaryTime: number,
-    options?: { durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"] },
+    options?: {
+      durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
+      sourceDurationSeconds?: number | null;
+    },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const currentSegment = currentDraft?.segments.find((segment) => segment.index === segmentIndex) ?? null;
@@ -19757,6 +19791,7 @@ export function WorkspacePage({
       currentSegment,
       timing.duration,
       baselineSegment,
+      { sourceDurationSeconds: options?.sourceDurationSeconds },
     );
     const durationSyncMode = options?.durationSyncMode === "voiceover" ? "voiceover" : "visual";
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
@@ -19774,7 +19809,10 @@ export function WorkspacePage({
   const applySegmentTimelineManualDuration = (
     segmentIndex: number,
     requestedDurationSeconds: number,
-    options?: { durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"] },
+    options?: {
+      durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
+      sourceDurationSeconds?: number | null;
+    },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const currentSegment = currentDraft?.segments.find((segment) => segment.index === segmentIndex) ?? null;
@@ -19883,10 +19921,7 @@ export function WorkspacePage({
   ) => {
     commitSegmentTimelineVisualDurationInput(event.currentTarget, options);
   };
-  const openSegmentEditorTimelineVideoExtensionMenu = (
-    segmentArrayIndex: number,
-    durationSeconds?: number | null,
-  ) => {
+  const openSegmentEditorTimelineVideoExtensionMenu = (segmentArrayIndex: number) => {
     const targetSegment = segmentEditorDraft?.segments[segmentArrayIndex] ?? null;
     if (!targetSegment) {
       return;
@@ -19910,7 +19945,6 @@ export function WorkspacePage({
       return;
     }
 
-    const sourceOverrideDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
     const shouldCloseCurrentMenu = segmentTimelineDurationMenuSegmentIndex === targetSegment.index;
     if (shouldCloseCurrentMenu) {
       setSegmentTimelineDurationSourceOverride(null);
@@ -19918,11 +19952,13 @@ export function WorkspacePage({
       return;
     }
 
+    const sourceVideoDurationSeconds = resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(
+      targetSegment,
+      baselineSegment,
+    );
     const currentDurationSeconds =
-      sourceOverrideDurationSeconds ??
-      getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment) ??
-      getWorkspaceSegmentKnownVisualDurationSeconds(targetSegment) ??
-      WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS;
+      clampWorkspaceSegmentEditorVisualDurationSeconds(sourceVideoDurationSeconds) ??
+      sourceVideoDurationSeconds;
     const recommendedDurationSeconds = getWorkspaceSegmentRecommendedDurationSeconds(targetSegment, segmentEditorDraft);
     const selectedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
       selectedSegmentPhotoAnimationQuality,
@@ -19931,7 +19967,7 @@ export function WorkspacePage({
     const aiExtensionTargetDurationSeconds =
       resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(targetSegment, baselineSegment, currentDurationSeconds, {
         extensionStepSeconds: selectedExtensionDurationSeconds,
-        sourceDurationSeconds: sourceOverrideDurationSeconds,
+        sourceDurationSeconds: sourceVideoDurationSeconds,
       }) ??
       Math.max(currentDurationSeconds, recommendedDurationSeconds ?? currentDurationSeconds);
     const initialDurationSeconds =
@@ -19940,37 +19976,42 @@ export function WorkspacePage({
       ) ?? aiExtensionTargetDurationSeconds;
     const voiceoverDurationSeconds =
       getSegmentTimelineVoiceoverDurationInfo(targetSegment, segmentEditorDraft)?.durationSeconds ?? null;
+    const shouldAutoTrimToVoiceover = shouldAutoTrimWorkspaceSegmentVideoToVoiceover(
+      currentDurationSeconds,
+      voiceoverDurationSeconds,
+    );
     const shouldTrimToVoiceover = shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
       targetSegment,
       baselineSegment,
       initialDurationSeconds,
       voiceoverDurationSeconds,
       {
-        sourceDurationSeconds: sourceOverrideDurationSeconds,
+        sourceDurationSeconds: sourceVideoDurationSeconds,
       },
     );
+    if (shouldAutoTrimToVoiceover && voiceoverDurationSeconds !== null) {
+      applySegmentTimelineDurationValue(targetSegment.index, voiceoverDurationSeconds, {
+        durationSyncMode: "voiceover",
+        sourceDurationSeconds: sourceVideoDurationSeconds,
+      });
+    }
     setSegmentTimelineDurationInputValue(formatWorkspaceSegmentDurationInputValue(initialDurationSeconds));
     setSegmentTimelineDurationAiPrompt(nextPrompt);
-    setSegmentTimelineDurationTrimToVoiceover(shouldTrimToVoiceover);
-    setSegmentTimelineDurationSourceOverride(
-      sourceOverrideDurationSeconds !== null
-        ? {
-            durationSeconds: roundWorkspaceSegmentTimelineSeconds(sourceOverrideDurationSeconds),
-            segmentIndex: targetSegment.index,
-          }
-        : null,
-    );
+    setSegmentTimelineDurationTrimToVoiceover(shouldAutoTrimToVoiceover || shouldTrimToVoiceover);
+    setSegmentTimelineDurationSourceOverride({
+      durationSeconds: roundWorkspaceSegmentTimelineSeconds(sourceVideoDurationSeconds),
+      segmentIndex: targetSegment.index,
+    });
     setSegmentTimelineDurationMenuSegmentIndex(targetSegment.index);
   };
   const handleSegmentEditorTimelineDurationClick = (
     segmentArrayIndex: number,
-    durationSeconds: number,
     event: ReactMouseEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.focus({ preventScroll: true });
-    openSegmentEditorTimelineVideoExtensionMenu(segmentArrayIndex, durationSeconds);
+    openSegmentEditorTimelineVideoExtensionMenu(segmentArrayIndex);
   };
   const handleSegmentTimelineVideoExtensionToolSelect = (segmentArrayIndex: number) => {
     openSegmentEditorTimelineVideoExtensionMenu(segmentArrayIndex);
@@ -19996,7 +20037,10 @@ export function WorkspacePage({
   const applySegmentTimelineDurationValue = (
     segmentIndex: number,
     nextDurationSeconds: number | null,
-    options?: { durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"] },
+    options?: {
+      durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
+      sourceDurationSeconds?: number | null;
+    },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const segmentArrayIndex = currentDraft?.segments.findIndex((segment) => segment.index === segmentIndex) ?? -1;
@@ -20084,6 +20128,7 @@ export function WorkspacePage({
           : rawDurationSeconds;
     return applySegmentTimelineDurationValue(segmentIndex, nextDurationSeconds, {
       durationSyncMode: shouldApplyTrimToVoiceover ? "voiceover" : "visual",
+      sourceDurationSeconds: sourceVideoDurationSeconds,
     });
   };
   const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
@@ -22603,8 +22648,19 @@ export function WorkspacePage({
   const segmentTimelineDurationMenuVoiceoverSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.durationSeconds ?? null;
   const segmentTimelineDurationMenuFullVideoSeconds = segmentTimelineDurationMenuSourceSeconds;
+  const segmentTimelineDurationMenuAutoTrimToVoiceover = shouldAutoTrimWorkspaceSegmentVideoToVoiceover(
+    segmentTimelineDurationMenuFullVideoSeconds,
+    segmentTimelineDurationMenuVoiceoverSeconds,
+  );
+  const segmentTimelineDurationMenuHasVideoVoiceoverMismatch =
+    segmentTimelineDurationMenuFullVideoSeconds !== null &&
+    segmentTimelineDurationMenuVoiceoverSeconds !== null &&
+    Math.abs(segmentTimelineDurationMenuFullVideoSeconds - segmentTimelineDurationMenuVoiceoverSeconds) >
+      WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
   const segmentTimelineDurationMenuCanTrimToVoiceover = Boolean(
     !isSegmentTimelineDurationMenuPhoto &&
+      !segmentTimelineDurationMenuAutoTrimToVoiceover &&
+      segmentTimelineDurationMenuHasVideoVoiceoverMismatch &&
       segmentTimelineDurationMenuSegment &&
       shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
         segmentTimelineDurationMenuSegment,
@@ -22616,9 +22672,12 @@ export function WorkspacePage({
         },
       ),
   );
+  const segmentTimelineDurationMenuShouldTrimToVoiceover =
+    segmentTimelineDurationMenuAutoTrimToVoiceover ||
+    (segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationTrimToVoiceover);
   const segmentTimelineDurationMenuMatchedInputSeconds =
-    segmentTimelineDurationMenuCanTrimToVoiceover
-      ? segmentTimelineDurationTrimToVoiceover
+    segmentTimelineDurationMenuAutoTrimToVoiceover || segmentTimelineDurationMenuCanTrimToVoiceover
+      ? segmentTimelineDurationMenuShouldTrimToVoiceover
         ? segmentTimelineDurationMenuVoiceoverSeconds
         : segmentTimelineDurationMenuFullVideoSeconds
       : null;
@@ -23587,17 +23646,10 @@ export function WorkspacePage({
                   visualDurationSeconds: actualVideoVisualDurationSeconds,
                 },
               );
-              const isVideoVisualDurationPending =
-                selectedVisualPreviewKind === "video" &&
-                actualVideoVisualDurationSeconds === null &&
-                Boolean(getWorkspaceSegmentVisualDurationMeasurementUrl(segment));
+              const isVideoVisualDurationPending = isSegmentEditorVideoVisualDurationPending(segment);
               const segmentSlotDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
                 Math.max(0, span.endTime - span.startTime),
               );
-              const segmentVisualSourceDurationSeconds =
-                isVideoVisualDurationPending
-                  ? null
-                  : actualVideoVisualDurationSeconds ?? visualAudioDurationMismatch?.visualDurationSeconds ?? null;
               const segmentDurationBadgeLabel =
                 formatWorkspaceSegmentEditorDurationBadgeLabel(segmentSlotDurationSeconds, locale);
               const segmentDurationInputInitialValue =
@@ -23851,7 +23903,6 @@ export function WorkspacePage({
                         onClick={(event) =>
                           handleSegmentEditorTimelineDurationClick(
                             index,
-                            segmentVisualSourceDurationSeconds ?? segmentSlotDurationSeconds,
                             event,
                           )
                         }
@@ -23861,7 +23912,7 @@ export function WorkspacePage({
                             !
                           </span>
                         ) : null}
-                        <span>{segmentDurationBadgeLabel}</span>
+                        <span>{isVideoVisualDurationPending ? "..." : segmentDurationBadgeLabel}</span>
                       </button>
                     )}
                     {renderSegmentTimelineHistoryButtons({
@@ -26366,11 +26417,15 @@ export function WorkspacePage({
 	        locale,
 	        isSegmentEditorBrandDirty
 	          ? "Примените бренд ко всему видео"
+	          : hasSegmentEditorPendingVisualDurationMeasurements
+	          ? "Измеряем длительность видео"
 	          : hasSegmentEditorCreateShortsInput
 	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	        isSegmentEditorBrandDirty
 	          ? "Apply brand to video"
+	          : hasSegmentEditorPendingVisualDurationMeasurements
+	          ? "Measuring video duration"
 	          : hasSegmentEditorCreateShortsInput
 	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
@@ -26379,11 +26434,15 @@ export function WorkspacePage({
 	        locale,
 	        isSegmentEditorBrandDirty
 	          ? "Примените бренд ко всему видео"
+	          : hasSegmentEditorPendingVisualDurationMeasurements
+	          ? "Измеряем длительность видео"
 	          : hasSegmentEditorCreateShortsInput
 	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	        isSegmentEditorBrandDirty
 	          ? "Apply brand to video"
+	          : hasSegmentEditorPendingVisualDurationMeasurements
+	          ? "Measuring video duration"
 	          : hasSegmentEditorCreateShortsInput
 	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,

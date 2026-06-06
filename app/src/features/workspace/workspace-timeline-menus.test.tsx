@@ -151,7 +151,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
 
     expect(screen.getByRole("radio", { name: /Видео 5с/ }).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByRole("radio", { name: /Озвучка 3с/ }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("button", { name: /Сохранить длину/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Сохранить длину/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Продлить/ })).toBeTruthy();
 
     screen.getByRole("radio", { name: /Видео 5с/ }).click();
@@ -159,6 +159,18 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(onTrimToVoiceoverToggle).toHaveBeenCalledWith(false);
     expect(onApplyDuration).toHaveBeenCalledWith(0, { trimToVoiceover: false });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not show a save button when trim mode selection applies immediately", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        hasExtensionPlan={false}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /Видео 5с/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
   });
 });
 

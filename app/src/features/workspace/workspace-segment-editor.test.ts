@@ -11,6 +11,8 @@ import {
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
+  shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
 } from "./workspace-segment-editor";
 import {
@@ -269,6 +271,169 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBeNull();
+  });
+
+  it("uses the standard generated-video source duration for the extension menu when only the scene slot is known", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 2.6,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      endTime: 19.5,
+      manualDurationSeconds: 2.6,
+      mediaType: "video",
+      speechDuration: 1.9,
+      speechEndTime: 18.8,
+      speechStartTime: 16.9,
+      startTime: 16.9,
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBeNull();
+    expect(resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(segment)).toBe(5);
+  });
+
+  it("uses the longer current video slot for the extension menu over a stale stored source duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 11.8,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 11.8,
+      manualDurationSeconds: 11.8,
+      mediaType: "video",
+      speechDuration: 11.7,
+      speechEndTime: 11.7,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+    });
+
+    expect(resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(segment)).toBe(11.8);
+  });
+
+  it("auto-trims to voiceover only when the video tail is shorter than one second", () => {
+    expect(shouldAutoTrimWorkspaceSegmentVideoToVoiceover(11.8, 11.7)).toBe(true);
+    expect(shouldAutoTrimWorkspaceSegmentVideoToVoiceover(12.7, 11.7)).toBe(false);
+    expect(shouldAutoTrimWorkspaceSegmentVideoToVoiceover(11.7, 11.8)).toBe(false);
+  });
+
+  it("normalizes a short video tail to the fresh voiceover duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 11.8,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 11.8,
+      manualDurationSeconds: 11.8,
+      mediaType: "video",
+      speechDuration: 11.7,
+      speechDurationSource: "audio",
+      speechEndTime: 11.7,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: 777,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 11.7,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      endTime: 11.7,
+      manualDurationSeconds: 11.7,
+      startTime: 0,
+    }));
+  });
+
+  it("normalizes a stale generated-video visual slot before browser measurement", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 11.8,
+      durationMode: "manual",
+      endTime: 11.8,
+      index: 0,
+      manualDurationSeconds: 11.8,
+      mediaType: "video",
+      startTime: 0,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/projects/77/segments/1/video",
+      currentSourceKind: "ai_generated",
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 15.8,
+      index: 1,
+      manualDurationSeconds: 4,
+      mediaType: "video",
+      speechDuration: 2.7,
+      speechEndTime: 14.5,
+      speechStartTime: 11.8,
+      startTime: 11.8,
+      videoAction: "original",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: null,
+      voiceType: "none",
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.8,
+      manualDurationSeconds: 5,
+      startTime: 11.8,
+    }));
+  });
+
+  it("does not expand a voiceover-trimmed generated-video slot to the default source duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/projects/77/segments/1/video",
+      currentSourceKind: "ai_generated",
+      duration: 2.7,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      endTime: 14.5,
+      index: 1,
+      manualDurationSeconds: 2.7,
+      mediaType: "video",
+      speechDuration: 2.7,
+      speechEndTime: 14.5,
+      speechStartTime: 11.8,
+      startTime: 11.8,
+      videoAction: "original",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: "none",
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.7,
+      durationSyncMode: "voiceover",
+      endTime: 2.7,
+      manualDurationSeconds: 2.7,
+      startTime: 0,
+    }));
   });
 
   it("uses a draft video asset duration as the source visual duration", () => {

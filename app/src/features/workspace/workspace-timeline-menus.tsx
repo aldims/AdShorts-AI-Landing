@@ -229,13 +229,6 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </button>
           </div>
         ) : null}
-        {canTrimToVoiceover && trimToVoiceoverLabels && hasExtensionPlan ? (
-          <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
-            <button type="button" onClick={applyDuration}>
-              {workspaceText(locale, "Сохранить длину", "Save duration")}
-            </button>
-          </div>
-        ) : null}
         {hasExtensionPlan ? (
           <div className="studio-segment-editor__timeline-duration-menu-field studio-segment-editor__timeline-duration-prompt-card">
             <textarea
@@ -278,7 +271,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </div>
           </div>
         ) : null}
-        {!hasExtensionPlan && !shouldShowManualDurationInput ? (
+        {!hasExtensionPlan && !shouldShowManualDurationInput && !canTrimToVoiceover ? (
           <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
             <button type="button" onClick={applyDuration}>
               {workspaceText(locale, "Сохранить", "Save")}
