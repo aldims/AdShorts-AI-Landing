@@ -367,8 +367,25 @@ describe("workspace segment editor timeline", () => {
     ).toBeCloseTo(5.5, 6);
   });
 
-  it("uses voice duration for automatic timing when video is longer", () => {
+  it("keeps known video duration for automatic timing when voice is shorter", () => {
     const segment = createSegment({
+      mediaType: "video",
+      speechDuration: 3.75,
+      text: "voice is shorter than this video segment",
+    });
+
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        visualDurationSeconds: 10,
+        visualKind: "video",
+        voiceEnabled: true,
+      }),
+    ).toBeCloseTo(10, 6);
+  });
+
+  it("trims known video duration only when voiceover sync mode is explicit", () => {
+    const segment = createSegment({
+      durationSyncMode: "voiceover",
       mediaType: "video",
       speechDuration: 3.75,
       text: "voice is shorter than this video segment",

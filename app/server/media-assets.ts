@@ -20,6 +20,9 @@ export type AdsflowMediaAssetPayload = {
   deleted_at?: string | null;
   download_path?: string | null;
   download_url?: string | null;
+  duration?: number | string | null;
+  durationSeconds?: number | string | null;
+  duration_seconds?: number | string | null;
   expires_at?: string | null;
   id?: number | string | null;
   is_current?: boolean | null;
@@ -75,10 +78,21 @@ const normalizeBoolean = (value: unknown) => {
   return null;
 };
 
+const normalizeDurationSeconds = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+
+  return Math.round(numeric * 1000) / 1000;
+};
+
 export const isAdsflowMediaAssetPayload = (value: unknown): value is AdsflowMediaAssetPayload =>
   Boolean(value) && typeof value === "object";
 
-export const buildWorkspaceMediaAssetRef = (value: Partial<AdsflowMediaAssetPayload> | null | undefined) => {
+export const buildWorkspaceMediaAssetRef = (
+  value: Partial<AdsflowMediaAssetPayload> | null | undefined,
+): WorkspaceMediaAssetRef | null => {
   if (!value) {
     return null;
   }
@@ -88,6 +102,10 @@ export const buildWorkspaceMediaAssetRef = (value: Partial<AdsflowMediaAssetPayl
   const deletedAt = normalizeIsoString(value.deleted_at);
   const downloadPath = normalizeText(value.download_path) || null;
   const downloadUrl = normalizeText(value.download_url) || null;
+  const durationSeconds =
+    normalizeDurationSeconds(value.duration_seconds) ??
+    normalizeDurationSeconds(value.durationSeconds) ??
+    normalizeDurationSeconds(value.duration);
   const expiresAt = normalizeIsoString(value.expires_at);
   const kind = normalizeText(value.kind) || null;
   const libraryKind = normalizeText(value.library_kind) || null;
@@ -108,6 +126,7 @@ export const buildWorkspaceMediaAssetRef = (value: Partial<AdsflowMediaAssetPayl
     deletedAt,
     downloadPath,
     downloadUrl,
+    durationSeconds,
     expiresAt,
     isCurrent,
     kind,
@@ -154,6 +173,7 @@ export const mergeWorkspaceMediaAssetRefs = (
     deletedAt: primary.deletedAt ?? fallback.deletedAt,
     downloadPath: primary.downloadPath ?? fallback.downloadPath,
     downloadUrl: primary.downloadUrl ?? fallback.downloadUrl,
+    durationSeconds: primary.durationSeconds ?? fallback.durationSeconds,
     expiresAt: primary.expiresAt ?? fallback.expiresAt,
     isCurrent: primary.isCurrent ?? fallback.isCurrent,
     kind: primary.kind ?? fallback.kind,

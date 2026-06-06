@@ -5337,7 +5337,7 @@ describe("WorkspacePage studio locale defaults", () => {
     }));
   });
 
-  it("does not preserve a stale auto timeline tail when voiceover duration is shorter", () => {
+  it("resets a stale auto timeline tail to the source video duration when voiceover is shorter", () => {
     const voiceText = "Взбейте яйца с сахаром и солью.";
     const firstSegment = createDraftSegment({
       duration: 11.4,
@@ -5389,8 +5389,8 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 2.3,
-      endTime: 13.7,
+      duration: 5,
+      endTime: 16.4,
       startTime: 11.4,
     }));
   });

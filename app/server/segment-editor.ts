@@ -86,6 +86,9 @@ export type AdsflowSegmentEditorResponse = {
 type AdsflowProjectMediaEntryPayload = {
   asset_kind?: string | null;
   download_url?: string | null;
+  duration?: number | string | null;
+  durationSeconds?: number | string | null;
+  duration_seconds?: number | string | null;
   file_name?: string | null;
   file_size?: number | string | null;
   id?: number | string | null;
@@ -1319,6 +1322,9 @@ const buildSegmentMediaAssetFromEntry = (
   const entryAsset = buildWorkspaceMediaAssetRef({
     download_path: entry?.download_url ?? entry?.url ?? null,
     download_url: entry?.download_url ?? null,
+    duration: entry?.duration ?? null,
+    durationSeconds: entry?.durationSeconds ?? null,
+    duration_seconds: entry?.duration_seconds ?? null,
     id: assetId,
     kind: entryKind,
     media_type: entry?.media_type ?? null,

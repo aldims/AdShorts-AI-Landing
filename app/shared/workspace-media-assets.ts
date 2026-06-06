@@ -13,6 +13,7 @@ export type WorkspaceMediaAssetRef = {
   deletedAt: string | null;
   downloadPath: string | null;
   downloadUrl: string | null;
+  durationSeconds?: number | null;
   expiresAt: string | null;
   isCurrent: boolean | null;
   kind: string | null;

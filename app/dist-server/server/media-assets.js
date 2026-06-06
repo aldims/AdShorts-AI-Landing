@@ -31,6 +31,13 @@ const normalizeBoolean = (value) => {
     }
     return null;
 };
+const normalizeDurationSeconds = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return null;
+    }
+    return Math.round(numeric * 1000) / 1000;
+};
 export const isAdsflowMediaAssetPayload = (value) => Boolean(value) && typeof value === "object";
 export const buildWorkspaceMediaAssetRef = (value) => {
     if (!value) {
@@ -41,6 +48,9 @@ export const buildWorkspaceMediaAssetRef = (value) => {
     const deletedAt = normalizeIsoString(value.deleted_at);
     const downloadPath = normalizeText(value.download_path) || null;
     const downloadUrl = normalizeText(value.download_url) || null;
+    const durationSeconds = normalizeDurationSeconds(value.duration_seconds) ??
+        normalizeDurationSeconds(value.durationSeconds) ??
+        normalizeDurationSeconds(value.duration);
     const expiresAt = normalizeIsoString(value.expires_at);
     const kind = normalizeText(value.kind) || null;
     const libraryKind = normalizeText(value.library_kind) || null;
@@ -60,6 +70,7 @@ export const buildWorkspaceMediaAssetRef = (value) => {
         deletedAt,
         downloadPath,
         downloadUrl,
+        durationSeconds,
         expiresAt,
         isCurrent,
         kind,
@@ -99,6 +110,7 @@ export const mergeWorkspaceMediaAssetRefs = (primary, fallback) => {
         deletedAt: primary.deletedAt ?? fallback.deletedAt,
         downloadPath: primary.downloadPath ?? fallback.downloadPath,
         downloadUrl: primary.downloadUrl ?? fallback.downloadUrl,
+        durationSeconds: primary.durationSeconds ?? fallback.durationSeconds,
         expiresAt: primary.expiresAt ?? fallback.expiresAt,
         isCurrent: primary.isCurrent ?? fallback.isCurrent,
         kind: primary.kind ?? fallback.kind,

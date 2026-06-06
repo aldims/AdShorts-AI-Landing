@@ -3241,6 +3241,13 @@ export const isWorkspaceSegmentVoiceoverAssetFresh = (
 export const getStudioCustomVideoFileDurationSeconds = (asset: StudioCustomVideoFile | null | undefined) =>
   normalizeWorkspaceSegmentManualDurationSeconds(asset?.durationSeconds);
 
+export const getWorkspaceMediaAssetDurationSeconds = (asset: WorkspaceMediaAssetRef | null | undefined) =>
+  normalizeWorkspaceSegmentManualDurationSeconds(
+    asset?.durationSeconds ??
+      (asset as { duration_seconds?: unknown } | null | undefined)?.duration_seconds ??
+      (asset as { duration?: unknown } | null | undefined)?.duration,
+  );
+
 export const isWorkspaceSegmentProjectVoiceoverAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
@@ -3385,9 +3392,19 @@ export const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: Workspace
     return visualAssetDuration;
   }
 
-  return getWorkspaceSegmentPreviewKind(segment) === "video"
-    ? normalizeWorkspaceSegmentManualDurationSeconds(segment.duration)
-    : null;
+  const mediaAssetDuration =
+    getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
+    getWorkspaceMediaAssetDurationSeconds(segment.originalAsset);
+  if (mediaAssetDuration !== null) {
+    return mediaAssetDuration;
+  }
+
+  const durationExtensionSourceDurationSeconds = getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  if (durationExtensionSourceDurationSeconds !== null) {
+    return durationExtensionSourceDurationSeconds;
+  }
+
+  return null;
 };
 
 export const getWorkspaceSegmentVideoVisualDurationSeconds = (
@@ -3409,6 +3426,8 @@ export const getWorkspaceSegmentVideoVisualDurationSeconds = (
 
   const directVisualDuration =
     getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
+    getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
+    getWorkspaceMediaAssetDurationSeconds(segment.originalAsset) ??
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
   if (directVisualDuration !== null) {
     return roundWorkspaceSegmentTimelineSeconds(directVisualDuration);
@@ -3660,6 +3679,59 @@ export const syncWorkspaceSegmentsEmbeddedVisualDurations = (
   });
 
   return hasChanges ? nextSegments : segments;
+};
+
+export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  durationSeconds: number | null | undefined,
+): WorkspaceSegmentEditorDraftSegment => {
+  const measuredVisualDuration = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
+  if (measuredVisualDuration === null || getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+    return segment;
+  }
+
+  if (normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover") {
+    return segment;
+  }
+
+  const knownVisualDuration = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
+  if (
+    knownVisualDuration !== null &&
+    areWorkspaceSegmentDurationValuesEqual(knownVisualDuration, measuredVisualDuration)
+  ) {
+    return segment;
+  }
+
+  const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const storedDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  const canCorrectMeasuredVisualDuration =
+    durationMode === "manual" &&
+    durationSyncMode === "visual" &&
+    manualDurationSeconds !== null &&
+    storedDurationExtensionSourceDurationSeconds === null &&
+    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < measuredVisualDuration;
+  const hasManualTimelineOverride =
+    durationMode === "manual" ||
+    manualDurationSeconds !== null ||
+    storedDurationExtensionSourceDurationSeconds !== null;
+  if (hasManualTimelineOverride && !canCorrectMeasuredVisualDuration) {
+    return segment;
+  }
+
+  const duration = roundWorkspaceSegmentTimelineSeconds(measuredVisualDuration);
+  const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+  return {
+    ...segment,
+    duration,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+    manualDurationSeconds: duration,
+    startTime,
+  };
 };
 
 export const getWorkspaceSegmentManualDurationMinimum = (
@@ -4490,6 +4562,7 @@ export const getWorkspaceSegmentRecommendedDurationSeconds = (
 ) => {
   const candidates = [
     getWorkspaceSegmentKnownVisualDurationSeconds(segment),
+    getWorkspaceSegmentCanonicalSlotDurationSeconds(segment),
     getWorkspaceSegmentVoiceoverDurationSeconds(segment, session),
   ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
 
@@ -4859,10 +4932,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
         subtitleColorId: fallbackStudioSubtitleColorOption.id,
         subtitleStyleId: fallbackStudioSubtitleStyleOption.id,
       }).isEnabled,
-    visualDurationSeconds: (segment) =>
-      getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session) !== null
-        ? null
-        : getWorkspaceSegmentKnownVisualDurationSeconds(segment),
+    visualDurationSeconds: (segment) => getWorkspaceSegmentKnownVisualDurationSeconds(segment),
     visualKind: (segment) => (getWorkspaceSegmentPreviewKind(segment) === "video" ? "video" : "image"),
     voiceDurationSeconds: (segment) => getWorkspaceSegmentTimelineVoiceoverDurationSeconds(segment, session),
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),

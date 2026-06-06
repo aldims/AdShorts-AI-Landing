@@ -55,6 +55,7 @@ export type WorkspaceSegmentEditorFullPreviewAudioSeekSyncOptions = {
   nextSourceTime: number;
   trackKind: string;
   voicePausedSeekToleranceSeconds: number;
+  voicePlayingSeekToleranceSeconds?: number;
 };
 
 export type WorkspaceSegmentEditorFullPreviewAudioStartGateSeekOptions = {
@@ -543,7 +544,12 @@ export const shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack = (
 
   const driftSeconds = Math.abs(options.currentSourceTime - options.nextSourceTime);
   if (options.isVoiceTrack) {
-    return options.isPaused && driftSeconds > options.voicePausedSeekToleranceSeconds;
+    if (options.isPaused) {
+      return driftSeconds > options.voicePausedSeekToleranceSeconds;
+    }
+
+    const playingToleranceSeconds = normalizePreviewTime(options.voicePlayingSeekToleranceSeconds);
+    return playingToleranceSeconds !== null && driftSeconds > playingToleranceSeconds;
   }
 
   const toleranceSeconds =

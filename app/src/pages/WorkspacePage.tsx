@@ -267,6 +267,7 @@ import {
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
   studioVideoOptions,
   studioVoiceOptionsByLanguage,
+  syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
@@ -3248,31 +3249,41 @@ export function WorkspacePage({
     [],
   );
 
+  const getSegmentEditorVisualDurationMeasurementCandidates = useCallback(
+    (segment: WorkspaceSegmentEditorDraftSegment) => {
+      if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+        return [];
+      }
+
+      const seenSourceUrls = new Set<string>();
+      return [
+        getWorkspaceSegmentVisualDurationMeasurementUrl(segment)?.trim() ?? "",
+        getWorkspaceSegmentDraftVideoUrl(segment)?.trim() ?? "",
+      ].flatMap((previewUrl) => {
+        const sourceUrl = normalizeWorkspaceVideoSourceUrl(previewUrl);
+        if (!previewUrl || !sourceUrl || seenSourceUrls.has(sourceUrl)) {
+          return [];
+        }
+
+        seenSourceUrls.add(sourceUrl);
+        return [{ previewUrl, sourceUrl }];
+      });
+    },
+    [],
+  );
+
   const segmentEditorVisualDurationMeasurementTargets = useMemo(() => {
     if (!segmentEditorDraft) {
       return [];
     }
 
     return segmentEditorDraft.segments.flatMap((segment) => {
-      if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
-        return [];
-      }
-
-      const measurementUrl = getWorkspaceSegmentVisualDurationMeasurementUrl(segment)?.trim() ?? "";
-      const sourceUrl = normalizeWorkspaceVideoSourceUrl(measurementUrl);
-      if (!measurementUrl || !sourceUrl) {
-        return [];
-      }
-
-      return [
-        {
-          previewUrl: measurementUrl,
-          segmentIndex: segment.index,
-          sourceUrl,
-        },
-      ];
+      return getSegmentEditorVisualDurationMeasurementCandidates(segment).map((candidate) => ({
+        ...candidate,
+        segmentIndex: segment.index,
+      }));
     });
-  }, [segmentEditorDraft]);
+  }, [getSegmentEditorVisualDurationMeasurementCandidates, segmentEditorDraft]);
 
   useEffect(() => {
     if (segmentEditorVisualDurationMeasurementTargets.length === 0) {
@@ -3280,6 +3291,8 @@ export function WorkspacePage({
     }
 
     let cancelled = false;
+    const retryTimers: number[] = [];
+    const maxAttempts = 3;
 
     segmentEditorVisualDurationMeasurementTargets.forEach(({ previewUrl, segmentIndex, sourceUrl }) => {
       const currentEntry = segmentEditorMeasuredVisualDurations[segmentIndex];
@@ -3287,17 +3300,36 @@ export function WorkspacePage({
         return;
       }
 
-      void readWorkspaceVideoDurationSeconds(previewUrl)
-        .then((durationSeconds) => {
-          if (!cancelled) {
-            updateSegmentEditorMeasuredVisualDuration(segmentIndex, sourceUrl, durationSeconds);
-          }
-        })
-        .catch(() => undefined);
+      const measureDuration = (attempt: number) => {
+        void readWorkspaceVideoDurationSeconds(previewUrl)
+          .then((durationSeconds) => {
+            if (cancelled) {
+              return;
+            }
+
+            const normalizedDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
+            if (normalizedDurationSeconds !== null) {
+              updateSegmentEditorMeasuredVisualDuration(segmentIndex, sourceUrl, durationSeconds);
+              return;
+            }
+
+            if (attempt + 1 < maxAttempts) {
+              retryTimers.push(window.setTimeout(() => measureDuration(attempt + 1), 700 * (attempt + 1)));
+            }
+          })
+          .catch(() => {
+            if (!cancelled && attempt + 1 < maxAttempts) {
+              retryTimers.push(window.setTimeout(() => measureDuration(attempt + 1), 700 * (attempt + 1)));
+            }
+          });
+      };
+
+      measureDuration(0);
     });
 
     return () => {
       cancelled = true;
+      retryTimers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [
     segmentEditorMeasuredVisualDurations,
@@ -3307,15 +3339,22 @@ export function WorkspacePage({
 
   const getSegmentEditorMeasuredVisualDurationSeconds = useCallback(
     (segment: WorkspaceSegmentEditorDraftSegment) => {
-      const sourceUrl = normalizeWorkspaceVideoSourceUrl(getWorkspaceSegmentVisualDurationMeasurementUrl(segment));
+      const sourceUrls = getSegmentEditorVisualDurationMeasurementCandidates(segment).map((candidate) => candidate.sourceUrl);
       const measuredDuration = segmentEditorMeasuredVisualDurations[segment.index] ?? null;
-      if (!sourceUrl || measuredDuration?.sourceUrl !== sourceUrl) {
-        return readWorkspaceSegmentVisualDurationCache(sourceUrl);
+      if (measuredDuration && sourceUrls.includes(measuredDuration.sourceUrl)) {
+        return measuredDuration.durationSeconds;
       }
 
-      return measuredDuration.durationSeconds;
+      for (const sourceUrl of sourceUrls) {
+        const cachedDurationSeconds = readWorkspaceSegmentVisualDurationCache(sourceUrl);
+        if (cachedDurationSeconds !== null) {
+          return cachedDurationSeconds;
+        }
+      }
+
+      return null;
     },
-    [segmentEditorMeasuredVisualDurations],
+    [getSegmentEditorVisualDurationMeasurementCandidates, segmentEditorMeasuredVisualDurations],
   );
 
   const getSegmentEditorMeasuredVoiceoverDurationSeconds = useCallback(
@@ -9845,6 +9884,27 @@ export function WorkspacePage({
     }), options);
   };
 
+  const buildSegmentEditorKnownVideoDurationPatch = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    durationSeconds: number | null | undefined,
+  ): Partial<WorkspaceSegmentEditorDraftSegment> => {
+    const visualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
+    if (visualDurationSeconds === null) {
+      return {};
+    }
+
+    const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+    const duration = roundWorkspaceSegmentTimelineSeconds(visualDurationSeconds);
+    return {
+      duration,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+      manualDurationSeconds: duration,
+      startTime,
+    };
+  };
+
   const updateSegmentEditorDraft = (
     updater: (draft: WorkspaceSegmentEditorDraftSession) => WorkspaceSegmentEditorDraftSession,
     options?: {
@@ -9870,6 +9930,34 @@ export function WorkspacePage({
       return nextDraft;
     });
   };
+
+  useEffect(() => {
+    if (!segmentEditorDraft) {
+      return;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    let hasChanges = false;
+    const nextSegments = currentDraft.segments.map((segment) => {
+      const measuredDurationSeconds = getSegmentEditorMeasuredVisualDurationSeconds(segment);
+      const nextSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, measuredDurationSeconds);
+      if (nextSegment !== segment) {
+        hasChanges = true;
+      }
+      return nextSegment;
+    });
+
+    if (!hasChanges) {
+      return;
+    }
+
+    const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...currentDraft,
+      segments: nextSegments,
+    }, { preserveSourceTimelineEnd: false });
+    segmentEditorDraftRef.current = nextDraft;
+    setSegmentEditorDraft(nextDraft);
+  }, [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorDraft]);
 
   const applySegmentEditorGlobalVoiceToAllSegments = (
     draft: WorkspaceSegmentEditorDraftSession,
@@ -10943,6 +11031,7 @@ export function WorkspacePage({
           objectUrl,
           source: "upload",
         },
+        ...buildSegmentEditorKnownVideoDurationPatch(segment, mimeType.startsWith("video/") ? durationSeconds : null),
         durationExtensionSourceDurationSeconds: null,
         visualReset: false,
         videoAction: "custom",
@@ -11115,9 +11204,16 @@ export function WorkspacePage({
       source: item.source,
       targetSegmentIndex,
     });
+    const selectedMediaLibraryAsset = createStudioCustomVideoFileFromMediaLibraryItem(item);
+    const selectedMediaLibraryDurationSeconds =
+      getWorkspaceSegmentCustomPreviewKind(selectedMediaLibraryAsset) === "video"
+        ? getStudioCustomVideoFileDurationSeconds(selectedMediaLibraryAsset)
+        : null;
+
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
-      customVideo: createStudioCustomVideoFileFromMediaLibraryItem(item),
+      customVideo: selectedMediaLibraryAsset,
+      ...buildSegmentEditorKnownVideoDurationPatch(segment, selectedMediaLibraryDurationSeconds),
       durationExtensionSourceDurationSeconds: null,
       visualReset: false,
       videoAction: "custom",
@@ -12064,6 +12160,7 @@ export function WorkspacePage({
                 posterUrl: preferredPosterUrl,
               }
             : payload.data.asset;
+          const nextAiVideoDurationSeconds = getStudioCustomVideoFileDurationSeconds(nextAiVideoAsset);
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
@@ -12072,6 +12169,7 @@ export function WorkspacePage({
             aiVideoGeneratedFromPrompt: options.prompt,
             aiVideoPrompt: options.prompt,
             aiVideoPromptInitialized: true,
+            ...buildSegmentEditorKnownVideoDurationPatch(segment, nextAiVideoDurationSeconds),
             durationExtensionSourceDurationSeconds: null,
             visualReset: false,
             videoAction: "ai",
@@ -20486,8 +20584,32 @@ export function WorkspacePage({
         element.muted = true;
         element.defaultMuted = true;
         element.volume = 0;
-        element.loop = true;
+        element.loop = Boolean(track.loop);
         ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+        if (!track.loop) {
+          const inactiveSourceTime = getSegmentEditorFullPreviewTrackSourceTime(
+            track,
+            track.timelineStartTime,
+            element,
+          );
+          const mediaCurrentTime = Number.isFinite(element.currentTime) ? element.currentTime : null;
+          if (
+            Number.isFinite(inactiveSourceTime) &&
+            (mediaCurrentTime === null ||
+              Math.abs(mediaCurrentTime - inactiveSourceTime) >
+                WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS)
+          ) {
+            try {
+              element.currentTime = inactiveSourceTime;
+            } catch {
+              // Metadata may not be ready yet; preparation already installs a metadata retry.
+            }
+          }
+          if (!element.paused) {
+            element.pause();
+          }
+          return;
+        }
         if (element.ended) {
           try {
             element.currentTime = 0;
@@ -21366,8 +21488,7 @@ export function WorkspacePage({
 
     if (
       segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key) &&
-      !element.paused &&
-      !element.ended
+      (!track.loop || (!element.paused && !element.ended))
     ) {
       return;
     }
@@ -21376,11 +21497,30 @@ export function WorkspacePage({
     element.muted = true;
     element.defaultMuted = true;
     element.volume = 0;
-    element.loop = true;
+    element.loop = Boolean(track.loop);
     ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
-    void playSegmentEditorFullPreviewAudioElement(track, element, "unlock").catch(() => {
+    void playSegmentEditorFullPreviewAudioElement(track, element, "unlock").then(
+      () => {
+        if (
+          !track.loop &&
+          !isSegmentEditorFullPreviewAudioTrackActive(
+            track,
+            segmentEditorFullPreviewTimeRef.current,
+            element,
+          )
+        ) {
+          element.pause();
+          seekSegmentEditorFullPreviewPreparedAudioElement(
+            track,
+            element,
+            segmentEditorFullPreviewTimeRef.current,
+          );
+        }
+      },
+      () => {
         segmentEditorFullPreviewUnlockedAudioKeysRef.current.delete(track.key);
-      });
+      },
+    );
   };
   const prepareSegmentEditorFullPreviewUpcomingAudioTracks = (currentTime: number) => {
     const lookaheadTime = currentTime + WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_LOOKAHEAD_SECONDS;
@@ -21402,7 +21542,7 @@ export function WorkspacePage({
       element.muted = true;
       element.defaultMuted = true;
       element.volume = 0;
-      element.loop = true;
+      element.loop = Boolean(track.loop);
       ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
       seekSegmentEditorFullPreviewPreparedAudioElement(track, element, track.timelineStartTime);
       void waitForSegmentEditorFullPreviewMediaElementReady(element, {
@@ -21585,7 +21725,7 @@ export function WorkspacePage({
         element.muted = true;
         element.defaultMuted = true;
         element.volume = 0;
-        element.loop = true;
+        element.loop = Boolean(track.loop);
         unlockSegmentEditorFullPreviewAudioElement(track, element);
       });
 
@@ -21866,6 +22006,7 @@ export function WorkspacePage({
         nextSourceTime,
         trackKind: track.kind,
         voicePausedSeekToleranceSeconds: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS,
+        voicePlayingSeekToleranceSeconds: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS,
       });
       if (shouldSeekAudio) {
         writeSegmentEditorFullPreviewDebugTrace("audio.seek.sync", {

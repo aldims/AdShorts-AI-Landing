@@ -181,7 +181,7 @@ export const readWorkspaceVideoDurationSeconds = async (sourceUrl: string) => {
   try {
     const isReady = await waitForWorkspaceVideoElementReady(video, {
       minimumReadyState: HTMLMediaElement.HAVE_METADATA,
-      timeoutMs: 3500,
+      timeoutMs: 9000,
     });
     const duration = isReady && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
     return duration;

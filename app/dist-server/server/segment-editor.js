@@ -732,6 +732,9 @@ const buildSegmentMediaAssetFromEntry = (entry, projectMediaByAssetId, options) 
     const entryAsset = buildWorkspaceMediaAssetRef({
         download_path: entry?.download_url ?? entry?.url ?? null,
         download_url: entry?.download_url ?? null,
+        duration: entry?.duration ?? null,
+        durationSeconds: entry?.durationSeconds ?? null,
+        duration_seconds: entry?.duration_seconds ?? null,
         id: assetId,
         kind: entryKind,
         media_type: entry?.media_type ?? null,

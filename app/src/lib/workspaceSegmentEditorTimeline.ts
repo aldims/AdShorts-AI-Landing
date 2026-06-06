@@ -8,6 +8,7 @@ export type WorkspaceSegmentDurationMode = "auto" | "manual";
 export type WorkspaceSegmentTimelineSegment = {
   duration?: number | null;
   durationMode?: WorkspaceSegmentDurationMode | null;
+  durationSyncMode?: "voiceover" | "visual" | null;
   endTime?: number | null;
   manualDurationSeconds?: number | null;
   mediaType?: string | null;
@@ -240,6 +241,8 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
   const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
+  const durationSyncMode = String(segment.durationSyncMode ?? "").trim().toLowerCase();
+  const shouldSyncVideoToVoiceover = visualKind === "video" && durationSyncMode === "voiceover";
   const timelineDuration =
     getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
   const existingStillDuration =
@@ -258,6 +261,14 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     );
   }
 
+  if (shouldSyncVideoToVoiceover && voiceDuration !== null) {
+    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
+  }
+
+  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
+    return Math.max(minimumDuration, visualDuration);
+  }
+
   if (voiceDuration !== null) {
     if (options?.preserveExistingStillDuration && existingStillDuration !== null) {
       return Math.max(
@@ -268,10 +279,6 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     }
 
     return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
-  }
-
-  if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {
-    return Math.max(minimumDuration, visualDuration);
   }
 
   if (options?.subtitleEnabled === false && visualKind === "image") {

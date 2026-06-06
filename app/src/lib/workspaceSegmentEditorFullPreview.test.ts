@@ -466,6 +466,22 @@ describe("workspace segment editor full preview", () => {
     ).toBe(false);
   });
 
+  it("re-syncs a playing voice track after a large source-time drift", () => {
+    expect(
+      shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack({
+        audioSeekToleranceSeconds: 0.09,
+        currentSourceTime: 2,
+        isPaused: false,
+        isVoiceTrack: true,
+        musicSeekToleranceSeconds: 0.75,
+        nextSourceTime: 11,
+        trackKind: "voice",
+        voicePausedSeekToleranceSeconds: 0.04,
+        voicePlayingSeekToleranceSeconds: 0.75,
+      }),
+    ).toBe(true);
+  });
+
   it("re-seeks a pre-armed voice track that is ahead of the expected start source time", () => {
     expect(
       shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack({

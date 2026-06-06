@@ -4,12 +4,14 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import {
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentKnownVisualDurationSeconds,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getStudioSceneSoundAssetPreviewMediaKind,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  syncWorkspaceSegmentMeasuredVideoVisualDuration,
 } from "./workspace-segment-editor";
 import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
@@ -256,6 +258,206 @@ describe("workspace segment editor subtitle availability", () => {
 });
 
 describe("workspace segment editor project voiceover timeline", () => {
+  it("does not treat an existing scene slot as the source video duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 3.8,
+      endTime: 3.8,
+      mediaType: "video",
+      speechDuration: 2.1,
+      speechEndTime: 2.1,
+      speechStartTime: 0,
+    });
+
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBeNull();
+  });
+
+  it("uses a draft video asset duration as the source visual duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 3.8,
+      endTime: 3.8,
+      mediaType: "video",
+      videoAction: "custom",
+    });
+
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(5);
+  });
+
+  it("uses a persisted media asset duration as the source visual duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 5025,
+        createdAt: null,
+        deletedAt: null,
+        downloadPath: "/api/media/5025/download",
+        downloadUrl: null,
+        durationSeconds: 5,
+        expiresAt: null,
+        isCurrent: true,
+        kind: "segment_current",
+        libraryKind: null,
+        lifecycle: "ready",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        originalUrl: null,
+        playbackUrl: "/api/media/5025/download",
+        projectId: 3737,
+        role: "segment_current",
+        segmentIndex: 1,
+        sourceKind: "upload",
+        status: "ready",
+        storageKey: null,
+      },
+      duration: 3.8,
+      endTime: 3.8,
+      mediaType: "video",
+    });
+
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(5);
+  });
+
+  it("syncs an auto video scene slot to the measured source video duration", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 11.1,
+      durationMode: "manual",
+      endTime: 11.1,
+      index: 0,
+      manualDurationSeconds: 11.1,
+      startTime: 0,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 3.8,
+      endTime: 14.9,
+      index: 1,
+      mediaType: "video",
+      speechDuration: 2.1,
+      speechEndTime: 2.1,
+      speechStartTime: 0,
+      startTime: 11.1,
+      videoAction: "custom",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+
+    const syncedSecondSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(secondSegment, 5);
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: null,
+      voiceType: "none",
+      segments: [firstSegment, syncedSecondSegment],
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.1,
+      manualDurationSeconds: 5,
+      startTime: 11.1,
+    }));
+  });
+
+  it("does not replace a voiceover-trimmed video scene with measured visual duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 2.1,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.1,
+      index: 0,
+      mediaType: "video",
+      speechDuration: 2.1,
+      speechEndTime: 2.1,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "custom",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 5)).toBe(segment);
+  });
+
+  it("corrects a measured visual duration that arrives after a shorter visual slot", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 3.8,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 14.9,
+      index: 1,
+      manualDurationSeconds: 3.8,
+      mediaType: "video",
+      startTime: 11.1,
+      videoAction: "custom",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 5)).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.1,
+      manualDurationSeconds: 5,
+      startTime: 11.1,
+    }));
+  });
+
+  it("does not shrink an intentionally extended visual duration to the measured source video duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 10,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 21.1,
+      index: 1,
+      manualDurationSeconds: 10,
+      mediaType: "video",
+      startTime: 11.1,
+      videoAction: "custom",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 5)).toBe(segment);
+  });
+
   it("does not use duration-only speech metadata as a seekable project voiceover range", () => {
     const text = "Взбейте яйца с сахаром и солью.";
     const segment = createProjectVoiceoverSegment({
