@@ -208,6 +208,7 @@ import {
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
   getWorkspaceSegmentSelectedVisualPreviewKind,
+  getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
   getWorkspaceSegmentSubtitleTypeOverrideId,
@@ -265,6 +266,7 @@ import {
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   rewriteWorkspaceSegmentProjectProxyUrl,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
+  shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
@@ -890,6 +892,7 @@ export {
   restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
+  shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
@@ -19830,13 +19833,17 @@ export function WorkspacePage({
       segmentEditorChecklistBaseSession?.projectId === currentDraft.projectId
         ? segmentEditorChecklistBaseSession.segments.find((segment) => segment.index === segmentIndex) ?? null
         : null;
-    const durationExtensionSourceDurationSeconds = resolveWorkspaceSegmentDurationExtensionSourceDurationSeconds(
-      currentSegment,
-      timing.duration,
-      baselineSegment,
-      { sourceDurationSeconds: options?.sourceDurationSeconds },
-    );
     const durationSyncMode = options?.durationSyncMode === "voiceover" ? "voiceover" : "visual";
+    const explicitSourceDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.sourceDurationSeconds);
+    const durationExtensionSourceDurationSeconds =
+      durationSyncMode === "visual" && explicitSourceDurationSeconds !== null
+        ? roundWorkspaceSegmentTimelineSeconds(explicitSourceDurationSeconds)
+        : resolveWorkspaceSegmentDurationExtensionSourceDurationSeconds(
+            currentSegment,
+            timing.duration,
+            baselineSegment,
+            { sourceDurationSeconds: options?.sourceDurationSeconds },
+          );
     updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
       ...segment,
       duration: timing.duration,
@@ -20303,7 +20310,9 @@ export function WorkspacePage({
           currentDraftSegment.voiceoverAsset?.durationSeconds,
         );
         const shouldPreserveCurrentManualVisualDuration =
-          shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentDraftSegment, nextDurationSeconds);
+          shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentDraftSegment, nextDurationSeconds) ||
+          (getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(currentDraftSegment) !== null &&
+            shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover(currentDraftSegment, nextDurationSeconds));
         const hasExpectedTimelineDurationSync =
           shouldPreserveCurrentManualVisualDuration ||
           (normalizeWorkspaceSegmentDurationSyncMode(currentDraftSegment.durationSyncMode) === "voiceover" &&
@@ -20336,7 +20345,9 @@ export function WorkspacePage({
           }
 
           const shouldPreserveManualVisualDuration =
-            shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentSegment, nextDurationSeconds);
+            shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentSegment, nextDurationSeconds) ||
+            (getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(currentSegment) !== null &&
+              shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover(currentSegment, nextDurationSeconds));
           const nextVoiceoverAsset =
             latestSceneVoiceoverAudioUrl !== null && currentSegment.voiceoverAsset
               ? {

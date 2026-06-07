@@ -4722,7 +4722,7 @@ export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
   );
 };
 
-const shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover = (
+export const shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover = (
   segment: WorkspaceSegmentEditorDraftSegment,
   voiceoverDurationSeconds: number | null | undefined,
 ) => {
@@ -4801,7 +4801,10 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
       hasManualVideoTimelineOverride &&
       (durationSyncMode !== "visual" ||
         isWorkspaceSegmentGeneratedVideoVisual(segment) ||
-        (hasSceneOnlyVoiceoverSession && latestVisualAction === "custom" && isManualVideoTimelineAtSourceDuration))) ||
+        (hasSceneOnlyVoiceoverSession &&
+          latestVisualAction === "custom" &&
+          isManualVideoTimelineAtSourceDuration &&
+          storedDurationExtensionSourceDurationSeconds === null))) ||
     (hasFreshCustomVideoProjectVoiceoverTimelineDuration && hasManualVideoTimelineOverride);
 
   if (

@@ -75,6 +75,7 @@ import {
   resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo,
   restoreWorkspaceSegmentSceneSoundState,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
+  shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
@@ -5102,6 +5103,67 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 4.9)).toBe(true);
     expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 12.1)).toBe(false);
+  });
+
+  it("keeps a user-selected full video duration when voiceover is shorter", () => {
+    const voiceText = "Короткая озвучка";
+    const segment = createDraftSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      index: 0,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 2.6,
+      speechDurationSource: "audio",
+      speechEndTime: 2.6,
+      speechStartTime: 0,
+      startTime: 0,
+      text: voiceText,
+      textByLanguage: { ru: voiceText },
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 780,
+        durationSeconds: 2.6,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-5/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 2.6)).toBe(false);
+    expect(shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover(segment, 2.6)).toBe(true);
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...createDraftSession(segment),
+      ttsAssetId: null,
+      voiceType: "none",
+    });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      startTime: 0,
+    }));
   });
 
   it("trims a generated video duration to a freshly generated shorter voiceover", () => {
