@@ -12681,6 +12681,7 @@ export function WorkspacePage({
             aiVideoPromptInitialized: true,
             photoAnimationSourceAsset:
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+            ...buildSegmentEditorKnownVideoDurationPatch(segment, generatedDurationSeconds),
             durationExtensionSourceDurationSeconds: null,
             visualReset: false,
             videoAction: "talking_photo",

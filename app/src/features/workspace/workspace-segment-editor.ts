@@ -3418,10 +3418,15 @@ export const getWorkspaceSegmentCanonicalSlotDurationSeconds = (segment: Workspa
 
 export const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
-    return (
-      getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) ??
-      getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment))
+    const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+    const assetDurationSeconds = getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment));
+    const durationCandidates = [slotDurationSeconds, assetDurationSeconds].filter(
+      (value): value is number => value !== null && Number.isFinite(value) && value > 0,
     );
+
+    return durationCandidates.length > 0
+      ? roundWorkspaceSegmentTimelineSeconds(Math.max(...durationCandidates))
+      : null;
   }
 
   const visualAsset = getWorkspaceSegmentDraftVisualAsset(segment);

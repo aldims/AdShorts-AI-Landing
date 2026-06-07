@@ -6770,7 +6770,7 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
-  it("rejects talking photo export when the generated media is materially longer than the segment slot", async () => {
+  it("extends talking photo export when the generated media is materially longer than the segment slot", async () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         assetId: 909,
@@ -6790,8 +6790,19 @@ describe("WorkspacePage studio locale defaults", () => {
       videoAction: "talking_photo",
     });
 
-    await expect(buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" })).rejects.toThrow(
-      "Говорящий персонаж сегмента 1 длиннее таймлайна сцены",
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 909,
+        duration: 6.7,
+        durationMode: "manual",
+        endTime: 6.7,
+        manualDurationSeconds: 6.7,
+        startTime: 0,
+        videoAction: "custom",
+        voiceType: "none",
+      }),
     );
   });
 
