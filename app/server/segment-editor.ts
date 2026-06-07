@@ -1496,6 +1496,7 @@ const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаю�
 const SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE = "Project components are still being prepared";
 const SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS = 30 * 60_000;
 const SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS = 6_500;
+const SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS = 5;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map<string, number>();
@@ -2326,6 +2327,25 @@ const getWorkspaceSegmentEditorPayloadSourceDurationSeconds = (
   normalizeManualDurationSeconds(payload.sourceDurationSeconds) ??
   normalizeManualDurationSeconds(payload.source_duration_seconds);
 
+const isWorkspaceSegmentEditorGeneratedVideoEntry = (
+  entry: AdsflowProjectMediaEntryPayload | null | undefined,
+) => detectWorkspaceSegmentSourceKind(entry) === "ai_generated" && isProjectMediaEntryVideo(entry);
+
+const normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds = (
+  durationSeconds: number | null,
+  currentEntry: AdsflowProjectMediaEntryPayload | null | undefined,
+  originalEntry?: AdsflowProjectMediaEntryPayload | null | undefined,
+) => {
+  if (
+    isWorkspaceSegmentEditorGeneratedVideoEntry(currentEntry) ||
+    isWorkspaceSegmentEditorGeneratedVideoEntry(originalEntry)
+  ) {
+    return Math.max(durationSeconds ?? 0, SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS);
+  }
+
+  return durationSeconds;
+};
+
 const getWorkspaceProjectMediaEntryDurationSeconds = (
   entry: AdsflowProjectMediaEntryPayload | null | undefined,
 ) => {
@@ -2333,11 +2353,11 @@ const getWorkspaceProjectMediaEntryDurationSeconds = (
     return null;
   }
 
-  return (
+  const durationSeconds =
     normalizeManualDurationSeconds(entry.durationSeconds) ??
     normalizeManualDurationSeconds(entry.duration_seconds) ??
-    normalizeManualDurationSeconds(entry.duration)
-  );
+    normalizeManualDurationSeconds(entry.duration);
+  return normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(durationSeconds, entry);
 };
 
 export const buildWorkspaceSegmentEditorSessionFromPayload = (
@@ -2515,9 +2535,13 @@ export const buildWorkspaceSegmentEditorSegment = (
   });
   const durationExtensionSourceDurationSeconds =
     resolvedMediaType === "video"
-      ? getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
-        getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
-        getWorkspaceProjectMediaEntryDurationSeconds(originalEntry)
+      ? normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(
+          getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
+            getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
+            getWorkspaceProjectMediaEntryDurationSeconds(originalEntry),
+          currentEntry,
+          originalEntry,
+        )
       : null;
   const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
   const projectSceneSoundEntry = findProjectSceneSoundMediaEntry(

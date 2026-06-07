@@ -189,6 +189,7 @@ import {
   getWorkspaceSegmentDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentDurationExtensionStillSourceAsset,
   getWorkspaceSegmentDraftVisualAsset,
+  getWorkspaceSegmentCanonicalSlotDurationSeconds,
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
@@ -219,6 +220,7 @@ import {
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasStudioBranding,
+  hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentDraftTextEdited,
@@ -228,6 +230,7 @@ import {
   isWorkspaceSegmentImageFile,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentProjectVoiceoverAsset,
+  isWorkspaceSegmentGeneratedVideoVisual,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   normalizeLegacyWorkspaceSegmentEditorDraftSession,
   normalizeStudioLanguageValue,
@@ -272,6 +275,7 @@ import {
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
+  WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
   WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
@@ -9087,6 +9091,37 @@ export function WorkspacePage({
     segmentEditorConsumedSourceResetProjectIdsRef.current.add(normalizedProjectId);
   };
 
+  const shouldRefreshSegmentEditorDraftSourceDurations = (draft: WorkspaceSegmentEditorDraftSession | null | undefined) =>
+    Boolean(
+      draft?.segments.some((segment) => {
+        if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+          return false;
+        }
+
+        const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+        const knownVisualDurationSeconds = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
+        if (
+          !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
+          knownVisualDurationSeconds === null &&
+          normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) !== "voiceover"
+        ) {
+          return true;
+        }
+
+        if (!isWorkspaceSegmentGeneratedVideoVisual(segment)) {
+          return false;
+        }
+
+        return (
+          slotDurationSeconds !== null &&
+          slotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS &&
+          (knownVisualDurationSeconds === null ||
+            knownVisualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS <
+              WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS)
+        );
+      }),
+    );
+
   const ensureSegmentEditorDraftForProject = async (
     projectId: number,
     options?: {
@@ -9160,6 +9195,8 @@ export function WorkspacePage({
         : segmentEditorDraftRef.current?.projectId === projectId
           ? segmentEditorDraftRef.current
           : null;
+    const shouldRefreshActiveDraftSourceDurations =
+      shouldRefreshSegmentEditorDraftSourceDurations(activeSegmentEditorDraft);
     const isActiveSegmentEditorDraftOpenInState = segmentEditorDraft?.projectId === projectId;
     const shouldSkipActiveDraftReopen = shouldSkipWorkspaceSegmentEditorActiveDraftReopen(
       projectId,
@@ -9172,7 +9209,13 @@ export function WorkspacePage({
       createMode === "segment-editor",
     );
 
-    if (activeSegmentEditorDraft && !shouldDiscardLocalDraft && !options?.forceRefresh && !options?.bypassCache) {
+    if (
+      activeSegmentEditorDraft &&
+      !shouldRefreshActiveDraftSourceDurations &&
+      !shouldDiscardLocalDraft &&
+      !options?.forceRefresh &&
+      !options?.bypassCache
+    ) {
       logSegmentEditorDiagnostics("client.segment-editor.load.reuse-active-draft", {
         projectId,
         requestedSegmentIndex,

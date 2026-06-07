@@ -506,6 +506,95 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(withInsertedSegment.segments[2]?.endTime).toBeCloseTo(19.1);
   });
 
+  it("keeps a generated-video visual slot at its stored source duration when a blank scene is appended", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 11.7,
+      durationMode: "manual",
+      endTime: 11.7,
+      index: 0,
+      manualDurationSeconds: 11.7,
+      mediaType: "video",
+      speechDuration: 11.7,
+      speechEndTime: 11.7,
+      speechStartTime: 0,
+      startTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 5025,
+        createdAt: null,
+        deletedAt: null,
+        downloadPath: "/api/media/5025/download",
+        downloadUrl: null,
+        durationSeconds: 4.1,
+        expiresAt: null,
+        isCurrent: true,
+        kind: "segment_current",
+        libraryKind: null,
+        lifecycle: "ready",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        originalUrl: null,
+        playbackUrl: "/api/media/5025/download",
+        projectId: 77,
+        role: "segment_current",
+        segmentIndex: 1,
+        sourceKind: "ai_generated",
+        status: "ready",
+        storageKey: null,
+      },
+      currentPlaybackUrl: "/api/workspace/projects/77/segments/1/video",
+      currentSourceKind: "ai_generated",
+      duration: 4.1,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "auto",
+      durationSyncMode: "visual",
+      endTime: 15.8,
+      index: 1,
+      manualDurationSeconds: null,
+      mediaType: "video",
+      speechDuration: 2.7,
+      speechEndTime: 14.4,
+      speechStartTime: 11.7,
+      startTime: 11.7,
+      videoAction: "original",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      segments: [firstSegment, secondSegment],
+    }, { preserveSourceTimelineEnd: false });
+    const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: normalized,
+      insertAt: normalized.segments.length,
+    });
+    const withInsertedSegment = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...normalized,
+      segments: [...normalized.segments, insertedSegment],
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.7,
+      manualDurationSeconds: 5,
+      startTime: 11.7,
+    }));
+    expect(withInsertedSegment.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.7,
+      manualDurationSeconds: 5,
+      startTime: 11.7,
+    }));
+  });
+
   it("refreshes stored original-video source duration from the fresh server session", () => {
     const segment = createProjectVoiceoverSegment({
       currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=1&source=original",
@@ -545,11 +634,54 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
       duration: 5,
       durationExtensionSourceDurationSeconds: 5,
-      durationMode: "auto",
-      manualDurationSeconds: null,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      manualDurationSeconds: 5,
     }));
     expect(refreshed.segments[0]?.durationSyncMode).not.toBe("voiceover");
     expect(getWorkspaceSegmentKnownVisualDurationSeconds(refreshed.segments[0])).toBe(5);
+  });
+
+  it("adopts a longer fresh server video duration over a stale live draft duration", () => {
+    const liveSegment = createProjectVoiceoverSegment({
+      currentSourceKind: "upload",
+      duration: 2.7,
+      durationMode: "manual",
+      endTime: 14.3,
+      index: 1,
+      manualDurationSeconds: 2.7,
+      mediaType: "video",
+      speechDuration: 2.7,
+      speechEndTime: 14.3,
+      speechStartTime: 11.7,
+      startTime: 11.7,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const freshSegment = createProjectVoiceoverSegment({
+      ...liveSegment,
+      duration: 5.042,
+      durationMode: "manual",
+      endTime: 16.742,
+      manualDurationSeconds: 5.042,
+    });
+    const liveDraft = createProjectVoiceoverDraft([liveSegment]);
+    const freshSession = createProjectVoiceoverDraft([freshSegment]);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      baselineSession: freshSession,
+      preserveLiveStructure: true,
+      preserveUnbaselinedManualDuration: true,
+    });
+
+    expect(refreshed.segments[0]).toEqual(expect.objectContaining({
+      duration: 5.042,
+      durationMode: "manual",
+      endTime: 5.042,
+      manualDurationSeconds: 5.042,
+      startTime: 0,
+    }));
   });
 
   it("does not overwrite a custom visual source duration during a server refresh", () => {
@@ -642,6 +774,41 @@ describe("workspace segment editor project voiceover timeline", () => {
       },
       duration: 3.8,
       endTime: 3.8,
+      mediaType: "video",
+    });
+
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(5);
+  });
+
+  it("uses the generated-video source duration over a trimmed media asset duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 5025,
+        createdAt: null,
+        deletedAt: null,
+        downloadPath: "/api/media/5025/download",
+        downloadUrl: null,
+        durationSeconds: 4.1,
+        expiresAt: null,
+        isCurrent: true,
+        kind: "segment_current",
+        libraryKind: null,
+        lifecycle: "ready",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        originalUrl: null,
+        playbackUrl: "/api/media/5025/download",
+        projectId: 3737,
+        role: "segment_current",
+        segmentIndex: 1,
+        sourceKind: "ai_generated",
+        status: "ready",
+        storageKey: null,
+      },
+      currentSourceKind: "ai_generated",
+      duration: 4.1,
+      durationExtensionSourceDurationSeconds: 5,
+      endTime: 4.1,
       mediaType: "video",
     });
 

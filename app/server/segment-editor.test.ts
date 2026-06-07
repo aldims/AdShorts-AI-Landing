@@ -191,7 +191,7 @@ describe("segment editor asset lifecycle mapping", () => {
           {},
           {
             download_url: "/api/media/1202/download",
-            duration_seconds: 5,
+            duration_seconds: 4.1,
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_current",
@@ -202,7 +202,7 @@ describe("segment editor asset lifecycle mapping", () => {
           {},
           {
             download_url: "/api/media/1202/download",
-            duration_seconds: 5,
+            duration_seconds: 4.1,
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_original",
@@ -218,6 +218,41 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.durationExtensionSourceDurationSeconds).toBe(5);
     expect(segment?.duration_extension_source_duration_seconds).toBe(5);
     expect(segment?.currentSourceKind).toBe("ai_generated");
+  });
+
+  it("keeps generated video source duration at the default when upstream sends a trimmed source duration", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 4.1,
+        index: 1,
+        media_type: "video",
+        original_video: "original-marker",
+        source_duration_seconds: 4.1,
+        text: "Whisk eggs with sugar and salt.",
+      },
+      {
+        currentEntries: [
+          {},
+          {
+            download_url: "/api/media/1202/download",
+            duration_seconds: 4.1,
+            media_type: "video",
+            mime_type: "video/mp4",
+            role: "segment_current",
+            source_kind: "ai_generated",
+          },
+        ],
+        originalEntries: [],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: false,
+      },
+    );
+
+    expect(segment?.duration).toBe(4.1);
+    expect(segment?.durationExtensionSourceDurationSeconds).toBe(5);
+    expect(segment?.duration_extension_source_duration_seconds).toBe(5);
   });
 
   it("prefers explicit editor source duration from upstream payload over media entry duration", () => {

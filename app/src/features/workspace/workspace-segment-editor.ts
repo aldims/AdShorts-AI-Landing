@@ -3248,6 +3248,27 @@ export const getWorkspaceMediaAssetDurationSeconds = (asset: WorkspaceMediaAsset
       (asset as { duration?: unknown } | null | undefined)?.duration,
   );
 
+const getWorkspaceSegmentMediaAssetVisualDurationSeconds = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const mediaAssetDuration =
+    getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
+    getWorkspaceMediaAssetDurationSeconds(segment.originalAsset);
+  const durationExtensionSourceDurationSeconds = getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+
+  if (isWorkspaceSegmentGeneratedVideoVisual(segment)) {
+    const generatedVideoDurationCandidates = [
+      mediaAssetDuration,
+      durationExtensionSourceDurationSeconds,
+      WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
+    ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
+
+    return generatedVideoDurationCandidates.length > 0
+      ? roundWorkspaceSegmentTimelineSeconds(Math.max(...generatedVideoDurationCandidates))
+      : null;
+  }
+
+  return mediaAssetDuration ?? durationExtensionSourceDurationSeconds;
+};
+
 export const isWorkspaceSegmentProjectVoiceoverAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
@@ -3392,16 +3413,9 @@ export const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: Workspace
     return visualAssetDuration;
   }
 
-  const mediaAssetDuration =
-    getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
-    getWorkspaceMediaAssetDurationSeconds(segment.originalAsset);
-  if (mediaAssetDuration !== null) {
-    return mediaAssetDuration;
-  }
-
-  const durationExtensionSourceDurationSeconds = getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  if (durationExtensionSourceDurationSeconds !== null) {
-    return durationExtensionSourceDurationSeconds;
+  const mediaAssetVisualDurationSeconds = getWorkspaceSegmentMediaAssetVisualDurationSeconds(segment);
+  if (mediaAssetVisualDurationSeconds !== null) {
+    return mediaAssetVisualDurationSeconds;
   }
 
   return null;
@@ -3426,9 +3440,7 @@ export const getWorkspaceSegmentVideoVisualDurationSeconds = (
 
   const directVisualDuration =
     getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
-    getWorkspaceMediaAssetDurationSeconds(segment.originalAsset) ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+    getWorkspaceSegmentMediaAssetVisualDurationSeconds(segment);
   if (directVisualDuration !== null) {
     return roundWorkspaceSegmentTimelineSeconds(directVisualDuration);
   }
@@ -3794,22 +3806,32 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
     return segment;
   }
 
-  if (
-    getWorkspaceSegmentKnownVisualDurationSeconds(segment) !== null ||
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) !== null
-  ) {
-    return segment;
-  }
-
   const currentSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+  const knownSourceDurationSeconds =
+    getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  const sourceDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
+    Math.max(
+      knownSourceDurationSeconds ?? 0,
+      WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
+    ),
+  );
+  if (currentSlotDurationSeconds === null) {
+    return segment;
+  }
+
+  const duration = roundWorkspaceSegmentTimelineSeconds(Math.max(currentSlotDurationSeconds, sourceDurationSeconds));
   if (
-    currentSlotDurationSeconds === null ||
-    currentSlotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
+    durationSyncMode === "visual" &&
+    areWorkspaceSegmentDurationValuesEqual(
+      normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
+      duration,
+    )
   ) {
     return segment;
   }
 
-  const duration = roundWorkspaceSegmentTimelineSeconds(WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS);
   const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
   return {
     ...segment,
@@ -4760,8 +4782,8 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
 
   if (
     isVideoVisualSegment &&
-    knownVideoVisualDurationSeconds !== null &&
-    knownVideoVisualDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+    currentVideoDurationSeconds !== null &&
+    currentVideoDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
   ) {
     return segment;
   }
@@ -5391,11 +5413,23 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       : null;
   const liveDurationMode = normalizeWorkspaceSegmentDurationMode(liveSegment.durationMode);
   const liveManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(liveSegment.manualDurationSeconds);
+  const liveSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(liveSegment);
+  const freshSlotDurationSeconds =
+    normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.manualDurationSeconds) ??
+    normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.duration);
+  const shouldAdoptFreshVideoSourceDuration =
+    getWorkspaceSegmentSelectedVisualPreviewKind(liveSegment) === "video" &&
+    normalizeWorkspaceSegmentMediaType(normalizedFreshSegment.mediaType) === "video" &&
+    !hasWorkspaceSegmentExplicitDraftVisual(liveSegment) &&
+    liveSlotDurationSeconds !== null &&
+    freshSlotDurationSeconds !== null &&
+    freshSlotDurationSeconds > liveSlotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
   const shouldPreserveLiveDuration =
-    baselineSegment
+    !shouldAdoptFreshVideoSourceDuration &&
+    (baselineSegment
       ? isWorkspaceSegmentDraftDurationEdited(liveSegment, baselineSegment)
       : options?.preserveUnbaselinedManualDuration !== false &&
-        (liveDurationMode === "manual" || liveManualDurationSeconds !== null);
+        (liveDurationMode === "manual" || liveManualDurationSeconds !== null));
   const liveDurationExtensionSourceDurationSeconds =
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(liveSegment);
   const freshDurationExtensionSourceDurationSeconds =

@@ -857,6 +857,7 @@ const SEGMENT_EDITOR_TIMEOUT_ERROR_MESSAGE = "Сегменты загружаю�
 const SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE = "Project components are still being prepared";
 const SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS = 30 * 60_000;
 const SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS = 6_500;
+const SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS = 5;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map();
@@ -1478,13 +1479,22 @@ const getWorkspaceSegmentEditorPayloadSourceDurationSeconds = (payload) => norma
     normalizeManualDurationSeconds(payload.duration_extension_source_duration_seconds) ??
     normalizeManualDurationSeconds(payload.sourceDurationSeconds) ??
     normalizeManualDurationSeconds(payload.source_duration_seconds);
+const isWorkspaceSegmentEditorGeneratedVideoEntry = (entry) => detectWorkspaceSegmentSourceKind(entry) === "ai_generated" && isProjectMediaEntryVideo(entry);
+const normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds = (durationSeconds, currentEntry, originalEntry) => {
+    if (isWorkspaceSegmentEditorGeneratedVideoEntry(currentEntry) ||
+        isWorkspaceSegmentEditorGeneratedVideoEntry(originalEntry)) {
+        return Math.max(durationSeconds ?? 0, SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS);
+    }
+    return durationSeconds;
+};
 const getWorkspaceProjectMediaEntryDurationSeconds = (entry) => {
     if (!entry || isWorkspaceSegmentTimelineFallbackEntry(entry)) {
         return null;
     }
-    return (normalizeManualDurationSeconds(entry.durationSeconds) ??
+    const durationSeconds = normalizeManualDurationSeconds(entry.durationSeconds) ??
         normalizeManualDurationSeconds(entry.duration_seconds) ??
-        normalizeManualDurationSeconds(entry.duration));
+        normalizeManualDurationSeconds(entry.duration);
+    return normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(durationSeconds, entry);
 };
 export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId, payload, options = {}) => {
     const sessionProjectId = normalizePositiveProjectId(requestedProjectId) ?? requestedProjectId;
@@ -1621,9 +1631,9 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         payloadMediaType: payload.media_type,
     });
     const durationExtensionSourceDurationSeconds = resolvedMediaType === "video"
-        ? getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
+        ? normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
             getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
-            getWorkspaceProjectMediaEntryDurationSeconds(originalEntry)
+            getWorkspaceProjectMediaEntryDurationSeconds(originalEntry), currentEntry, originalEntry)
         : null;
     const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
     const projectSceneSoundEntry = findProjectSceneSoundMediaEntry([
