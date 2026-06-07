@@ -20302,6 +20302,13 @@ export function WorkspacePage({
         const currentAssetDuration = normalizeWorkspaceSegmentManualDurationSeconds(
           currentDraftSegment.voiceoverAsset?.durationSeconds,
         );
+        const shouldPreserveCurrentManualVisualDuration =
+          shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(currentDraftSegment, nextDurationSeconds);
+        const hasExpectedTimelineDurationSync =
+          shouldPreserveCurrentManualVisualDuration ||
+          (normalizeWorkspaceSegmentDurationSyncMode(currentDraftSegment.durationSyncMode) === "voiceover" &&
+            normalizeWorkspaceSegmentDurationMode(currentDraftSegment.durationMode) === "auto" &&
+            normalizeWorkspaceSegmentManualDurationSeconds(currentDraftSegment.manualDurationSeconds) === null);
         const hasCurrentDuration =
           currentSpeechDuration !== null &&
           Math.abs(currentSpeechDuration - nextDurationSeconds) < 0.04 &&
@@ -20311,7 +20318,8 @@ export function WorkspacePage({
           Math.abs(currentSpeechEndTime - speechEndTime) < 0.04 &&
           (latestSceneVoiceoverAudioUrl === null ||
             currentAssetDuration === null ||
-            Math.abs(currentAssetDuration - nextDurationSeconds) < 0.04);
+            Math.abs(currentAssetDuration - nextDurationSeconds) < 0.04) &&
+          hasExpectedTimelineDurationSync;
         if (hasCurrentDuration) {
           return;
         }

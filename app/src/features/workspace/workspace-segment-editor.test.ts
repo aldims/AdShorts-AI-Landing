@@ -345,10 +345,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
       duration: 11.7,
       durationExtensionSourceDurationSeconds: null,
-      durationMode: "manual",
+      durationMode: "auto",
       durationSyncMode: "voiceover",
       endTime: 11.7,
-      manualDurationSeconds: 11.7,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
@@ -892,6 +892,113 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 5)).toBe(segment);
+  });
+
+  it("trims an uploaded video visual to a freshly generated scene voiceover by default", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      index: 0,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 2.2,
+      speechDurationSource: "audio",
+      speechEndTime: 2.2,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 889,
+        durationSeconds: 2.2,
+        fileName: "scene-voiceover.mp3",
+        fileSize: 0,
+        mimeType: "audio/mpeg",
+        remoteUrl: "/api/workspace/media-assets/889",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Segment"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: "none",
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.2,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.2,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves an intentionally extended uploaded video visual after a fresh scene voiceover", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 10,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 10,
+      index: 0,
+      manualDurationSeconds: 10,
+      mediaType: "video",
+      speechDuration: 2.2,
+      speechDurationSource: "audio",
+      speechEndTime: 2.2,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 889,
+        durationSeconds: 2.2,
+        fileName: "scene-voiceover.mp3",
+        fileSize: 0,
+        mimeType: "audio/mpeg",
+        remoteUrl: "/api/workspace/media-assets/889",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Segment"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: "none",
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 10,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 10,
+      manualDurationSeconds: 10,
+      startTime: 0,
+    }));
   });
 
   it("corrects a measured visual duration that arrives after a shorter visual slot", () => {
