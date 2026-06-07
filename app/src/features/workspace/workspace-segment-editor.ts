@@ -3785,10 +3785,10 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
 const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): WorkspaceSegmentEditorDraftSegment => {
+  const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
   if (
     getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video" ||
-    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) !== "visual" ||
-    normalizeWorkspaceSegmentDurationMode(segment.durationMode) !== "manual" ||
+    durationSyncMode === "voiceover" ||
     !isWorkspaceSegmentGeneratedVideoVisual(segment)
   ) {
     return segment;
@@ -3801,10 +3801,10 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
     return segment;
   }
 
-  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const currentSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
   if (
-    manualDurationSeconds === null ||
-    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS
+    currentSlotDurationSeconds === null ||
+    currentSlotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS
   ) {
     return segment;
   }
@@ -4733,10 +4733,13 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, voiceoverDurationSeconds);
   const shouldPreserveUserVisualDuration =
     shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover(segment, voiceoverDurationSeconds);
+  const isVideoVisualSegment = getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video";
+  const knownVideoVisualDurationSeconds = isVideoVisualSegment ? getWorkspaceSegmentKnownVisualDurationSeconds(segment) : null;
+  const canonicalVideoDurationSeconds = isVideoVisualSegment ? getWorkspaceSegmentCanonicalSlotDurationSeconds(segment) : null;
   const currentVideoDurationSeconds =
-    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video"
-      ? getWorkspaceSegmentCanonicalSlotDurationSeconds(segment)
-      : null;
+    knownVideoVisualDurationSeconds !== null && canonicalVideoDurationSeconds !== null
+      ? Math.max(knownVideoVisualDurationSeconds, canonicalVideoDurationSeconds)
+      : knownVideoVisualDurationSeconds ?? canonicalVideoDurationSeconds;
 
   if (shouldAutoTrimWorkspaceSegmentVideoToVoiceover(currentVideoDurationSeconds, voiceoverDurationSeconds)) {
     const duration = roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds);
@@ -4753,6 +4756,14 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
       speechDurationSource: shouldFillSpeechDuration ? "audio" : segment.speechDurationSource ?? null,
       startTime,
     };
+  }
+
+  if (
+    isVideoVisualSegment &&
+    knownVideoVisualDurationSeconds !== null &&
+    knownVideoVisualDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+  ) {
+    return segment;
   }
 
   if (shouldPreserveManualVisualDuration || shouldPreserveUserVisualDuration) {
@@ -5385,6 +5396,14 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       ? isWorkspaceSegmentDraftDurationEdited(liveSegment, baselineSegment)
       : options?.preserveUnbaselinedManualDuration !== false &&
         (liveDurationMode === "manual" || liveManualDurationSeconds !== null);
+  const liveDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(liveSegment);
+  const freshDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(normalizedFreshSegment);
+  const nextDurationExtensionSourceDurationSeconds =
+    freshDurationExtensionSourceDurationSeconds !== null && !hasWorkspaceSegmentExplicitDraftVisual(liveSegment)
+      ? freshDurationExtensionSourceDurationSeconds
+      : liveDurationExtensionSourceDurationSeconds;
   const currentVisualSegment = liveSegment.visualReset ? liveSegment : normalizedFreshSegment;
   const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
     ? liveSegment
@@ -5434,7 +5453,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     durationMode: shouldPreserveLiveDuration
       ? liveDurationMode
       : normalizeWorkspaceSegmentDurationMode(normalizedFreshSegment.durationMode),
-    durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(liveSegment),
+    durationExtensionSourceDurationSeconds: nextDurationExtensionSourceDurationSeconds,
     imageEditAsset: cloneStudioCustomVideoFile(liveSegment.imageEditAsset),
     imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
     imageEditPrompt: liveSegment.imageEditPrompt,

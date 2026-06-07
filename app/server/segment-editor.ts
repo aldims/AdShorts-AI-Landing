@@ -42,6 +42,8 @@ type AdsflowSegmentEditorSegmentPayload = {
   voice_source_start_time?: number | string | null;
   current_video?: string | null;
   duration?: number | string | null;
+  durationExtensionSourceDurationSeconds?: number | string | null;
+  duration_extension_source_duration_seconds?: number | string | null;
   duration_mode?: string | null;
   end_time?: number | string | null;
   index?: number | string | null;
@@ -55,6 +57,8 @@ type AdsflowSegmentEditorSegmentPayload = {
   speech_start_time?: number | string | null;
   speech_words?: AdsflowSegmentEditorSpeechWordPayload[] | null;
   start_time?: number | string | null;
+  sourceDurationSeconds?: number | string | null;
+  source_duration_seconds?: number | string | null;
   subtitle_color?: string | null;
   subtitle_style?: string | null;
   subtitle_type?: string | null;
@@ -202,6 +206,8 @@ export type WorkspaceSegmentEditorSegment = {
   currentPreviewUrl: string | null;
   currentSourceKind: WorkspaceSegmentEditorSourceKind;
   duration: number;
+  durationExtensionSourceDurationSeconds?: number | null;
+  duration_extension_source_duration_seconds?: number | null;
   durationMode: "auto" | "manual";
   endTime: number;
   index: number;
@@ -2312,6 +2318,28 @@ const buildWorkspaceSegmentPosterUrl = (
   return buildWorkspaceMediaAssetPosterUrl(asset);
 };
 
+const getWorkspaceSegmentEditorPayloadSourceDurationSeconds = (
+  payload: AdsflowSegmentEditorSegmentPayload,
+) =>
+  normalizeManualDurationSeconds(payload.durationExtensionSourceDurationSeconds) ??
+  normalizeManualDurationSeconds(payload.duration_extension_source_duration_seconds) ??
+  normalizeManualDurationSeconds(payload.sourceDurationSeconds) ??
+  normalizeManualDurationSeconds(payload.source_duration_seconds);
+
+const getWorkspaceProjectMediaEntryDurationSeconds = (
+  entry: AdsflowProjectMediaEntryPayload | null | undefined,
+) => {
+  if (!entry || isWorkspaceSegmentTimelineFallbackEntry(entry)) {
+    return null;
+  }
+
+  return (
+    normalizeManualDurationSeconds(entry.durationSeconds) ??
+    normalizeManualDurationSeconds(entry.duration_seconds) ??
+    normalizeManualDurationSeconds(entry.duration)
+  );
+};
+
 export const buildWorkspaceSegmentEditorSessionFromPayload = (
   requestedProjectId: number,
   payload: AdsflowSegmentEditorResponse,
@@ -2485,6 +2513,12 @@ export const buildWorkspaceSegmentEditorSegment = (
     originalEntry,
     payloadMediaType: payload.media_type,
   });
+  const durationExtensionSourceDurationSeconds =
+    resolvedMediaType === "video"
+      ? getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
+        getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
+        getWorkspaceProjectMediaEntryDurationSeconds(originalEntry)
+      : null;
   const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
   const projectSceneSoundEntry = findProjectSceneSoundMediaEntry(
     [
@@ -2536,6 +2570,8 @@ export const buildWorkspaceSegmentEditorSegment = (
       : null,
     currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
     duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
+    durationExtensionSourceDurationSeconds,
+    duration_extension_source_duration_seconds: durationExtensionSourceDurationSeconds,
     durationMode,
     endTime,
     index,

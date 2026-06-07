@@ -10,7 +10,9 @@ import {
   getStudioSceneSoundAssetPreviewMediaKind,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
+  createWorkspaceSegmentEditorInsertedSegment,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
@@ -433,6 +435,163 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 2.7,
       manualDurationSeconds: 2.7,
       startTime: 0,
+    }));
+  });
+
+  it("keeps a generated-video visual slot at the default source duration when a blank scene is appended", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 11.7,
+      durationMode: "manual",
+      endTime: 11.7,
+      index: 0,
+      manualDurationSeconds: 11.7,
+      mediaType: "video",
+      speechDuration: 11.7,
+      speechEndTime: 11.7,
+      speechStartTime: 0,
+      startTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/projects/77/segments/1/video",
+      currentSourceKind: "ai_generated",
+      duration: 4.1,
+      durationMode: "auto",
+      durationSyncMode: "visual",
+      endTime: 15.8,
+      index: 1,
+      manualDurationSeconds: null,
+      mediaType: "video",
+      speechDuration: 2.7,
+      speechEndTime: 14.4,
+      speechStartTime: 11.7,
+      startTime: 11.7,
+      videoAction: "original",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      segments: [firstSegment, secondSegment],
+    }, { preserveSourceTimelineEnd: false });
+    const insertedSegment = createWorkspaceSegmentEditorInsertedSegment({
+      draft: normalized,
+      insertAt: normalized.segments.length,
+    });
+    const withInsertedSegment = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...normalized,
+      segments: [...normalized.segments, insertedSegment],
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.7,
+      manualDurationSeconds: 5,
+      startTime: 11.7,
+    }));
+    expect(withInsertedSegment.segments[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 16.7,
+      manualDurationSeconds: 5,
+      startTime: 11.7,
+    }));
+    expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
+      duration: 2.4,
+      startTime: 16.7,
+    }));
+    expect(withInsertedSegment.segments[2]?.endTime).toBeCloseTo(19.1);
+  });
+
+  it("refreshes stored original-video source duration from the fresh server session", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=1&source=original",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=1&source=original&delivery=preview",
+      currentSourceKind: "ai_generated",
+      duration: 2.7,
+      durationMode: "auto",
+      endTime: 14.4,
+      index: 1,
+      mediaType: "video",
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=1&source=original",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=1&source=original&delivery=preview",
+      originalSourceKind: "ai_generated",
+      speechDuration: 2.7,
+      speechEndTime: 14.4,
+      speechStartTime: 11.7,
+      startTime: 11.7,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const liveDraft = createProjectVoiceoverDraft([segment]);
+    const freshSession = {
+      ...liveDraft,
+      segments: [
+        {
+          ...segment,
+          durationExtensionSourceDurationSeconds: 5,
+        },
+      ],
+    };
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      preserveUnbaselinedManualDuration: false,
+    });
+
+    expect(refreshed.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "auto",
+      manualDurationSeconds: null,
+    }));
+    expect(refreshed.segments[0]?.durationSyncMode).not.toBe("voiceover");
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(refreshed.segments[0])).toBe(5);
+  });
+
+  it("does not overwrite a custom visual source duration during a server refresh", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 6,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 6,
+      durationExtensionSourceDurationSeconds: 6,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 6,
+      manualDurationSeconds: 6,
+      mediaType: "video",
+      videoAction: "custom",
+    });
+    const liveDraft = createProjectVoiceoverDraft([segment]);
+    const freshSession = {
+      ...liveDraft,
+      segments: [
+        {
+          ...segment,
+          customVideo: null,
+          durationExtensionSourceDurationSeconds: 5,
+          videoAction: "original" as const,
+        },
+      ],
+    };
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      preserveUnbaselinedManualDuration: false,
+    });
+
+    expect(refreshed.segments[0]).toEqual(expect.objectContaining({
+      durationExtensionSourceDurationSeconds: 6,
+      videoAction: "custom",
     }));
   });
 

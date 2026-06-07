@@ -1474,6 +1474,18 @@ const buildWorkspaceSegmentPosterUrl = (projectId, segmentIndex, source, asset, 
     }
     return buildWorkspaceMediaAssetPosterUrl(asset);
 };
+const getWorkspaceSegmentEditorPayloadSourceDurationSeconds = (payload) => normalizeManualDurationSeconds(payload.durationExtensionSourceDurationSeconds) ??
+    normalizeManualDurationSeconds(payload.duration_extension_source_duration_seconds) ??
+    normalizeManualDurationSeconds(payload.sourceDurationSeconds) ??
+    normalizeManualDurationSeconds(payload.source_duration_seconds);
+const getWorkspaceProjectMediaEntryDurationSeconds = (entry) => {
+    if (!entry || isWorkspaceSegmentTimelineFallbackEntry(entry)) {
+        return null;
+    }
+    return (normalizeManualDurationSeconds(entry.durationSeconds) ??
+        normalizeManualDurationSeconds(entry.duration_seconds) ??
+        normalizeManualDurationSeconds(entry.duration));
+};
 export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId, payload, options = {}) => {
     const sessionProjectId = normalizePositiveProjectId(requestedProjectId) ?? requestedProjectId;
     const upstreamProjectId = normalizePositiveProjectId(payload.project_id);
@@ -1608,6 +1620,11 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         originalEntry,
         payloadMediaType: payload.media_type,
     });
+    const durationExtensionSourceDurationSeconds = resolvedMediaType === "video"
+        ? getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
+            getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
+            getWorkspaceProjectMediaEntryDurationSeconds(originalEntry)
+        : null;
     const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);
     const projectSceneSoundEntry = findProjectSceneSoundMediaEntry([
         ...(projectSources?.sceneSoundEntries ?? []),
@@ -1648,6 +1665,8 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
             : null,
         currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
         duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
+        durationExtensionSourceDurationSeconds,
+        duration_extension_source_duration_seconds: durationExtensionSourceDurationSeconds,
         durationMode,
         endTime,
         index,

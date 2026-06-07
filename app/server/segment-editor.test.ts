@@ -174,6 +174,83 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.originalPosterUrl).toBeNull();
   });
 
+  it("restores the original video source duration separately from the voice-trimmed slot", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 2.7,
+        duration_mode: "auto",
+        index: 1,
+        media_type: "video",
+        original_video: "original-marker",
+        text: "Whisk eggs with sugar and salt.",
+      },
+      {
+        currentEntries: [
+          {},
+          {
+            download_url: "/api/media/1202/download",
+            duration_seconds: 5,
+            media_type: "video",
+            mime_type: "video/mp4",
+            role: "segment_current",
+            source_kind: "ai_generated",
+          },
+        ],
+        originalEntries: [
+          {},
+          {
+            download_url: "/api/media/1202/download",
+            duration_seconds: 5,
+            media_type: "video",
+            mime_type: "video/mp4",
+            role: "segment_original",
+            source_kind: "ai_generated",
+          },
+        ],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: false,
+      },
+    );
+
+    expect(segment?.duration).toBe(2.7);
+    expect(segment?.durationExtensionSourceDurationSeconds).toBe(5);
+    expect(segment?.duration_extension_source_duration_seconds).toBe(5);
+    expect(segment?.currentSourceKind).toBe("ai_generated");
+  });
+
+  it("prefers explicit editor source duration from upstream payload over media entry duration", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 4.1,
+        duration_extension_source_duration_seconds: 5,
+        index: 1,
+        media_type: "video",
+        original_video: "original-marker",
+        text: "Whisk eggs with sugar and salt.",
+      },
+      {
+        currentEntries: [
+          {
+            duration_seconds: 4.1,
+            media_type: "video",
+            mime_type: "video/mp4",
+            role: "segment_current",
+          },
+        ],
+        originalEntries: [],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: false,
+      },
+    );
+
+    expect(segment?.duration).toBe(4.1);
+    expect(segment?.durationExtensionSourceDurationSeconds).toBe(5);
+  });
+
   it("restores a scene sound asset from project media into the editor segment", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,
