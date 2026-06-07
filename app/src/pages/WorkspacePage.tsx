@@ -267,6 +267,7 @@ import {
   rewriteWorkspaceSegmentProjectProxyUrl,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover,
+  shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
@@ -14195,14 +14196,26 @@ export function WorkspacePage({
       return;
     }
 
-    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
     const targetSegment =
       segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
       (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
-    const talkingPhotoSourceAsset = targetSegment ? getWorkspaceSegmentTalkingCharacterSourceAsset(targetSegment) : null;
-    const talkingPhotoUploadSourceAsset = targetSegment
-      ? getWorkspacePhotoAnimationUploadSourceAsset(targetSegment, talkingPhotoSourceAsset)
-      : talkingPhotoSourceAsset;
+    if (!targetSegment) {
+      setSegmentEditorVideoError("Сцена не найдена. Обновите проект и попробуйте снова.");
+      return;
+    }
+
+    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
+    if (shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment(segmentEditorDraft, visualJobBinding.isPersisted)) {
+      logSegmentEditorDiagnostics("client.segment-editor.talking-photo.blocked.unsaved-project-segment", {
+        draftProjectId: segmentEditorDraft.projectId,
+        targetSegmentIndex,
+      });
+      setSegmentEditorVideoError("Сначала сохраните изменения проекта, затем запустите говорящего персонажа.");
+      return;
+    }
+
+    const talkingPhotoSourceAsset = getWorkspaceSegmentTalkingCharacterSourceAsset(targetSegment);
+    const talkingPhotoUploadSourceAsset = getWorkspacePhotoAnimationUploadSourceAsset(targetSegment, talkingPhotoSourceAsset);
     const talkingPhotoSourceMediaType =
       getWorkspaceSegmentCustomPreviewKind(talkingPhotoUploadSourceAsset) === "video" ? "video" : "photo";
     const script = normalizeWorkspaceSegmentAiPhotoPrompt(options?.prompt ?? targetSegment?.text ?? "");

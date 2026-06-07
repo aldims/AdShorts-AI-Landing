@@ -2579,6 +2579,11 @@ export const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSeg
       segment.originalExternalPreviewUrl,
   );
 
+export const shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment = (
+  session: Pick<WorkspaceSegmentEditorDraftSession, "projectId"> | null | undefined,
+  isPersistedSegment: boolean,
+) => Boolean(session && Number(session.projectId || 0) > 0 && !isPersistedSegment);
+
 const isWorkspaceSegmentEditorDraftSegmentVisualEmpty = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) =>

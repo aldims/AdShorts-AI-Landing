@@ -11,6 +11,7 @@ import {
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
+  shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment,
 } from "../features/workspace/workspace-segment-editor";
 import {
   readStoredWorkspaceSegmentImageEditJobs,
@@ -612,6 +613,15 @@ describe("WorkspacePage talking character target selection", () => {
       x: 0.25,
       y: 0.375,
     });
+  });
+});
+
+describe("WorkspacePage segment visual job binding", () => {
+  it("blocks unsaved segments only inside an existing project", () => {
+    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 3747 }, false)).toBe(true);
+    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 3747 }, true)).toBe(false);
+    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 0 }, false)).toBe(false);
+    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment(null, false)).toBe(false);
   });
 });
 
