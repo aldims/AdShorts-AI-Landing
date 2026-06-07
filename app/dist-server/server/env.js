@@ -95,7 +95,7 @@ const toNumber = (value, fallback) => {
 };
 const nodeEnv = process.env.NODE_ENV ?? "development";
 const isProduction = nodeEnv === "production";
-const appUrl = trim(process.env.APP_URL) ?? "http://localhost:4174";
+const appUrl = trim(process.env.APP_URL) ?? "http://127.0.0.1:4174";
 const authBaseUrl = trim(process.env.BETTER_AUTH_URL) ?? appUrl;
 const authSecret = trim(process.env.BETTER_AUTH_SECRET) ?? "dev-only-secret-change-me";
 if (isProduction && authSecret === "dev-only-secret-change-me") {

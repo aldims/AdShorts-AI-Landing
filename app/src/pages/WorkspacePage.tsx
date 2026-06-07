@@ -222,7 +222,7 @@ import {
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
-  hasWorkspaceSegmentPersistedMediaReference,
+  isWorkspaceSegmentPersistedForVisualJobBinding,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentDraftTextEdited,
   isWorkspaceSegmentEditorCleanEmptyDraft,
@@ -267,7 +267,6 @@ import {
   rewriteWorkspaceSegmentProjectProxyUrl,
   shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover,
   shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover,
-  shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
@@ -11021,21 +11020,7 @@ export function WorkspacePage({
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const baselineSession = segmentEditorChecklistBaseSession;
 
-    if (!currentDraft) {
-      return false;
-    }
-
-    if (baselineSession && baselineSession.projectId === currentDraft.projectId) {
-      if (baselineSession.segments.some((segment) => segment.index === targetSegmentIndex)) {
-        return true;
-      }
-
-      const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
-      return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
-    }
-
-    const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
-    return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
+    return isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, targetSegmentIndex, baselineSession);
   };
 
   const getSegmentEditorVisualJobBinding = (
@@ -14205,15 +14190,6 @@ export function WorkspacePage({
     }
 
     const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
-    if (shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment(segmentEditorDraft, visualJobBinding.isPersisted)) {
-      logSegmentEditorDiagnostics("client.segment-editor.talking-photo.blocked.unsaved-project-segment", {
-        draftProjectId: segmentEditorDraft.projectId,
-        targetSegmentIndex,
-      });
-      setSegmentEditorVideoError("Сначала сохраните изменения проекта, затем запустите говорящего персонажа.");
-      return;
-    }
-
     const talkingPhotoSourceAsset = getWorkspaceSegmentTalkingCharacterSourceAsset(targetSegment);
     const talkingPhotoUploadSourceAsset = getWorkspacePhotoAnimationUploadSourceAsset(targetSegment, talkingPhotoSourceAsset);
     const talkingPhotoSourceMediaType =

@@ -84,9 +84,9 @@ const buildStudioUploadFileFromAsset = async (
 
 export const resolveStudioCustomAssetDataUrl = async (
   asset:
-    | Pick<StudioBrandLogoFile, "dataUrl" | "file">
-    | Pick<StudioCustomMusicFile, "dataUrl" | "file">
-    | Pick<StudioCustomVideoFile, "dataUrl" | "file" | "remoteUrl">
+    | Pick<StudioBrandLogoFile, "dataUrl" | "file" | "objectUrl">
+    | Pick<StudioCustomMusicFile, "dataUrl" | "file" | "objectUrl">
+    | Pick<StudioCustomVideoFile, "dataUrl" | "file" | "objectUrl" | "remoteUrl">
     | null
     | undefined,
 ) => {
@@ -103,8 +103,13 @@ export const resolveStudioCustomAssetDataUrl = async (
     typeof (asset as { remoteUrl?: unknown } | null | undefined)?.remoteUrl === "string"
       ? String((asset as { remoteUrl?: string }).remoteUrl).trim()
       : "";
-  if (remoteUrl) {
-    const response = await fetch(remoteUrl);
+  const objectUrl =
+    typeof (asset as { objectUrl?: unknown } | null | undefined)?.objectUrl === "string"
+      ? String((asset as { objectUrl?: string }).objectUrl).trim()
+      : "";
+  const sourceUrl = remoteUrl || objectUrl;
+  if (sourceUrl) {
+    const response = await fetch(sourceUrl);
     if (!response.ok) {
       throw new Error(`Не удалось загрузить удаленный файл (${response.status}).`);
     }

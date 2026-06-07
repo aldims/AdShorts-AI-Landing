@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const devHost = "127.0.0.1";
+const devPort = 4174;
 const authHost = process.env.AUTH_SERVER_HOST || "127.0.0.1";
 const authPort = Number(process.env.AUTH_SERVER_PORT || 4175);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -60,8 +61,48 @@ const apiProxy = {
   },
 };
 
+type DevHostRedirectRequest = {
+  headers: {
+    host?: string;
+  };
+  url?: string;
+};
+
+type DevHostRedirectResponse = {
+  end: () => void;
+  setHeader: (name: string, value: string) => void;
+  statusCode: number;
+};
+
+const isLocalhostDevHost = (host: string) => host === "localhost" || host === `localhost:${devPort}`;
+
+const redirectLocalhostToCanonicalDevHost = (
+  req: DevHostRedirectRequest,
+  res: DevHostRedirectResponse,
+  next: () => void,
+) => {
+  const host = req.headers.host?.toLowerCase();
+  if (!host || !isLocalhostDevHost(host)) {
+    next();
+    return;
+  }
+
+  res.statusCode = 307;
+  res.setHeader("Location", `http://${devHost}:${devPort}${req.url ?? "/"}`);
+  res.end();
+};
+
 export default defineConfig({
   plugins: [
+    {
+      name: "adshorts-canonical-dev-host",
+      configureServer(server) {
+        server.middlewares.use(redirectLocalhostToCanonicalDevHost);
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use(redirectLocalhostToCanonicalDevHost);
+      },
+    },
     {
       name: "adshorts-ensure-auth-backend",
       configureServer: ensureAuthBackend,
@@ -71,14 +112,14 @@ export default defineConfig({
   ],
   server: {
     host: devHost,
-    port: 4174,
+    port: devPort,
     strictPort: true,
     allowedHosts: ["localhost", "127.0.0.1"],
     proxy: apiProxy,
   },
   preview: {
     host: devHost,
-    port: 4174,
+    port: devPort,
     strictPort: true,
     proxy: apiProxy,
   },

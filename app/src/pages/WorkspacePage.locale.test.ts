@@ -11,7 +11,7 @@ import {
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
-  shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment,
+  isWorkspaceSegmentPersistedForVisualJobBinding,
 } from "../features/workspace/workspace-segment-editor";
 import {
   readStoredWorkspaceSegmentImageEditJobs,
@@ -617,11 +617,26 @@ describe("WorkspacePage talking character target selection", () => {
 });
 
 describe("WorkspacePage segment visual job binding", () => {
-  it("blocks unsaved segments only inside an existing project", () => {
-    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 3747 }, false)).toBe(true);
-    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 3747 }, true)).toBe(false);
-    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment({ projectId: 0 }, false)).toBe(false);
-    expect(shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment(null, false)).toBe(false);
+  it("does not bind a new project scene to a server segment just because it has generated media", () => {
+    const generatedInsertedSegment = createDraftSegment({
+      currentAsset: createMediaAsset(909, { mediaType: "photo", role: "segment_generated" }),
+      index: 7,
+    });
+    const savedSegment = createDraftSegment({ currentAsset: createMediaAsset(101), index: 0 });
+    const currentDraft = { ...createDraftSession(savedSegment), segments: [savedSegment, generatedInsertedSegment] };
+    const baseline = createDraftSession(savedSegment);
+
+    expect(isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, 7, baseline)).toBe(false);
+    expect(isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, 0, baseline)).toBe(true);
+  });
+
+  it("falls back to media references when no matching baseline is available", () => {
+    const generatedSegment = createDraftSegment({
+      currentAsset: createMediaAsset(909, { mediaType: "photo", role: "segment_generated" }),
+      index: 7,
+    });
+
+    expect(isWorkspaceSegmentPersistedForVisualJobBinding(createDraftSession(generatedSegment), 7, null)).toBe(true);
   });
 });
 

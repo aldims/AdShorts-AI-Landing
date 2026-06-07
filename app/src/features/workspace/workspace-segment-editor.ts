@@ -2579,10 +2579,22 @@ export const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSeg
       segment.originalExternalPreviewUrl,
   );
 
-export const shouldBlockWorkspaceSegmentVisualJobForUnsavedProjectSegment = (
-  session: Pick<WorkspaceSegmentEditorDraftSession, "projectId"> | null | undefined,
-  isPersistedSegment: boolean,
-) => Boolean(session && Number(session.projectId || 0) > 0 && !isPersistedSegment);
+export const isWorkspaceSegmentPersistedForVisualJobBinding = (
+  currentDraft: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null | undefined,
+  targetSegmentIndex: number,
+  baselineSession?: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null,
+) => {
+  if (!currentDraft) {
+    return false;
+  }
+
+  if (baselineSession && baselineSession.projectId === currentDraft.projectId) {
+    return baselineSession.segments.some((segment) => segment.index === targetSegmentIndex);
+  }
+
+  const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+  return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
+};
 
 const isWorkspaceSegmentEditorDraftSegmentVisualEmpty = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
