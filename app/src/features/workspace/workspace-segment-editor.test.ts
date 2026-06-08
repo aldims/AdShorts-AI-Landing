@@ -353,6 +353,40 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("preserves a user-selected full source video duration when the voiceover tail is short", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 4.4,
+      speechDurationSource: "audio",
+      speechEndTime: 4.4,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: 777,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      startTime: 0,
+    }));
+  });
+
   it("normalizes a stale generated-video visual slot before browser measurement", () => {
     const firstSegment = createProjectVoiceoverSegment({
       duration: 11.8,

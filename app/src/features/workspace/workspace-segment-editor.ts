@@ -4818,6 +4818,12 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     knownVideoVisualDurationSeconds !== null &&
     canonicalVideoDurationSeconds !== null &&
     canonicalVideoDurationSeconds <= knownVideoVisualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const isManualVideoTimelineAtStoredSourceDuration =
+    durationSyncMode === "visual" &&
+    hasManualVideoTimelineOverride &&
+    storedDurationExtensionSourceDurationSeconds !== null &&
+    canonicalVideoDurationSeconds !== null &&
+    areWorkspaceSegmentDurationValuesEqual(canonicalVideoDurationSeconds, storedDurationExtensionSourceDurationSeconds);
   const hasFreshVoiceoverTimelineDuration =
     freshVoiceoverDurationSeconds !== null &&
     Boolean(segment.voiceoverAsset) &&
@@ -4833,7 +4839,8 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
   const shouldSyncVideoToVoiceover =
     durationSyncMode === "voiceover" ||
     actualExtendedVoiceoverDurationSeconds !== null ||
-    shouldAutoTrimWorkspaceSegmentVideoToVoiceover(currentVideoDurationSeconds, voiceoverDurationSeconds) ||
+    (!isManualVideoTimelineAtStoredSourceDuration &&
+      shouldAutoTrimWorkspaceSegmentVideoToVoiceover(currentVideoDurationSeconds, voiceoverDurationSeconds)) ||
     (hasFreshVoiceoverTimelineDuration &&
       hasManualVideoTimelineOverride &&
       (durationSyncMode !== "visual" ||

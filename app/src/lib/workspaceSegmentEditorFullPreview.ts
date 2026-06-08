@@ -512,25 +512,7 @@ export const selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks = <
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,
 >(
   tracks: Track[],
-): Track[] => {
-  const nonVoiceTracks = tracks.filter((track) => track.kind !== "voice" && track.kind !== "embedded_voice");
-  const voiceTracks = tracks.filter((track) => track.kind === "voice" || track.kind === "embedded_voice");
-  if (voiceTracks.length <= 1) {
-    return [...nonVoiceTracks, ...voiceTracks];
-  }
-
-  const selectedVoiceTrack = [...voiceTracks].sort(
-    (left, right) =>
-      right.timelineStartTime - left.timelineStartTime ||
-      left.timelineEndTime - right.timelineEndTime ||
-      left.key.localeCompare(right.key),
-  )[0];
-
-  return [
-    ...nonVoiceTracks,
-    selectedVoiceTrack,
-  ];
-};
+): Track[] => tracks;
 
 export const selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart = <
   Track extends WorkspaceSegmentEditorFullPreviewAudibleAudioTrack,

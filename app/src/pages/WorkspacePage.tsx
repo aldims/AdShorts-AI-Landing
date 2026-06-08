@@ -20106,12 +20106,6 @@ export function WorkspacePage({
         sourceDurationSeconds: sourceVideoDurationSeconds,
       },
     );
-    if (shouldAutoTrimToVoiceover && voiceoverDurationSeconds !== null) {
-      applySegmentTimelineDurationValue(targetSegment.index, voiceoverDurationSeconds, {
-        durationSyncMode: "voiceover",
-        sourceDurationSeconds: sourceVideoDurationSeconds,
-      });
-    }
     setSegmentTimelineDurationInputValue(formatWorkspaceSegmentDurationInputValue(initialDurationSeconds));
     setSegmentTimelineDurationAiPrompt(nextPrompt);
     setSegmentTimelineDurationTrimToVoiceover(shouldAutoTrimToVoiceover || shouldTrimToVoiceover);
@@ -21832,13 +21826,7 @@ export function WorkspacePage({
       return;
     }
 
-    const hasPendingVoiceStart = hasSegmentEditorFullPreviewPendingVoiceStart(activeTracks, currentTime);
-    const audibleActiveTracks = selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(
-      activeTracks,
-      hasPendingVoiceStart,
-    );
-    const voiceDuckingStrength = getSegmentEditorFullPreviewVoiceDuckingStrength(currentTime);
-    audibleActiveTracks.forEach((track) => {
+    activeTracks.forEach((track) => {
       const element = ensureSegmentEditorFullPreviewAudioElement(track);
       element.loop = Boolean(track.loop);
       const sourceTime = getSegmentEditorFullPreviewTrackSourceTime(track, currentTime, element);
@@ -21850,18 +21838,10 @@ export function WorkspacePage({
         }
       }
 
-      applySegmentEditorFullPreviewAudioElementVolume(track, element, {
-        currentTime,
-        voiceDuckingStrength,
-      });
+      muteSegmentEditorFullPreviewAudioElement(element);
       void playSegmentEditorFullPreviewAudioElement(track, element, "user-gesture-active").then(
         () => {
-          makeSegmentEditorFullPreviewAudioElementAudibleAfterPlay(track, element, {
-            currentTime: segmentEditorFullPreviewTimeRef.current,
-            voiceDuckingStrength: getSegmentEditorFullPreviewVoiceDuckingStrength(
-              segmentEditorFullPreviewTimeRef.current,
-            ),
-          });
+          muteSegmentEditorFullPreviewAudioElement(element);
         },
         () => {
           // The click handler will switch to the explicit audio-unlock state if the browser still blocks playback.
@@ -22116,14 +22096,8 @@ export function WorkspacePage({
     });
     const playingActiveTracks = playingActiveElements.map(({ track }) => track);
     const hasPendingVoiceStart = hasSegmentEditorFullPreviewPendingVoiceStart(playingActiveTracks, currentTime);
-    const audibleActiveKeys = new Set(
-      selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(playingActiveTracks, hasPendingVoiceStart).map(
-        (track) => track.key,
-      ),
-    );
-    const voiceDuckingStrength = getSegmentEditorFullPreviewVoiceDuckingStrength(currentTime);
 
-    playingActiveElements.forEach(({ element, sourceTime, track }) => {
+    playingActiveElements.forEach(({ element, sourceTime }) => {
       if (Number.isFinite(sourceTime)) {
         try {
           element.currentTime = sourceTime;
@@ -22132,12 +22106,7 @@ export function WorkspacePage({
         }
       }
 
-      const isAudible = audibleActiveKeys.has(track.key);
-      applySegmentEditorFullPreviewAudioElementVolume(track, element, {
-        currentTime,
-        isAudible,
-        voiceDuckingStrength,
-      });
+      muteSegmentEditorFullPreviewAudioElement(element);
     });
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.done", {
       activeTrackCount: playingActiveTracks.length,
@@ -22317,7 +22286,9 @@ export function WorkspacePage({
     const isEmbeddedAudioTrackPlayable =
       embeddedAudioTrackKey !== null &&
       !segmentEditorFullPreviewFailedAudioKeysRef.current.has(embeddedAudioTrackKey) &&
-      Boolean(embeddedAudioElement);
+      Boolean(embeddedAudioElement) &&
+      !embeddedAudioElement?.paused &&
+      !embeddedAudioElement?.ended;
     const shouldUseVisualEmbeddedAudioFallback =
       Boolean(embeddedAudioUrl) &&
       !isEmbeddedAudioTrackPlayable &&
@@ -22895,7 +22866,6 @@ export function WorkspacePage({
       WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
   const segmentTimelineDurationMenuCanTrimToVoiceover = Boolean(
     !isSegmentTimelineDurationMenuPhoto &&
-      !segmentTimelineDurationMenuAutoTrimToVoiceover &&
       segmentTimelineDurationMenuHasVideoVoiceoverMismatch &&
       segmentTimelineDurationMenuSegment &&
       shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim(
@@ -22909,8 +22879,9 @@ export function WorkspacePage({
       ),
   );
   const segmentTimelineDurationMenuShouldTrimToVoiceover =
-    segmentTimelineDurationMenuAutoTrimToVoiceover ||
-    (segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationTrimToVoiceover);
+    segmentTimelineDurationMenuCanTrimToVoiceover
+      ? segmentTimelineDurationTrimToVoiceover
+      : segmentTimelineDurationMenuAutoTrimToVoiceover;
   const segmentTimelineDurationMenuMatchedInputSeconds =
     segmentTimelineDurationMenuAutoTrimToVoiceover || segmentTimelineDurationMenuCanTrimToVoiceover
       ? segmentTimelineDurationMenuShouldTrimToVoiceover

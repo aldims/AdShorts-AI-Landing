@@ -369,7 +369,7 @@ describe("workspace segment editor full preview", () => {
     ).toBeNull();
   });
 
-  it("prefers the newest voice track when voice tails overlap at a segment boundary", () => {
+  it("keeps overlapping voice tails audible at a segment boundary", () => {
     expect(
       selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks([
         { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
@@ -378,6 +378,7 @@ describe("workspace segment editor full preview", () => {
       ]),
     ).toEqual([
       { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 4.55, timelineStartTime: 0 },
       { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
     ]);
   });
@@ -394,6 +395,7 @@ describe("workspace segment editor full preview", () => {
       ),
     ).toEqual([
       { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
+      { key: "voice-1", kind: "voice", timelineEndTime: 4.45, timelineStartTime: 0 },
       { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
     ]);
   });
