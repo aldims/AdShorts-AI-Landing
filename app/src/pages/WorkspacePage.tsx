@@ -20459,6 +20459,20 @@ export function WorkspacePage({
         finalVoiceGraceSeconds: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS,
       },
     );
+  const getSegmentEditorEmbeddedTalkingPhotoAudioUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+    if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+      return null;
+    }
+
+    const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: true,
+    });
+    return mediaSurface.previewKind === "video" ? mediaSurface.viewerUrl ?? mediaSurface.displayUrl : null;
+  };
+  const getSegmentEditorEmbeddedTalkingPhotoAudioTrackKey = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    audioUrl: string,
+  ) => `full-preview:embedded:${segment.index}:${audioUrl}`;
   const buildSegmentEditorFullPreviewAudioTracks = (): WorkspaceSegmentEditorFullPreviewAudioTrack[] => {
     const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
     if (!segmentEditorDraft || !segmentEditorTracks || totalDuration <= 0) {
@@ -20491,16 +20505,10 @@ export function WorkspacePage({
         return;
       }
 
-      const mediaSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
-        isPlaybackRequested: true,
-      });
-      const embeddedAudioUrl =
-        doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) && mediaSurface.previewKind === "video"
-          ? mediaSurface.viewerUrl ?? mediaSurface.displayUrl
-          : null;
+      const embeddedAudioUrl = getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment);
       if (embeddedAudioUrl) {
         tracks.push({
-          key: `full-preview:embedded:${segment.index}:${embeddedAudioUrl}`,
+          key: getSegmentEditorEmbeddedTalkingPhotoAudioTrackKey(segment, embeddedAudioUrl),
           kind: "embedded_voice",
           mediaKind: "video",
           sourceKind: "isolated",
@@ -22195,9 +22203,27 @@ export function WorkspacePage({
     }
 
     pauseOtherSegmentEditorPreviewVideoElements(segmentPlaybackIndex);
-    element.muted = true;
-    element.defaultMuted = true;
     const mediaDuration = Number.isFinite(element.duration) && element.duration > 0.2 ? element.duration : null;
+    const embeddedAudioUrl = getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment);
+    const embeddedAudioTrackKey = embeddedAudioUrl
+      ? getSegmentEditorEmbeddedTalkingPhotoAudioTrackKey(segment, embeddedAudioUrl)
+      : null;
+    const embeddedAudioElement = embeddedAudioTrackKey
+      ? segmentEditorFullPreviewAudioRefs.current[embeddedAudioTrackKey] ?? null
+      : null;
+    const isEmbeddedAudioTrackPlayable =
+      embeddedAudioTrackKey !== null &&
+      !segmentEditorFullPreviewFailedAudioKeysRef.current.has(embeddedAudioTrackKey) &&
+      Boolean(embeddedAudioElement);
+    const shouldUseVisualEmbeddedAudioFallback =
+      Boolean(embeddedAudioUrl) &&
+      !isEmbeddedAudioTrackPlayable &&
+      options?.playVideo !== false &&
+      (mediaDuration === null ||
+        resolvedSegment.localTime <= mediaDuration + WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS);
+    element.muted = !shouldUseVisualEmbeddedAudioFallback;
+    element.defaultMuted = !shouldUseVisualEmbeddedAudioFallback;
+    element.volume = shouldUseVisualEmbeddedAudioFallback ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME : 0;
     const targetTime = mediaDuration ? resolvedSegment.localTime % mediaDuration : resolvedSegment.localTime;
     if (element.readyState >= HTMLMediaElement.HAVE_METADATA && Math.abs(element.currentTime - targetTime) > 0.16) {
       try {
@@ -24144,7 +24170,11 @@ export function WorkspacePage({
                 voiceoverDurationInfo?.source === "estimated" && voiceoverDurationLabel
                   ? `≈${voiceoverDurationLabel}`
                   : voiceoverDurationLabel;
-              const voiceoverAudioUrl = voiceoverAudioPreviewSource.audioUrl;
+              const usesEmbeddedTalkingPhotoAudio = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment);
+              const embeddedTalkingPhotoAudioUrl = usesEmbeddedTalkingPhotoAudio
+                ? getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment)
+                : null;
+              const voiceoverAudioUrl = embeddedTalkingPhotoAudioUrl ?? voiceoverAudioPreviewSource.audioUrl;
               const voiceAudioKey = `timeline:voice:${segment.index}:${voiceoverAudioUrl ?? "empty"}`;
               const isVoiceoverGenerationPending = hasWorkspaceSegmentVisualRun(
                 segmentEditorGeneratingVoiceoverRunIds,
@@ -24152,18 +24182,41 @@ export function WorkspacePage({
               );
               const voiceDisplayLabel = isVoiceoverGenerationPending
                 ? workspaceText(locale, "Озвучка", "Voiceover")
+                : usesEmbeddedTalkingPhotoAudio
+                  ? workspaceText(locale, "Говорящий персонаж", "Talking character")
                 : getSegmentTimelineVoiceDisplayLabel(segment);
+              const voiceStatusLabel = usesEmbeddedTalkingPhotoAudio
+                ? workspaceText(
+                    locale,
+                    `Звук встроен${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
+                    `Embedded audio${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
+                  )
+                : voiceoverDurationDisplayLabel
+                  ? workspaceText(
+                      locale,
+                      `Озвучка ${voiceoverDurationDisplayLabel}`,
+                      `Voice ${voiceoverDurationDisplayLabel}`,
+                    )
+                  : null;
+              const voicePreviewLabelPrefixRu = usesEmbeddedTalkingPhotoAudio ? "Звук говорящего персонажа" : "Озвучка";
+              const voicePreviewLabelPrefixEn = usesEmbeddedTalkingPhotoAudio ? "Talking character audio" : "Voiceover";
               const voiceLabel = workspaceText(
                 locale,
-                `Озвучка сцены ${index + 1}: ${voiceDisplayLabel}${
+                `${voicePreviewLabelPrefixRu} сцены ${index + 1}: ${voiceDisplayLabel}${
                   voiceoverDurationDisplayLabel ? `, ${voiceoverDurationDisplayLabel}` : ""
                 }`,
-                `Scene ${index + 1} voiceover: ${voiceDisplayLabel}${
+                `${voicePreviewLabelPrefixEn} scene ${index + 1}: ${voiceDisplayLabel}${
                   voiceoverDurationDisplayLabel ? `, ${voiceoverDurationDisplayLabel}` : ""
                 }`,
               );
               const voiceDisabledReason = isVoiceoverGenerationPending
                 ? workspaceText(locale, "Озвучка сцены создаётся", "Scene voiceover is generating")
+                : usesEmbeddedTalkingPhotoAudio
+                  ? workspaceText(
+                      locale,
+                      "Звук говорящего персонажа пока недоступен",
+                      "Talking character audio is not available yet",
+                    )
                 : !studioSidebarVoiceEnabled || !voiceOption
                   ? workspaceText(locale, "Озвучка выключена", "Voiceover is off")
                   : workspaceText(
@@ -24224,14 +24277,8 @@ export function WorkspacePage({
                       )}
                       {isVoiceoverGenerationPending ? (
                         <small>{workspaceText(locale, "Создаём озвучку", "Generating voiceover")}</small>
-                      ) : voiceoverDurationDisplayLabel ? (
-                        <small>
-                          {workspaceText(
-                            locale,
-                            `Озвучка ${voiceoverDurationDisplayLabel}`,
-                            `Voice ${voiceoverDurationDisplayLabel}`,
-                          )}
-                        </small>
+                      ) : voiceStatusLabel ? (
+                        <small>{voiceStatusLabel}</small>
                       ) : null}
                     </span>
                   </button>
@@ -24246,11 +24293,22 @@ export function WorkspacePage({
                   {renderSegmentTimelineAudioButton({
                     audioKey: voiceAudioKey,
                     disabledReason: voiceDisabledReason,
-                    durationSeconds: voiceoverAudioPreviewSource.shouldClip ? voiceoverDurationInfo?.durationSeconds ?? null : null,
-                    endTime: voiceoverAudioPreviewSource.shouldClip ? voiceoverPreviewRange?.endTime : null,
+                    durationSeconds:
+                      embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
+                        ? null
+                        : voiceoverDurationInfo?.durationSeconds ?? null,
+                    endTime:
+                      embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
+                        ? null
+                        : voiceoverPreviewRange?.endTime,
                     label: voiceLabel,
-                    startTime: voiceoverAudioPreviewSource.shouldClip ? voiceoverPreviewRange?.startTime : null,
+                    mediaKind: embeddedTalkingPhotoAudioUrl ? "video" : undefined,
+                    startTime:
+                      embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
+                        ? null
+                        : voiceoverPreviewRange?.startTime,
                     url: voiceoverAudioUrl,
+                    volume: embeddedTalkingPhotoAudioUrl ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME : undefined,
                   })}
                 </div>
               );

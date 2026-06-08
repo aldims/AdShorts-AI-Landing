@@ -3644,6 +3644,34 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("does not warn when a talking character clip is shorter than its manual scene slot", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 2.9,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/job/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 5,
+      durationMode: "manual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 5,
+      text: "Попробуйте, это очень вкусно!",
+      videoAction: "talking_photo",
+    });
+
+    expect(
+      resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 2.9,
+      }),
+    ).toBeNull();
+  });
+
   it("keeps the video visual duration when voiceover stretches the scene duration", () => {
     const segment = createDraftSegment({
       currentAsset: createMediaAsset(505, {

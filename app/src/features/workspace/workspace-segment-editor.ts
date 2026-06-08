@@ -4187,6 +4187,10 @@ export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
     return null;
   }
 
+  if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return null;
+  }
+
   if (!options?.includeAnyVideoVisual && !isWorkspaceSegmentGeneratedVideoVisual(segment)) {
     return null;
   }
