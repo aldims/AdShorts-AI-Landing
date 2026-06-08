@@ -250,6 +250,37 @@ describe("studio generation language resolution", () => {
     ]);
   });
 
+  it("keeps talking photo assets in normalized segment editor payload", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            customVideoAssetId: 909,
+            duration: 3.4,
+            durationMode: "manual",
+            endTime: 44.8,
+            index: 7,
+            manualDurationSeconds: 3.4,
+            startTime: 41.4,
+            text: "Попробуйте, это очень вкусно!",
+            videoAction: "talking_photo",
+            voiceType: "none",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 909,
+        videoAction: "talking_photo",
+        voiceType: "none",
+      }),
+    );
+  });
+
   it("accepts scratch scene-editor payloads without a project id", () => {
     const normalized = normalizeStudioSegmentEditorPayload(
       {

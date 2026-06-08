@@ -742,7 +742,7 @@ export type StudioGenerationStatus = {
   status: string;
 };
 
-export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original";
+export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original" | "talking_photo";
 export type StudioSegmentEditorDurationMode = "auto" | "manual";
 
 export type StudioSegmentEditorSegment = {
@@ -857,7 +857,7 @@ const studioSupportedPromptImproveModes = new Set([
 
 const studioSupportedSegmentVisualQualities = new Set(["standard", "premium"]);
 
-const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original"]);
+const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original", "talking_photo"]);
 
 const studioRussianVoiceIds = new Set([
   "Bys_24000",
@@ -1656,15 +1656,16 @@ export const normalizeStudioSegmentEditorPayload = (
         )
       : null;
 
-    if (videoAction === "custom" && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
+    const attachesCustomVisual = videoAction === "custom" || videoAction === "talking_photo";
+    if (attachesCustomVisual && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
       throw new Error(`Upload a custom video for segment ${index + 1} or choose a different source.`);
     }
 
     segments.push({
-      customVideoAssetId: videoAction === "custom" ? customVideoAssetId : undefined,
-      customVideoFileDataUrl: videoAction === "custom" ? customVideoFileDataUrl : undefined,
-      customVideoFileMimeType: videoAction === "custom" ? customVideoFileMimeType : undefined,
-      customVideoFileName: videoAction === "custom" ? customVideoFileName : undefined,
+      customVideoAssetId: attachesCustomVisual ? customVideoAssetId : undefined,
+      customVideoFileDataUrl: attachesCustomVisual ? customVideoFileDataUrl : undefined,
+      customVideoFileMimeType: attachesCustomVisual ? customVideoFileMimeType : undefined,
+      customVideoFileName: attachesCustomVisual ? customVideoFileName : undefined,
       duration,
       durationExtensionSourceDurationSeconds: rawDurationExtensionSourceDurationSeconds,
       durationMode,
@@ -5604,10 +5605,13 @@ export async function createStudioGenerationJob(
           source: normalizedSegmentEditor.source,
           segments: await Promise.all(
             normalizedSegmentEditor.segments.map(async (segment) => {
-              const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange
+              const attachesCustomVisual = segment.videoAction === "custom" || segment.videoAction === "talking_photo";
+              const isTalkingPhotoSegment = segment.videoAction === "talking_photo";
+              const uploadScopeProjectId = normalizedSegmentEditor.allowStructureChange && !isTalkingPhotoSegment
                 ? undefined
                 : normalizedProjectId ?? undefined;
-              const uploadScopeSegmentIndex = normalizedSegmentEditor.allowStructureChange ? undefined : segment.index;
+              const uploadScopeSegmentIndex =
+                normalizedSegmentEditor.allowStructureChange && !isTalkingPhotoSegment ? undefined : segment.index;
               const adsflowVoiceType = resolveStudioSegmentEditorAdsflowVoiceType({
                 globalVoiceEnabled: isVoiceEnabled,
                 globalVoiceId: normalizedVoiceId,
@@ -5617,19 +5621,19 @@ export async function createStudioGenerationJob(
               const segmentVoiceTypeForPayload =
                 segment.voiceType === null || segment.voiceType === undefined ? undefined : adsflowVoiceType;
               const segmentAssetId =
-                segment.videoAction === "custom" && segment.customVideoAssetId
+                attachesCustomVisual && segment.customVideoAssetId
                   ? segment.customVideoAssetId
-                  : segment.videoAction === "custom" && segment.customVideoFileDataUrl && segment.customVideoFileName
+                  : attachesCustomVisual && segment.customVideoFileDataUrl && segment.customVideoFileName
                   ? await uploadStudioMediaAsset(user, {
                       dataUrl: segment.customVideoFileDataUrl,
                       externalUserId,
                       fileName: segment.customVideoFileName,
-                      kind: "segment_source",
+                      kind: isTalkingPhotoSegment ? "talking_photo" : "segment_source",
                       language: normalizedLanguage,
                       mediaType: inferStudioUploadMediaType(segment.customVideoFileMimeType, segment.customVideoFileName),
                       mimeType: segment.customVideoFileMimeType,
                       projectId: uploadScopeProjectId,
-                      role: "segment_source",
+                      role: isTalkingPhotoSegment ? "talking_photo" : "segment_source",
                       segmentIndex: uploadScopeSegmentIndex,
                   })
                 : undefined;

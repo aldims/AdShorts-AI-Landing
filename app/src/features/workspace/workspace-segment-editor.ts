@@ -3961,7 +3961,10 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   const assetDuration = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
   const playableAssetDuration = isProjectVoiceoverAsset ? null : assetDuration;
   const voiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
-  if (voiceSourceDuration !== null) {
+  if (
+    voiceSourceDuration !== null &&
+    !isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(segment, session, voiceSourceDuration)
+  ) {
     return roundWorkspaceSegmentTimelineSeconds(
       Math.max(voiceSourceDuration, playableAssetDuration ?? voiceSourceDuration),
     );
@@ -4010,7 +4013,7 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   return playableAssetDuration;
 };
 
-const isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
+export const isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null | undefined,
   durationSeconds: number | null | undefined,
@@ -4442,14 +4445,22 @@ export const hasWorkspaceSegmentProjectVoiceoverTimingData = (
 
 export const getWorkspaceSegmentVoiceoverPreviewRange = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
+  session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
+    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
 ) => {
   if (!getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
     return null;
   }
 
   const voiceSourceRange = getWorkspaceSegmentVoiceSourceRange(segment);
-  if (voiceSourceRange !== null) {
+  const voiceSourceRangeDuration =
+    voiceSourceRange !== null && voiceSourceRange.endTime > voiceSourceRange.startTime
+      ? voiceSourceRange.endTime - voiceSourceRange.startTime
+      : null;
+  if (
+    voiceSourceRange !== null &&
+    !isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(segment, session, voiceSourceRangeDuration)
+  ) {
     return voiceSourceRange;
   }
 
@@ -5034,16 +5045,32 @@ const sanitizeWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
 
   const assetDurationSeconds = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
   const speechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration);
+  const voiceSourceDurationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
   if (
     assetDurationSeconds === null ||
-    speechDurationSeconds === null ||
-    !areWorkspaceSegmentDurationValuesEqual(speechDurationSeconds, assetDurationSeconds)
+    ![speechDurationSeconds, voiceSourceDurationSeconds].some(
+      (durationSeconds) => areWorkspaceSegmentDurationValuesEqual(durationSeconds, assetDurationSeconds),
+    )
   ) {
     return segment;
   }
 
   const shorterSpeechDurationSeconds =
     getWorkspaceSegmentShorterProjectVoiceoverSpeechDurationSeconds(segment, assetDurationSeconds);
+  const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechStartTime);
+  const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segment.speechEndTime);
+  const speechBoundaryDurationSeconds =
+    speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime
+      ? speechEndTime - speechStartTime
+      : null;
+  const shouldClearLeakedSpeechBoundary = areWorkspaceSegmentDurationValuesEqual(
+    speechBoundaryDurationSeconds,
+    assetDurationSeconds,
+  );
+  const shouldClearLeakedVoiceSource = areWorkspaceSegmentDurationValuesEqual(
+    voiceSourceDurationSeconds,
+    assetDurationSeconds,
+  );
   const hasShorterSceneDuration = getWorkspaceSegmentSceneDurationCandidates(segment).some(
     (duration) => duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < assetDurationSeconds,
   );
@@ -5077,6 +5104,11 @@ const sanitizeWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
       : segment.endTime,
     speechDuration: shorterSpeechDurationSeconds,
     speechDurationSource: null,
+    speechEndTime: shouldClearLeakedSpeechBoundary ? null : segment.speechEndTime,
+    speechStartTime: shouldClearLeakedSpeechBoundary ? null : segment.speechStartTime,
+    voiceSourceDuration: shouldClearLeakedVoiceSource ? null : segment.voiceSourceDuration,
+    voiceSourceEndTime: shouldClearLeakedVoiceSource ? null : segment.voiceSourceEndTime,
+    voiceSourceStartTime: shouldClearLeakedVoiceSource ? null : segment.voiceSourceStartTime,
   };
 };
 

@@ -391,4 +391,92 @@ describe("studio generation worker availability", () => {
     );
     expect(segmentEditor?.segments?.[1]).not.toHaveProperty("voice_type");
   });
+
+  it("forwards talking photo segment assets to AdsFlow generation", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-talking-photo-segment",
+            status: "queued",
+            title: "Talking photo segment",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("A short video about pancakes", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        isRegeneration: true,
+        language: "ru",
+        projectId: 42,
+        segmentEditor: {
+          allowStructureChange: true,
+          projectId: 42,
+          segments: [
+            {
+              customVideoAssetId: 909,
+              duration: 3.4,
+              durationMode: "manual",
+              endTime: 44.8,
+              index: 7,
+              manualDurationSeconds: 3.4,
+              startTime: 41.4,
+              text: "Попробуйте, это очень вкусно!",
+              videoAction: "talking_photo",
+              voiceType: "none",
+            },
+          ],
+        },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-talking-photo-segment",
+        status: "queued",
+      }),
+    );
+
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    const segmentEditor = generationBody?.segment_editor as {
+      segments?: Array<Record<string, unknown>>;
+    } | undefined;
+
+    expect(segmentEditor?.segments?.[0]).toEqual(
+      expect.objectContaining({
+        custom_video_asset_id: 909,
+        effective_voice_type: "none",
+        video_action: "talking_photo",
+        voice_type: "none",
+      }),
+    );
+    expect(calls.map((call) => call.pathname)).not.toContain("/api/web/media-assets/direct-upload/init");
+  });
 });

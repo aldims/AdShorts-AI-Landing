@@ -4948,6 +4948,64 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("does not use the full project voice source window as one scene voiceover duration", async () => {
+    const segment = createDraftSegment({
+      duration: 12,
+      durationMode: "manual",
+      endTime: 12,
+      manualDurationSeconds: 12,
+      mediaType: "video",
+      speechDuration: null,
+      speechEndTime: 44.8,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "Попробуйте, это очень вкусно!",
+      voiceoverAsset: {
+        assetId: 503,
+        durationSeconds: 44.8,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/503",
+      },
+      voiceSourceDuration: 44.8,
+      voiceSourceEndTime: 44.8,
+      voiceSourceStartTime: 0,
+    });
+    const session = {
+      ...createDraftSession(segment),
+      ttsAssetId: 503,
+    };
+
+    expect(getWorkspaceSegmentVoiceoverDurationSeconds(segment, session)).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
+        allowEstimated: false,
+      }),
+    ).toBeNull();
+    expect(
+      resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, session, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 12,
+      }),
+    ).toBeNull();
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(session);
+    expect(rebuilt.segments[0]).toMatchObject({
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(session, { language: "ru" });
+    expect(result.payload.segments[0]?.voiceSourceDuration).toBeUndefined();
+    expect(result.payload.segments[0]?.voiceSourceEndTime).toBeUndefined();
+    expect(result.payload.segments[0]?.voiceSourceStartTime).toBeUndefined();
+  });
+
   it("uses voiceover plus pause as the photo visual duration floor", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
       minimumDurationSeconds: 3.4,

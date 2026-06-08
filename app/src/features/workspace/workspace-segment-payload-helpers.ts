@@ -31,6 +31,7 @@ import {
   hasWorkspaceSegmentPersistedMediaReference,
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
   isWorkspaceSegmentVoiceoverAssetFresh,
+  isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak,
   normalizeWorkspaceSegmentDurationMode,
   normalizeWorkspaceSegmentEditorSetting,
   rebuildWorkspaceSegmentEditorDraftTimeline,
@@ -325,9 +326,15 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const voiceoverAssetId = isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
       ? getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) ?? undefined
       : undefined;
-    const shouldPreserveProjectVoiceSource = !voiceoverAssetId;
+    const rawVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+    const hasLeakedProjectVoiceSourceDuration = isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(
+      segment,
+      session,
+      rawVoiceSourceDuration,
+    );
+    const shouldPreserveProjectVoiceSource = !voiceoverAssetId && !hasLeakedProjectVoiceSourceDuration;
     const voiceSourceDuration = shouldPreserveProjectVoiceSource
-      ? getWorkspaceSegmentVoiceSourceDurationSeconds(segment)
+      ? rawVoiceSourceDuration
       : null;
     const voiceSourceEndTime = shouldPreserveProjectVoiceSource
       ? getWorkspaceSegmentVoiceSourceEndTime(segment)
