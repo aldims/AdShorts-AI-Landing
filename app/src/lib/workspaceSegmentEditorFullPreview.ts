@@ -42,6 +42,7 @@ export type WorkspaceSegmentEditorFullPreviewAudibleAudioTrack = {
 
 export type WorkspaceSegmentEditorFullPreviewVolumeEnvelopeTrack = {
   loop?: boolean;
+  kind?: string;
   timelineEndTime: number;
   timelineStartTime: number;
 };
@@ -245,6 +246,18 @@ export const getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier = (
         )
       : 1;
   return Math.min(fadeIn, fadeOut);
+};
+
+export const getWorkspaceSegmentEditorFullPreviewAudioFadeOptions = (
+  track: Pick<WorkspaceSegmentEditorFullPreviewVolumeEnvelopeTrack, "kind">,
+  fadeSeconds: number,
+) => {
+  const safeFadeSeconds = normalizePreviewTime(fadeSeconds) ?? 0;
+  const isVoiceTrack = track.kind === "voice" || track.kind === "embedded_voice";
+  return {
+    fadeInSeconds: isVoiceTrack ? Math.min(0.025, safeFadeSeconds) : safeFadeSeconds,
+    fadeOutSeconds: isVoiceTrack ? 0 : safeFadeSeconds,
+  };
 };
 
 export const getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength = <

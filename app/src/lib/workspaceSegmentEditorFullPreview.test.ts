@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
+  getWorkspaceSegmentEditorFullPreviewAudioFadeOptions,
   getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier,
   getWorkspaceSegmentEditorFullPreviewDuckedVolume,
   getWorkspaceSegmentEditorFullPreviewDuration,
@@ -97,6 +98,29 @@ describe("workspace segment editor full preview", () => {
 
     expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 1.025, options)).toBeCloseTo(0.5, 6);
     expect(getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, 4.9, options)).toBeCloseTo(0.5, 6);
+  });
+
+  it("does not fade out voice tracks before the final word", () => {
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeOptions({ kind: "voice" }, 0.2)).toEqual({
+      fadeInSeconds: 0.025,
+      fadeOutSeconds: 0,
+    });
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeOptions({ kind: "embedded_voice" }, 0.2)).toEqual({
+      fadeInSeconds: 0.025,
+      fadeOutSeconds: 0,
+    });
+    expect(getWorkspaceSegmentEditorFullPreviewAudioFadeOptions({ kind: "sound" }, 0.2)).toEqual({
+      fadeInSeconds: 0.2,
+      fadeOutSeconds: 0.2,
+    });
+
+    expect(
+      getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(
+        { kind: "voice", timelineEndTime: 5, timelineStartTime: 1 },
+        4.9,
+        getWorkspaceSegmentEditorFullPreviewAudioFadeOptions({ kind: "voice" }, 0.2),
+      ),
+    ).toBe(1);
   });
 
   it("ramps music ducking before and after voice instead of jumping at scene boundaries", () => {

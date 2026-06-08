@@ -781,6 +781,7 @@ import { resolveWorkspaceGenerationMusicRequest } from "../lib/workspaceGenerati
 import { resolveWorkspaceRegenerationPrompt } from "../lib/workspaceRegenerationPrompt";
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
+  getWorkspaceSegmentEditorFullPreviewAudioFadeOptions,
   getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier,
   getWorkspaceSegmentEditorFullPreviewDuckedVolume,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
@@ -20898,13 +20899,14 @@ export function WorkspacePage({
     },
   ) => {
     const currentTime = options?.currentTime ?? segmentEditorFullPreviewTimeRef.current;
-    const isVoiceTrack = isSegmentEditorFullPreviewVoiceAudioTrack(track);
-    const fadeMultiplier = getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(track, currentTime, {
-      fadeInSeconds: isVoiceTrack
-        ? Math.min(0.025, WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_FADE_SECONDS)
-        : WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_FADE_SECONDS,
-      fadeOutSeconds: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_FADE_SECONDS,
-    });
+    const fadeMultiplier = getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier(
+      track,
+      currentTime,
+      getWorkspaceSegmentEditorFullPreviewAudioFadeOptions(
+        track,
+        WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_FADE_SECONDS,
+      ),
+    );
     const voiceDuckingStrength =
       options?.voiceDuckingStrength ?? getSegmentEditorFullPreviewVoiceDuckingStrength(currentTime);
     let volume = track.volume;
