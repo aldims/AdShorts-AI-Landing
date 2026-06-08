@@ -5,6 +5,7 @@ import {
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
+  getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getStudioSceneSoundAssetPreviewMediaKind,
@@ -121,6 +122,40 @@ const createProjectVoiceoverDraft = (
 });
 
 describe("workspace segment editor scene sound preview", () => {
+  it("displays empty scene timeline ranges as zero-length without changing real slot timing", () => {
+    const emptySegment = createProjectVoiceoverSegment({
+      duration: 2.4,
+      endTime: 12.4,
+      originalText: "",
+      originalTextByLanguage: { ru: "" },
+      startTime: 10,
+      text: "",
+      textByLanguage: { ru: "" },
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const visibleRange = getWorkspaceSegmentEditorVisibleTimelineDisplayRange(emptySegment, {
+      endTime: 12.4,
+      startTime: 10,
+    });
+
+    expect(visibleRange).toEqual({ endTime: 10, startTime: 10 });
+
+    const filledSegment = createProjectVoiceoverSegment({
+      duration: 2.4,
+      endTime: 12.4,
+      startTime: 10,
+    });
+
+    expect(
+      getWorkspaceSegmentEditorVisibleTimelineDisplayRange(filledSegment, {
+        endTime: 12.4,
+        startTime: 10,
+      }),
+    ).toEqual({ endTime: 12.4, startTime: 10 });
+  });
+
   it("uses a video element for scene sound assets stored as mp4", () => {
     expect(getStudioSceneSoundAssetPreviewMediaKind({
       fileName: "scene-sound.mp4",

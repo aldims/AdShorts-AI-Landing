@@ -2638,6 +2638,20 @@ export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
       !segment.sceneSoundAsset,
   );
 
+export const getWorkspaceSegmentEditorVisibleTimelineDisplayRange = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  range: { endTime: number; startTime: number },
+) => {
+  if (!isWorkspaceSegmentEditorDraftSegmentEmpty(segment)) {
+    return range;
+  }
+
+  return {
+    endTime: range.startTime,
+    startTime: range.startTime,
+  };
+};
+
 export const getWorkspaceSegmentOriginalMediaType = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): WorkspaceSegmentMediaType => {

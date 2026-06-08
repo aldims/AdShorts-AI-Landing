@@ -31,7 +31,7 @@ export function WorkspaceSegmentEditorBrandOverlay({
 
   const normalizedBrandText = brandText.trim();
   const systemWatermarkText = workspaceText(locale, "Сделано в adshortsai.com", "Made with adshortsai.com");
-  const editBrandLabel = workspaceText(locale, "Изменить бренд", "Edit brand");
+  const editBrandLabel = workspaceText(locale, "Бренд ✏️", "Brand ✏️");
   const brandTitle = [
     hasBranding ? brandSummary : "",
     hasSystemWatermark ? systemWatermarkText : "",
@@ -94,26 +94,22 @@ export function WorkspaceSegmentEditorBrandOverlay({
 }
 
 type WorkspaceSegmentEditorBrandAddButtonProps = {
-  hasBranding: boolean;
   locale: Locale;
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 };
 
 export function WorkspaceSegmentEditorBrandAddButton({
-  hasBranding,
   locale,
   onClick,
 }: WorkspaceSegmentEditorBrandAddButtonProps) {
-  const brandActionLabel = hasBranding
-    ? workspaceText(locale, "Изменить бренд", "Edit brand")
-    : workspaceText(locale, "Добавить бренд", "Add brand");
+  const brandButtonLabel = workspaceText(locale, "Бренд ✏️", "Brand ✏️");
 
   return (
     <button
       className="studio-segment-editor__brand-add"
       type="button"
-      aria-label={brandActionLabel}
-      title={brandActionLabel}
+      aria-label={brandButtonLabel}
+      title={brandButtonLabel}
       onPointerDown={(event) => {
         event.stopPropagation();
       }}
@@ -123,7 +119,7 @@ export function WorkspaceSegmentEditorBrandAddButton({
         onClick(event);
       }}
     >
-      {brandActionLabel}
+      {brandButtonLabel}
     </button>
   );
 }

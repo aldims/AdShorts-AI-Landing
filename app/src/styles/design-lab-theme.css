@@ -40353,6 +40353,7 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--edit-hitbox:hover,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--edit-hitbox:focus-visible {
+  min-width: 76px;
   backdrop-filter: blur(14px) saturate(120%);
   -webkit-backdrop-filter: blur(14px) saturate(120%);
 }
@@ -40374,9 +40375,13 @@ html, body {
   .studio-segment-editor__brand-edit-label {
   position: absolute;
   left: 50%;
-  max-width: calc(100% - 18px);
+  max-width: none;
+  min-width: max-content;
   transform: translateX(-50%);
   display: inline-flex;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
   color: rgba(255, 255, 255, 0.96);
   font-weight: 850;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.68);
@@ -40416,6 +40421,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  opacity: 1;
   transform: translateX(-50%);
   pointer-events: auto;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.54);
@@ -40429,6 +40435,7 @@ html, body {
     border-color 0.16s ease,
     background 0.16s ease,
     color 0.16s ease,
+    opacity 0.16s ease,
     transform 0.16s ease;
 }
 

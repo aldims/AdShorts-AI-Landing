@@ -800,6 +800,14 @@ describe("WorkspacePage reference creation defaults", () => {
 });
 
 describe("WorkspacePage example prefill settings", () => {
+  it("keeps the system watermark disabled by default", () => {
+    expect(createWorkspaceSegmentEditorProjectBrandState()).toMatchObject({
+      brandLogoFile: null,
+      brandText: "",
+      systemWatermarkEnabled: false,
+    });
+  });
+
   it("uses example settings as the initial Studio state", () => {
     expect(
       resolveWorkspaceExamplePrefillInitialStudioState({

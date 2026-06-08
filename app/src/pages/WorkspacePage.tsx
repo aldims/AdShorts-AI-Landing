@@ -197,6 +197,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorReservedSegmentIndexes,
   getWorkspaceSegmentEditorSessionLanguage,
+  getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentEffectiveVoiceId,
@@ -1226,18 +1227,9 @@ export function WorkspacePage({
   const [segmentEditorBrandText, setSegmentEditorBrandText] = useState(
     () => examplePrefillInitialStudioState.brandText || (initialBrandSettingsRef.current?.brandText ?? ""),
   );
-  const [segmentEditorSystemWatermarkEnabled, setSegmentEditorSystemWatermarkEnabled] = useState(
-    () => normalizeWorkspacePlan(initialProfile?.plan) === "FREE",
-  );
-  const [appliedSegmentEditorSystemWatermarkEnabled, setAppliedSegmentEditorSystemWatermarkEnabled] = useState(
-    () => normalizeWorkspacePlan(initialProfile?.plan) === "FREE",
-  );
-  const [baselineSegmentEditorSystemWatermarkEnabled, setBaselineSegmentEditorSystemWatermarkEnabled] = useState(
-    () => normalizeWorkspacePlan(initialProfile?.plan) === "FREE",
-  );
-  const hasInitializedSegmentEditorSystemWatermarkRef = useRef(
-    normalizeWorkspacePlan(initialProfile?.plan) === "FREE",
-  );
+  const [segmentEditorSystemWatermarkEnabled, setSegmentEditorSystemWatermarkEnabled] = useState(false);
+  const [appliedSegmentEditorSystemWatermarkEnabled, setAppliedSegmentEditorSystemWatermarkEnabled] = useState(false);
+  const [baselineSegmentEditorSystemWatermarkEnabled, setBaselineSegmentEditorSystemWatermarkEnabled] = useState(false);
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
   const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>(examplePrefillInitialStudioState.musicType);
@@ -4463,31 +4455,6 @@ export function WorkspacePage({
   const workspacePlan = normalizeWorkspacePlan(verifiedWorkspaceProfile?.plan);
   const workspacePlanLabel = workspacePlan ?? "…";
   const workspaceBalance = normalizeWorkspaceBalance(verifiedWorkspaceProfile?.balance);
-  useEffect(() => {
-    if (segmentEditorDraftRef.current) {
-      hasInitializedSegmentEditorSystemWatermarkRef.current = workspacePlan === "FREE";
-      return;
-    }
-
-    if (workspacePlan === "FREE") {
-      if (hasInitializedSegmentEditorSystemWatermarkRef.current) {
-        return;
-      }
-
-      hasInitializedSegmentEditorSystemWatermarkRef.current = true;
-      setSegmentEditorSystemWatermarkEnabled(true);
-      setAppliedSegmentEditorSystemWatermarkEnabled(true);
-      setBaselineSegmentEditorSystemWatermarkEnabled(true);
-      return;
-    }
-
-    if (workspacePlan) {
-      hasInitializedSegmentEditorSystemWatermarkRef.current = false;
-      setSegmentEditorSystemWatermarkEnabled(false);
-      setAppliedSegmentEditorSystemWatermarkEnabled(false);
-      setBaselineSegmentEditorSystemWatermarkEnabled(false);
-    }
-  }, [workspacePlan]);
   const workspaceCanPurchaseCreditPacks = canPurchaseAddonCredits(workspacePlan);
   const workspaceBillingDescription = workspaceCanPurchaseCreditPacks
     ? workspaceText(locale, `На тарифе ${workspacePlanLabel} можно докупать кредиты пакетами.`, `Plan ${workspacePlanLabel} can buy credit packs.`)
@@ -5946,9 +5913,7 @@ export function WorkspacePage({
     isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo ||
     isAnySegmentEditorVisualJobBusy;
-  const isSegmentEditorAddSegmentBusy =
-    isSegmentEditorShortsGeneration ||
-    isSegmentEditorPreparingCustomVideo;
+  const isSegmentEditorAddSegmentBusy = isSegmentEditorShortsGeneration;
   const isSegmentEditorThumbReorderBusy =
     isSegmentEditorShortsGeneration ||
     isSegmentEditorPreparingCustomVideo;
@@ -8339,6 +8304,35 @@ export function WorkspacePage({
   }, [closeSegmentAiPhotoModal, isSegmentAiPhotoModalOpen, isSegmentAiPhotoModalVisible]);
 
   useEffect(() => {
+    if (createMode !== "segment-editor" || !isSegmentEditorVisualPanelOpen || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (
+        target.closest(
+          ".studio-segment-editor__prompt-column, .studio-segment-editor__carousel, .studio-segment-editor__timeline-cell--visual, [role=\"dialog\"]",
+        )
+      ) {
+        return;
+      }
+
+      setIsSegmentEditorVisualPanelOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [createMode, isSegmentEditorVisualPanelOpen]);
+
+  useEffect(() => {
     if (segmentEditorFullPreviewActiveRef.current) {
       return;
     }
@@ -8968,7 +8962,7 @@ export function WorkspacePage({
   ): WorkspaceSegmentEditorProjectBrandState =>
     createWorkspaceSegmentEditorProjectBrandState({
       brandText: getSegmentEditorProjectPrefillSettings(projectId)?.brandText ?? "",
-      systemWatermarkEnabled: workspacePlan === "FREE",
+      systemWatermarkEnabled: false,
     });
 
   const getSegmentEditorProjectBrandSnapshot = (
@@ -15641,11 +15635,9 @@ export function WorkspacePage({
 
     await handleGenerate(generationPrompt, {
       ...segmentEditorGenerationOptions,
-      addWatermark:
-        shouldShowSegmentEditorSystemWatermarkControl &&
-        appliedSegmentEditorSystemWatermarkEnabled !== baselineSegmentEditorSystemWatermarkEnabled
-          ? appliedSegmentEditorSystemWatermarkEnabled
-          : undefined,
+      addWatermark: shouldShowSegmentEditorSystemWatermarkControl
+        ? appliedSegmentEditorSystemWatermarkEnabled
+        : false,
       brandChanged:
         isSegmentEditorBrandDirty ||
         hasSegmentEditorBrandChange ||
@@ -17106,7 +17098,7 @@ export function WorkspacePage({
       appendStudioFormValue(formData, "videoModeChanged", Boolean(options?.videoModeChanged));
       appendStudioFormValue(formData, "voiceEnabled", effectiveVoiceEnabled);
       appendStudioFormValue(formData, "voiceId", effectiveVoiceId);
-      appendStudioFormValue(formData, "addWatermark", options?.addWatermark);
+      appendStudioFormValue(formData, "addWatermark", options?.addWatermark ?? false);
       appendStudioFormValue(formData, "brandChanged", options?.brandChanged);
       appendStudioFormValue(formData, "clearBranding", options?.clearBranding);
       appendStudioFormValue(formData, "brandText", effectiveBrandText || undefined);
@@ -17224,10 +17216,7 @@ export function WorkspacePage({
             }
           : null,
         brandText: effectiveBrandText,
-        systemWatermarkEnabled:
-          typeof options?.addWatermark === "boolean"
-            ? options.addWatermark
-            : workspacePlan === "FREE",
+        systemWatermarkEnabled: options?.addWatermark ?? false,
       });
 
       setStatus("Task queued");
@@ -19019,7 +19008,9 @@ export function WorkspacePage({
       return;
     }
 
-    setIsSegmentEditorVisualPanelOpen(true);
+    if (!isSegmentEditorVisualPanelOpen) {
+      setIsSegmentEditorVisualPanelOpen(true);
+    }
     activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
     syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
     setSegmentTimelineVisualMenuSegmentIndex(null);
@@ -23605,8 +23596,15 @@ export function WorkspacePage({
       startTime: span?.startTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment),
     };
   };
+  const getSegmentTimelineVisibleDisplayRange = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    segmentArrayIndex?: number | null,
+  ) => {
+    const range = getSegmentTimelineDisplayRange(segment, segmentArrayIndex);
+    return getWorkspaceSegmentEditorVisibleTimelineDisplayRange(segment, range);
+  };
   const activeSegmentTimeRange = activeSegment
-    ? getSegmentTimelineDisplayRange(activeSegment, activeSegmentIndex)
+    ? getSegmentTimelineVisibleDisplayRange(activeSegment, activeSegmentIndex)
     : null;
   const activeSegmentTimeRangeLabel = activeSegment
     ? formatWorkspaceSegmentEditorSegmentTimeRange(
@@ -23701,6 +23699,15 @@ export function WorkspacePage({
               const startBoundarySegment =
                 segmentArrayIndex > 0 ? segmentEditorDraft.segments[segmentArrayIndex - 1] ?? null : null;
               const endBoundarySegment = isLastSpan ? segmentEditorDraft.segments[segmentArrayIndex] ?? null : null;
+              const startBoundarySpan = index > 0 ? segmentEditorTimelineVisualRow?.spans[index - 1] ?? null : null;
+              const startBoundaryTime =
+                startBoundarySegment && startBoundarySpan && isWorkspaceSegmentEditorDraftSegmentEmpty(startBoundarySegment)
+                  ? startBoundarySpan.startTime
+                  : span.startTime;
+              const endBoundaryTime =
+                endBoundarySegment && isWorkspaceSegmentEditorDraftSegmentEmpty(endBoundarySegment)
+                  ? span.startTime
+                  : span.endTime;
               const segmentDisplayNumber = segment
                 ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index)
                 : segmentArrayIndex + 1;
@@ -23714,7 +23721,7 @@ export function WorkspacePage({
                 >
                   {startBoundarySegment ? (
                     renderSegmentTimelineBoundaryTimecode({
-                      boundaryTime: span.startTime,
+                      boundaryTime: startBoundaryTime,
                       segment: startBoundarySegment,
                       segmentDisplayNumber: getWorkspaceSegmentEditorDisplayNumber(
                         segmentEditorDraft.segments,
@@ -23728,7 +23735,7 @@ export function WorkspacePage({
                   )}
                   {endBoundarySegment ? (
                     renderSegmentTimelineBoundaryTimecode({
-                      boundaryTime: span.endTime,
+                      boundaryTime: endBoundaryTime,
                       className: "studio-segment-editor__timeline-timecode-boundary--end",
                       segment: endBoundarySegment,
                       segmentDisplayNumber: getWorkspaceSegmentEditorDisplayNumber(
@@ -23826,9 +23833,11 @@ export function WorkspacePage({
               const thumbGenerationLabel = getSegmentVisualGenerationStatusLabel(segment.index, "compact");
               const isThumbVisualGenerationPending = Boolean(thumbGenerationLabel);
               const segmentDisplayNumber = getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, segment.index);
+              const isEmptySegment = isWorkspaceSegmentEditorDraftSegmentEmpty(segment);
+              const displaySpanEndTime = isEmptySegment ? span.startTime : span.endTime;
               const segmentDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
                 span.startTime,
-                span.endTime,
+                displaySpanEndTime,
                 locale,
                 { isFirstSegment: index === 0 },
               );
@@ -23860,9 +23869,9 @@ export function WorkspacePage({
                 },
               );
               const isVideoVisualDurationPending = isSegmentEditorVideoVisualDurationPending(segment);
-              const segmentSlotDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
-                Math.max(0, span.endTime - span.startTime),
-              );
+              const segmentSlotDurationSeconds = isEmptySegment
+                ? 0
+                : roundWorkspaceSegmentTimelineSeconds(Math.max(0, span.endTime - span.startTime));
               const segmentDurationBadgeLabel =
                 formatWorkspaceSegmentEditorDurationBadgeLabel(segmentSlotDurationSeconds, locale);
               const segmentDurationInputInitialValue =
@@ -26467,7 +26476,6 @@ export function WorkspacePage({
   );
   const renderSegmentEditorBrandAddButton = () => (
     <WorkspaceSegmentEditorBrandAddButton
-      hasBranding={hasAppliedSegmentEditorBranding}
       locale={locale}
       onClick={handleSegmentEditorPromptBrandToolButtonClick}
     />
@@ -27768,7 +27776,10 @@ export function WorkspacePage({
 
                                 const isActiveCard = offset === 0;
                                 const segmentNumber = nextSegmentArrayIndex + 1;
-                                const segmentTimelineRange = getSegmentTimelineDisplayRange(segment, nextSegmentArrayIndex);
+                                const segmentTimelineRange = getSegmentTimelineVisibleDisplayRange(
+                                  segment,
+                                  nextSegmentArrayIndex,
+                                );
                                 const segmentTimelineRangeLabel = formatWorkspaceSegmentEditorSegmentTimeRange(
                                   segmentTimelineRange.startTime,
                                   segmentTimelineRange.endTime,
