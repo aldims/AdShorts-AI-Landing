@@ -6702,7 +6702,7 @@ describe("WorkspacePage studio locale defaults", () => {
       endTime: 5,
       manualDurationSeconds: 5,
       startTime: 0,
-      videoAction: "custom",
+      videoAction: "talking_photo",
       voiceType: "none",
     });
   });
@@ -6764,7 +6764,7 @@ describe("WorkspacePage studio locale defaults", () => {
         customVideoAssetId: 909,
         duration: 6.48,
         manualDurationSeconds: 6.48,
-        videoAction: "custom",
+        videoAction: "talking_photo",
         voiceType: "none",
       }),
     );
@@ -6800,7 +6800,7 @@ describe("WorkspacePage studio locale defaults", () => {
         endTime: 6.7,
         manualDurationSeconds: 6.7,
         startTime: 0,
-        videoAction: "custom",
+        videoAction: "talking_photo",
         voiceType: "none",
       }),
     );
@@ -7028,6 +7028,54 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(result.payload.segments[0]?.videoAction).toBe("original");
     expect(result.payload.segments[0]?.customVideoAssetId).toBeUndefined();
+  });
+
+  it("keeps an already-applied talking photo as talking photo for export", async () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "photo",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(303, {
+      kind: "talking_photo",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 303,
+        durationSeconds: 3.4,
+        fileName: "talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-303/video",
+      },
+      aiVideoGeneratedFromPrompt: "Говорящий персонаж",
+      aiVideoGeneratedMode: "talking_photo",
+      aiVideoPrompt: "Говорящий персонаж",
+      aiVideoPromptInitialized: true,
+      currentAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      duration: 3.4,
+      durationMode: "manual",
+      endTime: 3.4,
+      manualDurationSeconds: 3.4,
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      text: "Попробуйте, это очень вкусно!",
+      videoAction: "talking_photo",
+      voiceType: "Boris",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: 303,
+      videoAction: "talking_photo",
+      voiceType: "none",
+    });
   });
 
   it("keeps an already-applied AI photo when it matches the current segment media", async () => {

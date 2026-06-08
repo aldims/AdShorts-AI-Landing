@@ -50,7 +50,7 @@ import type {
   WorkspaceSegmentEditorVideoAction,
 } from "./workspace-types";
 
-export type WorkspaceSegmentEditorPayloadVideoAction = "ai" | "custom" | "original";
+export type WorkspaceSegmentEditorPayloadVideoAction = "ai" | "custom" | "original" | "talking_photo";
 
 export type WorkspaceSegmentEditorPayloadSegment = {
   customVideoAssetId?: number;
@@ -195,7 +195,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
               : null;
     const isTalkingPhotoExport = exportAction === "talking_photo" && Boolean(selectedAiVideoAsset);
     const payloadVideoAction: WorkspaceSegmentEditorPayloadVideoAction =
-      exportAction === "ai_photo" || exportAction === "image_edit" || Boolean(selectedAiVideoAsset)
+      isTalkingPhotoExport
+        ? "talking_photo"
+        : exportAction === "ai_photo" || exportAction === "image_edit" || Boolean(selectedAiVideoAsset)
         ? "custom"
         : exportAction === "photo_animation" || exportAction === "talking_photo"
           ? "original"
@@ -206,13 +208,15 @@ export const buildWorkspaceSegmentEditorPayload = async (
     let customVideoRemoteUrl: string | undefined;
     let sceneSoundAssetId = getWorkspaceSegmentSceneSoundAssetId(segment.sceneSoundAsset) ?? undefined;
     const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
+      !isTalkingPhotoExport &&
       payloadVideoAction === "custom" &&
       isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
       isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)
         ? "original"
         : payloadVideoAction;
+    const shouldAttachCustomVisualAsset = payloadVideoActionForSegment === "custom" || isTalkingPhotoExport;
 
-    if (payloadVideoActionForSegment === "custom") {
+    if (shouldAttachCustomVisualAsset) {
       if (isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset)) {
         throw new Error(
           `Визуал сегмента ${segment.index + 1} не обновился. Сгенерируйте ИИ фото ещё раз или обновите редактор.`,
@@ -225,11 +229,11 @@ export const buildWorkspaceSegmentEditorPayload = async (
         customVideoAssetId = (await ensureStudioUploadedAssetId(customVisualAsset, {
           fallbackFileName: customVisualAsset.fileName || `segment-visual-${segment.index + 1}.bin`,
           fallbackMimeType: customVisualAsset.mimeType,
-          kind: "segment_source",
+          kind: isTalkingPhotoExport ? "talking_photo" : "segment_source",
           language: options.language,
           mediaType: getWorkspaceSegmentCustomPreviewKind(customVisualAsset) === "image" ? "photo" : "video",
           projectId: mediaUploadScope.projectId,
-          role: "segment_source",
+          role: isTalkingPhotoExport ? "talking_photo" : "segment_source",
           segmentIndex: mediaUploadScope.segmentIndex,
         })) ?? undefined;
       }
@@ -335,8 +339,8 @@ export const buildWorkspaceSegmentEditorPayload = async (
     segments.push({
       customVideoAssetId,
       customVideoFileDataUrl,
-      customVideoFileMimeType: payloadVideoActionForSegment === "custom" ? customVisualAsset?.mimeType : undefined,
-      customVideoFileName: payloadVideoActionForSegment === "custom" ? customVisualAsset?.fileName : undefined,
+      customVideoFileMimeType: shouldAttachCustomVisualAsset ? customVisualAsset?.mimeType : undefined,
+      customVideoFileName: shouldAttachCustomVisualAsset ? customVisualAsset?.fileName : undefined,
       customVideoRemoteUrl,
       customVideoFileUploadKey,
       duration,
