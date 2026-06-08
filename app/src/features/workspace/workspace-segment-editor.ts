@@ -6194,7 +6194,7 @@ export const getWorkspaceSegmentEditorEffectiveSubtitleSelection = (
 export type WorkspaceSegmentEditorCarouselSlot =
   | {
       kind: "segment";
-      offset: -1 | 0 | 1;
+      offset: number;
       segmentArrayIndex: number;
     }
   | {
@@ -6204,7 +6204,7 @@ export type WorkspaceSegmentEditorCarouselSlot =
     }
   | {
       kind: "empty";
-      offset: -1 | 0 | 1;
+      offset: number;
       segmentArrayIndex: number;
     };
 
@@ -6242,6 +6242,7 @@ export const getWorkspaceSegmentEditorCarouselNavigation = (options: {
 export const getWorkspaceSegmentEditorCarouselSlots = (options: {
   activeSegmentIndex: number;
   canAddSegment: boolean;
+  forwardPreloadCount?: number;
   segmentCount: number;
 }): WorkspaceSegmentEditorCarouselSlot[] => {
   const segmentCount = normalizeWorkspaceSegmentEditorCarouselSegmentCount(options.segmentCount);
@@ -6249,8 +6250,18 @@ export const getWorkspaceSegmentEditorCarouselSlots = (options: {
     options.activeSegmentIndex,
     segmentCount,
   );
+  const rawForwardPreloadCount = options.forwardPreloadCount;
+  const forwardPreloadCount =
+    typeof rawForwardPreloadCount === "number" && Number.isFinite(rawForwardPreloadCount)
+      ? Math.max(1, Math.trunc(rawForwardPreloadCount))
+      : 1;
+  const offsets = [
+    -1,
+    0,
+    ...Array.from({ length: forwardPreloadCount }, (_, index) => index + 1),
+  ];
 
-  return ([-1, 0, 1] as const).map((offset) => {
+  return offsets.map((offset) => {
     const segmentArrayIndex = activeSegmentIndex + offset;
     if (segmentArrayIndex >= 0 && segmentArrayIndex < segmentCount) {
       return {

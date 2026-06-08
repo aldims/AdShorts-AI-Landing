@@ -286,6 +286,20 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   }, [mediaKey, previewKind, resolvedPreviewUrl, shouldAllowVideoPlayback]);
 
   useEffect(() => {
+    if (previewKind !== "video" || !isPlaybackRequested || preload === "none") {
+      return;
+    }
+
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    delete element.dataset.previewPrimed;
+    ensureVideoElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+  }, [isPlaybackRequested, preload, previewKind, resolvedPreviewUrl]);
+
+  useEffect(() => {
     setPreviewCandidateIndex(0);
   }, [mediaKey, normalizedPreviewUrl, previewFallbackSignature, previewKind]);
 

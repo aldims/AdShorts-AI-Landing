@@ -61,6 +61,73 @@ const getWorkspaceSegmentExternalVideoFallbackUrls = (segment: WorkspaceSegmentE
     segment.originalExternalPreviewUrl,
   ]);
 
+const getWorkspaceVideoPlaybackRouteUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const isAbsoluteUrl = /^[a-z][a-z\d+.-]*:\/\//i.test(normalizedValue);
+    const url = new URL(normalizedValue, "http://localhost");
+
+    const mediaAssetMatch = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)$/i);
+    if (mediaAssetMatch) {
+      const assetId = getPositiveWorkspaceMediaAssetId(mediaAssetMatch[1]);
+      if (!assetId) {
+        return null;
+      }
+
+      return `${isAbsoluteUrl ? url.origin : ""}${buildWorkspaceMediaAssetPlaybackUrl(assetId)}${url.search}${url.hash}`;
+    }
+
+    if (
+      url.pathname.toLowerCase() === "/api/workspace/project-segment-video" &&
+      url.searchParams.get("delivery")?.toLowerCase() === "preview"
+    ) {
+      url.searchParams.set("delivery", "playback");
+      return `${isAbsoluteUrl ? url.origin : ""}${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const getStudioCustomVideoAssetPlaybackUrl = (asset: StudioCustomVideoFile | null | undefined) => {
+  if (!asset) {
+    return null;
+  }
+
+  const previewUrl = getStudioCustomAssetPreviewUrl(asset);
+  if (getWorkspaceSegmentCustomPreviewKind(asset) !== "video") {
+    return previewUrl;
+  }
+
+  if (asset.objectUrl?.trim() || asset.dataUrl?.trim()) {
+    return previewUrl;
+  }
+
+  const assetId = getPositiveWorkspaceMediaAssetId(asset.assetId);
+  if (assetId) {
+    return buildWorkspaceMediaAssetPlaybackUrl(assetId);
+  }
+
+  return getWorkspaceVideoPlaybackRouteUrl(asset.remoteUrl ?? previewUrl) ?? previewUrl;
+};
+
+const getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  mode: "ai_video" | "photo_animation" | "talking_photo",
+) => {
+  if (!getWorkspaceSegmentDisplayAiVideoAssetUrl(segment, mode)) {
+    return null;
+  }
+
+  return getStudioCustomVideoAssetPlaybackUrl(segment.aiVideoAsset);
+};
+
 const getWorkspaceSegmentPersistedSourceKind = (segment: WorkspaceSegmentEditorDraftSegment): WorkspaceSegmentSourceKind =>
   [
     segment.currentSourceKind,
@@ -635,6 +702,82 @@ export const getWorkspaceSegmentDraftVideoUrl = (segment: WorkspaceSegmentEditor
   );
 };
 
+const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  if (segment.visualReset && !hasWorkspaceSegmentExplicitDraftVisual(segment)) {
+    return getWorkspaceSegmentVisualResetVideoUrl(segment);
+  }
+
+  const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
+
+  if (latestVisualAction === "ai") {
+    return (
+      getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "ai_video") ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  if (latestVisualAction === "photo_animation") {
+    return (
+      getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "photo_animation") ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  if (latestVisualAction === "talking_photo") {
+    return (
+      getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "talking_photo") ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  if (segment.videoAction === "custom") {
+    return (
+      getStudioCustomVideoAssetPlaybackUrl(segment.customVideo) ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  if (segment.videoAction === "image_edit") {
+    return (
+      getStudioCustomVideoAssetPlaybackUrl(segment.imageEditAsset) ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  if (segment.videoAction === "ai_photo") {
+    return (
+      getStudioCustomVideoAssetPlaybackUrl(segment.aiPhotoAsset) ??
+      segment.currentPlaybackUrl ??
+      segment.currentExternalPlaybackUrl ??
+      segment.originalPlaybackUrl ??
+      segment.originalExternalPlaybackUrl ??
+      getWorkspaceSegmentDraftVideoUrl(segment)
+    );
+  }
+
+  return getWorkspaceSegmentDraftVideoUrl(segment);
+};
+
 const getStudioCustomAssetMediaIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
   if (!asset) {
     return null;
@@ -690,7 +833,12 @@ export const getWorkspaceSegmentResolvedMediaSurface = (
 ): WorkspaceResolvedMediaSurface => {
   const previewKind = getWorkspaceSegmentPreviewKind(segment);
   const previewUrl = getWorkspaceSegmentDraftPreviewUrl(segment);
-  const viewerUrl = previewKind === "video" ? getWorkspaceSegmentDraftVideoUrl(segment) : previewUrl;
+  const viewerUrl =
+    previewKind === "video"
+      ? options?.isPlaybackRequested
+        ? getWorkspaceSegmentDraftPlaybackVideoUrl(segment)
+        : getWorkspaceSegmentDraftVideoUrl(segment)
+      : previewUrl;
   const posterUrl = previewKind === "video" ? getWorkspaceSegmentDraftPosterUrl(segment) : null;
   const fallbackPosterUrl = previewKind === "video" ? getWorkspaceSegmentDraftFallbackPosterUrl(segment) : null;
   const fallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(segment, previewKind);

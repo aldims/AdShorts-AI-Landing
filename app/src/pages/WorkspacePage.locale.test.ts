@@ -2079,6 +2079,22 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(navigation.canNavigateNext).toBe(false);
   });
 
+  it("can include an extra forward carousel slot for full-preview video preloading", () => {
+    const slots = getWorkspaceSegmentEditorCarouselSlots({
+      activeSegmentIndex: 1,
+      canAddSegment: true,
+      forwardPreloadCount: 2,
+      segmentCount: 5,
+    });
+
+    expect(slots).toEqual([
+      { kind: "segment", offset: -1, segmentArrayIndex: 0 },
+      { kind: "segment", offset: 0, segmentArrayIndex: 1 },
+      { kind: "segment", offset: 1, segmentArrayIndex: 2 },
+      { kind: "segment", offset: 2, segmentArrayIndex: 3 },
+    ]);
+  });
+
   it("keeps a single empty segment when delete is requested again", () => {
     const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
     const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
@@ -7663,6 +7679,58 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentDraftPreviewFallbackUrls(segment, "video")).toEqual([
       "/api/workspace/media-assets/909/playback",
     ]);
+  });
+
+  it("uses durable playback media for generated carousel videos when playback is requested", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 1692,
+        fileName: "talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        posterUrl: "/api/workspace/media-assets/1692/poster?v=current",
+        remoteUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=preview&v=ready",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=playback&v=ready",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=preview&v=ready",
+      mediaType: "video",
+      videoAction: "talking_photo",
+    });
+
+    const idleSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: false,
+    });
+    const playbackSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: true,
+    });
+
+    expect(idleSurface.displayUrl).toContain("delivery=preview");
+    expect(playbackSurface.displayUrl).toBe("/api/workspace/media-assets/1692/playback");
+    expect(playbackSurface.viewerUrl).toBe("/api/workspace/media-assets/1692/playback");
+    expect(playbackSurface.preloadPolicy).toBe("auto");
+  });
+
+  it("rewrites project segment preview delivery for playback-only custom videos", () => {
+    const segment = createDraftSegment({
+      customVideo: {
+        fileName: "segment-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/project-segment-video?projectId=3753&segmentIndex=2&source=current&delivery=preview&v=clip",
+      },
+      mediaType: "video",
+      videoAction: "custom",
+    });
+
+    const playbackSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: true,
+    });
+
+    expect(playbackSurface.displayUrl).toBe(
+      "/api/workspace/project-segment-video?projectId=3753&segmentIndex=2&source=current&delivery=playback&v=clip",
+    );
+    expect(playbackSurface.viewerUrl).toBe(playbackSurface.displayUrl);
   });
 
   it("uses server-provided posters for video segment previews", () => {

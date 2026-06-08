@@ -78,6 +78,10 @@ import {
   getWorkspaceMediaAssetPlaybackCacheKey,
 } from "./media-asset-playback.js";
 import {
+  ensureWorkspaceSegmentVideoCache,
+  getWorkspaceSegmentVideoCacheKey,
+} from "./segment-video-cache.js";
+import {
   createTelegramOidcSession,
   getTelegramUserProfile,
   getTelegramUserProfileFromIdToken,
@@ -2652,6 +2656,7 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
   const segmentIndex = Number(req.query.segmentIndex ?? -1);
   const delivery = typeof req.query.delivery === "string" ? req.query.delivery.trim() : "preview";
   const source = typeof req.query.source === "string" ? req.query.source.trim() : "";
+  const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
 
   if (!Number.isFinite(projectId) || projectId <= 0) {
     res.status(400).json({ error: "Project id is required." });
@@ -2680,6 +2685,40 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
       segmentIndex,
       source,
     });
+    if (version) {
+      const cacheKey = getWorkspaceSegmentVideoCacheKey({
+        delivery,
+        projectId: String(Math.trunc(projectId)),
+        segmentIndex: Math.trunc(segmentIndex),
+        source,
+        targetUrl: target.url,
+        version,
+      });
+
+      try {
+        const cachedVideo = await ensureWorkspaceSegmentVideoCache({
+          cacheKey,
+          delivery,
+          projectId: String(Math.trunc(projectId)),
+          segmentIndex: Math.trunc(segmentIndex),
+          source,
+          upstreamHeaders: target.headers,
+          upstreamUrl: target.url,
+        });
+        res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+        res.setHeader("Content-Type", cachedVideo.contentType);
+        res.sendFile(cachedVideo.absolutePath);
+        return;
+      } catch (error) {
+        console.warn("[workspace] Failed to serve cached segment video; falling back to proxy", {
+          cacheKey,
+          error,
+          projectId,
+          segmentIndex,
+        });
+      }
+    }
+
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");

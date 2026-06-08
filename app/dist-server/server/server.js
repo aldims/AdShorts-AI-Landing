@@ -19,6 +19,7 @@ import { createWorkspaceSavedReference, deleteWorkspaceSavedReference, listWorks
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
+import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
@@ -2082,6 +2083,7 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
     const segmentIndex = Number(req.query.segmentIndex ?? -1);
     const delivery = typeof req.query.delivery === "string" ? req.query.delivery.trim() : "preview";
     const source = typeof req.query.source === "string" ? req.query.source.trim() : "";
+    const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
     if (!Number.isFinite(projectId) || projectId <= 0) {
         res.status(400).json({ error: "Project id is required." });
         return;
@@ -2105,6 +2107,39 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
             segmentIndex,
             source,
         });
+        if (version) {
+            const cacheKey = getWorkspaceSegmentVideoCacheKey({
+                delivery,
+                projectId: String(Math.trunc(projectId)),
+                segmentIndex: Math.trunc(segmentIndex),
+                source,
+                targetUrl: target.url,
+                version,
+            });
+            try {
+                const cachedVideo = await ensureWorkspaceSegmentVideoCache({
+                    cacheKey,
+                    delivery,
+                    projectId: String(Math.trunc(projectId)),
+                    segmentIndex: Math.trunc(segmentIndex),
+                    source,
+                    upstreamHeaders: target.headers,
+                    upstreamUrl: target.url,
+                });
+                res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
+                res.setHeader("Content-Type", cachedVideo.contentType);
+                res.sendFile(cachedVideo.absolutePath);
+                return;
+            }
+            catch (error) {
+                console.warn("[workspace] Failed to serve cached segment video; falling back to proxy", {
+                    cacheKey,
+                    error,
+                    projectId,
+                    segmentIndex,
+                });
+            }
+        }
         res.setHeader("Cache-Control", "private, no-store");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");

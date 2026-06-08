@@ -2,7 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { waitForWorkspaceAttachedVideoElement } from "./workspace-media-probe-helpers";
+import {
+  videoElementUsesAnyWorkspaceSourceUrl,
+  waitForWorkspaceAttachedVideoElement,
+} from "./workspace-media-probe-helpers";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -10,6 +13,16 @@ afterEach(() => {
 });
 
 describe("waitForWorkspaceAttachedVideoElement", () => {
+  it("matches a ready video against any primary or fallback source url", () => {
+    const element = document.createElement("video");
+    element.src = `${window.location.origin}/api/workspace/project-segment-video?projectId=3753&segmentIndex=1&source=original&delivery=preview&v=ready`;
+
+    expect(videoElementUsesAnyWorkspaceSourceUrl(element, [
+      "/api/workspace/project-segment-video?projectId=3753&segmentIndex=1&source=original&delivery=playback&v=ready",
+      "/api/workspace/project-segment-video?projectId=3753&segmentIndex=1&source=original&delivery=preview&v=ready",
+    ])).toBe(true);
+  });
+
   it("times out when animation frames are paused in a background tab", async () => {
     vi.useFakeTimers();
     const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);

@@ -36,6 +36,16 @@ export const videoElementUsesWorkspaceSourceUrl = (element: HTMLVideoElement, so
     .some((candidate) => candidate === normalizedSourceUrl);
 };
 
+export const videoElementUsesAnyWorkspaceSourceUrl = (
+  element: HTMLVideoElement,
+  sourceUrls: Array<string | null | undefined>,
+) =>
+  sourceUrls.some((sourceUrl) => (
+    typeof sourceUrl === "string" &&
+    sourceUrl.trim().length > 0 &&
+    videoElementUsesWorkspaceSourceUrl(element, sourceUrl)
+  ));
+
 export const waitForWorkspaceAttachedVideoElement = (
   resolveElement: () => HTMLVideoElement | null,
   sourceUrl: string,
