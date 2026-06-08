@@ -791,6 +791,7 @@ import {
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
@@ -20582,13 +20583,18 @@ export function WorkspacePage({
 
       const embeddedAudioUrl = getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment);
       if (embeddedAudioUrl) {
+        const embeddedVoiceTimelineEndTime = resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+          timelineEndTime,
+          timelineStartTime,
+          voiceDurationSeconds: getWorkspaceSegmentKnownVisualDurationSeconds(segment),
+        });
         tracks.push({
           key: getSegmentEditorEmbeddedTalkingPhotoAudioTrackKey(segment, embeddedAudioUrl),
           kind: "embedded_voice",
           mediaKind: "video",
           sourceKind: "isolated",
           sourceStartTime: 0,
-          timelineEndTime,
+          timelineEndTime: embeddedVoiceTimelineEndTime,
           timelineStartTime,
           url: embeddedAudioUrl,
           volume: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME,
@@ -20626,7 +20632,15 @@ export function WorkspacePage({
       });
       const voiceoverAudioUrl = voiceoverAudioPreviewSource.audioUrl;
       const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
-      const voiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
+      const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
+      const measuredVoiceoverDurationSeconds =
+        voiceoverAudioPreviewSource.sourceKind === "scene"
+          ? getSegmentEditorMeasuredVoiceoverDurationSeconds(segment.index, voiceoverAudioUrl)
+          : null;
+      const voiceoverDurationSeconds = resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
+        fallbackDurationSeconds: fallbackVoiceoverDurationSeconds,
+        measuredDurationSeconds: measuredVoiceoverDurationSeconds,
+      });
       const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft.ttsAssetId);
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
         const isProjectVoiceoverAudio = voiceoverAudioPreviewSource.sourceKind === "project";

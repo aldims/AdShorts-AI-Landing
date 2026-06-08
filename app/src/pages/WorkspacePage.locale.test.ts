@@ -6809,6 +6809,35 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("uses talking photo generated video duration as the embedded audio duration", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 6.7,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 6.48,
+      durationMode: "manual",
+      endTime: 6.48,
+      manualDurationSeconds: 6.48,
+      text: "Говорящий персонаж",
+      videoAction: "talking_photo",
+    });
+
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
+        allowEstimated: false,
+      }),
+    ).toEqual({
+      durationSeconds: 6.7,
+      source: "actual",
+    });
+  });
+
   it("keeps the project timeline stable when a talking photo asset is shorter than the fourth segment slot", async () => {
     const durations = [6.38, 8.22, 6.4, 6.48, 6.04, 5.24];
     let cursor = 0;

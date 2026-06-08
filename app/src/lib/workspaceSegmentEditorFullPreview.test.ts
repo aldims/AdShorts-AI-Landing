@@ -15,6 +15,7 @@ import {
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
@@ -52,6 +53,19 @@ describe("workspace segment editor full preview", () => {
         [
           { key: "music", kind: "music", timelineEndTime: 9, timelineStartTime: 0 },
           { key: "voice-3", kind: "voice", timelineEndTime: 9.25, timelineStartTime: 6 },
+        ],
+        { finalVoiceGraceSeconds: 0.45 },
+      ),
+    ).toBeCloseTo(9.7, 6);
+  });
+
+  it("extends playback end for a final embedded voice tail", () => {
+    expect(
+      getWorkspaceSegmentEditorFullPreviewPlaybackEndTime(
+        9,
+        [
+          { key: "music", kind: "music", timelineEndTime: 9, timelineStartTime: 0 },
+          { key: "embedded-3", kind: "embedded_voice", timelineEndTime: 9.25, timelineStartTime: 6 },
         ],
         { finalVoiceGraceSeconds: 0.45 },
       ),
@@ -143,6 +157,34 @@ describe("workspace segment editor full preview", () => {
         voiceDurationSeconds: 5,
       }),
     ).toBe(7);
+  });
+
+  it("keeps an embedded voice track long enough when the generated video is longer than the visual slot", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+        timelineEndTime: 6.48,
+        timelineStartTime: 0,
+        voiceDurationSeconds: 6.7,
+      }),
+    ).toBe(6.7);
+  });
+
+  it("uses measured scene voice duration when it is longer than saved metadata", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
+        fallbackDurationSeconds: 4.4,
+        measuredDurationSeconds: 4.644,
+      }),
+    ).toBe(4.644);
+  });
+
+  it("falls back to saved voice metadata when measured duration is missing", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
+        fallbackDurationSeconds: 4.4,
+        measuredDurationSeconds: null,
+      }),
+    ).toBe(4.4);
   });
 
   it("falls back to the visual slot when isolated voice duration is unknown", () => {

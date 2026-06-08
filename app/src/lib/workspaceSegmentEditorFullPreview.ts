@@ -322,6 +322,21 @@ export const resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTim
   return timelineStartTime + voiceDurationSeconds;
 };
 
+export const resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds = (options: {
+  fallbackDurationSeconds?: number | null;
+  measuredDurationSeconds?: number | null;
+}) => {
+  const measuredDurationSeconds = normalizePreviewTime(options.measuredDurationSeconds);
+  const fallbackDurationSeconds = normalizePreviewTime(options.fallbackDurationSeconds);
+  if (measuredDurationSeconds !== null && measuredDurationSeconds > 0) {
+    return fallbackDurationSeconds !== null && fallbackDurationSeconds > 0
+      ? Math.max(measuredDurationSeconds, fallbackDurationSeconds)
+      : measuredDurationSeconds;
+  }
+
+  return fallbackDurationSeconds !== null && fallbackDurationSeconds > 0 ? fallbackDurationSeconds : null;
+};
+
 export const serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (
   ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
   overlapToleranceSeconds = 0.05,
