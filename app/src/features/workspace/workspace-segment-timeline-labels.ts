@@ -3,6 +3,7 @@ import { workspaceText } from "./workspace-page-model";
 import { formatWorkspaceSegmentEditorChecklistPreview } from "./workspace-segment-editor-checklist";
 import {
   getWorkspaceSegmentEffectiveSubtitleSettings,
+  normalizeWorkspaceSegmentEditorTextForCompare,
   getWorkspaceSegmentVoiceOverrideId,
 } from "./workspace-segment-editor";
 import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
@@ -39,14 +40,17 @@ export const getWorkspaceSegmentTimelineVoiceLabel = (
 
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
-  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption && !voiceoverVoiceOption) {
+  const fallbackStudioVoiceOption =
+    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+    settings.getVoiceOptionById(settings.studioSidebarVoiceId);
+  if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
 
   const voice =
     voiceOverrideOption ??
     voiceoverVoiceOption ??
-    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId);
+    fallbackStudioVoiceOption;
   if (voiceOverrideOption && voiceOverrideOption.id !== settings.studioSidebarVoiceId) {
     return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
   }
@@ -65,14 +69,17 @@ export const getWorkspaceSegmentTimelineVoiceOption = (
 
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
-  if (!settings.studioSidebarVoiceEnabled && !voiceOverrideOption && !voiceoverVoiceOption) {
+  const fallbackStudioVoiceOption =
+    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+    settings.getVoiceOptionById(settings.studioSidebarVoiceId);
+  if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return null;
   }
 
   return (
     voiceOverrideOption ??
     voiceoverVoiceOption ??
-    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+    fallbackStudioVoiceOption ??
     null
   );
 };
@@ -105,11 +112,14 @@ export const getWorkspaceSegmentTimelineVoiceDisplayLabel = (
   locale: Locale,
   segment: WorkspaceSegmentEditorDraftSegment,
   settings: WorkspaceSegmentTimelineVoiceSettings,
-) =>
-  `${getWorkspaceSegmentTimelineVoiceLabel(locale, segment, settings)} · “${getWorkspaceSegmentTimelineVoiceTextPreview(
-    locale,
-    segment,
-  )}”`;
+) => {
+  const textPreview = getWorkspaceSegmentTimelineVoiceTextPreview(locale, segment);
+  if (!normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) {
+    return workspaceText(locale, "Добавить озвучку", "Add voiceover");
+  }
+
+  return `${getWorkspaceSegmentTimelineVoiceLabel(locale, segment, settings)} · “${textPreview}”`;
+};
 
 export const getWorkspaceSegmentTimelineSubtitleDisplay = (
   locale: Locale,

@@ -250,7 +250,7 @@ export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
     canForward,
     hasHistory: canBack || canForward,
     historyKind,
-    isEdited: options.isGeneratedVoiceoverEdited || options.isVoiceSettingsEdited,
+    isEdited: options.isGeneratedVoiceoverEdited || options.isVoiceSettingsEdited || options.isTextEdited,
   };
 };
 

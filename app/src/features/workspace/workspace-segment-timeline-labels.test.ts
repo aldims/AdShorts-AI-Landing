@@ -4,6 +4,7 @@ import {
   getWorkspaceSegmentTimelineSoundLabel,
   getWorkspaceSegmentTimelineVoiceLabel,
   getWorkspaceSegmentTimelineVoiceOption,
+  getWorkspaceSegmentTimelineVoiceDisplayLabel,
 } from "./workspace-segment-timeline-labels";
 
 describe("getWorkspaceSegmentTimelineSoundLabel", () => {
@@ -39,5 +40,44 @@ describe("getWorkspaceSegmentTimelineVoiceLabel", () => {
 
     expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, settings)).toBe("Тим");
     expect(getWorkspaceSegmentTimelineVoiceOption(segment, settings)?.id).toBe("Russian_BrightHeroine");
+  });
+
+  it("falls back to global voice lookup for a sidebar voice not in selected options", () => {
+    const segment = {
+      voiceType: null,
+      voiceoverVoiceType: null,
+    } as any;
+    const fallbackSettings = {
+      ...settings,
+      selectedVoiceOptions: [{ description: "", id: "Russian_BrightHeroine", label: "Тим" }],
+    };
+
+    expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, fallbackSettings)).toBe("Борис");
+    expect(getWorkspaceSegmentTimelineVoiceOption(segment, fallbackSettings)?.id).toBe("Bys_24000");
+  });
+
+  it("shows sidebar voice label even when sidebar voice is disabled", () => {
+    const segment = {
+      voiceType: null,
+      voiceoverVoiceType: null,
+    } as any;
+    const disabledSettings = {
+      ...settings,
+      studioSidebarVoiceEnabled: false,
+    };
+
+    expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, disabledSettings)).toBe("Борис");
+    expect(getWorkspaceSegmentTimelineVoiceOption(segment, disabledSettings)?.id).toBe("Bys_24000");
+  });
+
+  it("shows 'Добавить озвучку' in the full timeline label when text is empty", () => {
+    const segment = {
+      text: "   ",
+      voiceType: null,
+      voiceoverVoiceType: null,
+    } as any;
+
+    expect(getWorkspaceSegmentTimelineVoiceDisplayLabel("ru", segment, settings)).toBe("Добавить озвучку");
+    expect(getWorkspaceSegmentTimelineVoiceDisplayLabel("en", segment, settings)).toBe("Add voiceover");
   });
 });

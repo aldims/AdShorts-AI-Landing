@@ -6229,7 +6229,7 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
-  it("keeps the voice track unmarked for text edits until voiceover is generated", () => {
+  it("marks the voice timeline as edited for text-only changes", () => {
     const textOnlyState = resolveWorkspaceSegmentVoiceTimelineState({
       canForwardText: false,
       canForwardVoice: false,
@@ -6256,7 +6256,7 @@ describe("WorkspacePage studio locale defaults", () => {
       canBack: true,
       hasHistory: true,
       historyKind: "text",
-      isEdited: false,
+      isEdited: true,
     });
     expect(generatedVoiceoverState).toMatchObject({
       canBack: true,
