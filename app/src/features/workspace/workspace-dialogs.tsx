@@ -509,21 +509,16 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
           </div>
           <div className="workspace-confirm-modal__copy">
             <h2 className="workspace-confirm-modal__title">
-              {workspaceText(locale, "Для предпросмотра нужна озвучка", "Voiceover required for preview")}
+              {workspaceText(locale, "Озвучка некоторых сцен еще не сгенерирована", "Voiceover for some scenes has not been generated")}
             </h2>
             <p className="workspace-confirm-modal__message">
               {workspaceText(
                 locale,
-                "В некоторых сценах есть сохранённый текст без сгенерированной озвучки. Без неё предпросмотр будет недоступен.",
-                "Some scenes have saved text without generated voiceover. Without it, preview is not available.",
+                "Для предварительного просмотра сгенерируйте озвучку.",
+                "Generate voiceover to enable preview playback.",
               )}
             </p>
             {disabledReason ? <p className="workspace-confirm-modal__message" role="alert">{disabledReason}</p> : null}
-            {generateCostLabel ? (
-              <p className="workspace-confirm-modal__message">
-                {workspaceText(locale, `К оплате: ${generateCostLabel}`, `Cost: ${generateCostLabel}`)}
-              </p>
-            ) : null}
           </div>
         </div>
 
@@ -547,7 +542,11 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
                 {workspaceText(locale, "Генерируем озвучку...", "Generating voiceover...")}
               </>
             ) : (
-              workspaceText(locale, "Сгенерировать озвучку", "Generate voiceover")
+              workspaceText(
+                locale,
+                generateCostLabel ? `Сгенерировать озвучку за ${generateCostLabel}` : "Сгенерировать озвучку",
+                generateCostLabel ? `Generate voiceover for ${generateCostLabel}` : "Generate voiceover",
+              )
             )}
           </button>
         </div>

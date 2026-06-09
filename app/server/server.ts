@@ -104,6 +104,7 @@ import {
   createStudioSegmentImageUpscaleJob,
   createStudioSegmentPhotoAnimationJob,
   createStudioSegmentSceneSoundJob,
+  createStudioBatchVoiceoverJob,
   createStudioProjectVoiceoverJob,
   createStudioSegmentVoiceoverJob,
   createStudioSegmentTalkingPhotoJob,
@@ -120,6 +121,7 @@ import {
   getStudioSegmentPhotoAnimationJobStatus,
   getStudioSegmentSceneSoundJobFileProxyTarget,
   getStudioSegmentSceneSoundJobStatus,
+  getStudioBatchVoiceoverJobStatus,
   getStudioProjectVoiceoverJobFileProxyTarget,
   getStudioProjectVoiceoverJobStatus,
   getStudioSegmentVoiceoverJobFileProxyTarget,
@@ -4583,6 +4585,131 @@ app.get("/api/studio/segment-scene-sound/jobs/:jobId/audio", async (req, res) =>
     });
     res.status(502).json({
       error: error instanceof Error ? error.message : "Failed to load generated segment scene sound.",
+    });
+  }
+});
+
+app.post("/api/studio/voiceover/batch-jobs", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const projectId =
+    normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
+    normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
+    getRequestStudioRouteProjectId(req);
+  const rawGroups: unknown[] = Array.isArray(req.body?.groups) ? req.body.groups : [];
+  const groups = rawGroups
+    .map((group: unknown) => {
+      if (!group || typeof group !== "object") {
+        return null;
+      }
+
+      const groupPayload = group as Record<string, unknown>;
+      const language = typeof groupPayload.language === "string" ? groupPayload.language.trim() : "";
+      const voiceType =
+        typeof groupPayload.voiceType === "string"
+          ? groupPayload.voiceType.trim()
+          : typeof groupPayload.voice_type === "string"
+            ? groupPayload.voice_type.trim()
+            : "";
+      const rawSegments: unknown[] = Array.isArray(groupPayload.segments) ? groupPayload.segments : [];
+      const segments = rawSegments
+        .map((segment: unknown, index: number) => {
+          if (!segment || typeof segment !== "object") {
+            return null;
+          }
+
+          const segmentPayload = segment as Record<string, unknown>;
+          const text = typeof segmentPayload.text === "string" ? segmentPayload.text.trim() : "";
+          if (!text) {
+            return null;
+          }
+
+          return {
+            segmentIndex:
+              normalizeRequestNonNegativeInteger(
+                segmentPayload.segmentIndex ?? segmentPayload.segment_index ?? segmentPayload.index,
+              ) ?? index,
+            targetDurationSeconds:
+              typeof segmentPayload.targetDurationSeconds === "number"
+                ? segmentPayload.targetDurationSeconds
+                : typeof segmentPayload.target_duration_seconds === "number"
+                  ? segmentPayload.target_duration_seconds
+                  : typeof segmentPayload.targetDuration === "number"
+                    ? segmentPayload.targetDuration
+                    : typeof segmentPayload.target_duration === "number"
+                      ? segmentPayload.target_duration
+                      : typeof segmentPayload.duration === "number"
+                        ? segmentPayload.duration
+                        : null,
+            text,
+          };
+        })
+        .filter((segment): segment is { segmentIndex: number; targetDurationSeconds: number | null; text: string } =>
+          Boolean(segment),
+        );
+
+      if (!voiceType || segments.length === 0) {
+        return null;
+      }
+
+      return {
+        language,
+        segments,
+        voiceType,
+      };
+    })
+    .filter((group): group is { language: string; segments: { segmentIndex: number; targetDurationSeconds: number | null; text: string }[]; voiceType: string } =>
+      Boolean(group),
+    );
+
+  if (groups.length === 0) {
+    res.status(400).json({ error: "At least one voiceover group is required." });
+    return;
+  }
+
+  try {
+    const job = await createStudioBatchVoiceoverJob(session.user, {
+      groups,
+      projectId,
+    });
+    res.json({ data: job });
+  } catch (error) {
+    console.error("[studio] Failed to create batch voiceover job", error);
+    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+
+    res.status(statusCode).json({
+      error: error instanceof Error ? error.message : "Failed to create batch voiceover job.",
+    });
+  }
+});
+
+app.get("/api/studio/voiceover/batch-jobs/:jobId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const status = await getStudioBatchVoiceoverJobStatus(req.params.jobId, session.user);
+    if (status.segments.some((segment) => segment.asset) && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
+    res.json({ data: status });
+  } catch (error) {
+    console.error("[studio] Failed to fetch batch voiceover job status", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to fetch batch voiceover job status.",
     });
   }
 });

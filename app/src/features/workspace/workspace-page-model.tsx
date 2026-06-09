@@ -707,6 +707,24 @@ export type WorkspaceProjectVoiceoverJobCreateRequest = {
   voice_type?: string;
 };
 
+export type WorkspaceBatchVoiceoverSegmentRequest = WorkspaceProjectVoiceoverSegmentRequest & {
+  targetDurationSeconds?: number | null;
+  target_duration_seconds?: number | null;
+};
+
+export type WorkspaceBatchVoiceoverGroupRequest = {
+  language: StudioLanguage;
+  segments: WorkspaceBatchVoiceoverSegmentRequest[];
+  voiceType?: string;
+  voice_type?: string;
+};
+
+export type WorkspaceBatchVoiceoverJobCreateRequest = {
+  groups: WorkspaceBatchVoiceoverGroupRequest[];
+  projectId?: number;
+  project_id?: number;
+};
+
 export type WorkspaceSegmentVoiceoverJobStatusPayload = WorkspaceSegmentAiPhotoJobStatusPayload & {
   speechDuration?: number | null;
   speechDurationSource?: "audio" | null;
@@ -721,6 +739,27 @@ export type WorkspaceSegmentVoiceoverJobStatusResponse = {
 };
 
 export type WorkspaceProjectVoiceoverJobStatusResponse = WorkspaceSegmentVoiceoverJobStatusResponse;
+
+export type WorkspaceBatchVoiceoverJobSegmentStatusPayload = WorkspaceSegmentVoiceoverJobStatusPayload & {
+  language: StudioLanguage;
+  segmentIndex: number;
+  text: string;
+  voiceType: string;
+};
+
+export type WorkspaceBatchVoiceoverJobStatusPayload = {
+  creditCost?: number;
+  error?: string;
+  jobId: string;
+  profile: WorkspaceProfile;
+  segments: WorkspaceBatchVoiceoverJobSegmentStatusPayload[];
+  status: string;
+};
+
+export type WorkspaceBatchVoiceoverJobStatusResponse = {
+  data?: WorkspaceBatchVoiceoverJobStatusPayload;
+  error?: string;
+};
 
 export type WorkspaceSegmentAiVideoJobCreatePayload = {
   jobId: string;
