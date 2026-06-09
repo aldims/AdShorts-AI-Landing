@@ -457,3 +457,102 @@ export function WorkspaceSegmentEditorDeleteConfirmModal({
     document.body,
   );
 }
+
+type WorkspaceSegmentEditorVoiceoverGenerationRequiredModalProps = {
+  disabledReason: string | null;
+  generateCostLabel?: string;
+  isGenerating: boolean;
+  isOpen: boolean;
+  locale: Locale;
+  onClose: () => void;
+  onGenerate: () => void;
+};
+
+export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
+  disabledReason,
+  generateCostLabel,
+  isGenerating,
+  isOpen,
+  locale,
+  onClose,
+  onGenerate,
+}: WorkspaceSegmentEditorVoiceoverGenerationRequiredModalProps) {
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Требуется озвучка", "Voiceover required")}>
+      <button
+        className="workspace-confirm-modal__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(locale, "Закрыть окно с предупреждением о озвучке", "Close voiceover warning")}
+        onClick={onClose}
+      />
+      <div className="workspace-confirm-modal__panel" role="document">
+        <button
+          className="workspace-confirm-modal__close route-close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть окно с предупреждением о озвучке", "Close voiceover warning")}
+          onClick={onClose}
+        >
+          ×
+        </button>
+
+        <div className="workspace-confirm-modal__header">
+          <div className="workspace-confirm-modal__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M12 4 4 20h16L12 4Z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M12 9v4" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="16" r="1" fill="currentColor" />
+            </svg>
+          </div>
+          <div className="workspace-confirm-modal__copy">
+            <h2 className="workspace-confirm-modal__title">
+              {workspaceText(locale, "Для предпросмотра нужна озвучка", "Voiceover required for preview")}
+            </h2>
+            <p className="workspace-confirm-modal__message">
+              {workspaceText(
+                locale,
+                "В некоторых сценах есть сохранённый текст без сгенерированной озвучки. Без неё предпросмотр будет недоступен.",
+                "Some scenes have saved text without generated voiceover. Without it, preview is not available.",
+              )}
+            </p>
+            {disabledReason ? <p className="workspace-confirm-modal__message" role="alert">{disabledReason}</p> : null}
+            {generateCostLabel ? (
+              <p className="workspace-confirm-modal__message">
+                {workspaceText(locale, `К оплате: ${generateCostLabel}`, `Cost: ${generateCostLabel}`)}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="workspace-confirm-modal__actions">
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+            type="button"
+            onClick={onClose}
+          >
+            {workspaceText(locale, "Позже", "Later")}
+          </button>
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--primary"
+            type="button"
+            disabled={isGenerating || Boolean(disabledReason)}
+            onClick={onGenerate}
+          >
+            {isGenerating ? (
+              <>
+                <span className="workspace-confirm-modal__spinner" aria-hidden="true"></span>
+                {workspaceText(locale, "Генерируем озвучку...", "Generating voiceover...")}
+              </>
+            ) : (
+              workspaceText(locale, "Сгенерировать озвучку", "Generate voiceover")
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

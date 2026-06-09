@@ -421,6 +421,7 @@ import {
   WorkspaceLocalExampleModal,
   WorkspaceProjectDeleteModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
+  WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
   WorkspaceSegmentEditorResetConfirmModal,
 } from "../features/workspace/workspace-dialogs";
 import {
@@ -1300,6 +1301,18 @@ export function WorkspacePage({
     Boolean(
       segmentEditorDraft?.segments.some((segment) => normalizeWorkspaceSegmentEditorTextForCompare(segment.text).length > 0),
     );
+  const hasSegmentEditorTextAndVoiceForSubtitles = (draft: WorkspaceSegmentEditorDraftSession | null) => {
+    if (!draft) {
+      return false;
+    }
+
+    return draft.segments.some((segment) =>
+      Boolean(normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) &&
+      (getWorkspaceSegmentVoiceOverrideId(segment) !== "none" ||
+        normalizeWorkspaceSegmentEditorSetting(draft.voiceType) !== "none"),
+    );
+  };
+  const hasSavedSegmentEditorTextAndVoiceForSubtitles = hasSegmentEditorTextAndVoiceForSubtitles(segmentEditorDraft);
   const [segmentEditorAppliedSession, setSegmentEditorAppliedSession] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const [segmentEditorError, setSegmentEditorError] = useState<string | null>(null);
   const [segmentEditorVideoError, setSegmentEditorVideoError] = useState<string | null>(null);
@@ -1317,6 +1330,7 @@ export function WorkspacePage({
   >({});
   const [segmentEditorPendingDeleteIndex, setSegmentEditorPendingDeleteIndex] = useState<number | null>(null);
   const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
+  const [isSegmentEditorVoiceoverPreviewRequiredModalOpen, setIsSegmentEditorVoiceoverPreviewRequiredModalOpen] = useState(false);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
   const [segmentThumbDragState, setSegmentThumbDragState] = useState<WorkspaceSegmentThumbDragState | null>(null);
   const [segmentTimelineGlobalControlOpen, setSegmentTimelineGlobalControlOpen] =
@@ -2725,6 +2739,7 @@ export function WorkspacePage({
   const isAnyWorkspaceModalOpen =
     isAnyPreviewModalOpen ||
     isSegmentAiPhotoModalOpen ||
+    isSegmentEditorVoiceoverPreviewRequiredModalOpen ||
     isLocalExampleModalOpen ||
     isSegmentEditorResetConfirmOpen ||
     segmentEditorPendingDeleteIndex !== null ||
@@ -2873,6 +2888,20 @@ export function WorkspacePage({
     setIsSegmentEditorResetConfirmOpen(false);
   };
 
+  const openSegmentEditorVoiceoverPreviewRequiredModal = () => {
+    setIsSegmentEditorVoiceoverPreviewRequiredModalOpen(true);
+  };
+
+  const closeSegmentEditorVoiceoverPreviewRequiredModal = () => {
+    setIsSegmentEditorVoiceoverPreviewRequiredModalOpen(false);
+  };
+
+  const handleSegmentEditorVoiceoverPreviewRequiredGenerate = () => {
+    clearSegmentTimelineBulkVoiceTextEditSnapshot();
+    closeSegmentEditorVoiceoverPreviewRequiredModal();
+    void handleSegmentTimelineGlobalVoiceoverGenerate();
+  };
+
   const closeInsufficientCreditsModal = () => {
     setInsufficientCreditsContext(null);
   };
@@ -2920,6 +2949,10 @@ export function WorkspacePage({
           closeSegmentEditorResetModal();
           return;
         }
+        if (isSegmentEditorVoiceoverPreviewRequiredModalOpen) {
+          closeSegmentEditorVoiceoverPreviewRequiredModal();
+          return;
+        }
         if (isLocalExampleModalOpen) {
           closeLocalExampleModal();
           return;
@@ -2947,6 +2980,7 @@ export function WorkspacePage({
     isSegmentAiPhotoModalOpen,
     projectPendingDelete,
     segmentEditorPendingDeleteIndex,
+    isSegmentEditorVoiceoverPreviewRequiredModalOpen,
     isProjectDeleteSubmitting,
   ]);
 
@@ -2957,6 +2991,7 @@ export function WorkspacePage({
       setProjectPendingDeleteProjects([]);
       setSegmentEditorPendingDeleteIndex(null);
       setIsSegmentEditorResetConfirmOpen(false);
+      closeSegmentEditorVoiceoverPreviewRequiredModal();
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
       closePublishModal();
@@ -10169,6 +10204,29 @@ export function WorkspacePage({
       (segmentLanguage ?? language) === language
     );
   };
+  const isSegmentEditorVoiceoverGenerationScheduledForSegment = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    draft: WorkspaceSegmentEditorDraftSession | null,
+  ) => {
+    if (!draft || doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+      return false;
+    }
+
+    const segmentTimelineVoiceGenerationLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
+    const segmentTimelineVoiceDurationSession = getSegmentTimelineVoiceDurationSession(segment, draft);
+    const segmentTimelineVoiceType = getWorkspaceSegmentEffectiveVoiceId(segment, segmentTimelineVoiceDurationSession);
+    const segmentTimelineVoiceTextNormalized = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
+    if (!segmentTimelineVoiceGenerationLanguage || !segmentTimelineVoiceTextNormalized || !segmentTimelineVoiceType) {
+      return false;
+    }
+
+    return !isSegmentEditorVoiceoverFreshForVoice(
+      segment,
+      segmentTimelineVoiceGenerationLanguage,
+      segmentTimelineVoiceType,
+      draft,
+    );
+  };
 
   const applyGeneratedSegmentEditorGlobalVoiceToAllSegments = (
     draft: WorkspaceSegmentEditorDraftSession,
@@ -10482,22 +10540,22 @@ export function WorkspacePage({
 
   const handleSegmentEditorSubtitleColorSelect = (colorId: StudioSubtitleColorOption["id"]) => {
     updateSegmentEditorDraft((currentDraft) =>
-      normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) === "none"
+      hasSegmentEditorTextAndVoiceForSubtitles(currentDraft)
         ? {
             ...currentDraft,
-            subtitleType: "none",
+            subtitleColor: colorId,
           }
         : {
             ...currentDraft,
-            subtitleColor: colorId,
+            subtitleType: "none",
           },
     );
   };
 
   const handleSegmentEditorSubtitleToggle = (enabled: boolean) => {
     updateSegmentEditorDraft((currentDraft) => {
-      const isDraftVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) !== "none";
-      if (enabled && !isDraftVoiceEnabled) {
+      const isDraftSubtitleEnabled = hasSegmentEditorTextAndVoiceForSubtitles(currentDraft);
+      if (enabled && !isDraftSubtitleEnabled) {
         return {
           ...currentDraft,
           subtitleType: "none",
@@ -10521,7 +10579,7 @@ export function WorkspacePage({
 
   const handleSegmentEditorSubtitleStyleSelect = (styleId: StudioSubtitleStyleOption["id"]) => {
     updateSegmentEditorDraft((currentDraft) => {
-      if (normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType) === "none") {
+      if (!hasSegmentEditorTextAndVoiceForSubtitles(currentDraft)) {
         return {
           ...currentDraft,
           subtitleType: "none",
@@ -10857,7 +10915,7 @@ export function WorkspacePage({
     }
 
     if (settingId === "subtitle") {
-      if (normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.voiceType) === "none") {
+      if (!hasSegmentEditorTextAndVoiceForSubtitles(segmentEditorDraft)) {
         updateSegmentEditorDraft((currentDraft) => ({
           ...currentDraft,
           subtitleType: "none",
@@ -19105,6 +19163,36 @@ export function WorkspacePage({
       voiceId,
     };
   };
+  const getSegmentTimelineGlobalVoiceDraftForMissingGeneration = (
+    draft: WorkspaceSegmentEditorDraftSession | null,
+  ): SegmentTimelineGlobalVoiceDraft | null => {
+    if (!draft) {
+      return null;
+    }
+
+    for (const segment of draft.segments) {
+      if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+        continue;
+      }
+
+      if (!normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) {
+        continue;
+      }
+
+      const segmentVoiceOption = getSegmentTimelineVoiceOption(segment);
+      if (!segmentVoiceOption) {
+        continue;
+      }
+
+      return {
+        isEnabled: true,
+        language: getStudioLanguageForVoiceId(segmentVoiceOption.id) ?? getWorkspaceSegmentEditorSessionLanguage(draft) ?? selectedLanguage,
+        voiceId: segmentVoiceOption.id,
+      };
+    }
+
+    return null;
+  };
   const commitSegmentTimelineGlobalVoiceDraft = (draft: SegmentTimelineGlobalVoiceDraft) => {
     segmentTimelineGlobalVoiceDraftRef.current = draft;
     setSegmentTimelineGlobalVoiceDraft(draft);
@@ -19122,7 +19210,13 @@ export function WorkspacePage({
     selection?: StudioVoiceSelectorGenerationSelection | null,
   ): SegmentTimelineGlobalVoiceDraft => {
     if (!selection) {
-      return segmentTimelineGlobalVoiceDraftRef.current ?? segmentTimelineGlobalVoiceDraft ?? getCurrentSegmentTimelineGlobalVoiceDraft();
+      const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+      return (
+        segmentTimelineGlobalVoiceDraftRef.current ??
+        segmentTimelineGlobalVoiceDraft ??
+        getSegmentTimelineGlobalVoiceDraftForMissingGeneration(currentDraft) ??
+        getCurrentSegmentTimelineGlobalVoiceDraft()
+      );
     }
 
     const language = selection.language ?? getStudioLanguageForVoiceId(selection.voiceId) ?? selectedLanguage;
@@ -22513,7 +22607,13 @@ export function WorkspacePage({
   };
   const startSegmentEditorFullPreview = async (options?: { startTime?: number }) => {
     const totalDuration = getSegmentEditorFullPreviewDurationSeconds();
-    if (!segmentEditorDraft || !segmentEditorTracks || totalDuration <= 0 || typeof window === "undefined") {
+    if (
+      !segmentEditorDraft ||
+      !segmentEditorTracks ||
+      totalDuration <= 0 ||
+      isSegmentEditorFullPreviewBlockedByVoiceoverGeneration ||
+      typeof window === "undefined"
+    ) {
       return;
     }
 
@@ -22775,7 +22875,10 @@ export function WorkspacePage({
   };
   const handleSegmentEditorFullPreviewScrubPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const isPreviewUnavailable =
-      !segmentEditorDraft || !segmentEditorTracks || getSegmentEditorFullPreviewDurationSeconds() <= 0;
+      !segmentEditorDraft ||
+      !segmentEditorTracks ||
+      getSegmentEditorFullPreviewDurationSeconds() <= 0 ||
+      isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;
     if (isPreviewUnavailable || event.button !== 0) {
       return;
     }
@@ -24475,25 +24578,9 @@ export function WorkspacePage({
                 segmentEditorDraft,
               );
               const segmentTimelineVoiceType = getWorkspaceSegmentEffectiveVoiceId(segment, segmentTimelineVoiceDurationSession);
-              const segmentTimelineVoiceTextNormalized = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
-              const isSegmentTimelineVoiceGenerationScheduled = (() => {
-                if (
-                  isPendingVoiceTextEdit ||
-                  usesEmbeddedTalkingPhotoAudio ||
-                  !segmentTimelineVoiceGenerationLanguage ||
-                  !segmentTimelineVoiceTextNormalized ||
-                  !segmentTimelineVoiceType
-                ) {
-                  return false;
-                }
-
-                return !isSegmentEditorVoiceoverFreshForVoice(
-                  segment,
-                  segmentTimelineVoiceGenerationLanguage,
-                  segmentTimelineVoiceType,
-                  segmentEditorDraft,
-                );
-              })();
+              const isSegmentTimelineVoiceGenerationScheduled = isPendingVoiceTextEdit
+                ? false
+                : isSegmentEditorVoiceoverGenerationScheduledForSegment(segment, segmentEditorDraft);
               const segmentTimelineVoiceGenerationLabel = isSegmentTimelineVoiceGenerationScheduled
                 ? getWorkspaceSegmentTimelineVoiceLabel(locale, segment, segmentTimelineVoiceSettings)
                 : null;
@@ -26629,7 +26716,9 @@ export function WorkspacePage({
                 ? workspaceText(locale, "Заменить визуал", "Replace visual")
                 : workspaceText(locale, "Загрузить визуал", "Upload visual");
   const effectiveSegmentTimelineGlobalVoiceDraft =
-    segmentTimelineGlobalVoiceDraft ?? getCurrentSegmentTimelineGlobalVoiceDraft();
+    segmentTimelineGlobalVoiceDraft ??
+    getSegmentTimelineGlobalVoiceDraftForMissingGeneration(segmentEditorDraft) ??
+    getCurrentSegmentTimelineGlobalVoiceDraft();
   const segmentTimelineGlobalVoiceOptions =
     studioVoiceOptionsByLanguage[effectiveSegmentTimelineGlobalVoiceDraft.language] ?? selectedVoiceOptions;
   const segmentTimelineGlobalVoiceId =
@@ -26793,12 +26882,48 @@ export function WorkspacePage({
   const isSegmentEditorFullPreviewPlaying = segmentEditorFullPreviewStatus === "playing";
   const isSegmentEditorFullPreviewLoading = segmentEditorFullPreviewStatus === "loading";
   const isSegmentEditorFullPreviewPaused = segmentEditorFullPreviewStatus === "paused";
+  const isSegmentEditorFullPreviewBlockedByVoiceoverGeneration = segmentEditorDraft
+    ? segmentEditorDraft.segments.some((segment) =>
+        isSegmentEditorVoiceoverGenerationScheduledForSegment(segment, segmentEditorDraft),
+      )
+    : false;
+  const segmentEditorFullPreviewUnavailableReason = isSegmentEditorFullPreviewBlockedByVoiceoverGeneration
+    ? workspaceText(
+        locale,
+        "Сначала сгенерируйте озвучку сцен с сохраненным текстом",
+        "Generate voiceover for scenes with saved text first",
+      )
+    : null;
   const isSegmentEditorFullPreviewUnavailable =
-    !segmentEditorDraft || !segmentEditorTracks || segmentEditorFullPreviewDuration <= 0;
+    !segmentEditorDraft || !segmentEditorTracks || segmentEditorFullPreviewDuration <= 0 || isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;
   const isSegmentEditorFullPreviewAudioUnlockAction =
     isSegmentEditorFullPreviewPlaying && segmentEditorFullPreviewAudioUnlockRequired;
+  const segmentEditorFullPreviewUnavailableButton = (
+    <button
+      className="studio-segment-editor__timeline-preview-toggle"
+      type="button"
+      aria-busy={isSegmentEditorGeneratingGlobalVoiceover ? true : undefined}
+      aria-label={workspaceText(locale, "Предпросмотр", "Preview")}
+      title={workspaceText(locale, "Предпросмотр", "Preview")}
+      disabled={isSegmentEditorGeneratingGlobalVoiceover}
+      onClick={() => {
+        openSegmentEditorVoiceoverPreviewRequiredModal();
+      }}
+    >
+      {isSegmentEditorGeneratingGlobalVoiceover ? (
+        <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
+      ) : (
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+          <path d="M6 3.8v9.4l7.35-4.7L6 3.8Z" fill="currentColor" />
+        </svg>
+      )}
+      <span>{workspaceText(locale, "Предпросмотр", "Preview")}</span>
+      {segmentTimelineGlobalVoiceCostLabel ? <small>{segmentTimelineGlobalVoiceCostLabel}</small> : null}
+    </button>
+  );
   const segmentEditorFullPreviewButtonLabel = isSegmentEditorFullPreviewUnavailable
-    ? workspaceText(locale, "Предпросмотр недоступен", "Preview unavailable")
+    ? segmentEditorFullPreviewUnavailableReason ??
+      workspaceText(locale, "Предпросмотр недоступен", "Preview unavailable")
     : isSegmentEditorFullPreviewLoading
       ? workspaceText(locale, "Готовим аудио предпросмотра", "Preparing preview audio")
       : isSegmentEditorFullPreviewAudioUnlockAction
@@ -26852,6 +26977,8 @@ export function WorkspacePage({
         ) : null}
       </button>
     </span>
+  ) : isSegmentEditorFullPreviewBlockedByVoiceoverGeneration ? (
+    segmentEditorFullPreviewUnavailableButton
   ) : (
     <button
       className={`studio-segment-editor__timeline-preview-toggle${isSegmentEditorFullPreviewPlaying ? " is-playing" : ""}${
@@ -27640,120 +27767,98 @@ export function WorkspacePage({
             </div>
             <div className="studio-canvas-prompt__footer">
               <div className="studio-segment-editor__prompt-controls">
-                {(() => {
-                  const isSubtitleControlsAvailable = segmentEditorDraft
-                    ? segmentEditorDraft.segments.some((segment) => {
-                        const segmentSubtitleSettingsSession = getSegmentTimelineSubtitleSettingsSession(segment, {
-                          draft: segmentEditorDraft,
-                        });
-                        const segmentSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(
-                          segmentSubtitleSettingsSession,
-                          segment,
-                          {
-                            subtitleColorId: studioSidebarSubtitleColorId,
-                            subtitleStyleId: studioSidebarSubtitleStyleId,
-                          },
-                        );
-
-                        return segmentSubtitleSettings.isEnabled;
-                      })
-                    : false;
-
-                  return (
-                    <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
-                      <StudioSubtitleSelectorChip
-                        closeRequestId={segmentTimelineSubtitleCloseRequestId}
-                        disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
-                        isDisabled={!studioSidebarVoiceEnabled && !isSubtitleControlsAvailable}
-                        isProgrammaticOnly
-                        isEnabled={studioSidebarSubtitlesEnabled}
-                        openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                        openRequestId={segmentTimelineSubtitleOpenRequestId}
-                        onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
-                        onToggleEnabled={handleSegmentEditorSubtitleToggle}
-                        selectedColorId={studioSidebarSubtitleColorId}
-                        selectedExampleId={selectedSubtitleExampleId}
-                        selectedStyleId={studioSidebarSubtitleStyleId}
-                        subtitleColorOptions={subtitleColorOptions}
-                        subtitleStyleOptions={subtitleStyleOptions}
-                        onSelectColor={handleSegmentEditorSubtitleColorSelect}
-                        onSelectExample={setSelectedSubtitleExampleId}
-                        onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
-                      />
-                      <StudioVoiceSelectorChip
-                        bulkTextError={segmentSubtitleBulkTextError}
-                        bulkTextSegmentCount={segmentEditorSegmentCount}
-                        bulkTextValue={segmentSubtitleBulkTextValue}
-                        closeRequestId={segmentTimelineVoiceCloseRequestId}
-                        generateVoiceoverCostLabel={segmentTimelineGlobalVoiceCostLabel}
-                        generateVoiceoverDisabledReason={segmentTimelineGlobalVoiceGenerateDisabledReason}
-                        generateVoiceoverLabel={segmentTimelineGlobalVoiceGenerateLabel}
-                        isProgrammaticOnly
-                        isGeneratingVoiceover={isSegmentEditorGeneratingGlobalVoiceover}
-                        isEnabled={effectiveSegmentTimelineGlobalVoiceDraft.isEnabled}
-                        openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                        openRequestId={segmentTimelineVoiceOpenRequestId}
-                        onBulkTextChange={handleSegmentTimelineGlobalVoiceBulkTextChange}
-                        onGenerateVoiceover={(selection) => {
-                          clearSegmentTimelineBulkVoiceTextEditSnapshot();
-                          void handleSegmentTimelineGlobalVoiceoverGenerate(selection);
-                        }}
-                        onOpenChange={(isOpen) => {
-                          handleSegmentTimelineGlobalControlOpenChange("voice", isOpen);
-                          if (!isOpen) {
-                            restorePendingSegmentTimelineBulkVoiceTextEdit();
-                          }
-                        }}
-                        onSelectLanguage={handleSegmentTimelineGlobalVoiceLanguageSelect}
-                        onToggleEnabled={handleSegmentTimelineGlobalVoiceToggle}
-                        selectedLanguage={effectiveSegmentTimelineGlobalVoiceDraft.language}
-                        selectedVoiceId={segmentTimelineGlobalVoiceId}
-                        voiceOptions={segmentTimelineGlobalVoiceOptions}
-                        onSelect={handleSegmentTimelineGlobalVoiceSelect}
-                      />
-                      <StudioMusicSelectorChip
-                        closeRequestId={segmentTimelineMusicCloseRequestId}
-                        customMusicFile={selectedCustomMusic}
-                        isProgrammaticOnly
-                        isPreparingCustomMusic={isPreparingCustomMusic}
-                        openAnchorRect={segmentTimelineGlobalControlAnchorRect}
-                        openRequestId={segmentTimelineMusicOpenRequestId}
-                        onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("music", isOpen)}
-                        onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
-                        onSelectMusicType={handleSegmentEditorMusicTypeSelect}
-                        selectedMusicType={studioSidebarMusicType}
-                        uploadError={musicSelectionError}
-                      />
-                      <StudioBrandSelectorChip
-                        appliedBrandLogoFile={appliedSegmentEditorBrandSnapshot.brandLogoFile}
-                        appliedBrandText={appliedSegmentEditorBrandSnapshot.brandText}
-                        appliedSystemWatermarkEnabled={appliedSegmentEditorBrandSnapshot.appliedSystemWatermarkEnabled}
-                        brandLogoFile={segmentEditorBrandLogo}
-                        brandText={segmentEditorBrandText}
-                        brandUploadError={brandSelectionError}
-                        closeRequestId={segmentEditorBrandCloseRequestId}
-                        isDirty={isSegmentEditorBrandDirty}
-                        isProgrammaticOnly
-                        isPreparingBrandLogo={isPreparingBrandLogo}
-                        openAnchorRect={segmentEditorBrandAnchorRect}
-                        openRequestId={segmentEditorBrandOpenRequestId}
-                        onApplyBrand={handleApplySegmentEditorBrand}
-                        onBrandLogoSelect={handleSegmentEditorBrandLogoSelect}
-                        onBrandTextChange={handleSegmentEditorBrandTextChange}
-                        onClearBrandText={handleClearSegmentEditorBrandText}
-                        onOpenChange={(isOpen) => {
-                          if (!isOpen) {
-                            setSegmentEditorBrandAnchorRect(null);
-                          }
-                        }}
-                        onRemoveBrandLogo={handleRemoveSegmentEditorBrandLogo}
-                        onSystemWatermarkToggle={setSegmentEditorSystemWatermarkEnabled}
-                        showSystemWatermarkControl={shouldShowSegmentEditorSystemWatermarkControl}
-                        systemWatermarkEnabled={segmentEditorSystemWatermarkEnabled}
-                      />
-                    </div>
-                  );
-                })()}
+                <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
+                  <StudioSubtitleSelectorChip
+                    closeRequestId={segmentTimelineSubtitleCloseRequestId}
+                    disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
+                    isDisabled={!studioSidebarVoiceEnabled && !hasSavedSegmentEditorTextAndVoiceForSubtitles}
+                    isProgrammaticOnly
+                    isEnabled={studioSidebarSubtitlesEnabled}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineSubtitleOpenRequestId}
+                    onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("subtitle", isOpen)}
+                    onToggleEnabled={handleSegmentEditorSubtitleToggle}
+                    selectedColorId={studioSidebarSubtitleColorId}
+                    selectedExampleId={selectedSubtitleExampleId}
+                    selectedStyleId={studioSidebarSubtitleStyleId}
+                    subtitleColorOptions={subtitleColorOptions}
+                    subtitleStyleOptions={subtitleStyleOptions}
+                    onSelectColor={handleSegmentEditorSubtitleColorSelect}
+                    onSelectExample={setSelectedSubtitleExampleId}
+                    onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
+                  />
+                  <StudioVoiceSelectorChip
+                    bulkTextError={segmentSubtitleBulkTextError}
+                    bulkTextSegmentCount={segmentEditorSegmentCount}
+                    bulkTextValue={segmentSubtitleBulkTextValue}
+                    closeRequestId={segmentTimelineVoiceCloseRequestId}
+                    generateVoiceoverCostLabel={segmentTimelineGlobalVoiceCostLabel}
+                    generateVoiceoverDisabledReason={segmentTimelineGlobalVoiceGenerateDisabledReason}
+                    generateVoiceoverLabel={segmentTimelineGlobalVoiceGenerateLabel}
+                    isProgrammaticOnly
+                    isGeneratingVoiceover={isSegmentEditorGeneratingGlobalVoiceover}
+                    isEnabled={effectiveSegmentTimelineGlobalVoiceDraft.isEnabled}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineVoiceOpenRequestId}
+                    onBulkTextChange={handleSegmentTimelineGlobalVoiceBulkTextChange}
+                    onGenerateVoiceover={(selection) => {
+                      clearSegmentTimelineBulkVoiceTextEditSnapshot();
+                      void handleSegmentTimelineGlobalVoiceoverGenerate(selection);
+                    }}
+                    onOpenChange={(isOpen) => {
+                      handleSegmentTimelineGlobalControlOpenChange("voice", isOpen);
+                      if (!isOpen) {
+                        restorePendingSegmentTimelineBulkVoiceTextEdit();
+                      }
+                    }}
+                    onSelectLanguage={handleSegmentTimelineGlobalVoiceLanguageSelect}
+                    onToggleEnabled={handleSegmentTimelineGlobalVoiceToggle}
+                    selectedLanguage={effectiveSegmentTimelineGlobalVoiceDraft.language}
+                    selectedVoiceId={segmentTimelineGlobalVoiceId}
+                    voiceOptions={segmentTimelineGlobalVoiceOptions}
+                    onSelect={handleSegmentTimelineGlobalVoiceSelect}
+                  />
+                  <StudioMusicSelectorChip
+                    closeRequestId={segmentTimelineMusicCloseRequestId}
+                    customMusicFile={selectedCustomMusic}
+                    isProgrammaticOnly
+                    isPreparingCustomMusic={isPreparingCustomMusic}
+                    openAnchorRect={segmentTimelineGlobalControlAnchorRect}
+                    openRequestId={segmentTimelineMusicOpenRequestId}
+                    onOpenChange={(isOpen) => handleSegmentTimelineGlobalControlOpenChange("music", isOpen)}
+                    onSelectCustomFile={handleSegmentEditorCustomMusicSelect}
+                    onSelectMusicType={handleSegmentEditorMusicTypeSelect}
+                    selectedMusicType={studioSidebarMusicType}
+                    uploadError={musicSelectionError}
+                  />
+                  <StudioBrandSelectorChip
+                    appliedBrandLogoFile={appliedSegmentEditorBrandSnapshot.brandLogoFile}
+                    appliedBrandText={appliedSegmentEditorBrandSnapshot.brandText}
+                    appliedSystemWatermarkEnabled={appliedSegmentEditorBrandSnapshot.appliedSystemWatermarkEnabled}
+                    brandLogoFile={segmentEditorBrandLogo}
+                    brandText={segmentEditorBrandText}
+                    brandUploadError={brandSelectionError}
+                    closeRequestId={segmentEditorBrandCloseRequestId}
+                    isDirty={isSegmentEditorBrandDirty}
+                    isProgrammaticOnly
+                    isPreparingBrandLogo={isPreparingBrandLogo}
+                    openAnchorRect={segmentEditorBrandAnchorRect}
+                    openRequestId={segmentEditorBrandOpenRequestId}
+                    onApplyBrand={handleApplySegmentEditorBrand}
+                    onBrandLogoSelect={handleSegmentEditorBrandLogoSelect}
+                    onBrandTextChange={handleSegmentEditorBrandTextChange}
+                    onClearBrandText={handleClearSegmentEditorBrandText}
+                    onOpenChange={(isOpen) => {
+                      if (!isOpen) {
+                        setSegmentEditorBrandAnchorRect(null);
+                      }
+                    }}
+                    onRemoveBrandLogo={handleRemoveSegmentEditorBrandLogo}
+                    onSystemWatermarkToggle={setSegmentEditorSystemWatermarkEnabled}
+                    showSystemWatermarkControl={shouldShowSegmentEditorSystemWatermarkControl}
+                    systemWatermarkEnabled={segmentEditorSystemWatermarkEnabled}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -27773,47 +27878,21 @@ export function WorkspacePage({
       ) : null}
 
         <div className="studio-sidebar__nav studio-sidebar__nav--settings" aria-label={workspaceText(locale, "Параметры видео", "Video settings")}>
-          {/*
-            Разрешаем управление субтитрами в боковой колонке по той же логике,
-            что и через таймлайн: глобально либо через сцено-специфичную озвучку.
-          */}
-          {(() => {
-            const isSubtitleControlsAvailable = segmentEditorDraft
-              ? segmentEditorDraft.segments.some((segment) => {
-                  const segmentSubtitleSettingsSession = getSegmentTimelineSubtitleSettingsSession(segment, {
-                    draft: segmentEditorDraft,
-                  });
-                  const segmentSubtitleSettings = getWorkspaceSegmentEffectiveSubtitleSettings(
-                    segmentSubtitleSettingsSession,
-                    segment,
-                    {
-                      subtitleColorId: studioSidebarSubtitleColorId,
-                      subtitleStyleId: studioSidebarSubtitleStyleId,
-                    },
-                  );
-
-                  return segmentSubtitleSettings.isEnabled;
-                })
-              : false;
-
-            return (
-              <StudioSubtitleSelectorChip
-                disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
-                isDisabled={!studioSidebarVoiceEnabled && !isSubtitleControlsAvailable}
-                isEnabled={studioSidebarSubtitlesEnabled}
-                variant="sidebar"
-                onToggleEnabled={handleSegmentEditorSubtitleToggle}
-                selectedColorId={studioSidebarSubtitleColorId}
-                selectedExampleId={selectedSubtitleExampleId}
-                selectedStyleId={studioSidebarSubtitleStyleId}
-                subtitleColorOptions={subtitleColorOptions}
-                subtitleStyleOptions={subtitleStyleOptions}
-                onSelectColor={handleSegmentEditorSubtitleColorSelect}
-                onSelectExample={setSelectedSubtitleExampleId}
-                onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
-              />
-            );
-          })()}
+          <StudioSubtitleSelectorChip
+            disabledReason={workspaceText(locale, "Включите озвучку, чтобы использовать субтитры", "Turn voiceover on before using subtitles")}
+            isDisabled={!studioSidebarVoiceEnabled && !hasSavedSegmentEditorTextAndVoiceForSubtitles}
+            isEnabled={studioSidebarSubtitlesEnabled}
+            variant="sidebar"
+            onToggleEnabled={handleSegmentEditorSubtitleToggle}
+            selectedColorId={studioSidebarSubtitleColorId}
+            selectedExampleId={selectedSubtitleExampleId}
+            selectedStyleId={studioSidebarSubtitleStyleId}
+            subtitleColorOptions={subtitleColorOptions}
+            subtitleStyleOptions={subtitleStyleOptions}
+            onSelectColor={handleSegmentEditorSubtitleColorSelect}
+            onSelectExample={setSelectedSubtitleExampleId}
+            onSelectStyle={handleSegmentEditorSubtitleStyleSelect}
+          />
         <StudioVoiceSelectorChip
           bulkTextError={segmentSubtitleBulkTextError}
           bulkTextSegmentCount={segmentEditorSegmentCount}
@@ -29292,6 +29371,16 @@ export function WorkspacePage({
           locale={locale}
           onClose={closeSegmentEditorResetModal}
           onConfirm={confirmResetSegmentEditorChanges}
+        />
+
+        <WorkspaceSegmentEditorVoiceoverGenerationRequiredModal
+          disabledReason={segmentTimelineGlobalVoiceGenerateDisabledReason}
+          generateCostLabel={segmentTimelineGlobalVoiceCostLabel}
+          isGenerating={isSegmentEditorGeneratingGlobalVoiceover}
+          isOpen={isSegmentEditorVoiceoverPreviewRequiredModalOpen}
+          locale={locale}
+          onClose={closeSegmentEditorVoiceoverPreviewRequiredModal}
+          onGenerate={handleSegmentEditorVoiceoverPreviewRequiredGenerate}
         />
 
         <WorkspaceSegmentEditorDeleteConfirmModal
