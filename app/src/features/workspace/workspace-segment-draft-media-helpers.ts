@@ -721,8 +721,13 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (latestVisualAction === "photo_animation") {
+    const generatedPlaybackUrl = getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "photo_animation");
+    if (!generatedPlaybackUrl && getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image") {
+      return null;
+    }
+
     return (
-      getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "photo_animation") ??
+      generatedPlaybackUrl ??
       segment.currentPlaybackUrl ??
       segment.currentExternalPlaybackUrl ??
       segment.originalPlaybackUrl ??
@@ -732,8 +737,13 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (latestVisualAction === "talking_photo") {
+    const generatedPlaybackUrl = getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "talking_photo");
+    if (!generatedPlaybackUrl && getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image") {
+      return null;
+    }
+
     return (
-      getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "talking_photo") ??
+      generatedPlaybackUrl ??
       segment.currentPlaybackUrl ??
       segment.currentExternalPlaybackUrl ??
       segment.originalPlaybackUrl ??
@@ -743,6 +753,10 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (segment.videoAction === "custom") {
+    if (getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "image") {
+      return null;
+    }
+
     return (
       getStudioCustomVideoAssetPlaybackUrl(segment.customVideo) ??
       segment.currentPlaybackUrl ??
@@ -754,6 +768,10 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (segment.videoAction === "image_edit") {
+    if (getWorkspaceSegmentCustomPreviewKind(segment.imageEditAsset) === "image") {
+      return null;
+    }
+
     return (
       getStudioCustomVideoAssetPlaybackUrl(segment.imageEditAsset) ??
       segment.currentPlaybackUrl ??
@@ -765,6 +783,10 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (segment.videoAction === "ai_photo") {
+    if (getWorkspaceSegmentCustomPreviewKind(segment.aiPhotoAsset) === "image") {
+      return null;
+    }
+
     return (
       getStudioCustomVideoAssetPlaybackUrl(segment.aiPhotoAsset) ??
       segment.currentPlaybackUrl ??

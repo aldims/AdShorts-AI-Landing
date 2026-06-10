@@ -377,8 +377,22 @@ type AdsflowSegmentAiVideoJobStatusResponse = {
   asset?: AdsflowSegmentAiVideoAssetPayload | null;
   error?: string | null;
   job_id?: string;
+  segments?: AdsflowProjectVoiceoverSegmentStatusPayload[] | null;
   status?: string;
   user?: AdsflowWebUserPayload | null;
+};
+
+type AdsflowProjectVoiceoverSegmentStatusPayload = {
+  duration?: number | string | null;
+  end_time?: number | string | null;
+  segmentIndex?: number | string | null;
+  segment_index?: number | string | null;
+  speech_duration?: number | string | null;
+  speech_end_time?: number | string | null;
+  speech_start_time?: number | string | null;
+  speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
+  start_time?: number | string | null;
+  text?: string | null;
 };
 
 type AdsflowSegmentVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobStatusResponse & {
@@ -635,7 +649,18 @@ export type StudioSegmentVoiceoverJobStatus = {
   status: string;
 };
 
-export type StudioProjectVoiceoverJobStatus = StudioSegmentVoiceoverJobStatus;
+export type StudioProjectVoiceoverSegmentStatus = {
+  segmentIndex: number;
+  speechDuration: number | null;
+  speechEndTime: number | null;
+  speechStartTime: number | null;
+  speechWords: StudioSegmentVoiceoverSpeechWord[];
+  text: string;
+};
+
+export type StudioProjectVoiceoverJobStatus = StudioSegmentVoiceoverJobStatus & {
+  segments: StudioProjectVoiceoverSegmentStatus[];
+};
 
 export type StudioBatchVoiceoverJobSegmentStatus = StudioSegmentVoiceoverJobStatus & {
   language: "en" | "ru";
@@ -7363,11 +7388,16 @@ type StudioBatchVoiceoverFallbackChildJob = NormalizedStudioBatchVoiceoverSegmen
   voiceType: string;
 };
 
+type StudioBatchVoiceoverFallbackProjectGroupJob = NormalizedStudioBatchVoiceoverGroup & {
+  jobId: string;
+};
+
 type StudioBatchVoiceoverFallbackJob = {
   children: StudioBatchVoiceoverFallbackChildJob[];
   createdAt: number;
   creditCost: number;
   profile: WorkspaceProfile;
+  projectGroups: StudioBatchVoiceoverFallbackProjectGroupJob[];
   status: string;
 };
 
@@ -7592,24 +7622,27 @@ export async function createStudioBatchVoiceoverJob(
     }
   }
 
-  const creditReservation = await consumeWorkspaceGenerationCredit(
-    user,
-    creditCost,
-    normalizedGroups[0]?.language,
-  );
   const children: StudioBatchVoiceoverFallbackChildJob[] = [];
+  const projectGroups: StudioBatchVoiceoverFallbackProjectGroupJob[] = [];
+  let fallbackProfile = buildWorkspaceProfile();
 
   try {
-    for (const group of normalizedGroups) {
-      for (const segment of group.segments) {
-        const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
+    if (normalizedProjectId) {
+      for (const group of normalizedGroups) {
+        const groupText = group.segments.map((segment) => segment.text).join(" ").trim();
+        const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/project-voiceover/jobs", {
           admin_token: env.adsflowAdminToken,
-          credit_cost: 0,
+          credit_cost: group.creditCost,
           external_user_id: externalUserId,
           language: group.language,
-          project_id: normalizedProjectId ?? undefined,
-          segment_index: segment.segmentIndex,
-          text: segment.text,
+          project_id: normalizedProjectId,
+          segments: group.segments.map((segment) => ({
+            duration: segment.targetDurationSeconds,
+            segment_index: segment.segmentIndex,
+            target_duration: segment.targetDurationSeconds,
+            text: segment.text,
+          })),
+          text: groupText,
           user_email: user.email ?? undefined,
           user_name: user.name ?? undefined,
           voice_type: group.voiceType,
@@ -7618,26 +7651,60 @@ export async function createStudioBatchVoiceoverJob(
           timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
         });
 
-        const childJobId = String(payload.job_id ?? "").trim();
-        if (!childJobId) {
-          throw new Error("AdsFlow did not return a segment voiceover job id.");
+        const groupJobId = String(payload.job_id ?? "").trim();
+        if (!groupJobId) {
+          throw new Error("AdsFlow did not return a project voiceover job id.");
         }
 
-        children.push({
-          ...segment,
-          jobId: childJobId,
-          language: group.language,
-          voiceType: group.voiceType,
+        projectGroups.push({
+          ...group,
+          jobId: groupJobId,
         });
+        fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(
+          payload.user ?? undefined,
+          payload.user?.user_id ? String(payload.user.user_id) : undefined,
+          subscriptionDetails,
+        );
+      }
+    } else {
+      for (const group of normalizedGroups) {
+        for (const segment of group.segments) {
+          const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
+            admin_token: env.adsflowAdminToken,
+            credit_cost: group.creditCost,
+            external_user_id: externalUserId,
+            language: group.language,
+            project_id: normalizedProjectId ?? undefined,
+            segment_index: segment.segmentIndex,
+            text: segment.text,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+            voice_type: group.voiceType,
+          }, {
+            retryDelaysMs: [],
+            timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+          });
+
+          const childJobId = String(payload.job_id ?? "").trim();
+          if (!childJobId) {
+            throw new Error("AdsFlow did not return a segment voiceover job id.");
+          }
+
+          children.push({
+            ...segment,
+            jobId: childJobId,
+            language: group.language,
+            voiceType: group.voiceType,
+          });
+          fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(
+            payload.user ?? undefined,
+            payload.user?.user_id ? String(payload.user.user_id) : undefined,
+            subscriptionDetails,
+          );
+        }
       }
     }
   } catch (error) {
-    try {
-      await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedGroups[0]?.language);
-    } catch (refundError) {
-      console.error("[studio] Failed to refund batch voiceover credits", refundError);
-    }
-
     throw error;
   }
 
@@ -7651,14 +7718,15 @@ export async function createStudioBatchVoiceoverJob(
     children,
     createdAt: Date.now(),
     creditCost,
-    profile: creditReservation.profile,
+    profile: fallbackProfile,
+    projectGroups,
     status: "queued",
   });
 
   return {
     creditCost,
     jobId,
-    profile: creditReservation.profile,
+    profile: fallbackProfile,
     status: "queued",
   };
 }
@@ -7955,6 +8023,29 @@ export async function getStudioProjectVoiceoverJobStatus(
   const speechDuration =
     normalizeNumber(payload.speech_duration) ??
     (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+  const segments = (Array.isArray(payload.segments) ? payload.segments : [])
+    .map((segment, index) => {
+      const segmentIndex = normalizeNonNegativeInteger(segment.segmentIndex ?? segment.segment_index) ?? index;
+      const segmentSpeechStartTime = normalizeNumber(segment.speech_start_time ?? segment.start_time);
+      const segmentSpeechEndTime = normalizeNumber(segment.speech_end_time ?? segment.end_time);
+      const segmentSpeechDuration =
+        normalizeNumber(segment.speech_duration ?? segment.duration) ??
+        (segmentSpeechStartTime !== null && segmentSpeechEndTime !== null
+          ? Math.max(0, segmentSpeechEndTime - segmentSpeechStartTime)
+          : null);
+
+      return {
+        segmentIndex,
+        speechDuration: segmentSpeechDuration !== null ? Math.max(0, segmentSpeechDuration) : null,
+        speechEndTime:
+          segmentSpeechStartTime !== null && segmentSpeechEndTime !== null
+            ? Math.max(segmentSpeechStartTime, segmentSpeechEndTime)
+            : null,
+        speechStartTime: segmentSpeechStartTime !== null ? Math.max(0, segmentSpeechStartTime) : null,
+        speechWords: normalizeSegmentVoiceoverSpeechWords(segment.speech_words),
+        text: normalizeGenerationText(segment.text),
+      } satisfies StudioProjectVoiceoverSegmentStatus;
+    });
 
   return {
     asset,
@@ -7968,6 +8059,7 @@ export async function getStudioProjectVoiceoverJobStatus(
       speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
     speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
     speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
+    segments,
     status,
   };
 }
@@ -7985,7 +8077,43 @@ export async function getStudioBatchVoiceoverJobStatus(
 
   const fallbackJob = studioBatchVoiceoverFallbackJobs.get(safeJobId);
   if (fallbackJob) {
-    const childStatuses = await Promise.all(
+    const projectGroupStatuses = await Promise.all(
+      fallbackJob.projectGroups.map(async (group) => {
+        const status = await getStudioProjectVoiceoverJobStatus(group.jobId, user);
+        let fallbackCursor = 0;
+        const segments = group.segments.map((segment) => {
+          const segmentStatus = status.segments.find((item) => item.segmentIndex === segment.segmentIndex);
+          const fallbackStartTime = fallbackCursor;
+          const fallbackDuration = Math.max(0.2, segment.targetDurationSeconds ?? segmentStatus?.speechDuration ?? 0.8);
+          const fallbackEndTime = fallbackStartTime + fallbackDuration;
+          fallbackCursor = fallbackEndTime;
+
+          return {
+            asset: status.asset,
+            error: status.error,
+            jobId: status.jobId,
+            language: group.language,
+            profile: status.profile,
+            segmentIndex: segment.segmentIndex,
+            speechDuration: segmentStatus?.speechDuration ?? fallbackDuration,
+            speechEndTime: segmentStatus?.speechEndTime ?? fallbackEndTime,
+            speechStartTime: segmentStatus?.speechStartTime ?? fallbackStartTime,
+            speechWords: segmentStatus?.speechWords ?? [],
+            status: status.status,
+            text: segmentStatus?.text || segment.text,
+            voiceType: group.voiceType,
+          } satisfies StudioBatchVoiceoverJobSegmentStatus;
+        });
+
+        return {
+          error: status.error,
+          profile: status.profile,
+          segments,
+          status: status.status,
+        };
+      }),
+    );
+    const segmentChildStatuses = await Promise.all(
       fallbackJob.children.map(async (child) => {
         const status = await getStudioSegmentVoiceoverJobStatus(child.jobId, user);
 
@@ -7998,13 +8126,20 @@ export async function getStudioBatchVoiceoverJobStatus(
         } satisfies StudioBatchVoiceoverJobSegmentStatus;
       }),
     );
+    const childStatuses = [
+      ...projectGroupStatuses.flatMap((group) => group.segments),
+      ...segmentChildStatuses,
+    ];
     const hasFailedSegment = childStatuses.some((segment) => isStudioVoiceoverFailedStatus(segment.status));
     const allSegmentsReady = childStatuses.every((segment) => Boolean(segment.asset));
     const allSegmentsTerminal = childStatuses.every((segment) =>
       Boolean(segment.asset) || isStudioVoiceoverReadyStatus(segment.status) || isStudioVoiceoverFailedStatus(segment.status),
     );
     const status = hasFailedSegment ? "failed" : allSegmentsReady || allSegmentsTerminal ? "done" : "processing";
-    const profile = childStatuses.find((segment) => segment.profile)?.profile ?? fallbackJob.profile;
+    const profile =
+      projectGroupStatuses.find((group) => group.profile)?.profile ??
+      childStatuses.find((segment) => segment.profile)?.profile ??
+      fallbackJob.profile;
 
     fallbackJob.status = status;
     if (allSegmentsReady || hasFailedSegment) {

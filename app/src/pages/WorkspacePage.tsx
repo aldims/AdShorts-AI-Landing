@@ -10210,7 +10210,11 @@ export function WorkspacePage({
     segment: WorkspaceSegmentEditorDraftSegment,
     draft: WorkspaceSegmentEditorDraftSession | null,
   ) => {
-    if (!draft || doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    if (
+      !draft ||
+      doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segment.index)
+    ) {
       return false;
     }
 
@@ -11199,6 +11203,8 @@ export function WorkspacePage({
 
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
         ...segment,
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
         customVideo: {
           durationSeconds: durationSeconds ?? undefined,
           file,
@@ -11244,6 +11250,8 @@ export function WorkspacePage({
           return previousSegment
             ? {
                 ...segment,
+                aiVideoAsset: previousSegment.aiVideoAsset,
+                aiVideoGeneratedMode: previousSegment.aiVideoGeneratedMode,
                 customVideo: previousSegment.customVideo,
                 durationExtensionSourceDurationSeconds: previousSegment.durationExtensionSourceDurationSeconds,
                 visualReset: previousSegment.visualReset,
@@ -11251,6 +11259,8 @@ export function WorkspacePage({
               }
             : {
                 ...segment,
+                aiVideoAsset: null,
+                aiVideoGeneratedMode: null,
                 customVideo: null,
                 durationExtensionSourceDurationSeconds: null,
                 visualReset: false,
@@ -11270,6 +11280,8 @@ export function WorkspacePage({
           return previousSegment
             ? {
                 ...segment,
+                aiVideoAsset: previousSegment.aiVideoAsset,
+                aiVideoGeneratedMode: previousSegment.aiVideoGeneratedMode,
                 customVideo: previousSegment.customVideo,
                 durationExtensionSourceDurationSeconds: previousSegment.durationExtensionSourceDurationSeconds,
                 visualReset: previousSegment.visualReset,
@@ -11277,6 +11289,8 @@ export function WorkspacePage({
               }
             : {
                 ...segment,
+                aiVideoAsset: null,
+                aiVideoGeneratedMode: null,
                 customVideo: null,
                 durationExtensionSourceDurationSeconds: null,
                 visualReset: false,
@@ -11389,6 +11403,8 @@ export function WorkspacePage({
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
       customVideo: selectedMediaLibraryAsset,
       ...buildSegmentEditorKnownVideoDurationPatch(segment, selectedMediaLibraryDurationSeconds),
       durationExtensionSourceDurationSeconds: null,
@@ -12090,6 +12106,8 @@ export function WorkspacePage({
           const currentDraft = segmentEditorDraftRef.current;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
+            aiVideoAsset: null,
+            aiVideoGeneratedMode: null,
             aiPhotoAsset: payload.data!.asset!,
             aiPhotoGeneratedFromPrompt: options.prompt,
             aiPhotoPrompt: options.prompt,
@@ -12232,6 +12250,8 @@ export function WorkspacePage({
           const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
+            aiVideoAsset: null,
+            aiVideoGeneratedMode: null,
             imageEditAsset: payload.data!.asset!,
             imageEditGeneratedFromPrompt: options.prompt,
             imageEditPrompt: options.prompt,
@@ -12626,21 +12646,6 @@ export function WorkspacePage({
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
-          if (options.projectId && options.projectId > 0) {
-            const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
-              bypassCache: true,
-              initialSegmentIndex: options.segmentIndex,
-              initialSegmentMode: "route",
-              openDraft: false,
-              syncRoute: false,
-            });
-            const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
-            if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "photo_animation") {
-              removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
-              return;
-            }
-          }
-
           removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированная ИИ анимация фото недоступна.");
         }
@@ -12838,21 +12843,6 @@ export function WorkspacePage({
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
-          if (options.projectId && options.projectId > 0) {
-            const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
-              bypassCache: true,
-              initialSegmentIndex: options.segmentIndex,
-              initialSegmentMode: "route",
-              openDraft: false,
-              syncRoute: false,
-            });
-            const refreshedSegment = refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
-            if (refreshedSegment && getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "talking_photo") {
-              removeStoredWorkspaceSegmentTalkingPhotoJob(session.email, safeJobId);
-              return;
-            }
-          }
-
           removeStoredWorkspaceSegmentTalkingPhotoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированный говорящий персонаж недоступен.");
         }
@@ -13142,6 +13132,8 @@ export function WorkspacePage({
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
       aiPhotoPrompt: nextPrompt,
       aiPhotoPromptInitialized: true,
       visualReset: false,
@@ -13414,6 +13406,8 @@ export function WorkspacePage({
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
       imageEditPrompt: nextPrompt,
       imageEditPromptInitialized: true,
       visualReset: false,
@@ -13740,6 +13734,8 @@ export function WorkspacePage({
     }
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
       aiVideoPrompt: nextPrompt,
       aiVideoPromptInitialized: true,
       visualReset: false,
@@ -13931,13 +13927,36 @@ export function WorkspacePage({
       return;
     }
 
-    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
-      ...segment,
-      aiVideoPrompt: nextPrompt,
-      aiVideoPromptInitialized: true,
-      photoAnimationSourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
-      visualReset: false,
-    }));
+    const photoAnimationSourceIdentity = getStudioCustomVideoFileIdentityKey(photoAnimationSourceAsset);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
+      const sourceVisualAction =
+        photoAnimationSourceIdentity &&
+        photoAnimationSourceIdentity === getStudioCustomVideoFileIdentityKey(segment.imageEditAsset)
+          ? "image_edit"
+          : photoAnimationSourceIdentity &&
+              photoAnimationSourceIdentity === getStudioCustomVideoFileIdentityKey(segment.aiPhotoAsset)
+            ? "ai_photo"
+            : photoAnimationSourceIdentity &&
+                photoAnimationSourceIdentity === getStudioCustomVideoFileIdentityKey(segment.customVideo)
+              ? "custom"
+              : null;
+      const shouldUseSourceAsCustomVisual =
+        !sourceVisualAction && getWorkspaceSegmentCustomPreviewKind(photoAnimationSourceAsset) === "image";
+
+      return {
+        ...segment,
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
+        aiVideoPrompt: nextPrompt,
+        aiVideoPromptInitialized: true,
+        customVideo: shouldUseSourceAsCustomVisual
+          ? cloneStudioCustomVideoFile(photoAnimationSourceAsset) ?? segment.customVideo
+          : segment.customVideo,
+        photoAnimationSourceAsset: cloneStudioCustomVideoFile(photoAnimationSourceAsset),
+        visualReset: false,
+        videoAction: sourceVisualAction ?? (shouldUseSourceAsCustomVisual ? "custom" : segment.videoAction),
+      };
+    });
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.insufficient-credits", {
@@ -14279,6 +14298,8 @@ export function WorkspacePage({
         segment.index === targetSegmentIndex
           ? clearWorkspaceSegmentVoiceoverTiming({
               ...segment,
+              aiVideoAsset: null,
+              aiVideoGeneratedMode: null,
               aiVideoPrompt: script,
               aiVideoPromptInitialized: true,
               photoAnimationSourceAsset: cloneStudioCustomVideoFile(talkingPhotoSourceAsset),
@@ -14492,6 +14513,8 @@ export function WorkspacePage({
         segment.index === job.segmentIndex
           ? clearWorkspaceSegmentVoiceoverTiming({
               ...segment,
+              aiVideoAsset: null,
+              aiVideoGeneratedMode: null,
               aiVideoPrompt: job.script || segment.aiVideoPrompt,
               aiVideoPromptInitialized: Boolean(job.script || segment.aiVideoPrompt),
               photoAnimationSourceAsset:
@@ -14599,6 +14622,8 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
       ...segment,
+      aiVideoAsset: null,
+      aiVideoGeneratedMode: null,
       aiVideoPrompt: job.prompt || segment.aiVideoPrompt,
       aiVideoPromptInitialized: Boolean(job.prompt || segment.aiVideoPrompt),
       photoAnimationSourceAsset: cloneStudioCustomVideoFile(job.sourceAsset) ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
@@ -15150,6 +15175,9 @@ export function WorkspacePage({
           speechEndTime: segmentStatus.speechEndTime ?? null,
           speechStartTime: segmentStatus.speechStartTime ?? null,
           speechWords: segmentStatus.speechWords ?? [],
+          voiceSourceDuration: segmentStatus.speechDuration ?? null,
+          voiceSourceEndTime: segmentStatus.speechEndTime ?? null,
+          voiceSourceStartTime: segmentStatus.speechStartTime ?? null,
           voiceoverAsset,
           voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
           voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
@@ -15596,9 +15624,13 @@ export function WorkspacePage({
 
     const voiceoverRequiredCredits =
       getSegmentTimelineVoiceoverGenerationCreditCost(voiceoverTargetsToGenerateOnCreate);
-    if (workspaceBalance !== null && voiceoverRequiredCredits > 0 && workspaceBalance < voiceoverRequiredCredits) {
+    if (
+      workspaceBalance !== null &&
+      voiceoverRequiredCredits > 0 &&
+      workspaceBalance < requiredCredits + voiceoverRequiredCredits
+    ) {
       setSegmentEditorVideoError(null);
-      openInsufficientCreditsModal("segment_voiceover", voiceoverRequiredCredits);
+      openInsufficientCreditsModal("video_generation", requiredCredits + voiceoverRequiredCredits);
       return;
     }
 
@@ -19322,6 +19354,7 @@ export function WorkspacePage({
     draft.segments.filter(
       (segment) =>
         !doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) &&
+        !hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segment.index) &&
         Boolean(normalizeWorkspaceSegmentEditorTextForCompare(segment.text)),
     );
 

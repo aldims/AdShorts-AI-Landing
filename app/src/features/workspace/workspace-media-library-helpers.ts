@@ -561,6 +561,8 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
       })
     ) {
       applyGeneratedVisualAsset(aiPhotoItem, nextSegment.aiPhotoAsset, (asset) => ({
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
         aiPhotoAsset: asset,
         durationExtensionSourceDurationSeconds: null,
         visualReset: false,
@@ -577,6 +579,8 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
       })
     ) {
       applyGeneratedVisualAsset(imageEditItem, nextSegment.imageEditAsset, (asset) => ({
+        aiVideoAsset: null,
+        aiVideoGeneratedMode: null,
         imageEditAsset: asset,
         durationExtensionSourceDurationSeconds: null,
         visualReset: false,

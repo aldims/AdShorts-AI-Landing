@@ -1334,7 +1334,9 @@ export const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDr
       isWorkspaceSegmentServerPhotoAnimationOverride(segment) ||
       isWorkspacePhotoAnimationMediaAsset(segment.currentAsset)
       ? "video"
-      : getWorkspaceSegmentFallbackPreviewKind(segment);
+      : getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image"
+        ? "image"
+        : getWorkspaceSegmentFallbackPreviewKind(segment);
   }
 
   return (
@@ -1835,7 +1837,7 @@ export const getWorkspaceSegmentLatestVisualAction = (
     return "photo_animation";
   }
 
-  if (segment.aiVideoGeneratedMode === "talking_photo" && hasWorkspaceSegmentPlayableVideoUrl(segment)) {
+  if (segment.aiVideoGeneratedMode === "talking_photo") {
     return "talking_photo";
   }
 
@@ -1863,6 +1865,7 @@ export const getWorkspaceSegmentLatestVisualAction = (
 
   if (
     segment.videoAction === "image_edit" &&
+    !segment.imageEditAsset &&
     segment.mediaType === "video" &&
     hasWorkspaceSegmentPlayableVideoUrl(segment)
   ) {
