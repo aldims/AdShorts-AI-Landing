@@ -15587,34 +15587,91 @@ export function WorkspacePage({
       return;
     }
 
-    const voiceGenerationLanguage = getWorkspaceSegmentEditorSessionLanguage(draftForVoiceoverGeneration);
-    const segmentsToGenerateVoiceoverOnCreate = draftForVoiceoverGeneration.segments
-      .map((segment) => {
-        const normalizedText = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
-        const effectiveVoiceType = getWorkspaceSegmentEffectiveVoiceId(segment, draftForVoiceoverGeneration);
-        if (
-          !normalizedText ||
-          !effectiveVoiceType ||
-          doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) ||
-          isSegmentEditorVoiceoverFreshForVoice(segment, voiceGenerationLanguage, effectiveVoiceType, draftForVoiceoverGeneration)
-        ) {
-          return null;
+    const voiceoverTargetsToGenerateOnCreate =
+      getSegmentTimelineVoiceoverGenerationTargets(draftForVoiceoverGeneration);
+    if (voiceoverTargetsToGenerateOnCreate.some((target) => isWorkspaceSegmentVisualJobBusy(target.segment.index))) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации в сценах перед созданием Shorts.");
+      return;
+    }
+
+    const voiceoverRequiredCredits =
+      getSegmentTimelineVoiceoverGenerationCreditCost(voiceoverTargetsToGenerateOnCreate);
+    if (workspaceBalance !== null && voiceoverRequiredCredits > 0 && workspaceBalance < voiceoverRequiredCredits) {
+      setSegmentEditorVideoError(null);
+      openInsufficientCreditsModal("segment_voiceover", voiceoverRequiredCredits);
+      return;
+    }
+
+    const createShortsVoiceoverRuns = voiceoverTargetsToGenerateOnCreate.map((target) => ({
+      runId: startSegmentVisualRun(
+        segmentVoiceoverRunRef,
+        setSegmentEditorGeneratingVoiceoverRunIds,
+        target.segment.index,
+      ),
+      segmentIndex: target.segment.index,
+    }));
+
+    try {
+      if (voiceoverTargetsToGenerateOnCreate.length > 0) {
+        const projectId =
+          Number.isInteger(draftForVoiceoverGeneration.projectId) && draftForVoiceoverGeneration.projectId > 0
+            ? draftForVoiceoverGeneration.projectId
+            : undefined;
+        const voiceoverGroups = getSegmentTimelineVoiceoverGenerationGroups(
+          voiceoverTargetsToGenerateOnCreate,
+          draftForVoiceoverGeneration,
+        );
+        const response = await fetch("/api/studio/voiceover/batch-jobs", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            project_id: projectId,
+            groups: voiceoverGroups,
+          } satisfies WorkspaceBatchVoiceoverJobCreateRequest),
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
+
+        if (response.status === 402) {
+          setSegmentEditorVideoError(null);
+          openInsufficientCreditsModal("segment_voiceover", voiceoverRequiredCredits);
+          return;
         }
 
-        return { segmentIndex: segment.index, voiceType: effectiveVoiceType };
-      })
-      .filter((entry): entry is { segmentIndex: number; voiceType: string } => Boolean(entry));
+        if (!response.ok || !payload?.data?.jobId) {
+          throw new Error(payload?.error ?? "Не удалось запустить генерацию озвучки сцен.");
+        }
 
-    for (const target of segmentsToGenerateVoiceoverOnCreate) {
-      const isGenerated = await handleSegmentEditorVoiceoverGenerate({
-        segmentIndex: target.segmentIndex,
-        language: voiceGenerationLanguage,
-        voiceType: target.voiceType,
-      });
-
-      if (!isGenerated) {
-        return;
+        applyWorkspaceProfile(payload.data.profile);
+        await pollSegmentEditorBatchVoiceoverJob(payload.data.jobId, payload.data.status, {
+          segments: voiceoverTargetsToGenerateOnCreate.map((target) => ({
+            language: target.language,
+            segmentIndex: target.segment.index,
+            text: target.text,
+            voiceType: target.voiceType,
+          })),
+        });
       }
+    } catch (error) {
+      setSegmentEditorVideoError(
+        error instanceof Error
+          ? error.message
+          : workspaceText(locale, "Не удалось сгенерировать озвучку сцен.", "Failed to generate scene voiceover."),
+      );
+      return;
+    } finally {
+      createShortsVoiceoverRuns.forEach(({ runId, segmentIndex }) => {
+        if (isSegmentVisualRunCurrent(segmentVoiceoverRunRef, segmentIndex, runId)) {
+          clearSegmentVisualRun(
+            segmentVoiceoverRunRef,
+            setSegmentEditorGeneratingVoiceoverRunIds,
+            segmentIndex,
+            runId,
+          );
+        }
+      });
     }
 
     const nextAppliedSession = (() => {
@@ -24239,6 +24296,21 @@ export function WorkspacePage({
                 : roundWorkspaceSegmentTimelineSeconds(Math.max(0, span.endTime - span.startTime));
               const segmentDurationBadgeLabel =
                 formatWorkspaceSegmentEditorDurationBadgeLabel(segmentSlotDurationSeconds, locale);
+              const isImageDurationSegment = selectedVisualPreviewKind === "image";
+              const segmentVideoVisualDurationBadgeSeconds =
+                selectedVisualPreviewKind === "video"
+                  ? actualVideoVisualDurationSeconds ?? visualAudioDurationMismatch?.visualDurationSeconds ?? null
+                  : null;
+              const segmentVideoVisualDurationBadgeLabel =
+                segmentVideoVisualDurationBadgeSeconds !== null
+                  ? formatWorkspaceSegmentEditorDurationBadgeLabel(
+                      roundWorkspaceSegmentTimelineSeconds(segmentVideoVisualDurationBadgeSeconds),
+                      locale,
+                    )
+                  : segmentDurationBadgeLabel;
+              const segmentVisualDurationBadgeLabel = isImageDurationSegment
+                ? segmentDurationBadgeLabel
+                : segmentVideoVisualDurationBadgeLabel;
               const segmentDurationInputInitialValue =
                 formatWorkspaceSegmentDurationInputValue(segmentSlotDurationSeconds);
               const isEditingSegmentDurationInput =
@@ -24267,12 +24339,11 @@ export function WorkspacePage({
                 : null;
               const segmentDurationWarningTitle = getSegmentTimelineVisualAudioDurationMismatchWarning(
                 visualAudioDurationMismatch,
-                segmentDurationBadgeLabel,
+                segmentVisualDurationBadgeLabel,
               );
               const isSegmentDurationManual = normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual";
               const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);
               const segmentExtensionPlan = getWorkspaceSegmentDurationExtensionPlan(segment, baselineVisualSegment);
-              const isImageDurationSegment = selectedVisualPreviewKind === "image";
               const imageDurationMaxSeconds = getWorkspaceSegmentEditorVisualDurationMaxSeconds(segment);
               const shouldShowSegmentDeleteButton =
                 segmentEditorDraft.segments.length > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS ||
@@ -24467,10 +24538,10 @@ export function WorkspacePage({
                                 locale,
                                 visualAudioDurationMismatch
                                   ? `Продлить видео сцены ${segmentDisplayNumber}, видео ${segmentDurationWarningVisualLabel ?? segmentDurationBadgeLabel}, озвучка ${segmentDurationWarningVoiceoverLabel}`
-                                  : `Продлить видео сцены ${segmentDisplayNumber}, сцена ${segmentDurationBadgeLabel}`,
+                                  : `Продлить видео сцены ${segmentDisplayNumber}, видео ${segmentVisualDurationBadgeLabel}`,
                                 visualAudioDurationMismatch
                                   ? `Extend scene ${segmentDisplayNumber} video, video ${segmentDurationWarningVisualLabel ?? segmentDurationBadgeLabel}, voiceover ${segmentDurationWarningVoiceoverLabel}`
-                                  : `Extend scene ${segmentDisplayNumber} video, scene ${segmentDurationBadgeLabel}`,
+                                  : `Extend scene ${segmentDisplayNumber} video, video ${segmentVisualDurationBadgeLabel}`,
                               )
                         }
                         title={
@@ -24495,7 +24566,7 @@ export function WorkspacePage({
                             !
                           </span>
                         ) : null}
-                        <span>{isVideoVisualDurationPending ? "..." : segmentDurationBadgeLabel}</span>
+                        <span>{isVideoVisualDurationPending ? "..." : segmentVisualDurationBadgeLabel}</span>
                       </button>
                     )}
                     {renderSegmentTimelineHistoryButtons({

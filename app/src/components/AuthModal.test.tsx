@@ -82,9 +82,21 @@ describe("AuthModal", () => {
     await waitFor(() => expect(screen.getByText("Telegram")).toBeTruthy());
   });
 
-  it("opens the server-built Telegram OIDC authorization URL", async () => {
-    const authorizationUrl =
-      "https://oauth.telegram.org/auth?client_id=123&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Ftelegram%2Foidc%2Fcallback&response_type=code";
+  it("uses the Telegram widget signed payload without the server OIDC exchange", async () => {
+    const telegramAuth = vi.fn((_options, callback) => {
+      callback({
+        auth_date: 1_700_000_000,
+        first_name: "Telegram",
+        hash: "signed-hash",
+        id: 12345,
+        username: "telegram_user",
+      });
+    });
+    vi.stubGlobal("Telegram", {
+      Login: {
+        auth: telegramAuth,
+      },
+    });
     vi.mocked(fetch).mockImplementation(async (input) => {
       const url = String(input);
       if (url === "/api/auth/status") {
@@ -102,14 +114,20 @@ describe("AuthModal", () => {
       if (url.startsWith("/api/auth/telegram/config")) {
         return {
           json: async () => ({
-            authorizationUrl,
             botId: "123",
             botUsername: "AuthBot",
             clientId: "123",
-            flow: "code",
+            flow: "widget",
             requestAccess: ["write"],
           }),
           ok: true,
+        } as Response;
+      }
+
+      if (url === "/api/auth/telegram/callback") {
+        return {
+          json: async () => ({ error: "test-stop" }),
+          ok: false,
         } as Response;
       }
 
@@ -118,11 +136,6 @@ describe("AuthModal", () => {
         ok: true,
       } as Response;
     });
-    const popup = {
-      closed: false,
-      focus: vi.fn(),
-    };
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
 
     renderAuthModal("signin");
 
@@ -130,19 +143,17 @@ describe("AuthModal", () => {
     await waitFor(() => expect(telegramButton.disabled).toBe(false));
 
     fireEvent.click(telegramButton);
-    expect(openSpy).toHaveBeenCalledWith(
-      authorizationUrl,
-      "telegram_oidc_login",
-      expect.stringContaining("width=550"),
+    await waitFor(() => expect(telegramAuth).toHaveBeenCalledWith(expect.objectContaining({ bot_id: "123" }), expect.any(Function)));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        "/api/auth/telegram/callback",
+        expect.objectContaining({
+          body: expect.stringContaining("signed-hash"),
+          method: "POST",
+        }),
+      ),
     );
-
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: { error: "cancelled", type: "adshorts.telegramAuth" },
-        origin: window.location.origin,
-      }),
-    );
-    expect(await screen.findByText("cancelled")).toBeTruthy();
+    expect(await screen.findByText("test-stop")).toBeTruthy();
   });
 
   it("uses an email code instead of a password", async () => {

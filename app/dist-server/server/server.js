@@ -21,7 +21,7 @@ import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
@@ -885,7 +885,21 @@ const sendTelegramAuthPopupResult = (res, result) => {
 </html>`);
 };
 app.get("/api/auth/telegram/config", (req, res) => {
-    if (!authProviderStatus.telegramEnabled || !env.telegramBotId || !env.telegramClientSecret) {
+    if (!authProviderStatus.telegramEnabled || !env.telegramBotId) {
+        res.status(404).json({ error: "Telegram login not configured." });
+        return;
+    }
+    if (authProviderStatus.telegramWidgetEnabled && env.telegramBotToken) {
+        res.json({
+            botId: env.telegramBotId,
+            botUsername: env.telegramBotUsername ?? "",
+            clientId: env.telegramBotId,
+            flow: "widget",
+            requestAccess: ["write"],
+        });
+        return;
+    }
+    if (!authProviderStatus.telegramOidcEnabled || !env.telegramClientSecret) {
         res.status(404).json({ error: "Telegram login not configured." });
         return;
     }
@@ -3775,6 +3789,109 @@ app.get("/api/studio/segment-scene-sound/jobs/:jobId/audio", async (req, res) =>
         });
         res.status(502).json({
             error: error instanceof Error ? error.message : "Failed to load generated segment scene sound.",
+        });
+    }
+});
+app.post("/api/studio/voiceover/batch-jobs", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
+        normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
+        getRequestStudioRouteProjectId(req);
+    const rawGroups = Array.isArray(req.body?.groups) ? req.body.groups : [];
+    const groups = rawGroups
+        .map((group) => {
+        if (!group || typeof group !== "object") {
+            return null;
+        }
+        const groupPayload = group;
+        const language = typeof groupPayload.language === "string" ? groupPayload.language.trim() : "";
+        const voiceType = typeof groupPayload.voiceType === "string"
+            ? groupPayload.voiceType.trim()
+            : typeof groupPayload.voice_type === "string"
+                ? groupPayload.voice_type.trim()
+                : "";
+        const rawSegments = Array.isArray(groupPayload.segments) ? groupPayload.segments : [];
+        const segments = rawSegments
+            .map((segment, index) => {
+            if (!segment || typeof segment !== "object") {
+                return null;
+            }
+            const segmentPayload = segment;
+            const text = typeof segmentPayload.text === "string" ? segmentPayload.text.trim() : "";
+            if (!text) {
+                return null;
+            }
+            return {
+                segmentIndex: normalizeRequestNonNegativeInteger(segmentPayload.segmentIndex ?? segmentPayload.segment_index ?? segmentPayload.index) ?? index,
+                targetDurationSeconds: typeof segmentPayload.targetDurationSeconds === "number"
+                    ? segmentPayload.targetDurationSeconds
+                    : typeof segmentPayload.target_duration_seconds === "number"
+                        ? segmentPayload.target_duration_seconds
+                        : typeof segmentPayload.targetDuration === "number"
+                            ? segmentPayload.targetDuration
+                            : typeof segmentPayload.target_duration === "number"
+                                ? segmentPayload.target_duration
+                                : typeof segmentPayload.duration === "number"
+                                    ? segmentPayload.duration
+                                    : null,
+                text,
+            };
+        })
+            .filter((segment) => Boolean(segment));
+        if (!voiceType || segments.length === 0) {
+            return null;
+        }
+        return {
+            language,
+            segments,
+            voiceType,
+        };
+    })
+        .filter((group) => Boolean(group));
+    if (groups.length === 0) {
+        res.status(400).json({ error: "At least one voiceover group is required." });
+        return;
+    }
+    try {
+        const job = await createStudioBatchVoiceoverJob(session.user, {
+            groups,
+            projectId,
+        });
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("[studio] Failed to create batch voiceover job", error);
+        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        res.status(statusCode).json({
+            error: error instanceof Error ? error.message : "Failed to create batch voiceover job.",
+        });
+    }
+});
+app.get("/api/studio/voiceover/batch-jobs/:jobId", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const status = await getStudioBatchVoiceoverJobStatus(req.params.jobId, session.user);
+        if (status.segments.some((segment) => segment.asset) && isStudioSegmentVisualJobReadyStatus(status.status)) {
+            await invalidateWorkspaceSegmentVisualCaches(session.user);
+        }
+        res.json({ data: status });
+    }
+    catch (error) {
+        console.error("[studio] Failed to fetch batch voiceover job status", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to fetch batch voiceover job status.",
         });
     }
 });

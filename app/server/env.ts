@@ -200,6 +200,8 @@ export const env = {
 
 export const authProviderStatus = {
   googleEnabled: Boolean(env.googleClientId && env.googleClientSecret),
-  telegramEnabled: Boolean(env.telegramBotId && env.telegramClientSecret),
+  telegramOidcEnabled: Boolean(env.telegramBotId && env.telegramClientSecret),
+  telegramWidgetEnabled: Boolean(env.telegramBotId && env.telegramBotToken),
+  telegramEnabled: Boolean((env.telegramBotId && env.telegramClientSecret) || (env.telegramBotId && env.telegramBotToken)),
   smtpConfigured: Boolean(env.smtpHost && env.smtpUser && env.smtpPass),
 };

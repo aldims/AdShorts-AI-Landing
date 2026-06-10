@@ -203,19 +203,25 @@ export const buildWorkspaceSegmentEditorPayload = async (
         : exportAction === "photo_animation" || exportAction === "talking_photo"
           ? "original"
           : exportAction;
+    const isPayloadVisualSameAsOriginal =
+      (payloadVideoAction === "custom" || payloadVideoAction === "talking_photo") &&
+      isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset);
     let customVideoFileDataUrl: string | undefined;
     let customVideoAssetId: number | undefined;
     let customVideoFileUploadKey: string | undefined;
     let customVideoRemoteUrl: string | undefined;
     let sceneSoundAssetId = getWorkspaceSegmentSceneSoundAssetId(segment.sceneSoundAsset) ?? undefined;
     const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
-      !isTalkingPhotoExport &&
-      payloadVideoAction === "custom" &&
-      isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
-      isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)
+      isPayloadVisualSameAsOriginal
+        ? "original"
+        : !isTalkingPhotoExport &&
+          payloadVideoAction === "custom" &&
+          isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
+          isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)
         ? "original"
         : payloadVideoAction;
-    const shouldAttachCustomVisualAsset = payloadVideoActionForSegment === "custom" || isTalkingPhotoExport;
+    const isPayloadTalkingPhotoExport = payloadVideoActionForSegment === "talking_photo";
+    const shouldAttachCustomVisualAsset = payloadVideoActionForSegment === "custom" || isPayloadTalkingPhotoExport;
 
     if (shouldAttachCustomVisualAsset) {
       if (isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset)) {
@@ -230,11 +236,11 @@ export const buildWorkspaceSegmentEditorPayload = async (
         customVideoAssetId = (await ensureStudioUploadedAssetId(customVisualAsset, {
           fallbackFileName: customVisualAsset.fileName || `segment-visual-${segment.index + 1}.bin`,
           fallbackMimeType: customVisualAsset.mimeType,
-          kind: isTalkingPhotoExport ? "talking_photo" : "segment_source",
+          kind: isPayloadTalkingPhotoExport ? "talking_photo" : "segment_source",
           language: options.language,
           mediaType: getWorkspaceSegmentCustomPreviewKind(customVisualAsset) === "image" ? "photo" : "video",
           projectId: mediaUploadScope.projectId,
-          role: isTalkingPhotoExport ? "talking_photo" : "segment_source",
+          role: isPayloadTalkingPhotoExport ? "talking_photo" : "segment_source",
           segmentIndex: mediaUploadScope.segmentIndex,
         })) ?? undefined;
       }
@@ -260,7 +266,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
     }
 
     const durationMode =
-      isTalkingPhotoExport
+      isPayloadTalkingPhotoExport
         ? "manual"
         : normalizeWorkspaceSegmentDurationMode(segment.durationMode);
     const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
@@ -286,11 +292,11 @@ export const buildWorkspaceSegmentEditorPayload = async (
       durationMode === "manual" && resolvedManualDurationSeconds !== null
         ? roundWorkspaceSegmentTimelineSeconds(resolvedManualDurationSeconds)
         : null;
-    const talkingPhotoMediaDurationSeconds = isTalkingPhotoExport
+    const talkingPhotoMediaDurationSeconds = isPayloadTalkingPhotoExport
       ? getStudioCustomVideoFileDurationSeconds(selectedAiVideoAsset)
       : null;
     if (
-      isTalkingPhotoExport &&
+      isPayloadTalkingPhotoExport &&
       typeof duration === "number" &&
       talkingPhotoMediaDurationSeconds !== null &&
       talkingPhotoMediaDurationSeconds > duration + WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS
@@ -303,7 +309,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
     if (typeof duration === "number") {
       timelineCursor = endTime;
     }
-    const segmentVoiceType = isTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideId(segment);
+    const segmentVoiceType = isPayloadTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideId(segment);
     const segmentHasVoice =
       segmentVoiceType === "none"
         ? false

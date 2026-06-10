@@ -29,18 +29,48 @@ type TelegramAuthConfig = {
   botId: string;
   botUsername: string;
   clientId: string;
-  flow?: "code" | "post_message";
+  flow?: "code" | "post_message" | "widget";
   nonce?: string;
   requestAccess?: string[];
 };
 
+type TelegramWidgetAuthData = {
+  auth_date?: number | string;
+  first_name?: string;
+  hash?: string;
+  id?: number | string;
+  last_name?: string;
+  photo_url?: string;
+  username?: string;
+};
+
 type TelegramLoginResult = {
+  authData?: TelegramWidgetAuthData;
   error?: string;
   id_token?: string;
   redirectTo?: string;
   signedIn?: boolean;
   user?: unknown;
 };
+
+type TelegramLoginApi = {
+  auth: (
+    options: {
+      bot_id: number | string;
+      lang?: string;
+      request_access?: string;
+    },
+    callback: (authData: TelegramWidgetAuthData | false) => void,
+  ) => void;
+};
+
+declare global {
+  interface Window {
+    Telegram?: {
+      Login?: TelegramLoginApi;
+    };
+  }
+}
 
 type Feedback =
   | {
@@ -112,6 +142,9 @@ const resolveAuthActionErrorMessage = (error: unknown, fallback: string) => {
 const TELEGRAM_OIDC_ORIGIN = "https://oauth.telegram.org";
 const TELEGRAM_AUTH_MESSAGE_TYPE = "adshorts.telegramAuth";
 const TELEGRAM_POPUP_CLOSE_GRACE_MS = 5_000;
+const TELEGRAM_WIDGET_SCRIPT_SRC = "https://telegram.org/js/telegram-widget.js?22";
+
+let telegramWidgetScriptPromise: Promise<void> | null = null;
 
 const readResponseErrorMessage = async (response: Response, fallback: string) => {
   try {
@@ -130,6 +163,62 @@ const hasTelegramAuthorizationUrl = (
 ): config is TelegramAuthConfig & { authorizationUrl: string } =>
   typeof config?.authorizationUrl === "string" && config.authorizationUrl.trim().length > 0;
 
+const hasTelegramWidgetConfig = (config: TelegramAuthConfig | null) =>
+  config?.flow === "widget" && typeof config.botId === "string" && config.botId.trim().length > 0;
+
+const isTelegramConfigReady = (config: TelegramAuthConfig | null) =>
+  hasTelegramWidgetConfig(config) || hasTelegramAuthorizationUrl(config);
+
+const loadTelegramWidgetScript = () => {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Telegram login is unavailable outside the browser."));
+  }
+
+  if (window.Telegram?.Login?.auth) {
+    return Promise.resolve();
+  }
+
+  if (telegramWidgetScriptPromise) {
+    return telegramWidgetScriptPromise;
+  }
+
+  telegramWidgetScriptPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${TELEGRAM_WIDGET_SCRIPT_SRC}"]`);
+    const script = existingScript ?? document.createElement("script");
+
+    const cleanup = () => {
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+    };
+    const handleLoad = () => {
+      cleanup();
+      if (window.Telegram?.Login?.auth) {
+        resolve();
+        return;
+      }
+
+      telegramWidgetScriptPromise = null;
+      reject(new Error("Telegram login widget did not initialize."));
+    };
+    const handleError = () => {
+      cleanup();
+      telegramWidgetScriptPromise = null;
+      reject(new Error("Could not load Telegram login widget."));
+    };
+
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleError);
+
+    if (!existingScript) {
+      script.async = true;
+      script.src = TELEGRAM_WIDGET_SCRIPT_SRC;
+      document.head.appendChild(script);
+    }
+  });
+
+  return telegramWidgetScriptPromise;
+};
+
 const readTelegramSignedInResult = async (): Promise<TelegramLoginResult | null> => {
   try {
     const response = await fetch("/api/me", { credentials: "include" });
@@ -142,6 +231,70 @@ const readTelegramSignedInResult = async (): Promise<TelegramLoginResult | null>
   } catch {
     return null;
   }
+};
+
+const openTelegramWidgetAuth = async (config: TelegramAuthConfig, locale: Locale) => {
+  const botId = config.botId.trim();
+  if (!botId) {
+    throw new Error(locale === "en" ? "Telegram sign-in is not configured correctly." : "Вход через Telegram настроен некорректно.");
+  }
+
+  await loadTelegramWidgetScript();
+
+  const telegramLogin = window.Telegram?.Login;
+  if (!telegramLogin?.auth) {
+    throw new Error(locale === "en" ? "Telegram sign-in is unavailable." : "Вход через Telegram недоступен.");
+  }
+
+  return new Promise<TelegramLoginResult>((resolve, reject) => {
+    let isSettled = false;
+    let popupWasOpened = true;
+    const originalOpen = window.open;
+    const timeoutId = window.setTimeout(() => {
+      if (isSettled) return;
+      isSettled = true;
+      reject(new Error(locale === "en" ? "Telegram authorization timed out." : "Авторизация Telegram не завершилась вовремя."));
+    }, 120_000);
+
+    const settle = (callback: () => void) => {
+      if (isSettled) return;
+      isSettled = true;
+      window.clearTimeout(timeoutId);
+      callback();
+    };
+
+    window.open = ((...args: Parameters<typeof window.open>) => {
+      const popup = originalOpen.apply(window, args);
+      popupWasOpened = Boolean(popup);
+      return popup;
+    }) as typeof window.open;
+
+    try {
+      telegramLogin.auth(
+        {
+          bot_id: botId,
+          lang: locale,
+          request_access: config.requestAccess?.includes("write") ? "write" : undefined,
+        },
+        (authData) => {
+          if (!authData) {
+            settle(() => reject(new Error(locale === "en" ? "Telegram authorization was cancelled." : "Авторизация Telegram отменена.")));
+            return;
+          }
+
+          settle(() => resolve({ authData }));
+        },
+      );
+    } catch (error) {
+      settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+    } finally {
+      window.open = originalOpen;
+    }
+
+    if (!popupWasOpened) {
+      settle(() => reject(new Error(locale === "en" ? "Telegram popup was blocked." : "Окно Telegram было заблокировано браузером.")));
+    }
+  });
 };
 
 const openTelegramLoginPopup = (config: TelegramAuthConfig, locale: Locale) =>
@@ -356,7 +509,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
 
         if (!isCancelled) {
           setTelegramConfig(config);
-          setIsTelegramReady(hasTelegramAuthorizationUrl(config));
+          setIsTelegramReady(isTelegramConfigReady(config));
         }
       } catch {
         if (!isCancelled) {
@@ -560,7 +713,10 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         );
       }
 
-      const loginPayload = await openTelegramLoginPopup(telegramConfig, locale);
+      const loginPayload =
+        telegramConfig.flow === "widget"
+          ? await openTelegramWidgetAuth(telegramConfig, locale)
+          : await openTelegramLoginPopup(telegramConfig, locale);
       if (loginPayload.error) {
         throw new Error(loginPayload.error);
       }
@@ -578,12 +734,13 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         return;
       }
 
-      if (!loginPayload.id_token) {
+      const callbackBody = loginPayload.authData ?? (loginPayload.id_token ? { id_token: loginPayload.id_token } : null);
+      if (!callbackBody) {
         throw new Error(locale === "en" ? "Telegram did not return an ID token." : "Telegram не вернул ID token.");
       }
 
       const callbackResponse = await fetch("/api/auth/telegram/callback", {
-        body: JSON.stringify({ id_token: loginPayload.id_token }),
+        body: JSON.stringify(callbackBody),
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         method: "POST",

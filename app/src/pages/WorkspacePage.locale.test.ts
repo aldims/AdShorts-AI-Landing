@@ -7105,7 +7105,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.payload.segments.map((segment) => segment.videoAction)).toEqual(["custom", "custom"]);
   });
 
-  it("blocks AI photo export when the selected asset is still the original visual", async () => {
+  it("keeps the original visual when AI photo asset is still the original visual", async () => {
     const stockAsset = createMediaAsset(3543, {
       mediaType: "video",
       sourceKind: "stock",
@@ -7127,9 +7127,48 @@ describe("WorkspacePage studio locale defaults", () => {
       videoAction: "ai_photo",
     });
 
-    await expect(
-      buildWorkspaceSegmentEditorPayload(createDraftSession(staleSegment), { language: "ru" }),
-    ).rejects.toThrow("Визуал сегмента 1 не обновился");
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(staleSegment), { language: "ru" });
+
+    expect(result.payload.segments[0]?.videoAction).toBe("original");
+    expect(result.payload.segments[0]?.customVideoAssetId).toBeUndefined();
+  });
+
+  it("keeps the original visual when custom media matches the original segment media", async () => {
+    const originalAsset = createMediaAsset(101, {
+      kind: "segment_original",
+      mediaType: "video",
+      role: "segment_original",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(303, {
+      kind: "source_ai_video",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      currentAsset,
+      currentPreviewUrl: "/api/workspace/media-assets/303",
+      currentSourceKind: "ai_generated",
+      customVideo: {
+        assetId: 101,
+        fileName: "original-stock.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/101",
+        source: "media-library",
+      },
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      text: "Updated voice text",
+      videoAction: "custom",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]?.videoAction).toBe("original");
+    expect(result.payload.segments[0]?.customVideoAssetId).toBeUndefined();
   });
 
   it("keeps the existing visual when custom media already matches the current segment media", async () => {
@@ -7214,6 +7253,49 @@ describe("WorkspacePage studio locale defaults", () => {
       customVideoAssetId: 303,
       videoAction: "talking_photo",
       voiceType: "none",
+    });
+  });
+
+  it("keeps the original visual when talking photo asset is still the original visual", async () => {
+    const originalAsset = createMediaAsset(101, {
+      mediaType: "video",
+      sourceKind: "stock",
+    });
+    const currentAsset = createMediaAsset(303, {
+      kind: "source_ai_video",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 101,
+        durationSeconds: 4,
+        fileName: "original-stock.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/101/playback",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      currentAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/303/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/303/playback",
+      currentSourceKind: "ai_generated",
+      originalAsset,
+      originalPlaybackUrl: "/api/workspace/media-assets/101/playback",
+      originalPreviewUrl: "/api/workspace/media-assets/101/playback",
+      originalSourceKind: "stock",
+      text: "Updated voice text",
+      videoAction: "talking_photo",
+      voiceType: "Boris",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      customVideoAssetId: undefined,
+      videoAction: "original",
+      voiceType: "Boris",
     });
   });
 

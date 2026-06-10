@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -1228,6 +1229,16 @@ const buildStudioSegmentVoiceoverJobAudioProxyUrl = (jobId) => {
     const proxyUrl = new URL(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(normalizedJobId)}/audio`, env.appUrl);
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
+const buildStudioBatchVoiceoverSegmentAudioUrl = (jobId, payload) => {
+    const segmentJobProxyUrl = buildStudioSegmentVoiceoverJobAudioProxyUrl(jobId);
+    if (segmentJobProxyUrl) {
+        return segmentJobProxyUrl;
+    }
+    return (normalizeGenerationText(payload?.remote_url) ||
+        normalizeGenerationText(payload?.download_url) ||
+        normalizeGenerationText(payload?.url) ||
+        null);
+};
 const buildStudioProjectVoiceoverJobAudioProxyUrl = (jobId) => {
     const normalizedJobId = normalizeGenerationText(jobId);
     if (!normalizedJobId) {
@@ -2384,6 +2395,19 @@ const normalizeAdsflowSegmentVoiceoverAsset = (jobId, payload) => {
         remoteUrl,
     };
 };
+const normalizeAdsflowBatchVoiceoverSegmentAsset = (jobId, fallbackFileName, payload) => {
+    const remoteUrl = buildStudioBatchVoiceoverSegmentAudioUrl(jobId, payload);
+    if (!remoteUrl) {
+        throw new Error("Generated batch voiceover segment is unavailable.");
+    }
+    return {
+        assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        fileName: normalizeGenerationText(payload?.file_name) || fallbackFileName,
+        fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        mimeType: normalizeGenerationText(payload?.mime_type) || "audio/wav",
+        remoteUrl,
+    };
+};
 const normalizeAdsflowProjectVoiceoverAsset = (jobId, payload) => {
     const remoteUrl = buildStudioProjectVoiceoverJobAudioProxyUrl(jobId);
     if (!remoteUrl) {
@@ -3386,6 +3410,18 @@ const fetchAdsflowProjectVoiceoverJobStatus = async (jobId, user) => {
     }
     const externalUserId = await resolveStudioExternalUserId(user);
     return fetchAdsflowJson(buildAdsflowUrl(`/api/web/project-voiceover/jobs/${encodeURIComponent(safeJobId)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    }));
+};
+const fetchAdsflowBatchVoiceoverJobStatus = async (jobId, user) => {
+    assertAdsflowConfigured();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const externalUserId = await resolveStudioExternalUserId(user);
+    return fetchAdsflowJson(buildAdsflowUrl(`/api/web/voiceover/batch-jobs/${encodeURIComponent(safeJobId)}`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
     }));
@@ -4942,6 +4978,230 @@ export async function createStudioProjectVoiceoverJob(text, user, options) {
         status: String(payload.status ?? "queued"),
     };
 }
+const studioBatchVoiceoverFallbackJobs = new Map();
+const studioBatchVoiceoverJobMetadata = new Map();
+const STUDIO_BATCH_VOICEOVER_FALLBACK_JOB_TTL_MS = 45 * 60 * 1000;
+const cleanupStudioBatchVoiceoverFallbackJobs = () => {
+    const now = Date.now();
+    for (const [jobId, job] of studioBatchVoiceoverFallbackJobs) {
+        if (now - job.createdAt > STUDIO_BATCH_VOICEOVER_FALLBACK_JOB_TTL_MS) {
+            studioBatchVoiceoverFallbackJobs.delete(jobId);
+        }
+    }
+    for (const [jobId, metadata] of studioBatchVoiceoverJobMetadata) {
+        if (now - metadata.createdAt > STUDIO_BATCH_VOICEOVER_FALLBACK_JOB_TTL_MS) {
+            studioBatchVoiceoverJobMetadata.delete(jobId);
+        }
+    }
+};
+const isStudioVoiceoverReadyStatus = (value) => {
+    const status = String(value ?? "").trim().toLowerCase();
+    return ["completed", "done", "ready", "success", "succeeded"].includes(status);
+};
+const isStudioVoiceoverFailedStatus = (value) => {
+    const status = String(value ?? "").trim().toLowerCase();
+    return ["canceled", "cancelled", "error", "failed", "timeout"].includes(status);
+};
+const normalizeStudioBatchVoiceoverGroups = (groups) => {
+    const normalizedGroups = (groups ?? [])
+        .map((group) => {
+        const language = normalizeStudioLanguage(group.language);
+        const voiceType = normalizeStudioVoiceIdForLanguage(group.voiceType, language);
+        if (!voiceType || voiceType === "none") {
+            return null;
+        }
+        const segments = (group.segments ?? [])
+            .map((segment, index) => {
+            const text = normalizeGenerationText(segment.text);
+            if (!text) {
+                return null;
+            }
+            return {
+                segmentIndex: normalizeNonNegativeInteger(segment.segmentIndex) ?? index,
+                targetDurationSeconds: normalizeNumber(segment.targetDurationSeconds),
+                text,
+            };
+        })
+            .filter((segment) => Boolean(segment));
+        if (segments.length === 0) {
+            return null;
+        }
+        return {
+            creditCost: getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+            language,
+            segments,
+            voiceType,
+        };
+    })
+        .filter((group) => Boolean(group));
+    const mergedGroups = new Map();
+    normalizedGroups.forEach((group) => {
+        const key = `${group.language}:${group.voiceType.toLowerCase()}`;
+        const existing = mergedGroups.get(key);
+        if (existing) {
+            existing.segments.push(...group.segments);
+            return;
+        }
+        mergedGroups.set(key, {
+            ...group,
+            segments: [...group.segments],
+        });
+    });
+    return [...mergedGroups.values()];
+};
+const getStudioBatchVoiceoverCreditCost = (groups) => groups.reduce((total, group) => total + Math.max(0, group.creditCost), 0);
+const normalizeAdsflowBatchVoiceoverStatusSegment = (payload, fallback) => {
+    const segmentIndex = normalizeNonNegativeInteger(payload.segmentIndex ?? payload.segment_index) ??
+        fallback.segmentIndex ??
+        fallback.index;
+    const language = normalizeStudioLanguage(payload.language ?? fallback.language);
+    const voiceType = normalizeStudioVoiceIdForLanguage(payload.voiceType ?? payload.voice_type ?? fallback.voiceType, language);
+    if (!voiceType || voiceType === "none") {
+        throw new Error("Batch voiceover segment voice type is missing.");
+    }
+    const jobId = normalizeGenerationText(payload.job_id);
+    const asset = payload.asset
+        ? normalizeAdsflowBatchVoiceoverSegmentAsset(jobId, `segment-voiceover-${segmentIndex}.wav`, payload.asset)
+        : undefined;
+    const speechStartTime = normalizeNumber(payload.speech_start_time);
+    const speechEndTime = normalizeNumber(payload.speech_end_time);
+    const speechDuration = normalizeNumber(payload.speech_duration) ??
+        (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    return {
+        asset,
+        error: normalizeGenerationText(payload.error) || undefined,
+        jobId: jobId || "",
+        language,
+        profile: buildWorkspaceProfile(),
+        segmentIndex,
+        speechDuration: speechDuration !== null ? Math.max(0, speechDuration) : null,
+        speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
+        speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
+        speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
+        status: String(payload.status ?? "queued"),
+        text: normalizeGenerationText(payload.text) || fallback.text || "",
+        voiceType,
+    };
+};
+export async function createStudioBatchVoiceoverJob(user, options) {
+    assertAdsflowConfigured();
+    cleanupStudioBatchVoiceoverFallbackJobs();
+    const normalizedGroups = normalizeStudioBatchVoiceoverGroups(options?.groups);
+    if (normalizedGroups.length === 0) {
+        throw new Error("At least one voiceover group is required.");
+    }
+    const creditCost = getStudioBatchVoiceoverCreditCost(normalizedGroups);
+    if (creditCost <= 0) {
+        throw new Error("Voiceover credit cost is required.");
+    }
+    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    try {
+        const payload = await postAdsflowJson("/api/web/voiceover/batch-jobs", {
+            admin_token: env.adsflowAdminToken,
+            credit_cost: creditCost,
+            external_user_id: externalUserId,
+            groups: normalizedGroups.map((group) => ({
+                language: group.language,
+                segments: group.segments.map((segment) => ({
+                    duration: segment.targetDurationSeconds,
+                    segment_index: segment.segmentIndex,
+                    target_duration: segment.targetDurationSeconds,
+                    text: segment.text,
+                })),
+                voice_type: group.voiceType,
+            })),
+            project_id: normalizedProjectId ?? undefined,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+        }, {
+            retryDelaysMs: [],
+            timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+        });
+        const jobId = String(payload.job_id ?? "").trim();
+        if (!jobId) {
+            throw new Error("AdsFlow did not return a batch voiceover job id.");
+        }
+        studioBatchVoiceoverJobMetadata.set(jobId, {
+            createdAt: Date.now(),
+            creditCost,
+            groups: normalizedGroups,
+        });
+        return {
+            creditCost,
+            jobId,
+            profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
+            status: String(payload.status ?? "queued"),
+        };
+    }
+    catch (error) {
+        if (!isAdsflowHttpStatusError(error, 404)) {
+            throw error;
+        }
+    }
+    const creditReservation = await consumeWorkspaceGenerationCredit(user, creditCost, normalizedGroups[0]?.language);
+    const children = [];
+    try {
+        for (const group of normalizedGroups) {
+            for (const segment of group.segments) {
+                const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
+                    admin_token: env.adsflowAdminToken,
+                    credit_cost: 0,
+                    external_user_id: externalUserId,
+                    language: group.language,
+                    project_id: normalizedProjectId ?? undefined,
+                    segment_index: segment.segmentIndex,
+                    text: segment.text,
+                    user_email: user.email ?? undefined,
+                    user_name: user.name ?? undefined,
+                    voice_type: group.voiceType,
+                }, {
+                    retryDelaysMs: [],
+                    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+                });
+                const childJobId = String(payload.job_id ?? "").trim();
+                if (!childJobId) {
+                    throw new Error("AdsFlow did not return a segment voiceover job id.");
+                }
+                children.push({
+                    ...segment,
+                    jobId: childJobId,
+                    language: group.language,
+                    voiceType: group.voiceType,
+                });
+            }
+        }
+    }
+    catch (error) {
+        try {
+            await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedGroups[0]?.language);
+        }
+        catch (refundError) {
+            console.error("[studio] Failed to refund batch voiceover credits", refundError);
+        }
+        throw error;
+    }
+    const jobId = `voiceover-batch-${randomUUID()}`;
+    studioBatchVoiceoverJobMetadata.set(jobId, {
+        createdAt: Date.now(),
+        creditCost,
+        groups: normalizedGroups,
+    });
+    studioBatchVoiceoverFallbackJobs.set(jobId, {
+        children,
+        createdAt: Date.now(),
+        creditCost,
+        profile: creditReservation.profile,
+        status: "queued",
+    });
+    return {
+        creditCost,
+        jobId,
+        profile: creditReservation.profile,
+        status: "queued",
+    };
+}
 export async function getStudioSegmentAiPhotoJobStatus(jobId, user) {
     const safeJobId = String(jobId ?? "").trim();
     const waveSpeedPredictionId = parseWaveSpeedSegmentAiPhotoPredictionId(safeJobId);
@@ -5192,6 +5452,79 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
         speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
         speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
         speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
+        status,
+    };
+}
+export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
+    cleanupStudioBatchVoiceoverFallbackJobs();
+    const safeJobId = String(jobId ?? "").trim();
+    if (!safeJobId) {
+        throw new Error("Job id is required.");
+    }
+    const fallbackJob = studioBatchVoiceoverFallbackJobs.get(safeJobId);
+    if (fallbackJob) {
+        const childStatuses = await Promise.all(fallbackJob.children.map(async (child) => {
+            const status = await getStudioSegmentVoiceoverJobStatus(child.jobId, user);
+            return {
+                ...status,
+                language: child.language,
+                segmentIndex: child.segmentIndex,
+                text: child.text,
+                voiceType: child.voiceType,
+            };
+        }));
+        const hasFailedSegment = childStatuses.some((segment) => isStudioVoiceoverFailedStatus(segment.status));
+        const allSegmentsReady = childStatuses.every((segment) => Boolean(segment.asset));
+        const allSegmentsTerminal = childStatuses.every((segment) => Boolean(segment.asset) || isStudioVoiceoverReadyStatus(segment.status) || isStudioVoiceoverFailedStatus(segment.status));
+        const status = hasFailedSegment ? "failed" : allSegmentsReady || allSegmentsTerminal ? "done" : "processing";
+        const profile = childStatuses.find((segment) => segment.profile)?.profile ?? fallbackJob.profile;
+        fallbackJob.status = status;
+        if (allSegmentsReady || hasFailedSegment) {
+            studioBatchVoiceoverFallbackJobs.delete(safeJobId);
+            studioBatchVoiceoverJobMetadata.delete(safeJobId);
+        }
+        return {
+            creditCost: fallbackJob.creditCost,
+            error: childStatuses.find((segment) => segment.error)?.error,
+            jobId: safeJobId,
+            profile,
+            segments: childStatuses,
+            status,
+        };
+    }
+    const payload = await fetchAdsflowBatchVoiceoverJobStatus(safeJobId, user);
+    const status = String(payload.status ?? "queued").trim() || "queued";
+    const resolvedJobId = String(payload.job_id ?? safeJobId).trim() || safeJobId;
+    const metadata = studioBatchVoiceoverJobMetadata.get(safeJobId) ?? studioBatchVoiceoverJobMetadata.get(resolvedJobId);
+    const rawSegments = Array.isArray(payload.segments)
+        ? payload.segments
+        : Array.isArray(payload.results)
+            ? payload.results
+            : [];
+    const segments = rawSegments.map((segment, index) => {
+        const segmentIndex = normalizeNonNegativeInteger(segment.segmentIndex ?? segment.segment_index) ?? index;
+        const metadataGroup = metadata?.groups.find((group) => group.segments.some((metadataSegment) => metadataSegment.segmentIndex === segmentIndex));
+        const metadataSegment = metadataGroup?.segments.find((item) => item.segmentIndex === segmentIndex);
+        return normalizeAdsflowBatchVoiceoverStatusSegment(segment, {
+            index,
+            language: metadataGroup?.language,
+            segmentIndex,
+            text: metadataSegment?.text,
+            voiceType: metadataGroup?.voiceType,
+        });
+    });
+    if (isStudioVoiceoverReadyStatus(status) || isStudioVoiceoverFailedStatus(status)) {
+        studioBatchVoiceoverJobMetadata.delete(safeJobId);
+        studioBatchVoiceoverJobMetadata.delete(resolvedJobId);
+    }
+    return {
+        creditCost: metadata?.creditCost ?? 0,
+        error: normalizeGenerationText(payload.error) || segments.find((segment) => segment.error)?.error,
+        jobId: resolvedJobId,
+        profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+            rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+        }),
+        segments,
         status,
     };
 }
