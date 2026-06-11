@@ -10070,13 +10070,28 @@ export function WorkspacePage({
       preserveSourceTimelineEnd?: boolean;
     },
   ) => {
-    updateSegmentEditorDraft((currentDraft) => ({
-      ...currentDraft,
-      segments: currentDraft.segments.map((segment) =>
-        segment.index === targetSegmentIndex ? updater(segment) : segment,
-      ),
-    }), options);
+    updateSegmentEditorDraft((currentDraft) => {
+      const hasTargetSegmentIndex = currentDraft.segments.some(
+        (draftSegment) => draftSegment.index === targetSegmentIndex,
+      );
+      return {
+        ...currentDraft,
+        segments: currentDraft.segments.map((segment, segmentArrayIndex) =>
+          segment.index === targetSegmentIndex || (!hasTargetSegmentIndex && segmentArrayIndex === targetSegmentIndex)
+            ? updater(segment)
+            : segment,
+        ),
+      };
+    }, options);
   };
+
+  const getSegmentEditorDraftSegmentByIndex = (
+    draft: WorkspaceSegmentEditorDraftSession,
+    targetSegmentIndex: number,
+  ) =>
+    draft.segments.find((segment) => segment.index === targetSegmentIndex) ??
+    draft.segments[targetSegmentIndex] ??
+    null;
 
   const buildSegmentEditorKnownVideoDurationPatch = (
     segment: WorkspaceSegmentEditorDraftSegment,
@@ -11473,6 +11488,18 @@ export function WorkspacePage({
     updateSegmentSubtitleBulkTextDraft(value, { captureVoiceTextEditSnapshot: true });
   };
 
+  const handleSegmentTimelineGlobalVoiceBulkTextSave = () => {
+    const didUpdate = updateSegmentSubtitleBulkTextDraft(segmentSubtitleBulkTextValue);
+    if (!didUpdate) {
+      return false;
+    }
+
+    clearSegmentTimelineBulkVoiceTextEditSnapshot();
+    setHasEditedSegmentSubtitleBulkTextInput(false);
+    setSegmentSubtitleBulkTextInput("");
+    return true;
+  };
+
   const handleSegmentEditorTextChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = event.target.value;
     updateSegmentEditorDraft((currentDraft) => ({
@@ -11602,29 +11629,39 @@ export function WorkspacePage({
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
+    const baselineVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(baselineSegment);
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
-      const nextText = baselineSegment?.text ?? segment.originalText;
-      const nextTextByLanguage = baselineSegment
-        ? { ...baselineSegment.textByLanguage }
-        : {
-            ...segment.originalTextByLanguage,
-            [selectedLanguage]: segment.originalText,
-          };
+      const nextText = segment.originalText;
+      const nextTextByLanguage = {
+        ...segment.originalTextByLanguage,
+        [selectedLanguage]: segment.originalText,
+      };
+      const shouldRestoreBaselineVoiceover = Boolean(
+        baselineSegment &&
+          normalizeWorkspaceSegmentEditorTextForCompare(baselineSegment.text) ===
+            normalizeWorkspaceSegmentEditorTextForCompare(nextText),
+      );
+      const restoredVoiceoverSegment = shouldRestoreBaselineVoiceover ? baselineSegment : null;
+      const nextVoiceType = shouldRestoreBaselineVoiceover ? baselineVoiceOverrideId : null;
 
       return {
         ...segment,
-        speechDuration: baselineSegment?.speechDuration ?? null,
-        speechDurationSource: baselineSegment?.speechDurationSource ?? null,
-        speechEndTime: baselineSegment?.speechEndTime ?? null,
-        speechStartTime: baselineSegment?.speechStartTime ?? null,
-        speechWords: baselineSegment?.speechWords.map((word) => ({ ...word })) ?? [],
+        speechDuration: restoredVoiceoverSegment?.speechDuration ?? null,
+        speechDurationSource: restoredVoiceoverSegment?.speechDurationSource ?? null,
+        speechEndTime: restoredVoiceoverSegment?.speechEndTime ?? null,
+        speechStartTime: restoredVoiceoverSegment?.speechStartTime ?? null,
+        speechWords: restoredVoiceoverSegment?.speechWords.map((word) => ({ ...word })) ?? [],
         text: nextText,
         textByLanguage: nextTextByLanguage,
-        voiceoverAsset: cloneStudioCustomVideoFile(baselineSegment?.voiceoverAsset ?? null),
-        voiceoverLanguage: baselineSegment?.voiceoverLanguage ?? null,
-        voiceoverTextHash: baselineSegment?.voiceoverTextHash ?? null,
-        voiceoverVoiceType: baselineSegment?.voiceoverVoiceType ?? null,
+        voiceSourceDuration: restoredVoiceoverSegment?.voiceSourceDuration ?? null,
+        voiceSourceEndTime: restoredVoiceoverSegment?.voiceSourceEndTime ?? null,
+        voiceSourceStartTime: restoredVoiceoverSegment?.voiceSourceStartTime ?? null,
+        voiceoverAsset: cloneStudioCustomVideoFile(restoredVoiceoverSegment?.voiceoverAsset ?? null),
+        voiceoverLanguage: restoredVoiceoverSegment?.voiceoverLanguage ?? null,
+        voiceoverTextHash: restoredVoiceoverSegment?.voiceoverTextHash ?? null,
+        voiceoverVoiceType: restoredVoiceoverSegment?.voiceoverVoiceType ?? null,
+        voiceType: nextVoiceType,
       };
     });
   };
@@ -11724,6 +11761,8 @@ export function WorkspacePage({
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
+    const baselineVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(baselineSegment);
+    const nextVoiceType = baselineVoiceOverrideId;
 
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
@@ -11744,11 +11783,14 @@ export function WorkspacePage({
         speechWords: baselineSegment?.speechWords.map((word) => ({ ...word })) ?? [],
         text: nextText,
         textByLanguage: nextTextByLanguage,
+        voiceSourceDuration: baselineSegment?.voiceSourceDuration ?? null,
+        voiceSourceEndTime: baselineSegment?.voiceSourceEndTime ?? null,
+        voiceSourceStartTime: baselineSegment?.voiceSourceStartTime ?? null,
         voiceoverAsset: cloneStudioCustomVideoFile(baselineSegment?.voiceoverAsset ?? null),
         voiceoverLanguage: baselineSegment?.voiceoverLanguage ?? null,
         voiceoverTextHash: baselineSegment?.voiceoverTextHash ?? null,
         voiceoverVoiceType: baselineSegment?.voiceoverVoiceType ?? null,
-        voiceType: getWorkspaceSegmentVoiceOverrideId(baselineSegment),
+        voiceType: nextVoiceType,
       };
     });
   };
@@ -11833,7 +11875,7 @@ export function WorkspacePage({
       return;
     }
 
-    const currentSegment = segmentEditorDraft.segments.find((segment) => segment.index === safeSegmentIndex);
+    const currentSegment = getSegmentEditorDraftSegmentByIndex(segmentEditorDraft, safeSegmentIndex);
     if (!currentSegment) {
       return;
     }
@@ -11951,7 +11993,7 @@ export function WorkspacePage({
       return;
     }
 
-    const currentSegment = segmentEditorDraft.segments.find((segment) => segment.index === safeSegmentIndex);
+    const currentSegment = getSegmentEditorDraftSegmentByIndex(segmentEditorDraft, safeSegmentIndex);
     if (!currentSegment) {
       return;
     }
@@ -24672,6 +24714,9 @@ export function WorkspacePage({
               if (!segment) {
                 return null;
               }
+              const segmentTimelineHistorySegmentIndex = Number.isInteger(Number(segment.index))
+                ? Number(segment.index)
+                : index;
               const voiceOption = getSegmentTimelineVoiceOption(segment);
               const isPendingVoiceTextEdit =
                 segmentTimelineVoiceTextEditSnapshotRef.current?.segmentIndex === segment.index;
@@ -24884,8 +24929,8 @@ export function WorkspacePage({
                       "Озвучка сегмента пока недоступна как отдельный аудиофайл",
                       "Segment voiceover is not available as an isolated audio file yet",
                     );
-              const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segment.index);
-              const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segment.index);
+              const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentTimelineHistorySegmentIndex);
+              const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentTimelineHistorySegmentIndex);
               const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
               const canForwardVoiceText = Boolean(segmentTimelineRedoSnapshots[voiceTextHistoryKey]);
               const voiceTimelineState = resolveWorkspaceSegmentVoiceTimelineState({
@@ -24958,7 +25003,7 @@ export function WorkspacePage({
                     canForward: voiceTimelineState.canForward && !isVoiceoverGenerationPending,
                     kind: voiceTimelineState.historyKind,
                     label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
-                    segmentIndex: segment.index,
+                    segmentIndex: segmentTimelineHistorySegmentIndex,
                     withPlay: true,
                   })}
                   {renderSegmentTimelineAudioButton({
@@ -26968,10 +27013,11 @@ export function WorkspacePage({
                     "Wait for scene generation to finish.",
                   )
                 : null;
-  const segmentTimelineGlobalVoiceGenerateLabel =
-    segmentTimelineGlobalVoiceTargetsToGenerate.length === 0 && segmentTimelineGlobalVoiceTargets.length > 0
-      ? workspaceText(locale, "Применить озвучку", "Apply voiceover")
-      : workspaceText(locale, "Сгенерировать озвучку", "Generate voiceover");
+  const segmentTimelineGlobalVoiceGenerateLabel = workspaceText(
+    locale,
+    "Сгенерировать озвучку",
+    "Generate voiceover",
+  );
   const segmentTimelineGlobalVoiceCostLabel =
     segmentTimelineGlobalVoiceoverCost > 0 ? `${segmentTimelineGlobalVoiceoverCost} ⚡` : undefined;
   const appliedSegmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(
@@ -28009,6 +28055,7 @@ export function WorkspacePage({
                     openAnchorRect={segmentTimelineGlobalControlAnchorRect}
                     openRequestId={segmentTimelineVoiceOpenRequestId}
                     onBulkTextChange={handleSegmentTimelineGlobalVoiceBulkTextChange}
+                    onBulkTextSave={handleSegmentTimelineGlobalVoiceBulkTextSave}
                     onGenerateVoiceover={(selection) => {
                       clearSegmentTimelineBulkVoiceTextEditSnapshot();
                       void handleSegmentTimelineGlobalVoiceoverGenerate(selection);

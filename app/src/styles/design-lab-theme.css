@@ -27158,7 +27158,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
   position: absolute;
   right: 6px;
   top: 5px;
-  z-index: 9;
+  z-index: 30;
   display: inline-flex;
   align-items: center;
   gap: 0;
@@ -27169,6 +27169,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 10px 16px -14px rgba(0, 0, 0, 0.86);
+  pointer-events: none;
   transform: none;
 }
 
@@ -27192,6 +27193,8 @@ button.studio-segment-editor__timeline-label:focus-visible {
 }
 
 .studio-segment-editor__timeline-history-button {
+  position: relative;
+  z-index: 31;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -27203,6 +27206,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
   background: transparent;
   color: rgba(226, 232, 240, 0.78);
   cursor: pointer;
+  pointer-events: auto;
   transition:
     background 0.16s ease,
     color 0.16s ease,
@@ -43337,18 +43341,22 @@ html, body {
 }
 
 .studio-segment-editor__timeline-history {
+  z-index: 30;
   top: 3px;
   padding: 1px;
+  pointer-events: none;
 }
 
 .studio-segment-editor__timeline-history-button {
-  width: 15px;
-  height: 15px;
+  z-index: 31;
+  width: 20px;
+  height: 20px;
+  pointer-events: auto;
 }
 
 .studio-segment-editor__timeline-history-button svg {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 
 @media (max-width: 640px) {

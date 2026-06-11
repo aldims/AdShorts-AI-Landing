@@ -2158,6 +2158,8 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
       ...segment,
       text: snapshot.text,
       textByLanguage: { ...snapshot.textByLanguage },
+      voiceType: getWorkspaceSegmentVoiceOverrideId(snapshot),
+      voice_type: getWorkspaceSegmentVoiceOverrideId(snapshot),
     }, snapshot);
   }
 

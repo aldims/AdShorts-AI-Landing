@@ -182,6 +182,7 @@ type StudioVoiceSelectorChipProps = {
   openAnchorRect?: StudioMenuAnchorRect | null;
   openRequestId?: number;
   onBulkTextChange?: (value: string) => void;
+  onBulkTextSave?: () => boolean | void;
   onGenerateVoiceover?: (selection: StudioVoiceSelectorGenerationSelection) => void;
   onOpenChange?: (isOpen: boolean) => void;
   onSelect: (voiceId: StudioVoiceOption["id"]) => void;
@@ -792,6 +793,7 @@ export function StudioVoiceSelectorChip({
   openAnchorRect = null,
   openRequestId = 0,
   onBulkTextChange,
+  onBulkTextSave,
   onGenerateVoiceover,
   onOpenChange,
   onSelect,
@@ -1196,6 +1198,23 @@ export function StudioVoiceSelectorChip({
                   {bulkTextError ? <p className="studio-voice-selector__bulk-error">{bulkTextError}</p> : null}
                   {hasVoiceoverGenerator ? (
                     <div className="studio-voice-selector__bulk-actions">
+                      <button
+                        className="studio-voice-selector__bulk-save"
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const didSave = onBulkTextSave?.();
+                          if (didSave === false) {
+                            return;
+                          }
+                          stopVoicePreview();
+                          setRequestAnchorRect(null);
+                          setIsOpen(false);
+                        }}
+                      >
+                        {locale === "en" ? "Save text" : "Сохранить текст"}
+                      </button>
                       <button
                         className="studio-voice-selector__bulk-generate"
                         type="button"
