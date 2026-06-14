@@ -606,10 +606,24 @@ type StudioGenerateMultipartSegment = {
 };
 
 type StudioGenerateMultipartSegmentEditor = {
+  addWatermark?: unknown;
   allowStructureChange?: unknown;
+  brandChanged?: unknown;
+  brandLogoAssetId?: unknown;
+  brandLogoFileMimeType?: unknown;
+  brandLogoFileName?: unknown;
+  brandText?: unknown;
+  clearBranding?: unknown;
   projectId?: unknown;
   segments?: unknown;
   source?: unknown;
+  add_watermark?: unknown;
+  brand_changed?: unknown;
+  brand_logo_asset_id?: unknown;
+  brand_logo_mime_type?: unknown;
+  brand_logo_original_name?: unknown;
+  brand_text?: unknown;
+  clear_branding?: unknown;
 };
 
 type AdsflowMediaUploadSessionPayload = {
@@ -657,6 +671,23 @@ const getFormDataBoolean = (formData: FormData, key: string, defaultValue: boole
 
 const getFormDataOptionalBoolean = (formData: FormData, key: string) => {
   const value = formData.get(key);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return !["0", "false", "no", "off"].includes(normalized);
+};
+
+const normalizeRequestOptionalBoolean = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
   if (typeof value !== "string") {
     return undefined;
   }
@@ -862,11 +893,21 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
   const rawSegmentEditor = parseServerJson<StudioGenerateMultipartSegmentEditor>(getFormDataString(formData, "segmentEditor"));
   const segmentEditorRecord =
     rawSegmentEditor && typeof rawSegmentEditor === "object" ? rawSegmentEditor : null;
+  const segmentEditorBrandRecord = segmentEditorRecord as Record<string, unknown> | null;
   const rawSegments = Array.isArray(segmentEditorRecord?.segments) ? segmentEditorRecord.segments : [];
   const segmentEditor =
     segmentEditorRecord && rawSegments.length > 0
       ? {
+          addWatermark: segmentEditorBrandRecord?.addWatermark ?? segmentEditorBrandRecord?.add_watermark,
           allowStructureChange: Boolean(segmentEditorRecord.allowStructureChange),
+          brandChanged: segmentEditorBrandRecord?.brandChanged ?? segmentEditorBrandRecord?.brand_changed,
+          brandLogoAssetId: segmentEditorBrandRecord?.brandLogoAssetId ?? segmentEditorBrandRecord?.brand_logo_asset_id,
+          brandLogoFileMimeType:
+            segmentEditorBrandRecord?.brandLogoFileMimeType ?? segmentEditorBrandRecord?.brand_logo_mime_type,
+          brandLogoFileName:
+            segmentEditorBrandRecord?.brandLogoFileName ?? segmentEditorBrandRecord?.brand_logo_original_name,
+          brandText: segmentEditorBrandRecord?.brandText ?? segmentEditorBrandRecord?.brand_text,
+          clearBranding: segmentEditorBrandRecord?.clearBranding ?? segmentEditorBrandRecord?.clear_branding,
           projectId: segmentEditorRecord.projectId,
           segments: await Promise.all(
             rawSegments.map(async (segment) => {
@@ -3100,10 +3141,13 @@ app.post("/api/contact/international-payments-waitlist", async (req, res) => {
       userAgent: req.header("user-agent") ?? null,
     });
 
-    await appendInternationalPaymentsWaitlistSubmission(submission);
-    void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
-      console.error("[contact] Failed to notify international payments waitlist submission", error);
-    });
+    const wasAppended = await appendInternationalPaymentsWaitlistSubmission(submission);
+
+    if (wasAppended) {
+      void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
+        console.error("[contact] Failed to notify international payments waitlist submission", error);
+      });
+    }
 
     res.status(201).json({ data: { ok: true } });
   } catch (error) {
@@ -3544,23 +3588,66 @@ app.post("/api/studio/generate", async (req, res) => {
   const editedFromProjectAdId = requestBody.editedFromProjectAdId;
   const projectId = requestBody.projectId;
   const segmentEditor = requestBody.segmentEditor;
+  const segmentEditorBrandRecord =
+    segmentEditor && typeof segmentEditor === "object"
+      ? (segmentEditor as Record<string, unknown>)
+      : null;
+  const segmentEditorAddWatermark = normalizeRequestOptionalBoolean(
+    segmentEditorBrandRecord?.addWatermark ?? segmentEditorBrandRecord?.add_watermark,
+  );
+  const segmentEditorBrandChanged = normalizeRequestOptionalBoolean(
+    segmentEditorBrandRecord?.brandChanged ?? segmentEditorBrandRecord?.brand_changed,
+  );
+  const segmentEditorClearBranding = normalizeRequestOptionalBoolean(
+    segmentEditorBrandRecord?.clearBranding ?? segmentEditorBrandRecord?.clear_branding,
+  );
+  const effectiveAddWatermark = addWatermark ?? segmentEditorAddWatermark;
+  const effectiveBrandChanged = brandChanged ?? segmentEditorBrandChanged;
+  const effectiveClearBranding = clearBranding ?? segmentEditorClearBranding;
+  const effectiveBrandLogoAssetId =
+    brandLogoAssetId ??
+    normalizeRequestPositiveInteger(
+      segmentEditorBrandRecord?.brandLogoAssetId ?? segmentEditorBrandRecord?.brand_logo_asset_id,
+    );
+  const effectiveBrandLogoFileMimeType =
+    brandLogoFileMimeType ||
+    (typeof segmentEditorBrandRecord?.brandLogoFileMimeType === "string"
+      ? segmentEditorBrandRecord.brandLogoFileMimeType.trim()
+      : typeof segmentEditorBrandRecord?.brand_logo_mime_type === "string"
+        ? segmentEditorBrandRecord.brand_logo_mime_type.trim()
+        : "");
+  const effectiveBrandLogoFileName =
+    brandLogoFileName ||
+    (typeof segmentEditorBrandRecord?.brandLogoFileName === "string"
+      ? segmentEditorBrandRecord.brandLogoFileName.trim()
+      : typeof segmentEditorBrandRecord?.brand_logo_original_name === "string"
+        ? segmentEditorBrandRecord.brand_logo_original_name.trim()
+        : "");
+  const effectiveBrandText =
+    brandText ||
+    (typeof segmentEditorBrandRecord?.brandText === "string"
+      ? segmentEditorBrandRecord.brandText.trim()
+      : typeof segmentEditorBrandRecord?.brand_text === "string"
+        ? segmentEditorBrandRecord.brand_text.trim()
+        : "");
   const versionRootProjectAdId = requestBody.versionRootProjectAdId;
   const videoModeChanged = requestBody.videoModeChanged;
 
   console.info("[studio] generate.brand-input", {
     brandLogoDataUrlLength: brandLogoFileDataUrl.length,
-    brandLogoFileName: brandLogoFileName || null,
-    brandLogoMimeType: brandLogoFileMimeType || null,
-    brandTextLength: brandText.trim().length,
-    hasBrandLogo: Boolean(brandLogoFileDataUrl),
-    hasBrandText: Boolean(brandText.trim()),
+    brandLogoAssetId: effectiveBrandLogoAssetId ?? null,
+    brandLogoFileName: effectiveBrandLogoFileName || null,
+    brandLogoMimeType: effectiveBrandLogoFileMimeType || null,
+    brandTextLength: effectiveBrandText.trim().length,
+    hasBrandLogo: Boolean(brandLogoFileDataUrl) || Boolean(effectiveBrandLogoAssetId),
+    hasBrandText: Boolean(effectiveBrandText.trim()),
     isRegeneration,
     language: language || null,
     projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
     segmentEditorActive: Boolean(segmentEditor),
-    addWatermarkOverride: addWatermark ?? null,
-    brandChangedOverride: brandChanged ?? null,
-    clearBrandingOverride: clearBranding ?? null,
+    addWatermarkOverride: effectiveAddWatermark ?? null,
+    brandChangedOverride: effectiveBrandChanged ?? null,
+    clearBrandingOverride: effectiveClearBranding ?? null,
     voiceId: voiceId || null,
     voiceEnabled,
     subtitleEnabled,
@@ -3573,14 +3660,14 @@ app.post("/api/studio/generate", async (req, res) => {
 
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
-      addWatermark,
-      brandChanged,
-      clearBranding,
+      addWatermark: effectiveAddWatermark,
+      brandChanged: effectiveBrandChanged,
+      clearBranding: effectiveClearBranding,
       brandLogoFileDataUrl,
-      brandLogoAssetId,
-      brandLogoFileMimeType,
-      brandLogoFileName,
-      brandText,
+      brandLogoAssetId: effectiveBrandLogoAssetId,
+      brandLogoFileMimeType: effectiveBrandLogoFileMimeType,
+      brandLogoFileName: effectiveBrandLogoFileName,
+      brandText: effectiveBrandText,
       customMusicFileDataUrl,
       customMusicAssetId,
       customMusicFileName,

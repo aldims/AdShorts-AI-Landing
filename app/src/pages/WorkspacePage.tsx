@@ -370,6 +370,7 @@ import {
 } from "../features/workspace/workspace-segment-structure-helpers";
 import {
   buildWorkspaceSegmentEditorPayload,
+  type WorkspaceSegmentEditorPayload,
 } from "../features/workspace/workspace-segment-payload-helpers";
 import {
   buildStudioRouteUrl,
@@ -17812,7 +17813,17 @@ export function WorkspacePage({
       }
 
       if (effectiveSegmentEditor) {
-        formData.append("segmentEditor", JSON.stringify(effectiveSegmentEditor));
+        const effectiveSegmentEditorWithBrand: WorkspaceSegmentEditorPayload = {
+          ...effectiveSegmentEditor,
+          addWatermark: options?.addWatermark ?? false,
+          brandChanged: options?.brandChanged,
+          brandLogoAssetId: brandLogoAssetId || undefined,
+          brandLogoFileMimeType: effectiveBrandLogoFile?.mimeType || undefined,
+          brandLogoFileName: effectiveBrandLogoFile?.fileName || undefined,
+          brandText: effectiveBrandText || undefined,
+          clearBranding: options?.clearBranding,
+        };
+        formData.append("segmentEditor", JSON.stringify(effectiveSegmentEditorWithBrand));
       }
 
       effectiveSegmentEditorBuild?.uploads.forEach((upload) => {

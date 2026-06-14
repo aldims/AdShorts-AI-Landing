@@ -2469,10 +2469,12 @@ app.post("/api/contact/international-payments-waitlist", async (req, res) => {
         const submission = parseInternationalPaymentsWaitlistSubmission(req.body, {
             userAgent: req.header("user-agent") ?? null,
         });
-        await appendInternationalPaymentsWaitlistSubmission(submission);
-        void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
-            console.error("[contact] Failed to notify international payments waitlist submission", error);
-        });
+        const wasAppended = await appendInternationalPaymentsWaitlistSubmission(submission);
+        if (wasAppended) {
+            void notifyInternationalPaymentsWaitlistSubmission(submission).catch((error) => {
+                console.error("[contact] Failed to notify international payments waitlist submission", error);
+            });
+        }
         res.status(201).json({ data: { ok: true } });
     }
     catch (error) {

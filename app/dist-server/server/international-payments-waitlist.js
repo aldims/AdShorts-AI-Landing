@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { env } from "./env.js";
 import { sendAppEmail } from "./mail.js";
@@ -39,9 +39,38 @@ export const parseInternationalPaymentsWaitlistSubmission = (value, metadata = {
         userAgent,
     };
 };
+const getWaitlistFilePath = () => join(env.dataDir, WAITLIST_FILE_NAME);
+const isWaitlistEmailAlreadyRegistered = async (email) => {
+    try {
+        const fileData = await readFile(getWaitlistFilePath(), "utf8");
+        return fileData
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .some((line) => {
+            try {
+                const entry = JSON.parse(line);
+                return String(entry.email ?? "").trim().toLowerCase() === email;
+            }
+            catch {
+                return false;
+            }
+        });
+    }
+    catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+            return false;
+        }
+        throw error;
+    }
+};
 export const appendInternationalPaymentsWaitlistSubmission = async (submission) => {
     await mkdir(env.dataDir, { recursive: true });
-    await appendFile(join(env.dataDir, WAITLIST_FILE_NAME), `${JSON.stringify(submission)}\n`, "utf8");
+    if (await isWaitlistEmailAlreadyRegistered(submission.email)) {
+        return false;
+    }
+    await appendFile(getWaitlistFilePath(), `${JSON.stringify(submission)}\n`, "utf8");
+    return true;
 };
 export const notifyInternationalPaymentsWaitlistSubmission = async (submission) => {
     const submittedAt = new Intl.DateTimeFormat("ru-RU", {

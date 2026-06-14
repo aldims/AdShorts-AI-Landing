@@ -82,7 +82,14 @@ export type WorkspaceSegmentEditorPayloadSegment = {
 };
 
 export type WorkspaceSegmentEditorPayload = {
+  addWatermark?: boolean;
   allowStructureChange?: boolean;
+  brandChanged?: boolean;
+  brandLogoAssetId?: number;
+  brandLogoFileMimeType?: string;
+  brandLogoFileName?: string;
+  brandText?: string;
+  clearBranding?: boolean;
   projectId?: number | null;
   segments: WorkspaceSegmentEditorPayloadSegment[];
   source?: "project" | "scratch";
