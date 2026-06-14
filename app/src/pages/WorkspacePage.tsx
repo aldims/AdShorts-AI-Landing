@@ -15841,20 +15841,58 @@ export function WorkspacePage({
       return;
     }
 
+    const segmentEditorBrandSnapshotForGeneration = isSegmentEditorBrandDirty
+      ? currentSegmentEditorBrandSettings
+      : appliedSegmentEditorBrandSnapshot;
+    const segmentEditorSystemWatermarkForGeneration = isSegmentEditorBrandDirty
+      ? segmentEditorSystemWatermarkEnabled
+      : appliedSegmentEditorSystemWatermarkEnabled;
+    const hasSegmentEditorBrandingForGeneration = hasStudioBranding(segmentEditorBrandSnapshotForGeneration);
+    const hasSegmentEditorBrandChangeForGeneration = !areStudioBrandSettingsEqual(
+      baselineSegmentEditorBrandSnapshot,
+      segmentEditorBrandSnapshotForGeneration,
+    );
+    const hasSegmentEditorBrandRemovalForGeneration =
+      hasBaselineSegmentEditorBranding && !hasSegmentEditorBrandingForGeneration;
+    const hasSegmentEditorSystemWatermarkRemovalForGeneration =
+      shouldShowSegmentEditorSystemWatermarkControl &&
+      baselineSegmentEditorSystemWatermarkEnabled &&
+      !segmentEditorSystemWatermarkForGeneration;
+    const hasSegmentEditorSystemWatermarkAdditionForGeneration =
+      shouldShowSegmentEditorSystemWatermarkControl &&
+      !baselineSegmentEditorSystemWatermarkEnabled &&
+      segmentEditorSystemWatermarkForGeneration;
+
     if (isSegmentEditorBrandDirty) {
       logSegmentEditorDiagnostics(
-        "client.segment-editor.create-shorts.blocked",
-        { reason: "brand-dirty" },
-        { draft: effectiveDraft, level: "warn" },
+        "client.segment-editor.create-shorts.brand-draft-applied",
+        {
+          brandLogoSelected: Boolean(segmentEditorBrandSnapshotForGeneration.brandLogoFile),
+          brandTextLength: segmentEditorBrandSnapshotForGeneration.brandText.length,
+          systemWatermarkEnabled: segmentEditorSystemWatermarkForGeneration,
+        },
+        { draft: effectiveDraft },
       );
-      setSegmentEditorVideoError(
-        workspaceText(
-          locale,
-          "Нажмите «Применить ко всему видео» в настройках бренда перед созданием Shorts.",
-          "Click “Apply to video” in brand settings before creating Shorts.",
-        ),
-      );
-      return;
+      setAppliedSegmentEditorBrandSettings({
+        brandLogoFile: segmentEditorBrandSnapshotForGeneration.brandLogoFile,
+        brandText: segmentEditorBrandSnapshotForGeneration.brandText,
+      });
+      setAppliedSegmentEditorSystemWatermarkEnabled(segmentEditorSystemWatermarkForGeneration);
+      const projectId = segmentEditorDraftRef.current?.projectId ?? segmentEditorDraft?.projectId ?? null;
+      if (projectId) {
+        writeStoredWorkspaceSegmentEditorBrandSnapshot(session.email, projectId, {
+          applied: createWorkspaceSegmentEditorProjectBrandState({
+            brandLogoFile: segmentEditorBrandSnapshotForGeneration.brandLogoFile,
+            brandText: segmentEditorBrandSnapshotForGeneration.brandText,
+            systemWatermarkEnabled: segmentEditorSystemWatermarkForGeneration,
+          }),
+          baseline: createWorkspaceSegmentEditorProjectBrandState({
+            brandLogoFile: baselineSegmentEditorBrandSnapshot.brandLogoFile,
+            brandText: baselineSegmentEditorBrandSnapshot.brandText,
+            systemWatermarkEnabled: baselineSegmentEditorSystemWatermarkEnabled,
+          }),
+        });
+      }
     }
 
     const scratchGenerationPrompt = isScratchDraft ? buildScratchSegmentEditorGenerationPrompt(effectiveDraft) : "";
@@ -16188,19 +16226,19 @@ export function WorkspacePage({
     await handleGenerate(generationPrompt, {
       ...segmentEditorGenerationOptions,
       addWatermark: shouldShowSegmentEditorSystemWatermarkControl
-        ? appliedSegmentEditorSystemWatermarkEnabled
+        ? segmentEditorSystemWatermarkForGeneration
         : false,
       brandChanged:
         isSegmentEditorBrandDirty ||
-        hasSegmentEditorBrandChange ||
-        hasSegmentEditorSystemWatermarkRemoval ||
-        hasSegmentEditorSystemWatermarkAddition,
+        hasSegmentEditorBrandChangeForGeneration ||
+        hasSegmentEditorSystemWatermarkRemovalForGeneration ||
+        hasSegmentEditorSystemWatermarkAdditionForGeneration,
       clearBranding:
-        !hasAppliedSegmentEditorBranding &&
-        (hasSegmentEditorBrandRemoval ||
-          (!appliedSegmentEditorSystemWatermarkEnabled && hasSegmentEditorSystemWatermarkRemoval)),
-      brandLogoFile: appliedSegmentEditorBrandSnapshot.brandLogoFile,
-      brandText: appliedSegmentEditorBrandSnapshot.brandText,
+        !hasSegmentEditorBrandingForGeneration &&
+        (hasSegmentEditorBrandRemovalForGeneration ||
+          (!segmentEditorSystemWatermarkForGeneration && hasSegmentEditorSystemWatermarkRemovalForGeneration)),
+      brandLogoFile: segmentEditorBrandSnapshotForGeneration.brandLogoFile,
+      brandText: segmentEditorBrandSnapshotForGeneration.brandText,
       segmentEditorAllowStructureChange: allowSegmentStructureChange,
       segmentEditorPersistedSegmentIndexes,
     });
