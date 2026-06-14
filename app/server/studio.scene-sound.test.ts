@@ -459,4 +459,61 @@ describe("studio segment voiceover jobs", () => {
       },
     ]);
   });
+
+  it("keeps batch voiceover processing until every segment has an asset", async () => {
+    const { getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/voiceover/batch-jobs/batch-voiceover-job-1") {
+          return jsonResponse({
+            job_id: "batch-voiceover-job-1",
+            segments: [
+              {
+                job_id: "project-voiceover-child-1",
+                language: "ru",
+                segment_index: 0,
+                speech_duration: 3.4,
+                status: "done",
+                text: "Первая сцена",
+                voice_type: "Liam",
+              },
+            ],
+            status: "done",
+            user: {
+              balance: 7,
+              plan: "FREE",
+              start_plan_used: true,
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioBatchVoiceoverJobStatus("batch-voiceover-job-1", {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status.status).toBe("processing");
+    expect(status.segments).toEqual([
+      expect.objectContaining({
+        asset: undefined,
+        jobId: "project-voiceover-child-1",
+        segmentIndex: 0,
+        speechDuration: 3.4,
+        status: "done",
+      }),
+    ]);
+  });
 });
