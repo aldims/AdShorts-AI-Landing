@@ -4277,6 +4277,10 @@ export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
     return null;
   }
 
+  if (normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover") {
+    return null;
+  }
+
   if (!options?.includeAnyVideoVisual && !isWorkspaceSegmentGeneratedVideoVisual(segment)) {
     return null;
   }

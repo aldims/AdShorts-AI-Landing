@@ -8,6 +8,7 @@ import {
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
+  getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   getStudioSceneSoundAssetPreviewMediaKind,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
@@ -294,6 +295,53 @@ describe("workspace segment editor subtitle availability", () => {
     };
 
     expect(getWorkspaceSegmentEffectiveVoiceId(segment, session)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+  });
+});
+
+describe("workspace segment editor visual and voiceover mismatch", () => {
+  it("does not warn about visual and voiceover mismatch when video is explicitly synced to voiceover", () => {
+    const visualSyncedSegment = createProjectVoiceoverSegment({
+      customVideo: {
+        durationSeconds: 5,
+        fileName: "scene-video.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        objectUrl: "blob:http://localhost/scene-video",
+        source: "upload",
+      },
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      mediaType: "video",
+      videoAction: "custom",
+    });
+    const voiceoverSyncedSegment = createProjectVoiceoverSegment({
+      customVideo: {
+        durationSeconds: 5,
+        fileName: "scene-video.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        objectUrl: "blob:http://localhost/scene-video",
+        source: "upload",
+      },
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      mediaType: "video",
+      videoAction: "custom",
+    });
+    const draft = createProjectVoiceoverDraft([visualSyncedSegment]);
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(visualSyncedSegment, draft, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 5,
+      }),
+    ).not.toBeNull();
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(voiceoverSyncedSegment, draft, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 5,
+      }),
+    ).toBeNull();
   });
 });
 
