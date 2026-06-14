@@ -104,6 +104,7 @@ export type WorkspaceGenerateOptions = {
   editedFromProjectAdId?: number;
   isRegeneration?: boolean;
   language?: StudioLanguage | string;
+  musicName?: string;
   musicType?: StudioMusicType | string;
   projectId?: number;
   segmentEditor?: WorkspaceSegmentEditorPayload;

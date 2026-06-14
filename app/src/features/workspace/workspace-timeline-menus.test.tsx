@@ -56,7 +56,7 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
     const onClose = vi.fn();
     render(<WorkspaceSegmentTimelineVoiceMenu {...baseProps} onClose={onClose} />);
 
-    screen.getByRole("button", { name: "Сохранить текст" }).click();
+    screen.getByRole("button", { name: "Сохранить" }).click();
 
     expect(onClose).toHaveBeenCalledOnce();
   });

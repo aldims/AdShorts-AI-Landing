@@ -4,6 +4,8 @@ import {
   STUDIO_CREDIT_COST_BY_ACTION,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_VIDEO_GENERATION_CREDIT_COST,
+  getStudioSegmentTalkingPhotoCreditCost,
+  getStudioSegmentTalkingPhotoCreditCostForDuration,
   getStudioSegmentVoiceoverCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
@@ -46,5 +48,23 @@ describe("segment voiceover credit costs", () => {
     expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioSegmentVoiceoverCreditCost("none")).toBe(0);
     expect(getStudioSegmentVoiceoverCreditCost(null)).toBe(0);
+  });
+});
+
+describe("talking photo credit costs", () => {
+  it("prices talking character generation by estimated duration with a ten credit minimum", () => {
+    expect(getStudioSegmentTalkingPhotoCreditCostForDuration(5)).toBe(10);
+    expect(getStudioSegmentTalkingPhotoCreditCostForDuration(7)).toBe(14);
+    expect(getStudioSegmentTalkingPhotoCreditCostForDuration(10)).toBe(20);
+  });
+
+  it("prices non-empty talking character scripts and ignores empty text", () => {
+    expect(getStudioSegmentTalkingPhotoCreditCost("")).toBe(0);
+    expect(getStudioSegmentTalkingPhotoCreditCost("Короткий текст")).toBe(10);
+    expect(
+      getStudioSegmentTalkingPhotoCreditCost(
+        "Раз два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать тринадцать четырнадцать пятнадцать шестнадцать семнадцать восемнадцать девятнадцать двадцать",
+      ),
+    ).toBeGreaterThan(10);
   });
 });

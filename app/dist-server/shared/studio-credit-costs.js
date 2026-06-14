@@ -14,6 +14,8 @@ export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST = STUDIO_SEGMEN
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST;
 export const STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST = 10;
+export const STUDIO_SEGMENT_TALKING_PHOTO_CREDITS_PER_SECOND = 2;
+export const STUDIO_SEGMENT_TALKING_PHOTO_WORDS_PER_SECOND = 2.2;
 export const STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST = 5;
 export const STUDIO_SEGMENT_AI_PHOTO_STANDARD_CREDIT_COST = 2;
 export const STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST = 4;
@@ -87,6 +89,31 @@ export const getStudioSegmentVoiceoverCreditCost = (voiceId) => {
     return STUDIO_PREMIUM_VOICE_IDS.some((premiumVoiceId) => premiumVoiceId.toLowerCase() === normalizedVoiceKey)
         ? STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST
         : STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
+};
+export const getStudioSegmentTalkingPhotoCreditCostForDuration = (durationSeconds) => {
+    const duration = Number(durationSeconds);
+    if (!Number.isFinite(duration) || duration <= 0) {
+        return STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST;
+    }
+    return Math.max(STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, Math.ceil(duration * STUDIO_SEGMENT_TALKING_PHOTO_CREDITS_PER_SECOND));
+};
+export const estimateStudioSegmentTalkingPhotoScriptDurationSeconds = (script) => {
+    const normalizedScript = String(script ?? "").trim();
+    if (!normalizedScript) {
+        return 0;
+    }
+    const words = normalizedScript.match(/[0-9A-Za-zА-Яа-яЁё]+/g) ?? [];
+    if (words.length > 0) {
+        return words.length / STUDIO_SEGMENT_TALKING_PHOTO_WORDS_PER_SECOND;
+    }
+    return normalizedScript.replace(/\s+/g, "").length / 14;
+};
+export const getStudioSegmentTalkingPhotoCreditCost = (script) => {
+    const normalizedScript = String(script ?? "").trim();
+    if (!normalizedScript) {
+        return 0;
+    }
+    return getStudioSegmentTalkingPhotoCreditCostForDuration(estimateStudioSegmentTalkingPhotoScriptDurationSeconds(normalizedScript));
 };
 export const STUDIO_CREDIT_COST_BY_ACTION = {
     video_generation: STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,

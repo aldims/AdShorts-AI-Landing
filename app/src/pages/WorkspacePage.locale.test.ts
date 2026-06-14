@@ -307,6 +307,7 @@ const createFreshSession = (segment: DraftSegment): FreshSession => ({
       currentPreviewUrl: segment.currentPreviewUrl,
       currentSourceKind: segment.currentSourceKind,
       duration: segment.duration,
+      durationExtensionSourceDurationSeconds: segment.durationExtensionSourceDurationSeconds,
       durationMode: segment.durationMode,
       endTime: segment.endTime,
       index: segment.index,
@@ -3096,6 +3097,126 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("adopts fresh shorter server timing instead of keeping a stale cached source duration", () => {
+    const staleLiveSegment = createDraftSegment({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 47.323,
+      index: 7,
+      manualDurationSeconds: 5,
+      startTime: 42.323,
+      text: "Final scene",
+    });
+    const freshServerSegment = createDraftSegment({
+      duration: 2.9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 45.223,
+      index: 7,
+      manualDurationSeconds: 2.9,
+      startTime: 42.323,
+      text: "Final scene",
+    });
+    const freshSession = createFreshSession(freshServerSegment);
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(staleLiveSegment),
+      freshSession,
+      {
+        baselineSession: freshSession,
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 2.9,
+      durationMode: "manual",
+      endTime: 2.9,
+      manualDurationSeconds: 2.9,
+      startTime: 0,
+    });
+  });
+
+  it("does not expand a fresh shorter server video scene back to its source duration", () => {
+    const videoAsset = createMediaAsset(808, {
+      kind: "segment_current",
+      mediaType: "video",
+      role: "segment_current",
+      sourceKind: "ai_generated",
+    });
+    const freshServerSegment = createDraftSegment({
+      currentAsset: videoAsset,
+      currentPlaybackUrl: "/api/workspace/media-assets/808/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/808/poster",
+      currentSourceKind: "ai_generated",
+      duration: 2.9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      endTime: 45.223,
+      index: 7,
+      manualDurationSeconds: 2.9,
+      mediaType: "video",
+      startTime: 42.323,
+      text: "Final scene",
+    });
+
+    const draft = createWorkspaceSegmentEditorDraftSession(createFreshSession(freshServerSegment));
+
+    expect(draft.segments[0]).toMatchObject({
+      duration: 2.9,
+      durationMode: "manual",
+      endTime: 2.9,
+      manualDurationSeconds: 2.9,
+      startTime: 0,
+    });
+  });
+
+  it("preserves an explicitly selected visual duration during fresh session refresh", () => {
+    const liveSegment = createDraftSegment({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 47.323,
+      index: 7,
+      manualDurationSeconds: 5,
+      startTime: 42.323,
+      text: "Final scene",
+    });
+    const freshServerSegment = createDraftSegment({
+      duration: 2.9,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 45.223,
+      index: 7,
+      manualDurationSeconds: 2.9,
+      startTime: 42.323,
+      text: "Final scene",
+    });
+    const freshSession = createFreshSession(freshServerSegment);
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(liveSegment),
+      freshSession,
+      {
+        baselineSession: freshSession,
+      },
+    );
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      startTime: 0,
+    });
+  });
+
   it("adopts fresh auto timing during refresh even when no stored baseline is available", () => {
     const staleLiveSegments = [
       createDraftSegment({
@@ -5337,15 +5458,16 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
     });
 
-    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(false);
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(true);
 
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 3,
-      durationMode: "auto",
-      endTime: 3,
-      manualDurationSeconds: null,
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
   });
@@ -5402,15 +5524,17 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
-      durationMode: "auto",
-      endTime: 2.3,
-      manualDurationSeconds: null,
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 2.3,
+      startTime: 5,
     }));
   });
 
@@ -5461,15 +5585,17 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
-      durationMode: "auto",
-      endTime: 2.3,
-      manualDurationSeconds: null,
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 2.3,
+      startTime: 5,
     }));
   });
 
@@ -5525,11 +5651,13 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
-      durationMode: "auto",
-      endTime: 13.7,
-      manualDurationSeconds: null,
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 16.4,
+      manualDurationSeconds: 5,
       startTime: 11.4,
     }));
   });
@@ -5695,16 +5823,16 @@ describe("WorkspacePage studio locale defaults", () => {
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.3,
-      durationMode: "auto",
-      durationSyncMode: "voiceover",
-      endTime: 2.3,
-      manualDurationSeconds: null,
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
   });
 
-  it("automatically syncs scene timing to a freshly generated voiceover", () => {
+  it("preserves scene timing when a freshly generated voiceover is shorter", () => {
     const voiceText = "Короткая озвучка задает новый тайминг";
     const firstSegment = createDraftSegment({
       duration: 8,
@@ -5744,14 +5872,15 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 3.2,
-      durationMode: "auto",
-      endTime: 3.2,
-      manualDurationSeconds: null,
+      duration: 8,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 8,
+      manualDurationSeconds: 8,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 3.2,
+      startTime: 8,
     }));
   });
 

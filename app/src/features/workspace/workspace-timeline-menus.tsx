@@ -205,7 +205,13 @@ export function WorkspaceSegmentTimelineDurationMenu({
                   `Video ${trimToVoiceoverLabels.fullDurationLabel}`,
                 )}
               </strong>
-              <small>{workspaceText(locale, "озвучка закончится, видео доиграет", "voice ends, video keeps playing")}</small>
+              <small>
+                {workspaceText(
+                  locale,
+                  `итог в Shorts: ${trimToVoiceoverLabels.fullDurationLabel}`,
+                  `Shorts result: ${trimToVoiceoverLabels.fullDurationLabel}`,
+                )}
+              </small>
             </button>
             <button
               className={`studio-segment-editor__timeline-duration-menu-mode${
@@ -225,7 +231,13 @@ export function WorkspaceSegmentTimelineDurationMenu({
                   `Voice ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
                 )}
               </strong>
-              <small>{workspaceText(locale, "обрезать видео по озвучке", "trim video to voiceover")}</small>
+              <small>
+                {workspaceText(
+                  locale,
+                  `итог в Shorts: ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                  `Shorts result: ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                )}
+              </small>
             </button>
           </div>
         ) : null}
@@ -458,6 +470,8 @@ export function WorkspaceSegmentTimelineVoiceMenu({
     return null;
   }
 
+  const saveTextDisabledReason = generateDisabledReason;
+
   return createPortal(
     <div
       ref={menuRef}
@@ -628,9 +642,16 @@ export function WorkspaceSegmentTimelineVoiceMenu({
           <button
             className="studio-segment-editor__timeline-voice-text-save"
             type="button"
+            disabled={Boolean(saveTextDisabledReason)}
+            aria-label={
+              saveTextDisabledReason
+                ? `${workspaceText(locale, "Сохранить", "Save")}. ${saveTextDisabledReason}`
+                : workspaceText(locale, "Сохранить", "Save")
+            }
+            title={saveTextDisabledReason ?? undefined}
             onClick={onClose}
           >
-            {workspaceText(locale, "Сохранить текст", "Save text")}
+            {workspaceText(locale, "Сохранить", "Save")}
           </button>
           <button
             className="studio-segment-editor__timeline-voice-text-generate"

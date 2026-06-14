@@ -165,6 +165,84 @@ describe("studio talking photo speaker confirmation", () => {
     );
   });
 
+  it("forwards talking photo credit cost calculated from script length", async () => {
+    const { createStudioSegmentTalkingPhotoJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+    const target = { height: 0.24, width: 0.18, x: 0.31, y: 0.22 };
+    const longScript = [
+      "Раз",
+      "два",
+      "три",
+      "четыре",
+      "пять",
+      "шесть",
+      "семь",
+      "восемь",
+      "девять",
+      "десять",
+      "одиннадцать",
+      "двенадцать",
+      "тринадцать",
+      "четырнадцать",
+      "пятнадцать",
+      "шестнадцать",
+      "семнадцать",
+      "восемнадцать",
+      "девятнадцать",
+      "двадцать",
+      "двадцать один",
+      "двадцать два",
+    ].join(" ");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-talking-photo/jobs") {
+          return jsonResponse({
+            job_id: "talking-job-priced",
+            status: "queued",
+            user: {
+              balance: 40,
+              plan: "START",
+              start_plan_used: true,
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await createStudioSegmentTalkingPhotoJob(longScript, {
+      email: "alexmamondi@gmail.com",
+    }, {
+      customVideoAssetId: 123,
+      customVideoMediaType: "photo",
+      language: "ru",
+      projectId: 3559,
+      segmentIndex: 3,
+      speakerConfirmationToken: "v1.2000000000.client-signature",
+      speakerTarget: target,
+    });
+
+    expect(calls.find((call) => call.pathname === "/api/web/segment-talking-photo/jobs")?.body).toEqual(
+      expect.objectContaining({
+        credit_cost: 22,
+        script: longScript,
+        speaker_confirmation_token: "v1.2000000000.client-signature",
+      }),
+    );
+  });
+
   it("recovers a completed talking photo job when status omits the asset", async () => {
     const { getStudioSegmentTalkingPhotoJobStatus } = await loadStudioModule();
     const calls: Array<{ pathname: string; range: string | null }> = [];

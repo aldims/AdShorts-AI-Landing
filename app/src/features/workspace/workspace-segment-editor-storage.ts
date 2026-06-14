@@ -273,15 +273,6 @@ export const writeWorkspaceSegmentEditorStorageValue = (storageKey: string, rawV
   }
 };
 
-const isStoredWorkspaceSegmentEditorSession = (value: unknown): value is WorkspaceSegmentEditorSession => {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const payload = value as Partial<WorkspaceSegmentEditorSession>;
-  return Number.isFinite(Number(payload.projectId)) && Array.isArray(payload.segments);
-};
-
 export const readStoredWorkspaceSegmentEditorSession = (email: string | null | undefined, projectId: number | null | undefined) => {
   if (typeof window === "undefined") {
     return null;
@@ -291,32 +282,6 @@ export const readStoredWorkspaceSegmentEditorSession = (email: string | null | u
   const normalizedProjectId = Number(projectId);
   if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
     return null;
-  }
-
-  const storageKey = getWorkspaceSegmentEditorSessionStorageKey(normalizedEmail, normalizedProjectId);
-
-  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
-    try {
-      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
-      if (!isStoredWorkspaceSegmentEditorSession(parsedValue)) {
-        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-        continue;
-      }
-
-      const normalizedSession = normalizeWorkspaceSegmentEditorSession(parsedValue);
-      if (normalizedSession.projectId !== normalizedProjectId) {
-        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-        continue;
-      }
-
-      if (candidate.storageName === "sessionStorage") {
-        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedSession));
-      }
-
-      return normalizedSession;
-    } catch {
-      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-    }
   }
 
   return null;
@@ -371,6 +336,7 @@ export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX = "adshor
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
 const WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-consumed-source:";
+const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION = 3;
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
 export const WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS = 0.1;
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-ai-photo-pending:";
@@ -478,8 +444,12 @@ const isStoredWorkspaceSegmentEditorDraftSession = (value: unknown): value is Wo
     return false;
   }
 
-  const payload = value as Partial<WorkspaceSegmentEditorDraftSession>;
-  return Number.isFinite(Number(payload.projectId)) && Array.isArray(payload.segments);
+  const payload = value as Partial<WorkspaceSegmentEditorDraftSession> & { storageVersion?: unknown };
+  return (
+    payload.storageVersion === WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION &&
+    Number.isFinite(Number(payload.projectId)) &&
+    Array.isArray(payload.segments)
+  );
 };
 
 const hasWorkspaceSegmentImmediateImagePreview = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -1084,37 +1054,6 @@ export const readStoredWorkspaceSegmentEditorDraft = (
     return null;
   }
 
-  const storageKey = getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId);
-
-  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
-    try {
-      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
-      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
-        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-        continue;
-      }
-
-      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
-      if (normalizedDraft.projectId !== normalizedProjectId) {
-        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-        continue;
-      }
-
-      if (!canRestoreStoredWorkspaceSegmentEditorDraftSession(normalizedDraft)) {
-        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-        continue;
-      }
-
-      if (candidate.storageName === "sessionStorage") {
-        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedDraft));
-      }
-
-      return normalizedDraft;
-    } catch {
-      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
-    }
-  }
-
   return null;
 };
 
@@ -1130,52 +1069,7 @@ export const readStoredWorkspaceSegmentEditorDrafts = (
     return [];
   }
 
-  const storageKeyPrefix = `${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${normalizedEmail}:`;
-  const draftsByProjectId = new Map<number, WorkspaceSegmentEditorDraftSession>();
-  const handledStorageKeys = new Set<string>();
-
-  readWorkspaceSegmentEditorStorageEntries(storageKeyPrefix).forEach((entry) => {
-    if (handledStorageKeys.has(entry.storageKey)) {
-      removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-      return;
-    }
-
-    const storageProjectId = Number(entry.storageKey.slice(storageKeyPrefix.length));
-    if (!Number.isInteger(storageProjectId) || storageProjectId <= 0) {
-      removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-      return;
-    }
-
-    try {
-      const parsedValue = JSON.parse(entry.rawValue) as unknown;
-      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
-        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-        return;
-      }
-
-      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
-      if (normalizedDraft.projectId !== storageProjectId) {
-        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-        return;
-      }
-
-      if (!canRestoreStoredWorkspaceSegmentEditorDraftSession(normalizedDraft)) {
-        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-        return;
-      }
-
-      if (entry.storageName === "sessionStorage") {
-        writeWorkspaceSegmentEditorStorageValue(entry.storageKey, JSON.stringify(normalizedDraft));
-      }
-
-      draftsByProjectId.set(normalizedDraft.projectId, normalizedDraft);
-      handledStorageKeys.add(entry.storageKey);
-    } catch {
-      removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
-    }
-  });
-
-  return Array.from(draftsByProjectId.values()).sort((left, right) => right.projectId - left.projectId);
+  return [];
 };
 
 export const writeStoredWorkspaceSegmentEditorDraft = (
@@ -1194,7 +1088,10 @@ export const writeStoredWorkspaceSegmentEditorDraft = (
 
   writeWorkspaceSegmentEditorStorageValue(
     getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId),
-    JSON.stringify(normalizeStoredWorkspaceSegmentEditorDraftSession(session)),
+    JSON.stringify({
+      ...normalizeStoredWorkspaceSegmentEditorDraftSession(session),
+      storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+    }),
   );
 };
 
@@ -1244,7 +1141,10 @@ export const readStoredWorkspaceSegmentEditorScratchDraft = (
       }
 
       if (candidate.storageName === "sessionStorage") {
-        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedDraft));
+        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify({
+          ...normalizedDraft,
+          storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+        }));
       }
 
       return normalizedDraft;
@@ -1271,7 +1171,10 @@ export const writeStoredWorkspaceSegmentEditorScratchDraft = (
 
   writeWorkspaceSegmentEditorStorageValue(
     getWorkspaceSegmentEditorScratchDraftStorageKey(normalizedEmail),
-    JSON.stringify(normalizeStoredWorkspaceSegmentEditorDraftSession(session)),
+    JSON.stringify({
+      ...normalizeStoredWorkspaceSegmentEditorDraftSession(session),
+      storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+    }),
   );
 };
 

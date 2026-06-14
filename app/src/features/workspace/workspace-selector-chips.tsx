@@ -824,11 +824,19 @@ export function StudioVoiceSelectorChip({
   const hasBulkTextEditor =
     typeof bulkTextValue === "string" &&
     typeof onBulkTextChange === "function";
+  const bulkTextSaveDisabledReason =
+    hasBulkTextEditor && (!isEnabled || selectedVoiceId === "none")
+      ? locale === "en"
+        ? "Select a voice first"
+        : "Сначала выберите голос"
+      : null;
   const hasVoiceoverGenerator = typeof onGenerateVoiceover === "function";
   const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
   const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
   const resolvedGenerateVoiceoverLabel =
     generateVoiceoverLabel ?? (locale === "en" ? "Generate voiceover" : "Сгенерировать озвучку");
+  const generateVoiceoverResolvedDisabledReason =
+    bulkTextSaveDisabledReason ?? generateVoiceoverDisabledReason;
   const getVoiceLanguageLabel = (language: StudioLanguage) =>
     locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getVoiceLanguageDescription = (language: StudioLanguage) =>
@@ -1201,9 +1209,19 @@ export function StudioVoiceSelectorChip({
                       <button
                         className="studio-voice-selector__bulk-save"
                         type="button"
+                        disabled={Boolean(bulkTextSaveDisabledReason)}
+                        aria-label={
+                          bulkTextSaveDisabledReason
+                            ? `${locale === "en" ? "Save" : "Сохранить"}. ${bulkTextSaveDisabledReason}`
+                            : undefined
+                        }
+                        title={bulkTextSaveDisabledReason ?? undefined}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
+                          if (bulkTextSaveDisabledReason) {
+                            return;
+                          }
                           const didSave = onBulkTextSave?.();
                           if (didSave === false) {
                             return;
@@ -1213,22 +1231,25 @@ export function StudioVoiceSelectorChip({
                           setIsOpen(false);
                         }}
                       >
-                        {locale === "en" ? "Save text" : "Сохранить текст"}
+                        {locale === "en" ? "Save" : "Сохранить"}
                       </button>
                       <button
                         className="studio-voice-selector__bulk-generate"
                         type="button"
-                        disabled={Boolean(generateVoiceoverDisabledReason)}
+                        disabled={Boolean(generateVoiceoverResolvedDisabledReason)}
                         aria-busy={isGeneratingVoiceover ? true : undefined}
                         aria-label={
-                          generateVoiceoverDisabledReason
-                            ? `${resolvedGenerateVoiceoverLabel}. ${generateVoiceoverDisabledReason}`
+                          generateVoiceoverResolvedDisabledReason
+                            ? `${resolvedGenerateVoiceoverLabel}. ${generateVoiceoverResolvedDisabledReason}`
                             : resolvedGenerateVoiceoverLabel
                         }
-                        title={generateVoiceoverDisabledReason ?? undefined}
+                        title={generateVoiceoverResolvedDisabledReason ?? undefined}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
+                          if (generateVoiceoverResolvedDisabledReason) {
+                            return;
+                          }
                           onGenerateVoiceover?.({
                             isEnabled,
                             language: selectedLanguage ?? null,

@@ -243,6 +243,8 @@ export type WorkspaceSegmentEditorSegment = {
   voiceoverVoiceType: string | null;
   voiceover_asset_id: number | null;
   voiceType: string | null;
+  aiVideoGeneratedMode?: "ai_video" | "photo_animation" | "talking_photo" | null;
+  videoAction?: "ai" | "ai_photo" | "custom" | "image_edit" | "original" | "photo_animation" | "talking_photo" | null;
 };
 
 export type WorkspaceSegmentEditorSession = {
@@ -781,6 +783,49 @@ const pickProjectDetailSegments = (
   }
 
   return [] as AdsflowSegmentEditorSegmentPayload[];
+};
+
+const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
+  segment: AdsflowSegmentEditorSegmentPayload,
+  authoritativeSegment: AdsflowSegmentEditorSegmentPayload | null | undefined,
+): AdsflowSegmentEditorSegmentPayload => {
+  if (!authoritativeSegment) {
+    return segment;
+  }
+
+  const startTime = normalizeNumber(authoritativeSegment.start_time);
+  const endTime = normalizeNumber(authoritativeSegment.end_time);
+  const duration = normalizeNumber(authoritativeSegment.duration);
+  const durationMode = normalizeText(authoritativeSegment.duration_mode);
+  const manualDurationSeconds = normalizeManualDurationSeconds(authoritativeSegment.manual_duration_seconds);
+  const segmentStartTime = normalizeNumber(segment.start_time);
+  const segmentEndTime = normalizeNumber(segment.end_time);
+  const segmentDuration = normalizeNumber(segment.duration);
+  const segmentDurationMode = normalizeText(segment.duration_mode);
+  const segmentManualDurationSeconds = normalizeManualDurationSeconds(segment.manual_duration_seconds);
+  const hasSegmentManualTimeline = segmentDurationMode === "manual" || segmentManualDurationSeconds !== null;
+  const sourceDurationSeconds =
+    normalizeNumber(authoritativeSegment.duration_extension_source_duration_seconds) ??
+    normalizeNumber(authoritativeSegment.durationExtensionSourceDurationSeconds) ??
+    normalizeNumber(authoritativeSegment.source_duration_seconds) ??
+    normalizeNumber(authoritativeSegment.sourceDurationSeconds);
+
+  return {
+    ...segment,
+    duration: hasSegmentManualTimeline ? segmentDuration ?? duration ?? segment.duration : duration ?? segment.duration,
+    durationExtensionSourceDurationSeconds:
+      sourceDurationSeconds ?? segment.durationExtensionSourceDurationSeconds,
+    duration_extension_source_duration_seconds:
+      sourceDurationSeconds ?? segment.duration_extension_source_duration_seconds,
+    duration_mode: hasSegmentManualTimeline ? segment.duration_mode : durationMode || segment.duration_mode,
+    end_time: hasSegmentManualTimeline ? segmentEndTime ?? endTime ?? segment.end_time : endTime ?? segment.end_time,
+    manual_duration_seconds: hasSegmentManualTimeline
+      ? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
+      : manualDurationSeconds ?? segment.manual_duration_seconds,
+    sourceDurationSeconds: sourceDurationSeconds ?? segment.sourceDurationSeconds,
+    source_duration_seconds: sourceDurationSeconds ?? segment.source_duration_seconds,
+    start_time: hasSegmentManualTimeline ? segmentStartTime ?? startTime ?? segment.start_time : startTime ?? segment.start_time,
+  };
 };
 
 const getProjectDetailsSourceProjectId = (payload: AdsflowProjectDetailsResponse | null | undefined) => {
@@ -2388,17 +2433,30 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
   const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
+  const authoritativeTimelineSegmentsByIndex = new Map(
+    pickProjectDetailSegments(generationSettings).map((segment, fallbackIndex) => [
+      getSegmentEditorSegmentIndex(segment, fallbackIndex),
+      segment,
+    ] as const),
+  );
   const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
   const segments = (payload.segments ?? [])
-    .map((segment) =>
-      buildWorkspaceSegmentEditorSegment(sessionProjectId, segment, {
-        currentEntries,
-        projectMediaAssets: projectMediaEnvelope.assets,
-        projectMediaLoaded: projectMediaEnvelope.loaded,
-        projectMediaByAssetId,
-        originalEntries,
-        sceneSoundEntries,
-      }),
+    .map((segment, fallbackIndex) =>
+      buildWorkspaceSegmentEditorSegment(
+        sessionProjectId,
+        mergeProjectDetailTimelineIntoSegmentEditorPayload(
+          segment,
+          authoritativeTimelineSegmentsByIndex.get(getSegmentEditorSegmentIndex(segment, fallbackIndex)),
+        ),
+        {
+          currentEntries,
+          projectMediaAssets: projectMediaEnvelope.assets,
+          projectMediaLoaded: projectMediaEnvelope.loaded,
+          projectMediaByAssetId,
+          originalEntries,
+          sceneSoundEntries,
+        },
+      ),
     )
     .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
     .sort((left, right) => left.index - right.index);
@@ -2580,6 +2638,10 @@ export const buildWorkspaceSegmentEditorSegment = (
     voiceover?.media_asset_id ??
     normalizePositiveProjectId(projectVoiceoverAsset?.assetId) ??
     null;
+  const isTalkingPhotoSegment = [
+    currentAsset?.libraryKind,
+    originalAsset?.libraryKind,
+  ].some((value) => normalizeText(value).replace(/-/g, "_").toLowerCase() === "talking_photo");
 
   return {
     currentAsset,
@@ -2639,6 +2701,8 @@ export const buildWorkspaceSegmentEditorSegment = (
     voiceoverVoiceType: normalizeText(payload.voiceover_voice_type) || null,
     voiceover_asset_id: voiceoverAssetId,
     voiceType: normalizeText(payload.voice_type) || null,
+    aiVideoGeneratedMode: isTalkingPhotoSegment ? "talking_photo" : null,
+    videoAction: isTalkingPhotoSegment ? "talking_photo" : null,
   };
 };
 
@@ -2883,11 +2947,10 @@ export async function getWorkspaceProjectMusicAudioProxyTarget(
   user: SegmentEditorUser,
   options: {
     musicName?: string | null;
-    projectId: number;
+    projectId?: number | null;
   },
 ) {
   assertAdsflowConfigured();
-  await assertWorkspaceProjectAccess(user, options.projectId);
 
   const musicName = normalizeWorkspaceProjectMusicFileName(options.musicName);
   if (musicName) {
@@ -2899,11 +2962,18 @@ export async function getWorkspaceProjectMusicAudioProxyTarget(
     };
   }
 
+  const projectId = normalizePositiveProjectId(options.projectId);
+  if (projectId === null) {
+    throw new WorkspaceSegmentEditorError("Project id is required.", 400);
+  }
+
+  await assertWorkspaceProjectAccess(user, projectId);
+
   return {
     headers: {
       "X-Admin-Token": env.adsflowAdminToken ?? "",
     },
-    url: buildAdsflowUrl(`/api/projects/${options.projectId}/audio/music`),
+    url: buildAdsflowUrl(`/api/projects/${projectId}/audio/music`),
   };
 }
 

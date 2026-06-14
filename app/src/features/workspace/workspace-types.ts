@@ -139,6 +139,8 @@ export type WorkspaceSegmentEditorSegment = {
   voiceover_asset_id?: number | null;
   voiceType?: string | null;
   voice_type?: string | null;
+  aiVideoGeneratedMode?: WorkspaceSegmentAiVideoMode | null;
+  videoAction?: WorkspaceSegmentEditorVideoAction | null;
 };
 
 export type WorkspaceSegmentEditorSession = {
@@ -180,6 +182,7 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   imageEditPrompt: string;
   imageEditPromptInitialized: boolean;
   durationSyncMode?: "voiceover" | "visual" | null;
+  durationSyncModeUserSelected?: boolean | null;
   durationExtensionSourceDurationSeconds?: number | null;
   originalText: string;
   originalTextByLanguage: WorkspaceSegmentEditorLocalizedTextMap;

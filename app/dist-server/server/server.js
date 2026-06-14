@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import express from "express";
@@ -609,6 +611,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
         editedFromProjectAdId: normalizeRequestPositiveInteger(getFormDataString(formData, "editedFromProjectAdId")),
         isRegeneration: getFormDataBoolean(formData, "isRegeneration", false),
         language: getFormDataString(formData, "language"),
+        musicName: getFormDataString(formData, "musicName"),
         musicType: getFormDataString(formData, "musicType"),
         projectId: getFormDataNumber(formData, "projectId"),
         prompt: getFormDataString(formData, "prompt"),
@@ -2012,7 +2015,7 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
         return;
     }
     try {
-        const shouldBypassCache = ["1", "true", "yes"].includes(String(req.query.refresh ?? req.query.bypassCache ?? "").trim().toLowerCase());
+        const shouldBypassCache = ["1", "true", "yes"].includes(String(req.query.reload ?? req.query.refresh ?? req.query.bypassCache ?? "").trim().toLowerCase());
         const data = await getWorkspaceSegmentEditorSession(session.user, projectId, {
             bypassCache: shouldBypassCache,
         });
@@ -2026,6 +2029,32 @@ app.get("/api/workspace/projects/:projectId/segment-editor", async (req, res) =>
         console.error("[workspace] Failed to load segment editor session", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to load segment editor session.",
+        });
+    }
+});
+app.get("/api/workspace/projects/:projectId/segment-editor/reload", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const projectId = Number(req.params.projectId ?? 0);
+    if (!Number.isFinite(projectId) || projectId <= 0) {
+        res.status(400).json({ error: "Project id is required." });
+        return;
+    }
+    try {
+        const data = await getWorkspaceSegmentEditorSession(session.user, projectId, {
+            bypassCache: true,
+        });
+        res.json({ data });
+    }
+    catch (error) {
+        console.error("[workspace] Failed to load project segment editor", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load project segment editor.",
         });
     }
 });
@@ -2170,6 +2199,28 @@ app.get("/api/workspace/project-segment-video", async (req, res) => {
         });
     }
 });
+const WORKSPACE_STOCK_MUSIC_FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}\.(?:aac|m4a|mp3|ogg|wav)$/i;
+const getWorkspaceLocalStockMusicPath = (musicName) => {
+    const safeMusicName = basename(String(musicName ?? "").trim());
+    if (!safeMusicName || !WORKSPACE_STOCK_MUSIC_FILE_PATTERN.test(safeMusicName)) {
+        return null;
+    }
+    const styleName = safeMusicName.replace(/_\d+\.(?:aac|m4a|mp3|ogg|wav)$/i, "");
+    if (!styleName || styleName === safeMusicName) {
+        return null;
+    }
+    const roots = [
+        resolve(process.cwd(), "../AdsFlow AI/services/api/assets/music"),
+        resolve(process.cwd(), "../../AdsFlow AI/services/api/assets/music"),
+    ];
+    for (const root of roots) {
+        const candidate = join(root, styleName, safeMusicName);
+        if (existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+};
 app.get("/api/workspace/project-music-audio", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -2179,18 +2230,27 @@ app.get("/api/workspace/project-music-audio", async (req, res) => {
         return;
     }
     const projectId = Number(req.query.projectId ?? 0);
-    if (!Number.isFinite(projectId) || projectId <= 0) {
+    const musicName = typeof req.query.musicName === "string"
+        ? req.query.musicName
+        : typeof req.query.v === "string"
+            ? req.query.v
+            : null;
+    if ((!Number.isFinite(projectId) || projectId <= 0) && !musicName) {
         res.status(400).json({ error: "Project id is required." });
+        return;
+    }
+    const localStockMusicPath = getWorkspaceLocalStockMusicPath(musicName);
+    if (localStockMusicPath) {
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.sendFile(localStockMusicPath);
         return;
     }
     try {
         const target = await getWorkspaceProjectMusicAudioProxyTarget(session.user, {
-            musicName: typeof req.query.musicName === "string"
-                ? req.query.musicName
-                : typeof req.query.v === "string"
-                    ? req.query.v
-                    : null,
-            projectId,
+            musicName,
+            projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
         });
         res.setHeader("Cache-Control", "private, no-store");
         res.setHeader("Pragma", "no-cache");
@@ -2750,6 +2810,7 @@ app.post("/api/studio/generate", async (req, res) => {
             editedFromProjectAdId: normalizeRequestPositiveInteger(req.body?.editedFromProjectAdId),
             isRegeneration: Boolean(req.body?.isRegeneration),
             language: typeof req.body?.language === "string" ? req.body.language.trim() : "",
+            musicName: typeof req.body?.musicName === "string" ? req.body.musicName.trim() : "",
             musicType: typeof req.body?.musicType === "string" ? req.body.musicType.trim() : "",
             projectId: Number(req.body?.projectId ?? 0),
             prompt: typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "",
@@ -2769,6 +2830,7 @@ app.post("/api/studio/generate", async (req, res) => {
     const clearBranding = requestBody.clearBranding;
     const isRegeneration = requestBody.isRegeneration;
     const language = requestBody.language;
+    const musicName = requestBody.musicName;
     const voiceId = requestBody.voiceId;
     const musicType = requestBody.musicType;
     const voiceEnabled = requestBody.voiceEnabled;
@@ -2835,6 +2897,7 @@ app.post("/api/studio/generate", async (req, res) => {
             editedFromProjectAdId: editedFromProjectAdId ?? undefined,
             isRegeneration,
             language,
+            musicName,
             musicType,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             segmentEditor,

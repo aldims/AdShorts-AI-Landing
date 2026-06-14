@@ -1647,6 +1647,117 @@ describe("segment editor asset lifecycle mapping", () => {
     }));
   });
 
+  it("uses project details timeline over a stale voiceover-trimmed segment editor payload", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3813,
+      {
+        project_id: 3813,
+        segments: [
+          {
+            duration: 4.7,
+            duration_mode: "auto",
+            end_time: 26.939,
+            index: 3,
+            media_type: "video",
+            speech_duration: 4.7,
+            start_time: 22.239,
+            text: "Добавьте растительное масло.",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            original_video_segments: [
+              {
+                duration: 5.042,
+                duration_mode: "manual",
+                end_time: 27.281,
+                index: 3,
+                manual_duration_seconds: 5.042,
+                media_type: "video",
+                speech_duration: 4.7,
+                start_time: 22.239,
+                text: "Добавьте растительное масло.",
+              },
+            ],
+          },
+          id: 3813,
+        },
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 3813,
+        },
+      },
+    );
+
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      duration: 5.042,
+      durationMode: "manual",
+      endTime: 27.281,
+      manualDurationSeconds: 5.042,
+      speechDuration: 4.7,
+      startTime: 22.239,
+    }));
+  });
+
+  it("keeps segment editor manual timing over stale project details timing", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3821,
+      {
+        project_id: 3821,
+        segments: [
+          {
+            duration: 5,
+            duration_mode: "manual",
+            end_time: 42.323,
+            index: 6,
+            manual_duration_seconds: 5,
+            media_type: "video",
+            speech_duration: 4,
+            start_time: 37.323,
+            text: "Жарьте на хорошо разогретой сковороде.",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            original_video_segments: [
+              {
+                duration: 5.5,
+                duration_mode: "manual",
+                end_time: 42.865,
+                index: 6,
+                manual_duration_seconds: 5.5,
+                media_type: "video",
+                speech_duration: 4,
+                start_time: 37.323,
+                text: "Жарьте на хорошо разогретой сковороде.",
+              },
+            ],
+          },
+          id: 3821,
+        },
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 3821,
+        },
+      },
+    );
+
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 42.323,
+      manualDurationSeconds: 5,
+      speechDuration: 4,
+      startTime: 37.323,
+    }));
+  });
+
   it("keeps legacy explicit custom music metadata even when music type is absent", () => {
     const metadata = resolveWorkspaceSegmentEditorCustomMusicMetadata({
       generation_settings: {

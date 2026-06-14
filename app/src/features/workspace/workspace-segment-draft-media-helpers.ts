@@ -1017,6 +1017,7 @@ export const getWorkspaceSegmentEditorGenerationOverrides = (
   return {
     language:
       normalizeStudioLanguageValue(session?.language) ?? getStudioLanguageForVoiceId(session?.voiceType) ?? undefined,
+    musicName: normalizeWorkspaceSegmentEditorSetting(session?.musicName) ?? undefined,
     musicType: normalizeWorkspaceSegmentEditorSetting(session?.musicType),
     subtitleEnabled,
     subtitleColorId: subtitleEnabled

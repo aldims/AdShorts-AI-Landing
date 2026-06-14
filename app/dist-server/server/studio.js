@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -243,6 +243,16 @@ const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, "
 const normalizeStudioMusicType = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedMusicTypes.has(normalized) ? normalized : "ai";
+};
+const normalizeStudioMusicName = (value) => {
+    const normalized = String(value ?? "").trim();
+    if (!normalized ||
+        normalized.includes("/") ||
+        normalized.includes("\\") ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}\.(?:aac|m4a|mp3|ogg|wav)$/i.test(normalized)) {
+        return undefined;
+    }
+    return normalized;
 };
 const normalizeStudioSubtitleStyle = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
@@ -1230,12 +1240,21 @@ const buildStudioSegmentVoiceoverJobAudioProxyUrl = (jobId) => {
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 const buildStudioBatchVoiceoverSegmentAudioUrl = (jobId, payload) => {
+    const downloadUrl = normalizeGenerationText(payload?.download_url);
+    const projectVoiceoverMatch = downloadUrl.match(/\/api\/web\/project-voiceover\/jobs\/([^/?#]+)\/file/);
+    if (projectVoiceoverMatch) {
+        const projectJobId = decodeURIComponent(projectVoiceoverMatch[1] ?? "").trim();
+        if (projectJobId) {
+            const proxyUrl = new URL(`/api/studio/project-voiceover/jobs/${encodeURIComponent(projectJobId)}/audio`, env.appUrl);
+            return `${proxyUrl.pathname}${proxyUrl.search}`;
+        }
+    }
     const segmentJobProxyUrl = buildStudioSegmentVoiceoverJobAudioProxyUrl(jobId);
     if (segmentJobProxyUrl) {
         return segmentJobProxyUrl;
     }
     return (normalizeGenerationText(payload?.remote_url) ||
-        normalizeGenerationText(payload?.download_url) ||
+        downloadUrl ||
         normalizeGenerationText(payload?.url) ||
         null);
 };
@@ -3573,6 +3592,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const requestedVoiceEnabled = options?.voiceEnabled !== false;
     const normalizedVoiceId = requestedVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
     const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
+    const normalizedMusicName = normalizedMusicType === "custom" ? undefined : normalizeStudioMusicName(options?.musicName);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentEditor = normalizeStudioSegmentEditorPayload(options?.segmentEditor, normalizedLanguage, normalizedProjectId ?? undefined, { globalVoiceEnabled: requestedVoiceEnabled });
     const mediaFlags = resolveStudioSegmentEditorGenerationMediaFlags({
@@ -3853,7 +3873,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 project_id: normalizedProjectId ?? undefined,
                 segment_editor: normalizedSegmentEditorAssetPayload,
                 custom_music_asset_id: normalizedMusicType === "custom" ? customMusicAssetId : undefined,
-                custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : undefined,
+                custom_music_original_name: normalizedMusicType === "custom" ? normalizedCustomMusicFileName : normalizedMusicName,
                 subtitle_type: isSubtitleEnabled ? undefined : "none",
                 subtitle_color: normalizedSubtitleColorId,
                 subtitle_style: normalizedSubtitleStyleId,
@@ -4761,9 +4781,10 @@ export async function createStudioSegmentTalkingPhotoJob(script, user, options) 
     if (!speakerConfirmationToken) {
         throw new Error("Speaker confirmation token is required.");
     }
+    const creditCost = getStudioSegmentTalkingPhotoCreditCost(normalizedScript) || STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST;
     const payload = await postAdsflowJson("/api/web/segment-talking-photo/jobs", {
         admin_token: env.adsflowAdminToken,
-        credit_cost: STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
+        credit_cost: creditCost,
         custom_video_asset_id: confirmedSourceAssetId,
         custom_video_data_url: undefined,
         custom_video_media_type: confirmedSourceMediaType,
@@ -5140,19 +5161,26 @@ export async function createStudioBatchVoiceoverJob(user, options) {
             throw error;
         }
     }
-    const creditReservation = await consumeWorkspaceGenerationCredit(user, creditCost, normalizedGroups[0]?.language);
     const children = [];
+    const projectGroups = [];
+    let fallbackProfile = buildWorkspaceProfile();
     try {
-        for (const group of normalizedGroups) {
-            for (const segment of group.segments) {
-                const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
+        if (normalizedProjectId) {
+            for (const group of normalizedGroups) {
+                const groupText = group.segments.map((segment) => segment.text).join(" ").trim();
+                const payload = await postAdsflowJson("/api/web/project-voiceover/jobs", {
                     admin_token: env.adsflowAdminToken,
-                    credit_cost: 0,
+                    credit_cost: group.creditCost,
                     external_user_id: externalUserId,
                     language: group.language,
-                    project_id: normalizedProjectId ?? undefined,
-                    segment_index: segment.segmentIndex,
-                    text: segment.text,
+                    project_id: normalizedProjectId,
+                    segments: group.segments.map((segment) => ({
+                        duration: segment.targetDurationSeconds,
+                        segment_index: segment.segmentIndex,
+                        target_duration: segment.targetDurationSeconds,
+                        text: segment.text,
+                    })),
+                    text: groupText,
                     user_email: user.email ?? undefined,
                     user_name: user.name ?? undefined,
                     voice_type: group.voiceType,
@@ -5160,26 +5188,51 @@ export async function createStudioBatchVoiceoverJob(user, options) {
                     retryDelaysMs: [],
                     timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
                 });
-                const childJobId = String(payload.job_id ?? "").trim();
-                if (!childJobId) {
-                    throw new Error("AdsFlow did not return a segment voiceover job id.");
+                const groupJobId = String(payload.job_id ?? "").trim();
+                if (!groupJobId) {
+                    throw new Error("AdsFlow did not return a project voiceover job id.");
                 }
-                children.push({
-                    ...segment,
-                    jobId: childJobId,
-                    language: group.language,
-                    voiceType: group.voiceType,
+                projectGroups.push({
+                    ...group,
+                    jobId: groupJobId,
                 });
+                fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails);
+            }
+        }
+        else {
+            for (const group of normalizedGroups) {
+                for (const segment of group.segments) {
+                    const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
+                        admin_token: env.adsflowAdminToken,
+                        credit_cost: group.creditCost,
+                        external_user_id: externalUserId,
+                        language: group.language,
+                        project_id: normalizedProjectId ?? undefined,
+                        segment_index: segment.segmentIndex,
+                        text: segment.text,
+                        user_email: user.email ?? undefined,
+                        user_name: user.name ?? undefined,
+                        voice_type: group.voiceType,
+                    }, {
+                        retryDelaysMs: [],
+                        timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+                    });
+                    const childJobId = String(payload.job_id ?? "").trim();
+                    if (!childJobId) {
+                        throw new Error("AdsFlow did not return a segment voiceover job id.");
+                    }
+                    children.push({
+                        ...segment,
+                        jobId: childJobId,
+                        language: group.language,
+                        voiceType: group.voiceType,
+                    });
+                    fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails);
+                }
             }
         }
     }
     catch (error) {
-        try {
-            await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedGroups[0]?.language);
-        }
-        catch (refundError) {
-            console.error("[studio] Failed to refund batch voiceover credits", refundError);
-        }
         throw error;
     }
     const jobId = `voiceover-batch-${randomUUID()}`;
@@ -5192,13 +5245,14 @@ export async function createStudioBatchVoiceoverJob(user, options) {
         children,
         createdAt: Date.now(),
         creditCost,
-        profile: creditReservation.profile,
+        profile: fallbackProfile,
+        projectGroups,
         status: "queued",
     });
     return {
         creditCost,
         jobId,
-        profile: creditReservation.profile,
+        profile: fallbackProfile,
         status: "queued",
     };
 }
@@ -5441,6 +5495,26 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
     const speechEndTime = normalizeNumber(payload.speech_end_time);
     const speechDuration = normalizeNumber(payload.speech_duration) ??
         (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    const segments = (Array.isArray(payload.segments) ? payload.segments : [])
+        .map((segment, index) => {
+        const segmentIndex = normalizeNonNegativeInteger(segment.segmentIndex ?? segment.segment_index) ?? index;
+        const segmentSpeechStartTime = normalizeNumber(segment.speech_start_time ?? segment.start_time);
+        const segmentSpeechEndTime = normalizeNumber(segment.speech_end_time ?? segment.end_time);
+        const segmentSpeechDuration = normalizeNumber(segment.speech_duration ?? segment.duration) ??
+            (segmentSpeechStartTime !== null && segmentSpeechEndTime !== null
+                ? Math.max(0, segmentSpeechEndTime - segmentSpeechStartTime)
+                : null);
+        return {
+            segmentIndex,
+            speechDuration: segmentSpeechDuration !== null ? Math.max(0, segmentSpeechDuration) : null,
+            speechEndTime: segmentSpeechStartTime !== null && segmentSpeechEndTime !== null
+                ? Math.max(segmentSpeechStartTime, segmentSpeechEndTime)
+                : null,
+            speechStartTime: segmentSpeechStartTime !== null ? Math.max(0, segmentSpeechStartTime) : null,
+            speechWords: normalizeSegmentVoiceoverSpeechWords(segment.speech_words),
+            text: normalizeGenerationText(segment.text),
+        };
+    });
     return {
         asset,
         error: normalizeGenerationText(payload.error) || undefined,
@@ -5452,6 +5526,7 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
         speechEndTime: speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
         speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
         speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
+        segments,
         status,
     };
 }
@@ -5463,7 +5538,39 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
     }
     const fallbackJob = studioBatchVoiceoverFallbackJobs.get(safeJobId);
     if (fallbackJob) {
-        const childStatuses = await Promise.all(fallbackJob.children.map(async (child) => {
+        const projectGroupStatuses = await Promise.all(fallbackJob.projectGroups.map(async (group) => {
+            const status = await getStudioProjectVoiceoverJobStatus(group.jobId, user);
+            let fallbackCursor = 0;
+            const segments = group.segments.map((segment) => {
+                const segmentStatus = status.segments.find((item) => item.segmentIndex === segment.segmentIndex);
+                const fallbackStartTime = fallbackCursor;
+                const fallbackDuration = Math.max(0.2, segment.targetDurationSeconds ?? segmentStatus?.speechDuration ?? 0.8);
+                const fallbackEndTime = fallbackStartTime + fallbackDuration;
+                fallbackCursor = fallbackEndTime;
+                return {
+                    asset: status.asset,
+                    error: status.error,
+                    jobId: status.jobId,
+                    language: group.language,
+                    profile: status.profile,
+                    segmentIndex: segment.segmentIndex,
+                    speechDuration: segmentStatus?.speechDuration ?? fallbackDuration,
+                    speechEndTime: segmentStatus?.speechEndTime ?? fallbackEndTime,
+                    speechStartTime: segmentStatus?.speechStartTime ?? fallbackStartTime,
+                    speechWords: segmentStatus?.speechWords ?? [],
+                    status: status.status,
+                    text: segmentStatus?.text || segment.text,
+                    voiceType: group.voiceType,
+                };
+            });
+            return {
+                error: status.error,
+                profile: status.profile,
+                segments,
+                status: status.status,
+            };
+        }));
+        const segmentChildStatuses = await Promise.all(fallbackJob.children.map(async (child) => {
             const status = await getStudioSegmentVoiceoverJobStatus(child.jobId, user);
             return {
                 ...status,
@@ -5473,11 +5580,17 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
                 voiceType: child.voiceType,
             };
         }));
+        const childStatuses = [
+            ...projectGroupStatuses.flatMap((group) => group.segments),
+            ...segmentChildStatuses,
+        ];
         const hasFailedSegment = childStatuses.some((segment) => isStudioVoiceoverFailedStatus(segment.status));
         const allSegmentsReady = childStatuses.every((segment) => Boolean(segment.asset));
         const allSegmentsTerminal = childStatuses.every((segment) => Boolean(segment.asset) || isStudioVoiceoverReadyStatus(segment.status) || isStudioVoiceoverFailedStatus(segment.status));
         const status = hasFailedSegment ? "failed" : allSegmentsReady || allSegmentsTerminal ? "done" : "processing";
-        const profile = childStatuses.find((segment) => segment.profile)?.profile ?? fallbackJob.profile;
+        const profile = projectGroupStatuses.find((group) => group.profile)?.profile ??
+            childStatuses.find((segment) => segment.profile)?.profile ??
+            fallbackJob.profile;
         fallbackJob.status = status;
         if (allSegmentsReady || hasFailedSegment) {
             studioBatchVoiceoverFallbackJobs.delete(safeJobId);
