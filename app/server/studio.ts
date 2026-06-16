@@ -4578,6 +4578,50 @@ const buildStudioGenerationStatusFromHistoryEntry = (
   };
 };
 
+const syncStudioGenerationStatusToHistory = async (
+  user: StudioUser,
+  status: StudioGenerationStatus | null | undefined,
+  options?: {
+    fallbackEntry?: WorkspaceGenerationHistoryEntry | null;
+  },
+) => {
+  const safeJobId = normalizeGenerationText(status?.jobId);
+  if (!safeJobId) {
+    return;
+  }
+
+  const generation = status?.generation ?? null;
+  const finalAsset = generation?.finalAsset ?? null;
+  const fallbackEntry = options?.fallbackEntry ?? null;
+  const resolvedMetadata = resolveGenerationPresentation({
+    description: generation?.description ?? fallbackEntry?.description ?? "",
+    fallbackTitle: fallbackEntry?.prefillSettings?.language === "en" ? "Ready video" : "Готовое видео",
+    hashtags: generation?.hashtags ?? fallbackEntry?.hashtags ?? [],
+    language: fallbackEntry?.prefillSettings?.language ?? generation?.prefillSettings?.language,
+    prompt: generation?.prompt ?? fallbackEntry?.prompt ?? "",
+    title: generation?.title ?? fallbackEntry?.title ?? "",
+  });
+
+  await saveWorkspaceGenerationHistory(user, {
+    adId: generation?.adId ?? fallbackEntry?.adId ?? null,
+    description: resolvedMetadata.description,
+    downloadPath: finalAsset?.downloadPath ?? fallbackEntry?.downloadPath ?? null,
+    editedFromProjectAdId: fallbackEntry?.editedFromProjectAdId ?? null,
+    error: status?.error ?? fallbackEntry?.error ?? null,
+    finalAssetId: finalAsset?.assetId ?? fallbackEntry?.finalAssetId ?? null,
+    finalAssetKind: finalAsset?.kind ?? fallbackEntry?.finalAssetKind ?? "final_video",
+    finalAssetStatus: finalAsset?.status ?? status?.status ?? fallbackEntry?.finalAssetStatus ?? null,
+    generatedAt: generation?.generatedAt ?? fallbackEntry?.generatedAt ?? null,
+    hashtags: resolvedMetadata.hashtags,
+    jobId: safeJobId,
+    prompt: resolvedMetadata.prompt,
+    status: generation ? "done" : status?.status ?? fallbackEntry?.status ?? "queued",
+    title: resolvedMetadata.title,
+    updatedAt: generation?.generatedAt ?? new Date().toISOString(),
+    versionRootProjectAdId: fallbackEntry?.versionRootProjectAdId ?? null,
+  });
+};
+
 const isStudioGenerationStatusDeleted = (
   status: StudioGenerationStatus | null | undefined,
   deletedProjects: WorkspaceDeletedProjectEntry[],
@@ -5541,6 +5585,16 @@ export async function getWorkspaceBootstrap(user: StudioUser, options: Workspace
       ),
       deletedProjects,
     );
+
+    if (latestGeneration) {
+      try {
+        await syncStudioGenerationStatusToHistory(user, latestGeneration, {
+          fallbackEntry: latestHistoryEntry,
+        });
+      } catch (error) {
+        console.error("[studio] Failed to sync latest generation history during bootstrap", error);
+      }
+    }
 
     const bootstrap = {
       latestGeneration,

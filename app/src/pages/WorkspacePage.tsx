@@ -151,6 +151,7 @@ import {
 } from "../features/workspace/workspace-brand-helpers";
 import {
   areWorkspaceSegmentDurationValuesEqual,
+  applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceMediaAssetProxyUrl,
   buildWorkspaceProjectMusicAudioProxyUrl,
@@ -1605,6 +1606,7 @@ export function WorkspacePage({
   const segmentEditorLanguageTranslateRunRef = useRef(0);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
+  const activeGenerationJobIdRef = useRef<string | null>(null);
   const suppressProjectFallbackPreviewRef = useRef(false);
   const createdVideoAnalyticsJobIdsRef = useRef<Set<string>>(new Set());
   const pendingGeneratedVideoActionModeRef = useRef<StudioGeneratedVideoActionMode>("expanded");
@@ -10423,30 +10425,7 @@ export function WorkspacePage({
   const applySegmentEditorGlobalVoiceToAllSegments = (
     draft: WorkspaceSegmentEditorDraftSession,
     voiceType: string,
-  ): WorkspaceSegmentEditorDraftSession => {
-    const isVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(voiceType) === "none";
-
-    return {
-      ...draft,
-      subtitleType: isVoiceDisabled ? "none" : draft.subtitleType,
-      ttsAssetId: null,
-      voiceType,
-      segments: draft.segments.map((segment) =>
-        getWorkspaceSegmentVoiceOverrideId(segment)
-          ? clearSegmentEditorVoiceoverGenerationState({
-              ...segment,
-              subtitleType: isVoiceDisabled ? "none" : segment.subtitleType,
-              voiceType: null,
-            })
-          : isVoiceDisabled
-            ? clearSegmentEditorVoiceoverGenerationState({
-                ...segment,
-                subtitleType: "none",
-              })
-            : clearSegmentEditorVoiceoverGenerationState(segment),
-      ),
-    };
-  };
+  ): WorkspaceSegmentEditorDraftSession => applyWorkspaceSegmentEditorGlobalVoiceToSegments(draft, voiceType);
 
   const isSegmentEditorVoiceoverFreshForVoice = (
     segment: WorkspaceSegmentEditorDraftSegment,
@@ -17000,6 +16979,7 @@ export function WorkspacePage({
     setStatus(getStudioStatusLabel(initialStatus, locale));
     generationRunRef.current += 1;
     const runId = generationRunRef.current;
+    activeGenerationJobIdRef.current = safeJobId;
 
     if (resetTimerRef.current) {
       window.clearTimeout(resetTimerRef.current);
@@ -17174,6 +17154,7 @@ export function WorkspacePage({
       }
     } finally {
       if (generationRunRef.current === runId) {
+        activeGenerationJobIdRef.current = null;
         setIsGenerating(false);
         setGenerationUiSource("idle");
       }
@@ -19422,6 +19403,95 @@ export function WorkspacePage({
     };
   }, [refreshWorkspaceNotifications]);
 
+  useEffect(() => {
+    if (!isGenerating || generatedVideo?.id || generationUiSource === "idle") {
+      return;
+    }
+
+    let isCancelled = false;
+    let isChecking = false;
+
+    const resumeGenerationFromBootstrap = async () => {
+      if (isCancelled || isChecking || document.hidden) {
+        return;
+      }
+
+      isChecking = true;
+      try {
+        const response = await fetch(buildWorkspaceBootstrapRequestUrl(location.search));
+        const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
+
+        if (isCancelled || response.status === 401 || response.status === 403) {
+          return;
+        }
+
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error ?? "Failed to bootstrap workspace.");
+        }
+
+        const latestGeneration = payload.data.latestGeneration;
+        if (!latestGeneration) {
+          return;
+        }
+
+        if (latestGeneration.generation) {
+          activeGenerationJobIdRef.current = null;
+          suppressProjectFallbackPreviewRef.current = false;
+          setGeneratedVideo(latestGeneration.generation);
+          setGenerateError(latestGeneration.error ?? null);
+          setStatus("");
+          setIsGenerating(false);
+          setGenerationUiSource("idle");
+          setHasLoadedProjects(false);
+          return;
+        }
+
+        if (latestGeneration.status === "failed") {
+          activeGenerationJobIdRef.current = null;
+          setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
+          setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
+          setIsGenerating(false);
+          setGenerationUiSource("idle");
+          return;
+        }
+
+        const latestJobId = String(latestGeneration.jobId ?? "").trim();
+        if (latestJobId && activeGenerationJobIdRef.current !== latestJobId) {
+          void pollGenerationJob(latestJobId, latestGeneration.status || "queued", {
+            generationUiSource: "bootstrap",
+          });
+        }
+      } catch (error) {
+        if (isCancelled || isAbortLikeError(error)) return;
+        console.warn("[workspace] Generation resume check failed", error);
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void resumeGenerationFromBootstrap();
+    }, 30_000);
+    const handleFocus = () => {
+      void resumeGenerationFromBootstrap();
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void resumeGenerationFromBootstrap();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [generatedVideo?.id, generationUiSource, isGenerating, locale, session.email]);
+
   const dismissWorkspaceNotification = (notificationId: number) => {
     setWorkspaceNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     void fetch(`/api/workspace/notifications/${encodeURIComponent(String(notificationId))}/dismiss`, {
@@ -20413,6 +20483,13 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     activateSegmentEditorSegmentByArrayIndex(segmentArrayIndex);
     syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
+    if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(targetSegment)) {
+      restorePendingSegmentTimelineVoiceTextEdit();
+      setSegmentTimelineVoiceMenuSegmentIndex(null);
+      event.currentTarget.focus({ preventScroll: true });
+      return;
+    }
+
     const shouldCloseCurrentVoiceMenu = segmentTimelineVoiceMenuSegmentIndex === targetSegment.index;
     restorePendingSegmentTimelineVoiceTextEdit();
     setSegmentTimelineVoiceMenuSegmentIndex(shouldCloseCurrentVoiceMenu ? null : targetSegment.index);
@@ -25600,6 +25677,20 @@ export function WorkspacePage({
                       "Озвучка сегмента пока недоступна как отдельный аудиофайл",
                       "Segment voiceover is not available as an isolated audio file yet",
                     );
+              const voiceCellLabel = usesEmbeddedTalkingPhotoAudio
+                ? workspaceText(
+                    locale,
+                    `Озвучка говорящего персонажа сцены ${index + 1}`,
+                    `Scene ${index + 1} talking character audio`,
+                  )
+                : workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`);
+              const voiceCellTitle = usesEmbeddedTalkingPhotoAudio
+                ? workspaceText(
+                    locale,
+                    "Озвучка встроена в видео говорящего персонажа",
+                    "Voiceover is embedded in the talking character video",
+                  )
+                : undefined;
               const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentTimelineHistorySegmentIndex);
               const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentTimelineHistorySegmentIndex);
               const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
@@ -25636,7 +25727,8 @@ export function WorkspacePage({
                     }
                     type="button"
                     aria-busy={isVoiceoverGenerationPending ? true : undefined}
-                    aria-label={workspaceText(locale, `Изменить озвучку сцены ${index + 1}`, `Change scene ${index + 1} voiceover`)}
+                    aria-label={voiceCellLabel}
+                    title={voiceCellTitle}
                     onPointerDown={() => {
                       previewSegmentTimelineActiveStateByArrayIndex(index);
                     }}

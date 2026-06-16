@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
 import {
+  applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   createWorkspaceSegmentEditorDraftSession,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentLatestVisualAction,
@@ -6564,6 +6565,121 @@ describe("WorkspacePage studio locale defaults", () => {
       durationSeconds: 4.3,
       source: "actual",
     });
+  });
+
+  it("does not apply scene voice overrides to talking character audio", () => {
+    const text = "Говорящий персонаж уже содержит озвучку.";
+    const talkingSegment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 914,
+        durationSeconds: 6.2,
+        fileName: "talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/914/playback",
+        source: "media-library",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      text,
+      textByLanguage: { ru: text },
+      videoAction: "talking_photo",
+      voiceoverAsset: {
+        assetId: 915,
+        durationSeconds: 6.2,
+        fileName: "embedded-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/915",
+        source: "media-library",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const draft = createDraftSession(talkingSegment);
+
+    const updatedDraft = applyWorkspaceSegmentEditorSceneVoiceOverride(
+      draft,
+      talkingSegment.index,
+      "English_ManWithDeepVoice",
+    );
+
+    expect(updatedDraft.segments[0]).toEqual(talkingSegment);
+  });
+
+  it("skips talking character scenes when applying a global voice", async () => {
+    const talkingText = "Встроенная озвучка не должна сбрасываться.";
+    const talkingSegment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 916,
+        durationSeconds: 5.5,
+        fileName: "talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/916/playback",
+        source: "media-library",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      index: 0,
+      text: talkingText,
+      textByLanguage: { ru: talkingText },
+      videoAction: "talking_photo",
+      voiceoverAsset: {
+        assetId: 917,
+        durationSeconds: 5.5,
+        fileName: "embedded-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/917",
+        source: "media-library",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(talkingText),
+      voiceoverVoiceType: "Russian_BrightHeroine",
+      voiceType: "Russian_BrightHeroine",
+    });
+    const regularSegment = createDraftSegment({
+      index: 1,
+      text: "Обычная сцена меняет голос.",
+      voiceoverAsset: {
+        assetId: 918,
+        durationSeconds: 3,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/918",
+        source: "media-library",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Обычная сцена меняет голос."),
+      voiceoverVoiceType: "Russian_BrightHeroine",
+      voiceType: "Russian_BrightHeroine",
+    });
+    const draft = {
+      ...createDraftSession(talkingSegment),
+      segments: [talkingSegment, regularSegment],
+      voiceType: "Russian_BrightHeroine",
+    };
+
+    const updatedDraft = applyWorkspaceSegmentEditorGlobalVoiceToSegments(draft, DEFAULT_STUDIO_VOICE_ID.ru);
+
+    expect(updatedDraft.voiceType).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(updatedDraft.segments[0]).toEqual(talkingSegment);
+    expect(updatedDraft.segments[1]).toEqual(expect.objectContaining({
+      voiceType: null,
+      voiceoverAsset: null,
+      voiceoverLanguage: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    }));
+
+    const result = await buildWorkspaceSegmentEditorPayload(updatedDraft, { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(expect.objectContaining({
+      videoAction: "talking_photo",
+      voiceType: "none",
+    }));
   });
 
   it("restores generated voiceover timing together with voice text history", () => {

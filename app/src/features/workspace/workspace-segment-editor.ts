@@ -4667,6 +4667,52 @@ export const clearWorkspaceSegmentVoiceoverTiming = (
   };
 };
 
+export const clearWorkspaceSegmentEditorVoiceoverGenerationState = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): WorkspaceSegmentEditorDraftSegment => ({
+  ...clearWorkspaceSegmentVoiceoverTiming(segment),
+  voiceoverAsset: null,
+  voiceoverLanguage: null,
+  voiceoverTextHash: null,
+  voiceoverVoiceType: null,
+});
+
+export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  voiceType: string,
+): WorkspaceSegmentEditorDraftSession => {
+  const isVoiceDisabled = normalizeWorkspaceSegmentEditorSetting(voiceType) === "none";
+
+  return {
+    ...draft,
+    subtitleType: isVoiceDisabled ? "none" : draft.subtitleType,
+    ttsAssetId: null,
+    voiceType,
+    segments: draft.segments.map((segment) => {
+      if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+        return segment;
+      }
+
+      if (getWorkspaceSegmentVoiceOverrideId(segment)) {
+        return clearWorkspaceSegmentEditorVoiceoverGenerationState({
+          ...segment,
+          subtitleType: isVoiceDisabled ? "none" : segment.subtitleType,
+          voiceType: null,
+        });
+      }
+
+      if (isVoiceDisabled) {
+        return clearWorkspaceSegmentEditorVoiceoverGenerationState({
+          ...segment,
+          subtitleType: "none",
+        });
+      }
+
+      return clearWorkspaceSegmentEditorVoiceoverGenerationState(segment);
+    }),
+  };
+};
+
 export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
   draft: WorkspaceSegmentEditorDraftSession,
   segmentIndex: number,
@@ -4676,15 +4722,17 @@ export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
   ...draft,
   segments: draft.segments.map((segment) =>
     segment.index === segmentIndex
-      ? {
-          ...segment,
-          ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
-          voiceoverAsset: null,
-          voiceoverLanguage: null,
-          voiceoverTextHash: null,
-          voiceoverVoiceType: null,
-          voiceType,
-        }
+      ? doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)
+        ? segment
+        : {
+            ...segment,
+            ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
+            voiceoverAsset: null,
+            voiceoverLanguage: null,
+            voiceoverTextHash: null,
+            voiceoverVoiceType: null,
+            voiceType,
+          }
       : segment,
   ),
 });

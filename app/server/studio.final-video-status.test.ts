@@ -90,6 +90,11 @@ describe("studio final video status", () => {
 
   it("resolves a done latest generation during workspace bootstrap when only project media has the final video", async () => {
     const { getWorkspaceBootstrap } = await loadStudioModule();
+    const { getWorkspaceGenerationHistoryEntry, saveWorkspaceGenerationHistory } = await import("./workspace-history.js");
+    const user = {
+      id: "bootstrap-user",
+      name: "Bootstrap User",
+    };
 
     vi.stubGlobal(
       "fetch",
@@ -157,16 +162,25 @@ describe("studio final video status", () => {
       }),
     );
 
-    const bootstrap = await getWorkspaceBootstrap({
-      id: "bootstrap-user",
-      name: "Bootstrap User",
+    await saveWorkspaceGenerationHistory(user, {
+      finalAssetStatus: "processing",
+      jobId: "bootstrap-media-only",
+      prompt: "old prompt",
+      status: "processing",
+      updatedAt: "2026-05-29T18:59:00.000Z",
     });
 
+    const bootstrap = await getWorkspaceBootstrap(user);
+
     const latestGeneration = bootstrap.latestGeneration;
+    const historyEntry = await getWorkspaceGenerationHistoryEntry(user, "bootstrap-media-only");
 
     expect(latestGeneration?.status).toBe("done");
     expect(latestGeneration?.generation?.id).toBe("bootstrap-media-only");
     expect(latestGeneration?.generation?.finalAsset?.downloadPath).toBe("/api/media/4433/download");
+    expect(historyEntry?.status).toBe("done");
+    expect(historyEntry?.downloadPath).toBe("/api/media/4433/download");
+    expect(historyEntry?.finalAssetId).toBe(4433);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
