@@ -2935,6 +2935,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
   } = options;
   const rawVoiceoverAssetPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segment.voiceoverAsset);
   const isProjectVoiceoverAsset = isWorkspaceSegmentProjectVoiceoverAsset(segment, session);
+  const isSharedVoiceoverAsset = isWorkspaceSegmentSharedVoiceoverAsset(segment, session);
   const voiceSourceRange = getWorkspaceSegmentVoiceSourceRange(segment);
   const voiceoverAssetDurationSeconds = getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset);
   const voiceoverAssetId = getPositiveWorkspaceMediaAssetId(segment.voiceoverAsset?.assetId);
@@ -2944,9 +2945,16 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
     voiceSourceRange !== null && voiceSourceRange.endTime > voiceSourceRange.startTime
       ? voiceSourceRange.endTime - voiceSourceRange.startTime
       : null;
+  const estimatedProjectVoiceoverLeakDurationSeconds =
+    getWorkspaceSegmentEstimatedProjectVoiceoverLeakDuration(segment, voiceoverAssetDurationSeconds);
   const hasShorterSceneVoiceoverTimingThanAsset =
     voiceoverAssetDurationSeconds !== null &&
-    [explicitSpeechDurationSeconds, speechTimelineDurationSeconds, voiceSourceDurationSeconds].some(
+    [
+      explicitSpeechDurationSeconds,
+      speechTimelineDurationSeconds,
+      voiceSourceDurationSeconds,
+      estimatedProjectVoiceoverLeakDurationSeconds,
+    ].some(
       (durationSeconds) =>
         durationSeconds !== null &&
         durationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < voiceoverAssetDurationSeconds,
@@ -2974,7 +2982,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
       (voiceoverAssetDurationSeconds !== null &&
         voiceSourceRange.endTime < voiceoverAssetDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS));
   const latestSceneVoiceoverAudioUrl =
-    isProjectVoiceoverAsset || isWindowedVoiceoverAsset || isLeakedProjectVoiceoverAsset
+    isProjectVoiceoverAsset || isSharedVoiceoverAsset || isWindowedVoiceoverAsset || isLeakedProjectVoiceoverAsset
       ? null
       : rawVoiceoverAssetPreviewUrl;
   const windowedVoiceoverAudioUrl =
@@ -2992,7 +3000,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
   const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
   const projectVoiceoverAssetId =
     getPositiveWorkspaceMediaAssetId(session.ttsAssetId) ??
-    (isWindowedVoiceoverAsset || isLeakedProjectVoiceoverAsset ? voiceoverAssetId : null);
+    (isSharedVoiceoverAsset || isWindowedVoiceoverAsset || isLeakedProjectVoiceoverAsset ? voiceoverAssetId : null);
   const hasProjectVoiceoverTiming = hasWorkspaceSegmentProjectVoiceoverTimingData(segment);
   const projectTimelineFallbackRange =
     allowProjectTimelineFallback && !hasProjectVoiceoverTiming
@@ -3011,10 +3019,27 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
     projectVoiceoverAssetId !== null &&
     effectivePreviewRange !== null &&
     (hasProjectVoiceoverTiming || canUseProjectTimelineFallback);
+  const canUseLeakedProjectVoiceoverSegmentProxy =
+    voiceEnabled &&
+    projectVoiceoverAssetId !== null &&
+    effectivePreviewRange !== null &&
+    (isWindowedVoiceoverAsset || isLeakedProjectVoiceoverAsset) &&
+    !hasLeakedSharedFullVoiceoverAssetRange;
+  const canUseSharedProjectVoiceoverSegmentProxy =
+    voiceEnabled &&
+    projectVoiceoverAssetId !== null &&
+    effectivePreviewRange !== null &&
+    isSharedVoiceoverAsset &&
+    !hasLeakedSharedFullVoiceoverAssetRange;
   const canUseSegmentVoiceoverAudioProxy =
-    canUseProjectVoiceoverAudio && !hasLeakedSharedFullVoiceoverAssetRange;
+    (canUseProjectVoiceoverAudio && !hasLeakedSharedFullVoiceoverAssetRange) ||
+    canUseLeakedProjectVoiceoverSegmentProxy ||
+    canUseSharedProjectVoiceoverSegmentProxy;
   const projectVoiceoverAudioUrl =
-    canUseProjectVoiceoverAudio && projectVoiceoverAssetId !== null
+    (canUseProjectVoiceoverAudio ||
+      canUseLeakedProjectVoiceoverSegmentProxy ||
+      canUseSharedProjectVoiceoverSegmentProxy) &&
+    projectVoiceoverAssetId !== null
       ? `${buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)}?v=${encodeURIComponent(version)}`
       : null;
   const segmentVoiceoverAudioUrl =
@@ -4181,6 +4206,28 @@ const isWorkspaceSegmentVoiceoverDurationObviousVisualEcho = (
     );
 
   return matchesAssetDuration || matchesSceneDuration;
+};
+
+const getWorkspaceSegmentEstimatedProjectVoiceoverLeakDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  assetDurationSeconds: number | null,
+) => {
+  const normalizedText = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
+  if (assetDurationSeconds === null || !normalizedText) {
+    return null;
+  }
+
+  const estimatedSpeechDuration = estimateWorkspaceSegmentEditorSpeechDuration(normalizedText);
+  const isAssetMuchLongerThanSpeech =
+    assetDurationSeconds > Math.max(estimatedSpeechDuration * 2.6, estimatedSpeechDuration + 4);
+  const isAssetLongerThanScene = getWorkspaceSegmentSceneDurationCandidates(segment).some(
+    (durationSeconds) =>
+      durationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < assetDurationSeconds,
+  );
+
+  return isAssetMuchLongerThanSpeech && isAssetLongerThanScene
+    ? roundWorkspaceSegmentTimelineSeconds(estimatedSpeechDuration)
+    : null;
 };
 
 export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (

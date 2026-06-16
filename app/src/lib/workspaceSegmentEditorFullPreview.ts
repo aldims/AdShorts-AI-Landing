@@ -101,12 +101,50 @@ export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
   timelineStartTime: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewSharedAudioSourceSegment = {
+  assetKey?: string | null;
+  durationSeconds?: number | null;
+  segmentIndex: number;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
 };
 
 const roundPreviewTime = (value: number) => Number(value.toFixed(3));
+
+export const resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes = (
+  segments: WorkspaceSegmentEditorFullPreviewSharedAudioSourceSegment[],
+) => {
+  const normalizedSegments = segments.map((segment) => ({
+    assetKey: String(segment.assetKey ?? "").trim(),
+    durationSeconds: normalizePreviewTime(segment.durationSeconds) ?? 0,
+    segmentIndex: segment.segmentIndex,
+  }));
+  const assetUseCounts = normalizedSegments.reduce((counts, segment) => {
+    if (!segment.assetKey) {
+      return counts;
+    }
+
+    counts.set(segment.assetKey, (counts.get(segment.assetKey) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const cursorByAssetKey = new Map<string, number>();
+  const startTimeBySegmentIndex = new Map<number, number>();
+
+  normalizedSegments.forEach((segment) => {
+    if (!segment.assetKey || (assetUseCounts.get(segment.assetKey) ?? 0) <= 1) {
+      return;
+    }
+
+    const cursor = cursorByAssetKey.get(segment.assetKey) ?? 0;
+    startTimeBySegmentIndex.set(segment.segmentIndex, roundPreviewTime(cursor));
+    cursorByAssetKey.set(segment.assetKey, roundPreviewTime(cursor + segment.durationSeconds));
+  });
+
+  return startTimeBySegmentIndex;
+};
 
 export const clampWorkspaceSegmentEditorFullPreviewTime = (
   currentTime: number,
@@ -348,6 +386,82 @@ export const resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds = (opt
   }
 
   return fallbackDurationSeconds !== null && fallbackDurationSeconds > 0 ? fallbackDurationSeconds : null;
+};
+
+export const extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails = (
+  ranges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[],
+  tailSeconds: number,
+): WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] => {
+  const safeTailSeconds = normalizePreviewTime(tailSeconds) ?? 0;
+  if (safeTailSeconds <= 0 || ranges.length === 0) {
+    return ranges;
+  }
+
+  const normalizedRanges = ranges.map((range, index) => {
+    const startTime = normalizePreviewTime(range.startTime);
+    const endTime = normalizePreviewTime(range.endTime);
+    const sourceStartTime = normalizePreviewTime(range.sourceStartTime) ?? startTime;
+    const url = range.url.trim();
+    return startTime !== null &&
+      endTime !== null &&
+      endTime > startTime &&
+      sourceStartTime !== null &&
+      url
+      ? {
+          duration: endTime - startTime,
+          endTime,
+          index,
+          sourceStartTime,
+          startTime,
+          url,
+        }
+      : null;
+  });
+  const rangesByUrl = new Map<string, NonNullable<(typeof normalizedRanges)[number]>[]>();
+
+  normalizedRanges.forEach((range) => {
+    if (!range) {
+      return;
+    }
+
+    const rangesForUrl = rangesByUrl.get(range.url) ?? [];
+    rangesForUrl.push(range);
+    rangesByUrl.set(range.url, rangesForUrl);
+  });
+
+  const nextSourceStartTimeByIndex = new Map<number, number>();
+  rangesByUrl.forEach((rangesForUrl) => {
+    const sortedRanges = [...rangesForUrl].sort(
+      (left, right) => left.sourceStartTime - right.sourceStartTime || left.startTime - right.startTime,
+    );
+    sortedRanges.forEach((range, rangeIndex) => {
+      const nextRange = sortedRanges
+        .slice(rangeIndex + 1)
+        .find((candidate) => candidate.sourceStartTime > range.sourceStartTime + 0.001);
+      if (nextRange) {
+        nextSourceStartTimeByIndex.set(range.index, nextRange.sourceStartTime);
+      }
+    });
+  });
+
+  return ranges.map((range, index) => {
+    const normalizedRange = normalizedRanges[index];
+    if (!normalizedRange) {
+      return range;
+    }
+
+    const nextSourceStartTime = nextSourceStartTimeByIndex.get(index) ?? null;
+    const sourceDurationLimit =
+      nextSourceStartTime !== null
+        ? Math.max(normalizedRange.duration, nextSourceStartTime - normalizedRange.sourceStartTime)
+        : normalizedRange.duration + safeTailSeconds;
+    const extendedDuration = Math.min(normalizedRange.duration + safeTailSeconds, sourceDurationLimit);
+
+    return {
+      ...range,
+      endTime: roundPreviewTime(normalizedRange.startTime + extendedDuration),
+    };
+  });
 };
 
 export const serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges = (

@@ -221,6 +221,7 @@ import {
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
   getWorkspaceSegmentVoiceOverrideId,
+  hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
@@ -513,6 +514,7 @@ import {
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_AUDIBLE_TAIL_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS,
@@ -800,11 +802,13 @@ import {
   getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
+  extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
@@ -21602,6 +21606,17 @@ export function WorkspacePage({
 
     const tracks: WorkspaceSegmentEditorFullPreviewAudioTrack[] = [];
     const projectVoiceoverAudioRanges: WorkspaceSegmentEditorFullPreviewAudioTimelineRange[] = [];
+    const sharedVoiceoverSourceStartTimes =
+      resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes(
+        segmentEditorDraft.segments.map((segment) => ({
+          assetKey: getStudioCustomVideoFileIdentityKey(segment.voiceoverAsset),
+          durationSeconds:
+            getWorkspaceSegmentVoiceSourceDurationSeconds(segment) ??
+            getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft) ??
+            getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds(segment, segmentEditorDraft),
+          segmentIndex: segment.index,
+        })),
+      );
     let hasPriorNonProjectVoiceover = false;
 
     if (segmentTimelineMusicPreviewUrl) {
@@ -21686,6 +21701,7 @@ export function WorkspacePage({
         fallbackDurationSeconds: fallbackVoiceoverDurationSeconds,
         measuredDurationSeconds: measuredVoiceoverDurationSeconds,
       });
+      const hasProjectVoiceoverTiming = hasWorkspaceSegmentProjectVoiceoverTimingData(segment);
       const projectVoiceoverAssetId = getPositiveWorkspaceMediaAssetId(segmentEditorDraft.ttsAssetId);
       if (!embeddedAudioUrl && voiceoverAudioUrl) {
         const isProjectVoiceoverAudio = voiceoverAudioPreviewSource.sourceKind === "project";
@@ -21713,26 +21729,29 @@ export function WorkspacePage({
         const voiceTimelineStartTime = timelineStartTime;
         const shouldUseProjectVoiceoverTimelineSource = isProjectVoiceoverAudio && !shouldUseSegmentProxyForProjectVoiceover;
         const projectVoiceoverFullPreviewRange = shouldUseProjectVoiceoverTimelineSource
-          ? !voiceoverAudioPreviewSource.segmentVoiceoverAudioUrl
-            ? {
-                sourceStartTime: voiceoverPreviewRange?.startTime ?? timelineStartTime,
-                timelineEndTime: voiceoverPreviewRange?.endTime ?? timelineEndTime,
-              }
-            : resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
-                previewRange: voiceoverPreviewRange,
-                segment,
-                timelineEndTime,
-                timelineStartTime,
-              })
+          ? resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+              previewRange: voiceoverPreviewRange,
+              segment,
+              timelineEndTime,
+              timelineStartTime,
+            })
           : null;
-        const projectVoiceSourceStartTime = projectVoiceoverFullPreviewRange?.sourceStartTime ?? null;
+        const sharedVoiceoverSourceStartTime = sharedVoiceoverSourceStartTimes.get(segment.index) ?? null;
+        const shouldUseSharedVoiceoverSourceTiming =
+          isProjectVoiceoverAudio && !hasProjectVoiceoverTiming && sharedVoiceoverSourceStartTime !== null;
+        const projectVoiceSourceStartTime =
+          shouldUseSharedVoiceoverSourceTiming
+            ? sharedVoiceoverSourceStartTime
+            : projectVoiceoverFullPreviewRange?.sourceStartTime ?? null;
+        const fallbackVoiceTimelineEndTime = resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
+          timelineEndTime,
+          timelineStartTime: voiceTimelineStartTime,
+          voiceDurationSeconds: voiceoverDurationSeconds,
+        });
         const voiceTimelineEndTime =
-          projectVoiceoverFullPreviewRange?.timelineEndTime ??
-          resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
-            timelineEndTime,
-            timelineStartTime: voiceTimelineStartTime,
-            voiceDurationSeconds: voiceoverDurationSeconds,
-          });
+          shouldUseSharedVoiceoverSourceTiming
+            ? fallbackVoiceTimelineEndTime
+            : projectVoiceoverFullPreviewRange?.timelineEndTime ?? fallbackVoiceTimelineEndTime;
 
         if (voiceTimelineEndTime > voiceTimelineStartTime) {
           if (shouldUseProjectVoiceoverTimelineSource) {
@@ -21777,7 +21796,12 @@ export function WorkspacePage({
     });
 
     mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(
-      serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(projectVoiceoverAudioRanges),
+      serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges(
+        extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails(
+          projectVoiceoverAudioRanges,
+          WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_AUDIBLE_TAIL_SECONDS,
+        ),
+      ),
     ).forEach((range, rangeIndex) => {
       tracks.push({
         endGraceSeconds: 0,

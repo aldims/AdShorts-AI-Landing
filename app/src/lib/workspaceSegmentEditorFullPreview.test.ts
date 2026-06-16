@@ -14,12 +14,14 @@ import {
   getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
+  extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
@@ -45,6 +47,40 @@ describe("workspace segment editor full preview", () => {
 
   it("resolves total duration from segment end times", () => {
     expect(getWorkspaceSegmentEditorFullPreviewDuration(segments)).toBe(9);
+  });
+
+  it("resolves shared audio source starts by concatenating scene voice durations", () => {
+    expect(
+      Array.from(
+        resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes([
+          { assetKey: "project-voice", durationSeconds: 7.4, segmentIndex: 0 },
+          { assetKey: "project-voice", durationSeconds: 2.1, segmentIndex: 1 },
+          { assetKey: "scene-only", durationSeconds: 4, segmentIndex: 2 },
+          { assetKey: "project-voice", durationSeconds: 1.7, segmentIndex: 3 },
+        ]).entries(),
+      ),
+    ).toEqual([
+      [0, 0],
+      [1, 7.4],
+      [3, 9.5],
+    ]);
+  });
+
+  it("adds a small voice tail without crossing into the next shared audio source window", () => {
+    expect(
+      extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails(
+        [
+          { endTime: 2, sourceStartTime: 0, startTime: 0, url: "/voice.wav" },
+          { endTime: 7, sourceStartTime: 2.1, startTime: 5, url: "/voice.wav" },
+          { endTime: 4, sourceStartTime: 0, startTime: 3, url: "/other.wav" },
+        ],
+        0.22,
+      ),
+    ).toEqual([
+      { endTime: 2.1, sourceStartTime: 0, startTime: 0, url: "/voice.wav" },
+      { endTime: 7.22, sourceStartTime: 2.1, startTime: 5, url: "/voice.wav" },
+      { endTime: 4.22, sourceStartTime: 0, startTime: 3, url: "/other.wav" },
+    ]);
   });
 
   it("extends playback end for a final voice tail without changing visual duration", () => {
