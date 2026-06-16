@@ -393,6 +393,104 @@ describe("studio segment voiceover jobs", () => {
     ]);
   });
 
+  it("does not apply a whole-project voiceover segment as the first scene in fallback batch jobs", async () => {
+    const { createStudioBatchVoiceoverJob, getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/voiceover/batch-jobs") {
+          return jsonResponse({ detail: "not found" }, 404);
+        }
+
+        if (url.pathname === "/api/web/project-voiceover/jobs") {
+          return jsonResponse({
+            job_id: "project-voiceover-job-1",
+            status: "queued",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        if (url.pathname === "/api/web/project-voiceover/jobs/project-voiceover-job-1") {
+          return jsonResponse({
+            asset: {
+              file_name: "whole-video.wav",
+              media_asset_id: 902,
+              mime_type: "audio/wav",
+            },
+            job_id: "project-voiceover-job-1",
+            segments: [
+              {
+                segment_index: 0,
+                speech_duration: 31.5,
+                speech_end_time: 31.5,
+                speech_start_time: 0,
+                text: "Scene one Scene two",
+              },
+            ],
+            status: "completed",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioBatchVoiceoverJob({
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      groups: [
+        {
+          language: "ru",
+          segments: [
+            { segmentIndex: 0, targetDurationSeconds: 7.9, text: "Scene one" },
+            { segmentIndex: 1, targetDurationSeconds: 5, text: "Scene two" },
+          ],
+          voiceType: "Liam",
+        },
+      ],
+      projectId: 3657,
+    });
+
+    const status = await getStudioBatchVoiceoverJobStatus(job.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status.segments).toEqual([
+      expect.objectContaining({
+        segmentIndex: 0,
+        speechDuration: 7.9,
+        speechEndTime: 7.9,
+        speechStartTime: 0,
+        text: "Scene one",
+      }),
+      expect.objectContaining({
+        segmentIndex: 1,
+        speechDuration: 5,
+        speechEndTime: 12.9,
+        speechStartTime: 7.9,
+        text: "Scene two",
+      }),
+    ]);
+  });
+
   it("normalizes speech metadata from AdsFlow status responses", async () => {
     const { getStudioSegmentVoiceoverJobStatus } = await loadStudioModule();
 

@@ -273,6 +273,7 @@ import {
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
+  shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
@@ -3454,6 +3455,32 @@ export function WorkspacePage({
       return measuredDuration.durationSeconds;
     },
     [segmentEditorMeasuredVoiceoverDurations],
+  );
+  const getSegmentEditorSafeMeasuredVoiceoverDurationSeconds = useCallback(
+    (
+      segment: WorkspaceSegmentEditorDraftSegment,
+      session: WorkspaceSegmentEditorDraftSession,
+      sourceUrl: string | null | undefined,
+    ) => {
+      const measuredDurationSeconds = getSegmentEditorMeasuredVoiceoverDurationSeconds(segment.index, sourceUrl);
+      if (measuredDurationSeconds === null) {
+        return null;
+      }
+
+      if (
+        shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(
+          segment,
+          session,
+          normalizeWorkspaceVideoSourceUrl(sourceUrl),
+          measuredDurationSeconds,
+        )
+      ) {
+        return null;
+      }
+
+      return measuredDurationSeconds;
+    },
+    [getSegmentEditorMeasuredVoiceoverDurationSeconds],
   );
 
   useEffect(() => {
@@ -21653,7 +21680,7 @@ export function WorkspacePage({
       const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
       const measuredVoiceoverDurationSeconds =
         voiceoverAudioPreviewSource.sourceKind === "scene"
-          ? getSegmentEditorMeasuredVoiceoverDurationSeconds(segment.index, voiceoverAudioUrl)
+          ? getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(segment, segmentEditorDraft, voiceoverAudioUrl)
           : null;
       const voiceoverDurationSeconds = resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
         fallbackDurationSeconds: fallbackVoiceoverDurationSeconds,
@@ -25425,8 +25452,9 @@ export function WorkspacePage({
               const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
               const voiceoverMeasuredDurationSourceUrl =
                 voiceoverAudioPreviewSource.sourceKind === "scene" ? voiceoverAudioPreviewSource.audioUrl : null;
-              const measuredVoiceoverDurationSeconds = getSegmentEditorMeasuredVoiceoverDurationSeconds(
-                segment.index,
+              const measuredVoiceoverDurationSeconds = getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(
+                segment,
+                segmentEditorDraft,
                 voiceoverMeasuredDurationSourceUrl,
               );
               const voiceoverDurationInfo =

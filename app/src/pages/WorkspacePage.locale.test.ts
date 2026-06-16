@@ -3693,7 +3693,7 @@ describe("WorkspacePage studio locale defaults", () => {
       duration: 5,
       endTime: 5,
       mediaType: "photo",
-      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли?",
+      text: "Вы когда-нибудь задумывались, что было бы, если бы динозавры не вымерли, а продолжили жить рядом с нами сегодня?",
       videoAction: "ai",
     });
 
@@ -4492,7 +4492,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("keeps project voiceover source in full preview after a prior non-project voiceover", () => {
+  it("uses the scene voiceover proxy in full preview after a prior non-project voiceover", () => {
     const segment = createDraftSegment({
       index: 1,
       speechDuration: 5.44,
@@ -4506,7 +4506,7 @@ describe("WorkspacePage studio locale defaults", () => {
       shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, createDraftSession(segment), {
         hasPriorNonProjectVoiceover: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("uses segment voiceover proxy in full preview when a manual visual slot creates a voice pause", () => {
@@ -4537,7 +4537,7 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(true);
   });
 
-  it("keeps full project voiceover audio when a manual voice pause has a project TTS asset", () => {
+  it("uses segment voiceover proxy when a manual voice pause has a project TTS asset", () => {
     const segment = createDraftSegment({
       duration: 10,
       durationMode: "manual",
@@ -4559,7 +4559,7 @@ describe("WorkspacePage studio locale defaults", () => {
         timelineEndTime: 10,
         timelineStartTime: 0,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("uses segment voiceover proxy in full preview when a prior manual scene shifts the project voice source", () => {
@@ -4603,7 +4603,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
   });
 
-  it("keeps the project voiceover source in full preview when the scene voice still matches the project voice", () => {
+  it("uses segment voiceover proxy in full preview when the scene voice still matches the project voice", () => {
     const segment = createDraftSegment({
       index: 0,
       text: "First",
@@ -4614,10 +4614,10 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceType: "boris",
     };
 
-    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(false);
+    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
   });
 
-  it("uses project voiceover ranges before the segment proxy while project audio is fresh", () => {
+  it("uses project voiceover ranges for full preview and segment proxy for scene preview", () => {
     const segment = createDraftSegment({
       duration: 4.4,
       endTime: 12.4,
@@ -4662,11 +4662,12 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: studioVoiceOptionsByLanguage.ru[0],
     });
 
-    expect(timelineSource.sourceKind).toBe("project");
-    expect(timelineSource.audioUrl).toBe(timelineSource.projectVoiceoverAudioUrl);
-    expect(timelineSource.audioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(timelineSource.sourceKind).toBe("segment");
+    expect(timelineSource.audioUrl).toBe(timelineSource.segmentVoiceoverAudioUrl);
+    expect(timelineSource.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(timelineSource.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(timelineSource.shouldClip).toBe(true);
+    expect(timelineSource.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(timelineSource.shouldClip).toBe(false);
   });
 
   it("allows segment voiceover preview from project TTS timing even when the voice option is legacy", () => {
@@ -4702,12 +4703,12 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: null,
     });
 
-    expect(source.sourceKind).toBe("project");
-    expect(source.audioUrl).toContain("/api/workspace/media-assets/4946?v=");
+    expect(source.sourceKind).toBe("segment");
+    expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.segmentVoiceoverAudioUrl).toContain("projectId=3727");
     expect(source.segmentVoiceoverAudioUrl).toContain("segmentIndex=6");
     expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/4946?v=");
-    expect(source.shouldClip).toBe(true);
+    expect(source.shouldClip).toBe(false);
   });
 
   it("does not play the full project TTS asset as a scene voiceover without timing", () => {

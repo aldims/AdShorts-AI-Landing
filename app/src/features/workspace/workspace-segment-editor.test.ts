@@ -18,6 +18,7 @@ import {
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
+  shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
 } from "./workspace-segment-editor";
 import {
@@ -678,10 +679,10 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
-      duration: 2.4,
+      duration: 5,
       startTime: 16.7,
     }));
-    expect(withInsertedSegment.segments[2]?.endTime).toBeCloseTo(19.1);
+    expect(withInsertedSegment.segments[2]?.endTime).toBeCloseTo(21.7);
   });
 
   it("keeps a generated-video visual slot at its stored source duration when a blank scene is appended", () => {
@@ -1570,12 +1571,12 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       previewRange: { endTime: 22.957, startTime: 12.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      segmentVoiceoverAudioUrl: null,
-      shouldClip: true,
-      sourceKind: "project",
+      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      shouldClip: false,
+      sourceKind: "segment",
     }));
   });
 
@@ -1625,12 +1626,12 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       previewRange: { endTime: 24.919, startTime: 22.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      segmentVoiceoverAudioUrl: null,
-      shouldClip: true,
-      sourceKind: "project",
+      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      shouldClip: false,
+      sourceKind: "segment",
     }));
   });
 
@@ -1697,11 +1698,12 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       previewRange: { endTime: 24.919, startTime: 22.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      shouldClip: true,
-      sourceKind: "project",
+      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      shouldClip: false,
+      sourceKind: "segment",
     }));
   });
 
@@ -1796,13 +1798,75 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       previewRange: { endTime: 12.309, startTime: 0 },
+      segmentVoiceoverAudioUrl: expect.stringContaining("segmentIndex=0"),
+      shouldClip: false,
+      sourceKind: "segment",
+    }));
+  });
+
+  it("clips a batch voiceover asset attached directly to a segment", () => {
+    const text = "second scene text";
+    const segment = createProjectVoiceoverSegment({
+      duration: 5.4,
+      durationMode: "manual",
+      endTime: 10.8,
+      index: 1,
+      manualDurationSeconds: 5.4,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 5.4,
+      speechDurationSource: "audio",
+      speechEndTime: 10.8,
+      speechStartTime: 5.4,
+      speechWords: [{ confidence: 1, endTime: 10.8, startTime: 5.4, text: "second" }],
+      startTime: 5.4,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: 5.4,
+      voiceSourceEndTime: 10.8,
+      voiceSourceStartTime: 5.4,
+      voiceoverAsset: {
+        assetId: 888,
+        durationSeconds: 35.2,
+        fileName: "project-voiceover-group.wav",
+        fileSize: 0,
+        mimeType: "audio/x-wav",
+        remoteUrl: "/api/workspace/media-assets/888",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      projectId: 0,
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      getWorkspaceSegmentVoiceoverAudioPreviewSource({
+        isVoiceAudioStale: false,
+        preferSegmentProxy: true,
+        segment,
+        session,
+        voiceEnabled: true,
+        voiceOption: null,
+      }),
+    ).toEqual(expect.objectContaining({
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
+      latestSceneVoiceoverAudioUrl: null,
+      previewRange: { endTime: 10.8, startTime: 5.4 },
+      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
     }));
   });
 
-  it("clips a batch voiceover asset attached directly to a segment", () => {
+  it("uses the segment voiceover proxy for a saved project windowed voiceover asset", () => {
     const text = "second scene text";
     const segment = createProjectVoiceoverSegment({
       duration: 5.4,
@@ -1851,12 +1915,189 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       latestSceneVoiceoverAudioUrl: null,
       previewRange: { endTime: 10.8, startTime: 5.4 },
-      projectVoiceoverAudioUrl: null,
+      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      shouldClip: false,
+      sourceKind: "segment",
+    }));
+  });
+
+  it("does not treat a shared full voiceover asset as an isolated scene voiceover", () => {
+    const firstText = "Scene one text";
+    const secondText = "Scene two text";
+    const sharedVoiceoverAsset = {
+      assetId: 888,
+      durationSeconds: 31.5,
+      fileName: "whole-project-voiceover.wav",
+      fileSize: 0,
+      mimeType: "audio/x-wav",
+      remoteUrl: "/api/workspace/media-assets/888",
+      source: "media-library" as const,
+    };
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 7.9,
+      durationMode: "manual",
+      endTime: 7.9,
+      index: 0,
+      manualDurationSeconds: 7.9,
+      originalText: firstText,
+      originalTextByLanguage: { ru: firstText },
+      speechDuration: 31.5,
+      speechDurationSource: "audio",
+      speechEndTime: 31.5,
+      speechStartTime: 0,
+      speechWords: [],
+      startTime: 0,
+      text: firstText,
+      textByLanguage: { ru: firstText },
+      voiceSourceDuration: 31.5,
+      voiceSourceEndTime: 31.5,
+      voiceSourceStartTime: 0,
+      voiceoverAsset: sharedVoiceoverAsset,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(firstText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      duration: 5,
+      durationMode: "manual",
+      endTime: 12.9,
+      index: 1,
+      manualDurationSeconds: 5,
+      originalText: secondText,
+      originalTextByLanguage: { ru: secondText },
+      speechDuration: 5,
+      speechDurationSource: "audio",
+      speechEndTime: 12.9,
+      speechStartTime: 7.9,
+      speechWords: [],
+      startTime: 7.9,
+      text: secondText,
+      textByLanguage: { ru: secondText },
+      voiceSourceDuration: 5,
+      voiceSourceEndTime: 12.9,
+      voiceSourceStartTime: 7.9,
+      voiceoverAsset: sharedVoiceoverAsset,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(secondText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      getWorkspaceSegmentVoiceoverAudioPreviewSource({
+        isVoiceAudioStale: false,
+        preferSegmentProxy: true,
+        segment: firstSegment,
+        session,
+        voiceEnabled: true,
+        voiceOption: null,
+      }),
+    ).toEqual(expect.objectContaining({
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
+      latestSceneVoiceoverAudioUrl: null,
+      previewRange: { endTime: 2.25, startTime: 0 },
+      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
+    }));
+  });
+
+  it("ignores measured full project audio duration when a scene already has shorter voice timing", () => {
+    const text = "Сегодня покажу вам рецепт очень вкусных блинов.";
+    const segment = createProjectVoiceoverSegment({
+      duration: 5,
+      endTime: 5,
+      index: 0,
+      manualDurationSeconds: 5,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 7.9,
+      speechEndTime: null,
+      speechStartTime: null,
+      startTime: 0,
+      text,
+      textByLanguage: { ru: text },
+      voiceoverAsset: {
+        assetId: 6004,
+        fileName: "project-tts.wav",
+        fileSize: 0,
+        mimeType: "audio/x-wav",
+        remoteUrl: "/api/workspace/media-assets/6004",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(segment, session, "/api/workspace/media-assets/6004", 31.532),
+    ).toBe(true);
+    expect(
+      shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(segment, session, "/api/workspace/media-assets/6004", 8.1),
+    ).toBe(false);
+    expect(
+      shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(
+        segment,
+        session,
+        "/api/workspace/project-segment-voiceover?projectId=77&segmentIndex=0",
+        31.532,
+      ),
+    ).toBe(false);
+  });
+
+  it("uses the segment voiceover proxy for single-scene project voiceover preview", () => {
+    const text = "second scene text";
+    const segment = createProjectVoiceoverSegment({
+      duration: 5.4,
+      durationMode: "manual",
+      endTime: 10.8,
+      index: 1,
+      manualDurationSeconds: 5.4,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 5.4,
+      speechDurationSource: "audio",
+      speechEndTime: 10.8,
+      speechStartTime: 5.4,
+      speechWords: [{ confidence: 1, endTime: 10.8, startTime: 5.4, text: "second" }],
+      startTime: 5.4,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: 5.4,
+      voiceSourceEndTime: 10.8,
+      voiceSourceStartTime: 5.4,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+
+    expect(
+      getWorkspaceSegmentVoiceoverAudioPreviewSource({
+        isVoiceAudioStale: false,
+        preferSegmentProxy: true,
+        segment,
+        session,
+        voiceEnabled: true,
+        voiceOption: null,
+      }),
+    ).toEqual(expect.objectContaining({
+      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      segmentVoiceoverAudioUrl: expect.stringContaining("projectId=77"),
+      shouldClip: false,
+      sourceKind: "segment",
     }));
   });
 
@@ -2007,6 +2248,110 @@ describe("workspace segment editor project voiceover timeline", () => {
       durationSyncMode: "voiceover",
       endTime: 2.22,
       manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("does not reset a photo scene with valid voiceover timing to the empty-scene default duration", () => {
+    const text = "Сегодня покажу вам рецепт очень вкусных блинов, нам понадобятся: Молоко, Яйца, Мука, Сахар, Соль, Растительное масло и Кипяток.";
+    const segment = createProjectVoiceoverSegment({
+      duration: 58.2,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 58.2,
+      manualDurationSeconds: 58.2,
+      mediaType: "photo",
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 58.2,
+      speechEndTime: 58.2,
+      speechStartTime: 0,
+      startTime: 0,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: 11.2,
+      voiceSourceEndTime: 11.2,
+      voiceSourceStartTime: 0,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 11.2,
+      durationMode: "auto",
+      durationSyncMode: "visual",
+      endTime: 11.2,
+      manualDurationSeconds: null,
+      startTime: 0,
+      voiceSourceDuration: 11.2,
+    }));
+  });
+
+  it("extends a photo scene to a longer generated voiceover duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "photo",
+      speechDuration: 11.2,
+      speechDurationSource: "audio",
+      speechEndTime: 11.2,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 11.2,
+      voiceSourceEndTime: 11.2,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 11.2,
+      endTime: 11.2,
+      manualDurationSeconds: 5,
+      startTime: 0,
+    }));
+  });
+
+  it("does not shorten a photo scene to a shorter generated voiceover duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "photo",
+      speechDuration: 2.2,
+      speechDurationSource: "audio",
+      speechEndTime: 2.2,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 2.2,
+      voiceSourceEndTime: 2.2,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
   });

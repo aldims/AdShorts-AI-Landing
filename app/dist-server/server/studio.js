@@ -5120,8 +5120,10 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (payload, fallback) => {
         : undefined;
     const speechStartTime = normalizeNumber(payload.speech_start_time);
     const speechEndTime = normalizeNumber(payload.speech_end_time);
-    const speechDuration = normalizeNumber(payload.speech_duration) ??
-        (speechStartTime !== null && speechEndTime !== null ? Math.max(0, speechEndTime - speechStartTime) : null);
+    const speechBoundaryDuration = speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime
+        ? Math.max(0, speechEndTime - speechStartTime)
+        : null;
+    const speechDuration = speechBoundaryDuration ?? normalizeNumber(payload.speech_duration ?? payload.duration);
     return {
         asset,
         error: normalizeGenerationText(payload.error) || undefined,
@@ -5137,6 +5139,18 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (payload, fallback) => {
         text: normalizeGenerationText(payload.text) || fallback.text || "",
         voiceType,
     };
+};
+const normalizeStudioVoiceoverTextForMatch = (value) => normalizeGenerationText(value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+const isStudioVoiceoverSegmentTextCompatible = (statusText, requestedText) => {
+    const normalizedStatusText = normalizeStudioVoiceoverTextForMatch(statusText);
+    const normalizedRequestedText = normalizeStudioVoiceoverTextForMatch(requestedText);
+    if (!normalizedStatusText || !normalizedRequestedText) {
+        return true;
+    }
+    return normalizedStatusText === normalizedRequestedText;
 };
 export async function createStudioBatchVoiceoverJob(user, options) {
     assertAdsflowConfigured();
@@ -5534,10 +5548,10 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
         const segmentIndex = normalizeNonNegativeInteger(segment.segmentIndex ?? segment.segment_index) ?? index;
         const segmentSpeechStartTime = normalizeNumber(segment.speech_start_time ?? segment.start_time);
         const segmentSpeechEndTime = normalizeNumber(segment.speech_end_time ?? segment.end_time);
-        const segmentSpeechDuration = normalizeNumber(segment.speech_duration ?? segment.duration) ??
-            (segmentSpeechStartTime !== null && segmentSpeechEndTime !== null
-                ? Math.max(0, segmentSpeechEndTime - segmentSpeechStartTime)
-                : null);
+        const segmentSpeechBoundaryDuration = segmentSpeechStartTime !== null && segmentSpeechEndTime !== null && segmentSpeechEndTime > segmentSpeechStartTime
+            ? Math.max(0, segmentSpeechEndTime - segmentSpeechStartTime)
+            : null;
+        const segmentSpeechDuration = segmentSpeechBoundaryDuration ?? normalizeNumber(segment.speech_duration ?? segment.duration);
         return {
             segmentIndex,
             speechDuration: segmentSpeechDuration !== null ? Math.max(0, segmentSpeechDuration) : null,
@@ -5576,7 +5590,8 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
             const status = await getStudioProjectVoiceoverJobStatus(group.jobId, user);
             let fallbackCursor = 0;
             const segments = group.segments.map((segment) => {
-                const segmentStatus = status.segments.find((item) => item.segmentIndex === segment.segmentIndex);
+                const segmentStatus = status.segments.find((item) => item.segmentIndex === segment.segmentIndex &&
+                    isStudioVoiceoverSegmentTextCompatible(item.text, segment.text));
                 const fallbackStartTime = fallbackCursor;
                 const fallbackDuration = Math.max(0.2, segment.targetDurationSeconds ?? segmentStatus?.speechDuration ?? 0.8);
                 const fallbackEndTime = fallbackStartTime + fallbackDuration;

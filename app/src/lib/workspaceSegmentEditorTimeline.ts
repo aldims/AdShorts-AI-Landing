@@ -239,7 +239,11 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const durationSyncMode = String(segment.durationSyncMode ?? "").trim().toLowerCase();
   const shouldSyncVideoToVoiceover = visualKind === "video" && durationSyncMode === "voiceover";
   const shouldSyncDurationToVoiceover = durationSyncMode === "voiceover";
-  const voiceMinimumDuration = shouldSyncDurationToVoiceover && voiceDuration !== null ? voiceDuration : null;
+  const shouldKeepStillAtLeastVoiceDuration = visualKind === "image" && voiceDuration !== null;
+  const voiceMinimumDuration =
+    (shouldSyncDurationToVoiceover || shouldKeepStillAtLeastVoiceDuration) && voiceDuration !== null
+      ? voiceDuration
+      : null;
   const minimumDuration = Math.max(
     WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
     voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
@@ -281,6 +285,7 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     if (options?.preserveExistingStillDuration && existingStillDuration !== null) {
       return Math.max(
         WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+        voiceDuration,
         existingStillDuration,
       );
     }
