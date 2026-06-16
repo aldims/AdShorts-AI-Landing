@@ -252,6 +252,66 @@ describe("studio generation worker availability", () => {
     );
   });
 
+  it("keeps the watermark on FREE subscription-credit generations even when false is requested", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 0, subscription: 10 },
+            user: { balance: 0, plan: "FREE", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-free-watermark",
+            status: "queued",
+            title: "Free generation",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("A short video about focus", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        addWatermark: false,
+        language: "en",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-free-watermark",
+        status: "queued",
+      }),
+    );
+
+    expect(calls.find((call) => call.pathname === "/api/web/generations")?.body).toEqual(
+      expect.objectContaining({
+        add_watermark: true,
+      }),
+    );
+  });
+
   it("forwards manual segment timing aliases to AdsFlow generation", async () => {
     const { createStudioGenerationJob } = await loadStudioModule();
     const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];

@@ -1757,6 +1757,7 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
     res.json({
       data: {
         latestGeneration: workspace.latestGeneration,
+        notifications: workspace.notifications,
         profile,
         studioOptions: workspace.studioOptions,
       },
@@ -1765,6 +1766,91 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
     console.error("[workspace] Failed to bootstrap workspace", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to bootstrap workspace.",
+    });
+  }
+});
+
+app.get("/api/workspace/notifications", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const payload = await postAdsflowJson<{ notifications?: unknown[] }>(
+      "/api/web/notifications",
+      {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: "ru",
+        user_email: session.user.email ?? undefined,
+        user_email_verified: session.user.emailVerified === true,
+        user_name: session.user.name ?? undefined,
+      },
+      upstreamPolicies.adsflowBootstrap,
+      {
+        endpoint: "workspace.notifications",
+        projectId: externalUserId,
+      },
+    );
+
+    res.json({ data: { notifications: Array.isArray(payload?.notifications) ? payload.notifications : [] } });
+  } catch (error) {
+    console.error("[workspace] Failed to load web notifications", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to load notifications.",
+    });
+  }
+});
+
+app.post("/api/workspace/notifications/:notificationId/dismiss", express.json({ limit: "64kb" }), async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const notificationId = Number(req.params.notificationId ?? 0);
+  if (!Number.isFinite(notificationId) || notificationId <= 0) {
+    res.status(400).json({ error: "Notification id is required." });
+    return;
+  }
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const payload = await postAdsflowJson(
+      `/api/web/notifications/${Math.trunc(notificationId)}/dismiss`,
+      {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: "ru",
+        user_email: session.user.email ?? undefined,
+        user_email_verified: session.user.emailVerified === true,
+        user_name: session.user.name ?? undefined,
+      },
+      upstreamPolicies.adsflowMutation,
+      {
+        endpoint: "workspace.notification-dismiss",
+        projectId: externalUserId,
+      },
+    );
+
+    await invalidateWorkspaceBootstrapCache(session.user).catch((cacheError) => {
+      console.warn("[workspace] Failed to invalidate bootstrap cache after notification dismiss", cacheError);
+    });
+    res.json({ data: payload ?? { success: true } });
+  } catch (error) {
+    console.error("[workspace] Failed to dismiss web notification", error);
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to dismiss notification.",
     });
   }
 });

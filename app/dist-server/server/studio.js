@@ -906,6 +906,7 @@ const cloneStudioGenerationStatus = (status) => ({
 });
 const cloneWorkspaceBootstrap = (bootstrap) => ({
     latestGeneration: bootstrap.latestGeneration ? cloneStudioGenerationStatus(bootstrap.latestGeneration) : null,
+    notifications: bootstrap.notifications.map((notification) => ({ ...notification })),
     profile: { ...bootstrap.profile },
     studioOptions: {
         subtitleColors: bootstrap.studioOptions.subtitleColors.map((color) => ({ ...color })),
@@ -1374,6 +1375,25 @@ const buildWorkspaceProfile = (payload) => {
         userId: rawUserId || null,
     };
 };
+const buildWorkspaceNotifications = (payload) => Array.isArray(payload)
+    ? payload
+        .map((notification) => {
+        const id = Number(notification?.id ?? 0);
+        const title = normalizeGenerationText(notification?.title);
+        const message = normalizeGenerationText(notification?.message);
+        if (!Number.isFinite(id) || id <= 0 || !title || !message) {
+            return null;
+        }
+        return {
+            createdAt: normalizeGenerationText(notification?.created_at) || null,
+            id: Math.trunc(id),
+            message,
+            source: normalizeGenerationText(notification?.source) || null,
+            title,
+        };
+    })
+        .filter((notification) => Boolean(notification))
+    : [];
 export const applyWorkspaceSubscriptionDetailsToProfile = (profile, details) => {
     const normalizedPlan = String(details?.plan ?? "").trim().toUpperCase();
     const hasAdminPlan = normalizedPlan === "START" || normalizedPlan === "PRO" || normalizedPlan === "ULTRA";
@@ -3536,6 +3556,7 @@ export async function getWorkspaceBootstrap(user, options = {}) {
         const latestGeneration = removeDeletedStudioGenerationStatus(await prepareStudioLatestGenerationForBootstrap(buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry), user), deletedProjects);
         const bootstrap = {
             latestGeneration,
+            notifications: buildWorkspaceNotifications(payload.notifications),
             profile,
             studioOptions: buildWorkspaceStudioOptions(payload.studio_options),
         };
@@ -3575,6 +3596,7 @@ export async function getWorkspaceBootstrap(user, options = {}) {
         }
         return {
             latestGeneration,
+            notifications: cachedBootstrap.notifications,
             profile: cachedBootstrap.profile,
             studioOptions: cachedBootstrap.studioOptions,
         };
@@ -3653,11 +3675,10 @@ export async function createStudioGenerationJob(prompt, user, options) {
     await ensureStudioGenerationWorkersAvailable();
     const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
     const externalUserId = await resolveStudioExternalUserId(user);
-    const shouldAddWatermark = typeof options?.addWatermark === "boolean"
-        ? options.addWatermark
-        : creditReservation.profile.plan === "FREE" &&
-            creditReservation.consumed.subscription > 0 &&
-            creditReservation.consumed.purchased <= 0;
+    const requiresFreeWatermark = creditReservation.profile.plan === "FREE" &&
+        creditReservation.consumed.subscription > 0 &&
+        creditReservation.consumed.purchased <= 0;
+    const shouldAddWatermark = requiresFreeWatermark || (typeof options?.addWatermark === "boolean" ? options.addWatermark : false);
     const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
     const prefillSettings = normalizeExamplePrefillStudioSettings({
         brandText: normalizedBrandText,
@@ -5023,6 +5044,19 @@ const isStudioVoiceoverFailedStatus = (value) => {
     const status = String(value ?? "").trim().toLowerCase();
     return ["canceled", "cancelled", "error", "failed", "timeout"].includes(status);
 };
+const resolveStudioBatchVoiceoverStatus = (status, segments) => {
+    if (segments.some((segment) => isStudioVoiceoverFailedStatus(segment.status)) || isStudioVoiceoverFailedStatus(status)) {
+        return "failed";
+    }
+    const allSegmentsReady = segments.length > 0 && segments.every((segment) => Boolean(segment.asset));
+    if (allSegmentsReady) {
+        return "done";
+    }
+    if (isStudioVoiceoverReadyStatus(status)) {
+        return "processing";
+    }
+    return status || "processing";
+};
 const normalizeStudioBatchVoiceoverGroups = (groups) => {
     const normalizedGroups = (groups ?? [])
         .map((group) => {
@@ -5584,15 +5618,12 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
             ...projectGroupStatuses.flatMap((group) => group.segments),
             ...segmentChildStatuses,
         ];
-        const hasFailedSegment = childStatuses.some((segment) => isStudioVoiceoverFailedStatus(segment.status));
-        const allSegmentsReady = childStatuses.every((segment) => Boolean(segment.asset));
-        const allSegmentsTerminal = childStatuses.every((segment) => Boolean(segment.asset) || isStudioVoiceoverReadyStatus(segment.status) || isStudioVoiceoverFailedStatus(segment.status));
-        const status = hasFailedSegment ? "failed" : allSegmentsReady || allSegmentsTerminal ? "done" : "processing";
+        const status = resolveStudioBatchVoiceoverStatus(fallbackJob.status, childStatuses);
         const profile = projectGroupStatuses.find((group) => group.profile)?.profile ??
             childStatuses.find((segment) => segment.profile)?.profile ??
             fallbackJob.profile;
         fallbackJob.status = status;
-        if (allSegmentsReady || hasFailedSegment) {
+        if (isStudioVoiceoverReadyStatus(status) || isStudioVoiceoverFailedStatus(status)) {
             studioBatchVoiceoverFallbackJobs.delete(safeJobId);
             studioBatchVoiceoverJobMetadata.delete(safeJobId);
         }
@@ -5626,7 +5657,8 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
             voiceType: metadataGroup?.voiceType,
         });
     });
-    if (isStudioVoiceoverReadyStatus(status) || isStudioVoiceoverFailedStatus(status)) {
+    const resolvedStatus = resolveStudioBatchVoiceoverStatus(status, segments);
+    if (isStudioVoiceoverReadyStatus(resolvedStatus) || isStudioVoiceoverFailedStatus(resolvedStatus)) {
         studioBatchVoiceoverJobMetadata.delete(safeJobId);
         studioBatchVoiceoverJobMetadata.delete(resolvedJobId);
     }
@@ -5638,7 +5670,7 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
             rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
         }),
         segments,
-        status,
+        status: resolvedStatus,
     };
 }
 export async function getStudioGenerationStatus(jobId, user) {

@@ -233,16 +233,17 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     ? [speechDuration, explicitVoiceDuration].filter((value): value is number => value !== null)
     : [];
   const voiceDuration = voiceDurationCandidates.length > 0 ? Math.max(...voiceDurationCandidates) : null;
-  const voiceMinimumDuration = voiceDuration !== null ? voiceDuration : null;
-  const minimumDuration = Math.max(
-    WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
-    voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
-  );
   const manualDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
   const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
   const durationSyncMode = String(segment.durationSyncMode ?? "").trim().toLowerCase();
   const shouldSyncVideoToVoiceover = visualKind === "video" && durationSyncMode === "voiceover";
+  const shouldSyncDurationToVoiceover = durationSyncMode === "voiceover";
+  const voiceMinimumDuration = shouldSyncDurationToVoiceover && voiceDuration !== null ? voiceDuration : null;
+  const minimumDuration = Math.max(
+    WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+    voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+  );
   const timelineDuration =
     getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
   const existingStillDuration =
@@ -280,7 +281,6 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     if (options?.preserveExistingStillDuration && existingStillDuration !== null) {
       return Math.max(
         WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
-        voiceDuration,
         existingStillDuration,
       );
     }

@@ -21968,6 +21968,152 @@ textarea {
   }
 }
 
+.workspace-admin-notifications {
+  position: fixed;
+  top: max(86px, calc(env(safe-area-inset-top) + 78px));
+  left: 50%;
+  z-index: 255;
+  display: grid;
+  width: min(1180px, calc(100vw - 40px));
+  gap: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.workspace-admin-notification {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 16px;
+  min-height: 84px;
+  padding: 18px 18px 18px 22px;
+  border: 1px solid rgba(69, 214, 220, 0.28);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(72, 221, 185, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(16, 28, 40, 0.96), rgba(6, 10, 18, 0.94));
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 0 36px rgba(45, 212, 191, 0.16);
+  color: rgba(255, 255, 255, 0.95);
+  pointer-events: auto;
+  animation: workspace-admin-notification-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workspace-admin-notification::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(69, 214, 220, 0.2), transparent 32%, rgba(139, 92, 246, 0.1));
+  opacity: 0.9;
+  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  padding: 1px;
+}
+
+.workspace-admin-notification__icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(117, 255, 184, 0.24);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.24), transparent 36%),
+    linear-gradient(135deg, #35c878, #1d8f57);
+  box-shadow:
+    0 0 0 8px rgba(45, 212, 191, 0.06),
+    0 12px 28px rgba(30, 185, 110, 0.28);
+  color: #ecfff7;
+}
+
+.workspace-admin-notification__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workspace-admin-notification__icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workspace-admin-notification__content {
+  min-width: 0;
+}
+
+.workspace-admin-notification__content strong {
+  display: block;
+  margin: 0 0 5px;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: clamp(0.98rem, 1.2vw, 1.1rem);
+  font-weight: 900;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.workspace-admin-notification__content p {
+  margin: 0;
+  max-width: 760px;
+  color: rgba(225, 237, 255, 0.78);
+  font-size: clamp(0.82rem, 1vw, 0.93rem);
+  font-weight: 720;
+  line-height: 1.38;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.workspace-admin-notification__close {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(222, 232, 255, 0.54);
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 900;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.workspace-admin-notification__close:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  transform: scale(1.04);
+}
+
+@keyframes workspace-admin-notification-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .studio-toast {
   position: fixed;
   top: max(18px, env(safe-area-inset-top));
@@ -22014,6 +22160,29 @@ textarea {
 }
 
 @media (max-width: 520px) {
+  .workspace-admin-notifications {
+    top: max(74px, calc(env(safe-area-inset-top) + 66px));
+    width: calc(100vw - 18px);
+  }
+
+  .workspace-admin-notification {
+    grid-template-columns: 34px minmax(0, 1fr) 30px;
+    gap: 10px;
+    min-height: 76px;
+    padding: 13px 10px 13px 13px;
+    border-radius: 14px;
+  }
+
+  .workspace-admin-notification__icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .workspace-admin-notification__close {
+    width: 30px;
+    height: 30px;
+  }
+
   .studio-canvas-preview__quick-action--expanded {
     height: 28px;
   }

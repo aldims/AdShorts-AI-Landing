@@ -212,12 +212,28 @@ export type WorkspaceLocalExampleSaveResponse = {
 
 export type WorkspaceBootstrapPayload = {
   latestGeneration?: StudioGenerationStatusPayload | null;
+  notifications?: WorkspaceNotification[];
   profile: WorkspaceProfile;
   studioOptions: WorkspaceStudioOptionsPayload;
 };
 
+export type WorkspaceNotification = {
+  createdAt: string | null;
+  id: number;
+  message: string;
+  source: string | null;
+  title: string;
+};
+
 export type WorkspaceBootstrapResponse = {
   data?: WorkspaceBootstrapPayload;
+  error?: string;
+};
+
+export type WorkspaceNotificationsResponse = {
+  data?: {
+    notifications?: WorkspaceNotification[];
+  };
   error?: string;
 };
 

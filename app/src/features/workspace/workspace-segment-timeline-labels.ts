@@ -49,8 +49,8 @@ export const getWorkspaceSegmentTimelineVoiceLabel = (
 
   const voice =
     voiceOverrideOption ??
-    voiceoverVoiceOption ??
-    fallbackStudioVoiceOption;
+    fallbackStudioVoiceOption ??
+    voiceoverVoiceOption;
   if (voiceOverrideOption && voiceOverrideOption.id !== settings.studioSidebarVoiceId) {
     return voice?.label ?? workspaceText(locale, "Голос изменен", "Voice changed");
   }
@@ -78,8 +78,8 @@ export const getWorkspaceSegmentTimelineVoiceOption = (
 
   return (
     voiceOverrideOption ??
-    voiceoverVoiceOption ??
     fallbackStudioVoiceOption ??
+    voiceoverVoiceOption ??
     null
   );
 };

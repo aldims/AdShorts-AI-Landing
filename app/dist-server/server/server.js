@@ -364,6 +364,19 @@ const getFormDataOptionalBoolean = (formData, key) => {
     }
     return !["0", "false", "no", "off"].includes(normalized);
 };
+const normalizeRequestOptionalBoolean = (value) => {
+    if (typeof value === "boolean") {
+        return value;
+    }
+    if (typeof value !== "string") {
+        return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return undefined;
+    }
+    return !["0", "false", "no", "off"].includes(normalized);
+};
 const getFormDataNumber = (formData, key) => {
     const value = Number(getFormDataString(formData, key));
     return Number.isFinite(value) ? value : 0;
@@ -525,10 +538,18 @@ const parseStudioGenerateMultipartBody = async (req) => {
     const brandLogoFile = brandLogoFileEntry instanceof File ? brandLogoFileEntry : null;
     const rawSegmentEditor = parseServerJson(getFormDataString(formData, "segmentEditor"));
     const segmentEditorRecord = rawSegmentEditor && typeof rawSegmentEditor === "object" ? rawSegmentEditor : null;
+    const segmentEditorBrandRecord = segmentEditorRecord;
     const rawSegments = Array.isArray(segmentEditorRecord?.segments) ? segmentEditorRecord.segments : [];
     const segmentEditor = segmentEditorRecord && rawSegments.length > 0
         ? {
+            addWatermark: segmentEditorBrandRecord?.addWatermark ?? segmentEditorBrandRecord?.add_watermark,
             allowStructureChange: Boolean(segmentEditorRecord.allowStructureChange),
+            brandChanged: segmentEditorBrandRecord?.brandChanged ?? segmentEditorBrandRecord?.brand_changed,
+            brandLogoAssetId: segmentEditorBrandRecord?.brandLogoAssetId ?? segmentEditorBrandRecord?.brand_logo_asset_id,
+            brandLogoFileMimeType: segmentEditorBrandRecord?.brandLogoFileMimeType ?? segmentEditorBrandRecord?.brand_logo_mime_type,
+            brandLogoFileName: segmentEditorBrandRecord?.brandLogoFileName ?? segmentEditorBrandRecord?.brand_logo_original_name,
+            brandText: segmentEditorBrandRecord?.brandText ?? segmentEditorBrandRecord?.brand_text,
+            clearBranding: segmentEditorBrandRecord?.clearBranding ?? segmentEditorBrandRecord?.clear_branding,
             projectId: segmentEditorRecord.projectId,
             segments: await Promise.all(rawSegments.map(async (segment) => {
                 const segmentRecord = segment && typeof segment === "object" ? segment : {};
@@ -1257,6 +1278,7 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
         res.json({
             data: {
                 latestGeneration: workspace.latestGeneration,
+                notifications: workspace.notifications,
                 profile,
                 studioOptions: workspace.studioOptions,
             },
@@ -1266,6 +1288,74 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
         console.error("[workspace] Failed to bootstrap workspace", error);
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to bootstrap workspace.",
+        });
+    }
+});
+app.get("/api/workspace/notifications", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const payload = await postAdsflowJson("/api/web/notifications", {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            language: "ru",
+            user_email: session.user.email ?? undefined,
+            user_email_verified: session.user.emailVerified === true,
+            user_name: session.user.name ?? undefined,
+        }, upstreamPolicies.adsflowBootstrap, {
+            endpoint: "workspace.notifications",
+            projectId: externalUserId,
+        });
+        res.json({ data: { notifications: Array.isArray(payload?.notifications) ? payload.notifications : [] } });
+    }
+    catch (error) {
+        console.error("[workspace] Failed to load web notifications", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to load notifications.",
+        });
+    }
+});
+app.post("/api/workspace/notifications/:notificationId/dismiss", express.json({ limit: "64kb" }), async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const notificationId = Number(req.params.notificationId ?? 0);
+    if (!Number.isFinite(notificationId) || notificationId <= 0) {
+        res.status(400).json({ error: "Notification id is required." });
+        return;
+    }
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const payload = await postAdsflowJson(`/api/web/notifications/${Math.trunc(notificationId)}/dismiss`, {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            language: "ru",
+            user_email: session.user.email ?? undefined,
+            user_email_verified: session.user.emailVerified === true,
+            user_name: session.user.name ?? undefined,
+        }, upstreamPolicies.adsflowMutation, {
+            endpoint: "workspace.notification-dismiss",
+            projectId: externalUserId,
+        });
+        await invalidateWorkspaceBootstrapCache(session.user).catch((cacheError) => {
+            console.warn("[workspace] Failed to invalidate bootstrap cache after notification dismiss", cacheError);
+        });
+        res.json({ data: payload ?? { success: true } });
+    }
+    catch (error) {
+        console.error("[workspace] Failed to dismiss web notification", error);
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to dismiss notification.",
         });
     }
 });
@@ -2855,22 +2945,52 @@ app.post("/api/studio/generate", async (req, res) => {
     const editedFromProjectAdId = requestBody.editedFromProjectAdId;
     const projectId = requestBody.projectId;
     const segmentEditor = requestBody.segmentEditor;
+    const segmentEditorBrandRecord = segmentEditor && typeof segmentEditor === "object"
+        ? segmentEditor
+        : null;
+    const segmentEditorAddWatermark = normalizeRequestOptionalBoolean(segmentEditorBrandRecord?.addWatermark ?? segmentEditorBrandRecord?.add_watermark);
+    const segmentEditorBrandChanged = normalizeRequestOptionalBoolean(segmentEditorBrandRecord?.brandChanged ?? segmentEditorBrandRecord?.brand_changed);
+    const segmentEditorClearBranding = normalizeRequestOptionalBoolean(segmentEditorBrandRecord?.clearBranding ?? segmentEditorBrandRecord?.clear_branding);
+    const effectiveAddWatermark = addWatermark ?? segmentEditorAddWatermark;
+    const effectiveBrandChanged = brandChanged ?? segmentEditorBrandChanged;
+    const effectiveClearBranding = clearBranding ?? segmentEditorClearBranding;
+    const effectiveBrandLogoAssetId = brandLogoAssetId ??
+        normalizeRequestPositiveInteger(segmentEditorBrandRecord?.brandLogoAssetId ?? segmentEditorBrandRecord?.brand_logo_asset_id);
+    const effectiveBrandLogoFileMimeType = brandLogoFileMimeType ||
+        (typeof segmentEditorBrandRecord?.brandLogoFileMimeType === "string"
+            ? segmentEditorBrandRecord.brandLogoFileMimeType.trim()
+            : typeof segmentEditorBrandRecord?.brand_logo_mime_type === "string"
+                ? segmentEditorBrandRecord.brand_logo_mime_type.trim()
+                : "");
+    const effectiveBrandLogoFileName = brandLogoFileName ||
+        (typeof segmentEditorBrandRecord?.brandLogoFileName === "string"
+            ? segmentEditorBrandRecord.brandLogoFileName.trim()
+            : typeof segmentEditorBrandRecord?.brand_logo_original_name === "string"
+                ? segmentEditorBrandRecord.brand_logo_original_name.trim()
+                : "");
+    const effectiveBrandText = brandText ||
+        (typeof segmentEditorBrandRecord?.brandText === "string"
+            ? segmentEditorBrandRecord.brandText.trim()
+            : typeof segmentEditorBrandRecord?.brand_text === "string"
+                ? segmentEditorBrandRecord.brand_text.trim()
+                : "");
     const versionRootProjectAdId = requestBody.versionRootProjectAdId;
     const videoModeChanged = requestBody.videoModeChanged;
     console.info("[studio] generate.brand-input", {
         brandLogoDataUrlLength: brandLogoFileDataUrl.length,
-        brandLogoFileName: brandLogoFileName || null,
-        brandLogoMimeType: brandLogoFileMimeType || null,
-        brandTextLength: brandText.trim().length,
-        hasBrandLogo: Boolean(brandLogoFileDataUrl),
-        hasBrandText: Boolean(brandText.trim()),
+        brandLogoAssetId: effectiveBrandLogoAssetId ?? null,
+        brandLogoFileName: effectiveBrandLogoFileName || null,
+        brandLogoMimeType: effectiveBrandLogoFileMimeType || null,
+        brandTextLength: effectiveBrandText.trim().length,
+        hasBrandLogo: Boolean(brandLogoFileDataUrl) || Boolean(effectiveBrandLogoAssetId),
+        hasBrandText: Boolean(effectiveBrandText.trim()),
         isRegeneration,
         language: language || null,
         projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : null,
         segmentEditorActive: Boolean(segmentEditor),
-        addWatermarkOverride: addWatermark ?? null,
-        brandChangedOverride: brandChanged ?? null,
-        clearBrandingOverride: clearBranding ?? null,
+        addWatermarkOverride: effectiveAddWatermark ?? null,
+        brandChangedOverride: effectiveBrandChanged ?? null,
+        clearBrandingOverride: effectiveClearBranding ?? null,
         voiceId: voiceId || null,
         voiceEnabled,
         subtitleEnabled,
@@ -2881,14 +3001,14 @@ app.post("/api/studio/generate", async (req, res) => {
     }
     try {
         const job = await createStudioGenerationJob(prompt, session.user, {
-            addWatermark,
-            brandChanged,
-            clearBranding,
+            addWatermark: effectiveAddWatermark,
+            brandChanged: effectiveBrandChanged,
+            clearBranding: effectiveClearBranding,
             brandLogoFileDataUrl,
-            brandLogoAssetId,
-            brandLogoFileMimeType,
-            brandLogoFileName,
-            brandText,
+            brandLogoAssetId: effectiveBrandLogoAssetId,
+            brandLogoFileMimeType: effectiveBrandLogoFileMimeType,
+            brandLogoFileName: effectiveBrandLogoFileName,
+            brandText: effectiveBrandText,
             customMusicFileDataUrl,
             customMusicAssetId,
             customMusicFileName,

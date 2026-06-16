@@ -50,7 +50,7 @@ const isWaitlistEmailAlreadyRegistered = async (email) => {
             .some((line) => {
             try {
                 const entry = JSON.parse(line);
-                return String(entry.email ?? "").trim().toLowerCase() === email;
+                return normalizeText(entry.email).toLowerCase() === email;
             }
             catch {
                 return false;

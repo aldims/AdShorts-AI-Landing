@@ -312,6 +312,10 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
       durationSyncMode: "visual",
       durationSyncModeUserSelected: true,
       mediaType: "video",
+      speechDuration: 6.2,
+      speechDurationSource: "audio",
+      speechEndTime: 6.2,
+      speechStartTime: 0,
       videoAction: "custom",
     });
     const voiceoverSyncedSegment = createProjectVoiceoverSegment({
@@ -326,6 +330,10 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: true,
       mediaType: "video",
+      speechDuration: 6.2,
+      speechDurationSource: "audio",
+      speechEndTime: 6.2,
+      speechStartTime: 0,
       videoAction: "custom",
     });
     const draft = createProjectVoiceoverDraft([visualSyncedSegment]);
@@ -433,6 +441,58 @@ describe("workspace segment editor project voiceover timeline", () => {
       durationSyncMode: "visual",
       endTime: 11.8,
       manualDurationSeconds: 11.8,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves manual visual duration when regenerated voiceover is longer", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        durationSeconds: 5,
+        fileName: "scene-video.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        objectUrl: "blob:http://localhost/scene-video",
+        source: "upload",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 16.6,
+      speechDurationSource: "audio",
+      speechEndTime: 16.6,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "custom",
+      voiceoverAsset: {
+        assetId: 778,
+        durationSeconds: 16.6,
+        fileName: "scene-voiceover.mp3",
+        fileSize: 0,
+        mimeType: "audio/mpeg",
+        remoteUrl: "/api/workspace/media-assets/778",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Segment"),
+      voiceoverVoiceType: "Russian_BrightHeroine",
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: "none",
+    }, { preserveSourceTimelineEnd: false });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
   });
@@ -1742,6 +1802,64 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("clips a batch voiceover asset attached directly to a segment", () => {
+    const text = "second scene text";
+    const segment = createProjectVoiceoverSegment({
+      duration: 5.4,
+      durationMode: "manual",
+      endTime: 10.8,
+      index: 1,
+      manualDurationSeconds: 5.4,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 5.4,
+      speechDurationSource: "audio",
+      speechEndTime: 10.8,
+      speechStartTime: 5.4,
+      speechWords: [{ confidence: 1, endTime: 10.8, startTime: 5.4, text: "second" }],
+      startTime: 5.4,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: 5.4,
+      voiceSourceEndTime: 10.8,
+      voiceSourceStartTime: 5.4,
+      voiceoverAsset: {
+        assetId: 888,
+        durationSeconds: 35.2,
+        fileName: "project-voiceover-group.wav",
+        fileSize: 0,
+        mimeType: "audio/x-wav",
+        remoteUrl: "/api/workspace/media-assets/888",
+        source: "media-library",
+      },
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      getWorkspaceSegmentVoiceoverAudioPreviewSource({
+        isVoiceAudioStale: false,
+        preferSegmentProxy: true,
+        segment,
+        session,
+        voiceEnabled: true,
+        voiceOption: null,
+      }),
+    ).toEqual(expect.objectContaining({
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
+      latestSceneVoiceoverAudioUrl: null,
+      previewRange: { endTime: 10.8, startTime: 5.4 },
+      projectVoiceoverAudioUrl: null,
+      shouldClip: true,
+      sourceKind: "project",
+    }));
+  });
+
   it("keeps saved talking photo slot duration when the media asset is longer", () => {
     const text = "Попробуйте, это очень вкусно!";
     const segment = createProjectVoiceoverSegment({
@@ -1849,6 +1967,47 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(rebuilt.segments[1]).toEqual(expect.objectContaining({
       endTime: 10.8,
       startTime: 5.25,
+    }));
+  });
+
+  it("drops a legacy voice render window duration from a short photo voiceover scene", () => {
+    const text = "Попробуйте, это очень вкусно!";
+    const segment = createProjectVoiceoverSegment({
+      duration: 18.24,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 58.187,
+      index: 7,
+      manualDurationSeconds: 18.24,
+      mediaType: "photo",
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: 2.22,
+      speechDurationSource: "audio",
+      speechEndTime: 2.22,
+      speechStartTime: 0,
+      startTime: 39.947,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: 2.22,
+      voiceSourceEndTime: 2.22,
+      voiceSourceStartTime: 0,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.22,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.22,
+      manualDurationSeconds: null,
+      startTime: 0,
     }));
   });
 });

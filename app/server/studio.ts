@@ -260,8 +260,17 @@ type AdsflowStudioOptionsPayload = {
 
 type AdsflowBootstrapResponse = {
   latest_generation?: AdsflowLatestGenerationPayload | null;
+  notifications?: AdsflowWebNotificationPayload[] | null;
   studio_options?: AdsflowStudioOptionsPayload | null;
   user?: AdsflowWebUserPayload;
+};
+
+type AdsflowWebNotificationPayload = {
+  created_at?: string | null;
+  id?: number | string | null;
+  message?: string | null;
+  source?: string | null;
+  title?: string | null;
 };
 
 type AdsflowCreditConsumeResponse = {
@@ -730,8 +739,17 @@ export type WorkspaceStudioOptions = {
 
 export type WorkspaceBootstrap = {
   latestGeneration: StudioGenerationStatus | null;
+  notifications: WorkspaceNotification[];
   profile: WorkspaceProfile;
   studioOptions: WorkspaceStudioOptions;
+};
+
+export type WorkspaceNotification = {
+  createdAt: string | null;
+  id: number;
+  message: string;
+  source: string | null;
+  title: string;
 };
 
 export type StudioGenerationAvailability = {
@@ -1978,6 +1996,7 @@ const cloneStudioGenerationStatus = (status: StudioGenerationStatus): StudioGene
 
 const cloneWorkspaceBootstrap = (bootstrap: WorkspaceBootstrap): WorkspaceBootstrap => ({
   latestGeneration: bootstrap.latestGeneration ? cloneStudioGenerationStatus(bootstrap.latestGeneration) : null,
+  notifications: bootstrap.notifications.map((notification) => ({ ...notification })),
   profile: { ...bootstrap.profile },
   studioOptions: {
     subtitleColors: bootstrap.studioOptions.subtitleColors.map((color) => ({ ...color })),
@@ -2608,6 +2627,28 @@ const buildWorkspaceProfile = (payload?: AdsflowWebUserPayload): WorkspaceProfil
     userId: rawUserId || null,
   };
 };
+
+const buildWorkspaceNotifications = (payload?: AdsflowWebNotificationPayload[] | null): WorkspaceNotification[] =>
+  Array.isArray(payload)
+    ? payload
+        .map((notification) => {
+          const id = Number(notification?.id ?? 0);
+          const title = normalizeGenerationText(notification?.title);
+          const message = normalizeGenerationText(notification?.message);
+          if (!Number.isFinite(id) || id <= 0 || !title || !message) {
+            return null;
+          }
+
+          return {
+            createdAt: normalizeGenerationText(notification?.created_at) || null,
+            id: Math.trunc(id),
+            message,
+            source: normalizeGenerationText(notification?.source) || null,
+            title,
+          } satisfies WorkspaceNotification;
+        })
+        .filter((notification): notification is WorkspaceNotification => Boolean(notification))
+    : [];
 
 export const applyWorkspaceSubscriptionDetailsToProfile = (
   profile: WorkspaceProfile,
@@ -5482,6 +5523,7 @@ export async function getWorkspaceBootstrap(user: StudioUser, options: Workspace
 
     const bootstrap = {
       latestGeneration,
+      notifications: buildWorkspaceNotifications(payload.notifications),
       profile,
       studioOptions: buildWorkspaceStudioOptions(payload.studio_options),
     } satisfies WorkspaceBootstrap;
@@ -5530,6 +5572,7 @@ export async function getWorkspaceBootstrap(user: StudioUser, options: Workspace
 
     return {
       latestGeneration,
+      notifications: cachedBootstrap.notifications,
       profile: cachedBootstrap.profile,
       studioOptions: cachedBootstrap.studioOptions,
     };
@@ -5662,12 +5705,12 @@ export async function createStudioGenerationJob(
 
   const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
   const externalUserId = await resolveStudioExternalUserId(user);
+  const requiresFreeWatermark =
+    creditReservation.profile.plan === "FREE" &&
+    creditReservation.consumed.subscription > 0 &&
+    creditReservation.consumed.purchased <= 0;
   const shouldAddWatermark =
-    typeof options?.addWatermark === "boolean"
-      ? options.addWatermark
-      : creditReservation.profile.plan === "FREE" &&
-        creditReservation.consumed.subscription > 0 &&
-        creditReservation.consumed.purchased <= 0;
+    requiresFreeWatermark || (typeof options?.addWatermark === "boolean" ? options.addWatermark : false);
   const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
   const prefillSettings = normalizeExamplePrefillStudioSettings({
     brandText: normalizedBrandText,
