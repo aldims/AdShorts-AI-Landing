@@ -4,11 +4,12 @@ export type WorkspaceSegmentTimelineWord = {
 };
 
 export type WorkspaceSegmentDurationMode = "auto" | "manual";
+export type WorkspaceSegmentDurationSyncMode = "voiceover" | "visual";
 
 export type WorkspaceSegmentTimelineSegment = {
   duration?: number | null;
   durationMode?: WorkspaceSegmentDurationMode | null;
-  durationSyncMode?: "voiceover" | "visual" | null;
+  durationSyncMode?: WorkspaceSegmentDurationSyncMode | null;
   endTime?: number | null;
   manualDurationSeconds?: number | null;
   mediaType?: string | null;

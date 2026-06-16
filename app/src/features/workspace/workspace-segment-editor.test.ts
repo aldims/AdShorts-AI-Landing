@@ -945,6 +945,86 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("preserves a user-selected voiceover duration during a server refresh", () => {
+    const liveSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3821&segmentIndex=6&source=original",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3821&segmentIndex=6&source=original&delivery=preview",
+      currentSourceKind: "upload",
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 37.4,
+      index: 6,
+      manualDurationSeconds: 4,
+      mediaType: "video",
+      speechDuration: 4,
+      speechEndTime: 37.4,
+      speechStartTime: 33.4,
+      startTime: 33.4,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const freshSegment = createProjectVoiceoverSegment({
+      ...liveSegment,
+      duration: 3.6,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 37,
+      manualDurationSeconds: 3.6,
+    });
+    const liveDraft = createProjectVoiceoverDraft([liveSegment]);
+    const freshSession = createProjectVoiceoverDraft([freshSegment]);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      baselineSession: freshSession,
+      preserveLiveStructure: true,
+      preserveUnbaselinedManualDuration: true,
+    });
+
+    expect(refreshed.segments[0]).toEqual(expect.objectContaining({
+      duration: 4,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 4,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("adopts a fresh server duration sync mode during a server refresh", () => {
+    const liveSegment = createProjectVoiceoverSegment({
+      currentSourceKind: "upload",
+      duration: 5,
+      durationMode: "auto",
+      durationSyncMode: null,
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: null,
+      mediaType: "video",
+      startTime: 0,
+    });
+    const freshSegment = createProjectVoiceoverSegment({
+      ...liveSegment,
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+    });
+    const liveDraft = createProjectVoiceoverDraft([liveSegment]);
+    const freshSession = createProjectVoiceoverDraft([freshSegment]);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      baselineSession: freshSession,
+      preserveLiveStructure: true,
+      preserveUnbaselinedManualDuration: false,
+    });
+
+    expect(refreshed.segments[0]?.durationSyncMode).toBe("voiceover");
+    expect(refreshed.segments[0]?.durationSyncModeUserSelected).toBe(true);
+  });
+
   it("does not overwrite a custom visual source duration during a server refresh", () => {
     const segment = createProjectVoiceoverSegment({
       customVideo: {

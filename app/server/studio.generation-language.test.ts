@@ -168,6 +168,8 @@ describe("studio generation language resolution", () => {
             duration: 3,
             durationExtensionSourceDurationSeconds: 3,
             durationMode: "manual",
+            durationSyncMode: "voiceover",
+            durationSyncModeUserSelected: true,
             endTime: 13,
             index: 0,
             manualDurationSeconds: 13,
@@ -194,6 +196,8 @@ describe("studio generation language resolution", () => {
         durationExtensionSourceDurationSeconds: 3,
         endTime: 13,
         durationMode: "manual",
+        durationSyncMode: "voiceover",
+        durationSyncModeUserSelected: true,
         manualDurationSeconds: 13,
       }),
     );

@@ -33,6 +33,7 @@ import {
   isWorkspaceSegmentVoiceoverAssetFresh,
   isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak,
   normalizeWorkspaceSegmentDurationMode,
+  normalizeWorkspaceSegmentDurationSyncMode,
   normalizeWorkspaceSegmentEditorSetting,
   rebuildWorkspaceSegmentEditorDraftTimeline,
   resolveWorkspaceSegmentEditorMediaUploadScope,
@@ -63,6 +64,10 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   duration?: number;
   durationExtensionSourceDurationSeconds?: number | null;
   durationMode?: WorkspaceSegmentDurationMode;
+  durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
+  durationSyncModeUserSelected?: boolean | null;
+  duration_sync_mode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
+  duration_sync_mode_user_selected?: boolean | null;
   endTime?: number;
   index: number;
   manualDurationSeconds?: number | null;
@@ -276,6 +281,8 @@ export const buildWorkspaceSegmentEditorPayload = async (
       isPayloadTalkingPhotoExport
         ? "manual"
         : normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+    const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+    const durationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
     const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
     const startTime = timelineCursor;
     const sourceStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
@@ -366,6 +373,10 @@ export const buildWorkspaceSegmentEditorPayload = async (
       duration,
       durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
       durationMode,
+      durationSyncMode,
+      durationSyncModeUserSelected,
+      duration_sync_mode: durationSyncMode,
+      duration_sync_mode_user_selected: durationSyncModeUserSelected,
       endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
       index: segment.index,

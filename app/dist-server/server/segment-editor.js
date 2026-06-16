@@ -44,6 +44,10 @@ const normalizeSegmentDurationMode = (value) => {
     const normalized = normalizeText(value).toLowerCase();
     return normalized === "manual" ? "manual" : "auto";
 };
+const normalizeSegmentDurationSyncMode = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "voiceover" || normalized === "visual" ? normalized : null;
+};
 const normalizeManualDurationSeconds = (value) => {
     const numeric = normalizeNumber(value);
     return numeric !== null && numeric >= 1 ? numeric : null;
@@ -362,6 +366,11 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (segment, authoritati
     const endTime = normalizeNumber(authoritativeSegment.end_time);
     const duration = normalizeNumber(authoritativeSegment.duration);
     const durationMode = normalizeText(authoritativeSegment.duration_mode);
+    const durationSyncMode = normalizeSegmentDurationSyncMode(authoritativeSegment.durationSyncMode ?? authoritativeSegment.duration_sync_mode);
+    const hasDurationSyncModeUserSelected = Object.prototype.hasOwnProperty.call(authoritativeSegment, "durationSyncModeUserSelected") ||
+        Object.prototype.hasOwnProperty.call(authoritativeSegment, "duration_sync_mode_user_selected");
+    const durationSyncModeUserSelected = normalizeBooleanFlag(authoritativeSegment.durationSyncModeUserSelected ??
+        authoritativeSegment.duration_sync_mode_user_selected);
     const manualDurationSeconds = normalizeManualDurationSeconds(authoritativeSegment.manual_duration_seconds);
     const segmentStartTime = normalizeNumber(segment.start_time);
     const segmentEndTime = normalizeNumber(segment.end_time);
@@ -379,6 +388,10 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (segment, authoritati
         durationExtensionSourceDurationSeconds: sourceDurationSeconds ?? segment.durationExtensionSourceDurationSeconds,
         duration_extension_source_duration_seconds: sourceDurationSeconds ?? segment.duration_extension_source_duration_seconds,
         duration_mode: hasSegmentManualTimeline ? segment.duration_mode : durationMode || segment.duration_mode,
+        durationSyncMode: durationSyncMode ?? segment.durationSyncMode,
+        durationSyncModeUserSelected: hasDurationSyncModeUserSelected ? durationSyncModeUserSelected : Boolean(segment.durationSyncModeUserSelected),
+        duration_sync_mode: durationSyncMode ?? segment.duration_sync_mode,
+        duration_sync_mode_user_selected: hasDurationSyncModeUserSelected ? durationSyncModeUserSelected : Boolean(segment.duration_sync_mode_user_selected),
         end_time: hasSegmentManualTimeline ? segmentEndTime ?? endTime ?? segment.end_time : endTime ?? segment.end_time,
         manual_duration_seconds: hasSegmentManualTimeline
             ? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
@@ -676,6 +689,8 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
         const endTime = normalizeNumber(record.end_time);
         const duration = normalizeNumber(record.duration) ??
             (startTime !== null && endTime !== null ? Math.max(0, endTime - startTime) : null);
+        const durationSyncMode = normalizeSegmentDurationSyncMode(record.durationSyncMode ?? record.duration_sync_mode);
+        const durationSyncModeUserSelected = normalizeBooleanFlag(record.durationSyncModeUserSelected ?? record.duration_sync_mode_user_selected);
         const text = normalizeText(record.text);
         const sceneSound = buildWorkspaceSegmentSceneSoundRef(typeof record.scene_sound === "object" ? record.scene_sound : null);
         const sceneSoundAssetId = normalizePositiveProjectId(record.scene_sound_asset_id) ??
@@ -699,7 +714,11 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             _voice_source_start_time: voiceSourceStartTime,
             current_video: getProjectSegmentMarker(currentEntry, `project:${projectId}:segment:${index}:current`),
             duration,
+            durationSyncMode,
+            durationSyncModeUserSelected,
             duration_mode: normalizeText(record.duration_mode),
+            duration_sync_mode: durationSyncMode,
+            duration_sync_mode_user_selected: durationSyncModeUserSelected,
             end_time: endTime,
             index,
             manual_duration_seconds: normalizeNumber(record.manual_duration_seconds),
@@ -1623,6 +1642,8 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
     const endTime = normalizeNumber(payload.end_time) ?? Math.max(startTime, startTime + (normalizeNumber(payload.duration) ?? 0));
     const duration = normalizeNumber(payload.duration) ?? Math.max(0, endTime - startTime);
     const durationMode = normalizeSegmentDurationMode(payload.duration_mode);
+    const durationSyncMode = normalizeSegmentDurationSyncMode(payload.durationSyncMode ?? payload.duration_sync_mode);
+    const durationSyncModeUserSelected = normalizeBooleanFlag(payload.durationSyncModeUserSelected ?? payload.duration_sync_mode_user_selected);
     const manualDurationSeconds = normalizeManualDurationSeconds(payload.manual_duration_seconds) ??
         (durationMode === "manual" ? normalizeManualDurationSeconds(duration) : null);
     const speechStartTime = normalizeNumber(payload.speech_start_time);
@@ -1720,6 +1741,10 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         durationExtensionSourceDurationSeconds,
         duration_extension_source_duration_seconds: durationExtensionSourceDurationSeconds,
         durationMode,
+        durationSyncMode,
+        durationSyncModeUserSelected,
+        duration_sync_mode: durationSyncMode,
+        duration_sync_mode_user_selected: durationSyncModeUserSelected,
         endTime,
         index,
         manualDurationSeconds,

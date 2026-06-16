@@ -1,6 +1,9 @@
 import type { ExamplePrefillStudioSettings } from "../../../shared/example-prefill";
 import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-assets";
-import type { WorkspaceSegmentDurationMode } from "../../lib/workspaceSegmentEditorTimeline";
+import type {
+  WorkspaceSegmentDurationMode,
+  WorkspaceSegmentDurationSyncMode,
+} from "../../lib/workspaceSegmentEditorTimeline";
 
 export type StudioVideoMode = "ai_photo" | "ai_video" | "custom" | "standard";
 
@@ -94,6 +97,10 @@ export type WorkspaceSegmentEditorSegment = {
   durationExtensionSourceDurationSeconds?: number | null;
   duration_extension_source_duration_seconds?: number | null;
   durationMode?: WorkspaceSegmentDurationMode | null;
+  durationSyncMode?: WorkspaceSegmentDurationSyncMode | null;
+  durationSyncModeUserSelected?: boolean | null;
+  duration_sync_mode?: WorkspaceSegmentDurationSyncMode | null;
+  duration_sync_mode_user_selected?: boolean | null;
   endTime: number;
   index: number;
   manualDurationSeconds?: number | null;
@@ -183,8 +190,9 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   imageEditGeneratedFromPrompt: string | null;
   imageEditPrompt: string;
   imageEditPromptInitialized: boolean;
-  durationSyncMode?: "voiceover" | "visual" | null;
+  durationSyncMode?: WorkspaceSegmentDurationSyncMode | null;
   durationSyncModeUserSelected?: boolean | null;
+  duration_sync_mode_user_selected?: boolean | null;
   durationExtensionSourceDurationSeconds?: number | null;
   originalText: string;
   originalTextByLanguage: WorkspaceSegmentEditorLocalizedTextMap;

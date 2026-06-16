@@ -836,6 +836,7 @@ export type StudioGenerationStatus = {
 
 export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original" | "talking_photo";
 export type StudioSegmentEditorDurationMode = "auto" | "manual";
+export type StudioSegmentEditorDurationSyncMode = "voiceover" | "visual";
 
 export type StudioSegmentEditorSegment = {
   customVideoAssetId?: number;
@@ -845,6 +846,8 @@ export type StudioSegmentEditorSegment = {
   duration?: number;
   durationExtensionSourceDurationSeconds?: number | null;
   durationMode?: StudioSegmentEditorDurationMode;
+  durationSyncMode?: StudioSegmentEditorDurationSyncMode | null;
+  durationSyncModeUserSelected?: boolean | null;
   endTime?: number;
   index: number;
   manualDurationSeconds?: number | null;
@@ -1587,6 +1590,11 @@ const normalizeStudioSegmentDurationMode = (value: unknown): StudioSegmentEditor
   return normalized === "manual" ? "manual" : "auto";
 };
 
+const normalizeStudioSegmentDurationSyncMode = (value: unknown): StudioSegmentEditorDurationSyncMode | null => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "voiceover" || normalized === "visual" ? normalized : null;
+};
+
 const normalizeStudioSegmentManualDurationSeconds = (value: unknown) => {
   const normalized = normalizeNumber(value);
   return normalized !== null && normalized >= 1 ? normalized : null;
@@ -1635,6 +1643,10 @@ export const normalizeStudioSegmentEditorPayload = (
       duration_extension_source_duration_seconds?: unknown;
       durationMode?: unknown;
       duration_mode?: unknown;
+      durationSyncMode?: unknown;
+      durationSyncModeUserSelected?: unknown;
+      duration_sync_mode?: unknown;
+      duration_sync_mode_user_selected?: unknown;
       endTime?: unknown;
       index?: unknown;
       manualDurationSeconds?: unknown;
@@ -1678,6 +1690,13 @@ export const normalizeStudioSegmentEditorPayload = (
     const rawEndTime = normalizeNumber(segmentRecord.endTime);
     const rawDuration = normalizeNumber(segmentRecord.duration);
     const rawDurationMode = normalizeStudioSegmentDurationMode(segmentRecord.durationMode ?? segmentRecord.duration_mode);
+    const durationSyncMode = normalizeStudioSegmentDurationSyncMode(
+      segmentRecord.durationSyncMode ?? segmentRecord.duration_sync_mode,
+    );
+    const durationSyncModeUserSelected =
+      normalizeWorkspaceBooleanFlag(
+        segmentRecord.durationSyncModeUserSelected ?? segmentRecord.duration_sync_mode_user_selected,
+      ) === true;
     const rawDurationExtensionSourceDurationSeconds = normalizeStudioSegmentManualDurationSeconds(
       segmentRecord.durationExtensionSourceDurationSeconds ?? segmentRecord.duration_extension_source_duration_seconds,
     );
@@ -1775,6 +1794,8 @@ export const normalizeStudioSegmentEditorPayload = (
       duration,
       durationExtensionSourceDurationSeconds: rawDurationExtensionSourceDurationSeconds,
       durationMode,
+      durationSyncMode,
+      durationSyncModeUserSelected,
       endTime,
       index,
       manualDurationSeconds: normalizedManualDurationSeconds,
@@ -5852,8 +5873,12 @@ export async function createStudioGenerationJob(
                 duration: segment.duration,
                 durationMode: segment.durationMode,
                 durationSeconds,
+                durationSyncMode: segment.durationSyncMode,
+                durationSyncModeUserSelected: segment.durationSyncModeUserSelected === true,
                 duration_extension_source_duration_seconds: sourceDurationSeconds,
                 duration_mode: segment.durationMode,
+                duration_sync_mode: segment.durationSyncMode,
+                duration_sync_mode_user_selected: segment.durationSyncModeUserSelected === true,
                 duration_seconds: durationSeconds,
                 end_time: segment.endTime,
                 endTime: segment.endTime,
@@ -5896,6 +5921,8 @@ export async function createStudioGenerationJob(
           duration: segment.duration ?? null,
           durationExtensionSourceDurationSeconds: segment.duration_extension_source_duration_seconds ?? null,
           durationMode: segment.duration_mode ?? null,
+          durationSyncMode: segment.duration_sync_mode ?? null,
+          durationSyncModeUserSelected: segment.duration_sync_mode_user_selected ?? null,
           endTime: segment.end_time ?? null,
           index: segment.index,
           manualDurationSeconds: segment.manual_duration_seconds ?? null,

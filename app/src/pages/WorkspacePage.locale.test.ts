@@ -14,12 +14,17 @@ import {
   isWorkspaceSegmentPersistedForVisualJobBinding,
 } from "../features/workspace/workspace-segment-editor";
 import {
+  readStoredWorkspaceSegmentEditorDraft,
+  readStoredWorkspaceSegmentEditorDrafts,
+  readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
   readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   removeStoredWorkspaceSegmentEditorConsumedSourceProject,
+  writeStoredWorkspaceSegmentEditorDraft,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
+  writeStoredWorkspaceSegmentEditorSession,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
@@ -1065,6 +1070,98 @@ describe("WorkspacePage segment editor draft persistence", () => {
       expect(JSON.parse(window.localStorage.getItem(talkingPhotoJobsKey) ?? "[]")).toEqual([
         expect.objectContaining({ jobId: "kept-talking", projectId: 102 }),
       ]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+      if (originalSessionStorage) {
+        Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
+  });
+
+  it("restores stored segment editor drafts and sessions after a refresh", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    const localStorageMock = createMemoryStorage();
+    const sessionStorageMock = createMemoryStorage();
+    const email = "Duration-Draft@Example.test";
+    const projectId = 3870;
+    const baselineSegment = createDraftSegment({
+      duration: 3.6,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 3.6,
+      index: 5,
+      manualDurationSeconds: 3.6,
+      mediaType: "video",
+      text: "Baseline scene",
+    });
+    const draftSegment = createDraftSegment({
+      ...baselineSegment,
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 4,
+      manualDurationSeconds: 4,
+      speechDuration: 4,
+      speechEndTime: 4,
+      speechStartTime: 0,
+    });
+    const baselineSession = {
+      ...createDraftSession(baselineSegment),
+      projectId,
+      segments: [baselineSegment],
+    };
+    const draftSession = {
+      ...createDraftSession(draftSegment),
+      projectId,
+      segments: [draftSegment],
+    };
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+      Object.defineProperty(window, "sessionStorage", { configurable: true, value: sessionStorageMock });
+
+      writeStoredWorkspaceSegmentEditorSession(email, baselineSession);
+      writeStoredWorkspaceSegmentEditorDraft(email, draftSession);
+
+      expect(readStoredWorkspaceSegmentEditorSession(email.toLowerCase(), projectId)?.segments[0]).toEqual(
+        expect.objectContaining({
+          duration: 3.6,
+          durationMode: "manual",
+          manualDurationSeconds: 3.6,
+        }),
+      );
+      expect(readStoredWorkspaceSegmentEditorDraft(email.toLowerCase(), projectId)?.segments[0]).toEqual(
+        expect.objectContaining({
+          duration: 4,
+          durationMode: "manual",
+          durationSyncMode: "voiceover",
+          durationSyncModeUserSelected: true,
+          manualDurationSeconds: 4,
+        }),
+      );
+      expect(readStoredWorkspaceSegmentEditorDrafts(email).map((draft) => draft.projectId)).toContain(projectId);
     } finally {
       if (originalLocalStorage) {
         Object.defineProperty(window, "localStorage", originalLocalStorage);
@@ -6719,6 +6816,23 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(staleTextResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
     expect(staleVoiceResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
     expect(staleLanguageResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
+  });
+
+  it("exports the selected visual duration sync mode for reload-safe saves", async () => {
+    const segment = createDraftSegment({
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      mediaType: "video",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(expect.objectContaining({
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      duration_sync_mode: "voiceover",
+      duration_sync_mode_user_selected: true,
+    }));
   });
 
   it("includes per-scene subtitle disable override without changing the shared segment text", async () => {

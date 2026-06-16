@@ -213,4 +213,17 @@ describe("WorkspaceSegmentTimelineSoundMenu", () => {
     expect(screen.getByRole("status").textContent).toContain("Генерируем звук сцены");
     expect(screen.queryByText("1 ⚡")).toBeNull();
   });
+
+  it("does not show delete sound for an empty scene sound slot", () => {
+    render(
+      <WorkspaceSegmentTimelineSoundMenu
+        {...baseSoundProps}
+        canDelete={false}
+        prompt=""
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Удалить звук" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Добавить звук/ })).toBeTruthy();
+  });
 });

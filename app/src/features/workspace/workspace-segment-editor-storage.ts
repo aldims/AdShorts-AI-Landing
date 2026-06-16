@@ -284,6 +284,31 @@ export const readStoredWorkspaceSegmentEditorSession = (email: string | null | u
     return null;
   }
 
+  const storageKey = getWorkspaceSegmentEditorSessionStorageKey(normalizedEmail, normalizedProjectId);
+  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
+    try {
+      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+      if (!isStoredWorkspaceSegmentEditorSession(parsedValue)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      const normalizedSession = normalizeWorkspaceSegmentEditorSession(parsedValue);
+      if (Number(normalizedSession.projectId) !== normalizedProjectId) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      if (candidate.storageName === "sessionStorage") {
+        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedSession));
+      }
+
+      return normalizedSession;
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+    }
+  }
+
   return null;
 };
 
@@ -450,6 +475,15 @@ const isStoredWorkspaceSegmentEditorDraftSession = (value: unknown): value is Wo
     Number.isFinite(Number(payload.projectId)) &&
     Array.isArray(payload.segments)
   );
+};
+
+const isStoredWorkspaceSegmentEditorSession = (value: unknown): value is WorkspaceSegmentEditorSession => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Partial<WorkspaceSegmentEditorSession>;
+  return Number.isFinite(Number(payload.projectId)) && Array.isArray(payload.segments);
 };
 
 const hasWorkspaceSegmentImmediateImagePreview = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -1054,6 +1088,34 @@ export const readStoredWorkspaceSegmentEditorDraft = (
     return null;
   }
 
+  const storageKey = getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId);
+  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
+    try {
+      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
+      if (normalizedDraft.projectId !== normalizedProjectId || !canRestoreStoredWorkspaceSegmentEditorDraftSession(normalizedDraft)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      if (candidate.storageName === "sessionStorage") {
+        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify({
+          ...normalizedDraft,
+          storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+        }));
+      }
+
+      return normalizedDraft;
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+    }
+  }
+
   return null;
 };
 
@@ -1069,7 +1131,47 @@ export const readStoredWorkspaceSegmentEditorDrafts = (
     return [];
   }
 
-  return [];
+  const storageKeyPrefix = `${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${normalizedEmail}:`;
+  const draftsByProjectId = new Map<number, WorkspaceSegmentEditorDraftSession>();
+
+  readWorkspaceSegmentEditorStorageEntries(storageKeyPrefix).forEach((entry) => {
+    try {
+      const parsedValue = JSON.parse(entry.rawValue) as unknown;
+      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
+        return;
+      }
+
+      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
+      const normalizedProjectId = Number(normalizedDraft.projectId);
+      if (
+        !Number.isInteger(normalizedProjectId) ||
+        normalizedProjectId <= 0 ||
+        !entry.storageKey.endsWith(`:${normalizedProjectId}`) ||
+        !canRestoreStoredWorkspaceSegmentEditorDraftSession(normalizedDraft)
+      ) {
+        removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
+        return;
+      }
+
+      if (draftsByProjectId.has(normalizedProjectId)) {
+        return;
+      }
+
+      if (entry.storageName === "sessionStorage") {
+        writeWorkspaceSegmentEditorStorageValue(entry.storageKey, JSON.stringify({
+          ...normalizedDraft,
+          storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+        }));
+      }
+
+      draftsByProjectId.set(normalizedProjectId, normalizedDraft);
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(entry.storageName, entry.storageKey);
+    }
+  });
+
+  return Array.from(draftsByProjectId.values());
 };
 
 export const writeStoredWorkspaceSegmentEditorDraft = (

@@ -786,13 +786,15 @@ export function WorkspaceSegmentTimelineSoundMenu({
           }}
         />
         <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-sound-menu-actions">
-          <button
-            type="button"
-            disabled={!canDelete || isStructureActionBusy}
-            onClick={() => onDelete(segment.index)}
-          >
-            {workspaceText(locale, "Удалить звук", "Delete sound")}
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={isStructureActionBusy}
+              onClick={() => onDelete(segment.index)}
+            >
+              {workspaceText(locale, "Удалить звук", "Delete sound")}
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={isActionDisabled}

@@ -345,19 +345,63 @@ const shouldDiscardWorkspaceSegmentLegacyVoiceRenderManualDuration = (
   );
 };
 
+type WorkspaceSegmentDraftDurationComparable = Pick<
+  WorkspaceSegmentEditorDraftSegment,
+  "duration" | "durationMode" | "manualDurationSeconds"
+> &
+  Partial<
+    Pick<
+      WorkspaceSegmentEditorDraftSegment,
+      | "durationExtensionSourceDurationSeconds"
+      | "durationSyncMode"
+      | "durationSyncModeUserSelected"
+      | "duration_extension_source_duration_seconds"
+    >
+  >;
+
 export const isWorkspaceSegmentDraftDurationEdited = (
-  segment: Pick<WorkspaceSegmentEditorDraftSegment, "duration" | "durationMode" | "manualDurationSeconds">,
-  baselineSegment: Pick<WorkspaceSegmentEditorDraftSegment, "duration" | "durationMode" | "manualDurationSeconds"> | null | undefined,
+  segment: WorkspaceSegmentDraftDurationComparable,
+  baselineSegment: WorkspaceSegmentDraftDurationComparable | null | undefined,
 ) => {
   const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+  const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+  const durationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
+  const durationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
   if (!baselineSegment) {
-    return durationMode === "manual" && normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
+    return (
+      (durationMode === "manual" && normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null) ||
+      durationSyncModeUserSelected ||
+      durationExtensionSourceDurationSeconds !== null
+    );
   }
 
   const baselineDurationMode = normalizeWorkspaceSegmentDurationMode(baselineSegment?.durationMode);
+  const baselineDurationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(baselineSegment?.durationSyncMode);
+  const baselineDurationSyncModeUserSelected = baselineSegment.durationSyncModeUserSelected === true;
+  const baselineDurationExtensionSourceDurationSeconds =
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(baselineSegment);
   const duration = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
   const baselineDuration = normalizeWorkspaceSegmentManualDurationSeconds(baselineSegment?.duration);
   if (durationMode !== baselineDurationMode) {
+    return true;
+  }
+
+  if (durationSyncModeUserSelected && durationSyncMode !== baselineDurationSyncMode) {
+    return true;
+  }
+
+  if (durationSyncModeUserSelected && durationSyncModeUserSelected !== baselineDurationSyncModeUserSelected) {
+    return true;
+  }
+
+  if (
+    durationSyncModeUserSelected &&
+    !areWorkspaceSegmentDurationValuesEqual(
+      durationExtensionSourceDurationSeconds,
+      baselineDurationExtensionSourceDurationSeconds,
+    )
+  ) {
     return true;
   }
 
@@ -2368,6 +2412,7 @@ export const cloneWorkspaceSegmentEditorDraftSegment = (
   aiVideoPromptInitialized: Boolean(segment.aiVideoPromptInitialized),
   customVideo: cloneStudioCustomVideoFile(segment.customVideo),
   durationSyncMode: normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode),
+  durationSyncModeUserSelected: segment.durationSyncModeUserSelected === true,
   durationExtensionSourceDurationSeconds: getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
   imageEditAsset: cloneStudioCustomVideoFile(segment.imageEditAsset),
   imageEditGeneratedFromPrompt:
@@ -5076,6 +5121,9 @@ export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
   const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const storedDurationExtensionSourceDurationSeconds =
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
+  const hasUserSelectedVoiceoverDurationSync =
+    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
+    segment.durationSyncModeUserSelected === true;
   const hasManualTimelineOverride =
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
     manualDurationSeconds !== null ||
@@ -5089,6 +5137,7 @@ export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
 
   return (
     normalizedVoiceoverDurationSeconds !== null &&
+    !hasUserSelectedVoiceoverDurationSync &&
     hasManualTimelineOverride &&
     isStillVisualSegment &&
     storedDurationExtensionSourceDurationSeconds === null &&
@@ -7025,6 +7074,7 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
     const normalizedMediaType = normalizeWorkspaceSegmentMediaType(segment.mediaType);
     const normalizedDurationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
     const normalizedDurationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+    const normalizedDurationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
     const normalizedDurationExtensionSourceDurationSeconds =
       getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
     const normalizedVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
@@ -7097,6 +7147,7 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedVideoAction !== segment.videoAction ||
       normalizedMediaType !== segment.mediaType ||
       normalizedDurationSyncModeForSegment !== normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) ||
+      normalizedDurationSyncModeUserSelected !== (segment.durationSyncModeUserSelected === true) ||
       !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceDuration, segment.voiceSourceDuration ?? null) ||
       !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceEndTime, segment.voiceSourceEndTime ?? null) ||
       !areWorkspaceSegmentDurationValuesEqual(normalizedVoiceSourceStartTime, segment.voiceSourceStartTime ?? null) ||
@@ -7145,6 +7196,7 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         aiVideoPromptInitialized: normalizedAiVideoPromptInitialized,
         customVideo: cloneStudioCustomVideoFile(segment.customVideo),
         durationSyncMode: normalizedDurationSyncModeForSegment,
+        durationSyncModeUserSelected: normalizedDurationSyncModeUserSelected,
         durationExtensionSourceDurationSeconds: normalizedDurationExtensionSourceDurationSeconds,
         durationMode: normalizedDurationModeForSegment,
         imageEditAsset: cloneStudioCustomVideoFile(segment.imageEditAsset),
@@ -7192,6 +7244,7 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       aiVideoPromptInitialized: normalizedAiVideoPromptInitialized,
       durationExtensionSourceDurationSeconds: normalizedDurationExtensionSourceDurationSeconds,
       durationSyncMode: normalizedDurationSyncModeForSegment,
+      durationSyncModeUserSelected: normalizedDurationSyncModeUserSelected,
       durationMode: normalizedDurationModeForSegment,
       imageEditAsset: null,
       imageEditGeneratedFromPrompt: normalizedImageEditGeneratedFromPrompt,

@@ -577,6 +577,10 @@ type StudioGenerateMultipartSegment = {
   duration_extension_source_duration_seconds?: unknown;
   durationMode?: unknown;
   duration_mode?: unknown;
+  durationSyncMode?: unknown;
+  durationSyncModeUserSelected?: unknown;
+  duration_sync_mode?: unknown;
+  duration_sync_mode_user_selected?: unknown;
   endTime?: unknown;
   index?: unknown;
   manualDurationSeconds?: unknown;
@@ -952,6 +956,10 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                   segmentRecord.durationExtensionSourceDurationSeconds ??
                   segmentRecord.duration_extension_source_duration_seconds,
                 durationMode: segmentRecord.durationMode ?? segmentRecord.duration_mode,
+                durationSyncMode: segmentRecord.durationSyncMode ?? segmentRecord.duration_sync_mode,
+                durationSyncModeUserSelected:
+                  segmentRecord.durationSyncModeUserSelected ??
+                  segmentRecord.duration_sync_mode_user_selected,
                 endTime: segmentRecord.endTime,
                 index: segmentRecord.index,
                 manualDurationSeconds: segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,

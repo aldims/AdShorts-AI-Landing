@@ -603,6 +603,65 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.manualDurationSeconds).toBe(10);
   });
 
+  it("restores duration sync mode from upstream timeline metadata", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(42, {
+      duration: 5,
+      duration_sync_mode: "voiceover",
+      duration_sync_mode_user_selected: true,
+      end_time: 5,
+      index: 0,
+      media_type: "video",
+      start_time: 0,
+      text: "Voice timed scene",
+    });
+
+    expect(segment?.durationSyncMode).toBe("voiceover");
+    expect(segment?.durationSyncModeUserSelected).toBe(true);
+    expect(segment?.duration_sync_mode).toBe("voiceover");
+    expect(segment?.duration_sync_mode_user_selected).toBe(true);
+  });
+
+  it("restores duration sync mode from final project generation settings", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      42,
+      {
+        project_id: 42,
+        segments: [
+          {
+            duration: 5,
+            end_time: 5,
+            index: 0,
+            start_time: 0,
+            text: "Voice timed scene",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            original_video_segments: [
+              {
+                duration: 5,
+                duration_sync_mode: "voiceover",
+                duration_sync_mode_user_selected: true,
+                end_time: 5,
+                segment_index: 0,
+                start_time: 0,
+                text: "Voice timed scene",
+              },
+            ],
+          },
+          project_id: 42,
+        },
+      },
+    );
+
+    expect(session.segments[0]?.durationSyncMode).toBe("voiceover");
+    expect(session.segments[0]?.durationSyncModeUserSelected).toBe(true);
+    expect(session.segments[0]?.duration_sync_mode).toBe("voiceover");
+    expect(session.segments[0]?.duration_sync_mode_user_selected).toBe(true);
+  });
+
   it("does not treat a current upload as the original visual when an original marker exists", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

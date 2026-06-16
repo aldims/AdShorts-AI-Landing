@@ -587,6 +587,9 @@ const parseStudioGenerateMultipartBody = async (req) => {
                     durationExtensionSourceDurationSeconds: segmentRecord.durationExtensionSourceDurationSeconds ??
                         segmentRecord.duration_extension_source_duration_seconds,
                     durationMode: segmentRecord.durationMode ?? segmentRecord.duration_mode,
+                    durationSyncMode: segmentRecord.durationSyncMode ?? segmentRecord.duration_sync_mode,
+                    durationSyncModeUserSelected: segmentRecord.durationSyncModeUserSelected ??
+                        segmentRecord.duration_sync_mode_user_selected,
                     endTime: segmentRecord.endTime,
                     index: segmentRecord.index,
                     manualDurationSeconds: segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
