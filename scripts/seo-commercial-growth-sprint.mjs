@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-05-31";
+const dateModified = "2026-06-17";
 const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
@@ -1253,6 +1253,14 @@ const renderPage = (page) => {
         priorityTitle: "High-intent pages in this cluster",
         priorityText:
           "Google is slower to index new pages when they look isolated. These internal routes connect the main generator, business and retention pages into one crawlable topic cluster.",
+        validationTitle: "Validate the page with one real video test",
+        validationText:
+          "A commercial generator page is stronger when it points to a concrete outcome. Before creating more variants, use this page to run one clean production test and keep the result measurable.",
+        validationItems: [
+          "Start from one audience, one short-form promise and one CTA source.",
+          "Generate a 9:16 draft, then adjust the hook, subtitles and final frame before publishing.",
+          "Compare retention, clicks and inquiries before deciding whether to scale the format.",
+        ],
         who: "Who this is for",
         workflow: "How the workflow works",
         why: "Why use AdShorts AI for this",
@@ -1282,6 +1290,14 @@ const renderPage = (page) => {
         priorityTitle: "Приоритетные страницы этого кластера",
         priorityText:
           "Google медленнее индексирует новые страницы, если они выглядят изолированными. Эти внутренние маршруты связывают генераторы, бизнес-страницы и гайды по удержанию в один понятный кластер.",
+        validationTitle: "Проверьте страницу одним реальным видео-тестом",
+        validationText:
+          "Коммерческая страница генератора сильнее, когда ведет к конкретному результату. Перед созданием новых вариантов запустите один чистый production-тест и оставьте его измеримым.",
+        validationItems: [
+          "Начните с одной аудитории, одного обещания для short-form видео и одного CTA-источника.",
+          "Сгенерируйте 9:16 черновик, затем поправьте хук, субтитры и финальный кадр перед публикацией.",
+          "Сравните удержание, клики и заявки до решения масштабировать формат.",
+        ],
         who: "Кому это подходит",
         workflow: "Как работает workflow",
         why: "Почему AdShorts AI подходит для этого",
@@ -1331,6 +1347,16 @@ ${renderHeader(page)}
             <ul>
 ${renderPriorityGrowthLinks(page)}
             </ul>
+          </section>
+
+          <section class="article-index-boost article-index-boost--validation" aria-labelledby="commercial-validation-plan">
+            <h2 id="commercial-validation-plan">${footerLinks.validationTitle}</h2>
+            <p>
+              ${footerLinks.validationText}
+            </p>
+            <ol>
+${renderList(footerLinks.validationItems)}
+            </ol>
           </section>
 
           <h2>${footerLinks.who}</h2>

@@ -2,6 +2,7 @@ import {
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
+  getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
@@ -11,6 +12,7 @@ import {
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
   isWorkspaceSegmentDraftDurationEdited,
   isWorkspaceSegmentDraftTextEdited,
+  isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentServerPhotoAnimationOverride,
   isWorkspaceSegmentVisualResetApplied,
   normalizeWorkspaceSegmentEditorSetting,
@@ -522,6 +524,38 @@ export const isWorkspaceSegmentDraftVoiceEdited = (
     segment.voiceoverVoiceType !== baselineSegment?.voiceoverVoiceType ||
     segment.voiceoverLanguage !== baselineSegment?.voiceoverLanguage
   );
+};
+
+export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  draft: WorkspaceSegmentEditorDraftSession,
+  options?: {
+    baselineSession?: WorkspaceSegmentEditorDraftSession | null;
+    isGlobalVoiceEdited?: boolean;
+  },
+) => {
+  const baselineSession = options?.baselineSession?.projectId === draft.projectId ? options.baselineSession : null;
+  const baselineSegment = baselineSession?.segments.find((candidate) => candidate.index === segment.index) ?? null;
+  const isDraftGlobalVoiceEdited = Boolean(
+    baselineSession &&
+      getWorkspaceSegmentEditorProjectVoiceType(draft) !== getWorkspaceSegmentEditorProjectVoiceType(baselineSession),
+  );
+  const isVoiceSettingsEdited = baselineSession
+    ? isWorkspaceSegmentDraftVoiceEdited(segment, baselineSegment, {
+        baselineSession,
+        draftSession: draft,
+      })
+    : false;
+  const allowFinalVideoStaleProjectTimelineFallback =
+    options?.isGlobalVoiceEdited !== true &&
+    !isDraftGlobalVoiceEdited &&
+    !isVoiceSettingsEdited &&
+    !isWorkspaceSegmentDraftTextEdited(segment);
+
+  return isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, draft, {
+    allowFinalVideoStaleWithMissingVoiceoverMetadata: allowFinalVideoStaleProjectTimelineFallback,
+    allowMissingVoiceoverMetadata: true,
+  });
 };
 
 const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (

@@ -16,12 +16,15 @@ import {
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails,
   mergeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
+  mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
@@ -107,6 +110,217 @@ describe("workspace segment editor full preview", () => {
         { finalVoiceGraceSeconds: 0.45 },
       ),
     ).toBeCloseTo(9.7, 6);
+  });
+
+  it("queues voice tracks so a long line does not overlap the next scene voice", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue(
+        [
+          {
+            key: "voice-7",
+            kind: "voice",
+            sourceKind: "timeline",
+            sourceStartTime: 35.727,
+            timelineEndTime: 41.219,
+            timelineStartTime: 35.727,
+            url: "/project-voice.mp3",
+          },
+          {
+            key: "embedded-8",
+            kind: "embedded_voice",
+            sourceKind: "isolated",
+            sourceStartTime: 0,
+            timelineEndTime: 46.269,
+            timelineStartTime: 40.769,
+            url: "/talking-scene.mp4",
+          },
+        ],
+        { overlapToleranceSeconds: 0.02 },
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-7",
+        timelineEndTime: 41.219,
+        timelineStartTime: 35.727,
+      }),
+      expect.objectContaining({
+        key: "embedded-8",
+        timelineEndTime: 46.719,
+        timelineStartTime: 41.219,
+      }),
+    ]);
+  });
+
+  it("keeps all voice kinds in chronological order before resolving overlaps", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+        {
+          key: "embedded-8",
+          kind: "embedded_voice",
+          sourceKind: "isolated",
+          sourceStartTime: 0,
+          timelineEndTime: 47,
+          timelineStartTime: 42,
+          url: "/talking-scene.mp4",
+        },
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 11.599,
+          timelineEndTime: 16.2,
+          timelineStartTime: 12.4,
+          url: "/project-voice.mp3",
+        },
+        {
+          key: "voice-3",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 16.641,
+          timelineEndTime: 21.2,
+          timelineStartTime: 17.5,
+          url: "/project-voice.mp3",
+        },
+      ]).map((track) => track.key),
+    ).toEqual(["voice-2", "voice-3", "embedded-8"]);
+  });
+
+  it("does not play a project voice tail into the next source window", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+        {
+          key: "voice-1",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 0,
+          timelineEndTime: 5.45,
+          timelineStartTime: 0,
+          url: "/project-voice.mp3?v=scene-1",
+        },
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 5,
+          timelineEndTime: 10,
+          timelineStartTime: 5,
+          url: "/project-voice.mp3?v=scene-2",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-1",
+        timelineEndTime: 5,
+        timelineStartTime: 0,
+      }),
+      expect.objectContaining({
+        key: "voice-2",
+        timelineEndTime: 10,
+        timelineStartTime: 5,
+      }),
+    ]);
+  });
+
+  it("merges continuous project voice tracks from the same source with different cache keys", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks([
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 11.599,
+          timelineEndTime: 16.641,
+          timelineStartTime: 11.599,
+          url: "/api/workspace/media-assets/6131?v=scene-2",
+        },
+        {
+          key: "voice-3",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 16.641,
+          timelineEndTime: 21.683,
+          timelineStartTime: 16.641,
+          url: "/api/workspace/media-assets/6131?v=scene-3",
+        },
+        {
+          key: "voice-4",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 21.683,
+          timelineEndTime: 26.725,
+          timelineStartTime: 21.683,
+          url: "/api/workspace/media-assets/6131?v=scene-4",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-2",
+        sourceStartTime: 11.599,
+        timelineEndTime: 26.725,
+        timelineStartTime: 11.599,
+      }),
+    ]);
+  });
+
+  it("keeps separate project voice tracks when the source offset is not continuous", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks([
+        {
+          key: "voice-1",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 0,
+          timelineEndTime: 4,
+          timelineStartTime: 0,
+          url: "/project-voice.mp3",
+        },
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 4.4,
+          timelineEndTime: 8,
+          timelineStartTime: 4,
+          url: "/project-voice.mp3",
+        },
+      ]),
+    ).toHaveLength(2);
+  });
+
+  it("extends visual preview segments to the queued voice duration instead of overlapping the next scene", () => {
+    const baseSegments = [
+      { endTime: 35.727, index: 6, startTime: 31.767 },
+      { endTime: 40.727, index: 7, startTime: 35.727 },
+      { endTime: 46.227, index: 8, startTime: 40.727 },
+    ];
+    const queuedVoiceTracks = resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+      {
+        key: "voice-7",
+        kind: "voice",
+        previewArrayIndex: 1,
+        sourceKind: "timeline",
+        sourceStartTime: 35.727,
+        timelineEndTime: 41.177,
+        timelineStartTime: 35.727,
+        url: "/project-voice.mp3",
+      },
+      {
+        key: "embedded-8",
+        kind: "embedded_voice",
+        previewArrayIndex: 2,
+        sourceKind: "isolated",
+        sourceStartTime: 0,
+        timelineEndTime: 46.227,
+        timelineStartTime: 40.727,
+        url: "/talking-scene.mp4",
+      },
+    ]);
+
+    expect(resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments(baseSegments, queuedVoiceTracks)).toEqual([
+      { endTime: 35.727, index: 6, startTime: 31.767 },
+      { endTime: 41.177, index: 7, startTime: 35.727 },
+      { endTime: 46.677, index: 8, startTime: 41.177 },
+    ]);
   });
 
   it("fades finite audio tracks at their preview boundaries", () => {

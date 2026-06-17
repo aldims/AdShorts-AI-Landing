@@ -26,6 +26,7 @@ import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
   getWorkspaceSegmentSceneSoundVisualAssetId,
 } from "./workspace-segment-visual-helpers";
+import { canReuseWorkspaceSegmentProjectTimelineVoiceover } from "./workspace-segment-editor-checklist";
 import type {
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
@@ -1679,12 +1680,12 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
       previewRange: { endTime: 22.957, startTime: 12.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
-      shouldClip: false,
-      sourceKind: "segment",
+      segmentVoiceoverAudioUrl: null,
+      shouldClip: true,
+      sourceKind: "project",
     }));
   });
 
@@ -1734,12 +1735,12 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
       previewRange: { endTime: 24.919, startTime: 22.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
-      shouldClip: false,
-      sourceKind: "segment",
+      segmentVoiceoverAudioUrl: null,
+      shouldClip: true,
+      sourceKind: "project",
     }));
   });
 
@@ -1806,13 +1807,100 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
+      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
       previewRange: { endTime: 24.919, startTime: 22.957 },
       projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
-      segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
-      shouldClip: false,
-      sourceKind: "segment",
+      segmentVoiceoverAudioUrl: null,
+      shouldClip: true,
+      sourceKind: "project",
     }));
+  });
+
+  it("reuses stale project TTS without metadata when only the visual changed", () => {
+    const text = "Влейте молоко и перемешайте.";
+    const segment = createProjectVoiceoverSegment({
+      duration: 1.962,
+      durationMode: "manual",
+      endTime: 24.919,
+      index: 2,
+      manualDurationSeconds: 1.962,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      startTime: 22.957,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      finalVideoStale: true,
+    };
+    const baselineSession = {
+      ...session,
+      finalVideoStale: false,
+    };
+
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, session, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not reuse stale project TTS without metadata after a global voice change", () => {
+    const text = "Влейте молоко и перемешайте.";
+    const baselineSegment = createProjectVoiceoverSegment({
+      duration: 1.962,
+      durationMode: "manual",
+      endTime: 24.919,
+      index: 2,
+      manualDurationSeconds: 1.962,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      startTime: 22.957,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const segment = {
+      ...baselineSegment,
+    };
+    const baselineSession = {
+      ...createProjectVoiceoverDraft([baselineSegment]),
+      finalVideoStale: false,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      finalVideoStale: true,
+      voiceType: "Russian_BrightHeroine",
+    };
+
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, session, {
+        baselineSession,
+        isGlobalVoiceEdited: true,
+      }),
+    ).toBe(false);
   });
 
   it("does not use the project TTS timeline when voiceover metadata conflicts with the current scene", () => {

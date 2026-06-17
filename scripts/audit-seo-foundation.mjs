@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const organicSprintLastmod = "2026-05-31";
-const commercialGrowthLastmod = "2026-05-31";
+const organicSprintLastmod = "2026-06-17";
+const commercialGrowthLastmod = "2026-06-17";
 
 const errors = [];
 
@@ -57,6 +57,10 @@ const organicSprintPages = [
   "shorts-ne-nabirayut-prosmotry/index.html",
   "shorts-dlya-kliniki/index.html",
   "kak-chasto-vykladyvat-shorts/index.html",
+  "kak-sdelat-seriyu-shorts/index.html",
+  "shorts-ne-konvertiruyut-v-podpischiki/index.html",
+  "kak-sdelat-huk-v-shorts/index.html",
+  "kak-podnyat-uderzhanie-v-shorts/index.html",
   "en/how-to-create-a-hook-in-shorts/index.html",
   "en/keywords-for-youtube-shorts/index.html",
   "analitika-youtube-shorts-kak-chitat/index.html",
@@ -184,6 +188,7 @@ for (const pagePath of organicSprintPages) {
   assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
   assert(/<!-- seo-index-boost:start -->/i.test(html), `${pagePath}: missing index boost block`);
+  assert(/<!-- seo-action-plan:start -->/i.test(html), `${pagePath}: missing action plan block`);
   assert(/<!-- seo-sprint-faq:start -->/i.test(html), `${pagePath}: missing visible sprint FAQ`);
 }
 
@@ -201,6 +206,7 @@ for (const pagePath of commercialGrowthPages) {
   assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
   assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
   assert(/id="priority-growth-links"/i.test(html), `${pagePath}: missing priority cluster links`);
+  assert(/id="commercial-validation-plan"/i.test(html), `${pagePath}: missing commercial validation plan`);
   assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
   assert(/href="\.\.\/shorts-guides\/#ai-generators"/i.test(html), `${pagePath}: missing commercial guides backlink`);
 }

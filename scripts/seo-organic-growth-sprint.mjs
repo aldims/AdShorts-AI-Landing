@@ -4,7 +4,7 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-05-31";
+const dateModified = "2026-06-17";
 
 const priorityRoutes = [
   "/en/faceless-youtube-shorts/",
@@ -15,6 +15,10 @@ const priorityRoutes = [
   "/shorts-ne-nabirayut-prosmotry/",
   "/shorts-dlya-kliniki/",
   "/kak-chasto-vykladyvat-shorts/",
+  "/kak-sdelat-seriyu-shorts/",
+  "/shorts-ne-konvertiruyut-v-podpischiki/",
+  "/kak-sdelat-huk-v-shorts/",
+  "/kak-podnyat-uderzhanie-v-shorts/",
   "/en/how-to-create-a-hook-in-shorts/",
   "/en/keywords-for-youtube-shorts/",
   "/analitika-youtube-shorts-kak-chitat/",
@@ -56,6 +60,31 @@ const priorityRoutes = [
 ];
 
 const metaOverrides = {
+  "/en/faceless-youtube-shorts/": {
+    title: "Faceless YouTube Shorts: Formats, Hooks and Retention",
+    description:
+      "Plan faceless YouTube Shorts with stronger hooks, readable text, voiceover, visual progress and retention checks before publishing the next video.",
+  },
+  "/kak-sdelat-seriyu-shorts/": {
+    title: "Как сделать серию Shorts: темы, структура и тесты",
+    description:
+      "Как сделать серию YouTube Shorts: выбрать повторяемый формат, собрать темы, удерживать внимание и проверять результат по метрикам.",
+  },
+  "/shorts-ne-konvertiruyut-v-podpischiki/": {
+    title: "Shorts не конвертируют в подписчиков: что исправить",
+    description:
+      "Почему Shorts набирают просмотры, но не дают подписчиков: проверьте обещание канала, CTA, концовку, профиль и следующий шаг зрителя.",
+  },
+  "/kak-sdelat-huk-v-shorts/": {
+    title: "Как сделать хук в Shorts: первые 2 секунды и примеры",
+    description:
+      "Как сделать хук в YouTube Shorts: усилить первый кадр, первую фразу, текст на экране и проверить, где зрители пролистывают ролик.",
+  },
+  "/kak-podnyat-uderzhanie-v-shorts/": {
+    title: "Как поднять удержание в Shorts: 7 правок перед публикацией",
+    description:
+      "Как поднять удержание в YouTube Shorts: проверьте первый кадр, темп, субтитры, звук, середину ролика, loop и понятный финал.",
+  },
   "/en/low-retention-on-youtube-shorts/": {
     title: "YouTube Shorts Retention: Fix the First 3 Seconds",
     description:
@@ -457,6 +486,93 @@ ${faq
 `;
 };
 
+const getActionPlan = ({ locale, category }) => {
+  if (locale === "en") {
+    return {
+      heading: "Three checks before the next upload",
+      intro:
+        "This page should lead to a real publishing decision, not just another read. Use the short checklist below to turn the topic into one measurable Shorts test.",
+      items: {
+        production: [
+          "Confirm the video is vertical 9:16, readable on a phone and exported without black bars, muffled audio or tiny subtitles.",
+          "Keep one production variable stable so the next result is not mixed with format or quality issues.",
+          "Save the clean version as the baseline before changing style, voice, music or background visuals.",
+        ],
+        performance: [
+          "Write the exact viewer promise for the first frame and first spoken line.",
+          "Change only one retention lever: hook, pacing, visual progress, subtitle density or ending.",
+          "Compare the first two seconds, average view duration and subscriber or CTA clicks before the next edit.",
+        ],
+        text: [
+          "Draft three hook variants that promise the same outcome in different words.",
+          "Check that on-screen text is readable without sound and does not repeat the voiceover too literally.",
+          "Use one CTA that matches the viewer intent instead of adding several competing actions.",
+        ],
+        growth: [
+          "Turn the topic into a repeatable series with one audience, one promise and one next action.",
+          "Publish several variants close together so the result is not based on a single upload.",
+          "Keep the winning format linked from the guide hub and related generator pages.",
+        ],
+        strategy: [
+          "Pick one repeatable format and one audience before generating more videos.",
+          "Batch several ideas, but publish only the cleanest version first.",
+          "Use retention and click data to decide whether the topic deserves a full series.",
+        ],
+      }[category],
+    };
+  }
+
+  return {
+    heading: "Три проверки перед следующим роликом",
+    intro:
+      "Эта страница должна приводить к конкретному тесту, а не просто к чтению. Используйте короткий чеклист ниже, чтобы превратить тему в измеримый Shorts-эксперимент.",
+    items: {
+      production: [
+        "Проверьте вертикальный формат 9:16, читаемость на телефоне, отсутствие черных полос, тихого звука и мелких субтитров.",
+        "Оставьте стабильным один production-параметр, чтобы следующий результат не смешался с проблемами качества.",
+        "Сохраните чистую версию как базовую перед сменой стиля, голоса, музыки или фона.",
+      ],
+      performance: [
+        "Запишите точное обещание для первого кадра и первой фразы.",
+        "Меняйте только один рычаг удержания: хук, темп, визуальный прогресс, плотность субтитров или концовку.",
+        "Сравните первые две секунды, среднюю длительность просмотра и подписки или клики по CTA перед следующей правкой.",
+      ],
+      text: [
+        "Подготовьте три варианта хука с одним и тем же обещанием, но разными формулировками.",
+        "Проверьте, что текст на экране читается без звука и не дублирует озвучку слишком буквально.",
+        "Оставьте один CTA под интент зрителя, а не несколько конкурирующих действий.",
+      ],
+      growth: [
+        "Соберите тему в повторяемую серию: одна аудитория, одно обещание, одно следующее действие.",
+        "Выпустите несколько близких вариантов, чтобы вывод не зависел от одного ролика.",
+        "Свяжите удачный формат с хабом гайдов и релевантными страницами генераторов.",
+      ],
+      strategy: [
+        "Выберите один повторяемый формат и одну аудиторию до генерации новых роликов.",
+        "Соберите несколько идей пачкой, но сначала публикуйте самый чистый вариант.",
+        "Решайте по удержанию и кликам, стоит ли развивать тему в полноценную серию.",
+      ],
+    }[category],
+  };
+};
+
+const renderActionPlanBlock = ({ locale, category }) => {
+  const plan = getActionPlan({ locale, category });
+
+  return `          <!-- seo-action-plan:start -->
+          <section class="article-index-boost article-index-boost--action-plan" aria-labelledby="seo-action-plan-heading">
+            <h2 id="seo-action-plan-heading">${escapeHtml(plan.heading)}</h2>
+            <p>
+              ${escapeHtml(plan.intro)}
+            </p>
+            <ol>
+${plan.items.map((item) => `              <li>${escapeHtml(item)}</li>`).join("\n")}
+            </ol>
+          </section>
+          <!-- seo-action-plan:end -->
+`;
+};
+
 const renderBoostBlock = ({ locale, h1, category, canonical }) => {
   const links = getLinks(locale, category, canonical);
   const escapedTitle = escapeHtml(h1);
@@ -595,7 +711,9 @@ const processPage = async (route) => {
   html = addJsonLdBlock(html, "seo-sprint-faq-jsonld", renderFaqJsonLd(faq));
   html = stripBlock(html, "seo-sprint-faq");
   html = stripBlock(html, "seo-index-boost");
+  html = stripBlock(html, "seo-action-plan");
   html = addBeforeReadAlso(html, renderBoostBlock({ locale, h1, category, canonical }));
+  html = addBeforeReadAlso(html, renderActionPlanBlock({ locale, category }));
   html = addBeforeReadAlso(html, renderFaqBlock({ locale, faq }));
 
   await writeFile(filePath, html);

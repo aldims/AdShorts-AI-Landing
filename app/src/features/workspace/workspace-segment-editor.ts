@@ -3099,7 +3099,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
     isSharedVoiceoverAsset &&
     !hasLeakedSharedFullVoiceoverAssetRange;
   const canUseSegmentVoiceoverAudioProxy =
-    (canUseProjectVoiceoverAudio && !hasLeakedSharedFullVoiceoverAssetRange) ||
+    (canUseProjectVoiceoverAudio && hasProjectVoiceoverTiming && !hasLeakedSharedFullVoiceoverAssetRange) ||
     canUseLeakedProjectVoiceoverSegmentProxy ||
     canUseSharedProjectVoiceoverSegmentProxy;
   const projectVoiceoverAudioUrl =

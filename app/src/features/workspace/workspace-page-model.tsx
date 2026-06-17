@@ -371,6 +371,8 @@ export type WorkspaceSegmentEditorFullPreviewAudioTrack = {
   kind: "embedded_voice" | "music" | "sound" | "voice";
   loop?: boolean;
   mediaKind?: "audio" | "video";
+  previewArrayIndex?: number | null;
+  segmentIndex?: number | null;
   sourceKind: "isolated" | "timeline";
   volume: number;
   sourceStartTime: number;
