@@ -20486,6 +20486,14 @@ export function WorkspacePage({
     if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(targetSegment)) {
       restorePendingSegmentTimelineVoiceTextEdit();
       setSegmentTimelineVoiceMenuSegmentIndex(null);
+      showStudioToast(
+        workspaceText(
+          locale,
+          "Озвучку говорящего персонажа нельзя изменить: звук уже встроен в видео.",
+          "Talking character voiceover cannot be changed because the audio is embedded in the video.",
+        ),
+        { durationMs: 3600, kind: "warning" },
+      );
       event.currentTarget.focus({ preventScroll: true });
       return;
     }
@@ -25687,9 +25695,12 @@ export function WorkspacePage({
               const voiceCellTitle = usesEmbeddedTalkingPhotoAudio
                 ? workspaceText(
                     locale,
-                    "Озвучка встроена в видео говорящего персонажа",
-                    "Voiceover is embedded in the talking character video",
+                    "Озвучку нельзя изменить: звук встроен в видео говорящего персонажа. Можно только прослушать.",
+                    "Voiceover cannot be changed because audio is embedded in the talking character video. You can only listen.",
                   )
+                : undefined;
+              const voiceLockedTooltipId = usesEmbeddedTalkingPhotoAudio
+                ? `segment-timeline-voice-locked-${segment.index}`
                 : undefined;
               const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentTimelineHistorySegmentIndex);
               const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentTimelineHistorySegmentIndex);
@@ -25715,6 +25726,8 @@ export function WorkspacePage({
                       voiceTimelineState.hasHistory && !isVoiceoverGenerationPending
                         ? " studio-segment-editor__timeline-cell--has-history"
                         : ""
+                    }${usesEmbeddedTalkingPhotoAudio ? " is-voice-locked" : ""}${
+                      usesEmbeddedTalkingPhotoAudio && voiceoverAudioUrl ? " is-listenable" : ""
                     }${
                       span.isActive ? " is-active" : ""
                     }${voiceTimelineState.isEdited ? " is-edited" : ""}${
@@ -25728,6 +25741,7 @@ export function WorkspacePage({
                     type="button"
                     aria-busy={isVoiceoverGenerationPending ? true : undefined}
                     aria-label={voiceCellLabel}
+                    aria-describedby={voiceLockedTooltipId}
                     title={voiceCellTitle}
                     onPointerDown={() => {
                       previewSegmentTimelineActiveStateByArrayIndex(index);
@@ -25761,6 +25775,15 @@ export function WorkspacePage({
                       ) : null}
                     </span>
                   </button>
+                  {usesEmbeddedTalkingPhotoAudio ? (
+                    <span
+                      className="studio-segment-editor__timeline-cell-tooltip studio-segment-editor__timeline-cell-tooltip--voice-locked"
+                      id={voiceLockedTooltipId}
+                      role="tooltip"
+                    >
+                      {voiceCellTitle}
+                    </span>
+                  ) : null}
                   {renderSegmentTimelineHistoryButtons({
                     canBack: voiceTimelineState.canBack && !isVoiceoverGenerationPending,
                     canForward: voiceTimelineState.canForward && !isVoiceoverGenerationPending,
