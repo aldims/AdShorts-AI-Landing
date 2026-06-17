@@ -1566,26 +1566,64 @@ export const buildWorkspaceMediaAssetPosterUrl = (asset: WorkspaceMediaAssetRef 
     return null;
   }
 
-  const posterUrl = new URL(`/api/workspace/media-assets/${Math.trunc(assetId)}/poster`, "http://localhost");
-  const version = [
-    asset?.createdAt,
-    asset?.expiresAt,
-    asset?.storageKey,
-    asset?.mimeType,
-    asset?.downloadPath,
-    asset?.downloadUrl,
-    asset?.playbackUrl,
-    asset?.originalUrl,
-  ]
-    .map(normalizeWorkspaceMediaAssetToken)
-    .filter(Boolean)
-    .join(":");
+  return `/api/workspace/media-assets/${Math.trunc(assetId)}/poster`;
+};
 
-  if (version) {
-    posterUrl.searchParams.set("v", version);
+const getWorkspaceMediaAssetPosterUrlAssetId = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return null;
   }
 
-  return `${posterUrl.pathname}${posterUrl.search}`;
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)\/poster$/i);
+    if (!match) {
+      return null;
+    }
+
+    return getPositiveWorkspaceMediaAssetId(match[1]);
+  } catch {
+    return null;
+  }
+};
+
+const shouldNormalizeWorkspaceMediaAssetPosterVersion = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const version = url.searchParams.get("v");
+    return !version || version.includes(":");
+  } catch {
+    return false;
+  }
+};
+
+const getWorkspaceStableMediaAssetPosterUrl = (
+  asset: WorkspaceMediaAssetRef | null | undefined,
+  posterUrl: string | null | undefined,
+) => {
+  const stablePosterUrl = buildWorkspaceMediaAssetPosterUrl(asset);
+  const normalizedPosterUrl = String(posterUrl ?? "").trim();
+  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  const posterAssetId = getWorkspaceMediaAssetPosterUrlAssetId(normalizedPosterUrl);
+  const normalizedMediaAssetPosterUrl = posterAssetId
+    ? `/api/workspace/media-assets/${posterAssetId}/poster`
+    : null;
+
+  if (
+    posterAssetId &&
+    (!assetId || posterAssetId === assetId) &&
+    shouldNormalizeWorkspaceMediaAssetPosterVersion(normalizedPosterUrl)
+  ) {
+    return stablePosterUrl ?? normalizedMediaAssetPosterUrl;
+  }
+
+  return normalizedPosterUrl || stablePosterUrl;
 };
 
 export const buildWorkspaceMediaLibraryAssetPosterUrl = (item: WorkspaceMediaLibraryItem) => {
@@ -1594,24 +1632,7 @@ export const buildWorkspaceMediaLibraryAssetPosterUrl = (item: WorkspaceMediaLib
     return null;
   }
 
-  const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, "http://localhost");
-  const version = [
-    item.createdAt ? String(item.createdAt) : null,
-    item.assetExpiresAt,
-    item.assetKind,
-    item.assetMediaType,
-    item.previewUrl,
-    item.downloadUrl,
-  ]
-    .map(normalizeWorkspaceMediaAssetToken)
-    .filter(Boolean)
-    .join(":");
-
-  if (version) {
-    posterUrl.searchParams.set("v", version);
-  }
-
-  return `${posterUrl.pathname}${posterUrl.search}`;
+  return `/api/workspace/media-assets/${assetId}/poster`;
 };
 
 export const getWorkspaceSegmentVideoAssetPosterUrl = (
@@ -1699,7 +1720,7 @@ export const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEdi
     return scopedPosterUrl;
   }
 
-  return segment.currentPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.currentAsset);
+  return getWorkspaceStableMediaAssetPosterUrl(segment.currentAsset, segment.currentPosterUrl);
 };
 
 export const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -1711,7 +1732,7 @@ export const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEd
     return scopedPosterUrl;
   }
 
-  return segment.originalPosterUrl ?? buildWorkspaceMediaAssetPosterUrl(segment.originalAsset);
+  return getWorkspaceStableMediaAssetPosterUrl(segment.originalAsset, segment.originalPosterUrl);
 };
 
 export const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {

@@ -49,6 +49,46 @@ const normalizeWorkspaceEmail = (value: string | null | undefined) => String(val
 const getVideoDownloadName = getWorkspaceVideoDownloadName;
 const getImageDownloadName = getWorkspaceImageDownloadName;
 
+const getWorkspaceMediaAssetPosterUrlAssetId = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)\/poster$/i);
+    return match ? getPositiveWorkspaceMediaAssetId(match[1]) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStableWorkspaceMediaAssetPosterUrl = (
+  asset: Pick<StudioCustomVideoFile, "assetId"> | null | undefined,
+  posterUrl: string,
+) => {
+  const posterAssetId = getWorkspaceMediaAssetPosterUrlAssetId(posterUrl);
+  if (!posterAssetId) {
+    return posterUrl;
+  }
+
+  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  if (assetId && assetId !== posterAssetId) {
+    return posterUrl;
+  }
+
+  try {
+    const url = new URL(posterUrl, "http://localhost");
+    const version = url.searchParams.get("v");
+    return !version || version.includes(":")
+      ? `/api/workspace/media-assets/${posterAssetId}/poster`
+      : posterUrl;
+  } catch {
+    return posterUrl;
+  }
+};
+
 export type WorkspaceGeneratedMediaLibraryEntry = {
   createdAt: number;
   id: string;
@@ -87,10 +127,21 @@ export const shouldShowWorkspaceMediaLibraryLoadingState = (options: {
 };
 
 export const getStudioCustomAssetPosterUrl = (
-  asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "fileName" | "mimeType" | "posterUrl"> | null | undefined,
 ) => {
   const posterUrl = typeof asset?.posterUrl === "string" ? asset.posterUrl.trim() : "";
-  return posterUrl || null;
+  if (posterUrl) {
+    return getStableWorkspaceMediaAssetPosterUrl(asset, posterUrl);
+  }
+
+  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  const fileName = String(asset?.fileName ?? "").trim().toLowerCase();
+  const mimeType = String(asset?.mimeType ?? "").trim().toLowerCase();
+  const isVideoAsset =
+    mimeType.startsWith("video/") ||
+    /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i.test(fileName);
+
+  return assetId && isVideoAsset ? `/api/workspace/media-assets/${assetId}/poster` : null;
 };
 
 export const isStudioSegmentPhotoAnimationPosterUrl = (value: string | null | undefined) => {
@@ -110,7 +161,7 @@ export const isStudioSegmentAiVideoPosterUrl = (value: string | null | undefined
 
 export const getWorkspaceAiVideoPreferredPosterUrl = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "fileName" | "mimeType" | "posterUrl"> | null | undefined,
 ) => {
   const assetPosterUrl = getStudioCustomAssetPosterUrl(asset);
   if (!assetPosterUrl || isStudioSegmentAiVideoPosterUrl(assetPosterUrl)) {
@@ -130,7 +181,7 @@ export const getWorkspacePhotoAnimationSourcePosterUrl = (segment: WorkspaceSegm
 
 export const getWorkspacePhotoAnimationPreferredPosterUrl = (
   segment: WorkspaceSegmentEditorDraftSegment,
-  asset: Pick<StudioCustomVideoFile, "posterUrl"> | null | undefined,
+  asset: Pick<StudioCustomVideoFile, "assetId" | "fileName" | "mimeType" | "posterUrl"> | null | undefined,
 ) => {
   const sourcePosterUrl = getWorkspacePhotoAnimationSourcePosterUrl(segment);
   if (sourcePosterUrl) {

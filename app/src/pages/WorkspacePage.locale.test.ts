@@ -8190,6 +8190,30 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(playbackSurface.preloadPolicy).toBe("auto");
   });
 
+  it("derives a stable poster for talking photo video assets without explicit poster urls", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 6067,
+        fileName: "talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/6067/playback",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      mediaType: "video",
+      videoAction: "talking_photo",
+    });
+
+    const idleSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
+      isPlaybackRequested: false,
+    });
+
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe("/api/workspace/media-assets/6067/poster");
+    expect(idleSurface.posterUrl).toBe("/api/workspace/media-assets/6067/poster");
+    expect(idleSurface.mountVideoWhenIdle).toBe(false);
+    expect(idleSurface.preloadPolicy).toBe("none");
+  });
+
   it("rewrites project segment preview delivery for playback-only custom videos", () => {
     const segment = createDraftSegment({
       customVideo: {

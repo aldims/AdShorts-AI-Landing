@@ -567,7 +567,6 @@ const buildWorkspaceDurableMediaAssetPosterVersion = (
 ) => {
   const versionParts = [
     asset.createdAt,
-    asset.expiresAt,
     asset.storageKey,
     asset.mimeType,
     asset.assetId ? String(asset.assetId) : null,
@@ -596,10 +595,8 @@ const buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem = (
   const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, env.appUrl);
   const version = [
     item.createdAt,
-    item.assetExpiresAt,
     item.assetKind,
     item.assetMediaType,
-    item.previewUrl,
     assetId,
   ]
     .map(normalizeText)

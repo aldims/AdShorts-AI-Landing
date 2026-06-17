@@ -168,6 +168,15 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     (primePausedFrame || (preferPosterFrame && !canUseResolvedPosterFrame));
   const shouldKeepVideoUnmountedWhileIdle =
     previewKind === "video" && !shouldAllowVideoPlayback && !effectiveMountVideoWhenIdle;
+  const effectivePreload =
+    previewKind === "video" && canMountVideoForPosterCapture && preload === "none" ? "metadata" : preload;
+  const shouldMaskIdleVideoUntilPoster =
+    previewKind === "video" &&
+    !shouldAllowVideoPlayback &&
+    !isVideoPlaying &&
+    !hasPresentedVideoFrame &&
+    preferPosterFrame &&
+    !canUseResolvedPosterFrame;
   const imageCandidateUrls = useMemo(
     () =>
       getUniqueWorkspaceSegmentPreviewUrls([
@@ -286,7 +295,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   }, [mediaKey, previewKind, resolvedPreviewUrl, shouldAllowVideoPlayback]);
 
   useEffect(() => {
-    if (previewKind !== "video" || !isPlaybackRequested || preload === "none") {
+    if (previewKind !== "video" || !isPlaybackRequested || effectivePreload === "none") {
       return;
     }
 
@@ -297,7 +306,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
 
     delete element.dataset.previewPrimed;
     ensureVideoElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
-  }, [isPlaybackRequested, preload, previewKind, resolvedPreviewUrl]);
+  }, [effectivePreload, isPlaybackRequested, previewKind, resolvedPreviewUrl]);
 
   useEffect(() => {
     setPreviewCandidateIndex(0);
@@ -394,7 +403,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     if (
       previewKind !== "video" ||
       autoplay ||
-      preload === "none" ||
+      effectivePreload === "none" ||
       !shouldPrimePausedFrame ||
       isPlaybackRequested ||
       isVideoPlaying
@@ -445,10 +454,10 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     };
   }, [
     autoplay,
+    effectivePreload,
     hasPresentedVideoFrame,
     isPlaybackRequested,
     isVideoPlaying,
-    preload,
     previewKind,
     resolvedPreviewUrl,
     shouldPrimePausedFrame,
@@ -517,6 +526,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   return (
     <>
       <video
+        className={shouldMaskIdleVideoUntilPoster ? "studio-segment-preview-card-media__video is-poster-pending" : undefined}
         key={`${mediaKey}:${resolvedPreviewUrl}`}
         ref={setVideoElementRef}
         src={resolvedPreviewUrl}
@@ -525,7 +535,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
         muted={muted}
         poster={canUseResolvedPosterFrame ? resolvedPosterUrl ?? undefined : undefined}
         playsInline
-        preload={preload}
+        preload={effectivePreload}
         disablePictureInPicture
         disableRemotePlayback
         draggable={false}
@@ -573,6 +583,12 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
         }}
         onTimeUpdate={(event) => onVideoTimeUpdate?.(event.currentTarget.currentTime)}
       />
+      {shouldMaskIdleVideoUntilPoster ? (
+        <div
+          className="studio-segment-preview-card-media__idle-placeholder studio-segment-preview-card-media__idle-placeholder--overlay"
+          aria-hidden="true"
+        />
+      ) : null}
       {canUseResolvedPosterFrame && resolvedPosterUrl && !isVideoPlaying && !hasPresentedVideoFrame ? (
         <img
           className="studio-segment-preview-card-media__poster"

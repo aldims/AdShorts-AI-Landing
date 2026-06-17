@@ -150,6 +150,21 @@ describe("workspace resolved media surface", () => {
     expect(surface.allowBrowserPosterCapture).toBe(false);
   });
 
+  it("removes volatile media asset poster versions before rendering", () => {
+    const surface = resolveWorkspaceMediaSurface({
+      context: "segment-carousel-card",
+      displayUrl: "/api/workspace/media-assets/6067/playback",
+      posterUrl:
+        "/api/workspace/media-assets/6067/poster?v=2026-06-16T11%3A59%3A20.607Z%3A2026-07-17T02%3A02%3A24.599Z%3Ausers%2Fdemo%2F6067.mp4",
+      previewKind: "video",
+      viewerUrl: "/api/workspace/media-assets/6067/playback",
+    });
+
+    expect(surface.posterUrl).toBe("/api/workspace/media-assets/6067/poster");
+    expect(surface.mountVideoWhenIdle).toBe(false);
+    expect(surface.preloadPolicy).toBe("none");
+  });
+
   it("mounts media-library video tiles without posters so a frame can be captured", () => {
     const surface = resolveWorkspaceMediaSurface({
       context: "media-library-tile",

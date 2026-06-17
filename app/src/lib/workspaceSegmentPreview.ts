@@ -3,6 +3,23 @@ const WORKSPACE_MEDIA_ASSET_PLAYBACK_ROUTE_PATTERN = /\/api\/workspace\/media-as
 const MEDIA_DOWNLOAD_VIDEO_ROUTE_PATTERN = /\/api\/media\/\d+\/download(?:[/?#]|$)/i;
 const VIDEO_ASSET_URL_PATTERN = /\.(mp4|mov|webm|m4v)(?:[?#]|$)/i;
 
+const getStableWorkspaceMediaAssetPosterUrl = (value: string) => {
+  try {
+    const url = new URL(value, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)\/poster$/i);
+    if (!match) {
+      return value;
+    }
+
+    const version = url.searchParams.get("v");
+    return !version || version.includes(":")
+      ? `/api/workspace/media-assets/${match[1]}/poster`
+      : value;
+  } catch {
+    return value;
+  }
+};
+
 export const getWorkspaceSegmentPausedPreviewTime = (duration: number | null | undefined) => {
   const normalizedDuration = Number(duration);
   if (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0.04) {
@@ -53,6 +70,11 @@ export const sanitizeWorkspaceSegmentPosterUrl = (
 
   if (previewKind !== "video") {
     return normalizedPosterUrl;
+  }
+
+  const stablePosterUrl = getStableWorkspaceMediaAssetPosterUrl(normalizedPosterUrl);
+  if (stablePosterUrl !== normalizedPosterUrl) {
+    return stablePosterUrl;
   }
 
   if (normalizedPosterUrl === normalizedPreviewUrl || isLikelyVideoAssetUrl(normalizedPosterUrl)) {

@@ -1495,13 +1495,9 @@ const buildWorkspaceMediaAssetPosterUrl = (asset) => {
     const posterUrl = new URL(`/api/workspace/media-assets/${assetId}/poster`, env.appUrl);
     const version = [
         asset?.createdAt,
-        asset?.expiresAt,
         asset?.storageKey,
         asset?.mimeType,
         asset?.downloadPath,
-        asset?.downloadUrl,
-        asset?.playbackUrl,
-        asset?.originalUrl,
     ]
         .map(normalizeText)
         .filter(Boolean)
