@@ -11,6 +11,7 @@ import {
   getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   getStudioSceneSoundAssetPreviewMediaKind,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
+  isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorDraftSession,
@@ -122,6 +123,33 @@ const createProjectVoiceoverDraft = (
   title: "Session",
   ttsAssetId: 777,
   voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+});
+
+it("recognizes talking photo assets by library kind", () => {
+  expect(
+    isWorkspaceTalkingPhotoMediaAsset({
+      assetId: 909,
+      createdAt: null,
+      deletedAt: null,
+      downloadPath: "/api/media/909/download",
+      downloadUrl: null,
+      expiresAt: null,
+      isCurrent: true,
+      kind: "segment_current",
+      libraryKind: "talking_photo",
+      lifecycle: "ready",
+      mediaType: "video",
+      mimeType: "video/mp4",
+      originalUrl: null,
+      playbackUrl: "/api/media/909/download",
+      projectId: 77,
+      role: "segment_current",
+      segmentIndex: 0,
+      sourceKind: "generated",
+      status: "ready",
+      storageKey: null,
+    }),
+  ).toBe(true);
 });
 
 describe("workspace segment editor scene sound preview", () => {

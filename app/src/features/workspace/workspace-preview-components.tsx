@@ -280,6 +280,20 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   }, [mediaKey, resolvedPreviewUrl]);
 
   useEffect(() => {
+    if (previewKind !== "video") {
+      return;
+    }
+
+    const element = localVideoRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.muted = muted;
+    element.defaultMuted = muted;
+  }, [mediaKey, muted, previewKind, resolvedPreviewUrl, shouldAllowVideoPlayback]);
+
+  useEffect(() => {
     if (previewKind !== "video" || shouldAllowVideoPlayback) {
       return;
     }

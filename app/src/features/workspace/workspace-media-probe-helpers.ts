@@ -5,6 +5,10 @@ export const ensureVideoElementLoading = (
   element: HTMLMediaElement,
   minimumReadyState: number = HTMLMediaElement.HAVE_CURRENT_DATA,
 ) => {
+  if (element.readyState >= minimumReadyState) {
+    return;
+  }
+
   if (element.preload !== "auto") {
     element.preload = "auto";
   }

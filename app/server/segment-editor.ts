@@ -101,6 +101,7 @@ type AdsflowProjectMediaEntryPayload = {
   file_size?: number | string | null;
   id?: number | string | null;
   kind?: string | null;
+  library_kind?: string | null;
   link_role?: string | null;
   local_path?: string | null;
   media_asset_id?: number | string | null;
@@ -1417,6 +1418,7 @@ const buildSegmentMediaAssetFromEntry = (
     duration_seconds: entry?.duration_seconds ?? null,
     id: assetId,
     kind: entryKind,
+    library_kind: entry?.library_kind ?? null,
     media_type: entry?.media_type ?? null,
     mime_type: entry?.mime_type ?? null,
     original_url: entry?.url ?? null,

@@ -790,6 +790,7 @@ const buildSegmentMediaAssetFromEntry = (entry, projectMediaByAssetId, options) 
         duration_seconds: entry?.duration_seconds ?? null,
         id: assetId,
         kind: entryKind,
+        library_kind: entry?.library_kind ?? null,
         media_type: entry?.media_type ?? null,
         mime_type: entry?.mime_type ?? null,
         original_url: entry?.url ?? null,

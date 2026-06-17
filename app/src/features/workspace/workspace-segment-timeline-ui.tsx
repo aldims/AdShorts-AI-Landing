@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Locale } from "../../lib/i18n";
 import {
   type WorkspaceSegmentEditorFullPreviewStatus,
@@ -36,7 +36,7 @@ export type WorkspaceSegmentTimelineAudioButtonOptions = {
 };
 
 export type WorkspaceSegmentTimelineAudioPreviewHandler = (
-  event: ReactMouseEvent<HTMLButtonElement>,
+  event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
   options: {
     durationSeconds?: number | null;
     endTime?: number | null;
@@ -112,7 +112,11 @@ export const renderWorkspaceSegmentTimelineAudioButton = (
       disabled={!hasPreviewAudio}
       aria-label={ariaLabel}
       title={ariaLabel}
-      onClick={(event) =>
+      onPointerDown={(event) => {
+        if (options.mediaKind !== "video" || !hasPreviewAudio) {
+          return;
+        }
+
         void onPreview(event, {
           endTime: options.endTime,
           key: options.audioKey,
@@ -122,8 +126,24 @@ export const renderWorkspaceSegmentTimelineAudioButton = (
           tracks: options.tracks,
           url: options.url,
           volume: options.volume,
-        })
-      }
+        });
+      }}
+      onClick={(event) => {
+        if (options.mediaKind === "video" && event.detail !== 0) {
+          return;
+        }
+
+        void onPreview(event, {
+          endTime: options.endTime,
+          key: options.audioKey,
+          mediaKind: options.mediaKind,
+          durationSeconds: options.durationSeconds,
+          startTime: options.startTime,
+          tracks: options.tracks,
+          url: options.url,
+          volume: options.volume,
+        });
+      }}
     >
       {isLoading ? (
         <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>

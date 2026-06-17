@@ -1445,6 +1445,7 @@ export const normalizeWorkspaceMediaAssetToken = (value: string | null | undefin
 export const getWorkspaceMediaAssetSignature = (asset: WorkspaceMediaAssetRef | null | undefined) =>
   [
     asset?.kind,
+    asset?.libraryKind,
     asset?.role,
     asset?.sourceKind,
     asset?.storageKey,
