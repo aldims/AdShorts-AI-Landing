@@ -118,6 +118,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     onApplyDuration: vi.fn(),
     onClose: vi.fn(),
     onInputValueChange: vi.fn(),
+    onPreviewDurationModeSelect: null,
     onTrimToVoiceoverToggle: vi.fn(),
     qualitySwitch: null,
     segment: {
@@ -131,6 +132,8 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     trimToVoiceover: true,
     trimToVoiceoverLabels: {
       fullDurationLabel: "5с",
+      fullResultDurationLabel: "5с",
+      fullResultLoopsToVoiceover: false,
       voiceoverDurationLabel: "3с",
     },
   };
@@ -171,6 +174,70 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
 
     expect(screen.getByRole("radio", { name: /Видео 5с/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
+  });
+
+  it("allows custom video trim duration while keeping the voiceover trim shortcut", () => {
+    const onApplyDuration = vi.fn(() => ({ duration: 7 }));
+    const onClose = vi.fn();
+    const onPreviewDurationModeSelect = vi.fn();
+
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        hasExtensionPlan={false}
+        inputValue="7"
+        onApplyDuration={onApplyDuration}
+        onClose={onClose}
+        onPreviewDurationModeSelect={onPreviewDurationModeSelect}
+        shouldShowManualDurationInput={true}
+        trimToVoiceover={true}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "60с",
+          fullResultDurationLabel: "60с",
+          fullResultLoopsToVoiceover: false,
+          voiceoverDurationLabel: "5с",
+        }}
+      />,
+    );
+
+    expect((screen.getByRole("textbox", { name: "Длительность визуала" }) as HTMLInputElement).value).toBe("7");
+    expect(screen.getByRole("radio", { name: /Видео 60с/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Озвучка 5с/ })).toBeTruthy();
+
+    screen.getByRole("radio", { name: /Видео 60с/ }).click();
+
+    expect(onPreviewDurationModeSelect).toHaveBeenCalledWith(false);
+    expect(onApplyDuration).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    screen.getByRole("button", { name: "ОК" }).click();
+
+    expect(onApplyDuration).toHaveBeenCalledWith(0);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("shows looped Shorts result as a summary instead of a choice when voiceover is longer than video", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        trimToVoiceover={false}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "5с",
+          fullResultDurationLabel: "5.9с",
+          fullResultLoopsToVoiceover: true,
+          voiceoverDurationLabel: "5.9с",
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("radio", { name: /Видео 5с/ })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /Озвучка 5.9с/ })).toBeNull();
+    expect(screen.getByText("Текущее видео")).toBeTruthy();
+    expect(screen.getByText("5с")).toBeTruthy();
+    expect(screen.getByText("Текущая озвучка")).toBeTruthy();
+    expect(screen.getByText("5.9с")).toBeTruthy();
+    expect(screen.getByText("Без ИИ-продления видео зациклится до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Оставить с повтором" })).toBeTruthy();
   });
 });
 

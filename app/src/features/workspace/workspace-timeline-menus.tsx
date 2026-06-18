@@ -43,6 +43,7 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   onApplyDuration: (segmentIndex: number, options?: { trimToVoiceover?: boolean }) => unknown;
   onClose: () => void;
   onInputValueChange: (value: string) => void;
+  onPreviewDurationModeSelect: ((trimToVoiceover: boolean) => void) | null;
   onTrimToVoiceoverToggle: (trimToVoiceover: boolean) => void;
   qualitySwitch: ReactNode;
   segment: WorkspaceSegmentEditorDraftSegment | null;
@@ -53,6 +54,8 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   trimToVoiceover: boolean;
   trimToVoiceoverLabels: {
     fullDurationLabel: string;
+    fullResultDurationLabel: string;
+    fullResultLoopsToVoiceover: boolean;
     voiceoverDurationLabel: string;
   } | null;
 };
@@ -78,6 +81,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
   onApplyDuration,
   onClose,
   onInputValueChange,
+  onPreviewDurationModeSelect,
   onTrimToVoiceoverToggle,
   qualitySwitch,
   segment,
@@ -103,11 +107,22 @@ export function WorkspaceSegmentTimelineDurationMenu({
       onTrimToVoiceoverToggle(nextTrimToVoiceover);
     }
 
+    if (shouldShowManualDurationInput && onPreviewDurationModeSelect) {
+      onPreviewDurationModeSelect(nextTrimToVoiceover);
+      return;
+    }
+
     const timing = onApplyDuration(segment.index, { trimToVoiceover: nextTrimToVoiceover });
     if (timing) {
       onClose();
     }
   };
+  const fullVideoResultDurationLabel =
+    trimToVoiceoverLabels?.fullResultDurationLabel ?? trimToVoiceoverLabels?.fullDurationLabel;
+  const fullVideoResultLoopsToVoiceover = trimToVoiceoverLabels?.fullResultLoopsToVoiceover === true;
+  const shouldShowDurationModeChoices =
+    canTrimToVoiceover && trimToVoiceoverLabels !== null && !fullVideoResultLoopsToVoiceover;
+  const shouldShowLoopedDurationSummary = trimToVoiceoverLabels !== null && fullVideoResultLoopsToVoiceover;
 
   return createPortal(
     <div
@@ -181,7 +196,28 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </div>
           </div>
         ) : null}
-        {canTrimToVoiceover && trimToVoiceoverLabels ? (
+        {shouldShowLoopedDurationSummary && trimToVoiceoverLabels ? (
+          <>
+            <div className="studio-segment-editor__timeline-duration-summary">
+              <div>
+                <span>{workspaceText(locale, "Текущее видео", "Current video")}</span>
+                <strong>{trimToVoiceoverLabels.fullDurationLabel}</strong>
+              </div>
+              <div>
+                <span>{workspaceText(locale, "Текущая озвучка", "Current voiceover")}</span>
+                <strong>{trimToVoiceoverLabels.voiceoverDurationLabel}</strong>
+              </div>
+            </div>
+            <p className="studio-segment-editor__timeline-duration-loop-note" role="status">
+              {workspaceText(
+                locale,
+                "Без ИИ-продления видео зациклится до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.",
+                "Without AI extension, the video will loop until the voiceover ends. Extend with AI to remove the repeat.",
+              )}
+            </p>
+          </>
+        ) : null}
+        {shouldShowDurationModeChoices && trimToVoiceoverLabels ? (
           <div
             className="studio-segment-editor__timeline-duration-menu-modes"
             role="radiogroup"
@@ -208,8 +244,12 @@ export function WorkspaceSegmentTimelineDurationMenu({
               <small>
                 {workspaceText(
                   locale,
-                  `итог в Shorts: ${trimToVoiceoverLabels.fullDurationLabel}`,
-                  `Shorts result: ${trimToVoiceoverLabels.fullDurationLabel}`,
+                  fullVideoResultLoopsToVoiceover
+                    ? `итог в Shorts: ${fullVideoResultDurationLabel} с повтором`
+                    : `итог в Shorts: ${fullVideoResultDurationLabel}`,
+                  fullVideoResultLoopsToVoiceover
+                    ? `Shorts result: ${fullVideoResultDurationLabel}, looped`
+                    : `Shorts result: ${fullVideoResultDurationLabel}`,
                 )}
               </small>
             </button>
@@ -256,9 +296,18 @@ export function WorkspaceSegmentTimelineDurationMenu({
               }}
             />
             <div className="studio-segment-editor__timeline-duration-prompt-actions">
-              {qualitySwitch}
               <div className="studio-segment-editor__timeline-duration-action-cluster">
+                {qualitySwitch}
                 {durationSwitch}
+                {shouldShowLoopedDurationSummary ? (
+                  <button
+                    className="studio-segment-editor__timeline-duration-keep-button"
+                    type="button"
+                    onClick={onClose}
+                  >
+                    {workspaceText(locale, "Оставить с повтором", "Keep looped")}
+                  </button>
+                ) : null}
                 <button
                   className="studio-segment-editor__timeline-duration-extend-button"
                   type="button"
@@ -283,7 +332,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </div>
           </div>
         ) : null}
-        {!hasExtensionPlan && !shouldShowManualDurationInput && !canTrimToVoiceover ? (
+        {!hasExtensionPlan && !shouldShowManualDurationInput && !shouldShowDurationModeChoices && !shouldShowLoopedDurationSummary ? (
           <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
             <button type="button" onClick={applyDuration}>
               {workspaceText(locale, "Сохранить", "Save")}

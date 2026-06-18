@@ -87,6 +87,7 @@ import {
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVideoVisualDurationSeconds,
+  getWorkspaceSegmentVideoVisualSourceDurationSeconds,
   resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange,
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
   getWorkspaceSegmentVoiceoverPreviewRange,
@@ -140,6 +141,9 @@ import {
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveWorkspaceSegmentDurationMenuTrimLabels,
+  resolveWorkspaceSegmentDurationExtensionRequestTiming,
+  resolveWorkspaceSegmentVideoTrimDuration,
+  resolveWorkspaceSegmentTimelineVisualDurationDisplay,
   resolveWorkspaceSegmentGeneratedVoiceoverEdited,
   resolveWorkspaceProjectVoiceoverPendingSegments,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
@@ -3981,6 +3985,48 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("shows the video duration in the visual badge instead of the looped scene duration", () => {
+    const segment = createDraftSegment({
+      currentPlaybackUrl: "/api/workspace/media-assets/505/playback",
+      currentSourceKind: "upload",
+      duration: 5.9,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5.9,
+      manualDurationSeconds: 5.9,
+      mediaType: "video",
+      videoAction: "custom",
+    });
+
+    expect(getWorkspaceSegmentVideoVisualDurationSeconds(segment, {
+      measuredVisualDurationSeconds: 5,
+      session: createDraftSession(segment),
+    })).toBe(5.9);
+    expect(getWorkspaceSegmentVideoVisualSourceDurationSeconds(segment, {
+      measuredVisualDurationSeconds: 5,
+    })).toBe(5);
+    expect(
+      resolveWorkspaceSegmentTimelineVisualDurationDisplay({
+        isImageDurationSegment: false,
+        locale: "ru",
+        segmentSlotDurationSeconds: 5.9,
+        videoVisualDurationSeconds: 5,
+      }),
+    ).toEqual({
+      badgeLabel: "5 сек",
+      durationLabel: "5 с",
+    });
+
+    expect(
+      resolveWorkspaceSegmentTimelineVisualDurationDisplay({
+        isImageDurationSegment: true,
+        locale: "ru",
+        segmentSlotDurationSeconds: 5.9,
+        videoVisualDurationSeconds: 5,
+      }).badgeLabel,
+    ).toBe("5.9 сек");
+  });
+
   it("does not show the scene slot duration as the video duration before metadata is known", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
@@ -6067,6 +6113,32 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(videoSegment, null, 12)).toBe(12);
   });
 
+  it("keeps AI duration extension request source and target durations separate", () => {
+    expect(
+      resolveWorkspaceSegmentDurationExtensionRequestTiming({
+        requestedExtensionDurationSeconds: 5,
+        slotDurationSeconds: 10,
+        sourceDurationSeconds: 5,
+      }),
+    ).toEqual({
+      sourceDurationSeconds: 5,
+      tailDurationSeconds: 5,
+      targetDurationSeconds: 10,
+    });
+
+    expect(
+      resolveWorkspaceSegmentDurationExtensionRequestTiming({
+        requestedExtensionDurationSeconds: 8,
+        slotDurationSeconds: 10,
+        sourceDurationSeconds: 5,
+      }),
+    ).toEqual({
+      sourceDurationSeconds: 5,
+      tailDurationSeconds: 5,
+      targetDurationSeconds: 10,
+    });
+  });
+
   it("caps an AI duration extension target at the maximum visual duration", () => {
     const videoSegment = createDraftSegment({
       aiVideoAsset: {
@@ -6247,11 +6319,80 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(labels).toEqual({
       fullDurationLabel: "5с",
+      fullResultDurationLabel: "5с",
+      fullResultLoopsToVoiceover: false,
       voiceoverDurationLabel: "2.4с",
     });
     expect(labels?.fullDurationLabel).not.toBe(
       formatWorkspaceSegmentEditorSegmentDurationLabel(0, aiExtensionTargetSeconds, "ru").replace(/\s+/g, ""),
     );
+  });
+
+  it("labels the video mode result as looped when voiceover is longer than video", () => {
+    expect(
+      resolveWorkspaceSegmentDurationMenuTrimLabels({
+        currentVideoDurationSeconds: 5,
+        locale: "ru",
+        voiceoverDurationSeconds: 5.9,
+        voiceoverDurationSource: "actual",
+      }),
+    ).toEqual({
+      fullDurationLabel: "5с",
+      fullResultDurationLabel: "5.9с",
+      fullResultLoopsToVoiceover: true,
+      voiceoverDurationLabel: "5.9с",
+    });
+  });
+
+  it("resolves custom source video trim durations between voiceover and full video", () => {
+    expect(
+      resolveWorkspaceSegmentVideoTrimDuration({
+        requestedDurationSeconds: 7,
+        sourceVideoDurationSeconds: 60,
+        voiceoverDurationSeconds: 5,
+      }),
+    ).toEqual({
+      durationSeconds: 7,
+      durationSyncMode: "visual",
+      maximumDurationSeconds: 60,
+      minimumDurationSeconds: 5,
+    });
+    expect(
+      resolveWorkspaceSegmentVideoTrimDuration({
+        requestedDurationSeconds: 3,
+        sourceVideoDurationSeconds: 60,
+        voiceoverDurationSeconds: 5,
+      })?.durationSeconds,
+    ).toBe(5);
+    expect(
+      resolveWorkspaceSegmentVideoTrimDuration({
+        requestedDurationSeconds: 70,
+        sourceVideoDurationSeconds: 60,
+        voiceoverDurationSeconds: 5,
+      })?.durationSeconds,
+    ).toBe(60);
+    expect(
+      resolveWorkspaceSegmentVideoTrimDuration({
+        requestedDurationSeconds: 7,
+        sourceVideoDurationSeconds: 60,
+        trimToVoiceover: true,
+        voiceoverDurationSeconds: 5,
+      }),
+    ).toMatchObject({
+      durationSeconds: 5,
+      durationSyncMode: "voiceover",
+    });
+    expect(
+      resolveWorkspaceSegmentVideoTrimDuration({
+        requestedDurationSeconds: 7,
+        sourceVideoDurationSeconds: 60,
+        trimToVoiceover: false,
+        voiceoverDurationSeconds: 5,
+      }),
+    ).toMatchObject({
+      durationSeconds: 60,
+      durationSyncMode: "visual",
+    });
   });
 
   it("shows AI extension voiceover trim from estimated voiceover duration while audio duration is not measured yet", () => {

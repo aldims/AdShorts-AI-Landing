@@ -34,6 +34,7 @@ import {
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentStillPreviewUrls,
+  getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentVideoAssetPosterUrl,
   hasWorkspaceSegmentExplicitDraftVisual,
   isWorkspaceSegmentServerPhotoAnimationOverride,
@@ -722,7 +723,13 @@ const getWorkspaceSegmentDraftPlaybackVideoUrl = (segment: WorkspaceSegmentEdito
 
   if (latestVisualAction === "photo_animation") {
     const generatedPlaybackUrl = getWorkspaceSegmentDisplayAiVideoAssetPlaybackUrl(segment, "photo_animation");
-    if (!generatedPlaybackUrl && getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image") {
+    const isPendingDurationExtension =
+      getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) !== null;
+    if (
+      !generatedPlaybackUrl &&
+      !isPendingDurationExtension &&
+      getWorkspaceSegmentCustomPreviewKind(segment.photoAnimationSourceAsset) === "image"
+    ) {
       return null;
     }
 
@@ -964,6 +971,10 @@ export const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEdi
 };
 
 export const getWorkspaceSegmentDraftSourceDisplayLabel = (sourceLabel: string, locale: Locale) => {
+  if (sourceLabel === "Говорящий персонаж") {
+    return locale === "en" ? "Talking" : "Говорящий";
+  }
+
   if (locale !== "en") {
     return sourceLabel;
   }
@@ -981,8 +992,6 @@ export const getWorkspaceSegmentDraftSourceDisplayLabel = (sourceLabel: string, 
       return "Image edit";
     case "ИИ анимация":
       return "AI animation";
-    case "Говорящий персонаж":
-      return "Talking character";
     case "ИИ видео":
       return "AI video";
     default:
