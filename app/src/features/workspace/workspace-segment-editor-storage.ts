@@ -541,7 +541,7 @@ const isStoredWorkspaceSegmentAiPhotoJob = (value: unknown): value is StoredWork
     typeof payload.jobId === "string" &&
     payload.jobId.trim().length > 0 &&
     Number.isInteger(Number(payload.projectId)) &&
-    Number(payload.projectId) > 0 &&
+    Number(payload.projectId) >= 0 &&
     Number.isInteger(Number(payload.segmentIndex)) &&
     Number(payload.segmentIndex) >= 0
   );
@@ -821,7 +821,7 @@ const isStoredWorkspaceSegmentPhotoAnimationJob = (value: unknown): value is Sto
     typeof payload.jobId === "string" &&
     payload.jobId.trim().length > 0 &&
     Number.isInteger(Number(payload.projectId)) &&
-    Number(payload.projectId) > 0 &&
+    Number(payload.projectId) >= 0 &&
     Number.isInteger(Number(payload.segmentIndex)) &&
     Number(payload.segmentIndex) >= 0
   );

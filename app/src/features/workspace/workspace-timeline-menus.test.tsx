@@ -100,14 +100,18 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
   const baseDurationProps = {
     aiPrompt: "extend the shot",
     aiPromptRef: { current: null },
+    applyDurationLabel: "Применить 5с",
     canRequestAiExtension: true,
     canTrimToVoiceover: true,
+    customDurationRangeLabel: "от 3с до 5с",
     durationSwitch: null,
+    extensionButtonLabel: "Продлить с ИИ на 5с",
     extensionCreditLabel: "1 ⚡",
     hasExtensionPlan: true,
     inputId: "duration-input",
     inputRef: { current: null },
     inputValue: "5",
+    isCustomDurationSelected: false,
     isExtensionDisabled: false,
     isExtensionPending: false,
     isPhoto: false,
@@ -117,6 +121,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     onAiPromptChange: vi.fn(),
     onApplyDuration: vi.fn(),
     onClose: vi.fn(),
+    onCustomDurationSelect: vi.fn(),
     onInputValueChange: vi.fn(),
     onPreviewDurationModeSelect: null,
     onTrimToVoiceoverToggle: vi.fn(),
@@ -152,12 +157,12 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       />,
     );
 
-    expect(screen.getByRole("radio", { name: /Видео 5с/ }).getAttribute("aria-checked")).toBe("false");
-    expect(screen.getByRole("radio", { name: /Озвучка 3с/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radio", { name: /По длине видео/ }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("radio", { name: /По длине озвучки/ }).getAttribute("aria-checked")).toBe("true");
     expect(screen.queryByRole("button", { name: /Сохранить длину/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Продлить/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Продлить с ИИ на 5с/ })).toBeTruthy();
 
-    screen.getByRole("radio", { name: /Видео 5с/ }).click();
+    screen.getByRole("radio", { name: /По длине видео/ }).click();
 
     expect(onTrimToVoiceoverToggle).toHaveBeenCalledWith(false);
     expect(onApplyDuration).toHaveBeenCalledWith(0, { trimToVoiceover: false });
@@ -172,12 +177,59 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       />,
     );
 
-    expect(screen.getByRole("radio", { name: /Видео 5с/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /По длине видео/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
   });
 
-  it("allows custom video trim duration while keeping the voiceover trim shortcut", () => {
+  it("allows custom video trim duration alongside video and voiceover presets", () => {
     const onApplyDuration = vi.fn(() => ({ duration: 7 }));
+    const onClose = vi.fn();
+    const onPreviewDurationModeSelect = vi.fn();
+    const onCustomDurationSelect = vi.fn();
+
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        applyDurationLabel="Применить 7с"
+        customDurationRangeLabel="от 5с до 60с"
+        hasExtensionPlan={false}
+        isCustomDurationSelected={true}
+        inputValue="7"
+        onApplyDuration={onApplyDuration}
+        onClose={onClose}
+        onCustomDurationSelect={onCustomDurationSelect}
+        onPreviewDurationModeSelect={onPreviewDurationModeSelect}
+        shouldShowManualDurationInput={true}
+        trimToVoiceover={true}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "60с",
+          fullResultDurationLabel: "60с",
+          fullResultLoopsToVoiceover: false,
+          voiceoverDurationLabel: "5с",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /По длине видео/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /По длине озвучки/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Задать длину/ }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("textbox", { name: "Задать длину сцены" }) as HTMLInputElement).value).toBe("7");
+
+    screen.getByRole("radio", { name: /Задать длину/ }).click();
+
+    expect(onCustomDurationSelect).toHaveBeenCalledOnce();
+    expect(onPreviewDurationModeSelect).not.toHaveBeenCalled();
+    expect(onApplyDuration).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    screen.getByRole("button", { name: "Применить 7с" }).click();
+
+    expect(onApplyDuration).toHaveBeenCalledWith(0);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("applies a video-length preset immediately when custom trim is available", () => {
+    const onApplyDuration = vi.fn(() => ({ duration: 60 }));
     const onClose = vi.fn();
     const onPreviewDurationModeSelect = vi.fn();
 
@@ -185,7 +237,6 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
         hasExtensionPlan={false}
-        inputValue="7"
         onApplyDuration={onApplyDuration}
         onClose={onClose}
         onPreviewDurationModeSelect={onPreviewDurationModeSelect}
@@ -200,19 +251,10 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       />,
     );
 
-    expect((screen.getByRole("textbox", { name: "Длительность визуала" }) as HTMLInputElement).value).toBe("7");
-    expect(screen.getByRole("radio", { name: /Видео 60с/ })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: /Озвучка 5с/ })).toBeTruthy();
+    screen.getByRole("radio", { name: /По длине видео/ }).click();
 
-    screen.getByRole("radio", { name: /Видео 60с/ }).click();
-
-    expect(onPreviewDurationModeSelect).toHaveBeenCalledWith(false);
-    expect(onApplyDuration).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-
-    screen.getByRole("button", { name: "ОК" }).click();
-
-    expect(onApplyDuration).toHaveBeenCalledWith(0);
+    expect(onPreviewDurationModeSelect).not.toHaveBeenCalled();
+    expect(onApplyDuration).toHaveBeenCalledWith(0, { trimToVoiceover: false });
     expect(onClose).toHaveBeenCalledOnce();
   });
 

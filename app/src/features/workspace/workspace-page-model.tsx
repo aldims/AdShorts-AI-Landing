@@ -619,6 +619,10 @@ export type WorkspaceSegmentPhotoAnimationJobCreateRequest = WorkspaceSegmentAiV
   customVideoFileName?: string;
   durationExtensionBaseDurationSeconds?: number;
   durationExtensionMode?: "stitch";
+  durationExtensionSourceVideoAssetId?: number;
+  durationExtensionSourceVideoFileDataUrl?: string;
+  durationExtensionSourceVideoFileMimeType?: string;
+  durationExtensionSourceVideoFileName?: string;
   durationExtensionTailDurationSeconds?: number;
   durationExtensionTargetDurationSeconds?: number;
 };

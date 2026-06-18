@@ -352,6 +352,7 @@ import {
   getWorkspaceSegmentImageUpscaleSource,
   getWorkspaceSegmentPhotoToolUnavailableReason,
   getWorkspaceSegmentPromptSceneModeForTab,
+  getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentSceneReferenceAssetId,
   getWorkspaceSegmentSceneSoundVisualAssetId,
   getWorkspaceSegmentSceneSoundVisualJobSource,
@@ -1490,6 +1491,7 @@ export function WorkspacePage({
     value: string;
   } | null>(null);
   const [segmentTimelineDurationAiPrompt, setSegmentTimelineDurationAiPrompt] = useState("");
+  const [segmentTimelineDurationCustomModeSelected, setSegmentTimelineDurationCustomModeSelected] = useState(false);
   const [segmentTimelineDurationTrimToVoiceover, setSegmentTimelineDurationTrimToVoiceover] = useState(false);
   const [segmentTimelineVisualMenuSegmentIndex, setSegmentTimelineVisualMenuSegmentIndex] = useState<number | null>(null);
   const [segmentTimelineVisualMenuStyle, setSegmentTimelineVisualMenuStyle] = useState<CSSProperties | null>(null);
@@ -12677,7 +12679,7 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
-        if (options.projectId) {
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
           upsertStoredWorkspaceSegmentAiPhotoJob(session.email, {
             createdAt: startedAt,
             jobId: safeJobId,
@@ -13802,7 +13804,7 @@ export function WorkspacePage({
 
       applyWorkspaceProfile(payload.data.profile);
       const pendingJobCreatedAt = Date.now();
-      if (visualJobBinding.projectId) {
+      if (typeof visualJobBinding.projectId === "number" && visualJobBinding.projectId >= 0) {
         upsertStoredWorkspaceSegmentAiPhotoJob(session.email, {
           createdAt: pendingJobCreatedAt,
           jobId: payload.data.jobId,
@@ -14473,6 +14475,7 @@ export function WorkspacePage({
       durationExtensionBaseDurationSeconds?: number | null;
       durationExtensionMode?: "stitch";
       durationExtensionSourceDurationSeconds?: number | null;
+      durationExtensionSourceVideoAsset?: StudioCustomVideoFile | null;
       durationExtensionTailDurationSeconds?: number | null;
       durationExtensionTargetDurationSeconds?: number | null;
       durationSeconds?: number;
@@ -14534,6 +14537,10 @@ export function WorkspacePage({
     const photoAnimationUploadSourceAsset = targetSegment
       ? getWorkspacePhotoAnimationUploadSourceAsset(targetSegment, photoAnimationSourceAsset)
       : photoAnimationSourceAsset;
+    const durationExtensionSourceVideoAsset =
+      options?.durationExtensionMode === "stitch" && targetSegment
+        ? (options.durationExtensionSourceVideoAsset ?? getWorkspaceSegmentCurrentVideoSourceAsset(targetSegment))
+        : null;
     const nextPrompt = options?.prompt ?? targetSegment?.aiVideoPrompt ?? "";
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
@@ -14625,10 +14632,33 @@ export function WorkspacePage({
             segmentIndex: visualJobBinding.segmentIndex,
           })
         : null;
+      const durationExtensionSourceVideoExistingAssetId = getPositiveWorkspaceMediaAssetId(
+        durationExtensionSourceVideoAsset?.assetId,
+      );
+      const durationExtensionSourceVideoUpload =
+        options?.durationExtensionMode === "stitch" &&
+        durationExtensionSourceVideoAsset &&
+        !durationExtensionSourceVideoExistingAssetId
+          ? await ensureStudioUploadedAssetIdWithInlineFallback(durationExtensionSourceVideoAsset, {
+              fallbackFileName: durationExtensionSourceVideoAsset.fileName || `segment-video-${targetSegmentIndex + 1}.mp4`,
+              fallbackMimeType: durationExtensionSourceVideoAsset.mimeType,
+              kind: "segment_source",
+              language: selectedLanguage,
+              mediaType: "video",
+              projectId: visualJobBinding.projectId,
+              role: "segment_source",
+              segmentIndex: visualJobBinding.segmentIndex,
+            })
+          : null;
       const customVideoAssetId = standardUpload?.assetId ?? null;
       const customVideoFileDataUrl = premiumCustomVideoFileDataUrl ?? standardUpload?.dataUrl;
       const customVideoFileMimeType = photoAnimationUploadSourceAsset?.mimeType;
       const customVideoFileName = photoAnimationUploadSourceAsset?.fileName;
+      const durationExtensionSourceVideoAssetId =
+        durationExtensionSourceVideoExistingAssetId ?? durationExtensionSourceVideoUpload?.assetId ?? null;
+      const durationExtensionSourceVideoFileDataUrl = durationExtensionSourceVideoUpload?.dataUrl;
+      const durationExtensionSourceVideoFileMimeType = durationExtensionSourceVideoAsset?.mimeType;
+      const durationExtensionSourceVideoFileName = durationExtensionSourceVideoAsset?.fileName;
 
       if (generationQuality === "standard" && photoAnimationUploadSourceAsset && !customVideoAssetId && !customVideoFileDataUrl) {
         logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.empty-source-data", {
@@ -14638,6 +14668,19 @@ export function WorkspacePage({
         });
         throw new Error("Не удалось подготовить выбранное фото для анимации.");
       }
+      if (
+        options?.durationExtensionMode === "stitch" &&
+        durationExtensionSourceVideoAsset &&
+        !durationExtensionSourceVideoAssetId &&
+        !durationExtensionSourceVideoFileDataUrl
+      ) {
+        logSegmentEditorDiagnostics("client.segment-editor.photo-animation.blocked.empty-extension-source-video", {
+          sourceMimeType: durationExtensionSourceVideoAsset.mimeType ?? null,
+          sourceRemoteUrl: durationExtensionSourceVideoAsset.remoteUrl ?? null,
+          targetSegmentIndex,
+        });
+        throw new Error("Не удалось подготовить исходное видео для ИИ-продления.");
+      }
 
       if (options?.shouldCloseModal) {
         closeSegmentAiPhotoModal();
@@ -14645,9 +14688,13 @@ export function WorkspacePage({
 
       logSegmentEditorDiagnostics("client.segment-editor.photo-animation.fetch.start", {
         customVideoAssetId,
+        durationExtensionSourceVideoAssetId,
         durationSeconds,
         hasCustomVideoFileDataUrl: Boolean(customVideoFileDataUrl),
+        hasDurationExtensionSourceVideoFileDataUrl: Boolean(durationExtensionSourceVideoFileDataUrl),
         quality: generationQuality,
+        sourceVideoFileName: durationExtensionSourceVideoFileName ?? null,
+        sourceVideoMimeType: durationExtensionSourceVideoFileMimeType ?? null,
         sourceFileName: customVideoFileName ?? null,
         sourceMimeType: customVideoFileMimeType ?? null,
         targetSegmentIndex,
@@ -14665,6 +14712,10 @@ export function WorkspacePage({
           customVideoFileName,
           durationExtensionBaseDurationSeconds: options?.durationExtensionBaseDurationSeconds ?? undefined,
           durationExtensionMode: options?.durationExtensionMode,
+          durationExtensionSourceVideoAssetId: durationExtensionSourceVideoAssetId ?? undefined,
+          durationExtensionSourceVideoFileDataUrl: durationExtensionSourceVideoFileDataUrl ?? undefined,
+          durationExtensionSourceVideoFileMimeType: durationExtensionSourceVideoFileMimeType ?? undefined,
+          durationExtensionSourceVideoFileName: durationExtensionSourceVideoFileName ?? undefined,
           durationExtensionTailDurationSeconds: options?.durationExtensionTailDurationSeconds ?? undefined,
           durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds ?? undefined,
           durationSeconds,
@@ -21563,6 +21614,7 @@ export function WorkspacePage({
     const shouldCloseCurrentMenu = segmentTimelineDurationMenuSegmentIndex === targetSegment.index;
     if (shouldCloseCurrentMenu) {
       setSegmentTimelineDurationSourceOverride(null);
+      setSegmentTimelineDurationCustomModeSelected(false);
       setSegmentTimelineDurationMenuSegmentIndex(null);
       return;
     }
@@ -21612,8 +21664,15 @@ export function WorkspacePage({
           ) ?? aiExtensionTargetDurationSeconds);
     const currentDurationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(targetSegment.durationSyncMode);
     const hasUserSelectedDurationSync = targetSegment.durationSyncModeUserSelected === true;
+    const shouldOpenCustomDuration =
+      shouldOpenVideoTrimRange &&
+      currentSlotDurationSeconds !== null &&
+      normalizedTargetVoiceoverDurationSeconds !== null &&
+      !areWorkspaceSegmentDurationValuesEqual(currentSlotDurationSeconds, sourceVideoDurationSeconds) &&
+      !areWorkspaceSegmentDurationValuesEqual(currentSlotDurationSeconds, normalizedTargetVoiceoverDurationSeconds);
     setSegmentTimelineDurationInputValue(formatWorkspaceSegmentDurationInputValue(initialDurationSeconds));
     setSegmentTimelineDurationAiPrompt(nextPrompt);
+    setSegmentTimelineDurationCustomModeSelected(shouldOpenCustomDuration);
     setSegmentTimelineDurationTrimToVoiceover(
       (currentDurationSyncMode === "voiceover" && hasUserSelectedDurationSync) ||
         (!hasUserSelectedDurationSync && shouldDefaultDurationToVoiceover),
@@ -24849,7 +24908,7 @@ export function WorkspacePage({
   const segmentTimelineDurationMenuCanTrimSourceVideo =
     segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationMenuVideoLongerThanVoiceover;
   const segmentTimelineDurationMenuShouldBuildAiExtensionPlan =
-    !isSegmentTimelineDurationMenuPhoto && !segmentTimelineDurationMenuCanTrimSourceVideo;
+    !isSegmentTimelineDurationMenuPhoto;
   const segmentTimelineDurationMenuMatchedInputSeconds =
     segmentTimelineDurationMenuAutoTrimToVoiceover ||
     (segmentTimelineDurationMenuCanTrimToVoiceover && !segmentTimelineDurationMenuCanTrimSourceVideo)
@@ -24892,8 +24951,14 @@ export function WorkspacePage({
       : segmentTimelineDurationMenuSegment;
   const segmentTimelineDurationMenuAiExtensionInputSeconds =
     !isSegmentTimelineDurationMenuPhoto &&
-    segmentTimelineDurationMenuSourceSeconds !== null &&
-    segmentTimelineDurationMenuShouldBuildAiExtensionPlan
+    segmentTimelineDurationMenuCanTrimSourceVideo &&
+    segmentTimelineDurationMenuSourceSeconds !== null
+      ? roundWorkspaceSegmentTimelineSeconds(
+          segmentTimelineDurationMenuSourceSeconds + segmentTimelineDurationSelectedExtensionDurationSeconds,
+        )
+      : !isSegmentTimelineDurationMenuPhoto &&
+        segmentTimelineDurationMenuSourceSeconds !== null &&
+        segmentTimelineDurationMenuShouldBuildAiExtensionPlan
       ? segmentTimelineDurationMenuRequestedInputSeconds
       : segmentTimelineDurationMenuEffectiveInputSeconds;
   const segmentTimelineDurationMenuAiExtensionPreviewSegment: WorkspaceSegmentEditorDraftSegment | null =
@@ -25008,11 +25073,15 @@ export function WorkspacePage({
   const shouldShowSegmentTimelineManualDurationInput =
     Boolean(segmentTimelineDurationMenuSegment) &&
     !isSegmentTimelineDurationMenuPhoto &&
-    !segmentTimelineDurationMenuExtensionPlan &&
+    (!segmentTimelineDurationMenuExtensionPlan || segmentTimelineDurationMenuCanTrimSourceVideo) &&
     (!segmentTimelineDurationMenuCanTrimToVoiceover || segmentTimelineDurationMenuCanTrimSourceVideo);
   const segmentTimelineDurationMenuTitle = (() => {
     if (isSegmentTimelineDurationMenuPhoto) {
       return workspaceText(locale, "Длительность фото", "Photo duration");
+    }
+
+    if (segmentTimelineDurationMenuCanTrimSourceVideo) {
+      return workspaceText(locale, "Длительность сцены", "Scene duration");
     }
 
     if (segmentTimelineDurationMenuExtensionPlan) {
@@ -25021,10 +25090,6 @@ export function WorkspacePage({
         `Продлить видео на ${segmentTimelineDurationMenuRequestedExtensionSecondsLabel} секунд`,
         `Extend video by ${segmentTimelineDurationMenuRequestedExtensionSecondsLabel} seconds`,
       );
-    }
-
-    if (segmentTimelineDurationMenuCanTrimSourceVideo) {
-      return workspaceText(locale, "Обрезать видео", "Trim video");
     }
 
     if (segmentTimelineDurationMenuCanTrimToVoiceover && segmentTimelineDurationTrimToVoiceover) {
@@ -25058,10 +25123,46 @@ export function WorkspacePage({
         )
       : null
     : segmentTimelineDurationMenuExtensionPlan
-      ? segmentTimelineDurationMenuRangeLabel
+      ? segmentTimelineDurationMenuTrimRangeLabel ?? segmentTimelineDurationMenuRangeLabel
       : segmentTimelineDurationMenuTrimRangeLabel
         ? segmentTimelineDurationMenuTrimRangeLabel
       : null;
+  const segmentTimelineDurationMenuApplyLabel =
+    segmentTimelineDurationMenuInputSeconds !== null
+      ? workspaceText(
+          locale,
+          `Применить ${formatWorkspaceSegmentEditorSegmentDurationLabel(
+            0,
+            segmentTimelineDurationMenuInputSeconds,
+            locale,
+          ).replace(/\s+/g, "")}`,
+          `Apply ${formatWorkspaceSegmentEditorSegmentDurationLabel(
+            0,
+            segmentTimelineDurationMenuInputSeconds,
+            locale,
+          ).replace(/\s+/g, "")}`,
+        )
+      : workspaceText(locale, "Применить", "Apply");
+  const segmentTimelineDurationMenuInputIsCustom = Boolean(
+    shouldShowSegmentTimelineManualDurationInput &&
+      segmentTimelineDurationMenuCanTrimSourceVideo &&
+      segmentTimelineDurationMenuInputSeconds !== null &&
+      segmentTimelineDurationMenuFullVideoSeconds !== null &&
+      segmentTimelineDurationMenuVoiceoverSeconds !== null &&
+      !areWorkspaceSegmentDurationValuesEqual(
+        segmentTimelineDurationMenuInputSeconds,
+        segmentTimelineDurationMenuFullVideoSeconds,
+      ) &&
+      !areWorkspaceSegmentDurationValuesEqual(
+        segmentTimelineDurationMenuInputSeconds,
+        segmentTimelineDurationMenuVoiceoverSeconds,
+      ),
+  );
+  const segmentTimelineDurationMenuIsCustomSelected = Boolean(
+    shouldShowSegmentTimelineManualDurationInput &&
+      segmentTimelineDurationMenuCanTrimSourceVideo &&
+      (segmentTimelineDurationCustomModeSelected || segmentTimelineDurationMenuInputIsCustom),
+  );
   const handleSegmentTimelineDurationModePreview = (trimToVoiceover: boolean) => {
     const targetDurationSeconds = trimToVoiceover
       ? segmentTimelineDurationMenuVoiceoverSeconds
@@ -25071,7 +25172,13 @@ export function WorkspacePage({
     }
 
     setSegmentEditorVideoError(null);
+    setSegmentTimelineDurationCustomModeSelected(false);
     setSegmentTimelineDurationInputValue(formatWorkspaceSegmentDurationInputValue(targetDurationSeconds));
+  };
+  const handleSegmentTimelineDurationCustomSelect = () => {
+    setSegmentEditorVideoError(null);
+    setSegmentTimelineDurationCustomModeSelected(true);
+    setSegmentTimelineDurationTrimToVoiceover(false);
   };
   const handleSegmentTimelineDurationAiExtensionClick = () => {
     if (segmentTimelineDurationMenuTargetSeconds === null) {
@@ -25102,8 +25209,10 @@ export function WorkspacePage({
     <WorkspaceSegmentTimelineDurationMenu
       aiPrompt={segmentTimelineDurationAiPrompt}
       aiPromptRef={segmentTimelineDurationAiPromptRef}
+      applyDurationLabel={segmentTimelineDurationMenuApplyLabel}
       canRequestAiExtension={Boolean(segmentTimelineDurationMenuExtensionPlan?.canRequestAiExtension)}
       canTrimToVoiceover={segmentTimelineDurationMenuCanTrimToVoiceover}
+      customDurationRangeLabel={segmentTimelineDurationMenuTrimRangeLabel}
       durationSwitch={
         segmentTimelineDurationMenuExtensionPlan
           ? renderSegmentPhotoAnimationDurationSwitch({
@@ -25115,11 +25224,17 @@ export function WorkspacePage({
             })
           : null
       }
+      extensionButtonLabel={workspaceText(
+        locale,
+        `Продлить с ИИ на ${segmentTimelineDurationMenuExtensionSecondsLabel}с`,
+        `Extend with AI by ${segmentTimelineDurationMenuExtensionSecondsLabel}s`,
+      )}
       extensionCreditLabel={formatSegmentVisualCreditsLabel(segmentTimelineDurationMenuExtensionCreditCost)}
       hasExtensionPlan={Boolean(segmentTimelineDurationMenuExtensionPlan)}
       inputId={segmentTimelineDurationInputId}
       inputRef={segmentTimelineDurationInputRef}
       inputValue={segmentTimelineDurationInputValue}
+      isCustomDurationSelected={segmentTimelineDurationMenuIsCustomSelected}
       isExtensionDisabled={isSegmentTimelineDurationAiExtensionDisabled}
       isExtensionPending={isSegmentTimelineDurationAiExtensionPending}
       isPhoto={isSegmentTimelineDurationMenuPhoto}
@@ -25131,9 +25246,17 @@ export function WorkspacePage({
         setSegmentTimelineDurationAiPrompt(value);
       }}
       onApplyDuration={handleSegmentTimelineDurationMenuApply}
-      onClose={() => setSegmentTimelineDurationMenuSegmentIndex(null)}
+      onClose={() => {
+        setSegmentTimelineDurationCustomModeSelected(false);
+        setSegmentTimelineDurationMenuSegmentIndex(null);
+      }}
+      onCustomDurationSelect={shouldShowSegmentTimelineManualDurationInput ? handleSegmentTimelineDurationCustomSelect : null}
       onInputValueChange={(value) => {
         setSegmentEditorVideoError(null);
+        if (shouldShowSegmentTimelineManualDurationInput) {
+          setSegmentTimelineDurationCustomModeSelected(true);
+          setSegmentTimelineDurationTrimToVoiceover(false);
+        }
         setSegmentTimelineDurationInputValue(value);
       }}
       onPreviewDurationModeSelect={

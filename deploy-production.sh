@@ -65,6 +65,7 @@ node scripts/generate-static-landing.mjs
 node scripts/generate-static-bofu-pages.mjs
 node scripts/seo-commercial-growth-sprint.mjs
 node scripts/seo-organic-growth-sprint.mjs
+node scripts/seo-yandex-growth-sprint.mjs
 node scripts/generate-static-press-pages.mjs
 node scripts/generate-static-contact-pages.mjs
 node scripts/update-static-language-switchers.mjs

@@ -25,14 +25,18 @@ type WorkspaceTimelineSpan = {
 type WorkspaceSegmentTimelineDurationMenuProps = {
   aiPrompt: string;
   aiPromptRef: RefObject<HTMLTextAreaElement | null>;
+  applyDurationLabel: string;
   canRequestAiExtension: boolean;
   canTrimToVoiceover: boolean;
+  customDurationRangeLabel: string | null;
   durationSwitch: ReactNode;
+  extensionButtonLabel: string;
   extensionCreditLabel: string;
   hasExtensionPlan: boolean;
   inputId: string;
   inputRef: RefObject<HTMLInputElement | null>;
   inputValue: string;
+  isCustomDurationSelected: boolean;
   isExtensionDisabled: boolean;
   isExtensionPending: boolean;
   isPhoto: boolean;
@@ -42,6 +46,7 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   onAiPromptChange: (value: string) => void;
   onApplyDuration: (segmentIndex: number, options?: { trimToVoiceover?: boolean }) => unknown;
   onClose: () => void;
+  onCustomDurationSelect: (() => void) | null;
   onInputValueChange: (value: string) => void;
   onPreviewDurationModeSelect: ((trimToVoiceover: boolean) => void) | null;
   onTrimToVoiceoverToggle: (trimToVoiceover: boolean) => void;
@@ -63,14 +68,18 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
 export function WorkspaceSegmentTimelineDurationMenu({
   aiPrompt,
   aiPromptRef,
+  applyDurationLabel,
   canRequestAiExtension,
   canTrimToVoiceover,
+  customDurationRangeLabel,
   durationSwitch,
+  extensionButtonLabel,
   extensionCreditLabel,
   hasExtensionPlan,
   inputId,
   inputRef,
   inputValue,
+  isCustomDurationSelected,
   isExtensionDisabled,
   isExtensionPending,
   isPhoto,
@@ -80,6 +89,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
   onAiPromptChange,
   onApplyDuration,
   onClose,
+  onCustomDurationSelect,
   onInputValueChange,
   onPreviewDurationModeSelect,
   onTrimToVoiceoverToggle,
@@ -102,9 +112,25 @@ export function WorkspaceSegmentTimelineDurationMenu({
       onClose();
     }
   };
+  const fullVideoResultDurationLabel =
+    trimToVoiceoverLabels?.fullResultDurationLabel ?? trimToVoiceoverLabels?.fullDurationLabel;
+  const fullVideoResultLoopsToVoiceover = trimToVoiceoverLabels?.fullResultLoopsToVoiceover === true;
+  const shouldShowDurationModeChoices =
+    canTrimToVoiceover && trimToVoiceoverLabels !== null && !fullVideoResultLoopsToVoiceover;
+  const shouldShowLoopedDurationSummary = trimToVoiceoverLabels !== null && fullVideoResultLoopsToVoiceover;
+  const shouldShowCustomDurationChoice = shouldShowManualDurationInput && shouldShowDurationModeChoices;
+  const shouldShowStandaloneManualDurationInput = shouldShowManualDurationInput && !shouldShowCustomDurationChoice;
   const selectDurationMode = (nextTrimToVoiceover: boolean) => {
     if (trimToVoiceover !== nextTrimToVoiceover) {
       onTrimToVoiceoverToggle(nextTrimToVoiceover);
+    }
+
+    if (shouldShowCustomDurationChoice) {
+      const timing = onApplyDuration(segment.index, { trimToVoiceover: nextTrimToVoiceover });
+      if (timing) {
+        onClose();
+      }
+      return;
     }
 
     if (shouldShowManualDurationInput && onPreviewDurationModeSelect) {
@@ -117,12 +143,71 @@ export function WorkspaceSegmentTimelineDurationMenu({
       onClose();
     }
   };
-  const fullVideoResultDurationLabel =
-    trimToVoiceoverLabels?.fullResultDurationLabel ?? trimToVoiceoverLabels?.fullDurationLabel;
-  const fullVideoResultLoopsToVoiceover = trimToVoiceoverLabels?.fullResultLoopsToVoiceover === true;
-  const shouldShowDurationModeChoices =
-    canTrimToVoiceover && trimToVoiceoverLabels !== null && !fullVideoResultLoopsToVoiceover;
-  const shouldShowLoopedDurationSummary = trimToVoiceoverLabels !== null && fullVideoResultLoopsToVoiceover;
+  const selectCustomDuration = () => {
+    if (onCustomDurationSelect) {
+      onCustomDurationSelect();
+    }
+
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+  const renderDurationInputField = (variant: "primary" | "custom") => {
+    const label = workspaceText(
+      locale,
+      variant === "custom"
+        ? "Задать длину сцены"
+        : isPhoto
+          ? "Длительность визуала"
+          : "Длительность сцены",
+      variant === "custom"
+        ? "Set scene duration"
+        : isPhoto
+          ? "Visual duration"
+          : "Scene duration",
+    );
+
+    return (
+      <div
+        className={`studio-segment-editor__timeline-duration-menu-field studio-segment-editor__timeline-duration-menu-field--${variant}`}
+      >
+        <label htmlFor={inputId}>{label}</label>
+        <div className="studio-segment-editor__timeline-duration-menu-input-row">
+          <input
+            ref={inputRef}
+            id={inputId}
+            className="studio-segment-editor__timeline-duration-menu-input"
+            type="text"
+            inputMode="decimal"
+            value={inputValue}
+            placeholder="4.5"
+            aria-label={label}
+            title={workspaceText(
+              locale,
+              "Можно ввести 4, 4.5 или 00:04.",
+              "Enter 4, 4.5, or 00:04.",
+            )}
+            onChange={(event) => {
+              onInputValueChange(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applyDuration();
+                return;
+              }
+
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onClose();
+              }
+            }}
+          />
+          <button type="button" onClick={applyDuration}>
+            {applyDurationLabel}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return createPortal(
     <div
@@ -150,52 +235,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
             {subtitle ? <small>{subtitle}</small> : null}
           </span>
         </div>
-        {shouldShowManualDurationInput ? (
-          <div className="studio-segment-editor__timeline-duration-menu-field studio-segment-editor__timeline-duration-menu-field--primary">
-            <label htmlFor={inputId}>
-              {workspaceText(
-                locale,
-                isPhoto ? "Длительность визуала" : "Длительность сцены",
-                isPhoto ? "Visual duration" : "Scene duration",
-              )}
-            </label>
-            <div className="studio-segment-editor__timeline-duration-menu-input-row">
-              <input
-                ref={inputRef}
-                id={inputId}
-                className="studio-segment-editor__timeline-duration-menu-input"
-                type="text"
-                inputMode="decimal"
-                value={inputValue}
-                placeholder="4.5"
-                aria-label={workspaceText(locale, "Длительность визуала", "Visual duration")}
-                title={workspaceText(
-                  locale,
-                  "Можно ввести 4, 4.5 или 00:04.",
-                  "Enter 4, 4.5, or 00:04.",
-                )}
-                onChange={(event) => {
-                  onInputValueChange(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    applyDuration();
-                    return;
-                  }
-
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    onClose();
-                  }
-                }}
-              />
-              <button type="button" onClick={applyDuration}>
-                {workspaceText(locale, "ОК", "OK")}
-              </button>
-            </div>
-          </div>
-        ) : null}
+        {shouldShowStandaloneManualDurationInput ? renderDurationInputField("primary") : null}
         {shouldShowLoopedDurationSummary && trimToVoiceoverLabels ? (
           <>
             <div className="studio-segment-editor__timeline-duration-summary">
@@ -219,17 +259,19 @@ export function WorkspaceSegmentTimelineDurationMenu({
         ) : null}
         {shouldShowDurationModeChoices && trimToVoiceoverLabels ? (
           <div
-            className="studio-segment-editor__timeline-duration-menu-modes"
+            className={`studio-segment-editor__timeline-duration-menu-modes${
+              shouldShowCustomDurationChoice ? " studio-segment-editor__timeline-duration-menu-modes--with-custom" : ""
+            }`}
             role="radiogroup"
             aria-label={workspaceText(locale, "Как синхронизировать видео и озвучку", "How to sync video and voiceover")}
           >
             <button
               className={`studio-segment-editor__timeline-duration-menu-mode${
-                !trimToVoiceover ? " is-selected" : ""
+                !trimToVoiceover && !isCustomDurationSelected ? " is-selected" : ""
               }`}
               type="button"
               role="radio"
-              aria-checked={!trimToVoiceover}
+              aria-checked={!trimToVoiceover && !isCustomDurationSelected}
               onClick={() => {
                 selectDurationMode(false);
               }}
@@ -237,29 +279,29 @@ export function WorkspaceSegmentTimelineDurationMenu({
               <strong>
                 {workspaceText(
                   locale,
-                  `Видео ${trimToVoiceoverLabels.fullDurationLabel}`,
-                  `Video ${trimToVoiceoverLabels.fullDurationLabel}`,
+                  "По длине видео",
+                  "Use video length",
                 )}
               </strong>
               <small>
                 {workspaceText(
                   locale,
                   fullVideoResultLoopsToVoiceover
-                    ? `итог в Shorts: ${fullVideoResultDurationLabel} с повтором`
-                    : `итог в Shorts: ${fullVideoResultDurationLabel}`,
+                    ? `${fullVideoResultDurationLabel} с повтором`
+                    : trimToVoiceoverLabels.fullDurationLabel,
                   fullVideoResultLoopsToVoiceover
-                    ? `Shorts result: ${fullVideoResultDurationLabel}, looped`
-                    : `Shorts result: ${fullVideoResultDurationLabel}`,
+                    ? `${fullVideoResultDurationLabel}, looped`
+                    : trimToVoiceoverLabels.fullDurationLabel,
                 )}
               </small>
             </button>
             <button
               className={`studio-segment-editor__timeline-duration-menu-mode${
-                trimToVoiceover ? " is-selected" : ""
+                trimToVoiceover && !isCustomDurationSelected ? " is-selected" : ""
               }`}
               type="button"
               role="radio"
-              aria-checked={trimToVoiceover}
+              aria-checked={trimToVoiceover && !isCustomDurationSelected}
               onClick={() => {
                 selectDurationMode(true);
               }}
@@ -267,20 +309,38 @@ export function WorkspaceSegmentTimelineDurationMenu({
               <strong>
                 {workspaceText(
                   locale,
-                  `Озвучка ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
-                  `Voice ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                  "По длине озвучки",
+                  "Use voiceover length",
                 )}
               </strong>
               <small>
                 {workspaceText(
                   locale,
-                  `итог в Shorts: ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
-                  `Shorts result: ${trimToVoiceoverLabels.voiceoverDurationLabel}`,
+                  trimToVoiceoverLabels.voiceoverDurationLabel,
+                  trimToVoiceoverLabels.voiceoverDurationLabel,
                 )}
               </small>
             </button>
+            {shouldShowCustomDurationChoice ? (
+              <button
+                className={`studio-segment-editor__timeline-duration-menu-mode${
+                  isCustomDurationSelected ? " is-selected" : ""
+                }`}
+                type="button"
+                role="radio"
+                aria-checked={isCustomDurationSelected}
+                onClick={selectCustomDuration}
+              >
+                <strong>{workspaceText(locale, "Задать длину", "Custom length")}</strong>
+                <small>
+                  {customDurationRangeLabel ??
+                    workspaceText(locale, "между озвучкой и видео", "between voiceover and video")}
+                </small>
+              </button>
+            ) : null}
           </div>
         ) : null}
+        {shouldShowCustomDurationChoice && isCustomDurationSelected ? renderDurationInputField("custom") : null}
         {hasExtensionPlan ? (
           <div className="studio-segment-editor__timeline-duration-menu-field studio-segment-editor__timeline-duration-prompt-card">
             <textarea
@@ -323,7 +383,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
                     <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
                   ) : (
                     <>
-                      <span>{workspaceText(locale, "Продлить", "Extend")}</span>
+                      <span>{extensionButtonLabel}</span>
                       <small>{extensionCreditLabel}</small>
                     </>
                   )}

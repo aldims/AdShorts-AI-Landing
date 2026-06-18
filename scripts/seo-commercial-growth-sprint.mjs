@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-06-17";
+const dateModified = "2026-06-18";
 const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
@@ -982,11 +982,919 @@ const ruBuyerGuidePages = [
   },
 ];
 
+const enYandexExpansionPages = [
+  {
+    slug: "ai-tool-for-creating-shorts",
+    ruSlug: "neyroset-dlya-sozdaniya-shorts",
+    targetQuery: "ai tool for creating shorts",
+    title: "AI Tool for Creating Shorts: Script, Voice and Subtitles",
+    description:
+      "AI tool for creating Shorts from one idea: generate a script, voiceover, subtitles, visual rhythm and CTA-ready vertical video draft.",
+    h1: "AI Tool for Creating Shorts",
+    lead:
+      "Use one AI workflow to turn a topic, offer or FAQ into a short vertical video draft with script, voice, subtitles and a clear first frame.",
+    ctaSource: "seo_en_ai_tool_for_creating_shorts",
+    useCases: ["Creators producing repeatable Shorts", "Businesses turning FAQs into video", "Teams testing hooks without manual editing"],
+    workflow: ["Enter one topic or offer", "Generate the short script and voiceover", "Review subtitles and first frame", "Export one clean 9:16 test"],
+    differentiators: [
+      "The workflow connects script, voice and visual pacing instead of generating only text.",
+      "It is built for repeatable organic tests, not one isolated demo video.",
+      "Editable drafts help improve hooks, subtitles and CTA before publishing.",
+    ],
+    related: [
+      ["../shorts-creation-service/", "Shorts creation service"],
+      ["../automatic-shorts-creation/", "automatic Shorts creation"],
+      ["../ai-shorts-generator/", "AI Shorts generator"],
+      ["../shorts-video-maker/", "Shorts video maker"],
+    ],
+    faq: [
+      ["What should I give the AI first?", "Start with one audience, one problem and one promised result. Specific input creates a stronger first draft."],
+      ["Can this replace manual editing?", "It can remove much of the repetitive work, but you should still review the hook, claims and CTA."],
+      ["What should I test first?", "Test the first frame and first sentence because they decide whether people keep watching."],
+    ],
+  },
+  {
+    slug: "shorts-creation-service",
+    ruSlug: "servis-dlya-sozdaniya-shorts",
+    targetQuery: "shorts creation service",
+    title: "Shorts Creation Service: AI Workflow for Vertical Videos",
+    description:
+      "Shorts creation service for creators and businesses: create vertical video drafts with AI script, voiceover, subtitles, visuals and CTA.",
+    h1: "Shorts Creation Service",
+    lead:
+      "Create Shorts without starting a production task from scratch every time. The service turns one idea into a structured draft you can edit and publish.",
+    ctaSource: "seo_en_shorts_creation_service",
+    useCases: ["Small businesses testing offers", "Creators building a weekly Shorts system", "Agencies preparing short-form drafts"],
+    workflow: ["Choose a content angle", "Generate the draft", "Edit hook and subtitles", "Publish and measure retention"],
+    differentiators: [
+      "Designed around a complete short-form workflow, not a single disconnected AI feature.",
+      "Useful for repeatable videos where format consistency matters.",
+      "Connects creation pages with examples, pricing and practical Shorts guides.",
+    ],
+    related: [
+      ["../ai-tool-for-creating-shorts/", "AI tool for creating Shorts"],
+      ["../shorts-video-maker/", "Shorts video maker"],
+      ["../youtube-shorts-generator/", "YouTube Shorts generator"],
+      ["../pricing/", "pricing"],
+    ],
+    faq: [
+      ["Who is this service for?", "It is for teams and creators who need a faster repeatable way to create short vertical videos."],
+      ["Is it a done-for-you agency?", "No. It is a self-serve AI workflow where you create and edit the draft yourself."],
+      ["What result should I expect?", "A publishable draft that still benefits from a quick human check before posting."],
+    ],
+  },
+  {
+    slug: "automatic-shorts-creation",
+    ruSlug: "avtomaticheskoe-sozdanie-shorts",
+    targetQuery: "automatic shorts creation",
+    title: "Automatic Shorts Creation: Repeatable AI Video Workflow",
+    description:
+      "Automatic Shorts creation with AI: generate scripts, voiceover, subtitles and vertical video drafts for regular organic content tests.",
+    h1: "Automatic Shorts Creation",
+    lead:
+      "Automate the repetitive parts of Shorts production while keeping strategy, facts and final review under your control.",
+    ctaSource: "seo_en_automatic_shorts_creation",
+    useCases: ["Content teams building a publishing rhythm", "Founders turning product knowledge into videos", "Faceless channels creating voice-led Shorts"],
+    workflow: ["Build a topic queue", "Generate scripts and drafts", "Review the first seconds", "Publish, measure and reuse winning formats"],
+    differentiators: [
+      "Automation is focused on quality signals: hook, pacing, subtitles and clear next step.",
+      "The process helps avoid random one-off videos and supports content clusters.",
+      "Every draft remains editable so automation does not remove control.",
+    ],
+    related: [
+      ["../youtube-shorts-automation/", "YouTube Shorts automation"],
+      ["../shorts-creation-service/", "Shorts creation service"],
+      ["../bulk-shorts-creation/", "bulk Shorts creation"],
+      ["../youtube-shorts-content-plan-for-a-month/", "Shorts content plan"],
+    ],
+    faq: [
+      ["Can Shorts be created automatically?", "Production steps can be automated, but final review and topic strategy should stay human."],
+      ["What should not be automated?", "Do not automate duplicate spam, misleading claims or low-quality mass publishing."],
+      ["How do I scale safely?", "Scale one topic cluster at a time and keep measuring retention, clicks and conversions."],
+    ],
+  },
+  {
+    slug: "shorts-production-service-or-ai",
+    ruSlug: "sozdanie-shorts-na-zakaz-ili-ai",
+    targetQuery: "shorts production service or ai",
+    title: "Shorts Production Service or AI: What to Choose",
+    description:
+      "Compare a Shorts production service with an AI workflow: speed, cost per test, editing control, repeatability and when each option makes sense.",
+    h1: "Shorts Production Service or AI",
+    lead:
+      "If you need short videos every week, the main question is not only quality. Compare speed, control and the cost of testing many angles.",
+    ctaSource: "seo_en_shorts_production_service_or_ai",
+    useCases: ["Teams choosing between hiring and self-serve creation", "Businesses testing short-form before scaling", "Creators who need more drafts per week"],
+    workflow: ["Estimate how many videos you need", "Compare cost per publishable test", "Check who controls revisions", "Pick agency, AI or a hybrid workflow"],
+    differentiators: [
+      "AI is strongest when you need many structured tests quickly.",
+      "A production service can be stronger for complex brand shoots and heavy creative direction.",
+      "A hybrid workflow often works best: AI drafts plus human review and selected polishing.",
+    ],
+    related: [
+      ["../shorts-creation-service/", "Shorts creation service"],
+      ["../ai-shorts-editing/", "AI Shorts editing"],
+      ["../shorts-for-sales/", "Shorts for sales"],
+      ["../pricing/", "pricing"],
+    ],
+    faq: [
+      ["Is AI always cheaper?", "Usually the cost per draft is lower, but the value depends on how much review and polishing you need."],
+      ["When should I use a production service?", "Use one for complex brand shoots, testimonials or high-stakes campaigns with custom filming."],
+      ["When is AI better?", "Use AI for regular educational, product, FAQ and faceless short-form tests."],
+    ],
+  },
+  {
+    slug: "shorts-for-sales",
+    ruSlug: "shorts-dlya-prodazh",
+    targetQuery: "shorts for sales",
+    title: "Shorts for Sales: Short Videos That Explain an Offer",
+    description:
+      "Shorts for sales: create short videos that explain one customer problem, one offer, one proof point and one clear next step.",
+    h1: "Shorts for Sales",
+    lead:
+      "Sales-focused Shorts work best when they sell one idea at a time: problem, proof, offer and the next action without a long pitch.",
+    ctaSource: "seo_en_shorts_for_sales",
+    useCases: ["Service businesses explaining offers", "Online stores showing product use cases", "Founders testing one value proposition per video"],
+    workflow: ["Pick one buyer pain", "Write a short hook", "Show the practical result", "End with one CTA"],
+    differentiators: [
+      "AdShorts AI helps turn sales points into short videos without making every clip feel like an ad.",
+      "The workflow keeps CTA and retention in balance.",
+      "It supports series around objections, use cases, comparisons and FAQs.",
+    ],
+    related: [
+      ["../youtube-shorts-for-business/", "Shorts for business"],
+      ["../shorts-ad-video-maker/", "Shorts ad video maker"],
+      ["../ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
+      ["../shorts-for-marketplaces/", "Shorts for marketplaces"],
+    ],
+    faq: [
+      ["Should every sales Short have a hard CTA?", "No. Many sales Shorts work better with a soft next step if the video is educational."],
+      ["What should I sell first?", "Sell one clear outcome or use case, not the whole product."],
+      ["What should I measure?", "Measure clicks, inquiries and whether viewers stay long enough to reach the offer."],
+    ],
+  },
+  {
+    slug: "shorts-ad-video-maker",
+    ruSlug: "video-dlya-reklamy-v-shorts",
+    targetQuery: "shorts ad video maker",
+    title: "Shorts Ad Video Maker: Create Fast Vertical Creative Tests",
+    description:
+      "Create Shorts-style ad video drafts with AI script, voiceover, subtitles, visuals and CTA for fast vertical creative testing.",
+    h1: "Shorts Ad Video Maker",
+    lead:
+      "Use a short-form workflow to produce quick creative drafts for vertical ads, organic tests or offer validation before investing in heavy production.",
+    ctaSource: "seo_en_shorts_ad_video_maker",
+    useCases: ["Testing ad angles before production", "Creating offer-led vertical videos", "Repurposing organic winners into paid creatives"],
+    workflow: ["Choose one offer angle", "Generate a short creative draft", "Edit the first frame and CTA", "Compare retention and clicks"],
+    differentiators: [
+      "Fast drafts help test messaging before spending on polished production.",
+      "Subtitles, voice and visual rhythm are generated together.",
+      "The same idea can become organic Shorts, Reels or a paid creative test.",
+    ],
+    related: [
+      ["../shorts-for-sales/", "Shorts for sales"],
+      ["../ai-video-generator-for-social-media/", "AI video for social media"],
+      ["../shorts-production-service-or-ai/", "production service or AI"],
+      ["../examples/", "examples"],
+    ],
+    faq: [
+      ["Is this for paid ads only?", "No. Use it for organic validation first, then adapt winning messages into paid creatives."],
+      ["What should the first version include?", "One hook, one customer problem, one proof point and one CTA."],
+      ["Should I generate many variants?", "Yes, but vary one major element at a time so you can learn from the result."],
+    ],
+  },
+  {
+    slug: "ai-voiceover-for-shorts",
+    ruSlug: "ai-ozvuchka-dlya-shorts",
+    targetQuery: "ai voiceover for shorts",
+    title: "AI Voiceover for Shorts: Generate Voice-Led Videos",
+    description:
+      "AI voiceover for Shorts: create voice-led vertical videos with script, subtitles, pacing and editable drafts for faceless or fast production.",
+    h1: "AI Voiceover for Shorts",
+    lead:
+      "Voiceover can replace camera recording when the script, tempo and subtitles are clear. Generate a voice-led draft and edit the first seconds before publishing.",
+    ctaSource: "seo_en_ai_voiceover_for_shorts",
+    useCases: ["Faceless channels", "Creators without recording setup", "Businesses turning FAQs into narrated videos"],
+    workflow: ["Write one short script", "Choose the voice and pace", "Add readable subtitles", "Check the intro and CTA"],
+    differentiators: [
+      "Voiceover is generated inside the video workflow, so subtitles and pacing stay aligned.",
+      "Useful for frequent publishing when recording voice manually slows you down.",
+      "Works with faceless, educational and product explainer formats.",
+    ],
+    related: [
+      ["../voiceover-for-shorts-how-to-choose-a-voice/", "voiceover guide"],
+      ["../automatic-subtitles-for-youtube-shorts/", "automatic subtitles"],
+      ["../faceless-youtube-shorts-generator/", "faceless Shorts generator"],
+      ["../ai-tool-for-creating-shorts/", "AI tool for Shorts"],
+    ],
+    faq: [
+      ["Is AI voiceover good enough for Shorts?", "It can be, if the voice matches the format and the script is written for spoken pacing."],
+      ["What should I adjust first?", "Adjust pace, pauses and subtitle line length before changing the whole script."],
+      ["Can I use voiceover for business videos?", "Yes, especially for FAQs, product explainers and simple educational videos."],
+    ],
+  },
+  {
+    slug: "shorts-subtitle-generator",
+    ruSlug: "generator-subtitrov-dlya-shorts",
+    targetQuery: "shorts subtitle generator",
+    title: "Shorts Subtitle Generator: Captions for Vertical Videos",
+    description:
+      "Shorts subtitle generator for vertical videos: create readable captions, voice-aligned timing and mobile-friendly text for better retention.",
+    h1: "Shorts Subtitle Generator",
+    lead:
+      "Subtitles are not just accessibility. In Shorts they carry the idea when people watch silently and help viewers follow the pace.",
+    ctaSource: "seo_en_shorts_subtitle_generator",
+    useCases: ["Videos watched without sound", "Voice-led explainers", "Faceless Shorts with text-driven progress"],
+    workflow: ["Generate or paste the script", "Create subtitles from the voice", "Shorten long lines", "Check safe margins on mobile"],
+    differentiators: [
+      "Subtitles are part of the short-form video draft, not a separate afterthought.",
+      "Readable caption rhythm helps early retention.",
+      "Works with AI voiceover, uploaded voice or script-led videos.",
+    ],
+    related: [
+      ["../automatic-subtitles-for-youtube-shorts/", "automatic subtitles"],
+      ["../on-screen-text-for-youtube-shorts/", "on-screen text"],
+      ["../ai-voiceover-for-shorts/", "AI voiceover"],
+      ["../shorts-video-maker/", "Shorts video maker"],
+    ],
+    faq: [
+      ["How long should subtitle lines be?", "Keep them short enough to read on a phone without covering the main visual."],
+      ["Do subtitles improve retention?", "They can, especially when viewers watch silently or the video has fast narration."],
+      ["Should every word be shown?", "Not always. Sometimes clean key-phrase subtitles work better than dense word-for-word captions."],
+    ],
+  },
+  {
+    slug: "vertical-video-generator",
+    ruSlug: "generator-vertikalnyh-video",
+    targetQuery: "vertical video generator",
+    title: "Vertical Video Generator for Shorts, Reels and TikTok",
+    description:
+      "Generate vertical videos for Shorts, Reels and TikTok with AI script, voiceover, subtitles, visual rhythm and 9:16 output.",
+    h1: "Vertical Video Generator",
+    lead:
+      "Create 9:16 vertical videos from one idea and adapt the result for Shorts, Reels or TikTok without rebuilding the draft manually.",
+    ctaSource: "seo_en_vertical_video_generator",
+    useCases: ["Short-form content calendars", "Social media video tests", "Businesses creating vertical explainers"],
+    workflow: ["Start with one idea", "Generate a 9:16 draft", "Edit subtitles and hook", "Export for the selected platform"],
+    differentiators: [
+      "Built specifically for vertical short-form instead of generic horizontal video.",
+      "Supports script, voice, subtitles and visual rhythm in one flow.",
+      "Helps create platform variants from a common draft.",
+    ],
+    related: [
+      ["../shorts-video-maker/", "Shorts video maker"],
+      ["../ai-video-maker-for-reels-tiktok-and-shorts/", "AI video maker"],
+      ["../tiktok-video-generator/", "TikTok video generator"],
+      ["../instagram-reels-generator/", "Reels generator"],
+    ],
+    faq: [
+      ["What format does vertical video need?", "Use 9:16 with readable subtitles and safe margins for mobile UI."],
+      ["Can one draft work across platforms?", "Yes, but adjust the first line, caption and CTA to the platform."],
+      ["What should I check before export?", "Check the first frame, subtitle readability, audio balance and final CTA."],
+    ],
+  },
+  {
+    slug: "shorts-for-telegram-channel",
+    ruSlug: "shorts-dlya-telegram-kanala",
+    targetQuery: "shorts for telegram channel",
+    title: "Shorts for Telegram Channel Growth: Drive Viewers to a Community",
+    description:
+      "Create Shorts that drive viewers to a Telegram channel: hooks, soft CTA, content bridge, subtitles and repeatable video ideas.",
+    h1: "Shorts for Telegram Channel Growth",
+    lead:
+      "Shorts can warm up viewers before they join a Telegram channel, but the video must explain why the next step is useful now.",
+    ctaSource: "seo_en_shorts_for_telegram_channel",
+    useCases: ["Experts growing a Telegram community", "Founders moving viewers to updates", "Creators building a warmer audience outside YouTube"],
+    workflow: ["Pick a useful preview idea", "Create a short answer or checklist", "Use a soft Telegram CTA", "Track clicks and retained viewers"],
+    differentiators: [
+      "AdShorts AI helps turn Telegram topics into short teaser videos.",
+      "The CTA can be framed as a continuation rather than a hard promotion.",
+      "Works best as a series around one audience problem.",
+    ],
+    related: [
+      ["../how-to-drive-traffic-from-shorts-to-telegram/", "drive traffic to Telegram"],
+      ["../shorts-for-experts/", "Shorts for experts"],
+      ["../youtube-shorts-content-plan-for-a-month/", "content plan"],
+      ["../cta-in-youtube-shorts/", "CTA in Shorts"],
+    ],
+    faq: [
+      ["Should the CTA mention Telegram directly?", "Yes, but only after the video gives value and makes the continuation clear."],
+      ["What content works best?", "Short checklists, mistakes, templates and previews of a deeper Telegram post."],
+      ["What should I measure?", "Measure profile clicks, Telegram joins and retention before the CTA."],
+    ],
+  },
+  {
+    slug: "shorts-for-marketplaces",
+    ruSlug: "shorts-dlya-marketplejsa",
+    targetQuery: "shorts for marketplaces",
+    title: "Shorts for Marketplaces: Product Videos Without Heavy Production",
+    description:
+      "Create Shorts for marketplace products: short demos, use cases, benefits, subtitles and product-led vertical video drafts with AI.",
+    h1: "Shorts for Marketplaces",
+    lead:
+      "Marketplace products need short videos that show use, problem, benefit and proof quickly. One product can become many short-form angles.",
+    ctaSource: "seo_en_shorts_for_marketplaces",
+    useCases: ["Sellers explaining product benefits", "Brands testing product angles", "Teams creating product-led short videos"],
+    workflow: ["Choose one product use case", "Generate a demo-style script", "Add subtitles and benefit text", "Export a vertical video test"],
+    differentiators: [
+      "Helps create product videos without planning a full shoot for every angle.",
+      "Supports benefit-led, FAQ, unboxing and problem-solution formats.",
+      "Useful for organic social and pre-testing creative ideas.",
+    ],
+    related: [
+      ["../shorts-for-sales/", "Shorts for sales"],
+      ["../shorts-ad-video-maker/", "ad video maker"],
+      ["../ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
+      ["../vertical-video-generator/", "vertical video generator"],
+    ],
+    faq: [
+      ["What product videos work best?", "Use case demos, problem-solution clips and short comparisons usually work better than generic product shots."],
+      ["Do I need filming?", "Real product footage helps, but AI workflow can still structure the script, subtitles and draft."],
+      ["How many angles should I test?", "Start with three: problem, benefit and objection."],
+    ],
+  },
+  {
+    slug: "shorts-for-experts",
+    ruSlug: "shorts-dlya-eksperta",
+    targetQuery: "shorts for experts",
+    title: "Shorts for Experts: Turn Knowledge Into Short Videos",
+    description:
+      "Create Shorts for experts: convert advice, FAQs, mistakes and frameworks into short videos with AI script, voiceover and subtitles.",
+    h1: "Shorts for Experts",
+    lead:
+      "Experts do not need viral tricks first. They need repeatable short videos that package one useful answer and build trust over time.",
+    ctaSource: "seo_en_shorts_for_experts",
+    useCases: ["Consultants explaining common mistakes", "Coaches turning frameworks into clips", "Specialists building trust with short answers"],
+    workflow: ["Pick one client question", "Create a compact answer", "Add a practical example", "End with a soft next step"],
+    differentiators: [
+      "AdShorts AI helps turn expertise into a repeatable video format.",
+      "Voiceover and subtitles make production faster when filming is a blocker.",
+      "Works well for series: myths, mistakes, checklists and mini-cases.",
+    ],
+    related: [
+      ["../shorts-for-telegram-channel/", "Shorts for Telegram"],
+      ["../youtube-shorts-for-business/", "Shorts for business"],
+      ["../ai-content-for-shorts/", "AI content for Shorts"],
+      ["../how-to-create-a-hook-in-shorts/", "hooks"],
+    ],
+    faq: [
+      ["What should an expert publish first?", "Start with frequent questions, mistakes and simple frameworks that clients already ask about."],
+      ["Can experts use faceless Shorts?", "Yes, voice-led videos with subtitles can work well for educational content."],
+      ["How do I avoid sounding too promotional?", "Teach one useful thing first, then use a soft CTA after the value is clear."],
+    ],
+  },
+  {
+    slug: "ai-content-for-shorts",
+    ruSlug: "kontent-dlya-shorts-s-ai",
+    targetQuery: "ai content for shorts",
+    title: "AI Content for Shorts: Ideas, Scripts and Video Drafts",
+    description:
+      "Create AI content for Shorts: turn topics, FAQs and offers into video ideas, scripts, voiceover, subtitles and vertical drafts.",
+    h1: "AI Content for Shorts",
+    lead:
+      "AI content for Shorts should not stop at idea generation. The useful workflow moves from topic to script to video draft to measurement.",
+    ctaSource: "seo_en_ai_content_for_shorts",
+    useCases: ["Creators building a content queue", "Businesses turning FAQs into posts", "Teams repurposing long ideas into short clips"],
+    workflow: ["Create a topic cluster", "Generate video angles", "Build drafts from the best angles", "Measure and expand the winning theme"],
+    differentiators: [
+      "Connects content planning and video production in one short-form workflow.",
+      "Helps avoid random ideas by clustering videos around real search and audience problems.",
+      "Supports both educational and commercial short-form content.",
+    ],
+    related: [
+      ["../youtube-shorts-content-plan-for-a-month/", "Shorts content plan"],
+      ["../ai-tool-for-creating-shorts/", "AI tool for Shorts"],
+      ["../youtube-shorts-script-generator/", "script generator"],
+      ["../bulk-shorts-creation/", "bulk creation"],
+    ],
+    faq: [
+      ["What is AI content for Shorts?", "It is the process of generating ideas, scripts and video drafts around a clear audience problem."],
+      ["How do I avoid generic content?", "Use specific questions, objections and product use cases instead of broad topics."],
+      ["How often should I create new ideas?", "Create ideas in batches, then scale the cluster that shows the strongest retention and clicks."],
+    ],
+  },
+  {
+    slug: "ai-shorts-editing",
+    ruSlug: "ai-montazh-shorts",
+    targetQuery: "ai shorts editing",
+    title: "AI Shorts Editing: Faster Hooks, Captions and Drafts",
+    description:
+      "AI Shorts editing workflow for faster short-form videos: improve hooks, captions, voiceover, pacing and CTA before publishing.",
+    h1: "AI Shorts Editing",
+    lead:
+      "AI editing for Shorts is most useful when it speeds up repetitive decisions: structure, subtitle rhythm, voice, first frame and CTA.",
+    ctaSource: "seo_en_ai_shorts_editing",
+    useCases: ["Creators reducing manual editing time", "Teams making multiple draft variants", "Faceless channels improving pacing"],
+    workflow: ["Generate or upload a draft", "Tighten the first seconds", "Fix subtitles and voice timing", "Export one measurable version"],
+    differentiators: [
+      "Focuses on short-form retention details instead of generic editing features.",
+      "Helps create variants without rebuilding the whole video.",
+      "Keeps human review in place for message, facts and brand fit.",
+    ],
+    related: [
+      ["../shorts-production-service-or-ai/", "production service or AI"],
+      ["../how-to-make-shorts-without-editing/", "Shorts without editing"],
+      ["../shorts-subtitle-generator/", "subtitle generator"],
+      ["../automatic-shorts-creation/", "automatic creation"],
+    ],
+    faq: [
+      ["Can AI edit Shorts completely?", "It can automate much of the draft work, but final judgment should stay with the creator or team."],
+      ["What should AI edit first?", "Start with the hook, subtitle readability, audio balance and CTA timing."],
+      ["Is this useful for existing footage?", "Yes, if the source material already has a clear idea or can be structured into a short answer."],
+    ],
+  },
+  {
+    slug: "bulk-shorts-creation",
+    ruSlug: "massovoe-sozdanie-shorts",
+    targetQuery: "bulk shorts creation",
+    title: "Bulk Shorts Creation: Scale Drafts Without Losing Quality",
+    description:
+      "Bulk Shorts creation with AI: create batches of scripts and vertical video drafts while preserving review, quality and topic focus.",
+    h1: "Bulk Shorts Creation",
+    lead:
+      "Bulk creation only works when each video still has a clear topic, useful hook and human review. Scale clusters, not low-quality duplicates.",
+    ctaSource: "seo_en_bulk_shorts_creation",
+    useCases: ["Content teams creating weekly batches", "Agencies preparing draft variants", "Creators scaling one proven topic cluster"],
+    workflow: ["Choose one topic cluster", "Generate multiple angles", "Review and edit the strongest drafts", "Publish gradually and measure results"],
+    differentiators: [
+      "Designed for batches of meaningful variants, not spammy duplicate uploads.",
+      "Supports topic clusters, internal links and measurable publishing rhythm.",
+      "Pairs well with analytics: keep winners, rewrite weak openings.",
+    ],
+    related: [
+      ["../automatic-shorts-creation/", "automatic Shorts creation"],
+      ["../youtube-shorts-automation/", "Shorts automation"],
+      ["../ai-content-for-shorts/", "AI content for Shorts"],
+      ["../youtube-shorts-content-plan-for-a-month/", "content plan"],
+    ],
+    faq: [
+      ["How many Shorts should I create in bulk?", "Start with a manageable batch around one cluster, then publish and measure before scaling."],
+      ["Will bulk creation hurt quality?", "It can if you skip review. Keep human checks for claims, hooks, subtitles and visual clarity."],
+      ["What is the safest scaling method?", "Create several angles from one topic, publish gradually and expand only the winners."],
+    ],
+  },
+];
+
+const ruYandexExpansionPages = [
+  {
+    slug: "neyroset-dlya-sozdaniya-shorts",
+    enSlug: "ai-tool-for-creating-shorts",
+    targetQuery: "нейросеть для создания shorts",
+    title: "Нейросеть для создания Shorts: сценарий, голос и субтитры",
+    description:
+      "Нейросеть для создания Shorts из одной идеи: AI-сценарий, озвучка, субтитры, визуальный ритм и CTA в вертикальном видео.",
+    h1: "Нейросеть для создания Shorts",
+    lead:
+      "Используйте один AI workflow, чтобы превратить тему, оффер или FAQ в короткий вертикальный ролик со сценарием, голосом, субтитрами и понятным первым кадром.",
+    ctaSource: "seo_ru_neyroset_dlya_sozdaniya_shorts",
+    useCases: ["Авторы, которые регулярно делают Shorts", "Бизнес, который превращает FAQ в видео", "Команды, тестирующие хуки без ручного монтажа"],
+    workflow: ["Введите одну тему или оффер", "Сгенерируйте сценарий и озвучку", "Проверьте субтитры и первый кадр", "Экспортируйте чистый 9:16 тест"],
+    differentiators: [
+      "Workflow связывает сценарий, голос и визуальный темп, а не генерирует только текст.",
+      "Подходит для повторяемых органических тестов, а не одного демо-ролика.",
+      "Редактируемый черновик помогает улучшить хук, субтитры и CTA до публикации.",
+    ],
+    related: [
+      ["../servis-dlya-sozdaniya-shorts/", "сервис для создания Shorts"],
+      ["../avtomaticheskoe-sozdanie-shorts/", "автоматическое создание Shorts"],
+      ["../ai-generator-shorts/", "AI-генератор Shorts"],
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+    ],
+    faq: [
+      ["Что дать нейросети сначала?", "Одну аудиторию, одну проблему и один обещанный результат. Чем конкретнее вход, тем сильнее черновик."],
+      ["Можно ли заменить ручной монтаж?", "Можно убрать большую часть повторяемой работы, но хук, факты и CTA всё равно стоит проверять."],
+      ["Что тестировать первым?", "Первый кадр и первую фразу: они решают, продолжит ли зритель смотреть."],
+    ],
+  },
+  {
+    slug: "servis-dlya-sozdaniya-shorts",
+    enSlug: "shorts-creation-service",
+    targetQuery: "сервис для создания shorts",
+    title: "Сервис для создания Shorts: AI workflow для вертикальных видео",
+    description:
+      "Сервис для создания Shorts: вертикальные видео с AI-сценарием, озвучкой, субтитрами, визуалом и CTA для авторов и бизнеса.",
+    h1: "Сервис для создания Shorts",
+    lead:
+      "Создавайте Shorts без запуска production-задачи с нуля каждый раз. Сервис превращает одну идею в структурированный черновик, который можно отредактировать и опубликовать.",
+    ctaSource: "seo_ru_servis_dlya_sozdaniya_shorts",
+    useCases: ["Малый бизнес тестирует офферы", "Авторы строят weekly Shorts-систему", "Агентства готовят short-form черновики"],
+    workflow: ["Выберите угол подачи", "Сгенерируйте черновик", "Отредактируйте хук и субтитры", "Опубликуйте и измерьте удержание"],
+    differentiators: [
+      "Это полный short-form workflow, а не одна отдельная AI-функция.",
+      "Полезен для регулярных видео, где важна повторяемость формата.",
+      "Связывает создание ролика с примерами, тарифами и практическими гайдами.",
+    ],
+    related: [
+      ["../neyroset-dlya-sozdaniya-shorts/", "нейросеть для создания Shorts"],
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+      ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
+      ["../pricing/", "тарифы"],
+    ],
+    faq: [
+      ["Кому подходит такой сервис?", "Командам и авторам, которым нужен быстрый повторяемый способ создавать короткие вертикальные видео."],
+      ["Это агентство под ключ?", "Нет. Это self-serve AI workflow, где вы сами создаете и редактируете черновик."],
+      ["Какой результат на выходе?", "Публикуемый черновик, который всё равно стоит быстро проверить человеком перед размещением."],
+    ],
+  },
+  {
+    slug: "avtomaticheskoe-sozdanie-shorts",
+    enSlug: "automatic-shorts-creation",
+    targetQuery: "автоматическое создание shorts",
+    title: "Автоматическое создание Shorts: повторяемый AI workflow",
+    description:
+      "Автоматическое создание Shorts с AI: сценарии, озвучка, субтитры и вертикальные черновики для регулярных органических тестов.",
+    h1: "Автоматическое создание Shorts",
+    lead:
+      "Автоматизируйте повторяемые части production Shorts, сохраняя стратегию, факты и финальную проверку под своим контролем.",
+    ctaSource: "seo_ru_avtomaticheskoe_sozdanie_shorts",
+    useCases: ["Контент-команды строят ритм публикаций", "Фаундеры превращают продуктовые знания в видео", "Faceless-каналы создают ролики с голосом"],
+    workflow: ["Соберите очередь тем", "Сгенерируйте сценарии и черновики", "Проверьте первые секунды", "Публикуйте, измеряйте и повторяйте удачные форматы"],
+    differentiators: [
+      "Автоматизация сфокусирована на сигналах качества: хук, темп, субтитры и следующий шаг.",
+      "Процесс помогает уйти от случайных роликов к тематическим кластерам.",
+      "Каждый черновик остается редактируемым, поэтому контроль не исчезает.",
+    ],
+    related: [
+      ["../avtomatizaciya-youtube-shorts/", "автоматизация YouTube Shorts"],
+      ["../servis-dlya-sozdaniya-shorts/", "сервис для создания Shorts"],
+      ["../massovoe-sozdanie-shorts/", "массовое создание Shorts"],
+      ["../kontent-plan-dlya-shorts-na-mesyac/", "контент-план Shorts"],
+    ],
+    faq: [
+      ["Можно ли создавать Shorts автоматически?", "Production-шаги можно автоматизировать, но финальная проверка и стратегия тем должны оставаться за человеком."],
+      ["Что не стоит автоматизировать?", "Дубликаты, вводящие в заблуждение обещания и массовые слабые публикации."],
+      ["Как масштабировать аккуратно?", "Масштабируйте один тематический кластер за раз и измеряйте удержание, клики и конверсии."],
+    ],
+  },
+  {
+    slug: "sozdanie-shorts-na-zakaz-ili-ai",
+    enSlug: "shorts-production-service-or-ai",
+    targetQuery: "создание shorts на заказ или ai",
+    title: "Создание Shorts на заказ или AI: что выбрать",
+    description:
+      "Сравните создание Shorts на заказ и AI workflow: скорость, цена одного теста, контроль правок, повторяемость и сценарии использования.",
+    h1: "Создание Shorts на заказ или AI",
+    lead:
+      "Если короткие видео нужны каждую неделю, важна не только финальная картинка. Сравнивайте скорость, контроль и стоимость проверки нескольких углов.",
+    ctaSource: "seo_ru_sozdanie_shorts_na_zakaz_ili_ai",
+    useCases: ["Команды выбирают между подрядчиком и self-serve", "Бизнес тестирует short-form до масштабирования", "Авторам нужно больше черновиков в неделю"],
+    workflow: ["Оцените нужный объем видео", "Посчитайте стоимость одного теста", "Проверьте, кто контролирует правки", "Выберите подрядчика, AI или гибрид"],
+    differentiators: [
+      "AI сильнее, когда нужно быстро проверить много структурированных идей.",
+      "Подрядчик полезнее для сложных брендовых съемок и кастомной режиссуры.",
+      "Часто оптимален гибрид: AI-черновики, human review и точечная полировка.",
+    ],
+    related: [
+      ["../servis-dlya-sozdaniya-shorts/", "сервис для создания Shorts"],
+      ["../ai-montazh-shorts/", "AI-монтаж Shorts"],
+      ["../shorts-dlya-prodazh/", "Shorts для продаж"],
+      ["../pricing/", "тарифы"],
+    ],
+    faq: [
+      ["AI всегда дешевле?", "Обычно цена черновика ниже, но итоговая ценность зависит от проверки и полировки."],
+      ["Когда нужен подрядчик?", "Для сложных брендовых съемок, отзывов и кампаний, где важна кастомная съемка."],
+      ["Когда лучше AI?", "Для регулярных обучающих, продуктовых, FAQ и faceless short-form тестов."],
+    ],
+  },
+  {
+    slug: "shorts-dlya-prodazh",
+    enSlug: "shorts-for-sales",
+    targetQuery: "shorts для продаж",
+    title: "Shorts для продаж: короткие видео, которые объясняют оффер",
+    description:
+      "Shorts для продаж: создавайте ролики про одну проблему клиента, один оффер, один аргумент и понятный следующий шаг.",
+    h1: "Shorts для продаж",
+    lead:
+      "Продающие Shorts работают лучше, когда продают одну идею за раз: проблема, доказательство, оффер и следующий шаг без длинного питча.",
+    ctaSource: "seo_ru_shorts_dlya_prodazh",
+    useCases: ["Услуги объясняют оффер", "Интернет-магазины показывают сценарии использования", "Фаундеры тестируют одну ценность за ролик"],
+    workflow: ["Выберите одну боль покупателя", "Напишите короткий хук", "Покажите практический результат", "Завершите одним CTA"],
+    differentiators: [
+      "AdShorts AI помогает превратить sales-тезисы в короткие видео без ощущения прямой рекламы.",
+      "Workflow балансирует CTA и удержание.",
+      "Подходит для серий про возражения, use cases, сравнения и FAQ.",
+    ],
+    related: [
+      ["../shorts-dlya-biznesa/", "Shorts для бизнеса"],
+      ["../video-dlya-reklamy-v-shorts/", "видео для рекламы в Shorts"],
+      ["../ai-generator-shorts-dlya-malogo-biznesa/", "AI Shorts для малого бизнеса"],
+      ["../shorts-dlya-marketplejsa/", "Shorts для маркетплейса"],
+    ],
+    faq: [
+      ["В каждом продающем Shorts нужен жесткий CTA?", "Нет. Часто лучше работает мягкий следующий шаг после полезной части."],
+      ["Что продавать первым?", "Один конкретный результат или сценарий использования, а не весь продукт сразу."],
+      ["Что измерять?", "Клики, заявки и то, досматривают ли зрители до оффера."],
+    ],
+  },
+  {
+    slug: "video-dlya-reklamy-v-shorts",
+    enSlug: "shorts-ad-video-maker",
+    targetQuery: "видео для рекламы в shorts",
+    title: "Видео для рекламы в Shorts: быстрые vertical creative тесты",
+    description:
+      "Создавайте рекламные Shorts-черновики с AI-сценарием, озвучкой, субтитрами, визуалом и CTA для быстрых vertical creative тестов.",
+    h1: "Видео для рекламы в Shorts",
+    lead:
+      "Используйте short-form workflow, чтобы быстро собрать креативы для рекламы, органических тестов или проверки оффера до дорогого продакшена.",
+    ctaSource: "seo_ru_video_dlya_reklamy_v_shorts",
+    useCases: ["Тестировать рекламные углы до продакшена", "Создавать offer-led вертикальные видео", "Переупаковывать органические победители в paid creative"],
+    workflow: ["Выберите один угол оффера", "Сгенерируйте короткий черновик", "Поправьте первый кадр и CTA", "Сравните удержание и клики"],
+    differentiators: [
+      "Быстрые черновики позволяют тестировать сообщение до расходов на полировку.",
+      "Субтитры, голос и визуальный ритм создаются вместе.",
+      "Одна идея может стать organic Shorts, Reels или платным creative-тестом.",
+    ],
+    related: [
+      ["../shorts-dlya-prodazh/", "Shorts для продаж"],
+      ["../ai-generator-video-dlya-socsetey/", "AI-видео для соцсетей"],
+      ["../sozdanie-shorts-na-zakaz-ili-ai/", "на заказ или AI"],
+      ["../examples/", "примеры"],
+    ],
+    faq: [
+      ["Это только для платной рекламы?", "Нет. Сначала можно проверить сообщение органически, а победителей адаптировать в paid creative."],
+      ["Что должна включать первая версия?", "Один хук, одну проблему клиента, один аргумент и один CTA."],
+      ["Нужно ли генерировать много вариантов?", "Да, но меняйте один главный элемент за раз, чтобы понимать, что сработало."],
+    ],
+  },
+  {
+    slug: "ai-ozvuchka-dlya-shorts",
+    enSlug: "ai-voiceover-for-shorts",
+    targetQuery: "ai озвучка для shorts",
+    title: "AI-озвучка для Shorts: ролики с голосом без записи",
+    description:
+      "AI-озвучка для Shorts: создавайте voice-led вертикальные видео со сценарием, субтитрами, темпом и редактируемым черновиком.",
+    h1: "AI-озвучка для Shorts",
+    lead:
+      "Озвучка может заменить запись на микрофон, если сценарий, темп и субтитры понятны. Сгенерируйте voice-led черновик и проверьте первые секунды до публикации.",
+    ctaSource: "seo_ru_ai_ozvuchka_dlya_shorts",
+    useCases: ["Faceless-каналы", "Авторы без setup для записи", "Бизнес превращает FAQ в ролики с голосом"],
+    workflow: ["Напишите короткий сценарий", "Выберите голос и темп", "Добавьте читаемые субтитры", "Проверьте вступление и CTA"],
+    differentiators: [
+      "Озвучка генерируется внутри video workflow, поэтому субтитры и темп совпадают.",
+      "Полезно для регулярного выпуска, когда ручная запись тормозит.",
+      "Подходит для faceless, обучающих и продуктовых объяснений.",
+    ],
+    related: [
+      ["../ozvuchka-dlya-shorts-kak-vybrat-golos/", "гайд по озвучке"],
+      ["../subtitry-dlya-shorts-avtomatom/", "автоматические субтитры"],
+      ["../generator-shorts-bez-lica/", "генератор Shorts без лица"],
+      ["../neyroset-dlya-sozdaniya-shorts/", "нейросеть для Shorts"],
+    ],
+    faq: [
+      ["AI-озвучка подходит для Shorts?", "Да, если голос совпадает с форматом, а сценарий написан под живой темп речи."],
+      ["Что править первым?", "Темп, паузы и длину строк субтитров, а не весь сценарий."],
+      ["Можно использовать для бизнеса?", "Да, особенно для FAQ, продуктовых объяснений и коротких обучающих роликов."],
+    ],
+  },
+  {
+    slug: "generator-subtitrov-dlya-shorts",
+    enSlug: "shorts-subtitle-generator",
+    targetQuery: "генератор субтитров для shorts",
+    title: "Генератор субтитров для Shorts: читаемый текст для видео",
+    description:
+      "Генератор субтитров для Shorts: создавайте читаемые caption-строки, тайминг под голос и мобильный текст для лучшего удержания.",
+    h1: "Генератор субтитров для Shorts",
+    lead:
+      "Субтитры в Shorts - не только доступность. Они несут смысл, когда зритель смотрит без звука, и помогают удерживать темп.",
+    ctaSource: "seo_ru_generator_subtitrov_dlya_shorts",
+    useCases: ["Видео смотрят без звука", "Voice-led объяснения", "Faceless Shorts с текстовым прогрессом"],
+    workflow: ["Сгенерируйте или вставьте сценарий", "Создайте субтитры из голоса", "Сократите длинные строки", "Проверьте safe margins на телефоне"],
+    differentiators: [
+      "Субтитры входят в short-form черновик, а не добавляются отдельно в конце.",
+      "Читабельный ритм caption-строк помогает раннему удержанию.",
+      "Работает с AI-озвучкой, загруженным голосом или script-led видео.",
+    ],
+    related: [
+      ["../subtitry-dlya-shorts-avtomatom/", "автоматические субтитры"],
+      ["../kak-sdelat-tekst-na-video-dlya-shorts/", "текст на видео"],
+      ["../ai-ozvuchka-dlya-shorts/", "AI-озвучка"],
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+    ],
+    faq: [
+      ["Какой длины должны быть строки?", "Достаточно короткие, чтобы читаться на телефоне и не закрывать основной визуал."],
+      ["Субтитры улучшают удержание?", "Могут, особенно если зрители смотрят без звука или озвучка идет быстро."],
+      ["Нужно показывать каждое слово?", "Не всегда. Иногда чистые key-phrase субтитры лучше плотной дословной расшифровки."],
+    ],
+  },
+  {
+    slug: "generator-vertikalnyh-video",
+    enSlug: "vertical-video-generator",
+    targetQuery: "генератор вертикальных видео",
+    title: "Генератор вертикальных видео для Shorts, Reels и TikTok",
+    description:
+      "Генерируйте вертикальные видео для Shorts, Reels и TikTok: AI-сценарий, озвучка, субтитры, визуальный ритм и формат 9:16.",
+    h1: "Генератор вертикальных видео",
+    lead:
+      "Создавайте 9:16 видео из одной идеи и адаптируйте результат под Shorts, Reels или TikTok без ручной пересборки черновика.",
+    ctaSource: "seo_ru_generator_vertikalnyh_video",
+    useCases: ["Short-form контент-планы", "Тесты видео для соцсетей", "Бизнес делает вертикальные объяснения"],
+    workflow: ["Начните с одной идеи", "Сгенерируйте 9:16 черновик", "Поправьте субтитры и хук", "Экспортируйте под выбранную платформу"],
+    differentiators: [
+      "Workflow создан именно для вертикального short-form, а не универсального горизонтального видео.",
+      "Сценарий, голос, субтитры и визуальный ритм находятся в одном процессе.",
+      "Помогает делать platform-variants из общего черновика.",
+    ],
+    related: [
+      ["../sozdat-shorts-video/", "создать Shorts-видео"],
+      ["../ai-video-maker-dlya-reels-tiktok-i-shorts/", "AI video maker"],
+      ["../generator-video-dlya-tiktok/", "генератор TikTok"],
+      ["../generator-reels-instagram/", "генератор Reels"],
+    ],
+    faq: [
+      ["Какой формат нужен вертикальному видео?", "9:16, читаемые субтитры и безопасные поля под мобильный интерфейс."],
+      ["Один черновик подойдет везде?", "Да, но первую фразу, caption и CTA лучше адаптировать под платформу."],
+      ["Что проверить перед экспортом?", "Первый кадр, читаемость субтитров, баланс звука и финальный CTA."],
+    ],
+  },
+  {
+    slug: "shorts-dlya-telegram-kanala",
+    enSlug: "shorts-for-telegram-channel",
+    targetQuery: "shorts для telegram канала",
+    title: "Shorts для Telegram-канала: как вести зрителей в сообщество",
+    description:
+      "Создавайте Shorts для роста Telegram-канала: хук, мягкий CTA, мостик к посту, субтитры и повторяемые идеи видео.",
+    h1: "Shorts для Telegram-канала",
+    lead:
+      "Shorts могут прогревать зрителя перед переходом в Telegram, но ролик должен объяснять, зачем следующий шаг полезен именно сейчас.",
+    ctaSource: "seo_ru_shorts_dlya_telegram_kanala",
+    useCases: ["Эксперты растят Telegram-сообщество", "Фаундеры ведут зрителей к обновлениям", "Авторы строят теплую аудиторию вне YouTube"],
+    workflow: ["Выберите полезную teaser-идею", "Сделайте короткий ответ или чеклист", "Добавьте мягкий Telegram CTA", "Отслеживайте клики и удержание"],
+    differentiators: [
+      "AdShorts AI помогает превращать темы Telegram в короткие teaser-видео.",
+      "CTA можно оформить как продолжение, а не как прямую рекламу.",
+      "Лучше всего работает серией вокруг одной проблемы аудитории.",
+    ],
+    related: [
+      ["../kak-privesti-trafik-iz-shorts-v-telegram/", "трафик из Shorts в Telegram"],
+      ["../shorts-dlya-eksperta/", "Shorts для эксперта"],
+      ["../kontent-plan-dlya-shorts-na-mesyac/", "контент-план"],
+      ["../cta-v-shorts/", "CTA в Shorts"],
+    ],
+    faq: [
+      ["Нужно ли прямо упоминать Telegram?", "Да, но после полезной части и с понятным продолжением темы."],
+      ["Какие темы подходят?", "Чеклисты, ошибки, шаблоны и preview более глубокого поста в Telegram."],
+      ["Что измерять?", "Клики в профиль, переходы в Telegram и удержание до CTA."],
+    ],
+  },
+  {
+    slug: "shorts-dlya-marketplejsa",
+    enSlug: "shorts-for-marketplaces",
+    targetQuery: "shorts для маркетплейса",
+    title: "Shorts для маркетплейса: продуктовые видео без тяжелого продакшена",
+    description:
+      "Создавайте Shorts для товаров на маркетплейсах: демо, use cases, преимущества, субтитры и product-led черновики с AI.",
+    h1: "Shorts для маркетплейса",
+    lead:
+      "Товарам нужны короткие видео, которые быстро показывают сценарий использования, проблему, выгоду и доказательство. Один товар можно раскрыть через несколько углов.",
+    ctaSource: "seo_ru_shorts_dlya_marketplejsa",
+    useCases: ["Продавцы объясняют преимущества товара", "Бренды тестируют продуктовые углы", "Команды делают product-led короткие видео"],
+    workflow: ["Выберите один сценарий использования", "Сгенерируйте demo-style сценарий", "Добавьте субтитры и benefit-текст", "Экспортируйте вертикальный тест"],
+    differentiators: [
+      "Помогает делать продуктовые видео без отдельной съемки под каждый угол.",
+      "Поддерживает benefit-led, FAQ, unboxing и problem-solution форматы.",
+      "Полезно для органики и предварительного теста creative-идей.",
+    ],
+    related: [
+      ["../shorts-dlya-prodazh/", "Shorts для продаж"],
+      ["../video-dlya-reklamy-v-shorts/", "видео для рекламы"],
+      ["../ai-generator-shorts-dlya-malogo-biznesa/", "AI Shorts для малого бизнеса"],
+      ["../generator-vertikalnyh-video/", "генератор вертикальных видео"],
+    ],
+    faq: [
+      ["Какие продуктовые видео работают лучше?", "Демо сценария использования, problem-solution и короткие сравнения обычно сильнее обычных product shots."],
+      ["Нужна ли съемка товара?", "Реальные кадры товара полезны, но AI workflow всё равно помогает со сценарием, субтитрами и черновиком."],
+      ["Сколько углов тестировать?", "Начните с трех: проблема, выгода и возражение."],
+    ],
+  },
+  {
+    slug: "shorts-dlya-eksperta",
+    enSlug: "shorts-for-experts",
+    targetQuery: "shorts для эксперта",
+    title: "Shorts для эксперта: упакуйте знания в короткие видео",
+    description:
+      "Создавайте Shorts для экспертов: советы, FAQ, ошибки и фреймворки в коротких видео с AI-сценарием, озвучкой и субтитрами.",
+    h1: "Shorts для эксперта",
+    lead:
+      "Экспертам не нужны сначала вирусные трюки. Нужны повторяемые короткие видео, которые упаковывают один полезный ответ и постепенно строят доверие.",
+    ctaSource: "seo_ru_shorts_dlya_eksperta",
+    useCases: ["Консультанты объясняют частые ошибки", "Коучи превращают фреймворки в клипы", "Специалисты отвечают на вопросы клиентов"],
+    workflow: ["Выберите один вопрос клиента", "Соберите компактный ответ", "Добавьте практический пример", "Закончите мягким следующим шагом"],
+    differentiators: [
+      "AdShorts AI помогает превращать экспертизу в повторяемый видеоформат.",
+      "Озвучка и субтитры ускоряют production, если съемка тормозит.",
+      "Хорошо работает сериями: мифы, ошибки, чеклисты и мини-кейсы.",
+    ],
+    related: [
+      ["../shorts-dlya-telegram-kanala/", "Shorts для Telegram"],
+      ["../shorts-dlya-biznesa/", "Shorts для бизнеса"],
+      ["../kontent-dlya-shorts-s-ai/", "контент для Shorts с AI"],
+      ["../kak-sdelat-huk-v-shorts/", "хуки"],
+    ],
+    faq: [
+      ["Что эксперту публиковать первым?", "Частые вопросы, ошибки и простые фреймворки, которые клиенты уже спрашивают."],
+      ["Можно ли делать Shorts без лица?", "Да, voice-led ролики с субтитрами хорошо подходят для обучающего контента."],
+      ["Как не выглядеть слишком рекламно?", "Сначала дать одну полезную мысль, потом мягкий CTA после ценности."],
+    ],
+  },
+  {
+    slug: "kontent-dlya-shorts-s-ai",
+    enSlug: "ai-content-for-shorts",
+    targetQuery: "контент для shorts с ai",
+    title: "Контент для Shorts с AI: идеи, сценарии и видео-черновики",
+    description:
+      "Создавайте контент для Shorts с AI: превращайте темы, FAQ и офферы в идеи видео, сценарии, озвучку, субтитры и черновики.",
+    h1: "Контент для Shorts с AI",
+    lead:
+      "AI-контент для Shorts не должен заканчиваться списком идей. Полезный workflow ведет от темы к сценарию, видео-черновику и измерению результата.",
+    ctaSource: "seo_ru_kontent_dlya_shorts_s_ai",
+    useCases: ["Авторы собирают очередь тем", "Бизнес превращает FAQ в ролики", "Команды переупаковывают длинные идеи в короткие клипы"],
+    workflow: ["Создайте тематический кластер", "Сгенерируйте углы видео", "Соберите черновики из лучших углов", "Измерьте и расширьте winning theme"],
+    differentiators: [
+      "Связывает контент-планирование и video production в одном short-form workflow.",
+      "Помогает избежать случайных идей через кластеры реальных проблем аудитории.",
+      "Поддерживает образовательный и коммерческий short-form контент.",
+    ],
+    related: [
+      ["../kontent-plan-dlya-shorts-na-mesyac/", "контент-план Shorts"],
+      ["../neyroset-dlya-sozdaniya-shorts/", "нейросеть для Shorts"],
+      ["../generator-scenariev-youtube-shorts/", "генератор сценариев"],
+      ["../massovoe-sozdanie-shorts/", "массовое создание"],
+    ],
+    faq: [
+      ["Что такое контент для Shorts с AI?", "Это генерация идей, сценариев и видео-черновиков вокруг конкретной проблемы аудитории."],
+      ["Как избежать generic-контента?", "Используйте конкретные вопросы, возражения и продуктовые сценарии, а не широкие темы."],
+      ["Как часто делать новые идеи?", "Генерируйте идеи пачками, а масштабируйте кластер, который дает лучшее удержание и клики."],
+    ],
+  },
+  {
+    slug: "ai-montazh-shorts",
+    enSlug: "ai-shorts-editing",
+    targetQuery: "ai монтаж shorts",
+    title: "AI-монтаж Shorts: быстрее хуки, субтитры и черновики",
+    description:
+      "AI-монтаж Shorts: ускорьте создание коротких видео через правку хуков, субтитров, озвучки, темпа и CTA перед публикацией.",
+    h1: "AI-монтаж Shorts",
+    lead:
+      "AI-монтаж для Shorts полезен, когда ускоряет повторяемые решения: структура, ритм субтитров, голос, первый кадр и CTA.",
+    ctaSource: "seo_ru_ai_montazh_shorts",
+    useCases: ["Авторы сокращают время монтажа", "Команды делают несколько вариантов черновика", "Faceless-каналы улучшают темп"],
+    workflow: ["Сгенерируйте или загрузите черновик", "Усильте первые секунды", "Поправьте субтитры и тайминг голоса", "Экспортируйте одну измеримую версию"],
+    differentiators: [
+      "Фокус на short-form retention, а не на универсальных editing-фичах.",
+      "Помогает делать варианты без пересборки всего видео.",
+      "Оставляет human review для смысла, фактов и бренда.",
+    ],
+    related: [
+      ["../sozdanie-shorts-na-zakaz-ili-ai/", "на заказ или AI"],
+      ["../kak-sdelat-shorts-bez-montazha/", "Shorts без монтажа"],
+      ["../generator-subtitrov-dlya-shorts/", "генератор субтитров"],
+      ["../avtomaticheskoe-sozdanie-shorts/", "автоматическое создание"],
+    ],
+    faq: [
+      ["AI может полностью смонтировать Shorts?", "Он может автоматизировать большую часть черновой работы, но финальная оценка должна оставаться за человеком."],
+      ["Что править первым?", "Хук, читаемость субтитров, баланс звука и момент CTA."],
+      ["Подходит ли для уже снятого видео?", "Да, если в исходнике есть понятная идея или его можно структурировать в короткий ответ."],
+    ],
+  },
+  {
+    slug: "massovoe-sozdanie-shorts",
+    enSlug: "bulk-shorts-creation",
+    targetQuery: "массовое создание shorts",
+    title: "Массовое создание Shorts: масштабируйте черновики без потери качества",
+    description:
+      "Массовое создание Shorts с AI: пачки сценариев и вертикальных видео-черновиков с контролем качества, тем и human review.",
+    h1: "Массовое создание Shorts",
+    lead:
+      "Массовое создание работает только если у каждого ролика есть понятная тема, полезный хук и проверка человеком. Масштабируйте кластеры, а не дубли.",
+    ctaSource: "seo_ru_massovoe_sozdanie_shorts",
+    useCases: ["Контент-команды делают weekly batches", "Агентства готовят варианты черновиков", "Авторы масштабируют один доказанный кластер"],
+    workflow: ["Выберите один тематический кластер", "Сгенерируйте несколько углов", "Проверьте и отредактируйте сильные черновики", "Публикуйте постепенно и измеряйте результат"],
+    differentiators: [
+      "Подходит для meaningful-вариантов, а не спамных дублей.",
+      "Поддерживает тематические кластеры, внутренние ссылки и измеримый ритм публикаций.",
+      "Хорошо работает вместе с аналитикой: оставляйте победителей, переписывайте слабые вступления.",
+    ],
+    related: [
+      ["../avtomaticheskoe-sozdanie-shorts/", "автоматическое создание Shorts"],
+      ["../avtomatizaciya-youtube-shorts/", "автоматизация Shorts"],
+      ["../kontent-dlya-shorts-s-ai/", "контент для Shorts с AI"],
+      ["../kontent-plan-dlya-shorts-na-mesyac/", "контент-план"],
+    ],
+    faq: [
+      ["Сколько Shorts создавать пачкой?", "Начните с управляемой пачки вокруг одного кластера, затем публикуйте и измеряйте перед масштабированием."],
+      ["Массовое создание портит качество?", "Может, если убрать review. Проверяйте факты, хук, субтитры и визуальную ясность."],
+      ["Как масштабировать безопаснее?", "Создавайте несколько углов из одной темы, публикуйте постепенно и расширяйте только победителей."],
+    ],
+  },
+];
+
 const allCommercialPages = [
   ...commercialPages.map((page) => ({ ...page, locale: "en", alternateSlug: page.ruSlug })),
   ...enBuyerGuidePages.map((page) => ({ ...page, locale: "en", alternateSlug: page.ruSlug })),
+  ...enYandexExpansionPages.map((page) => ({ ...page, locale: "en", alternateSlug: page.ruSlug })),
   ...ruCommercialPages.map((page) => ({ ...page, locale: "ru", alternateSlug: page.enSlug })),
   ...ruBuyerGuidePages.map((page) => ({ ...page, locale: "ru", alternateSlug: page.enSlug })),
+  ...ruYandexExpansionPages.map((page) => ({ ...page, locale: "ru", alternateSlug: page.enSlug })),
 ];
 
 const escapeHtml = (value) =>
@@ -1199,6 +2107,11 @@ const renderRelated = (items) =>
 
 const priorityGrowthLinks = {
   ru: [
+    ["../servis-dlya-sozdaniya-shorts/", "сервис для создания Shorts"],
+    ["../avtomaticheskoe-sozdanie-shorts/", "автоматическое создание Shorts"],
+    ["../neyroset-dlya-sozdaniya-shorts/", "нейросеть для создания Shorts"],
+    ["../ai-ozvuchka-dlya-shorts/", "AI-озвучка для Shorts"],
+    ["../shorts-dlya-prodazh/", "Shorts для продаж"],
     ["../ai-generator-shorts/", "AI-генератор Shorts"],
     ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
     ["../ai-generator-shorts-dlya-malogo-biznesa/", "Shorts для малого бизнеса"],
@@ -1211,6 +2124,11 @@ const priorityGrowthLinks = {
     ["../cta-v-shorts/", "CTA в Shorts"],
   ],
   en: [
+    ["../shorts-creation-service/", "Shorts creation service"],
+    ["../automatic-shorts-creation/", "automatic Shorts creation"],
+    ["../ai-tool-for-creating-shorts/", "AI tool for creating Shorts"],
+    ["../ai-voiceover-for-shorts/", "AI voiceover for Shorts"],
+    ["../shorts-for-sales/", "Shorts for sales"],
     ["../ai-shorts-generator/", "AI Shorts generator"],
     ["../youtube-shorts-generator/", "YouTube Shorts generator"],
     ["../ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
@@ -1228,7 +2146,7 @@ const renderPriorityGrowthLinks = (page) => {
   const currentHref = `../${page.slug}/`;
   return priorityGrowthLinks[page.locale]
     .filter(([href]) => href !== currentHref)
-    .slice(0, 8)
+    .slice(0, 12)
     .map(([href, label]) => `              <li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`)
     .join("\n");
 };
@@ -1422,7 +2340,9 @@ ${renderRelated(page.related)}
 };
 
 const renderGuidesBlock = (locale) => {
-  const pages = locale === "en" ? [...commercialPages, ...enBuyerGuidePages] : [...ruCommercialPages, ...ruBuyerGuidePages];
+  const pages = locale === "en"
+    ? [...commercialPages, ...enBuyerGuidePages, ...enYandexExpansionPages]
+    : [...ruCommercialPages, ...ruBuyerGuidePages, ...ruYandexExpansionPages];
   const title = locale === "en" ? "AI generators" : "AI-генераторы";
   const intro = locale === "en"
     ? "High-intent generator, buyer-guide and use-case pages for users who are already looking for a short-form video workflow."

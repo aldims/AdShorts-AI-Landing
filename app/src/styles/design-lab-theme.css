@@ -28613,7 +28613,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
   position: relative;
   z-index: 1;
   gap: 14px;
-  width: min(560px, calc(100vw - 32px));
+  width: min(680px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 48px));
   padding: 16px;
   border-color: rgba(251, 191, 36, 0.16);
@@ -28695,7 +28695,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
 
 .studio-segment-editor__timeline-duration-menu-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   min-width: 0;
 }
@@ -28736,7 +28736,8 @@ button.studio-segment-editor__timeline-label:focus-visible {
 }
 
 .studio-segment-editor__timeline-duration-menu-input-row button {
-  padding: 0;
+  min-width: 122px;
+  padding: 0 14px;
   border: 1px solid rgba(45, 212, 191, 0.26);
   background: rgba(13, 148, 136, 0.16);
   color: rgba(240, 253, 250, 0.96);
@@ -29062,6 +29063,10 @@ button.studio-segment-editor__timeline-label:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
+}
+
+.studio-segment-editor__timeline-duration-menu-modes--with-custom {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .studio-segment-editor__timeline-duration-menu-mode {

@@ -6942,6 +6942,10 @@ export async function createStudioSegmentPhotoAnimationJob(
     customVideoFileName?: string;
     durationExtensionBaseDurationSeconds?: number;
     durationExtensionMode?: string;
+    durationExtensionSourceVideoAssetId?: number;
+    durationExtensionSourceVideoFileDataUrl?: string;
+    durationExtensionSourceVideoFileMimeType?: string;
+    durationExtensionSourceVideoFileName?: string;
     durationExtensionTailDurationSeconds?: number;
     durationExtensionTargetDurationSeconds?: number;
     durationSeconds?: number;
@@ -6985,6 +6989,13 @@ export async function createStudioSegmentPhotoAnimationJob(
   }
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
+  const normalizedDurationExtensionSourceVideoAssetId = normalizePositiveInteger(options?.durationExtensionSourceVideoAssetId);
+  const normalizedDurationExtensionSourceVideoFileDataUrl =
+    String(options?.durationExtensionSourceVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedDurationExtensionSourceVideoFileMimeType =
+    String(options?.durationExtensionSourceVideoFileMimeType ?? "").trim() || undefined;
+  const normalizedDurationExtensionSourceVideoFileName =
+    String(options?.durationExtensionSourceVideoFileName ?? "").trim() || undefined;
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const customVideoAssetId =
@@ -7004,6 +7015,23 @@ export async function createStudioSegmentPhotoAnimationJob(
           segmentIndex: normalizedSegmentIndex,
         })
       : undefined;
+  const durationExtensionSourceVideoAssetId =
+    normalizedDurationExtensionSourceVideoAssetId
+      ? normalizedDurationExtensionSourceVideoAssetId
+      : normalizedDurationExtensionSourceVideoFileDataUrl && normalizedDurationExtensionSourceVideoFileName
+        ? await uploadStudioMediaAsset(user, {
+            dataUrl: normalizedDurationExtensionSourceVideoFileDataUrl,
+            externalUserId,
+            fileName: normalizedDurationExtensionSourceVideoFileName,
+            kind: "segment_source",
+            language: normalizedLanguage,
+            mediaType: "video",
+            mimeType: normalizedDurationExtensionSourceVideoFileMimeType,
+            projectId: normalizedProjectId,
+            role: "segment_source",
+            segmentIndex: normalizedSegmentIndex,
+          })
+        : undefined;
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-photo-animation/jobs", {
     admin_token: env.adsflowAdminToken,
     credit_cost: requiredCredits,
@@ -7011,6 +7039,12 @@ export async function createStudioSegmentPhotoAnimationJob(
     custom_video_data_url: customVideoAssetId ? undefined : normalizedCustomVideoFileDataUrl,
     custom_video_mime_type: normalizedCustomVideoFileMimeType,
     custom_video_original_name: normalizedCustomVideoFileName,
+    duration_extension_source_video_asset_id: durationExtensionSourceVideoAssetId,
+    duration_extension_source_video_data_url: durationExtensionSourceVideoAssetId
+      ? undefined
+      : normalizedDurationExtensionSourceVideoFileDataUrl,
+    duration_extension_source_video_mime_type: normalizedDurationExtensionSourceVideoFileMimeType,
+    duration_extension_source_video_original_name: normalizedDurationExtensionSourceVideoFileName,
     external_user_id: externalUserId,
     ...buildStudioSegmentVisualDurationExtensionPayload({
       baseDurationSeconds: options?.durationExtensionBaseDurationSeconds,

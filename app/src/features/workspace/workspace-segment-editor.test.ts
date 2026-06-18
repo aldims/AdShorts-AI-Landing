@@ -29,6 +29,7 @@ import {
 } from "./workspace-segment-editor";
 import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
+  getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentSceneSoundVisualAssetId,
 } from "./workspace-segment-visual-helpers";
 import { canReuseWorkspaceSegmentProjectTimelineVoiceover } from "./workspace-segment-editor-checklist";
@@ -459,6 +460,34 @@ describe("workspace segment editor project voiceover timeline", () => {
       visualDurationSeconds: 5,
       voiceoverDurationSeconds: 5.9,
     });
+  });
+
+  it("uses the selected draft video as the AI duration extension base source", () => {
+    const selectedVideo = {
+      assetId: 606,
+      durationSeconds: 5,
+      fileName: "library-video.mp4",
+      fileSize: 0,
+      mimeType: "video/mp4",
+      posterUrl: "/api/workspace/media-assets/606/poster",
+      remoteUrl: "/api/workspace/media-assets/606/playback",
+      source: "media-library" as const,
+    };
+    const segment = createProjectVoiceoverSegment({
+      customVideo: selectedVideo,
+      duration: 5.9,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      endTime: 5.9,
+      manualDurationSeconds: 5.9,
+      mediaType: "video",
+      speechDuration: 5.9,
+      speechEndTime: 5.9,
+      videoAction: "custom",
+    });
+
+    expect(getWorkspaceSegmentCurrentVideoSourceAsset(segment)).toEqual(selectedVideo);
+    expect(resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(segment)).toBe(5);
   });
 
   it("uses the longer current video slot for the extension menu over a stale stored source duration", () => {

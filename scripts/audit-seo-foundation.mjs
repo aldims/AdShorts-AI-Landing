@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
 const organicSprintLastmod = "2026-06-17";
-const commercialGrowthLastmod = "2026-06-17";
+const commercialGrowthLastmod = "2026-06-18";
+const yandexGrowthLastmod = "2026-06-18";
 
 const errors = [];
 
@@ -134,6 +135,45 @@ const commercialGrowthPages = [
   "en/ai-shorts-generator-for-youtube-creators/index.html",
   "en/ai-video-maker-for-reels-tiktok-and-shorts/index.html",
   "en/faceless-video-generator-for-youtube-shorts/index.html",
+  "en/ai-tool-for-creating-shorts/index.html",
+  "en/shorts-creation-service/index.html",
+  "en/automatic-shorts-creation/index.html",
+  "en/shorts-production-service-or-ai/index.html",
+  "en/shorts-for-sales/index.html",
+  "en/shorts-ad-video-maker/index.html",
+  "en/ai-voiceover-for-shorts/index.html",
+  "en/shorts-subtitle-generator/index.html",
+  "en/vertical-video-generator/index.html",
+  "en/shorts-for-telegram-channel/index.html",
+  "en/shorts-for-marketplaces/index.html",
+  "en/shorts-for-experts/index.html",
+  "en/ai-content-for-shorts/index.html",
+  "en/ai-shorts-editing/index.html",
+  "en/bulk-shorts-creation/index.html",
+  "neyroset-dlya-sozdaniya-shorts/index.html",
+  "servis-dlya-sozdaniya-shorts/index.html",
+  "avtomaticheskoe-sozdanie-shorts/index.html",
+  "sozdanie-shorts-na-zakaz-ili-ai/index.html",
+  "shorts-dlya-prodazh/index.html",
+  "video-dlya-reklamy-v-shorts/index.html",
+  "ai-ozvuchka-dlya-shorts/index.html",
+  "generator-subtitrov-dlya-shorts/index.html",
+  "generator-vertikalnyh-video/index.html",
+  "shorts-dlya-telegram-kanala/index.html",
+  "shorts-dlya-marketplejsa/index.html",
+  "shorts-dlya-eksperta/index.html",
+  "kontent-dlya-shorts-s-ai/index.html",
+  "ai-montazh-shorts/index.html",
+  "massovoe-sozdanie-shorts/index.html",
+];
+
+const yandexGrowthPages = [
+  "ai-generator-shorts-dlya-malogo-biznesa/index.html",
+  "ozvuchka-dlya-shorts-kak-vybrat-golos/index.html",
+  "kak-sdelat-shorts-bez-montazha/index.html",
+  "avtomatizaciya-youtube-shorts/index.html",
+  "sozdat-shorts-video/index.html",
+  "kak-postavit-oblozhku-na-shorts/index.html",
 ];
 
 const legalPages = [
@@ -209,6 +249,11 @@ for (const pagePath of commercialGrowthPages) {
   assert(/id="commercial-validation-plan"/i.test(html), `${pagePath}: missing commercial validation plan`);
   assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
   assert(/href="\.\.\/shorts-guides\/#ai-generators"/i.test(html), `${pagePath}: missing commercial guides backlink`);
+}
+
+for (const pagePath of yandexGrowthPages) {
+  const html = await readRootFile(pagePath);
+  assert(/<!-- seo-yandex-growth:start -->/i.test(html), `${pagePath}: missing Yandex growth section`);
 }
 
 const rootLanding = await readRootFile("index.html");
@@ -323,6 +368,16 @@ for (const pagePath of commercialGrowthPages) {
   assert(record?.intent === "commercial", `seo-url-metadata.json: commercial growth URL should be classified as commercial ${commercialUrl}`);
 }
 
+for (const pagePath of yandexGrowthPages) {
+  const growthUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
+  assert(
+    new RegExp(`<loc>${growthUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${yandexGrowthLastmod}<\\/lastmod>`).test(sitemap),
+    `sitemap.xml: Yandex growth URL must use current lastmod ${growthUrl}`,
+  );
+  const record = metadata.urls.find((entry) => entry.url === growthUrl);
+  assert(record?.lastmod === yandexGrowthLastmod, `seo-url-metadata.json: Yandex growth URL must use current lastmod ${growthUrl}`);
+}
+
 const englishGuides = await readRootFile("en/shorts-guides/index.html");
 assert(/href="#ai-generators"/i.test(englishGuides), "en/shorts-guides/index.html: missing AI generators nav link");
 assert(/<!-- seo-commercial-growth:start -->/i.test(englishGuides), "en/shorts-guides/index.html: missing commercial growth section");
@@ -333,6 +388,7 @@ assert(/<!-- seo-commercial-growth:start -->/i.test(russianGuides), "shorts-guid
 const deployProduction = await readRootFile("deploy-production.sh");
 assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
 assert(/node scripts\/seo-organic-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run organic growth sprint before SEO metadata export");
+assert(/node scripts\/seo-yandex-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run Yandex growth sprint before SEO metadata export");
 assert(/node scripts\/generate-static-press-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate press pages before SEO metadata export");
 assert(/node scripts\/generate-static-contact-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate contact pages before SEO metadata export");
 assert(/node scripts\/update-static-language-switchers\.mjs/.test(deployProduction), "deploy-production.sh: must normalize static language switchers and asset versions before SEO metadata export");
