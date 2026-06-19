@@ -468,6 +468,13 @@ reserved_referral_path_matchers = "\n        ".join(
 production_blocks = f"""https://adshortsai.com {{
     encode gzip zstd
 
+    header {{
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }}
+
     @acme path /.well-known/acme-challenge/*
     handle @acme {{
         root * /var/www/html

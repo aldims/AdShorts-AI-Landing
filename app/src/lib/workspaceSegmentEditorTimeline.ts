@@ -329,6 +329,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     speechBoundaryEnabled?: boolean | ((previousSegment: T, nextSegment: T) => boolean);
     preserveSourceTimelineEnd?: boolean;
     preserveExistingStillDurations?: boolean | ((segment: T) => boolean);
+    zeroDuration?: boolean | ((segment: T) => boolean);
   },
 ) => {
   let cursor = 0;
@@ -343,17 +344,21 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       typeof options?.preserveExistingStillDurations === "function"
         ? options.preserveExistingStillDurations(segment)
         : options?.preserveExistingStillDurations;
-    const duration = roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
-      fallbackDuration: segment.duration,
-      preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
-      preserveExistingStillDuration: preserveExistingStillDuration ?? false,
-      stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
-      subtitleEnabled,
-      visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
-      visualKind: options?.visualKind?.(segment) ?? null,
-      voiceDurationSeconds: options?.voiceDurationSeconds?.(segment) ?? null,
-      voiceEnabled,
-    }));
+    const shouldUseZeroDuration =
+      typeof options?.zeroDuration === "function" ? options.zeroDuration(segment) : options?.zeroDuration;
+    const duration = shouldUseZeroDuration
+      ? 0
+      : roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
+          fallbackDuration: segment.duration,
+          preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
+          preserveExistingStillDuration: preserveExistingStillDuration ?? false,
+          stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,
+          subtitleEnabled,
+          visualDurationSeconds: options?.visualDurationSeconds?.(segment) ?? null,
+          visualKind: options?.visualKind?.(segment) ?? null,
+          voiceDurationSeconds: options?.voiceDurationSeconds?.(segment) ?? null,
+          voiceEnabled,
+        }));
     const startTime = cursor;
     const endTime = roundWorkspaceSegmentTimelineSeconds(startTime + duration);
     cursor = endTime;

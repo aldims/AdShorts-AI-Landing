@@ -67,7 +67,7 @@ describe("local examples video source resolution", () => {
     ).resolves.toEqual({
       sourceUrl,
     });
-    expect(studioMocks.getStudioVideoProxyTargetByPath).toHaveBeenCalledWith("/outputs/hq-video.mp4");
+    expect(studioMocks.getStudioVideoProxyTargetByPath).toHaveBeenCalledWith("/outputs/hq-video.mp4", expect.any(String));
     expect(studioMocks.getStudioVideoProxyTarget).not.toHaveBeenCalled();
   });
 });

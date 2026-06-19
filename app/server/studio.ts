@@ -75,6 +75,7 @@ import {
   WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL,
 } from "./wavespeed-worker.js";
 import { normalizeWebReferralSource } from "./referral.js";
+import { appendVideoProxyToken } from "./video-proxy-token.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
 type StudioUser = {
@@ -2171,7 +2172,7 @@ const isPlayableStudioVideoPath = (value: string | null | undefined) => {
   }
 };
 
-const buildTrustedStudioVideoTarget = (value: string | null | undefined) => {
+const buildTrustedStudioVideoTarget = (value: string | null | undefined, externalUserId?: string | null) => {
   const normalized = normalizeGenerationText(value);
   if (!normalized) {
     throw new Error("Video path is required.");
@@ -2186,6 +2187,10 @@ const buildTrustedStudioVideoTarget = (value: string | null | undefined) => {
   const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl as string);
   if (upstreamUrl.origin === adsflowBaseUrl.origin) {
     upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+    const normalizedExternalUserId = normalizeGenerationText(externalUserId);
+    if (normalizedExternalUserId) {
+      upstreamUrl.searchParams.set("external_user_id", normalizedExternalUserId);
+    }
   }
 
   return upstreamUrl;
@@ -2204,6 +2209,7 @@ const buildStudioVideoProxyUrl = (value: string | null | undefined) => {
   const upstreamUrl = buildAdsflowUrl(normalized);
   const proxyUrl = new URL("/api/studio/video", env.appUrl);
   proxyUrl.searchParams.set("path", upstreamUrl.toString());
+  appendVideoProxyToken(proxyUrl, "studio-video-path", upstreamUrl.toString());
   return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 
@@ -8700,7 +8706,7 @@ export async function getLatestStudioGeneration(user: StudioUser): Promise<Studi
   return (await getWorkspaceBootstrap(user)).latestGeneration;
 }
 
-export function getStudioVideoProxyTargetByPath(value: string): URL {
+export function getStudioVideoProxyTargetByPath(value: string, externalUserId?: string | null): URL {
   const normalized = normalizeGenerationText(value);
   if (!normalized) {
     throw new Error("Video path is required.");
@@ -8710,10 +8716,14 @@ export function getStudioVideoProxyTargetByPath(value: string): URL {
     throw new Error("Video path is not a direct media file.");
   }
 
-  return buildTrustedStudioVideoTarget(normalized);
+  return buildTrustedStudioVideoTarget(normalized, externalUserId);
 }
 
-const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId: string, user: StudioUser) => {
+const getStudioVideoProxyTargetFromWorkspaceHistory = async (
+  jobId: string,
+  user: StudioUser,
+  externalUserId?: string | null,
+) => {
   const safeJobId = normalizeGenerationText(jobId);
   if (!safeJobId) {
     return null;
@@ -8734,11 +8744,12 @@ const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId: string, user
     return null;
   }
 
-  return buildTrustedStudioVideoTarget(downloadPath);
+  return buildTrustedStudioVideoTarget(downloadPath, externalUserId);
 };
 
 export async function getStudioVideoProxyTarget(jobId: string, user: StudioUser): Promise<URL> {
   let fallbackError: Error | null = null;
+  const externalUserId = await resolveStudioExternalUserId(user);
 
   try {
     const payload = await fetchAdsflowJobStatus(jobId, user);
@@ -8770,13 +8781,13 @@ export async function getStudioVideoProxyTarget(jobId: string, user: StudioUser)
       throw new Error("AdsFlow did not return a download path.");
     }
 
-    return buildTrustedStudioVideoTarget(downloadPath);
+    return buildTrustedStudioVideoTarget(downloadPath, externalUserId);
   } catch (error) {
     fallbackError = error instanceof Error ? error : new Error("Failed to resolve generated video.");
   }
 
   try {
-    const fallbackTarget = await getStudioVideoProxyTargetFromWorkspaceHistory(jobId, user);
+    const fallbackTarget = await getStudioVideoProxyTargetFromWorkspaceHistory(jobId, user, externalUserId);
     if (fallbackTarget) {
       return fallbackTarget;
     }
@@ -9460,7 +9471,7 @@ const getStudioPlaybackSource = async (
   }
 
   const upstreamUrl = options.preferredPath
-    ? getStudioVideoProxyTargetByPath(options.preferredPath)
+    ? getStudioVideoProxyTargetByPath(options.preferredPath, await resolveStudioExternalUserId(user))
     : await getStudioVideoProxyTarget(safeJobId, user);
 
   return {

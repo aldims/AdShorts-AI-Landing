@@ -7,6 +7,7 @@ import { ensureWorkspaceProjectPoster, getWorkspaceProjectPosterCacheKey, } from
 import { buildAdsflowUrl, fetchAdsflowJson, postAdsflowText, upstreamPolicies, } from "./upstream-client.js";
 import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory, markWorkspaceProjectDeleted, } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
+import { appendVideoProxyToken } from "./video-proxy-token.js";
 export class WorkspaceProjectNotFoundError extends Error {
     constructor() {
         super("Project not found.");
@@ -130,6 +131,7 @@ const buildWorkspaceProjectVideoProxyUrl = (value, version) => {
         return null;
     const proxyUrl = new URL("/api/workspace/project-video", env.appUrl);
     proxyUrl.searchParams.set("path", resolvedUrl);
+    appendVideoProxyToken(proxyUrl, "workspace-project-video", resolvedUrl);
     const normalizedVersion = normalizeText(version);
     if (normalizedVersion) {
         proxyUrl.searchParams.set("v", normalizedVersion);
@@ -502,7 +504,8 @@ const resolveWorkspaceProjectHistoryVideoTarget = async (jobId, user) => {
     });
     const historyEntry = historyEntries.find((entry) => normalizeText(entry.jobId) === normalizedJobId) ?? null;
     const downloadPath = normalizeText(historyEntry?.downloadPath);
-    return downloadPath ? getWorkspaceProjectVideoProxyTarget(downloadPath) : null;
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    return downloadPath ? getWorkspaceProjectVideoProxyTarget(downloadPath, externalUserId) : null;
 };
 const resolveWorkspaceProjectUpstreamTargetFromVideoUrl = async (playbackUrl, user) => {
     const normalizedPlaybackUrl = normalizeText(playbackUrl);
@@ -518,7 +521,8 @@ const resolveWorkspaceProjectUpstreamTargetFromVideoUrl = async (playbackUrl, us
     }
     if (resolvedUrl.pathname === "/api/workspace/project-video" || resolvedUrl.pathname === "/api/studio/video") {
         const path = normalizeText(resolvedUrl.searchParams.get("path"));
-        return path ? getWorkspaceProjectVideoProxyTarget(path) : null;
+        const externalUserId = await resolvePreferredExternalUserId(user);
+        return path ? getWorkspaceProjectVideoProxyTarget(path, externalUserId) : null;
     }
     if (resolvedUrl.pathname.startsWith("/api/studio/video/")) {
         const jobId = decodeURIComponent(resolvedUrl.pathname.slice("/api/studio/video/".length));
@@ -733,7 +737,7 @@ const loadWorkspaceProjects = async (user, externalUserId) => {
         .sort((left, right) => getSortTime(right) - getSortTime(left))
         .slice(0, MAX_PROJECTS);
 };
-export function getWorkspaceProjectVideoProxyTarget(value) {
+export function getWorkspaceProjectVideoProxyTarget(value, externalUserId) {
     const normalized = normalizeText(value);
     if (!normalized) {
         throw new Error("Project video path is missing.");
@@ -745,6 +749,10 @@ export function getWorkspaceProjectVideoProxyTarget(value) {
     }
     if (upstreamUrl.origin === adsflowBaseUrl.origin) {
         upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+        const normalizedExternalUserId = normalizeText(externalUserId);
+        if (normalizedExternalUserId) {
+            upstreamUrl.searchParams.set("external_user_id", normalizedExternalUserId);
+        }
     }
     return upstreamUrl;
 }

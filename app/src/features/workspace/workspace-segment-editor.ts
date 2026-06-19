@@ -6316,6 +6316,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
     preserveExistingStillDurations: (segment) =>
       shouldPreserveWorkspaceSegmentExistingStillDuration(segment, session),
+    zeroDuration: isWorkspaceSegmentEditorDraftSegmentEmpty,
   });
 };
 
@@ -7035,18 +7036,11 @@ export const getWorkspaceSegmentEditorInsertedSegmentTiming = (
   insertAt: number,
 ) => {
   const previousSegment = insertAt > 0 ? segments[insertAt - 1] ?? null : null;
-  const nextSegment = segments[insertAt] ?? null;
   const startTime = previousSegment ? getWorkspaceSegmentEditorDisplayEndTime(previousSegment) : 0;
-  const nextStartTime = nextSegment ? getWorkspaceSegmentEditorDisplayStartTime(nextSegment) : null;
-  const duration =
-    typeof nextStartTime === "number" && nextStartTime > startTime
-      ? nextStartTime - startTime
-      : WORKSPACE_SEGMENT_EDITOR_NEW_SEGMENT_DURATION_SECONDS;
-  const safeDuration = Math.max(1, duration);
 
   return {
-    duration: safeDuration,
-    endTime: startTime + safeDuration,
+    duration: 0,
+    endTime: startTime,
     startTime,
   };
 };

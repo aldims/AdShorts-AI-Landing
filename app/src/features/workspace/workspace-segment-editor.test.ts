@@ -985,10 +985,10 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
-      duration: 5,
+      duration: 0,
+      endTime: 16.7,
       startTime: 16.7,
     }));
-    expect(withInsertedSegment.segments[2]?.endTime).toBeCloseTo(21.7);
   });
 
   it("keeps a generated-video visual slot at its stored source duration when a blank scene is appended", () => {
@@ -1077,6 +1077,11 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 16.7,
       manualDurationSeconds: 5,
       startTime: 11.7,
+    }));
+    expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
+      duration: 0,
+      endTime: 16.7,
+      startTime: 16.7,
     }));
   });
 

@@ -32,6 +32,7 @@ import {
   type WorkspaceGenerationHistoryEntry,
 } from "./workspace-history.js";
 import { resolveGenerationPresentation } from "./generation-metadata.js";
+import { appendVideoProxyToken } from "./video-proxy-token.js";
 import type { ExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 
@@ -270,6 +271,7 @@ const buildWorkspaceProjectVideoProxyUrl = (
 
   const proxyUrl = new URL("/api/workspace/project-video", env.appUrl);
   proxyUrl.searchParams.set("path", resolvedUrl);
+  appendVideoProxyToken(proxyUrl, "workspace-project-video", resolvedUrl);
   const normalizedVersion = normalizeText(version);
   if (normalizedVersion) {
     proxyUrl.searchParams.set("v", normalizedVersion);
@@ -714,7 +716,8 @@ const resolveWorkspaceProjectHistoryVideoTarget = async (jobId: string | null | 
     historyEntries.find((entry) => normalizeText(entry.jobId) === normalizedJobId) ?? null;
   const downloadPath = normalizeText(historyEntry?.downloadPath);
 
-  return downloadPath ? getWorkspaceProjectVideoProxyTarget(downloadPath) : null;
+  const externalUserId = await resolvePreferredExternalUserId(user);
+  return downloadPath ? getWorkspaceProjectVideoProxyTarget(downloadPath, externalUserId) : null;
 };
 
 const resolveWorkspaceProjectUpstreamTargetFromVideoUrl = async (
@@ -735,7 +738,8 @@ const resolveWorkspaceProjectUpstreamTargetFromVideoUrl = async (
 
   if (resolvedUrl.pathname === "/api/workspace/project-video" || resolvedUrl.pathname === "/api/studio/video") {
     const path = normalizeText(resolvedUrl.searchParams.get("path"));
-    return path ? getWorkspaceProjectVideoProxyTarget(path) : null;
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    return path ? getWorkspaceProjectVideoProxyTarget(path, externalUserId) : null;
   }
 
   if (resolvedUrl.pathname.startsWith("/api/studio/video/")) {
@@ -1013,7 +1017,7 @@ const loadWorkspaceProjects = async (user: WorkspaceUser, externalUserId: string
     .slice(0, MAX_PROJECTS);
 };
 
-export function getWorkspaceProjectVideoProxyTarget(value: string): URL {
+export function getWorkspaceProjectVideoProxyTarget(value: string, externalUserId?: string | null): URL {
   const normalized = normalizeText(value);
   if (!normalized) {
     throw new Error("Project video path is missing.");
@@ -1028,6 +1032,10 @@ export function getWorkspaceProjectVideoProxyTarget(value: string): URL {
 
   if (upstreamUrl.origin === adsflowBaseUrl.origin) {
     upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+    const normalizedExternalUserId = normalizeText(externalUserId);
+    if (normalizedExternalUserId) {
+      upstreamUrl.searchParams.set("external_user_id", normalizedExternalUserId);
+    }
   }
 
   return upstreamUrl;

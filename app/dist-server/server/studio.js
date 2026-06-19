@@ -13,6 +13,7 @@ import { postAdsflowText as postAdsflowTextWithPolicy, upstreamPolicies } from "
 import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
 import { createWaveSpeedImageUpscaleJob, createWaveSpeedGptImage2EditJob, createWaveSpeedGptImage2TextToImageJob, getWaveSpeedPredictionOutputUrl, getWaveSpeedPredictionStatus, WAVESPEED_GPT_IMAGE_2_EDIT_MODEL, WAVESPEED_GPT_IMAGE_2_TEXT_TO_IMAGE_MODEL, } from "./wavespeed-worker.js";
 import { normalizeWebReferralSource } from "./referral.js";
+import { appendVideoProxyToken } from "./video-proxy-token.js";
 const normalizeWorkspaceSubscriptionPlanCode = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return normalized === "start" || normalized === "pro" || normalized === "ultra" ? normalized : null;
@@ -1038,7 +1039,7 @@ const isPlayableStudioVideoPath = (value) => {
         return false;
     }
 };
-const buildTrustedStudioVideoTarget = (value) => {
+const buildTrustedStudioVideoTarget = (value, externalUserId) => {
     const normalized = normalizeGenerationText(value);
     if (!normalized) {
         throw new Error("Video path is required.");
@@ -1051,6 +1052,10 @@ const buildTrustedStudioVideoTarget = (value) => {
     const adsflowBaseUrl = new URL(env.adsflowApiBaseUrl);
     if (upstreamUrl.origin === adsflowBaseUrl.origin) {
         upstreamUrl.searchParams.set("admin_token", env.adsflowAdminToken ?? "");
+        const normalizedExternalUserId = normalizeGenerationText(externalUserId);
+        if (normalizedExternalUserId) {
+            upstreamUrl.searchParams.set("external_user_id", normalizedExternalUserId);
+        }
     }
     return upstreamUrl;
 };
@@ -1065,6 +1070,7 @@ const buildStudioVideoProxyUrl = (value) => {
     const upstreamUrl = buildAdsflowUrl(normalized);
     const proxyUrl = new URL("/api/studio/video", env.appUrl);
     proxyUrl.searchParams.set("path", upstreamUrl.toString());
+    appendVideoProxyToken(proxyUrl, "studio-video-path", upstreamUrl.toString());
     return `${proxyUrl.pathname}${proxyUrl.search}`;
 };
 const ADSFLOW_FINAL_VIDEO_ASSET_FIELDS = [
@@ -5998,7 +6004,7 @@ export async function getStudioGenerationStatus(jobId, user) {
 export async function getLatestStudioGeneration(user) {
     return (await getWorkspaceBootstrap(user)).latestGeneration;
 }
-export function getStudioVideoProxyTargetByPath(value) {
+export function getStudioVideoProxyTargetByPath(value, externalUserId) {
     const normalized = normalizeGenerationText(value);
     if (!normalized) {
         throw new Error("Video path is required.");
@@ -6006,9 +6012,9 @@ export function getStudioVideoProxyTargetByPath(value) {
     if (!isPlayableStudioVideoPath(normalized)) {
         throw new Error("Video path is not a direct media file.");
     }
-    return buildTrustedStudioVideoTarget(normalized);
+    return buildTrustedStudioVideoTarget(normalized, externalUserId);
 }
-const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user) => {
+const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user, externalUserId) => {
     const safeJobId = normalizeGenerationText(jobId);
     if (!safeJobId) {
         return null;
@@ -6024,10 +6030,11 @@ const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user) => {
     if (!downloadPath) {
         return null;
     }
-    return buildTrustedStudioVideoTarget(downloadPath);
+    return buildTrustedStudioVideoTarget(downloadPath, externalUserId);
 };
 export async function getStudioVideoProxyTarget(jobId, user) {
     let fallbackError = null;
+    const externalUserId = await resolveStudioExternalUserId(user);
     try {
         const payload = await fetchAdsflowJobStatus(jobId, user);
         let downloadPath = resolveAdsflowFinalVideoDownloadPath(payload);
@@ -6056,13 +6063,13 @@ export async function getStudioVideoProxyTarget(jobId, user) {
         if (!downloadPath) {
             throw new Error("AdsFlow did not return a download path.");
         }
-        return buildTrustedStudioVideoTarget(downloadPath);
+        return buildTrustedStudioVideoTarget(downloadPath, externalUserId);
     }
     catch (error) {
         fallbackError = error instanceof Error ? error : new Error("Failed to resolve generated video.");
     }
     try {
-        const fallbackTarget = await getStudioVideoProxyTargetFromWorkspaceHistory(jobId, user);
+        const fallbackTarget = await getStudioVideoProxyTargetFromWorkspaceHistory(jobId, user, externalUserId);
         if (fallbackTarget) {
             return fallbackTarget;
         }
@@ -6582,7 +6589,7 @@ const getStudioPlaybackSource = async (options, user) => {
         throw new Error("Studio job id is required.");
     }
     const upstreamUrl = options.preferredPath
-        ? getStudioVideoProxyTargetByPath(options.preferredPath)
+        ? getStudioVideoProxyTargetByPath(options.preferredPath, await resolveStudioExternalUserId(user))
         : await getStudioVideoProxyTarget(safeJobId, user);
     return {
         cacheKey: getWorkspaceProjectPlaybackCacheKey({

@@ -20009,6 +20009,11 @@ export function WorkspacePage({
         return;
       }
 
+      if (response.status >= 500) {
+        setWorkspaceNotifications([]);
+        return;
+      }
+
       if (!response.ok || !payload?.data) {
         throw new Error(payload?.error ?? "Failed to load notifications.");
       }
@@ -29456,6 +29461,9 @@ export function WorkspacePage({
         isSegmentEditorVoiceoverGenerationScheduledForSegment(segment, segmentEditorDraft),
       )
     : false;
+  const hasSegmentEditorFullPreviewContent = Boolean(
+    segmentEditorDraft?.segments.some((segment) => !isWorkspaceSegmentEditorDraftSegmentEmpty(segment)),
+  );
   const segmentEditorFullPreviewActiveGenerationReason = workspaceText(
     locale,
     "Дождитесь завершения генерации элементов сцены",
@@ -29466,14 +29474,22 @@ export function WorkspacePage({
     "Сначала сгенерируйте озвучку сцен с сохраненным текстом",
     "Generate voiceover for scenes with saved text first",
   );
+  const segmentEditorFullPreviewEmptyReason = workspaceText(
+    locale,
+    "Сначала добавьте визуал, текст или звук",
+    "Add a visual, text, or sound first",
+  );
   const segmentEditorFullPreviewUnavailableReason = isSegmentEditorFullPreviewBlockedByActiveGeneration
     ? segmentEditorFullPreviewActiveGenerationReason
     : isSegmentEditorFullPreviewBlockedByVoiceoverGeneration
       ? segmentEditorFullPreviewVoiceoverRequiredReason
+      : !hasSegmentEditorFullPreviewContent
+        ? segmentEditorFullPreviewEmptyReason
       : null;
   const isSegmentEditorFullPreviewUnavailable =
     !segmentEditorDraft ||
     !segmentEditorTracks ||
+    !hasSegmentEditorFullPreviewContent ||
     segmentEditorFullPreviewDuration <= 0 ||
     isSegmentEditorFullPreviewBlockedByActiveGeneration ||
     isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;

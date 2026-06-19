@@ -195,10 +195,12 @@ import {
   runWithAdsflowWebSignal,
   setAdsflowWebDeviceCookie,
 } from "./web-device.js";
+import { verifyVideoProxyToken } from "./video-proxy-token.js";
 
 initServerLogging();
 
 const app = express();
+app.disable("x-powered-by");
 
 const resolvePreferredExternalUserId = async (user: { email?: string | null; id?: string | null }) => {
   try {
@@ -266,9 +268,106 @@ const normalizeWebDeviceId = (value: unknown) => {
   return /^[A-Za-z0-9._:-]{16,160}$/.test(normalized) ? normalized : "";
 };
 
+type RateLimitBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+
+const createRateLimitMiddleware = ({
+  keyPrefix,
+  max,
+  shouldLimit = () => true,
+  windowMs,
+}: {
+  keyPrefix: string;
+  max: number;
+  shouldLimit?: (req: express.Request) => boolean;
+  windowMs: number;
+}): express.RequestHandler => {
+  return (req, res, next) => {
+    if (!shouldLimit(req)) {
+      next();
+      return;
+    }
+
+    const now = Date.now();
+    const address = req.ip || req.socket.remoteAddress || "unknown";
+    const key = `${keyPrefix}:${address}`;
+    const bucket = rateLimitBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      next();
+      return;
+    }
+
+    if (bucket.count >= max) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
+      res.status(429).json({ error: "Too many requests." });
+      return;
+    }
+
+    bucket.count += 1;
+    next();
+  };
+};
+
+const publicWritePaths = new Set([
+  "/api/referrals/click",
+  "/api/client-events",
+  "/api/contact/agency",
+  "/api/contact/international-payments-waitlist",
+]);
+
+const isPublicWriteRequest = (req: express.Request) =>
+  req.method === "POST" && publicWritePaths.has(req.path);
+
+const publicWriteRateLimit = createRateLimitMiddleware({
+  keyPrefix: "public-write",
+  max: 120,
+  shouldLimit: isPublicWriteRequest,
+  windowMs: 60 * 1000,
+});
+
+const emailCodeRequestRateLimit = createRateLimitMiddleware({
+  keyPrefix: "email-code-request",
+  max: 10,
+  windowMs: 10 * 60 * 1000,
+});
+
+const compactJsonParser = express.json({ limit: "128kb" });
+const largeJsonParser = express.json({ limit: "90mb" });
+const largeJsonPathPrefixes = [
+  "/api/studio/",
+  "/api/workspace/publish",
+  "/api/workspace/youtube",
+];
+
+const selectJsonParser: express.RequestHandler = (req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    next();
+    return;
+  }
+
+  const parser = largeJsonPathPrefixes.some((prefix) => req.path.startsWith(prefix))
+    ? largeJsonParser
+    : compactJsonParser;
+  parser(req, res, next);
+};
+
 const allowedCorsOrigins = getConfiguredOrigins(env.appUrl, env.authBaseUrl, env.isProduction);
 
 app.set("trust proxy", true);
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (env.isProduction) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
 app.use(
   cors({
     credentials: true,
@@ -278,7 +377,7 @@ app.use(
         return;
       }
 
-      callback(new Error(`CORS origin is not allowed: ${origin}`));
+      callback(null, false);
     },
   }),
 );
@@ -1089,7 +1188,7 @@ app.get("/api/auth/dev/last-email", (_req, res) => {
   res.json({ data: getLastDevEmailPreview() });
 });
 
-app.post("/api/auth/email-code/request", express.json(), async (req, res) => {
+app.post("/api/auth/email-code/request", emailCodeRequestRateLimit, express.json({ limit: "32kb" }), async (req, res) => {
   const email = normalizeEmailLoginAddress(req.body?.email);
   if (!email) {
     res.status(400).json({ error: "Введите корректный email." });
@@ -1808,11 +1907,8 @@ app.get("/api/workspace/notifications", async (req, res) => {
     );
 
     res.json({ data: { notifications: Array.isArray(payload?.notifications) ? payload.notifications : [] } });
-  } catch (error) {
-    console.error("[workspace] Failed to load web notifications", error);
-    res.status(502).json({
-      error: error instanceof Error ? error.message : "Failed to load notifications.",
-    });
+  } catch {
+    res.json({ data: { notifications: [] } });
   }
 });
 
@@ -2685,7 +2781,13 @@ app.get("/api/workspace/project-video", async (req, res) => {
   }
 
   try {
-    const upstreamUrl = getWorkspaceProjectVideoProxyTarget(path);
+    if (!verifyVideoProxyToken("workspace-project-video", path, req.query.expiresAt, req.query.token)) {
+      res.status(403).json({ error: "Project video link is expired or invalid." });
+      return;
+    }
+
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = getWorkspaceProjectVideoProxyTarget(path, externalUserId);
     res.setHeader("Cache-Control", "private, max-age=600, stale-while-revalidate=60");
     await proxyVideoResponse(req, res, upstreamUrl, "Failed to load project video.");
   } catch (error) {
@@ -3137,7 +3239,8 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 
 app.all(/^\/api\/auth(\/.*)?$/, toNodeHandler(auth));
 
-app.use(express.json({ limit: "90mb" }));
+app.use(publicWriteRateLimit);
+app.use(selectJsonParser);
 
 app.post("/api/referrals/click", async (req, res) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -5362,7 +5465,13 @@ app.get("/api/studio/video", async (req, res) => {
   }
 
   try {
-    const upstreamUrl = getStudioVideoProxyTargetByPath(path);
+    if (!verifyVideoProxyToken("studio-video-path", path, req.query.expiresAt, req.query.token)) {
+      res.status(403).json({ error: "Video link is expired or invalid." });
+      return;
+    }
+
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = getStudioVideoProxyTargetByPath(path, externalUserId);
     await proxyVideoResponse(req, res, upstreamUrl, "Failed to load generated video.");
   } catch (error) {
     console.error("[studio] Failed to proxy generated video by path", error);

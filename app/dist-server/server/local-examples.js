@@ -11,6 +11,15 @@ import { env } from "./env.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { getWorkspaceProjectPlaybackAsset, getWorkspaceProjectVideoProxyTarget } from "./projects.js";
 import { getStudioVideoProxyTarget, getStudioVideoProxyTargetByPath } from "./studio.js";
+import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
+const resolveLocalExampleExternalUserId = async (user) => {
+    try {
+        return (await resolveExternalUserIdentity(user)).preferred;
+    }
+    catch {
+        return buildExternalUserId(user);
+    }
+};
 const LOCAL_EXAMPLES_ROOT_DIR = join(env.dataDir, "local-examples");
 const LOCAL_EXAMPLES_INDEX_PATH = join(LOCAL_EXAMPLES_ROOT_DIR, "examples.json");
 const LOCAL_EXAMPLE_FETCH_TIMEOUT_MS = 60_000;
@@ -257,13 +266,14 @@ export const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
         throw new Error("Video URL is required.");
     }
     const resolvedUrl = new URL(normalizedVideoUrl, env.appUrl);
+    const externalUserId = await resolveLocalExampleExternalUserId(user);
     if (resolvedUrl.pathname === "/api/studio/video") {
         const path = normalizeText(resolvedUrl.searchParams.get("path"));
         if (!path) {
             throw new Error("Studio video path is missing.");
         }
         return {
-            sourceUrl: getStudioVideoProxyTargetByPath(path),
+            sourceUrl: getStudioVideoProxyTargetByPath(path, externalUserId),
         };
     }
     if (resolvedUrl.pathname.startsWith("/api/studio/video/")) {
@@ -284,7 +294,7 @@ export const resolveLocalExampleVideoTarget = async (videoUrl, user) => {
             throw new Error("Project video path is missing.");
         }
         return {
-            sourceUrl: getWorkspaceProjectVideoProxyTarget(path),
+            sourceUrl: getWorkspaceProjectVideoProxyTarget(path, externalUserId),
         };
     }
     const workspacePlaybackMatch = resolvedUrl.pathname.match(/^\/api\/workspace\/projects\/([^/]+)\/playback$/i);

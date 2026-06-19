@@ -43913,8 +43913,27 @@ html, body {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__preview-column {
     grid-column: 2;
     grid-row: 1;
-    padding-left: clamp(18px, 2.8vw, 52px) !important;
-    transform: translateX(clamp(6px, 0.8vw, 16px));
+    padding-left: clamp(8px, 1.2vw, 18px) !important;
+    transform: none;
+  }
+
+  .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__card.is-side {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__arrow:first-of-type {
+    left: 8px;
+  }
+
+  .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__arrow:last-of-type {
+    right: 8px;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-closed .studio-segment-editor__preview-column {

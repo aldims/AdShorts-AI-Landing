@@ -15,11 +15,20 @@ import {
 } from "../shared/example-prefill.js";
 import { getWorkspaceProjectPlaybackAsset, getWorkspaceProjectVideoProxyTarget } from "./projects.js";
 import { getStudioVideoProxyTarget, getStudioVideoProxyTargetByPath } from "./studio.js";
+import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 
 type LocalExamplesUser = {
   email?: string | null;
   id?: string | null;
   name?: string | null;
+};
+
+const resolveLocalExampleExternalUserId = async (user: LocalExamplesUser) => {
+  try {
+    return (await resolveExternalUserIdentity(user)).preferred;
+  } catch {
+    return buildExternalUserId(user);
+  }
 };
 
 type LegacyLocalExampleGoal =
@@ -381,6 +390,7 @@ export const resolveLocalExampleVideoTarget = async (videoUrl: string, user: Loc
   }
 
   const resolvedUrl = new URL(normalizedVideoUrl, env.appUrl);
+  const externalUserId = await resolveLocalExampleExternalUserId(user);
 
   if (resolvedUrl.pathname === "/api/studio/video") {
     const path = normalizeText(resolvedUrl.searchParams.get("path"));
@@ -389,7 +399,7 @@ export const resolveLocalExampleVideoTarget = async (videoUrl: string, user: Loc
     }
 
     return {
-      sourceUrl: getStudioVideoProxyTargetByPath(path),
+      sourceUrl: getStudioVideoProxyTargetByPath(path, externalUserId),
     };
   }
 
@@ -414,7 +424,7 @@ export const resolveLocalExampleVideoTarget = async (videoUrl: string, user: Loc
     }
 
     return {
-      sourceUrl: getWorkspaceProjectVideoProxyTarget(path),
+      sourceUrl: getWorkspaceProjectVideoProxyTarget(path, externalUserId),
     };
   }
 
