@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import {
+  applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
@@ -18,9 +19,11 @@ import {
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorDraftSession,
+  normalizeLegacyWorkspaceSegmentEditorDraftSession,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resetWorkspaceSegmentDraftVisualToOriginal,
+  resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   restoreWorkspaceSegmentTimelineSnapshot,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
@@ -33,6 +36,7 @@ import {
   getWorkspaceSegmentSceneSoundVisualAssetId,
 } from "./workspace-segment-visual-helpers";
 import { canReuseWorkspaceSegmentProjectTimelineVoiceover } from "./workspace-segment-editor-checklist";
+import { normalizeStoredWorkspaceSegmentEditorDraftSession } from "./workspace-segment-editor-storage";
 import type {
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
@@ -240,6 +244,51 @@ describe("workspace segment editor scene sound preview", () => {
 });
 
 describe("workspace segment editor subtitle availability", () => {
+  it("clears stale scene subtitle overrides when global subtitle color changes", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      index: 0,
+      subtitleColor: "cyan",
+      subtitleStyle: "impact",
+      subtitleType: "default",
+    });
+    const disabledSegment = createProjectVoiceoverSegment({
+      index: 1,
+      startTime: 4,
+      endTime: 8,
+      subtitleColor: "pink",
+      subtitleStyle: "story",
+      subtitleType: "none",
+    });
+    const nextDraft = applyWorkspaceSegmentEditorGlobalSubtitleSelection(
+      createProjectVoiceoverDraft([firstSegment, disabledSegment]),
+      {
+        subtitleColor: "gold",
+      },
+    );
+
+    expect(nextDraft.subtitleColor).toBe("gold");
+    expect(nextDraft.segments[0]).toMatchObject({
+      subtitleColor: null,
+      subtitleStyle: null,
+      subtitleType: null,
+    });
+    expect(
+      getWorkspaceSegmentEffectiveSubtitleSettings(nextDraft, nextDraft.segments[0], {
+        subtitleColorId: "purple",
+        subtitleStyleId: "modern",
+      }),
+    ).toMatchObject({
+      isEnabled: true,
+      subtitleColorId: "gold",
+      subtitleStyleId: "modern",
+    });
+    expect(nextDraft.segments[1]).toMatchObject({
+      subtitleColor: null,
+      subtitleStyle: null,
+      subtitleType: "none",
+    });
+  });
+
   it("treats a fresh per-scene voiceover asset as available when the project voice is disabled", () => {
     const text = "Взбейте яйца с сахаром и солью.";
     const segment = createProjectVoiceoverSegment({
@@ -2816,6 +2865,315 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 2.9,
       manualDurationSeconds: 2.9,
       startTime: 0,
+    }));
+  });
+
+  it("uses measured voiceover duration when shrinking a still scene with stale speech duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 10,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 10,
+      manualDurationSeconds: 10,
+      mediaType: "photo",
+      speechDuration: 10,
+      speechDurationSource: null,
+      speechEndTime: 10,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "А как вы думаете, это физика или намёк на симуляцию?",
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+
+    const timing = resolveWorkspaceSegmentBoundaryTiming(segment, 8, session, {
+      voiceoverDurationSeconds: 4.1,
+    });
+
+    expect(timing).toEqual(expect.objectContaining({
+      boundaryTime: 8,
+      duration: 8,
+      minimumDuration: 4.3,
+      requestedDuration: 8,
+      status: "valid",
+    }));
+  });
+
+  it("does not fall back to stale scene-duration speech echo after resolving no reliable voice duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 10,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 10,
+      manualDurationSeconds: 10,
+      mediaType: "photo",
+      speechDuration: 10,
+      speechDurationSource: null,
+      speechEndTime: 10,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "А как вы думаете, это физика или намёк на симуляцию?",
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+
+    const timing = resolveWorkspaceSegmentBoundaryTiming(segment, 8, session, {
+      voiceoverDurationSeconds: null,
+    });
+
+    expect(timing).toEqual(expect.objectContaining({
+      boundaryTime: 8,
+      duration: 8,
+      minimumDuration: 1,
+      requestedDuration: 8,
+      status: "valid",
+    }));
+  });
+
+  it("keeps a user-shrunk still visual duration below the previous media slot duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 910,
+        createdAt: null,
+        deletedAt: null,
+        downloadPath: "/api/media/910/download",
+        downloadUrl: null,
+        durationSeconds: 10,
+        expiresAt: null,
+        isCurrent: true,
+        kind: "segment_current",
+        libraryKind: "image",
+        lifecycle: "ready",
+        mediaType: "image",
+        mimeType: "image/png",
+        originalUrl: null,
+        playbackUrl: "/api/media/910/download",
+        projectId: 77,
+        role: "segment_current",
+        segmentIndex: 5,
+        sourceKind: "generated",
+        status: "ready",
+        storageKey: null,
+      },
+      duration: 8,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 8,
+      index: 5,
+      manualDurationSeconds: 8,
+      mediaType: "photo",
+      speechDuration: 4.1,
+      speechDurationSource: "audio",
+      speechEndTime: 4.1,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "А как вы думаете, это физика или намёк на симуляцию?",
+      voiceSourceDuration: 4.1,
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(session);
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 8,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 8,
+      manualDurationSeconds: 8,
+      startTime: 0,
+    }));
+  });
+
+  it("repairs a dirty still scene whose manual duration is shorter than its stale timeline slot", () => {
+    const session = createProjectVoiceoverDraft([
+      createProjectVoiceoverSegment({
+        duration: 8,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 8,
+        index: 0,
+        manualDurationSeconds: 8,
+        mediaType: "photo",
+        speechDuration: 5.08,
+        startTime: 0,
+        voiceSourceDuration: 5.181,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 9,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 17,
+        index: 1,
+        manualDurationSeconds: 9,
+        mediaType: "photo",
+        speechDuration: 5.864,
+        speechDurationSource: "audio",
+        startTime: 8,
+        voiceSourceDuration: 5.864,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 9,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 26,
+        index: 2,
+        manualDurationSeconds: 9,
+        mediaType: "photo",
+        speechDuration: 5.983,
+        speechDurationSource: "audio",
+        startTime: 17,
+        voiceSourceDuration: 5.983,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 8.53,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 34.53,
+        index: 3,
+        manualDurationSeconds: 8.53,
+        mediaType: "photo",
+        speechDuration: 5.232,
+        speechDurationSource: "audio",
+        startTime: 26,
+        voiceSourceDuration: 5.232,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 9,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 43.53,
+        index: 4,
+        manualDurationSeconds: 9,
+        mediaType: "photo",
+        speechDuration: 6.552,
+        speechDurationSource: "audio",
+        startTime: 34.53,
+        voiceSourceDuration: 7.61,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 10,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 53.53,
+        index: 5,
+        manualDurationSeconds: 8,
+        mediaType: "photo",
+        speechDuration: 3.744,
+        speechDurationSource: "audio",
+        speechEndTime: 48.164,
+        speechStartTime: 44.42,
+        speechWords: [
+          { confidence: 1, endTime: 44.58, startTime: 44.42, text: "А" },
+          { confidence: 1, endTime: 47.9, startTime: 47.54, text: "симуляцию?" },
+        ],
+        startTime: 43.53,
+        text: "А как вы думаете, это физика или намёк на симуляцию?",
+        voiceSourceDuration: 4.104,
+        voiceSourceEndTime: 48.02,
+        voiceSourceStartTime: 44.42,
+      }),
+    ]);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(session);
+
+    expect(rebuilt.segments[5]).toEqual(expect.objectContaining({
+      duration: 8,
+      endTime: 51.53,
+      manualDurationSeconds: 8,
+      startTime: 43.53,
+    }));
+  });
+
+  it("repairs a legacy draft load where a user-selected still duration conflicts with the old slot", () => {
+    const session = createProjectVoiceoverDraft([
+      createProjectVoiceoverSegment({
+        duration: 4,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 4,
+        index: 0,
+        manualDurationSeconds: 4,
+        mediaType: "photo",
+        speechDuration: 2,
+        speechDurationSource: "audio",
+        speechEndTime: 2,
+        speechStartTime: 0,
+        startTime: 0,
+        voiceSourceDuration: 2,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 10,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 14,
+        index: 1,
+        manualDurationSeconds: 8,
+        mediaType: "photo",
+        speechDuration: 4.104,
+        speechDurationSource: "audio",
+        speechEndTime: 8.104,
+        speechStartTime: 4,
+        startTime: 4,
+        voiceSourceDuration: 4.104,
+      }),
+    ]);
+
+    const normalized = normalizeLegacyWorkspaceSegmentEditorDraftSession(session);
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 8,
+      endTime: 12,
+      manualDurationSeconds: 8,
+      startTime: 4,
+    }));
+  });
+
+  it("repairs persisted still duration conflicts while normalizing stored drafts", () => {
+    const session = createProjectVoiceoverDraft([
+      createProjectVoiceoverSegment({
+        duration: 4,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 4,
+        index: 0,
+        manualDurationSeconds: 4,
+        mediaType: "photo",
+        startTime: 0,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 10,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 14,
+        index: 1,
+        manualDurationSeconds: 8,
+        mediaType: "photo",
+        startTime: 4,
+      }),
+    ]);
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...session,
+      storageVersion: 3,
+    } as WorkspaceSegmentEditorDraftSession);
+
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 8,
+      endTime: 12,
+      manualDurationSeconds: 8,
+      startTime: 4,
     }));
   });
 

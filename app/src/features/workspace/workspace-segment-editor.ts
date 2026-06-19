@@ -289,6 +289,39 @@ export const getWorkspaceSegmentEffectiveSubtitleSettings = (
   };
 };
 
+export const applyWorkspaceSegmentEditorGlobalSubtitleSelection = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  selection: Partial<Pick<WorkspaceSegmentEditorDraftSession, "subtitleColor" | "subtitleStyle" | "subtitleType">>,
+): WorkspaceSegmentEditorDraftSession => {
+  const nextSubtitleType =
+    selection.subtitleType ??
+    (normalizeWorkspaceSegmentEditorSetting(draft.subtitleType) === "none"
+      ? "default"
+      : draft.subtitleType || "default");
+  const shouldClearSceneSubtitleType = nextSubtitleType !== "none";
+
+  return {
+    ...draft,
+    ...(selection.subtitleColor !== undefined ? { subtitleColor: selection.subtitleColor } : {}),
+    ...(selection.subtitleStyle !== undefined ? { subtitleStyle: selection.subtitleStyle } : {}),
+    subtitleType: nextSubtitleType,
+    segments: draft.segments.map((segment) => {
+      const segmentSubtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
+      const nextSegment: WorkspaceSegmentEditorDraftSegment = {
+        ...segment,
+        subtitleColor: null,
+        subtitleStyle: null,
+      };
+
+      if (shouldClearSceneSubtitleType && segmentSubtitleType !== "none") {
+        nextSegment.subtitleType = null;
+      }
+
+      return nextSegment;
+    }),
+  };
+};
+
 export const areWorkspaceSegmentDurationValuesEqual = (left: number | null, right: number | null) => {
   if (left === null || right === null) {
     return left === right;
@@ -4352,10 +4385,23 @@ export const getWorkspaceSegmentManualDurationMinimum = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
     Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
+  options?: {
+    voiceoverDurationSeconds?: number | null;
+  },
 ) => {
-  const voiceoverDurationSeconds = getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
+  const hasExplicitVoiceoverDurationSeconds = Object.prototype.hasOwnProperty.call(
+    options ?? {},
+    "voiceoverDurationSeconds",
+  );
+  const explicitVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    options?.voiceoverDurationSeconds,
+  );
+  const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
     ? getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, { allowEstimated: false })?.durationSeconds ?? null
     : null;
+  const voiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
+    ? explicitVoiceoverDurationSeconds
+    : fallbackVoiceoverDurationSeconds;
   const visualMinimumDurationSeconds =
     getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image"
       ? getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(voiceoverDurationSeconds)
@@ -5697,10 +5743,21 @@ export const resolveWorkspaceSegmentBoundaryTiming = (
   requestedBoundaryTime: number,
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
     Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
+  options?: {
+    voiceoverDurationSeconds?: number | null;
+  },
 ) => {
   const segmentStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
   const currentBoundaryTime = Math.max(segmentStartTime, getWorkspaceSegmentEditorDisplayEndTime(segment));
-  const minimumDuration = getWorkspaceSegmentManualDurationMinimum(segment, session);
+  const minimumDurationOptions = Object.prototype.hasOwnProperty.call(
+    options ?? {},
+    "voiceoverDurationSeconds",
+  )
+    ? {
+        voiceoverDurationSeconds: options?.voiceoverDurationSeconds,
+      }
+    : undefined;
+  const minimumDuration = getWorkspaceSegmentManualDurationMinimum(segment, session, minimumDurationOptions);
   const minimumBoundaryTime = segmentStartTime + minimumDuration;
 
   if (!Number.isFinite(requestedBoundaryTime) || requestedBoundaryTime < segmentStartTime) {
@@ -6021,6 +6078,35 @@ const sanitizeWorkspaceSegmentLegacyVoiceRenderManualDuration = (
   };
 };
 
+const hasWorkspaceSegmentUserSelectedStillDurationSlotConflict = (
+  segments: WorkspaceSegmentEditorDraftSegment[],
+) => segments.some((segment) => {
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  if (
+    manualDurationSeconds === null ||
+    segment.durationSyncModeUserSelected !== true ||
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) !== "manual" ||
+    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) !== "visual" ||
+    getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image"
+  ) {
+    return false;
+  }
+
+  const startTime = normalizeWorkspaceSegmentManualDurationSeconds(segment.startTime);
+  const endTime = normalizeWorkspaceSegmentManualDurationSeconds(segment.endTime);
+  const timelineDurationSeconds =
+    startTime !== null && endTime !== null && endTime > startTime
+      ? normalizeWorkspaceSegmentManualDurationSeconds(endTime - startTime)
+      : null;
+  const storedDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+
+  return [timelineDurationSeconds, storedDurationSeconds].some(
+    (durationSeconds) =>
+      durationSeconds !== null &&
+      !areWorkspaceSegmentDurationValuesEqual(durationSeconds, manualDurationSeconds),
+  );
+});
+
 export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
@@ -6083,6 +6169,8 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
         }
       : segmentWithRestoredVisualDuration;
   });
+  const shouldRepairUserSelectedStillDurations =
+    hasWorkspaceSegmentUserSelectedStillDurationSlotConflict(syncedSegments);
 
   return rebuildWorkspaceSegmentEditorTimeline(syncedSegments, {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
@@ -6098,7 +6186,8 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
     speechBoundaryEnabled: (previousSegment, nextSegment) =>
       shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
-    preserveSourceTimelineEnd: options?.preserveSourceTimelineEnd ?? !hasVoiceoverTimelineDurationReset,
+    preserveSourceTimelineEnd:
+      options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
     preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
   });
 };
@@ -7562,7 +7651,35 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
     hasChanges = true;
     return resetWorkspaceSegmentDraftVisualToOriginal(segment, session.projectId);
   });
-  const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(visualResetSegments, session);
+  const shouldRepairUserSelectedStillDurations = visualResetSegments.some((segment) => {
+    const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+    if (
+      manualDurationSeconds === null ||
+      segment.durationSyncModeUserSelected !== true ||
+      normalizeWorkspaceSegmentDurationMode(segment.durationMode) !== "manual" ||
+      normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) !== "visual" ||
+      getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image"
+    ) {
+      return false;
+    }
+
+    const startTime = normalizeWorkspaceSegmentManualDurationSeconds(segment.startTime);
+    const endTime = normalizeWorkspaceSegmentManualDurationSeconds(segment.endTime);
+    const timelineDurationSeconds =
+      startTime !== null && endTime !== null && endTime > startTime
+        ? normalizeWorkspaceSegmentManualDurationSeconds(endTime - startTime)
+        : null;
+    const storedDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+
+    return [timelineDurationSeconds, storedDurationSeconds].some(
+      (durationSeconds) =>
+        durationSeconds !== null &&
+        !areWorkspaceSegmentDurationValuesEqual(durationSeconds, manualDurationSeconds),
+    );
+  });
+  const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(visualResetSegments, session, {
+    preserveSourceTimelineEnd: !shouldRepairUserSelectedStillDurations,
+  });
 
   return hasChanges || normalizedSegments !== visualResetSegments
     ? {

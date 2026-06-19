@@ -9,6 +9,7 @@ import {
   getWorkspaceSegmentEditorSessionLanguage,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentStillPreviewUrls,
+  normalizeLegacyWorkspaceSegmentEditorDraftSession,
   normalizeWorkspaceSegmentAiPhotoPrompt,
   normalizeWorkspaceSegmentAiPhotoPrompt as normalizeWorkspaceSegmentAiVideoPrompt,
   normalizeWorkspaceSegmentEditorSession,
@@ -516,7 +517,7 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   const clonedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(
     cloneWorkspaceSegmentEditorDraftSession(session),
   );
-  return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+  return normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...clonedSession,
     segments: clonedSession.segments.map((segment) => ({
       ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
@@ -528,7 +529,7 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
       sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
       voiceoverAsset: normalizePersistedStudioCustomVideoFile(segment.voiceoverAsset),
     })),
-  });
+  }));
 };
 
 const isStoredWorkspaceSegmentAiPhotoJob = (value: unknown): value is StoredWorkspaceSegmentAiPhotoJob => {

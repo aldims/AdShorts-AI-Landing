@@ -45,6 +45,16 @@ export type WorkspaceSegmentEditorProjectBrandSnapshot = {
   baseline: WorkspaceSegmentEditorProjectBrandState;
 };
 
+export type WorkspaceSegmentEditorEffectiveBrandState = {
+  brandSnapshot: StudioBrandSettingsSnapshot;
+  state: WorkspaceSegmentEditorProjectBrandState;
+  hasBranding: boolean;
+  hasBrandChange: boolean;
+  hasBrandRemoval: boolean;
+  hasSystemWatermarkAddition: boolean;
+  hasSystemWatermarkRemoval: boolean;
+};
+
 export const isSupportedStudioBrandLogoFile = (fileName: string) => {
   const normalized = fileName.trim().toLowerCase();
   return STUDIO_ALLOWED_SEGMENT_CUSTOM_IMAGE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
@@ -283,6 +293,46 @@ export const areWorkspaceSegmentEditorProjectBrandStatesEqual = (
 ) =>
   areStudioBrandSettingsEqual(left, right) &&
   left.systemWatermarkEnabled === right.systemWatermarkEnabled;
+
+const hasWorkspaceSegmentEditorBranding = (state: StudioBrandSettingsSnapshot) =>
+  Boolean(state.brandLogoFile) || Boolean(normalizeStudioBrandSettingsText(state.brandText));
+
+export const resolveWorkspaceSegmentEditorEffectiveBrandState = (options: {
+  applied: WorkspaceSegmentEditorProjectBrandState;
+  baseline: WorkspaceSegmentEditorProjectBrandState;
+  current: WorkspaceSegmentEditorProjectBrandState;
+  showSystemWatermarkControl?: boolean;
+  useCurrentDraft?: boolean;
+}): WorkspaceSegmentEditorEffectiveBrandState => {
+  const state = options.useCurrentDraft ? options.current : options.applied;
+  const brandSnapshot: StudioBrandSettingsSnapshot = {
+    brandLogoFile: state.brandLogoFile,
+    brandText: normalizeStudioBrandSettingsText(state.brandText),
+  };
+  const baselineBrandSnapshot: StudioBrandSettingsSnapshot = {
+    brandLogoFile: options.baseline.brandLogoFile,
+    brandText: normalizeStudioBrandSettingsText(options.baseline.brandText),
+  };
+  const hasBranding = hasWorkspaceSegmentEditorBranding(brandSnapshot);
+  const hasBaselineBranding = hasWorkspaceSegmentEditorBranding(baselineBrandSnapshot);
+  const showSystemWatermarkControl = Boolean(options.showSystemWatermarkControl);
+
+  return {
+    brandSnapshot,
+    state,
+    hasBranding,
+    hasBrandChange: !areStudioBrandSettingsEqual(baselineBrandSnapshot, brandSnapshot),
+    hasBrandRemoval: hasBaselineBranding && !hasBranding,
+    hasSystemWatermarkAddition:
+      showSystemWatermarkControl &&
+      !options.baseline.systemWatermarkEnabled &&
+      state.systemWatermarkEnabled,
+    hasSystemWatermarkRemoval:
+      showSystemWatermarkControl &&
+      options.baseline.systemWatermarkEnabled &&
+      !state.systemWatermarkEnabled,
+  };
+};
 
 export const resolveWorkspaceSegmentEditorProjectBrandSnapshot = (options: {
   defaultState: WorkspaceSegmentEditorProjectBrandState;

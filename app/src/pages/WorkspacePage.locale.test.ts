@@ -33,6 +33,10 @@ import {
 import { isWorkspaceSegmentDraftVoiceEdited } from "../features/workspace/workspace-segment-editor-checklist";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
+  createWorkspaceSegmentEditorProjectBrandState,
+  resolveWorkspaceSegmentEditorEffectiveBrandState,
+} from "../features/workspace/workspace-brand-helpers";
+import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceSegmentEditorPayload,
   buildStudioRouteUrl,
@@ -41,7 +45,6 @@ import {
   canWorkspaceSegmentUseVideoExtensionTool,
   clearWorkspaceSegmentSceneSoundState,
   createStudioCustomVideoFileFromMediaLibraryItem,
-  createWorkspaceSegmentEditorProjectBrandState,
   buildWorkspaceReferenceAiPrompt,
   buildWorkspacePromptCharacterMentionTokens,
   buildWorkspacePromptRichEditorHtml,
@@ -817,6 +820,25 @@ describe("WorkspacePage example prefill settings", () => {
       brandText: "",
       systemWatermarkEnabled: false,
     });
+  });
+
+  it("treats dirty segment-editor brand draft as a generation change", () => {
+    const baseline = createWorkspaceSegmentEditorProjectBrandState();
+    const applied = createWorkspaceSegmentEditorProjectBrandState();
+    const current = createWorkspaceSegmentEditorProjectBrandState({
+      brandText: "Acme",
+    });
+
+    const result = resolveWorkspaceSegmentEditorEffectiveBrandState({
+      applied,
+      baseline,
+      current,
+      useCurrentDraft: true,
+    });
+
+    expect(result.brandSnapshot.brandText).toBe("Acme");
+    expect(result.hasBranding).toBe(true);
+    expect(result.hasBrandChange).toBe(true);
   });
 
   it("uses example settings as the initial Studio state", () => {

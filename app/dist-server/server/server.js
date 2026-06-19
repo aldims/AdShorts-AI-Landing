@@ -3591,6 +3591,22 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     const durationExtensionBaseDurationSeconds = normalizeRequestDurationSeconds(req.body?.durationExtensionBaseDurationSeconds ?? req.body?.duration_extension_base_duration_seconds);
     const durationExtensionTailDurationSeconds = normalizeRequestDurationSeconds(req.body?.durationExtensionTailDurationSeconds ?? req.body?.duration_extension_tail_duration_seconds);
     const durationExtensionTargetDurationSeconds = normalizeRequestDurationSeconds(req.body?.durationExtensionTargetDurationSeconds ?? req.body?.duration_extension_target_duration_seconds);
+    const durationExtensionSourceVideoAssetId = normalizeRequestPositiveInteger(req.body?.durationExtensionSourceVideoAssetId ?? req.body?.duration_extension_source_video_asset_id);
+    const durationExtensionSourceVideoFileDataUrl = typeof req.body?.durationExtensionSourceVideoFileDataUrl === "string"
+        ? req.body.durationExtensionSourceVideoFileDataUrl.trim()
+        : typeof req.body?.duration_extension_source_video_data_url === "string"
+            ? req.body.duration_extension_source_video_data_url.trim()
+            : "";
+    const durationExtensionSourceVideoFileMimeType = typeof req.body?.durationExtensionSourceVideoFileMimeType === "string"
+        ? req.body.durationExtensionSourceVideoFileMimeType.trim()
+        : typeof req.body?.duration_extension_source_video_mime_type === "string"
+            ? req.body.duration_extension_source_video_mime_type.trim()
+            : "";
+    const durationExtensionSourceVideoFileName = typeof req.body?.durationExtensionSourceVideoFileName === "string"
+        ? req.body.durationExtensionSourceVideoFileName.trim()
+        : typeof req.body?.duration_extension_source_video_original_name === "string"
+            ? req.body.duration_extension_source_video_original_name.trim()
+            : "";
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = Number(req.body?.segmentIndex ?? -1);
     if (!prompt) {
@@ -3609,6 +3625,10 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
             customVideoFileName: customVideoFileName || undefined,
             durationExtensionBaseDurationSeconds,
             durationExtensionMode,
+            durationExtensionSourceVideoAssetId,
+            durationExtensionSourceVideoFileDataUrl: durationExtensionSourceVideoFileDataUrl || undefined,
+            durationExtensionSourceVideoFileMimeType: durationExtensionSourceVideoFileMimeType || undefined,
+            durationExtensionSourceVideoFileName: durationExtensionSourceVideoFileName || undefined,
             durationExtensionTailDurationSeconds,
             durationExtensionTargetDurationSeconds,
             durationSeconds,

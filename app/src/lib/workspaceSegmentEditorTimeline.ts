@@ -10,6 +10,7 @@ export type WorkspaceSegmentTimelineSegment = {
   duration?: number | null;
   durationMode?: WorkspaceSegmentDurationMode | null;
   durationSyncMode?: WorkspaceSegmentDurationSyncMode | null;
+  durationSyncModeUserSelected?: boolean | null;
   endTime?: number | null;
   manualDurationSeconds?: number | null;
   mediaType?: string | null;
@@ -238,13 +239,9 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const visualKind = options?.visualKind ?? (String(segment.mediaType ?? "").trim().toLowerCase() === "photo" ? "image" : null);
   const visualDuration = normalizeWorkspaceSegmentTimelineTimeValue(options?.visualDurationSeconds);
   const durationSyncMode = String(segment.durationSyncMode ?? "").trim().toLowerCase();
+  const durationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
   const shouldSyncVideoToVoiceover = visualKind === "video" && durationSyncMode === "voiceover";
-  const shouldSyncDurationToVoiceover = durationSyncMode === "voiceover";
-  const shouldKeepStillAtLeastVoiceDuration = visualKind === "image" && voiceDuration !== null;
-  const voiceMinimumDuration =
-    (shouldSyncDurationToVoiceover || shouldKeepStillAtLeastVoiceDuration) && voiceDuration !== null
-      ? voiceDuration
-      : null;
+  const voiceMinimumDuration = voiceDuration;
   const minimumDuration = Math.max(
     WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
     voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
@@ -267,10 +264,16 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
       );
     }
 
+    const shouldPreserveLegacyManualStillDuration =
+      visualKind === "image" &&
+      options?.preserveExistingStillDuration &&
+      !durationSyncModeUserSelected &&
+      existingStillDuration !== null;
+
     return Math.max(
       minimumDuration,
       manualDuration,
-      options?.preserveExistingStillDuration && existingStillDuration !== null ? existingStillDuration : 0,
+      shouldPreserveLegacyManualStillDuration ? existingStillDuration : 0,
     );
   }
 

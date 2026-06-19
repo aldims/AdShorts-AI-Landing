@@ -284,6 +284,35 @@ describe("workspace segment editor timeline", () => {
     ).toBe(5);
   });
 
+  it("allows an explicitly edited still scene to shrink below its previous timeline duration", () => {
+    const segment = createSegment({
+      duration: 9,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 9,
+      manualDurationSeconds: 8,
+      mediaType: "photo",
+      speechDuration: 4.1,
+      speechEndTime: 4.1,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "shorter edited still",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([segment], {
+      preserveExistingStillDurations: true,
+      visualKind: () => "image",
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 8,
+      endTime: 8,
+      startTime: 0,
+    }));
+  });
+
   it("does not preserve the old source end when a manual edit shortens a timeline without later speech", () => {
     const firstSegment = createSegment({
       duration: 10,
