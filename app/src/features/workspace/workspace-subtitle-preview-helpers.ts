@@ -18,8 +18,16 @@ import type {
   WorkspaceSegmentEditorDraftSegment,
 } from "./workspace-types";
 
+type StudioSubtitleExampleCopy = {
+  activeWordIndex?: number;
+  label?: string;
+  lines?: string[];
+  note?: string;
+};
+
 export type StudioSubtitleExampleOption = {
   activeWordIndex: number;
+  copy?: Partial<Record<Locale, StudioSubtitleExampleCopy>>;
   id: string;
   label: string;
   lines: string[];
@@ -49,6 +57,15 @@ const studioSubtitleStyleLabelsRu: Record<string, string> = {
   story: "История",
 };
 
+const studioSubtitleStyleLabelsEn: Record<string, string> = {
+  cinema: "Cinema",
+  editorial: "Editorial",
+  impact: "Impact",
+  karaoke: "Karaoke",
+  modern: "Modern",
+  story: "Story",
+};
+
 const studioSubtitleStyleDescriptionsRu: Record<string, string> = {
   cinema: "Чистые субтитры без цветовой подсветки.",
   editorial: "Спокойный стиль для сцен с большим количеством текста.",
@@ -56,6 +73,43 @@ const studioSubtitleStyleDescriptionsRu: Record<string, string> = {
   karaoke: "Фразы с подсветкой активного слова.",
   modern: "Универсальный стиль для Shorts.",
   story: "Мягкий стиль для разговорных роликов.",
+};
+
+const studioSubtitleStyleDescriptionsEn: Record<string, string> = {
+  cinema: "Clean lower-third with a soft crossfade and no color accent.",
+  editorial: "Calm explanatory preset with plenty of breathing room.",
+  impact: "Aggressive viral style with a heavy outline and tight placement.",
+  karaoke: "Phrase caption with clear active-word highlighting.",
+  modern: "Current default for Shorts in Manrope.",
+  story: "Soft social/UGC style with lighter animation.",
+};
+
+const studioSubtitleColorLabelsRu: Record<string, string> = {
+  black: "Черный",
+  blue: "Синий",
+  cyan: "Голубой",
+  gold: "Золотой",
+  green: "Зеленый",
+  orange: "Оранжевый",
+  pink: "Розовый",
+  purple: "Фиолетовый",
+  red: "Красный",
+  white: "Белый",
+  yellow: "Желтый",
+};
+
+const studioSubtitleColorLabelsEn: Record<string, string> = {
+  black: "Black",
+  blue: "Blue",
+  cyan: "Cyan",
+  gold: "Gold",
+  green: "Green",
+  orange: "Orange",
+  pink: "Pink",
+  purple: "Purple",
+  red: "Red",
+  white: "White",
+  yellow: "Yellow",
 };
 
 export const getStudioSubtitleStyleDisplayLabel = (
@@ -66,7 +120,9 @@ export const getStudioSubtitleStyleDisplayLabel = (
     return "";
   }
 
-  return locale === "ru" ? studioSubtitleStyleLabelsRu[style.id] ?? style.label : style.label;
+  return locale === "ru"
+    ? studioSubtitleStyleLabelsRu[style.id] ?? style.label
+    : studioSubtitleStyleLabelsEn[style.id] ?? style.label;
 };
 
 export const getStudioSubtitleStyleDisplayDescription = (
@@ -77,7 +133,22 @@ export const getStudioSubtitleStyleDisplayDescription = (
     return "";
   }
 
-  return locale === "ru" ? studioSubtitleStyleDescriptionsRu[style.id] ?? style.description : style.description;
+  return locale === "ru"
+    ? studioSubtitleStyleDescriptionsRu[style.id] ?? style.description
+    : studioSubtitleStyleDescriptionsEn[style.id] ?? style.description;
+};
+
+export const getStudioSubtitleColorDisplayLabel = (
+  locale: Locale,
+  color: Pick<StudioSubtitleColorOption, "id" | "label"> | null | undefined,
+) => {
+  if (!color) {
+    return "";
+  }
+
+  return locale === "ru"
+    ? studioSubtitleColorLabelsRu[color.id] ?? color.label
+    : studioSubtitleColorLabelsEn[color.id] ?? color.label;
 };
 
 export const buildStudioSubtitleColorOptions = (
@@ -174,8 +245,28 @@ export const studioSubtitleExampleOptions: StudioSubtitleExampleOption[] = [
     label: "CTA",
     note: "Финальный призыв",
     lines: ["Забери шаблон", "и протестируй сегодня"],
+    copy: {
+      en: {
+        activeWordIndex: 2,
+        note: "Final call to action",
+        lines: ["Grab the template", "and test it today"],
+      },
+    },
   },
 ];
+
+export const getStudioSubtitleExampleDisplayOption = (
+  locale: Locale,
+  example: StudioSubtitleExampleOption,
+): StudioSubtitleExampleOption => {
+  const copy = example.copy?.[locale];
+  return copy
+    ? {
+        ...example,
+        ...copy,
+      }
+    : example;
+};
 
 const getStudioSubtitlePreviewFontFamily = (value: string) =>
   value === "Manrope" ? '"Manrope", "Avenir Next", "Segoe UI", sans-serif' : '"DejaVu Sans", "Trebuchet MS", sans-serif';

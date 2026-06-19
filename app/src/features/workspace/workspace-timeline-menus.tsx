@@ -7,7 +7,11 @@ import type {
 import { createPortal } from "react-dom";
 import type { Locale } from "../../lib/i18n";
 import { workspaceText } from "./workspace-page-model";
-import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
+import { getStudioVoiceOptionCopy } from "./workspace-segment-editor";
+import {
+  getStudioSubtitleColorDisplayLabel,
+  getStudioSubtitleStyleDisplayLabel,
+} from "./workspace-subtitle-preview-helpers";
 import type { WorkspaceSegmentVisualModalTab } from "./workspace-segment-visual-helpers";
 import type {
   StudioLanguage,
@@ -652,6 +656,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
         {voiceOptions.map((voice) => {
           const canPreviewVoice = Boolean(voice.previewSampleUrl);
           const isSelectedSceneVoice = !isVoiceDisabled && effectiveVoiceId === voice.id;
+          const voiceCopy = getStudioVoiceOptionCopy(voice, locale);
 
           return (
             <div
@@ -666,7 +671,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
                 onClick={() => onVoiceSelect(segment.index, voice.id)}
               >
                 <span className="studio-voice-selector__option-title">
-                  <span>{voice.label}</span>
+                  <span>{voiceCopy.label}</span>
                   {voice.badgeLabel ? (
                     <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
                   ) : null}
@@ -674,7 +679,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
                     <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
                   ) : null}
                 </span>
-                <small>{voice.description}</small>
+                <small>{voiceCopy.description}</small>
               </button>
               <button
                 className={`studio-voice-selector__preview${
@@ -683,10 +688,10 @@ export function WorkspaceSegmentTimelineVoiceMenu({
                 type="button"
                 aria-label={
                   !canPreviewVoice
-                    ? `${workspaceText(locale, "Превью недоступно", "Preview unavailable")}: ${voice.label}`
+                    ? `${workspaceText(locale, "Превью недоступно", "Preview unavailable")}: ${voiceCopy.label}`
                     : previewingVoiceId === voice.id
-                      ? `${workspaceText(locale, "Остановить", "Stop")}: ${voice.label}`
-                      : `${workspaceText(locale, "Прослушать", "Listen")}: ${voice.label}`
+                      ? `${workspaceText(locale, "Остановить", "Stop")}: ${voiceCopy.label}`
+                      : `${workspaceText(locale, "Прослушать", "Listen")}: ${voiceCopy.label}`
                 }
                 title={
                   !canPreviewVoice
@@ -1081,24 +1086,28 @@ export function WorkspaceSegmentTimelineSubtitleMenu({
           {workspaceText(locale, "Цвет", "Color")}
         </span>
         <div className="studio-subtitle-selector__colors">
-          {colorOptions.map((color) => (
-            <button
-              key={`timeline-scene-subtitle-color:${color.id}`}
-              className={`studio-subtitle-selector__color${
-                color.id === settings.subtitleColorId && subtitleMenuType !== "none"
-                  ? " is-selected"
-                  : ""
-              }`}
-              type="button"
-              aria-label={color.label}
-              aria-pressed={color.id === settings.subtitleColorId && subtitleMenuType !== "none"}
-              disabled={!settings.voiceEnabled}
-              onClick={() => onColorSelect(segment.index, color.id)}
-            >
-              <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
-              <span>{color.label}</span>
-            </button>
-          ))}
+          {colorOptions.map((color) => {
+            const colorLabel = getStudioSubtitleColorDisplayLabel(locale, color);
+
+            return (
+              <button
+                key={`timeline-scene-subtitle-color:${color.id}`}
+                className={`studio-subtitle-selector__color${
+                  color.id === settings.subtitleColorId && subtitleMenuType !== "none"
+                    ? " is-selected"
+                    : ""
+                }`}
+                type="button"
+                aria-label={colorLabel}
+                aria-pressed={color.id === settings.subtitleColorId && subtitleMenuType !== "none"}
+                disabled={!settings.voiceEnabled}
+                onClick={() => onColorSelect(segment.index, color.id)}
+              >
+                <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
+                <span>{colorLabel}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="studio-segment-editor__timeline-text-menu-actions">

@@ -7,6 +7,7 @@ import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-cr
 import {
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   createWorkspaceSegmentEditorDraftSession,
+  getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentVoiceOverrideId,
@@ -3559,6 +3560,8 @@ describe("WorkspacePage studio locale defaults", () => {
     const liveSegment = createDraftSegment({
       duration: 10,
       durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 10,
       index: 0,
       manualDurationSeconds: 10,
@@ -3571,6 +3574,8 @@ describe("WorkspacePage studio locale defaults", () => {
     const freshSegment = createDraftSegment({
       duration: 10,
       durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 10,
       index: 0,
       manualDurationSeconds: 10,
@@ -4280,6 +4285,8 @@ describe("WorkspacePage studio locale defaults", () => {
       },
       duration: 10,
       durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 10,
       manualDurationSeconds: 10,
       mediaType: "photo",
@@ -4300,9 +4307,16 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(10);
   });
 
-  it("shows video extension tools for video visuals and photo animation tools for still visuals", () => {
+  it("shows video extension tools only when a video visual has an extendable frame source", () => {
     expect(
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        mediaType: "video",
+        videoAction: "original",
+      })),
+    ).toBe(false);
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        currentPosterUrl: "/api/workspace/media-assets/101/poster",
         mediaType: "video",
         videoAction: "original",
       })),
@@ -4311,6 +4325,13 @@ describe("WorkspacePage studio locale defaults", () => {
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
         aiVideoGeneratedMode: "photo_animation",
         mediaType: "video",
+        photoAnimationSourceAsset: {
+          fileName: "source-frame.jpg",
+          fileSize: 0,
+          mimeType: "image/jpeg",
+          remoteUrl: "/api/workspace/media-assets/102/source-frame",
+          source: "media-library",
+        },
         videoAction: "photo_animation",
       })),
     ).toBe(true);
@@ -5481,6 +5502,8 @@ describe("WorkspacePage studio locale defaults", () => {
     const segment = createDraftSegment({
       duration: 10,
       durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 10,
       manualDurationSeconds: 10,
       mediaType: "photo",
@@ -5519,6 +5542,8 @@ describe("WorkspacePage studio locale defaults", () => {
     const segment = createDraftSegment({
       duration: 12,
       durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 12,
       manualDurationSeconds: 12,
       mediaType: "photo",
@@ -5544,6 +5569,7 @@ describe("WorkspacePage studio locale defaults", () => {
       durationExtensionSourceDurationSeconds: 5,
       durationMode: "manual",
       durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 5,
       index: 0,
       manualDurationSeconds: 5,
@@ -5908,6 +5934,7 @@ describe("WorkspacePage studio locale defaults", () => {
       },
       duration: 5,
       durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       durationMode: "manual",
       endTime: 16.4,
       index: 1,
@@ -6507,6 +6534,32 @@ describe("WorkspacePage studio locale defaults", () => {
     }
     expect(resolved.duration).toBeCloseTo(3.5, 6);
     expect(resolved.boundaryTime).toBeCloseTo(3.5, 6);
+  });
+
+  it("allows shrinking a talking photo video below the generated video duration", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 5.5,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 5.5,
+      durationMode: "manual",
+      endTime: 5.5,
+      manualDurationSeconds: 5.5,
+      text: "Говорящий персонаж",
+      videoAction: "talking_photo",
+    });
+
+    const resolved = resolveWorkspaceSegmentBoundaryTiming(segment, 3, createDraftSession(segment));
+
+    expect(resolved.status).toBe("valid");
+    expect(resolved.duration).toBe(3);
+    expect(resolved.minimumDuration).toBe(1);
   });
 
   it("keeps slot timings when a manual photo segment becomes a talking photo video", () => {
@@ -7340,7 +7393,48 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("uses talking photo generated video duration as the embedded audio duration", () => {
+  it("uses talking photo speech duration before the generated video duration", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 5.5,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 5.5,
+      durationMode: "manual",
+      endTime: 5.5,
+      manualDurationSeconds: 5.5,
+      speechDuration: 2.1,
+      speechDurationSource: "audio",
+      speechEndTime: 2.1,
+      speechStartTime: 0,
+      text: "Говорящий персонаж",
+      videoAction: "talking_photo",
+      voiceSourceDuration: 2.1,
+      voiceSourceEndTime: 2.1,
+      voiceSourceStartTime: 0,
+    });
+
+    expect(
+      getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+        allowVisualFallback: false,
+      }),
+    ).toBe(2.1);
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
+        allowEstimated: false,
+      }),
+    ).toEqual({
+      durationSeconds: 2.1,
+      source: "actual",
+    });
+  });
+
+  it("falls back to talking photo generated video duration when embedded audio timing is unknown", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         assetId: 909,
@@ -7360,12 +7454,30 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(
+      getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+        allowVisualFallback: false,
+      }),
+    ).toBeNull();
+    expect(
       getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
         allowEstimated: false,
       }),
     ).toEqual({
       durationSeconds: 6.7,
       source: "actual",
+    });
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
+        allowEmbeddedVisualFallback: false,
+        allowEstimated: false,
+      }),
+    ).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, createDraftSession(segment), {
+        allowEmbeddedVisualFallback: false,
+      }),
+    ).toMatchObject({
+      source: "estimated",
     });
   });
 
@@ -7461,6 +7573,51 @@ describe("WorkspacePage studio locale defaults", () => {
         durationMode: "manual",
         endTime: 6.7,
         manualDurationSeconds: 6.7,
+        startTime: 0,
+        videoAction: "talking_photo",
+        voiceType: "none",
+      }),
+    );
+  });
+
+  it("keeps a user-trimmed talking photo export when embedded speech fits the scene", async () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 5.5,
+        fileName: "segment-talking-photo.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-talking-photo/jobs/test-job-909/video",
+      },
+      aiVideoGeneratedMode: "talking_photo",
+      duration: 3,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 3,
+      index: 0,
+      manualDurationSeconds: 3,
+      speechDuration: 1.8,
+      speechDurationSource: "audio",
+      speechEndTime: 1.8,
+      speechStartTime: 0,
+      text: "Говорящий персонаж",
+      videoAction: "talking_photo",
+      voiceSourceDuration: 1.8,
+      voiceSourceEndTime: 1.8,
+      voiceSourceStartTime: 0,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 909,
+        duration: 3,
+        durationMode: "manual",
+        endTime: 3,
+        manualDurationSeconds: 3,
         startTime: 0,
         videoAction: "talking_photo",
         voiceType: "none",

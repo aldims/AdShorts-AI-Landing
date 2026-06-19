@@ -146,6 +146,7 @@ import {
   removeStoredWorkspaceSegmentEditorBrandSnapshot,
   resolveWorkspaceSegmentEditorEffectiveBrandState,
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
+  shouldSendWorkspaceSegmentEditorBrandChangeForGeneration,
   STUDIO_BRAND_LOGO_MAX_BYTES,
   STUDIO_BRAND_TEXT_MAX_CHARS,
   writeStoredWorkspaceSegmentEditorBrandSnapshot,
@@ -196,6 +197,7 @@ import {
   getWorkspaceSegmentDurationExtensionStillSourceAsset,
   getWorkspaceSegmentDraftVisualAsset,
   getWorkspaceSegmentCanonicalSlotDurationSeconds,
+  getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
@@ -224,6 +226,7 @@ import {
   getWorkspaceSegmentVideoVisualDurationSeconds,
   getWorkspaceSegmentVideoVisualSourceDurationSeconds,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
+  getStudioVoiceOptionCopy,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
@@ -1932,6 +1935,7 @@ export function WorkspacePage({
   const segmentEditorPendingRouteSyncKeyRef = useRef<string | null>(null);
   const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const segmentEditorConsumedSourceResetProjectIdsRef = useRef<Set<number>>(new Set());
+  const segmentEditorAddSegmentInFlightRef = useRef(false);
   const suppressScratchSegmentEditorRouteOpenRef = useRef(false);
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
   const workspaceSessionResetEmailRef = useRef(session.email);
@@ -6175,10 +6179,13 @@ export function WorkspacePage({
     : [];
   const segmentEditorBrandChangeSummaries = [
     effectiveSegmentEditorBrandChangeState.hasBrandChange && effectiveSegmentEditorBrandChangeState.hasBranding
-      ? getStudioBrandSummary({
-          brandLogoFile: effectiveSegmentEditorBrandChangeState.brandSnapshot.brandLogoFile,
-          brandText: effectiveSegmentEditorBrandChangeState.brandSnapshot.brandText,
-        })
+      ? getStudioBrandSummary(
+          {
+            brandLogoFile: effectiveSegmentEditorBrandChangeState.brandSnapshot.brandLogoFile,
+            brandText: effectiveSegmentEditorBrandChangeState.brandSnapshot.brandText,
+          },
+          locale,
+        )
       : "",
     effectiveSegmentEditorBrandChangeState.hasSystemWatermarkRemoval
       ? workspaceText(locale, "водяной знак убран", "watermark removed")
@@ -6491,11 +6498,12 @@ export function WorkspacePage({
       : isReady
         ? { label: workspaceText(locale, "Готово", "Ready"), tone: "ready" as const }
         : null;
-  const isSegmentAiPhotoModalVideoVisual =
-    segmentAiPhotoModalSegment ? getWorkspaceSegmentSelectedVisualPreviewKind(segmentAiPhotoModalSegment) === "video" : false;
+  const canSegmentAiPhotoModalUseVideoExtension = segmentAiPhotoModalSegment
+    ? canWorkspaceSegmentUseVideoExtensionTool(segmentAiPhotoModalSegment)
+    : false;
   const canAnimateSegmentPhoto = canWorkspaceSegmentUsePhotoAnimationTool(segmentAiPhotoModalSegment);
   const canExtendSegmentVideo =
-    Boolean(segmentAiPhotoModalSegment && isSegmentAiPhotoModalVideoVisual) &&
+    canSegmentAiPhotoModalUseVideoExtension &&
     !isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
   const canCreateSegmentTalkingPhoto = canWorkspaceSegmentCreateTalkingPhoto(segmentAiPhotoModalSegment);
   const segmentAiPhotoModalTalkingPhotoVoiceId =
@@ -6681,6 +6689,9 @@ export function WorkspacePage({
     selectedVoiceOptions.find((voice) => voice.id === activeSegmentEffectiveVoiceId) ??
     selectedVoiceOptions[0] ??
     null;
+  const activeSegmentVoiceOptionCopy = activeSegmentVoiceOption
+    ? getStudioVoiceOptionCopy(activeSegmentVoiceOption, locale)
+    : null;
   const activeSegmentUsesGlobalVoice =
     !activeSegmentVoiceDisabled &&
     studioSidebarVoiceEnabled &&
@@ -10997,58 +11008,56 @@ export function WorkspacePage({
   };
 
   const handleAddSegmentEditorSegment = () => {
-    if (!segmentEditorDraft) {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft) {
       return;
     }
 
-    if (isSegmentEditorAddSegmentBusy) {
+    if (isSegmentEditorAddSegmentBusy || segmentEditorAddSegmentInFlightRef.current) {
       return;
     }
 
-    if (segmentEditorDraft.segments.length >= WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
+    if (currentDraft.segments.length >= WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
       setSegmentEditorVideoError(`Можно добавить максимум ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`);
       return;
     }
 
-    const insertAt = segmentEditorDraft.segments.length;
+    segmentEditorAddSegmentInFlightRef.current = true;
+    const insertAt = currentDraft.segments.length;
     logSegmentEditorDiagnostics("client.segment-editor.structure.add", {
       insertAt,
-      segmentCountBefore: segmentEditorDraft.segments.length,
-    }, { includeOrder: true });
-    markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
+      segmentCountBefore: currentDraft.segments.length,
+    }, { draft: currentDraft, includeOrder: true });
+    markSegmentEditorExplicitStructureChange(currentDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
     const nextSegment = createWorkspaceSegmentEditorInsertedSegment({
-      draft: segmentEditorDraft,
+      draft: currentDraft,
       insertAt,
       reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
-      sourceSegment: segmentEditorDraft.segments[segmentEditorDraft.segments.length - 1] ?? null,
+      sourceSegment: currentDraft.segments[currentDraft.segments.length - 1] ?? null,
     });
-    const nextSegments = rebuildWorkspaceSegmentEditorDraftTimeline(
-      [...segmentEditorDraft.segments, nextSegment],
-      segmentEditorDraft,
-    );
-    updateSegmentEditorDraft((currentDraft) => {
-      if (currentDraft.segments.length >= WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS) {
-        return currentDraft;
-      }
-
-      return {
-        ...currentDraft,
-        segments: [
-          ...currentDraft.segments,
-          cloneWorkspaceSegmentEditorDraftSegment(
-            nextSegment,
-            normalizeStudioLanguageValue(currentDraft.language) ??
-              getStudioLanguageForVoiceId(currentDraft.voiceType) ??
-              selectedLanguage,
-          ),
-        ],
-      };
+    const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...currentDraft,
+      segments: [
+        ...currentDraft.segments,
+        cloneWorkspaceSegmentEditorDraftSegment(
+          nextSegment,
+          normalizeStudioLanguageValue(currentDraft.language) ??
+            getStudioLanguageForVoiceId(currentDraft.voiceType) ??
+            selectedLanguage,
+        ),
+      ],
     });
-    syncSegmentEditorRouteForArrayIndex({ projectId: segmentEditorDraft.projectId, segments: nextSegments }, insertAt);
+    segmentEditorDraftRef.current = nextDraft;
+    setSegmentEditorDraft(nextDraft);
+    syncSegmentEditorRouteForArrayIndex(nextDraft, insertAt);
     setActiveSegmentIndex(insertAt);
   };
+
+  useEffect(() => {
+    segmentEditorAddSegmentInFlightRef.current = false;
+  }, [segmentEditorDraft?.segments.length]);
 
   const handleDeleteSegmentEditorSegment = (targetSegmentIndex: number) => {
     if (!segmentEditorDraft) {
@@ -12913,13 +12922,15 @@ export function WorkspacePage({
           });
         }
 
-        if (payload.data.asset) {
+        const aiPhotoPayload = payload.data;
+        const aiPhotoAsset = aiPhotoPayload.asset;
+        if (aiPhotoAsset) {
           const currentDraft = segmentEditorDraftRef.current;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
             aiVideoAsset: null,
             aiVideoGeneratedMode: null,
-            aiPhotoAsset: payload.data!.asset!,
+            aiPhotoAsset,
             aiPhotoGeneratedFromPrompt: options.prompt,
             aiPhotoPrompt: options.prompt,
             aiPhotoPromptInitialized: true,
@@ -12928,7 +12939,7 @@ export function WorkspacePage({
             videoAction: "ai_photo",
           }));
           upsertGeneratedMediaLibraryEntry({
-            asset: payload.data.asset,
+            asset: aiPhotoAsset,
             kind: "ai_photo",
             projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -13057,13 +13068,15 @@ export function WorkspacePage({
           });
         }
 
-        if (payload.data.asset) {
+        const imageEditPayload = payload.data;
+        const imageEditAsset = imageEditPayload.asset;
+        if (imageEditAsset) {
           const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
             aiVideoAsset: null,
             aiVideoGeneratedMode: null,
-            imageEditAsset: payload.data!.asset!,
+            imageEditAsset,
             imageEditGeneratedFromPrompt: options.prompt,
             imageEditPrompt: options.prompt,
             imageEditPromptInitialized: true,
@@ -13072,7 +13085,7 @@ export function WorkspacePage({
             videoAction: "image_edit",
           }));
           upsertGeneratedMediaLibraryEntry({
-            asset: payload.data.asset,
+            asset: imageEditAsset,
             kind: "image_edit",
             projectId: currentDraft?.projectId ?? options.projectId ?? 0,
             segmentIndex: options.segmentIndex,
@@ -13155,19 +13168,21 @@ export function WorkspacePage({
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
 
-        if (payload.data.asset) {
+        const aiVideoPayload = payload.data;
+        const aiVideoAsset = aiVideoPayload.asset;
+        if (aiVideoAsset) {
           const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
           const currentSegment = currentDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
           const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
           const preferredPosterUrl = currentSegment
-            ? getWorkspaceAiVideoPreferredPosterUrl(currentSegment, payload.data.asset)
+            ? getWorkspaceAiVideoPreferredPosterUrl(currentSegment, aiVideoAsset)
             : null;
           const nextAiVideoAsset = preferredPosterUrl
             ? {
-                ...payload.data.asset,
+                ...aiVideoAsset,
                 posterUrl: preferredPosterUrl,
               }
-            : payload.data.asset;
+            : aiVideoAsset;
           const nextAiVideoDurationSeconds = getStudioCustomVideoFileDurationSeconds(nextAiVideoAsset);
 
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
@@ -13330,7 +13345,9 @@ export function WorkspacePage({
           });
         }
 
-        if (payload.data.asset) {
+        const photoAnimationPayload = payload.data;
+        const photoAnimationAsset = photoAnimationPayload.asset;
+        if (photoAnimationAsset) {
           const currentDraft = segmentEditorDraftRef.current;
           const currentSegment = currentDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
           const resolvedSourceAsset =
@@ -13344,16 +13361,16 @@ export function WorkspacePage({
                 }
               : currentSegment;
           const preferredPosterUrl = posterSegment
-            ? getWorkspacePhotoAnimationPreferredPosterUrl(posterSegment, payload.data.asset)
+            ? getWorkspacePhotoAnimationPreferredPosterUrl(posterSegment, photoAnimationAsset)
             : resolvedSourceAsset
               ? getStudioCustomAssetPreviewUrl(resolvedSourceAsset)
             : null;
           const nextPhotoAnimationAsset = preferredPosterUrl
             ? {
-                ...payload.data.asset,
+                ...photoAnimationAsset,
                 posterUrl: preferredPosterUrl,
               }
-            : payload.data.asset;
+            : photoAnimationAsset;
           const durationExtensionTargetDurationSeconds = clampWorkspaceSegmentEditorVisualDurationSeconds(
             options.durationExtensionTargetDurationSeconds,
           );
@@ -13561,7 +13578,9 @@ export function WorkspacePage({
           });
         }
 
-        if (payload.data.asset) {
+        const talkingPhotoPayload = payload.data;
+        const talkingPhotoAsset = talkingPhotoPayload.asset;
+        if (talkingPhotoAsset) {
           const currentDraft = segmentEditorDraftRef.current;
           const currentSegment = currentDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
           const resolvedSourceAsset =
@@ -13575,16 +13594,16 @@ export function WorkspacePage({
                 }
               : currentSegment;
           const preferredPosterUrl = posterSegment
-            ? getWorkspacePhotoAnimationPreferredPosterUrl(posterSegment, payload.data.asset)
+            ? getWorkspacePhotoAnimationPreferredPosterUrl(posterSegment, talkingPhotoAsset)
             : resolvedSourceAsset
               ? getStudioCustomAssetPreviewUrl(resolvedSourceAsset)
               : null;
           const nextTalkingPhotoAsset = preferredPosterUrl
             ? {
-                ...payload.data.asset,
+                ...talkingPhotoAsset,
                 posterUrl: preferredPosterUrl,
               }
-            : payload.data.asset;
+            : talkingPhotoAsset;
           const nextTalkingPhotoPreviewUrl = getStudioCustomAssetPreviewUrl(nextTalkingPhotoAsset);
           const segmentPlaybackIndex = resolveSegmentEditorArrayIndexFromRouteSegment(currentDraft, options.segmentIndex);
           const generatedDurationSeconds = nextTalkingPhotoAsset.durationSeconds
@@ -13592,6 +13611,9 @@ export function WorkspacePage({
             : nextTalkingPhotoPreviewUrl
               ? normalizeWorkspaceSegmentManualDurationSeconds(await readWorkspaceVideoDurationSeconds(nextTalkingPhotoPreviewUrl))
               : null;
+          const generatedSpeechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+            talkingPhotoPayload.speechDuration,
+          );
           if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, options.segmentIndex, options.runId)) {
             return;
           }
@@ -13614,6 +13636,16 @@ export function WorkspacePage({
               resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
             ...buildSegmentEditorKnownVideoDurationPatch(segment, generatedDurationSeconds),
             durationExtensionSourceDurationSeconds: null,
+            speechDuration: generatedSpeechDurationSeconds ?? segment.speechDuration,
+            speechDurationSource:
+              talkingPhotoPayload.speechDurationSource ??
+              (generatedSpeechDurationSeconds !== null ? "audio" : segment.speechDurationSource ?? null),
+            speechEndTime: talkingPhotoPayload.speechEndTime ?? segment.speechEndTime,
+            speechStartTime: talkingPhotoPayload.speechStartTime ?? segment.speechStartTime,
+            speechWords: talkingPhotoPayload.speechWords ?? segment.speechWords,
+            voiceSourceDuration: generatedSpeechDurationSeconds ?? segment.voiceSourceDuration,
+            voiceSourceEndTime: talkingPhotoPayload.speechEndTime ?? segment.voiceSourceEndTime,
+            voiceSourceStartTime: talkingPhotoPayload.speechStartTime ?? segment.voiceSourceStartTime,
             visualReset: false,
             videoAction: "talking_photo",
           }));
@@ -16565,6 +16597,10 @@ export function WorkspacePage({
     const segmentEditorBrandSnapshotForGeneration = segmentEditorBrandStateForGeneration.brandSnapshot;
     const segmentEditorSystemWatermarkForGeneration =
       segmentEditorBrandStateForGeneration.state.systemWatermarkEnabled;
+    const shouldSendSegmentEditorBrandChange =
+      shouldSendWorkspaceSegmentEditorBrandChangeForGeneration(segmentEditorBrandStateForGeneration, {
+        isBrandDirty: isSegmentEditorBrandDirty,
+      });
 
     if (isSegmentEditorBrandDirty) {
       logSegmentEditorDiagnostics(
@@ -16935,11 +16971,7 @@ export function WorkspacePage({
     await handleGenerate(generationPrompt, {
       ...segmentEditorGenerationOptions,
       addWatermark: segmentEditorAddWatermarkOverride,
-      brandChanged:
-        isSegmentEditorBrandDirty ||
-        segmentEditorBrandStateForGeneration.hasBrandChange ||
-        segmentEditorBrandStateForGeneration.hasSystemWatermarkRemoval ||
-        segmentEditorBrandStateForGeneration.hasSystemWatermarkAddition,
+      brandChanged: shouldSendSegmentEditorBrandChange,
       clearBranding:
         !segmentEditorBrandStateForGeneration.hasBranding &&
         (segmentEditorBrandStateForGeneration.hasBrandRemoval ||
@@ -21945,7 +21977,9 @@ export function WorkspacePage({
       sourceVideoDurationSeconds;
     const currentSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(targetSegment);
     const targetVoiceoverDurationSeconds =
-      getSegmentTimelineVoiceoverDurationInfo(targetSegment, segmentEditorDraft)?.durationSeconds ?? null;
+      getSegmentTimelineVoiceoverDurationInfo(targetSegment, segmentEditorDraft, {
+        allowEmbeddedVisualFallback: false,
+      })?.durationSeconds ?? null;
     const normalizedTargetVoiceoverDurationSeconds =
       normalizeWorkspaceSegmentManualDurationSeconds(targetVoiceoverDurationSeconds);
     const shouldDefaultDurationToVoiceover =
@@ -22087,7 +22121,9 @@ export function WorkspacePage({
         ? segmentTimelineDurationSourceOverride.durationSeconds
         : null;
     const voiceoverDurationSeconds = currentSegment
-      ? getSegmentTimelineVoiceoverDurationInfo(currentSegment, currentDraft)?.durationSeconds ?? null
+      ? getSegmentTimelineVoiceoverDurationInfo(currentSegment, currentDraft, {
+          allowEmbeddedVisualFallback: false,
+        })?.durationSeconds ?? null
       : null;
     const sourceVideoDurationSeconds = currentSegment
       ? getWorkspaceSegmentDurationExtensionSourceDurationSeconds(currentSegment, baselineSegment, {
@@ -22235,19 +22271,44 @@ export function WorkspacePage({
       voiceEnabled: studioSidebarVoiceEnabled,
       voiceOption,
     });
+    const usesEmbeddedTalkingPhotoAudio = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment);
+    const embeddedTalkingPhotoAudioUrl = usesEmbeddedTalkingPhotoAudio
+      ? getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment)
+      : null;
+    const embeddedTalkingPhotoKnownAudioDurationSeconds = usesEmbeddedTalkingPhotoAudio
+      ? getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+          allowVisualFallback: false,
+        })
+      : null;
     const measuredVoiceoverDurationSeconds =
-      voiceoverAudioPreviewSource.sourceKind === "scene"
+      embeddedTalkingPhotoAudioUrl || voiceoverAudioPreviewSource.sourceKind === "scene"
         ? getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(
             segment,
             draft,
-            voiceoverAudioPreviewSource.audioUrl,
+            embeddedTalkingPhotoAudioUrl ?? voiceoverAudioPreviewSource.audioUrl,
           )
         : null;
-    if (measuredVoiceoverDurationSeconds !== null) {
+    const embeddedTalkingPhotoVisualDurationSeconds = usesEmbeddedTalkingPhotoAudio
+      ? getWorkspaceSegmentKnownVisualDurationSeconds(segment)
+      : null;
+    const shouldUseMeasuredEmbeddedTalkingPhotoAudioDuration =
+      usesEmbeddedTalkingPhotoAudio &&
+      measuredVoiceoverDurationSeconds !== null &&
+      (embeddedTalkingPhotoKnownAudioDurationSeconds !== null ||
+        embeddedTalkingPhotoVisualDurationSeconds === null ||
+        measuredVoiceoverDurationSeconds + 0.04 < embeddedTalkingPhotoVisualDurationSeconds);
+    if (!usesEmbeddedTalkingPhotoAudio && measuredVoiceoverDurationSeconds !== null) {
       return measuredVoiceoverDurationSeconds;
+    }
+    if (shouldUseMeasuredEmbeddedTalkingPhotoAudioDuration) {
+      return measuredVoiceoverDurationSeconds;
+    }
+    if (embeddedTalkingPhotoKnownAudioDurationSeconds !== null) {
+      return embeddedTalkingPhotoKnownAudioDurationSeconds;
     }
 
     const fallbackVoiceoverDurationInfo = getSegmentTimelineVoiceoverDurationInfo(segment, draft, {
+      allowEmbeddedVisualFallback: false,
       allowEstimated: false,
       isStale: isVoiceAudioStale,
     });
@@ -24781,6 +24842,7 @@ export function WorkspacePage({
       !segmentEditorDraft ||
       !segmentEditorTracks ||
       totalDuration <= 0 ||
+      isSegmentEditorFullPreviewBlockedByActiveGeneration ||
       isSegmentEditorFullPreviewBlockedByVoiceoverGeneration ||
       typeof window === "undefined"
     ) {
@@ -25057,6 +25119,7 @@ export function WorkspacePage({
       !segmentEditorDraft ||
       !segmentEditorTracks ||
       getSegmentEditorFullPreviewDurationSeconds() <= 0 ||
+      isSegmentEditorFullPreviewBlockedByActiveGeneration ||
       isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;
     if (isPreviewUnavailable || event.button !== 0) {
       return;
@@ -25260,7 +25323,9 @@ export function WorkspacePage({
       )
     : null;
   const segmentTimelineDurationMenuVoiceoverInfo = segmentTimelineDurationMenuSegment
-    ? getSegmentTimelineVoiceoverDurationInfo(segmentTimelineDurationMenuSegment, segmentEditorDraft)
+    ? getSegmentTimelineVoiceoverDurationInfo(segmentTimelineDurationMenuSegment, segmentEditorDraft, {
+        allowEmbeddedVisualFallback: false,
+      })
     : null;
   const segmentTimelineDurationMenuVoiceoverSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.durationSeconds ?? null;
@@ -26273,7 +26338,10 @@ export function WorkspacePage({
                 ? workspaceText(locale, "Сейчас нельзя добавить сегмент", "Segment cannot be added right now")
                 : workspaceText(locale, "Добавить сегмент", "Add segment")
             }
-            onClick={handleAddSegmentEditorSegment}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleAddSegmentEditorSegment();
+            }}
           >
             <span className="studio-segment-editor__timeline-add-icon" aria-hidden="true">
               +
@@ -26940,15 +27008,53 @@ export function WorkspacePage({
                 voiceOption,
               });
               const voiceoverPreviewRange = voiceoverAudioPreviewSource.previewRange;
+              const usesEmbeddedTalkingPhotoAudio = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment);
+              const embeddedTalkingPhotoAudioUrl = usesEmbeddedTalkingPhotoAudio
+                ? getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment)
+                : null;
               const voiceoverMeasuredDurationSourceUrl =
-                voiceoverAudioPreviewSource.sourceKind === "scene" ? voiceoverAudioPreviewSource.audioUrl : null;
+                embeddedTalkingPhotoAudioUrl ??
+                (voiceoverAudioPreviewSource.sourceKind === "scene" ? voiceoverAudioPreviewSource.audioUrl : null);
               const measuredVoiceoverDurationSeconds = getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(
                 segment,
                 segmentEditorDraft,
                 voiceoverMeasuredDurationSourceUrl,
               );
+              const embeddedTalkingPhotoKnownAudioDurationSeconds = usesEmbeddedTalkingPhotoAudio
+                ? getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+                    allowVisualFallback: false,
+                  })
+                : null;
+              const embeddedTalkingPhotoVisualDurationSeconds = usesEmbeddedTalkingPhotoAudio
+                ? getWorkspaceSegmentKnownVisualDurationSeconds(segment)
+                : null;
+              const shouldUseMeasuredEmbeddedTalkingPhotoAudioDuration =
+                usesEmbeddedTalkingPhotoAudio &&
+                measuredVoiceoverDurationSeconds !== null &&
+                (embeddedTalkingPhotoKnownAudioDurationSeconds !== null ||
+                  embeddedTalkingPhotoVisualDurationSeconds === null ||
+                  measuredVoiceoverDurationSeconds + 0.04 < embeddedTalkingPhotoVisualDurationSeconds);
+              const embeddedTalkingPhotoDurationSeconds = shouldUseMeasuredEmbeddedTalkingPhotoAudioDuration
+                ? measuredVoiceoverDurationSeconds
+                : embeddedTalkingPhotoKnownAudioDurationSeconds;
+              const embeddedTalkingPhotoEstimatedDurationSeconds =
+                usesEmbeddedTalkingPhotoAudio && embeddedTalkingPhotoDurationSeconds === null
+                  ? getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds(segment, segmentEditorDraft)
+                  : null;
               const voiceoverDurationInfo =
-                measuredVoiceoverDurationSeconds !== null
+                usesEmbeddedTalkingPhotoAudio
+                  ? embeddedTalkingPhotoDurationSeconds !== null
+                    ? {
+                        durationSeconds: embeddedTalkingPhotoDurationSeconds,
+                        source: "actual" as const,
+                      }
+                    : embeddedTalkingPhotoEstimatedDurationSeconds !== null
+                      ? {
+                          durationSeconds: embeddedTalkingPhotoEstimatedDurationSeconds,
+                          source: "estimated" as const,
+                        }
+                      : null
+                : measuredVoiceoverDurationSeconds !== null
                   ? {
                       durationSeconds: measuredVoiceoverDurationSeconds,
                       source: "actual" as const,
@@ -26970,15 +27076,11 @@ export function WorkspacePage({
                 voiceoverDurationInfo?.source === "estimated" && voiceoverDurationLabel
                   ? `≈${voiceoverDurationLabel}`
                   : voiceoverDurationLabel;
-              const usesEmbeddedTalkingPhotoAudio = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment);
               const isSegmentTimelineVoiceGenerationScheduled = isPendingVoiceTextEdit
                 ? false
                 : isSegmentEditorVoiceoverGenerationScheduledForSegment(segment, segmentEditorDraft);
               const segmentTimelineVoiceGenerationLabel = isSegmentTimelineVoiceGenerationScheduled
                 ? getWorkspaceSegmentTimelineVoiceLabel(locale, segment, segmentTimelineVoiceSettings)
-                : null;
-              const embeddedTalkingPhotoAudioUrl = usesEmbeddedTalkingPhotoAudio
-                ? getSegmentEditorEmbeddedTalkingPhotoAudioUrl(segment)
                 : null;
               const voiceoverAudioUrl = embeddedTalkingPhotoAudioUrl ?? voiceoverAudioPreviewSource.audioUrl;
               const voiceAudioKey = `timeline:voice:${segment.index}:${voiceoverAudioUrl ?? "empty"}`;
@@ -29248,7 +29350,7 @@ export function WorkspacePage({
   ) => (
     <WorkspaceSegmentEditorBrandOverlay
       brandLogoPreviewUrl={appliedSegmentEditorBrandLogoPreviewUrl}
-      brandSummary={hasAppliedSegmentEditorBranding ? getStudioBrandSummary(appliedSegmentEditorBrandSnapshot) : ""}
+      brandSummary={hasAppliedSegmentEditorBranding ? getStudioBrandSummary(appliedSegmentEditorBrandSnapshot, locale) : ""}
       brandText={appliedSegmentEditorBrandSnapshot.brandText}
       editable={Boolean(options?.editable)}
       hasBranding={hasAppliedSegmentEditorBranding}
@@ -29348,20 +29450,40 @@ export function WorkspacePage({
   const isSegmentEditorFullPreviewPlaying = segmentEditorFullPreviewStatus === "playing";
   const isSegmentEditorFullPreviewLoading = segmentEditorFullPreviewStatus === "loading";
   const isSegmentEditorFullPreviewPaused = segmentEditorFullPreviewStatus === "paused";
+  const isSegmentEditorFullPreviewBlockedByActiveGeneration = isSegmentEditorStructureActionBusy;
   const isSegmentEditorFullPreviewBlockedByVoiceoverGeneration = segmentEditorDraft
     ? segmentEditorDraft.segments.some((segment) =>
         isSegmentEditorVoiceoverGenerationScheduledForSegment(segment, segmentEditorDraft),
       )
     : false;
-  const segmentEditorFullPreviewUnavailableReason = isSegmentEditorFullPreviewBlockedByVoiceoverGeneration
-    ? workspaceText(
-        locale,
-        "Сначала сгенерируйте озвучку сцен с сохраненным текстом",
-        "Generate voiceover for scenes with saved text first",
-      )
-    : null;
+  const segmentEditorFullPreviewActiveGenerationReason = workspaceText(
+    locale,
+    "Дождитесь завершения генерации элементов сцены",
+    "Wait for scene element generation to finish",
+  );
+  const segmentEditorFullPreviewVoiceoverRequiredReason = workspaceText(
+    locale,
+    "Сначала сгенерируйте озвучку сцен с сохраненным текстом",
+    "Generate voiceover for scenes with saved text first",
+  );
+  const segmentEditorFullPreviewUnavailableReason = isSegmentEditorFullPreviewBlockedByActiveGeneration
+    ? segmentEditorFullPreviewActiveGenerationReason
+    : isSegmentEditorFullPreviewBlockedByVoiceoverGeneration
+      ? segmentEditorFullPreviewVoiceoverRequiredReason
+      : null;
   const isSegmentEditorFullPreviewUnavailable =
-    !segmentEditorDraft || !segmentEditorTracks || segmentEditorFullPreviewDuration <= 0 || isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;
+    !segmentEditorDraft ||
+    !segmentEditorTracks ||
+    segmentEditorFullPreviewDuration <= 0 ||
+    isSegmentEditorFullPreviewBlockedByActiveGeneration ||
+    isSegmentEditorFullPreviewBlockedByVoiceoverGeneration;
+  useEffect(() => {
+    if (!isSegmentEditorFullPreviewBlockedByActiveGeneration || segmentEditorFullPreviewStatusRef.current === "idle") {
+      return;
+    }
+
+    stopSegmentEditorFullPreviewRef.current?.({ resetTime: true, status: "idle" });
+  }, [isSegmentEditorFullPreviewBlockedByActiveGeneration]);
   useEffect(() => {
     if (!segmentEditorPendingFullPreviewStartToken || isSegmentEditorFullPreviewUnavailable) {
       return;
@@ -29376,15 +29498,19 @@ export function WorkspacePage({
     <button
       className="studio-segment-editor__timeline-preview-toggle"
       type="button"
-      aria-busy={isSegmentEditorGeneratingGlobalVoiceover ? true : undefined}
-      aria-label={workspaceText(locale, "Предпросмотр", "Preview")}
-      title={workspaceText(locale, "Предпросмотр", "Preview")}
-      disabled={isSegmentEditorGeneratingGlobalVoiceover}
+      aria-busy={isSegmentEditorFullPreviewBlockedByActiveGeneration ? true : undefined}
+      aria-label={segmentEditorFullPreviewUnavailableReason ?? workspaceText(locale, "Предпросмотр", "Preview")}
+      title={segmentEditorFullPreviewUnavailableReason ?? workspaceText(locale, "Предпросмотр", "Preview")}
+      disabled={isSegmentEditorFullPreviewBlockedByActiveGeneration}
       onClick={() => {
+        if (isSegmentEditorFullPreviewBlockedByActiveGeneration) {
+          return;
+        }
+
         openSegmentEditorVoiceoverPreviewRequiredModal();
       }}
     >
-      {isSegmentEditorGeneratingGlobalVoiceover ? (
+      {isSegmentEditorFullPreviewBlockedByActiveGeneration ? (
         <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
       ) : (
         <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
@@ -29450,7 +29576,7 @@ export function WorkspacePage({
         ) : null}
       </button>
     </span>
-  ) : isSegmentEditorFullPreviewBlockedByVoiceoverGeneration ? (
+  ) : isSegmentEditorFullPreviewBlockedByActiveGeneration || isSegmentEditorFullPreviewBlockedByVoiceoverGeneration ? (
     segmentEditorFullPreviewUnavailableButton
   ) : (
     <button
@@ -29946,7 +30072,7 @@ export function WorkspacePage({
                         <strong>
                           {activeSegmentVoiceDisabled
                             ? workspaceText(locale, "Добавить озвучку", "Add voiceover")
-                            : activeSegmentVoiceOption?.label ?? workspaceText(locale, "Выбранный голос", "Selected voice")}
+                            : activeSegmentVoiceOptionCopy?.label ?? workspaceText(locale, "Выбранный голос", "Selected voice")}
                         </strong>
                         <small>
                           {activeSegmentVoiceDisabled
@@ -29976,6 +30102,7 @@ export function WorkspacePage({
                         </button>
                         {selectedVoiceOptions.map((voice) => {
                           const isSelectedSceneVoice = !activeSegmentVoiceDisabled && activeSegmentEffectiveVoiceId === voice.id;
+                          const voiceCopy = getStudioVoiceOptionCopy(voice, locale);
                           return (
                             <button
                               className={`studio-segment-editor__scene-voice-option${isSelectedSceneVoice ? " is-selected" : ""}`}
@@ -29985,8 +30112,8 @@ export function WorkspacePage({
                               onClick={() => handleSegmentEditorSceneVoiceSelect(voice.id)}
                             >
                               <span>
-                                <strong>{voice.label}</strong>
-                                <small>{voice.description}</small>
+                                <strong>{voiceCopy.label}</strong>
+                                <small>{voiceCopy.description}</small>
                               </span>
                               {voice.badgeLabel ? <em>{voice.badgeLabel}</em> : null}
                               {voice.creditCost ? <b>{voice.creditCost} ⚡</b> : null}
@@ -30579,7 +30706,10 @@ export function WorkspacePage({
                                               ? "Add segment"
                                               : "Добавить сегмент"
                                         }
-                                        onClick={handleAddSegmentEditorSegment}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleAddSegmentEditorSegment();
+                                        }}
                                       >
                                         <div className="studio-segment-editor__card-media studio-segment-editor__card-media--add">
                                           <div className="studio-segment-editor__card-add-copy">
@@ -32031,7 +32161,7 @@ export function WorkspacePage({
                                 setSegmentAiPhotoModalTab("ai_video");
                               },
                             })}
-                            {isSegmentAiPhotoModalVideoVisual
+                            {canSegmentAiPhotoModalUseVideoExtension
                               ? renderSegmentAiPhotoModalSourceButton({
                                   title: workspaceText(locale, "ИИ продление видео", "AI video extension"),
                                   description: workspaceText(locale, "Продлить текущий видеофрагмент", "Extend current video fragment"),

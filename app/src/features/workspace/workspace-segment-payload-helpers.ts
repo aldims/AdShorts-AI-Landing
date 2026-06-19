@@ -12,11 +12,11 @@ import {
 import {
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
-  getStudioCustomVideoFileDurationSeconds,
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
   getWorkspaceSegmentCustomPreviewKind,
+  getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentOriginalVisualIdentityKey,
   getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
@@ -306,14 +306,16 @@ export const buildWorkspaceSegmentEditorPayload = async (
       durationMode === "manual" && resolvedManualDurationSeconds !== null
         ? roundWorkspaceSegmentTimelineSeconds(resolvedManualDurationSeconds)
         : null;
-    const talkingPhotoMediaDurationSeconds = isPayloadTalkingPhotoExport
-      ? getStudioCustomVideoFileDurationSeconds(selectedAiVideoAsset)
+    const talkingPhotoVoiceDurationSeconds = isPayloadTalkingPhotoExport
+      ? getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+          allowVisualFallback: false,
+        })
       : null;
     if (
       isPayloadTalkingPhotoExport &&
       typeof duration === "number" &&
-      talkingPhotoMediaDurationSeconds !== null &&
-      talkingPhotoMediaDurationSeconds > duration + WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS
+      talkingPhotoVoiceDurationSeconds !== null &&
+      talkingPhotoVoiceDurationSeconds > duration + WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS
     ) {
       throw new Error(
         `Говорящий персонаж сегмента ${segment.index + 1} длиннее таймлайна сцены. Увеличьте длительность сегмента и попробуйте экспорт снова.`,

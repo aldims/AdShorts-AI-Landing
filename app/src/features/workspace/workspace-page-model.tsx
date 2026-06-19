@@ -808,6 +808,11 @@ export type WorkspaceSegmentAiVideoJobStatusPayload = {
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
+  speechDuration?: number | null;
+  speechDurationSource?: "audio" | null;
+  speechEndTime?: number | null;
+  speechStartTime?: number | null;
+  speechWords?: WorkspaceSegmentEditorSpeechWord[];
   status: string;
 };
 

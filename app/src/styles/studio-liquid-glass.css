@@ -1599,6 +1599,15 @@
   transform: translateY(-1px);
 }
 
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  transform: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 0.5px rgba(70, 230, 210, 0.08);
+}
+
 /* ─────────────────────────────────────────────────────────────
    TIMELINE PANEL — the signature frosted glass slab
 ─────────────────────────────────────────────────────────────── */
@@ -3246,9 +3255,10 @@
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-subtitle-selector,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-voice-selector,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-music-selector {
-    flex: 0 1 auto !important;
+    flex: 0 0 auto !important;
+    width: max-content !important;
     min-width: 0 !important;
-    max-width: 148px !important;
+    max-width: 172px !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip,
@@ -3257,29 +3267,32 @@
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-voice-selector__trigger,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-music-selector__trigger {
     display: inline-grid !important;
-    grid-template-columns: auto minmax(0, auto) auto !important;
+    grid-template-columns: minmax(0, max-content) auto !important;
+    grid-template-rows: auto auto !important;
     align-items: center !important;
     justify-content: center !important;
-    width: auto !important;
+    justify-items: start !important;
+    width: max-content !important;
     min-width: 0 !important;
-    max-width: 100% !important;
-    min-height: 30px !important;
-    padding: 4px 8px !important;
+    max-width: 172px !important;
+    min-height: 38px !important;
+    padding: 5px 9px !important;
     column-gap: 5px !important;
+    row-gap: 2px !important;
     overflow: hidden !important;
-    white-space: nowrap !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-video-selector__label,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-subtitle-selector__label,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-voice-selector__label,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-music-selector__label {
-    flex: none !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
     min-width: 0 !important;
-    max-width: 64px !important;
+    max-width: 100% !important;
     overflow: hidden !important;
     color: rgba(226, 232, 240, 0.52) !important;
-    font-size: 0.72rem !important;
+    font-size: 0.66rem !important;
     line-height: 1 !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
@@ -3289,12 +3302,13 @@
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-subtitle-selector__value,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-voice-selector__value,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-music-selector__value {
-    flex: none !important;
+    grid-column: 1 !important;
+    grid-row: 2 !important;
     min-width: 0 !important;
-    max-width: 82px !important;
+    max-width: 100% !important;
     overflow: hidden !important;
     color: rgba(255, 255, 255, 0.94) !important;
-    font-size: 0.78rem !important;
+    font-size: 0.74rem !important;
     font-weight: 800 !important;
     line-height: 1 !important;
     text-overflow: ellipsis !important;
@@ -3305,7 +3319,9 @@
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-subtitle-selector__icon,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-voice-selector__icon,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-music-selector__icon {
-    flex: none !important;
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    align-self: center !important;
     width: 12px !important;
     height: 12px !important;
   }
@@ -3446,16 +3462,17 @@
 
 @media (max-width: 640px) {
   .studio-canvas-route:not(.is-segment-editor) {
-    --studio-prompt-reserve: 190px !important;
-    --studio-prompt-panel-compact-height: 166px !important;
+    --studio-prompt-reserve: 226px !important;
+    --studio-prompt-panel-compact-height: 202px !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__footer {
     display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     grid-template-areas:
-      "visual subtitles music"
-      "voice language submit" !important;
+      "visual subtitles"
+      "voice music"
+      "language submit" !important;
     align-items: stretch !important;
     gap: 7px !important;
     width: 100% !important;
@@ -3514,6 +3531,20 @@
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-voice-selector__trigger,
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-music-selector__trigger {
     min-height: 38px !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-video-selector__label,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-subtitle-selector__label,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-voice-selector__label,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-music-selector__label {
+    font-size: 0.62rem !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-video-selector__value,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-subtitle-selector__value,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-voice-selector__value,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-music-selector__value {
+    font-size: 0.72rem !important;
   }
 
   .studio-canvas-route .studio-content-plan {

@@ -57,6 +57,36 @@ describe("StudioVoiceSelectorChip", () => {
       voiceId: "Bys_24000",
     });
   });
+
+  it("shows English voice copy for Russian voice options in the English UI", () => {
+    render(
+      <LocaleProvider locale="en">
+        <StudioVoiceSelectorChip
+          isEnabled
+          onSelect={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          selectedVoiceId="Bys_24000"
+          voiceOptions={[
+            {
+              description: "Базовый мужской голос",
+              id: "Bys_24000",
+              label: "Борис",
+              previewSampleUrl: "/voice-previews/boris.wav",
+            },
+          ]}
+        />
+      </LocaleProvider>,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Voiceover\s*Boris/ });
+    expect(trigger).toBeTruthy();
+    expect(screen.queryByText("Борис")).toBeNull();
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByText("Basic male voice")).toBeTruthy();
+    expect(screen.queryByText("Базовый мужской голос")).toBeNull();
+  });
 });
 
 describe("StudioSubtitleSelectorChip", () => {
@@ -85,5 +115,36 @@ describe("StudioSubtitleSelectorChip", () => {
     fireEvent.click(trigger);
 
     expect(screen.getByRole("button", { name: /Современный\s*Универсальный стиль для Shorts\./ })).toBeTruthy();
+  });
+
+  it("shows English subtitle style, color and example copy in the English UI", () => {
+    render(
+      <LocaleProvider locale="en">
+        <StudioSubtitleSelectorChip
+          isEnabled
+          onSelectColor={vi.fn()}
+          onSelectExample={vi.fn()}
+          onSelectStyle={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          selectedColorId="purple"
+          selectedExampleId="cta"
+          selectedStyleId="modern"
+          subtitleColorOptions={[fallbackStudioSubtitleColorOption]}
+          subtitleStyleOptions={[fallbackStudioSubtitleStyleOption]}
+        />
+      </LocaleProvider>,
+    );
+
+    const trigger = screen.getByRole("button", { name: /Subtitles\s*Modern/ });
+    expect(trigger).toBeTruthy();
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("button", { name: /Modern\s*Current default for Shorts in Manrope\./ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Purple" })).toBeTruthy();
+    expect(screen.getByText("Final call to action")).toBeTruthy();
+    expect(screen.getByText("Grab")).toBeTruthy();
+    expect(screen.queryByText("Фиолетовый")).toBeNull();
+    expect(screen.queryByText("Финальный призыв")).toBeNull();
   });
 });

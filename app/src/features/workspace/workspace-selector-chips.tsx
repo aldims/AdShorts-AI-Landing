@@ -23,6 +23,7 @@ import {
   getStudioCustomAssetPreviewUrl,
   getStudioVideoChipValue,
   getStudioVideoOptionCopy,
+  getStudioVoiceOptionCopy,
   hasStudioBranding,
   studioVideoOptions,
   truncateStudioCustomAssetName,
@@ -30,6 +31,8 @@ import {
 import { getStudioMusicChipValue } from "./workspace-segment-visual-helpers";
 import {
   buildStudioSubtitlePreviewLines,
+  getStudioSubtitleColorDisplayLabel,
+  getStudioSubtitleExampleDisplayOption,
   getStudioSubtitleLogicLabel,
   getStudioSubtitlePreviewStyle,
   getStudioSubtitleStyleDisplayDescription,
@@ -287,8 +290,9 @@ export function StudioSubtitleSelectorChip({
   const selectedColor = safeColorOptions.find((color) => color.id === selectedColorId) ?? safeColorOptions[0];
   const selectedStyleLabel = getStudioSubtitleStyleDisplayLabel(locale, selectedStyle);
   const previewStyle = getStudioSubtitlePreviewStyle(selectedStyle, selectedColor);
+  const selectedColorLabel = getStudioSubtitleColorDisplayLabel(locale, selectedColor);
   const previewColorLabel = studioSubtitleStyleUsesAccentColor(selectedStyle)
-    ? selectedColor.label
+    ? selectedColorLabel
     : locale === "en"
       ? "White text"
       : "Белый текст";
@@ -535,17 +539,21 @@ export function StudioSubtitleSelectorChip({
                   <span>{locale === "en" ? "Color" : "Цвет"}</span>
                 </div>
                 <div className="studio-subtitle-selector__colors">
-                  {safeColorOptions.map((color) => (
-                    <button
-                      key={color.id}
-                      className={`studio-subtitle-selector__color${color.id === selectedColorId ? " is-selected" : ""}`}
-                      type="button"
-                      onClick={() => onSelectColor(color.id)}
-                    >
-                      <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
-                      <span>{color.label}</span>
-                    </button>
-                  ))}
+                  {safeColorOptions.map((color) => {
+                    const colorLabel = getStudioSubtitleColorDisplayLabel(locale, color);
+
+                    return (
+                      <button
+                        key={color.id}
+                        className={`studio-subtitle-selector__color${color.id === selectedColorId ? " is-selected" : ""}`}
+                        type="button"
+                        onClick={() => onSelectColor(color.id)}
+                      >
+                        <span className="studio-subtitle-selector__color-swatch" style={{ background: color.accent }} aria-hidden="true"></span>
+                        <span>{colorLabel}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -555,7 +563,8 @@ export function StudioSubtitleSelectorChip({
                 </div>
                 <div className="studio-subtitle-selector__examples">
                   {studioSubtitleExampleOptions.map((example) => {
-                    const previewLines = buildStudioSubtitlePreviewLines(example, selectedStyle);
+                    const displayExample = getStudioSubtitleExampleDisplayOption(locale, example);
+                    const previewLines = buildStudioSubtitlePreviewLines(displayExample, selectedStyle);
 
                     return (
                       <button
@@ -564,8 +573,8 @@ export function StudioSubtitleSelectorChip({
                         type="button"
                         onClick={() => onSelectExample(example.id)}
                       >
-                        <span className="studio-subtitle-selector__example-label">{example.label}</span>
-                        <small className="studio-subtitle-selector__example-note">{example.note}</small>
+                        <span className="studio-subtitle-selector__example-label">{displayExample.label}</span>
+                        <small className="studio-subtitle-selector__example-note">{displayExample.note}</small>
                         <div
                           className="studio-subtitle-selector__example-stage"
                           data-style={selectedStyle.id}
@@ -819,6 +828,7 @@ export function StudioVoiceSelectorChip({
   const lastHandledOpenRequestIdRef = useRef(0);
   const lastReportedOpenRef = useRef(isOpen);
   const selectedVoice = voiceOptions.find((voice) => voice.id === selectedVoiceId) ?? voiceOptions[0];
+  const selectedVoiceCopy = selectedVoice ? getStudioVoiceOptionCopy(selectedVoice, locale) : null;
   const isSidebarVariant = variant === "sidebar";
   const hasLanguageSelector = Boolean(selectedLanguage && onSelectLanguage);
   const hasBulkTextEditor =
@@ -1039,7 +1049,7 @@ export function StudioVoiceSelectorChip({
             </span>
             <span className="studio-sidebar__item-copy">
               <strong>{resolvedTriggerLabel}</strong>
-              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</span>
+              <span className="studio-sidebar__item-value">{isEnabled ? selectedVoiceCopy?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</span>
             </span>
             <svg className="studio-voice-selector__icon studio-voice-selector__icon--sidebar" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -1048,7 +1058,7 @@ export function StudioVoiceSelectorChip({
         ) : (
           <>
             <span className="studio-voice-selector__label">{resolvedTriggerLabel}</span>
-            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoice?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</strong>
+            <strong className="studio-voice-selector__value">{isEnabled ? selectedVoiceCopy?.label ?? (locale === "en" ? "Choose voice" : "Выберите голос") : resolvedDisabledValueLabel}</strong>
             <svg className="studio-voice-selector__icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -1121,6 +1131,7 @@ export function StudioVoiceSelectorChip({
                   (() => {
                     const canPreviewVoice = Boolean(voice.previewSampleUrl);
                     const isVoiceSelected = isEnabled && voice.id === selectedVoiceId;
+                    const voiceCopy = getStudioVoiceOptionCopy(voice, locale);
 
                     return (
                       <div
@@ -1142,7 +1153,7 @@ export function StudioVoiceSelectorChip({
                           }}
                         >
                           <span className="studio-voice-selector__option-title">
-                            <span>{voice.label}</span>
+                            <span>{voiceCopy.label}</span>
                             {voice.badgeLabel ? (
                               <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
                             ) : null}
@@ -1150,17 +1161,17 @@ export function StudioVoiceSelectorChip({
                               <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
                             ) : null}
                           </span>
-                          <small>{voice.description}</small>
+                          <small>{voiceCopy.description}</small>
                         </button>
                         <button
                           className={`studio-voice-selector__preview${previewingVoiceId === voice.id ? " is-playing" : ""}`}
                           type="button"
                           aria-label={
                             !canPreviewVoice
-                              ? `${locale === "en" ? "Preview unavailable" : "Превью недоступно"}: ${voice.label}`
+                              ? `${locale === "en" ? "Preview unavailable" : "Превью недоступно"}: ${voiceCopy.label}`
                               : previewingVoiceId === voice.id
-                                ? `${locale === "en" ? "Stop" : "Остановить"}: ${voice.label}`
-                                : `${locale === "en" ? "Listen" : "Прослушать"}: ${voice.label}`
+                                ? `${locale === "en" ? "Stop" : "Остановить"}: ${voiceCopy.label}`
+                                : `${locale === "en" ? "Listen" : "Прослушать"}: ${voiceCopy.label}`
                           }
                           title={!canPreviewVoice ? (locale === "en" ? "Preview unavailable" : "Превью недоступно") : previewingVoiceId === voice.id ? (locale === "en" ? "Stop" : "Остановить") : (locale === "en" ? "Listen" : "Прослушать")}
                           disabled={!canPreviewVoice}
@@ -1305,7 +1316,10 @@ export function StudioVideoSelectorChip({
     brandText,
     locale,
   });
-  const selectedVideoTitle = [customVideoFile?.fileName ?? selectedVideoLabel, hasStudioBranding({ brandLogoFile, brandText }) ? getStudioBrandSummary({ brandLogoFile, brandText }) : ""]
+  const selectedVideoTitle = [
+    customVideoFile?.fileName ?? selectedVideoLabel,
+    hasStudioBranding({ brandLogoFile, brandText }) ? getStudioBrandSummary({ brandLogoFile, brandText }, locale) : "",
+  ]
     .filter(Boolean)
     .join(" · ");
   const customVideoFileLabel = customVideoFile ? truncateStudioCustomAssetName(customVideoFile.fileName) : null;
@@ -1542,7 +1556,7 @@ export function StudioVideoSelectorChip({
                     </div>
                     <div className="studio-video-selector__brand-copy">
                       <span>{hasStudioBranding({ brandLogoFile, brandText }) ? (locale === "en" ? "Brand added" : "Бренд добавлен") : (locale === "en" ? "Add brand" : "Добавить бренд")}</span>
-                      <small title={brandLogoFile?.fileName ?? brandText}>{getStudioBrandSummary({ brandLogoFile, brandText })}</small>
+                      <small title={brandLogoFile?.fileName ?? brandText}>{getStudioBrandSummary({ brandLogoFile, brandText }, locale)}</small>
                     </div>
                     <div className="studio-video-selector__brand-actions">
                       <button
@@ -1582,7 +1596,7 @@ export function StudioVideoSelectorChip({
                       type="text"
                       value={brandText}
                       maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
-                      placeholder="Например, adshortsai.com"
+                      placeholder={locale === "en" ? "Example: adshortsai.com" : "Например, adshortsai.com"}
                       onChange={(event) => onBrandTextChange(event.target.value)}
                     />
                   </label>
@@ -1670,7 +1684,7 @@ export function StudioBrandSelectorChip({
       ? "Apply"
       : "Применить"
     : hasAppliedBranding
-      ? getStudioBrandSummary(appliedBrandSettings)
+      ? getStudioBrandSummary(appliedBrandSettings, locale)
       : hasAppliedSystemWatermark
         ? locale === "en"
           ? "Watermark"
@@ -1680,7 +1694,7 @@ export function StudioBrandSelectorChip({
         : "Добавить";
   const triggerTitle = [
     isDirty ? (locale === "en" ? "Unapplied brand changes" : "Есть неприменённые изменения бренда") : "",
-    hasDraftBranding ? getStudioBrandSummary(draftBrandSettings) : "",
+    hasDraftBranding ? getStudioBrandSummary(draftBrandSettings, locale) : "",
     hasDraftSystemWatermark ? systemWatermarkText : "",
   ]
     .filter(Boolean)
@@ -1873,10 +1887,10 @@ export function StudioBrandSelectorChip({
                       </span>
                       <small title={brandLogoFile?.fileName ?? (brandText || (hasDraftSystemWatermark ? systemWatermarkText : undefined))}>
                         {hasDraftBranding
-                          ? getStudioBrandSummary(draftBrandSettings)
+                          ? getStudioBrandSummary(draftBrandSettings, locale)
                           : hasDraftSystemWatermark
                             ? systemWatermarkText
-                            : getStudioBrandSummary(draftBrandSettings)}
+                            : getStudioBrandSummary(draftBrandSettings, locale)}
                       </small>
                     </div>
                     <div className="studio-video-selector__brand-actions">

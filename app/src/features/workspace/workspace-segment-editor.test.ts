@@ -3329,13 +3329,14 @@ describe("workspace segment editor project voiceover timeline", () => {
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
       duration: 11.2,
+      durationMode: "auto",
       endTime: 11.2,
-      manualDurationSeconds: 5,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
 
-  it("does not shorten a photo scene to a shorter generated voiceover duration", () => {
+  it("shortens an inherited photo scene duration to a shorter generated voiceover duration", () => {
     const segment = createProjectVoiceoverSegment({
       duration: 5,
       durationMode: "manual",
@@ -3360,9 +3361,78 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 2.2,
+      durationMode: "auto",
+      endTime: 2.2,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves a user-selected photo scene duration over a shorter generated voiceover duration", () => {
+    const segment = createProjectVoiceoverSegment({
       duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 5,
       manualDurationSeconds: 5,
+      mediaType: "photo",
+      speechDuration: 2.2,
+      speechDurationSource: "audio",
+      speechEndTime: 2.2,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 2.2,
+      voiceSourceEndTime: 2.2,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      startTime: 0,
+    }));
+  });
+
+  it("drops a stale seven-second photo duration from a 1.7-second voiceover scene", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 7,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 7,
+      manualDurationSeconds: 7,
+      mediaType: "photo",
+      speechDuration: 1.7,
+      speechDurationSource: "audio",
+      speechEndTime: 1.7,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 1.7,
+      voiceSourceEndTime: 1.7,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 1.7,
+      durationMode: "auto",
+      endTime: 1.7,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });

@@ -700,6 +700,39 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
   ],
 };
 
+const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOption, "description" | "label">>> = {
+  Bys_24000: { label: "Boris", description: "Basic male voice" },
+  Dylan: { description: "Young male voice with a Beijing accent" },
+  English_ManWithDeepVoice: { label: "Gleb", description: "Deep premium voice" },
+  Eric: { description: "Lively male voice with a slight rasp" },
+  Liam: { label: "Alexander", description: "Expressive premium voice" },
+  May_24000: { label: "Marfa", description: "Young female voice" },
+  Nec_24000: { label: "Natalia", description: "Basic female voice" },
+  Ono_Anna: { description: "Light Japanese female tone" },
+  Ost_24000: { label: "Alexandra", description: "Natural advertising voice" },
+  Pon_24000: { label: "Sergey", description: "Businesslike male voice" },
+  Russian_BrightHeroine: { label: "Tim", description: "Bright premium voice" },
+  Ryan: { description: "Energetic male voice with a strong rhythm" },
+  Serena: { description: "Warm, soft female voice" },
+  Sohee: { description: "Warm Korean female voice with emotion" },
+  Tur_24000: { label: "Taras", description: "Confident male voice" },
+  Uncle_Fu: { description: "Low, mature male timbre" },
+  Vivian: { description: "Bright young female voice with character" },
+  "male-qn-jingying": { label: "Alexey", description: "Expressive male voice" },
+  Aiden: { description: "Clear American male voice" },
+};
+
+export const getStudioVoiceOptionCopy = (voice: StudioVoiceOption, locale: string): StudioVoiceOption => {
+  if (locale !== "en") {
+    return voice;
+  }
+
+  return {
+    ...voice,
+    ...(studioVoiceOptionEnglishCopy[voice.id] ?? {}),
+  };
+};
+
 export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
   const normalizedVoiceId = String(voiceId ?? "").trim();
   if (!normalizedVoiceId || normalizedVoiceId === "none") {
@@ -1412,7 +1445,8 @@ export const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegment
 };
 
 export const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video";
+  getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video" &&
+  Boolean(getWorkspaceSegmentDurationExtensionStillSourceAsset(segment));
 
 export const getWorkspaceSegmentEditorVisualDurationMaxSeconds = (
   _segment: WorkspaceSegmentEditorDraftSegment,
@@ -4397,7 +4431,10 @@ export const getWorkspaceSegmentManualDurationMinimum = (
     options?.voiceoverDurationSeconds,
   );
   const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
-    ? getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, { allowEstimated: false })?.durationSeconds ?? null
+    ? getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
+        allowEmbeddedVisualFallback: false,
+        allowEstimated: false,
+      })?.durationSeconds ?? null
     : null;
   const voiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
     ? explicitVoiceoverDurationSeconds
@@ -4693,6 +4730,46 @@ export const getWorkspaceSegmentVoiceoverDurationSeconds = (
     : speechTimelineDurationSeconds;
 };
 
+export const getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  options?: {
+    allowVisualFallback?: boolean;
+  },
+) => {
+  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return null;
+  }
+
+  const knownVisualDurationSeconds = getWorkspaceSegmentKnownVisualDurationSeconds(segment) ?? null;
+  const isVisualDurationEcho = (durationSeconds: number | null | undefined) =>
+    knownVisualDurationSeconds !== null &&
+    typeof durationSeconds === "number" &&
+    areWorkspaceSegmentDurationValuesEqual(durationSeconds, knownVisualDurationSeconds);
+
+  const voiceSourceDurationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+  const voiceSourceRange = getWorkspaceSegmentVoiceSourceRange(segment);
+  if (
+    voiceSourceDurationSeconds !== null &&
+    (voiceSourceRange !== null || !isVisualDurationEcho(voiceSourceDurationSeconds))
+  ) {
+    return roundWorkspaceSegmentTimelineSeconds(voiceSourceDurationSeconds);
+  }
+
+  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
+  const speechWordsDurationSeconds =
+    speechWordsRange !== null ? Math.max(0, speechWordsRange.endTime - speechWordsRange.startTime) : null;
+  if (speechWordsDurationSeconds !== null && speechWordsDurationSeconds > 0) {
+    return roundWorkspaceSegmentTimelineSeconds(speechWordsDurationSeconds);
+  }
+
+  const speechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration);
+  if (speechDurationSeconds !== null && !isVisualDurationEcho(speechDurationSeconds)) {
+    return roundWorkspaceSegmentTimelineSeconds(speechDurationSeconds);
+  }
+
+  return options?.allowVisualFallback === false ? null : knownVisualDurationSeconds;
+};
+
 export const shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session:
@@ -4768,13 +4845,14 @@ export const getWorkspaceSegmentTimelineVoiceoverDurationInfo = (
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
     Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
   options?: {
+    allowEmbeddedVisualFallback?: boolean;
     allowEstimated?: boolean;
     isStale?: boolean;
   },
 ) => {
-  const embeddedVoiceoverDurationSeconds = doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)
-    ? getWorkspaceSegmentKnownVisualDurationSeconds(segment)
-    : null;
+  const embeddedVoiceoverDurationSeconds = getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds(segment, {
+    allowVisualFallback: options?.allowEmbeddedVisualFallback,
+  });
   const knownDurationSeconds = options?.isStale
     ? null
     : normalizeWorkspaceSegmentManualDurationSeconds(
@@ -5448,22 +5526,32 @@ export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
   const hasUserSelectedVoiceoverDurationSync =
     normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
     segment.durationSyncModeUserSelected === true;
+  const hasUserSelectedVisualDurationSync =
+    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual" &&
+    segment.durationSyncModeUserSelected === true;
   const hasManualTimelineOverride =
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
     manualDurationSeconds !== null ||
     storedDurationExtensionSourceDurationSeconds !== null;
-  const isStillVisualSegment =
-    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" ||
-    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video" ||
-    getWorkspaceSegmentPreviewKind(segment) === "image" ||
-    getWorkspaceSegmentPreviewKind(segment) === "video" ||
-    ["photo", "video"].includes(String(segment.mediaType ?? "").trim().toLowerCase());
+  const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
+  const previewKind = getWorkspaceSegmentPreviewKind(segment);
+  const normalizedMediaType = String(segment.mediaType ?? "").trim().toLowerCase();
+  const isVideoVisualSegment =
+    selectedVisualPreviewKind === "video" ||
+    previewKind === "video" ||
+    normalizedMediaType === "video";
+  const isImageVisualSegment =
+    selectedVisualPreviewKind === "image" ||
+    previewKind === "image" ||
+    normalizedMediaType === "photo";
+  const hasPreservableVisualDuration =
+    isVideoVisualSegment || (isImageVisualSegment && hasUserSelectedVisualDurationSync);
 
   return (
     normalizedVoiceoverDurationSeconds !== null &&
     !hasUserSelectedVoiceoverDurationSync &&
     hasManualTimelineOverride &&
-    isStillVisualSegment &&
+    hasPreservableVisualDuration &&
     storedDurationExtensionSourceDurationSeconds === null &&
     manualDurationSeconds !== null &&
     manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= normalizedVoiceoverDurationSeconds
@@ -5476,8 +5564,16 @@ export const shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover = (
 ) => {
   const normalizedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
   const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
+  const previewKind = getWorkspaceSegmentPreviewKind(segment);
+  const isVideoVisualSegment =
+    selectedVisualPreviewKind === "video" ||
+    previewKind === "video" ||
+    String(segment.mediaType ?? "").trim().toLowerCase() === "video";
+  const hasVisualDurationSync = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual";
   return (
-    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual" &&
+    hasVisualDurationSync &&
+    (segment.durationSyncModeUserSelected === true || isVideoVisualSegment) &&
     normalizedVoiceoverDurationSeconds !== null &&
     manualDurationSeconds !== null
   );
@@ -6107,6 +6203,36 @@ const hasWorkspaceSegmentUserSelectedStillDurationSlotConflict = (
   );
 });
 
+const shouldPreserveWorkspaceSegmentExistingStillDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
+) => {
+  if (getWorkspaceSegmentPreviewKind(segment) !== "image") {
+    return false;
+  }
+
+  if (segment.durationSyncModeUserSelected === true) {
+    return true;
+  }
+
+  const voiceoverDurationSeconds =
+    getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, { allowEstimated: false })?.durationSeconds ?? null;
+  if (voiceoverDurationSeconds === null) {
+    return true;
+  }
+
+  const displayDurationSeconds =
+    getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
+  const hasResetManualVisualDuration =
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "auto" &&
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) === null;
+
+  return !(
+    hasResetManualVisualDuration &&
+    displayDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+  );
+};
+
 export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   segments: WorkspaceSegmentEditorDraftSegment[],
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
@@ -6188,7 +6314,8 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
       shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
     preserveSourceTimelineEnd:
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
-    preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
+    preserveExistingStillDurations: (segment) =>
+      shouldPreserveWorkspaceSegmentExistingStillDuration(segment, session),
   });
 };
 

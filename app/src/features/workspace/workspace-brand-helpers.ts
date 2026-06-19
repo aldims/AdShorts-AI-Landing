@@ -11,6 +11,7 @@ import {
   writeWorkspaceSegmentEditorStorageValue,
 } from "./workspace-segment-editor-storage";
 import type { StudioBrandLogoFile } from "./workspace-types";
+import type { Locale } from "../../lib/i18n";
 
 export const STUDIO_BRAND_LOGO_MAX_BYTES = 12 * 1024 * 1024;
 export const STUDIO_BRAND_TEXT_MAX_CHARS = 50;
@@ -77,10 +78,13 @@ const getStudioBrandTextPreview = (value: string) => {
   return normalized ? truncateStudioCustomAssetName(normalized, 20) : "";
 };
 
-export const getStudioBrandSummary = (options: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null }) => {
+export const getStudioBrandSummary = (
+  options: { brandLogoFile?: StudioBrandLogoFile | null; brandText?: string | null },
+  locale: Locale = "ru",
+) => {
   const normalizedText = String(options.brandText ?? "").trim();
   if (options.brandLogoFile && normalizedText) {
-    return `${truncateStudioCustomAssetName(options.brandLogoFile.fileName, 18)} + текст`;
+    return `${truncateStudioCustomAssetName(options.brandLogoFile.fileName, 18)} + ${locale === "en" ? "text" : "текст"}`;
   }
 
   if (options.brandLogoFile) {
@@ -88,10 +92,10 @@ export const getStudioBrandSummary = (options: { brandLogoFile?: StudioBrandLogo
   }
 
   if (normalizedText) {
-    return `Текст: ${getStudioBrandTextPreview(normalizedText)}`;
+    return `${locale === "en" ? "Text" : "Текст"}: ${getStudioBrandTextPreview(normalizedText)}`;
   }
 
-  return "Лого или текст бренда";
+  return locale === "en" ? "Logo or brand text" : "Лого или текст бренда";
 };
 
 const inferStudioBrandLogoExtension = (mimeType: string) => {
@@ -333,6 +337,18 @@ export const resolveWorkspaceSegmentEditorEffectiveBrandState = (options: {
       !state.systemWatermarkEnabled,
   };
 };
+
+export const shouldSendWorkspaceSegmentEditorBrandChangeForGeneration = (
+  state: WorkspaceSegmentEditorEffectiveBrandState,
+  options?: { isBrandDirty?: boolean },
+) =>
+  Boolean(
+    options?.isBrandDirty ||
+      state.hasBranding ||
+      state.hasBrandChange ||
+      state.hasSystemWatermarkAddition ||
+      state.hasSystemWatermarkRemoval,
+  );
 
 export const resolveWorkspaceSegmentEditorProjectBrandSnapshot = (options: {
   defaultState: WorkspaceSegmentEditorProjectBrandState;

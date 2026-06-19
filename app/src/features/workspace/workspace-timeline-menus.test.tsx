@@ -228,6 +228,27 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("keeps AI extension available while offering the video-to-voiceover duration range", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        hasExtensionPlan={true}
+        shouldShowManualDurationInput={true}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "5.5с",
+          fullResultDurationLabel: "5.5с",
+          fullResultLoopsToVoiceover: false,
+          voiceoverDurationLabel: "≈1.8с",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /По длине видео/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /По длине озвучки/ })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Задать длину/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Продлить с ИИ на 5с/ })).toBeTruthy();
+  });
+
   it("applies a video-length preset immediately when custom trim is available", () => {
     const onApplyDuration = vi.fn(() => ({ duration: 60 }));
     const onClose = vi.fn();
