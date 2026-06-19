@@ -559,6 +559,7 @@ import {
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorPreparingError,
+  isStudioGenerationUserFacing,
   waitWorkspaceDelay,
   isTextInputTarget,
   renderWorkspaceMediaLibraryPlayOverlay,
@@ -574,6 +575,7 @@ import {
   type WorkspaceCreditTopupPack,
   type StudioGeneration,
   type StudioGeneratedVideoActionMode,
+  type StudioGenerationUiSource,
   type StudioGenerationStartResponse,
   type StudioGenerationAvailabilityResponse,
   type StudioGenerationStatusResponse,
@@ -1371,8 +1373,7 @@ export function WorkspacePage({
   const [musicSelectionError, setMusicSelectionError] = useState<string | null>(null);
   const [, setStatus] = useState("Ready to generate");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationUiSource, setGenerationUiSource] =
-    useState<"idle" | "studio" | "segment-editor" | "bootstrap">("idle");
+  const [generationUiSource, setGenerationUiSource] = useState<StudioGenerationUiSource>("idle");
 
   useEffect(() => {
     const previousRouteLanguage = previousRouteLocaleLanguageRef.current;
@@ -4777,7 +4778,7 @@ export function WorkspacePage({
   const isGeneratedVideoDismissed = Boolean(generatedVideoDismissKey) && dismissedStudioPreviewKey === generatedVideoDismissKey;
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
-  const isUserFacingGeneration = isGenerating && generationUiSource !== "bootstrap";
+  const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
@@ -17333,7 +17334,7 @@ export function WorkspacePage({
       clearAppliedSegmentEditorOnSuccess?: boolean;
       clearStoredSegmentEditorDraftProjectId?: number | null;
       clearStoredSegmentEditorScratchDraftOnSuccess?: boolean;
-      generationUiSource?: "studio" | "segment-editor" | "bootstrap";
+      generationUiSource?: Exclude<StudioGenerationUiSource, "idle">;
       invalidateSegmentEditorOnSuccess?: boolean;
       openStudioCreateOnSuccess?: boolean;
       projectBrandStateOnSuccess?: WorkspaceSegmentEditorProjectBrandState | null;

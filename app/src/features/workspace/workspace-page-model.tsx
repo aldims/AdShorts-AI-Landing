@@ -151,6 +151,12 @@ export type StudioGeneration = {
 };
 
 export type StudioGeneratedVideoActionMode = "expanded" | "compact";
+export type StudioGenerationUiSource = "idle" | "studio" | "segment-editor" | "bootstrap";
+
+export const isStudioGenerationUserFacing = (
+  isGenerating: boolean,
+  generationUiSource: StudioGenerationUiSource,
+) => isGenerating && generationUiSource !== "idle";
 
 export type StudioGenerationJob = {
   jobId: string;
