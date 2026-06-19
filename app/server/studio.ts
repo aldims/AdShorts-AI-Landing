@@ -559,6 +559,7 @@ export type StudioSegmentAiPhotoGenerationResult = {
 };
 
 export type StudioSegmentAiPhotoJob = {
+  asset?: StudioGeneratedImageAsset;
   jobId: string;
   profile: WorkspaceProfile;
   status: string;
@@ -1156,6 +1157,7 @@ const buildStudioSegmentVisualQualityPayload = (quality: StudioSegmentVisualQual
 
 const WAVESPEED_SEGMENT_AI_VIDEO_JOB_PREFIX = "wavespeed:";
 const WAVESPEED_SEGMENT_AI_PHOTO_JOB_PREFIX = "wavespeed-image:";
+const DIRECT_SEGMENT_AI_PHOTO_JOB_PREFIX = "direct-image:";
 const WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY = "medium" as const;
 const WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION = "2k" as const;
 type WaveSpeedSegmentAiPhotoJobContext = {
@@ -1181,6 +1183,7 @@ const studioWaveSpeedSegmentAiVideoJobContexts = new Map<
   }
 >();
 const studioWaveSpeedSegmentAiPhotoJobContexts = new Map<string, WaveSpeedSegmentAiPhotoJobContext>();
+const studioDirectSegmentAiPhotoJobContexts = new Map<string, WaveSpeedSegmentAiPhotoJobContext>();
 
 const parseWaveSpeedSegmentAiVideoPredictionId = (jobId: string | null | undefined) => {
   const normalizedJobId = normalizeGenerationText(jobId);
@@ -1202,10 +1205,19 @@ const parseWaveSpeedSegmentAiPhotoPredictionId = (jobId: string | null | undefin
   return predictionId || null;
 };
 
+const isDirectSegmentAiPhotoJobId = (jobId: string | null | undefined) =>
+  normalizeGenerationText(jobId).startsWith(DIRECT_SEGMENT_AI_PHOTO_JOB_PREFIX);
+
 const normalizeWaveSpeedSegmentAiPhotoFileName = (jobId: string, referenceKind?: string) => {
   const normalizedKind = normalizeGenerationText(referenceKind).replace(/[^a-z0-9_-]+/gi, "-") || "reference";
   const normalizedJobId = normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "wavespeed";
   return `${normalizedKind}-image-${normalizedJobId}.png`;
+};
+
+const normalizeDirectSegmentAiPhotoFileName = (jobId: string, referenceKind: string | undefined, mimeType: string) => {
+  const normalizedKind = normalizeGenerationText(referenceKind).replace(/[^a-z0-9_-]+/gi, "-") || "reference";
+  const normalizedJobId = normalizeGenerationText(jobId).replace(/[^a-z0-9_-]+/gi, "-") || "direct";
+  return `${normalizedKind}-image-${normalizedJobId}${getStudioGeneratedImageExtension(mimeType)}`;
 };
 
 const buildWorkspaceReferenceCharacterSheetPrompt = (
@@ -5238,6 +5250,81 @@ const uploadStudioMediaAsset = async (
   return assetId;
 };
 
+const createDirectWorkspaceReferenceAiPhotoJob = async (
+  prompt: string,
+  user: StudioUser,
+  options: {
+    consumed: WorkspaceCreditConsumption;
+    externalUserId: string;
+    language: "en" | "ru";
+    profile: WorkspaceProfile;
+    projectId?: number | null;
+    referenceKind?: string;
+    segmentIndex?: number | null;
+  },
+): Promise<StudioSegmentAiPhotoJob> => {
+  const jobId = `${DIRECT_SEGMENT_AI_PHOTO_JOB_PREFIX}${randomUUID()}`;
+  const generatedAsset = await generateDirectStudioSegmentAiPhoto(prompt, {
+    segmentIndex: options.segmentIndex,
+  });
+  const dataUrl = String(generatedAsset.dataUrl ?? "").trim();
+  if (!dataUrl) {
+    throw new Error("DEAPI image fallback did not return uploadable image data.");
+  }
+
+  const fileName = normalizeDirectSegmentAiPhotoFileName(jobId, options.referenceKind, generatedAsset.mimeType);
+  const assetId = await uploadStudioMediaAsset(user, {
+    dataUrl,
+    externalUserId: options.externalUserId,
+    fileName,
+    kind: "workspace_reference",
+    language: options.language,
+    mediaType: "photo",
+    mimeType: generatedAsset.mimeType,
+    projectId: options.projectId,
+    role: options.referenceKind === "scene" ? "scene_reference" : "character_reference",
+    segmentIndex: options.segmentIndex,
+  });
+  const asset: StudioGeneratedImageAsset = {
+    assetId,
+    fileName,
+    fileSize: generatedAsset.fileSize,
+    mimeType: generatedAsset.mimeType,
+    remoteUrl: `/api/workspace/media-assets/${assetId}`,
+  };
+  const profile = { ...options.profile };
+
+  studioDirectSegmentAiPhotoJobContexts.set(jobId, {
+    asset,
+    consumed: options.consumed,
+    language: options.language,
+    ownerExternalUserId: options.externalUserId,
+    profile,
+    projectId: options.projectId,
+    referenceKind: options.referenceKind,
+    segmentIndex: options.segmentIndex,
+    upscaleRequired: false,
+  });
+
+  console.info(
+    JSON.stringify({
+      assetId,
+      event: "server.segment-ai-photo.direct-reference.created",
+      jobId,
+      projectId: options.projectId,
+      referenceKind: options.referenceKind,
+      segmentIndex: options.segmentIndex,
+    }),
+  );
+
+  return {
+    asset,
+    jobId,
+    profile,
+    status: "completed",
+  };
+};
+
 const fetchAdsflowJobStatus = async (jobId: string, user: StudioUser) => {
   assertAdsflowConfigured();
 
@@ -6708,12 +6795,13 @@ export async function createStudioSegmentAiPhotoJob(
   ) {
     const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
     let jobCreated = false;
+    const textToImagePrompt = isWorkspaceCharacterReference ? workspaceCharacterReferencePrompt : normalizedPrompt;
 
     try {
       const prediction = await createWaveSpeedGptImage2TextToImageJob({
         aspectRatio: "1:1",
         outputFormat: "png",
-        prompt: isWorkspaceCharacterReference ? workspaceCharacterReferencePrompt : normalizedPrompt,
+        prompt: textToImagePrompt,
         quality: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_QUALITY : "low",
         resolution: isWorkspaceCharacterReference ? WORKSPACE_CHARACTER_REFERENCE_GPT_IMAGE_2_RESOLUTION : "1k",
       });
@@ -6751,6 +6839,34 @@ export async function createStudioSegmentAiPhotoJob(
       };
     } catch (error) {
       if (!jobCreated) {
+        try {
+          const directJob = await createDirectWorkspaceReferenceAiPhotoJob(textToImagePrompt, user, {
+            consumed: creditReservation.consumed,
+            externalUserId,
+            language: normalizedLanguage,
+            profile: creditReservation.profile,
+            projectId: normalizedProjectId,
+            referenceKind: normalizedReferenceKind,
+            segmentIndex: normalizedSegmentIndex,
+          });
+          jobCreated = true;
+
+          console.warn(
+            "[studio] WaveSpeed GPT Image 2 text-to-image failed; generated workspace reference via DEAPI fallback",
+            error,
+          );
+
+          return directJob;
+        } catch (fallbackError) {
+          const waveSpeedMessage = error instanceof Error ? error.message : "WaveSpeed GPT Image 2 request failed.";
+          const fallbackMessage =
+            fallbackError instanceof Error ? fallbackError.message : "DEAPI image fallback failed.";
+
+          error = new Error(
+            `Не удалось сгенерировать референс. WaveSpeed: ${waveSpeedMessage}. DEAPI: ${fallbackMessage}.`,
+          );
+        }
+
         try {
           await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
         } catch (refundError) {
@@ -7966,6 +8082,11 @@ export async function getStudioSegmentAiPhotoJobStatus(
   user: StudioUser,
 ): Promise<StudioSegmentAiPhotoJobStatus> {
   const safeJobId = String(jobId ?? "").trim();
+
+  if (isDirectSegmentAiPhotoJobId(safeJobId)) {
+    return getDirectSegmentAiPhotoJobStatus(safeJobId, user);
+  }
+
   const waveSpeedPredictionId = parseWaveSpeedSegmentAiPhotoPredictionId(safeJobId);
 
   if (waveSpeedPredictionId) {
@@ -8670,6 +8791,44 @@ const getCachedWorkspaceProfileForUser = async (user: StudioUser): Promise<Works
   const externalUserId = await resolveStudioExternalUserId(user);
   const cacheKey = await resolveStudioAuthScopedCacheKey(user, externalUserId);
   return getCachedWorkspaceBootstrap(cacheKey)?.profile ?? buildWorkspaceProfile();
+};
+
+const getDirectSegmentAiPhotoJobStatus = async (
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiPhotoJobStatus> => {
+  const context = studioDirectSegmentAiPhotoJobContexts.get(jobId);
+  const profile = context ? { ...context.profile } : await getCachedWorkspaceProfileForUser(user);
+
+  if (!context) {
+    return {
+      error: "Direct segment AI photo job is not available.",
+      jobId,
+      profile,
+      status: "failed",
+    };
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  if (context.ownerExternalUserId !== externalUserId) {
+    throw new Error("Direct segment AI photo job is not available for this user.");
+  }
+
+  if (!context.asset) {
+    return {
+      error: "Direct segment AI photo job did not return an image.",
+      jobId,
+      profile,
+      status: "failed",
+    };
+  }
+
+  return {
+    asset: context.asset,
+    jobId,
+    profile,
+    status: "completed",
+  };
 };
 
 const getWaveSpeedSegmentAiPhotoJobContext = async (

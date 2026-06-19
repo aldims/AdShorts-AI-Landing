@@ -30,8 +30,11 @@ import {
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
   persistHiddenMediaLibraryItemKeys,
+  persistStudioCreateSettings,
   readDismissedStudioPreviewKey,
   readHiddenMediaLibraryItemKeys,
+  readStoredStudioCreateSettings,
+  type StoredStudioCreateSettings,
 } from "../features/workspace/workspace-browser-storage-helpers";
 import {
   captureProjectPosterOnce,
@@ -1202,6 +1205,102 @@ type SegmentTimelineBulkVoiceTextEditSnapshot = {
   ttsAssetId: WorkspaceSegmentEditorDraftSession["ttsAssetId"];
 };
 
+type StudioCreateInitialSettings = {
+  language: StudioLanguage;
+  musicName: string | null;
+  musicType: StudioMusicType;
+  subtitleColorId: StudioSubtitleColorOption["id"];
+  subtitleEnabled: boolean;
+  subtitleStyleId: StudioSubtitleStyleOption["id"];
+  videoMode: StudioVideoMode;
+  voiceEnabled: boolean;
+  voiceId: StudioVoiceOption["id"];
+  voiceIdsByLanguage: Record<StudioLanguage, StudioVoiceOption["id"]>;
+};
+
+const normalizeStoredStudioCreateTextValue = (value: unknown) => String(value ?? "").trim();
+
+const resolveStoredStudioCreateMusicType = (
+  value: unknown,
+  fallbackMusicType: StudioMusicType,
+): StudioMusicType => {
+  const fallbackNonCustomMusicType = fallbackMusicType === "custom" ? "ai" : fallbackMusicType;
+  const normalized = normalizeStoredStudioCreateTextValue(value);
+  if (normalized && normalized !== "custom") {
+    return studioMusicOptions.find((option) => option.id === normalized)?.id ?? fallbackNonCustomMusicType;
+  }
+
+  return fallbackNonCustomMusicType;
+};
+
+const resolveStoredStudioCreateVideoMode = (
+  value: unknown,
+  fallbackVideoMode: StudioVideoMode,
+): StudioVideoMode => {
+  const fallbackNonCustomVideoMode = fallbackVideoMode === "custom" ? "standard" : fallbackVideoMode;
+  const normalized = normalizeStoredStudioCreateTextValue(value);
+  if (normalized && normalized !== "custom") {
+    return studioVideoOptions.find((option) => option.id === normalized)?.id ?? fallbackNonCustomVideoMode;
+  }
+
+  return fallbackNonCustomVideoMode;
+};
+
+const resolveStudioCreateInitialSettings = (
+  storedSettings: StoredStudioCreateSettings | null,
+  fallbackSettings: Omit<StudioCreateInitialSettings, "musicName" | "voiceIdsByLanguage">,
+): StudioCreateInitialSettings => {
+  const storedVoiceId = normalizeStoredStudioCreateTextValue(storedSettings?.voiceId);
+  const storedVoiceLanguage = getStudioLanguageForVoiceId(storedVoiceId);
+  const language =
+    normalizeStudioLanguageValue(storedSettings?.language) ?? storedVoiceLanguage ?? fallbackSettings.language;
+  const fallbackVoiceIdForLanguage = (targetLanguage: StudioLanguage) =>
+    fallbackSettings.language === targetLanguage ? fallbackSettings.voiceId : getDefaultStudioVoiceId(targetLanguage);
+  const voiceIdsByLanguage: Record<StudioLanguage, StudioVoiceOption["id"]> = {
+    en: resolveStudioVoiceIdForLanguage(
+      "en",
+      normalizeStoredStudioCreateTextValue(storedSettings?.voiceIdsByLanguage?.en),
+      fallbackVoiceIdForLanguage("en"),
+    ),
+    ru: resolveStudioVoiceIdForLanguage(
+      "ru",
+      normalizeStoredStudioCreateTextValue(storedSettings?.voiceIdsByLanguage?.ru),
+      fallbackVoiceIdForLanguage("ru"),
+    ),
+  };
+  const voiceId = resolveStudioVoiceIdForLanguage(
+    language,
+    storedVoiceId || voiceIdsByLanguage[language] || fallbackSettings.voiceId,
+    fallbackVoiceIdForLanguage(language),
+  );
+  voiceIdsByLanguage[language] = voiceId;
+
+  const voiceEnabled =
+    typeof storedSettings?.voiceEnabled === "boolean" ? storedSettings.voiceEnabled : fallbackSettings.voiceEnabled;
+  const requestedSubtitleEnabled =
+    typeof storedSettings?.subtitleEnabled === "boolean"
+      ? storedSettings.subtitleEnabled
+      : fallbackSettings.subtitleEnabled;
+  const musicType = resolveStoredStudioCreateMusicType(storedSettings?.musicType, fallbackSettings.musicType);
+  const defaultMusicName = getStudioMusicPreviewTrackName(musicType);
+  const storedMusicName = normalizeStoredStudioCreateTextValue(storedSettings?.musicName);
+
+  return {
+    language,
+    musicName: defaultMusicName ? storedMusicName || defaultMusicName : null,
+    musicType,
+    subtitleColorId:
+      normalizeStoredStudioCreateTextValue(storedSettings?.subtitleColorId) || fallbackSettings.subtitleColorId,
+    subtitleEnabled: voiceEnabled && requestedSubtitleEnabled,
+    subtitleStyleId:
+      normalizeStoredStudioCreateTextValue(storedSettings?.subtitleStyleId) || fallbackSettings.subtitleStyleId,
+    videoMode: resolveStoredStudioCreateVideoMode(storedSettings?.videoMode, fallbackSettings.videoMode),
+    voiceEnabled,
+    voiceId,
+    voiceIdsByLanguage,
+  };
+};
+
 export function WorkspacePage({
   defaultTab,
   initialProfile = null,
@@ -1217,6 +1316,9 @@ export function WorkspacePage({
   const location = useLocation();
   const routeStudioDefaults = getWorkspaceInitialStudioDefaults(locale);
   const routeLocaleLanguage = routeStudioDefaults.language;
+  const localizedStudioPathname = localizePath("/app/studio").replace(/\/+$/, "") || "/";
+  const normalizedCurrentPathname = location.pathname.replace(/\/+$/, "") || "/";
+  const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
   const initialExamplePrefillRef = useRef(readExamplePrefillIntent());
@@ -1233,6 +1335,22 @@ export function WorkspacePage({
     prefillSettings: initialExamplePrefillRef.current?.settings ?? null,
     routeDefaults: routeStudioDefaults,
   });
+  const initialStoredStudioCreateSettingsRef = useRef<StoredStudioCreateSettings | null>(
+    preserveExamplePrefillRef.current ? null : readStoredStudioCreateSettings(session.email),
+  );
+  const initialStudioCreateSettings = resolveStudioCreateInitialSettings(
+    initialStoredStudioCreateSettingsRef.current,
+    {
+      language: examplePrefillInitialStudioState.language,
+      musicType: examplePrefillInitialStudioState.musicType,
+      subtitleColorId: examplePrefillInitialStudioState.subtitleColorId,
+      subtitleEnabled: examplePrefillInitialStudioState.subtitleEnabled,
+      subtitleStyleId: examplePrefillInitialStudioState.subtitleStyleId,
+      videoMode: examplePrefillInitialStudioState.videoMode,
+      voiceEnabled: examplePrefillInitialStudioState.voiceEnabled,
+      voiceId: examplePrefillInitialStudioState.voiceId,
+    },
+  );
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(defaultTab);
   const [studioView, setStudioView] = useState<StudioView>(() =>
     defaultTab === "studio" ? getStudioViewFromRouteSection(getStudioRouteSection(location.search)) : "create",
@@ -1242,39 +1360,33 @@ export function WorkspacePage({
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(examplePrefillInitialStudioState.language);
+  const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(initialStudioCreateSettings.language);
   const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([
     fallbackStudioSubtitleStyleOption,
   ]);
   const [subtitleColorCatalog, setSubtitleColorCatalog] = useState<StudioSubtitleColorCatalogOption[]>([
     fallbackStudioSubtitleColorCatalogOption,
   ]);
-  const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(examplePrefillInitialStudioState.subtitleEnabled);
-  const [isVoiceoverEnabled, setIsVoiceoverEnabled] = useState(examplePrefillInitialStudioState.voiceEnabled);
+  const [areSubtitlesEnabled, setAreSubtitlesEnabled] = useState(initialStudioCreateSettings.subtitleEnabled);
+  const [isVoiceoverEnabled, setIsVoiceoverEnabled] = useState(initialStudioCreateSettings.voiceEnabled);
   const [selectedSubtitleStyleId, setSelectedSubtitleStyleId] = useState<StudioSubtitleStyleOption["id"]>(
-    examplePrefillInitialStudioState.subtitleStyleId,
+    initialStudioCreateSettings.subtitleStyleId,
   );
   const [selectedSubtitleColorId, setSelectedSubtitleColorId] = useState<StudioSubtitleColorOption["id"]>(
-    examplePrefillInitialStudioState.subtitleColorId,
+    initialStudioCreateSettings.subtitleColorId,
   );
   const [selectedSubtitleExampleId, setSelectedSubtitleExampleId] = useState<StudioSubtitleExampleOption["id"]>(studioSubtitleExampleOptions[0]?.id ?? "hook");
   const [segmentSubtitleBulkTextInput, setSegmentSubtitleBulkTextInput] = useState("");
   const [hasEditedSegmentSubtitleBulkTextInput, setHasEditedSegmentSubtitleBulkTextInput] = useState(false);
   const [segmentSubtitleBulkTextError, setSegmentSubtitleBulkTextError] = useState<string | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<StudioVoiceOption["id"]>(
-    examplePrefillInitialStudioState.voiceId,
+    initialStudioCreateSettings.voiceId,
   );
   const selectedVoiceIdByLanguageRef = useRef<Record<StudioLanguage, StudioVoiceOption["id"]>>({
-    ru:
-      examplePrefillInitialStudioState.language === "ru"
-        ? examplePrefillInitialStudioState.voiceId
-        : getDefaultStudioVoiceId("ru"),
-    en:
-      examplePrefillInitialStudioState.language === "en"
-        ? examplePrefillInitialStudioState.voiceId
-        : getDefaultStudioVoiceId("en"),
+    ru: initialStudioCreateSettings.voiceIdsByLanguage.ru,
+    en: initialStudioCreateSettings.voiceIdsByLanguage.en,
   });
-  const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(examplePrefillInitialStudioState.videoMode);
+  const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(initialStudioCreateSettings.videoMode);
   const selectedVideoModeExplicitlyChangedRef = useRef(false);
   const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
     useState<StudioSegmentVisualQuality>("standard");
@@ -1364,16 +1476,85 @@ export function WorkspacePage({
   const [baselineSegmentEditorSystemWatermarkEnabled, setBaselineSegmentEditorSystemWatermarkEnabled] = useState(false);
   const [isPreparingBrandLogo, setIsPreparingBrandLogo] = useState(false);
   const [brandSelectionError, setBrandSelectionError] = useState<string | null>(null);
-  const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>(examplePrefillInitialStudioState.musicType);
-  const [selectedMusicName, setSelectedMusicName] = useState<string | null>(() =>
-    getStudioMusicPreviewTrackName(examplePrefillInitialStudioState.musicType),
-  );
+  const [selectedMusicType, setSelectedMusicType] = useState<StudioMusicType>(initialStudioCreateSettings.musicType);
+  const [selectedMusicName, setSelectedMusicName] = useState<string | null>(initialStudioCreateSettings.musicName);
   const [selectedCustomMusic, setSelectedCustomMusic] = useState<StudioCustomMusicFile | null>(null);
   const [isPreparingCustomMusic, setIsPreparingCustomMusic] = useState(false);
   const [musicSelectionError, setMusicSelectionError] = useState<string | null>(null);
   const [, setStatus] = useState("Ready to generate");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationUiSource, setGenerationUiSource] = useState<StudioGenerationUiSource>("idle");
+  const studioCreateRestoreRouteKeyRef = useRef<string | null>(null);
+
+  const applyStudioCreateSettingsSnapshot = (settings: StudioCreateInitialSettings) => {
+    setSelectedLanguage(settings.language);
+    setIsVoiceoverEnabled(settings.voiceEnabled);
+    setAreSubtitlesEnabled(settings.subtitleEnabled);
+    setSelectedSubtitleStyleId(settings.subtitleStyleId);
+    setSelectedSubtitleColorId(settings.subtitleColorId);
+    selectedVoiceIdByLanguageRef.current = { ...settings.voiceIdsByLanguage };
+    setSelectedVoiceId(settings.voiceId);
+    selectedVideoModeExplicitlyChangedRef.current = settings.videoMode !== "standard";
+    setSelectedVideoMode(settings.videoMode);
+    if (settings.videoMode !== "custom") {
+      setSelectedCustomVideo(null);
+      setVideoSelectionError(null);
+      setIsPreparingCustomVideo(false);
+    }
+    setSelectedMusicType(settings.musicType);
+    setSelectedMusicName(settings.musicName);
+    if (settings.musicType !== "custom") {
+      setSelectedCustomMusic(null);
+      setMusicSelectionError(null);
+      setIsPreparingCustomMusic(false);
+    }
+  };
+
+  const restoreStoredStudioCreateSettings = () => {
+    if (preserveExamplePrefillRef.current) {
+      return false;
+    }
+
+    const storedSettings = readStoredStudioCreateSettings(session.email);
+    if (!storedSettings) {
+      return false;
+    }
+
+    applyStudioCreateSettingsSnapshot(
+      resolveStudioCreateInitialSettings(storedSettings, {
+        language: selectedLanguage,
+        musicType: selectedMusicType,
+        subtitleColorId: selectedSubtitleColorId,
+        subtitleEnabled: areSubtitlesEnabled,
+        subtitleStyleId: selectedSubtitleStyleId,
+        videoMode: selectedVideoMode,
+        voiceEnabled: isVoiceoverEnabled,
+        voiceId: selectedVoiceId,
+      }),
+    );
+    return true;
+  };
+
+  useEffect(() => {
+    const shouldRestoreCreateSettings =
+      activeTab === "studio" &&
+      studioView === "create" &&
+      createMode === "default" &&
+      routeStudioState.section === "create";
+
+    if (!shouldRestoreCreateSettings) {
+      studioCreateRestoreRouteKeyRef.current = null;
+      return;
+    }
+
+    const restoreKey = `${session.email}:${location.pathname}:${location.search}`;
+    if (studioCreateRestoreRouteKeyRef.current === restoreKey) {
+      return;
+    }
+
+    studioCreateRestoreRouteKeyRef.current = restoreKey;
+    restoreStoredStudioCreateSettings();
+  }, [activeTab, createMode, location.pathname, location.search, routeStudioState.section, session.email, studioView]);
 
   useEffect(() => {
     const previousRouteLanguage = previousRouteLocaleLanguageRef.current;
@@ -2480,13 +2661,13 @@ export function WorkspacePage({
   }, [session.email, syncStorageBackedMediaLibraryState]);
 
   const hasExplicitStudioRouteState =
-    location.pathname.startsWith("/app/studio") &&
+    isStudioPathname &&
     (routeStudioState.section !== "create" ||
       routeStudioState.mode === "scenes" ||
       routeStudioState.projectId !== null ||
       routeStudioState.segmentIndex !== null);
   const hasExplicitSegmentEditorRoute =
-    location.pathname.startsWith("/app/studio") &&
+    isStudioPathname &&
     routeStudioState.section === "edit" &&
     routeStudioState.projectId !== null;
   const hasExplicitSegmentEditorRouteRef = useRef(hasExplicitSegmentEditorRoute);
@@ -2519,12 +2700,14 @@ export function WorkspacePage({
     section: StudioEntryIntentSection,
     options?: { mode?: StudioRouteMode | null; projectId?: number | null; replace?: boolean; segmentIndex?: number | null },
   ) => {
-    const baseSearch = location.pathname.startsWith("/app/studio") ? location.search : "";
-    const nextUrl = buildStudioRouteUrl(baseSearch, section, {
-      mode: options?.mode,
-      projectId: options?.projectId,
-      segmentIndex: options?.segmentIndex,
-    });
+    const baseSearch = isStudioPathname ? location.search : "";
+    const nextUrl = localizePath(
+      buildStudioRouteUrl(baseSearch, section, {
+        mode: options?.mode,
+        projectId: options?.projectId,
+        segmentIndex: options?.segmentIndex,
+      }),
+    );
     const currentUrl = `${location.pathname}${location.search}`;
 
     if (currentUrl === nextUrl) {
@@ -2772,7 +2955,7 @@ export function WorkspacePage({
   };
 
   useEffect(() => {
-    if (!location.pathname.startsWith("/app/studio")) {
+    if (!isStudioPathname) {
       if (pendingStudioRouteSectionResetTimerRef.current) {
         window.clearTimeout(pendingStudioRouteSectionResetTimerRef.current);
         pendingStudioRouteSectionResetTimerRef.current = null;
@@ -2792,16 +2975,16 @@ export function WorkspacePage({
         pendingStudioRouteSectionResetTimerRef.current = null;
       }, 0);
     }
-  }, [location.pathname, routeStudioState.section]);
+  }, [isStudioPathname, routeStudioState.section]);
 
   useEffect(() => {
-    if (!location.pathname.startsWith("/app/studio")) {
+    if (!isStudioPathname) {
       return;
     }
 
     const routeStudioView = getStudioViewFromRouteSection(routeStudioState.section);
     setStudioView((current) => (current === routeStudioView ? current : routeStudioView));
-  }, [location.pathname, routeStudioState.section]);
+  }, [isStudioPathname, routeStudioState.section]);
 
   useEffect(() => {
     segmentEditorCreateModeRef.current = createMode;
@@ -3275,8 +3458,13 @@ export function WorkspacePage({
     setPublishTargetVideoProjectId(null);
     setPublishTargetTitle("");
     if (!preserveExamplePrefillRef.current && !isGuestAuthHandoff) {
-      setSelectedVideoMode("standard");
-      selectedVideoModeExplicitlyChangedRef.current = false;
+      const didRestoreCreateSettings = restoreStoredStudioCreateSettings();
+      if (!didRestoreCreateSettings) {
+        setSelectedVideoMode("standard");
+        selectedVideoModeExplicitlyChangedRef.current = false;
+        setSelectedMusicType("ai");
+        setSelectedMusicName(null);
+      }
       setSelectedSegmentAiPhotoQuality("standard");
       setSelectedSegmentAiVideoQuality("standard");
       setSelectedSegmentPhotoAnimationQuality("standard");
@@ -3294,7 +3482,6 @@ export function WorkspacePage({
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
       setIsPreparingCustomVideo(false);
-      setSelectedMusicType("ai");
       setSelectedCustomMusic(null);
       setMusicSelectionError(null);
       setIsPreparingCustomMusic(false);
@@ -5849,6 +6036,10 @@ export function WorkspacePage({
       try {
         const response = await fetch("/api/workspace/references");
         const payload = (await response.json().catch(() => null)) as { data?: WorkspaceSavedReferencesPayload; error?: string } | null;
+        if (response.status === 401 || response.status === 403) {
+          onAuthRequired?.();
+          throw new Error(workspaceText(locale, "Сессия истекла. Войдите снова, чтобы открыть персонажей.", "Your session expired. Sign in again to open characters."));
+        }
         if (!response.ok || !payload?.data) {
           throw new Error(payload?.error ?? "Не удалось загрузить сохраненные персонажи и сцены.");
         }
@@ -5862,7 +6053,6 @@ export function WorkspacePage({
         if (isCancelled) {
           return;
         }
-        setSavedWorkspaceReferences([]);
         setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось загрузить сохраненные персонажи и сцены.");
       } finally {
         if (!isCancelled) {
@@ -5874,7 +6064,7 @@ export function WorkspacePage({
     return () => {
       isCancelled = true;
     };
-  }, [isGuest, session.email]);
+  }, [isGuest, locale, onAuthRequired, session.email]);
   useEffect(() => {
     const allCharacterOptions = [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions];
     const validCharacterKeys = new Set(allCharacterOptions.map((option) => option.key));
@@ -8873,6 +9063,37 @@ export function WorkspacePage({
   }, [selectedVoiceId]);
 
   useEffect(() => {
+    const persistedVoiceId = resolveStudioVoiceIdForLanguage(
+      selectedLanguage,
+      selectedVoiceId,
+      selectedVoiceIdByLanguageRef.current[selectedLanguage],
+    );
+    persistStudioCreateSettings(session.email, {
+      language: selectedLanguage,
+      musicName: selectedMusicType === "custom" ? null : selectedMusicName,
+      musicType: selectedMusicType === "custom" ? "ai" : selectedMusicType,
+      subtitleColorId: selectedSubtitleColorId,
+      subtitleEnabled: isVoiceoverEnabled && areSubtitlesEnabled,
+      subtitleStyleId: selectedSubtitleStyleId,
+      videoMode: selectedVideoMode === "custom" ? "standard" : selectedVideoMode,
+      voiceEnabled: isVoiceoverEnabled,
+      voiceId: persistedVoiceId,
+      voiceIdsByLanguage: { ...selectedVoiceIdByLanguageRef.current, [selectedLanguage]: persistedVoiceId },
+    });
+  }, [
+    areSubtitlesEnabled,
+    isVoiceoverEnabled,
+    selectedLanguage,
+    selectedMusicName,
+    selectedMusicType,
+    selectedSubtitleColorId,
+    selectedSubtitleStyleId,
+    selectedVideoMode,
+    selectedVoiceId,
+    session.email,
+  ]);
+
+  useEffect(() => {
     if (!isVoiceoverEnabled || !resolvedSelectedVoiceId || resolvedSelectedVoiceId === selectedVoiceId) {
       return;
     }
@@ -9506,7 +9727,7 @@ export function WorkspacePage({
 
   useEffect(() => {
     if (
-      !location.pathname.startsWith("/app/studio") ||
+      !isStudioPathname ||
       routeStudioState.section !== "create" ||
       routeStudioState.mode !== "scenes"
     ) {
@@ -9528,8 +9749,8 @@ export function WorkspacePage({
   }, [
     createMode,
     generatedMediaLibraryEntries,
+    isStudioPathname,
     isScratchSegmentEditorDraft,
-    location.pathname,
     routeStudioState.mode,
     routeStudioState.section,
     session.email,
@@ -10260,6 +10481,7 @@ export function WorkspacePage({
       setSegmentEditorDraft(null);
       setSegmentEditorVideoError(null);
       setCreateMode("default");
+      restoreStoredStudioCreateSettings();
       setStudioView("create");
       setActiveSegmentIndex(0);
     });
@@ -10267,7 +10489,7 @@ export function WorkspacePage({
   };
 
   useLayoutEffect(() => {
-    if (!location.pathname.startsWith("/app/studio")) {
+    if (!isStudioPathname) {
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
@@ -10507,7 +10729,7 @@ export function WorkspacePage({
     studioView,
     isSegmentEditorLoading,
     isSegmentEditorConsumedSourceProject,
-    location.pathname,
+    isStudioPathname,
     routeStudioState.projectId,
     routeStudioState.section,
     routeStudioState.segmentIndex,
@@ -10518,7 +10740,7 @@ export function WorkspacePage({
   ]);
 
   useEffect(() => {
-    if (!location.pathname.startsWith("/app/studio") || routeStudioState.section !== "edit") {
+    if (!isStudioPathname || routeStudioState.section !== "edit") {
       return;
     }
 
@@ -10541,7 +10763,7 @@ export function WorkspacePage({
   }, [
     activeTab,
     createMode,
-    location.pathname,
+    isStudioPathname,
     routeStudioState.projectId,
     routeStudioState.section,
     routeStudioState.segmentIndex,
@@ -19930,7 +20152,7 @@ export function WorkspacePage({
     searchParams.delete("publish");
     searchParams.delete("youtube_error");
     searchParams.delete("youtube_connected");
-    navigate(buildStudioRouteUrl(`?${searchParams.toString()}`, "create"), { replace: true });
+    navigate(localizePath(buildStudioRouteUrl(`?${searchParams.toString()}`, "create")), { replace: true });
   }, [hasLoadedProjects, isProjectsLoading, locale, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
@@ -27341,6 +27563,24 @@ export function WorkspacePage({
   };
   const renderSegmentReferenceOptionPreview = renderWorkspaceSegmentReferenceOptionPreview;
   const getSegmentReferenceOptionPromptAvatarUrl = getWorkspaceSegmentReferenceOptionPromptAvatarUrl;
+  const getWorkspaceSessionExpiredMessage = () =>
+    workspaceText(
+      locale,
+      "Сессия истекла. Войдите снова, чтобы создавать и сохранять персонажей.",
+      "Your session expired. Sign in again to create and save characters.",
+    );
+  const handleWorkspaceUnauthorizedResponse = () => {
+    onAuthRequired?.();
+    return new Error(getWorkspaceSessionExpiredMessage());
+  };
+  const getWorkspaceReferenceErrorMessage = (error: unknown, fallback: string) => {
+    const message = error instanceof Error ? error.message.trim() : "";
+    if (/^unauthorized\.?$/i.test(message)) {
+      onAuthRequired?.();
+      return getWorkspaceSessionExpiredMessage();
+    }
+    return message || fallback;
+  };
   const saveWorkspaceReference = async (options: {
     assetId: number;
     description?: string | null;
@@ -27360,6 +27600,9 @@ export function WorkspacePage({
       body: JSON.stringify(options),
     });
     const payload = (await response.json().catch(() => null)) as WorkspaceReferenceCreateResponse | null;
+    if (response.status === 401 || response.status === 403) {
+      throw handleWorkspaceUnauthorizedResponse();
+    }
     if (!response.ok || !payload?.data?.reference) {
       throw new Error(payload?.error ?? "Не удалось сохранить референс.");
     }
@@ -27456,6 +27699,9 @@ export function WorkspacePage({
         method: "DELETE",
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceReferenceDeleteResponse | null;
+      if (response.status === 401 || response.status === 403) {
+        throw handleWorkspaceUnauthorizedResponse();
+      }
       if (!response.ok || !payload?.data) {
         throw new Error(payload?.error ?? "Не удалось удалить референс.");
       }
@@ -27473,7 +27719,7 @@ export function WorkspacePage({
         setEditingReferenceName("");
       }
     } catch (error) {
-      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось удалить референс.");
+      setSavedWorkspaceReferencesError(getWorkspaceReferenceErrorMessage(error, "Не удалось удалить референс."));
     } finally {
       setDeletingReferenceId(null);
     }
@@ -27512,6 +27758,9 @@ export function WorkspacePage({
         }),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceReferenceUpdateResponse | null;
+      if (response.status === 401 || response.status === 403) {
+        throw handleWorkspaceUnauthorizedResponse();
+      }
       if (!response.ok || !payload?.data?.reference) {
         throw new Error(payload?.error ?? "Не удалось переименовать референс.");
       }
@@ -27528,7 +27777,7 @@ export function WorkspacePage({
       setEditingReferenceId(null);
       setEditingReferenceName("");
     } catch (error) {
-      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось переименовать референс.");
+      setSavedWorkspaceReferencesError(getWorkspaceReferenceErrorMessage(error, "Не удалось переименовать референс."));
     } finally {
       setSavingReferenceNameId(null);
     }
@@ -27574,6 +27823,10 @@ export function WorkspacePage({
     while (Date.now() - startedAt < WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS) {
       const response = await fetch(`/api/studio/segment-ai-photo/jobs/${encodeURIComponent(safeJobId)}`);
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobStatusResponse | null;
+
+      if (response.status === 401 || response.status === 403) {
+        throw handleWorkspaceUnauthorizedResponse();
+      }
 
       if (!response.ok || !payload?.data) {
         throw new Error(payload?.error ?? "Не удалось получить статус генерации.");
@@ -27746,6 +27999,10 @@ export function WorkspacePage({
         });
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
 
+        if (response.status === 401 || response.status === 403) {
+          throw handleWorkspaceUnauthorizedResponse();
+        }
+
         if (response.status === 402) {
           openInsufficientCreditsModal("ai_photo", generationCreditCost);
           return;
@@ -27756,7 +28013,7 @@ export function WorkspacePage({
         }
 
         applyWorkspaceProfile(payload.data.profile);
-        const asset = await pollWorkspaceReferenceAiPhotoJob(payload.data.jobId, payload.data.status);
+        const asset = payload.data.asset ?? await pollWorkspaceReferenceAiPhotoJob(payload.data.jobId, payload.data.status);
         assetId = getPositiveWorkspaceMediaAssetId(asset.assetId);
         description = prompt;
       } else {
@@ -27793,7 +28050,7 @@ export function WorkspacePage({
         closeWorkspaceReferenceCreator();
       }
     } catch (error) {
-      setSavedWorkspaceReferencesError(error instanceof Error ? error.message : "Не удалось создать референс.");
+      setSavedWorkspaceReferencesError(getWorkspaceReferenceErrorMessage(error, "Не удалось создать референс."));
     } finally {
       setGeneratingReferenceKind(null);
     }
@@ -31153,6 +31410,7 @@ export function WorkspacePage({
                     className="studio-projects__create"
                     type="button"
                     onClick={() => {
+                      restoreStoredStudioCreateSettings();
                       setStudioView("create");
                       syncStudioRouteSection("create");
                     }}
@@ -31496,6 +31754,7 @@ export function WorkspacePage({
                     className="studio-projects__create"
                     type="button"
                     onClick={() => {
+                      restoreStoredStudioCreateSettings();
                       setStudioView("create");
                       syncStudioRouteSection("create");
                       void handleStudioCreateModeSwitch("default");

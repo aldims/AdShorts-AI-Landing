@@ -70,6 +70,55 @@ describe("workspace references", () => {
     ]);
   });
 
+  it("keeps references stable when the auth user id changes for the same email", async () => {
+    const email = `workspace-reference-${randomUUID()}@example.test`;
+    const firstAuthUser = {
+      email,
+      id: `workspace-reference-${randomUUID()}`,
+    };
+    const secondAuthUser = {
+      email,
+      id: `workspace-reference-${randomUUID()}`,
+    };
+    testUsers.push(firstAuthUser, secondAuthUser);
+
+    await createWorkspaceSavedReference(firstAuthUser, {
+      assetId: 351,
+      kind: "character",
+      name: "Stable email character",
+    });
+
+    expect((await listWorkspaceSavedReferences(secondAuthUser)).map((reference) => reference.name)).toEqual([
+      "Stable email character",
+    ]);
+  });
+
+  it("reads legacy id-only references after email is attached to the same auth user", async () => {
+    const userId = `workspace-reference-${randomUUID()}`;
+    const legacyUser = { id: userId };
+    const currentUser = {
+      email: `workspace-reference-${randomUUID()}@example.test`,
+      id: userId,
+    };
+    testUsers.push(legacyUser, currentUser);
+
+    await createWorkspaceSavedReference(legacyUser, {
+      assetId: 361,
+      kind: "character",
+      name: "Legacy id character",
+    });
+    await createWorkspaceSavedReference(currentUser, {
+      assetId: 362,
+      kind: "scene",
+      name: "Current email scene",
+    });
+
+    expect((await listWorkspaceSavedReferences(currentUser)).map((reference) => reference.name).sort()).toEqual([
+      "Current email scene",
+      "Legacy id character",
+    ]);
+  });
+
   it("updates and deletes saved references without touching other records", async () => {
     const user = createTestUser();
     const character = await createWorkspaceSavedReference(user, {
@@ -97,4 +146,3 @@ describe("workspace references", () => {
     ]);
   });
 });
-

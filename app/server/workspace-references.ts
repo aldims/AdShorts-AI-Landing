@@ -15,6 +15,12 @@ export type WorkspaceReferenceUser = {
 };
 
 type WorkspaceReferenceDocument = {
+  owner?: {
+    canonicalKey: string;
+    email: string | null;
+    id: string | null;
+    keys: string[];
+  };
   references: WorkspaceSavedReference[];
 };
 
@@ -38,27 +44,60 @@ const normalizeNonNegativeInteger = (value: unknown) => {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
 };
 
-const resolveWorkspaceReferenceUserKey = (user: WorkspaceReferenceUser) => {
+const resolveWorkspaceReferenceEmailKey = (user: WorkspaceReferenceUser) => {
+  const email = normalizeText(user.email).toLowerCase();
+  return email ? `email:${email}` : null;
+};
+
+const resolveWorkspaceReferenceIdKey = (user: WorkspaceReferenceUser) => {
   const userId = normalizeText(user.id);
   if (userId) {
     return `id:${userId}`;
   }
 
-  const email = normalizeText(user.email).toLowerCase();
-  return email ? `email:${email}` : "anonymous";
+  return null;
 };
 
-const getWorkspaceReferencePath = (user: WorkspaceReferenceUser) =>
+const resolveWorkspaceReferenceCanonicalUserKey = (user: WorkspaceReferenceUser) =>
+  resolveWorkspaceReferenceEmailKey(user) ?? resolveWorkspaceReferenceIdKey(user) ?? "anonymous";
+
+const resolveWorkspaceReferenceUserKeys = (user: WorkspaceReferenceUser) => {
+  const canonicalKey = resolveWorkspaceReferenceCanonicalUserKey(user);
+  const keys = [canonicalKey];
+
+  for (const key of [resolveWorkspaceReferenceIdKey(user), resolveWorkspaceReferenceEmailKey(user)]) {
+    if (key && !keys.includes(key)) {
+      keys.push(key);
+    }
+  }
+
+  return keys;
+};
+
+const getWorkspaceReferencePathForUserKey = (userKey: string) =>
   join(
     WORKSPACE_REFERENCES_ROOT_DIR,
-    `${createHash("sha1").update(resolveWorkspaceReferenceUserKey(user)).digest("hex")}.json`,
+    `${createHash("sha1").update(userKey).digest("hex")}.json`,
   );
+
+const getWorkspaceReferencePath = (user: WorkspaceReferenceUser) =>
+  getWorkspaceReferencePathForUserKey(resolveWorkspaceReferenceCanonicalUserKey(user));
+
+const getWorkspaceReferencePaths = (user: WorkspaceReferenceUser) =>
+  resolveWorkspaceReferenceUserKeys(user).map(getWorkspaceReferencePathForUserKey);
+
+const buildWorkspaceReferenceDocumentOwner = (user: WorkspaceReferenceUser): WorkspaceReferenceDocument["owner"] => ({
+  canonicalKey: resolveWorkspaceReferenceCanonicalUserKey(user),
+  email: normalizeText(user.email).toLowerCase() || null,
+  id: normalizeText(user.id) || null,
+  keys: resolveWorkspaceReferenceUserKeys(user),
+});
 
 const withWorkspaceReferenceWriteLock = async <T>(
   user: WorkspaceReferenceUser,
   operation: () => Promise<T>,
 ): Promise<T> => {
-  const userKey = resolveWorkspaceReferenceUserKey(user);
+  const userKey = resolveWorkspaceReferenceCanonicalUserKey(user);
   const previousQueue = workspaceReferenceWriteQueues.get(userKey) ?? Promise.resolve();
   let releaseCurrentQueue: () => void = () => undefined;
   const currentQueue = new Promise<void>((resolve) => {
@@ -111,11 +150,9 @@ const normalizeWorkspaceSavedReference = (value: unknown): WorkspaceSavedReferen
   };
 };
 
-const readWorkspaceReferenceDocument = async (user: WorkspaceReferenceUser): Promise<WorkspaceReferenceDocument> => {
-  await mkdir(WORKSPACE_REFERENCES_ROOT_DIR, { recursive: true });
-
+const readWorkspaceReferenceDocumentFromPath = async (path: string): Promise<WorkspaceReferenceDocument> => {
   try {
-    const rawValue = await readFile(getWorkspaceReferencePath(user), "utf8");
+    const rawValue = await readFile(path, "utf8");
     const payload = JSON.parse(rawValue) as WorkspaceReferenceDocument | null;
     const references = Array.isArray(payload?.references)
       ? payload.references.map(normalizeWorkspaceSavedReference).filter(Boolean) as WorkspaceSavedReference[]
@@ -127,6 +164,28 @@ const readWorkspaceReferenceDocument = async (user: WorkspaceReferenceUser): Pro
   }
 };
 
+const mergeWorkspaceReferenceDocuments = (documents: WorkspaceReferenceDocument[]): WorkspaceReferenceDocument => {
+  const referencesById = new Map<string, WorkspaceSavedReference>();
+
+  for (const document of documents) {
+    for (const reference of document.references) {
+      const existingReference = referencesById.get(reference.id);
+      if (!existingReference || Date.parse(reference.updatedAt) >= Date.parse(existingReference.updatedAt)) {
+        referencesById.set(reference.id, reference);
+      }
+    }
+  }
+
+  return { references: sortWorkspaceReferencesNewestFirst([...referencesById.values()]) };
+};
+
+const readWorkspaceReferenceDocument = async (user: WorkspaceReferenceUser): Promise<WorkspaceReferenceDocument> => {
+  await mkdir(WORKSPACE_REFERENCES_ROOT_DIR, { recursive: true });
+
+  const documents = await Promise.all(getWorkspaceReferencePaths(user).map(readWorkspaceReferenceDocumentFromPath));
+  return mergeWorkspaceReferenceDocuments(documents);
+};
+
 const writeWorkspaceReferenceDocument = async (
   user: WorkspaceReferenceUser,
   payload: WorkspaceReferenceDocument,
@@ -136,8 +195,13 @@ const writeWorkspaceReferenceDocument = async (
   const tempPath = `${outputPath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
 
   try {
-    await writeFile(tempPath, JSON.stringify(payload, null, 2), "utf8");
+    await writeFile(tempPath, JSON.stringify({ ...payload, owner: buildWorkspaceReferenceDocumentOwner(user) }, null, 2), "utf8");
     await rename(tempPath, outputPath);
+    await Promise.all(
+      getWorkspaceReferencePaths(user)
+        .filter((path) => path !== outputPath)
+        .map((path) => rm(path, { force: true }).catch(() => undefined)),
+    );
   } catch (error) {
     await rm(tempPath, { force: true }).catch(() => undefined);
     throw error;
@@ -292,7 +356,6 @@ export const deleteWorkspaceSavedReference = async (
 
 export const clearWorkspaceSavedReferences = async (user: WorkspaceReferenceUser) => {
   await withWorkspaceReferenceWriteLock(user, async () => {
-    await rm(getWorkspaceReferencePath(user), { force: true }).catch(() => undefined);
+    await Promise.all(getWorkspaceReferencePaths(user).map((path) => rm(path, { force: true }).catch(() => undefined)));
   });
 };
-

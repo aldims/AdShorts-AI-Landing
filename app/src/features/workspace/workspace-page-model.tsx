@@ -512,6 +512,7 @@ export type WorkspaceSegmentTextTranslateResponse = {
 };
 
 export type WorkspaceSegmentAiPhotoJobCreatePayload = {
+  asset?: StudioCustomVideoFile;
   jobId: string;
   profile: WorkspaceProfile;
   status: string;

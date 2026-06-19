@@ -1,10 +1,78 @@
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
+const STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-create-settings:";
 
 export const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
 const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
+const getStudioCreateSettingsStorageKey = (email: string) => `${STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
+
+export type StoredStudioCreateSettings = {
+  language?: string;
+  musicName?: string | null;
+  musicType?: string;
+  subtitleColorId?: string;
+  subtitleEnabled?: boolean;
+  subtitleStyleId?: string;
+  updatedAt?: string;
+  version?: 1;
+  videoMode?: string;
+  voiceEnabled?: boolean;
+  voiceId?: string;
+  voiceIdsByLanguage?: Partial<Record<"ru" | "en", string>>;
+};
+
+const normalizeStoredStudioCreateString = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  return normalized || undefined;
+};
+
+const normalizeStoredStudioCreateBoolean = (value: unknown) => (typeof value === "boolean" ? value : undefined);
+
+const normalizeStoredStudioCreateVoiceIdsByLanguage = (value: unknown) => {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const source = value as Record<string, unknown>;
+  const ru = normalizeStoredStudioCreateString(source.ru);
+  const en = normalizeStoredStudioCreateString(source.en);
+
+  if (!ru && !en) {
+    return undefined;
+  }
+
+  return {
+    ...(ru ? { ru } : {}),
+    ...(en ? { en } : {}),
+  } satisfies Partial<Record<"ru" | "en", string>>;
+};
+
+const normalizeStoredStudioCreateSettings = (value: unknown): StoredStudioCreateSettings | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const source = value as Record<string, unknown>;
+  const voiceIdsByLanguage = normalizeStoredStudioCreateVoiceIdsByLanguage(source.voiceIdsByLanguage);
+  const settings: StoredStudioCreateSettings = {
+    language: normalizeStoredStudioCreateString(source.language),
+    musicName: normalizeStoredStudioCreateString(source.musicName) ?? null,
+    musicType: normalizeStoredStudioCreateString(source.musicType),
+    subtitleColorId: normalizeStoredStudioCreateString(source.subtitleColorId),
+    subtitleEnabled: normalizeStoredStudioCreateBoolean(source.subtitleEnabled),
+    subtitleStyleId: normalizeStoredStudioCreateString(source.subtitleStyleId),
+    updatedAt: normalizeStoredStudioCreateString(source.updatedAt),
+    version: source.version === 1 ? 1 : undefined,
+    videoMode: normalizeStoredStudioCreateString(source.videoMode),
+    voiceEnabled: normalizeStoredStudioCreateBoolean(source.voiceEnabled),
+    voiceId: normalizeStoredStudioCreateString(source.voiceId),
+    voiceIdsByLanguage,
+  };
+
+  return settings;
+};
 
 export const getStudioPreviewDismissKey = (
   generation:
@@ -133,5 +201,59 @@ export const persistHiddenMediaLibraryItemKeys = (email: string | null | undefin
     window.localStorage.setItem(storageKey, JSON.stringify(normalizedKeys));
   } catch {
     // Ignore storage write errors.
+  }
+};
+
+export const readStoredStudioCreateSettings = (email: string | null | undefined): StoredStudioCreateSettings | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getStudioCreateSettingsStorageKey(normalizedEmail));
+    if (!rawValue) {
+      return null;
+    }
+
+    return normalizeStoredStudioCreateSettings(JSON.parse(rawValue));
+  } catch {
+    return null;
+  }
+};
+
+export const persistStudioCreateSettings = (
+  email: string | null | undefined,
+  settings: StoredStudioCreateSettings,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    const storageKey = getStudioCreateSettingsStorageKey(normalizedEmail);
+    const normalizedSettings = normalizeStoredStudioCreateSettings({
+      ...settings,
+      updatedAt: new Date().toISOString(),
+      version: 1,
+    });
+
+    if (!normalizedSettings) {
+      window.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(normalizedSettings));
+  } catch {
+    // Ignore storage quota errors.
   }
 };

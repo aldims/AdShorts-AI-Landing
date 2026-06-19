@@ -503,6 +503,7 @@ export function App() {
   const referralPathSource = useMemo(() => readWebReferralSourceFromPathname(location.pathname), [location.pathname]);
   const { data: authSession, isPending: isSessionPending } = authClient.useSession();
   const [authState, setAuthState] = useState<AuthState>({ isOpen: false, mode: "signup" });
+  const [isAuthSessionInvalidated, setIsAuthSessionInvalidated] = useState(false);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
   const [isWorkspaceProfilePending, setIsWorkspaceProfilePending] = useState(false);
   const [isWorkspaceProfileVerified, setIsWorkspaceProfileVerified] = useState(false);
@@ -510,7 +511,7 @@ export function App() {
   const [accountDisplay, setAccountDisplay] = useState<AccountDisplayState | null>(null);
 
   const session = useMemo<Session | null>(() => {
-    if (!authSession?.user) return null;
+    if (isAuthSessionInvalidated || !authSession?.user) return null;
 
     return {
       displayEmail: accountDisplay?.displayEmail,
@@ -519,7 +520,7 @@ export function App() {
       name: authSession.user.name,
       plan: "FREE",
     };
-  }, [accountDisplay?.displayEmail, authSession]);
+  }, [accountDisplay?.displayEmail, authSession, isAuthSessionInvalidated]);
 
   const guestWorkspaceSession = useMemo<Session>(
     () => ({
@@ -532,6 +533,21 @@ export function App() {
   );
 
   useEffect(() => {
+    setIsAuthSessionInvalidated(false);
+  }, [authSession?.user?.id]);
+
+  const invalidateAuthenticatedSession = useCallback(() => {
+    clearImpersonationCookie();
+    workspaceProfileSessionEmailRef.current = null;
+    setIsAuthSessionInvalidated(true);
+    setAccountDisplay(null);
+    setWorkspaceProfile(null);
+    setIsWorkspaceProfileVerified(false);
+    setIsWorkspaceProfilePending(false);
+    void authClient.signOut().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (!authSession?.user) {
       setAccountDisplay(null);
       return undefined;
@@ -542,6 +558,12 @@ export function App() {
     const loadAccountDisplay = async () => {
       try {
         const response = await fetch("/api/me", { credentials: "include" });
+        if (response.status === 401 || response.status === 403) {
+          if (!isCancelled) {
+            invalidateAuthenticatedSession();
+          }
+          return;
+        }
         if (!response.ok) return;
 
         const payload = (await response.json()) as { user?: { displayEmail?: unknown; telegramUsername?: unknown } } | null;
@@ -562,7 +584,7 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, [authSession?.user?.email, authSession?.user?.id]);
+  }, [authSession?.user?.email, authSession?.user?.id, invalidateAuthenticatedSession]);
 
   useEffect(() => {
     const referralSource = readWebReferralSourceFromLocation(location);
@@ -604,7 +626,7 @@ export function App() {
 
         if (response.status === 401 || response.status === 403) {
           if (isCancelled) return;
-          setWorkspaceProfile((current) => (areWorkspaceProfilesEqual(current, cachedProfile) ? current : cachedProfile ?? null));
+          invalidateAuthenticatedSession();
           setIsWorkspaceProfileVerified(false);
           return;
         }
@@ -640,7 +662,7 @@ export function App() {
       isCancelled = true;
       controller.abort();
     };
-  }, [location.search, session?.email]);
+  }, [invalidateAuthenticatedSession, location.search, session?.email]);
 
   const handleWorkspaceProfileChange = useCallback((profile: WorkspaceProfile | null) => {
     const nextProfile = normalizeWorkspaceProfile(profile);

@@ -19556,29 +19556,22 @@ textarea {
   padding: 5px;
   border: 0;
   border-radius: 999px;
-  background:
-    radial-gradient(125% 140% at 26% -22%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.055) 44%, transparent 72%),
-    radial-gradient(110% 130% at 100% 100%, rgba(143, 149, 160, 0.13) 0%, rgba(143, 149, 160, 0.035) 48%, transparent 76%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(96, 103, 116, 0.05) 48%, rgba(4, 6, 10, 0.18)),
-    rgba(8, 10, 14, 0.18);
-  box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.28),
-    0 0 34px rgba(255, 255, 255, 0.035),
-    inset 0 0 26px rgba(255, 255, 255, 0.026);
-  overflow: hidden;
-  backdrop-filter: var(--studio-create-mode-switch-glass-filter);
-  -webkit-backdrop-filter: var(--studio-create-mode-switch-glass-filter);
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 @supports (backdrop-filter: blur(1px)) {
   .studio-create-mode-switch {
-    backdrop-filter: var(--studio-create-mode-switch-glass-filter) !important;
+    backdrop-filter: none !important;
   }
 }
 
 @supports (-webkit-backdrop-filter: blur(1px)) {
   .studio-create-mode-switch {
-    -webkit-backdrop-filter: var(--studio-create-mode-switch-glass-filter) !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 
