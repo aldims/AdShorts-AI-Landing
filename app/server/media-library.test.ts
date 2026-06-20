@@ -693,7 +693,7 @@ describe("media library dedupe", () => {
     expect(dedupeWorkspaceMediaLibraryPageItems([durableVideo, animation])).toEqual([animation]);
   });
 
-  it("keeps saved references separate from generated visuals with the same asset id", () => {
+  it("collapses saved references with generated visuals that use the same asset id", () => {
     const generatedPhoto = createWorkspaceMediaLibraryItem({
       assetId: 901,
       createdAt: "2026-04-09T00:00:00.000Z",
@@ -726,10 +726,7 @@ describe("media library dedupe", () => {
       source: "persisted",
     });
 
-    expect(dedupeWorkspaceMediaLibraryPageItems([generatedPhoto, characterReference]).map((item) => item.kind).sort()).toEqual([
-      "ai_photo",
-      "character_reference",
-    ]);
+    expect(dedupeWorkspaceMediaLibraryPageItems([generatedPhoto, characterReference])).toEqual([generatedPhoto]);
   });
 });
 

@@ -38,7 +38,17 @@ import type {
 export const characterPickerIconUrl = "/character.png";
 
 export type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
-export type WorkspaceMediaLibraryFilter = "all" | "photo" | "video" | "characters" | "scenes";
+export type WorkspaceMediaLibraryFilter =
+  | "all"
+  | "photo"
+  | "video"
+  | "ai_photo"
+  | "image_edit"
+  | "ai_video"
+  | "photo_animation"
+  | "talking_photo"
+  | "characters"
+  | "scenes";
 
 export const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 export const STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE = "generation_unavailable";

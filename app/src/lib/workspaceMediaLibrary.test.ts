@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  dedupeWorkspaceMediaLibraryPageItems,
   dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryAssetIdentityKey,
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
@@ -304,5 +305,98 @@ describe("workspace media library display identity", () => {
     const hiddenKeys = new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(hiddenItem));
 
     expect(isWorkspaceMediaLibraryItemHidden(reloadedItem, hiddenKeys)).toBe(true);
+  });
+
+  it("collapses draft and persisted items with the same durable asset id", () => {
+    const draftItem = createMediaLibraryItem({
+      assetId: 501,
+      createdAt: 3_000,
+      downloadUrl: "/api/workspace/media-assets/501/playback?download=draft",
+      itemKey: "draft:asset:501",
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/501/poster",
+      previewUrl: "/api/workspace/media-assets/501/playback",
+      source: "draft",
+    });
+    const persistedItem = createMediaLibraryItem({
+      assetId: 501,
+      createdAt: 2_000,
+      downloadUrl: "/api/workspace/media-assets/501",
+      itemKey: "persisted:asset:501",
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/501/poster",
+      previewUrl: "/api/workspace/media-assets/501/playback",
+      source: "persisted",
+    });
+
+  expect(dedupeWorkspaceMediaLibraryPageItems([draftItem, persistedItem])).toEqual([persistedItem]);
+  });
+
+  it("collapses references with generated visuals that use the same asset id", () => {
+    const generatedPhoto = createMediaLibraryItem({
+      assetId: 601,
+      createdAt: 1_000,
+      itemKey: "persisted:asset:601",
+      kind: "ai_photo",
+      previewUrl: "/api/workspace/media-assets/601",
+    });
+    const characterReference = createMediaLibraryItem({
+      assetId: 601,
+      createdAt: 2_000,
+      itemKey: "persisted:reference:character_reference:ref-601",
+      kind: "character_reference",
+      previewUrl: "/api/workspace/media-assets/601",
+      referenceId: "ref-601",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryPageItems([generatedPhoto, characterReference])).toEqual([generatedPhoto]);
+  });
+
+  it("prefers a specific stable asset item over a generic one", () => {
+    const genericPhoto = createMediaLibraryItem({
+      assetId: 701,
+      downloadUrl: "/api/workspace/media-assets/701",
+      itemKey: "persisted:asset:701",
+      kind: "ai_photo",
+      previewUrl: "/api/workspace/media-assets/701",
+      source: "persisted",
+    });
+    const imageEdit = createMediaLibraryItem({
+      assetId: 701,
+      downloadUrl: "/api/workspace/media-assets/701",
+      itemKey: "draft:asset:701",
+      kind: "image_edit",
+      previewUrl: "/api/workspace/media-assets/701",
+      source: "draft",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryPageItems([genericPhoto, imageEdit])).toEqual([imageEdit]);
+  });
+
+  it("does not keep a transient studio job item when a stable asset item exists", () => {
+    const transientTalkingPhoto = createMediaLibraryItem({
+      assetId: 801,
+      downloadUrl: "/api/studio/segment-talking-photo/jobs/job-801/video?download=1970-01-01T00%3A00%3A00.000Z%3A0%3Ajob-801",
+      itemKey: "live:talking_photo:job:job-801",
+      kind: "talking_photo",
+      previewKind: "video",
+      previewPosterUrl: "/api/studio/segment-talking-photo/jobs/job-801/poster",
+      previewUrl: "/api/studio/segment-talking-photo/jobs/job-801/video",
+      source: "live",
+    });
+    const stableVideo = createMediaLibraryItem({
+      assetId: 801,
+      downloadUrl: "/api/workspace/media-assets/801",
+      itemKey: "persisted:asset:801",
+      kind: "ai_video",
+      previewKind: "video",
+      previewPosterUrl: "/api/workspace/media-assets/801/poster",
+      previewUrl: "/api/workspace/media-assets/801/playback",
+      source: "persisted",
+    });
+
+    expect(dedupeWorkspaceMediaLibraryPageItems([transientTalkingPhoto, stableVideo])).toEqual([stableVideo]);
   });
 });

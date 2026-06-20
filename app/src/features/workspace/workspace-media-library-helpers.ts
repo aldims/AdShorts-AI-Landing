@@ -32,6 +32,8 @@ import {
   getWorkspaceImageDownloadName,
   getWorkspaceProjectDisplayTitle,
   getWorkspaceVideoDownloadName,
+  hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl,
+  isWorkspaceMediaLibraryItemDurableForStorage,
   normalizeWorkspaceMediaLibraryCreatedAt,
   type WorkspaceMediaLibraryItem,
   type WorkspaceMediaLibraryItemKind,
@@ -751,7 +753,9 @@ export const readStoredGeneratedMediaLibraryEntries = (
 
     return parsed
       .filter(isStoredWorkspaceGeneratedMediaLibraryEntry)
+      .filter((entry) => !hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(entry.item))
       .map((entry) => normalizeStoredWorkspaceGeneratedMediaLibraryEntry(entry))
+      .filter((entry) => isWorkspaceMediaLibraryItemDurableForStorage(entry.item))
       .sort((left, right) => right.createdAt - left.createdAt)
       .slice(0, WORKSPACE_GENERATED_MEDIA_LIBRARY_MAX_ENTRIES);
   } catch {
@@ -778,7 +782,9 @@ export const persistGeneratedMediaLibraryEntries = (
       .slice()
       .sort((left, right) => right.createdAt - left.createdAt)
       .slice(0, WORKSPACE_GENERATED_MEDIA_LIBRARY_MAX_ENTRIES)
-      .map((entry) => normalizeStoredWorkspaceGeneratedMediaLibraryEntry(entry));
+      .filter((entry) => !hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(entry.item))
+      .map((entry) => normalizeStoredWorkspaceGeneratedMediaLibraryEntry(entry))
+      .filter((entry) => isWorkspaceMediaLibraryItemDurableForStorage(entry.item));
 
     if (normalizedEntries.length === 0) {
       window.localStorage.removeItem(storageKey);
@@ -812,6 +818,13 @@ export const appendUrlToken = (value: string | null | undefined, key: string, to
 };
 
 const WORKSPACE_MEDIA_LIBRARY_FALLBACK_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+
+const getWorkspaceMediaLibraryDownloadToken = (
+  project: Pick<WorkspaceProject, "createdAt" | "generatedAt" | "id" | "updatedAt">,
+) => {
+  const token = project.updatedAt || project.generatedAt || project.createdAt || project.id;
+  return token.startsWith(WORKSPACE_MEDIA_LIBRARY_FALLBACK_TIMESTAMP) ? project.id : token;
+};
 
 type WorkspaceMediaLibraryStudioGeneration = {
   adId: number | null;
@@ -867,7 +880,7 @@ export const buildWorkspaceMediaLibraryDraftItems = (
 ): WorkspaceMediaLibraryItem[] => {
   const projectId = project.adId ?? draft.projectId;
   const projectTitle = getWorkspaceProjectDisplayTitle(project);
-  const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
+  const downloadToken = getWorkspaceMediaLibraryDownloadToken(project);
   const createdAt = normalizeWorkspaceMediaLibraryCreatedAt(project.updatedAt || project.generatedAt || project.createdAt);
 
   return draft.segments.flatMap((segment, segmentListIndex) => {
@@ -1005,7 +1018,7 @@ export const buildWorkspaceGeneratedMediaLibraryEntry = (options: {
     project.prefillSettings?.language ?? getStudioLanguageForVoiceId(options.project.prefillSettings?.voiceId) ?? "ru",
   );
   const segmentNumber = options.segmentListIndex + 1;
-  const downloadToken = project.updatedAt || project.generatedAt || project.createdAt || project.id;
+  const downloadToken = getWorkspaceMediaLibraryDownloadToken(project);
   const previewKind = options.kind === "ai_photo" || options.kind === "image_edit" ? "image" : "video";
   const previewPosterUrl =
     options.kind === "ai_photo" || options.kind === "image_edit"

@@ -1,7 +1,11 @@
 import { createPortal } from "react-dom";
 import type { Dispatch, SetStateAction } from "react";
 import type { Locale } from "../../lib/i18n";
-import { getWorkspaceProjectDisplayTitle } from "../../lib/workspaceMediaLibrary";
+import {
+  formatWorkspaceMediaLibraryCreatedAt,
+  getWorkspaceProjectDisplayTitle,
+  type WorkspaceMediaLibraryItem,
+} from "../../lib/workspaceMediaLibrary";
 import {
   getWorkspaceLocalExampleGoalCopy,
   workspaceLocalExampleGoalOptions,
@@ -218,6 +222,132 @@ export function WorkspaceProjectDeleteModal({
 
         <p className="workspace-confirm-modal__project">
           {getWorkspaceProjectDisplayTitle(project)}
+        </p>
+
+        {error ? (
+          <p className="workspace-confirm-modal__error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="workspace-confirm-modal__actions">
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            {workspaceText(locale, "Отмена", "Cancel")}
+          </button>
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
+            type="button"
+            onClick={() => void onDelete()}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <span className="workspace-confirm-modal__spinner" aria-hidden="true"></span>
+                {workspaceText(locale, "Удаляем...", "Deleting...")}
+              </>
+            ) : (
+              workspaceText(locale, "Удалить", "Delete")
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+type WorkspaceMediaLibraryDeleteConfirmModalProps = {
+  error: string | null;
+  isSubmitting: boolean;
+  item: WorkspaceMediaLibraryItem | null;
+  itemLabel: string;
+  locale: Locale;
+  onClose: () => void;
+  onDelete: () => void | Promise<void>;
+};
+
+export function WorkspaceMediaLibraryDeleteConfirmModal({
+  error,
+  isSubmitting,
+  item,
+  itemLabel,
+  locale,
+  onClose,
+  onDelete,
+}: WorkspaceMediaLibraryDeleteConfirmModalProps) {
+  if (!item || typeof document === "undefined") {
+    return null;
+  }
+
+  const isReference = item.kind === "character_reference" || item.kind === "scene_reference";
+  const hasDurableAsset = typeof item.assetId === "number" && item.assetId > 0;
+  const createdAtLabel = formatWorkspaceMediaLibraryCreatedAt(item.createdAt, locale);
+  const title = isReference
+    ? workspaceText(locale, "Удалить референс?", "Delete reference?")
+    : hasDurableAsset
+      ? workspaceText(locale, "Удалить media asset?", "Delete media asset?")
+      : workspaceText(locale, "Скрыть карточку?", "Hide card?");
+  const message = isReference
+    ? workspaceText(
+      locale,
+      "Референс будет удалён из медиатеки. Исходный media asset не удаляется.",
+      "The reference will be removed from the media library. The source media asset is not deleted.",
+    )
+    : hasDurableAsset
+      ? workspaceText(
+        locale,
+        "Будет удалён media asset из медиатеки. Это действие нельзя отменить.",
+        "The media asset will be deleted from the media library. This cannot be undone.",
+      )
+      : workspaceText(
+        locale,
+        "Карточка будет скрыта только в этом браузере. Media asset не удаляется.",
+        "This card will be hidden only in this browser. The media asset is not deleted.",
+      );
+
+  return createPortal(
+    <div className="workspace-confirm-modal" role="dialog" aria-modal="true" aria-label={workspaceText(locale, "Удаление из медиатеки", "Media library deletion")}>
+      <button
+        className="workspace-confirm-modal__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(locale, "Закрыть подтверждение удаления из медиатеки", "Close media library deletion confirmation")}
+        onClick={onClose}
+        disabled={isSubmitting}
+      />
+      <div className="workspace-confirm-modal__panel" role="document">
+        <button
+          className="workspace-confirm-modal__close route-close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть подтверждение удаления из медиатеки", "Close media library deletion confirmation")}
+          onClick={onClose}
+          disabled={isSubmitting}
+        >
+          ×
+        </button>
+
+        <div className="workspace-confirm-modal__header">
+          <div className="workspace-confirm-modal__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M4 7h16" strokeLinecap="round" />
+              <path d="M9 3h6" strokeLinecap="round" />
+              <path d="M10 11v6" strokeLinecap="round" />
+              <path d="M14 11v6" strokeLinecap="round" />
+              <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div className="workspace-confirm-modal__copy">
+            <h2 className="workspace-confirm-modal__title">{title}</h2>
+            <p className="workspace-confirm-modal__message">{message}</p>
+          </div>
+        </div>
+
+        <p className="workspace-confirm-modal__project">
+          {itemLabel} · {createdAtLabel} · {workspaceText(locale, `сегмент ${item.segmentNumber}`, `segment ${item.segmentNumber}`)}
         </p>
 
         {error ? (

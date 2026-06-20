@@ -48,6 +48,24 @@ export const normalizeWorkspaceMediaLibraryCreatedAt = (value: number | string |
   return Number.isFinite(timestamp) ? Math.max(0, Math.trunc(timestamp)) : 0;
 };
 
+export const formatWorkspaceMediaLibraryCreatedAt = (
+  value: number | string | null | undefined,
+  locale: "ru" | "en" = "ru",
+) => {
+  const timestamp = normalizeWorkspaceMediaLibraryCreatedAt(value);
+  if (timestamp <= 0) {
+    return locale === "en" ? "Date unavailable" : "Дата недоступна";
+  }
+
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+};
+
 export const sortWorkspaceMediaLibraryItemsNewestFirst = (items: WorkspaceMediaLibraryItem[]) =>
   items.slice().sort((left, right) => {
     const createdAtDifference = right.createdAt - left.createdAt;
@@ -157,6 +175,61 @@ const getWorkspaceMediaLibraryAssetIdentity = (value: string | null | undefined)
 export const getWorkspaceMediaLibraryAssetIdentityKey = (value: string | null | undefined) =>
   getWorkspaceMediaLibraryAssetIdentity(value);
 
+const getPositiveWorkspaceMediaLibraryAssetId = (value: number | null | undefined) =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+
+export const isWorkspaceMediaLibraryStableAssetUrl = (
+  value: string | null | undefined,
+  assetId?: number | null,
+) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    const match = url.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)(?:\/(?:playback|poster|source-frame))?$/i);
+    if (!match) {
+      return false;
+    }
+
+    const routeAssetId = Number(match[1]);
+    const expectedAssetId = getPositiveWorkspaceMediaLibraryAssetId(assetId);
+    return !expectedAssetId || routeAssetId === expectedAssetId;
+  } catch {
+    return false;
+  }
+};
+
+export const isWorkspaceMediaLibraryTransientStudioJobUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    return url.pathname.startsWith("/api/studio/") && url.pathname.includes("/jobs/");
+  } catch {
+    return normalizedValue.includes("/api/studio/") && normalizedValue.includes("/jobs/");
+  }
+};
+
+export const isWorkspaceMediaLibraryLegacyFallbackDownloadUrl = (value: string | null | undefined) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  try {
+    const url = new URL(normalizedValue, "http://localhost");
+    return String(url.searchParams.get("download") ?? "").startsWith("1970-01-01T00:00:00.000Z");
+  } catch {
+    return normalizedValue.includes("download=1970-01-01T00");
+  }
+};
+
 export const getWorkspaceMediaLibraryDisplayAssetIdentityKey = (item: Pick<
   WorkspaceMediaLibraryItem,
   "assetId" | "kind" | "previewPosterUrl" | "previewUrl"
@@ -248,6 +321,199 @@ export const dedupeWorkspaceMediaLibraryItems = (items: WorkspaceMediaLibraryIte
   }
 
   return Array.from(itemsByPrimaryKey.values());
+};
+
+const getWorkspaceMediaLibraryItemSpecificityRank = (item: Pick<WorkspaceMediaLibraryItem, "kind">) => {
+  if (item.kind === "character_reference" || item.kind === "scene_reference") {
+    return 1;
+  }
+
+  if (item.kind === "photo_animation" || item.kind === "talking_photo" || item.kind === "image_edit") {
+    return 4;
+  }
+
+  if (item.kind === "ai_video" || item.kind === "ai_photo") {
+    return 3;
+  }
+
+  return 2;
+};
+
+const getWorkspaceMediaLibrarySourceRank = (item: Pick<WorkspaceMediaLibraryItem, "source">) => {
+  if (item.source === "persisted") {
+    return 3;
+  }
+
+  if (item.source === "live") {
+    return 2;
+  }
+
+  return 1;
+};
+
+const getWorkspaceMediaLibraryItemUrls = (
+  item: Pick<WorkspaceMediaLibraryItem, "downloadUrl" | "previewPosterUrl" | "previewUrl">,
+) => [item.previewUrl, item.previewPosterUrl, item.downloadUrl];
+
+export const hasWorkspaceMediaLibraryStableAssetUrl = (
+  item: Pick<WorkspaceMediaLibraryItem, "assetId" | "downloadUrl" | "previewPosterUrl" | "previewUrl">,
+) => {
+  const assetId = getPositiveWorkspaceMediaLibraryAssetId(item.assetId);
+  return getWorkspaceMediaLibraryItemUrls(item).some((url) => isWorkspaceMediaLibraryStableAssetUrl(url, assetId));
+};
+
+export const hasWorkspaceMediaLibraryTransientStudioJobUrl = (
+  item: Pick<WorkspaceMediaLibraryItem, "downloadUrl" | "previewPosterUrl" | "previewUrl">,
+) => getWorkspaceMediaLibraryItemUrls(item).some(isWorkspaceMediaLibraryTransientStudioJobUrl);
+
+export const hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl = (
+  item: Pick<WorkspaceMediaLibraryItem, "downloadUrl">,
+) => isWorkspaceMediaLibraryLegacyFallbackDownloadUrl(item.downloadUrl);
+
+export const isWorkspaceMediaLibraryItemDurableForStorage = (
+  item: Pick<WorkspaceMediaLibraryItem, "assetId" | "downloadUrl" | "previewPosterUrl" | "previewUrl">,
+) => {
+  if (hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(item)) {
+    return false;
+  }
+
+  if (getPositiveWorkspaceMediaLibraryAssetId(item.assetId)) {
+    return true;
+  }
+
+  return hasWorkspaceMediaLibraryStableAssetUrl(item) && !hasWorkspaceMediaLibraryTransientStudioJobUrl(item);
+};
+
+const shouldPreferWorkspaceMediaLibraryAssetDuplicate = (
+  candidate: WorkspaceMediaLibraryItem,
+  existing: WorkspaceMediaLibraryItem,
+) => {
+  const candidateIsTransient = hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(candidate) ||
+    hasWorkspaceMediaLibraryTransientStudioJobUrl(candidate);
+  const existingIsTransient = hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(existing) ||
+    hasWorkspaceMediaLibraryTransientStudioJobUrl(existing);
+  if (candidateIsTransient !== existingIsTransient) {
+    return !candidateIsTransient;
+  }
+
+  const specificityDifference =
+    getWorkspaceMediaLibraryItemSpecificityRank(candidate) -
+    getWorkspaceMediaLibraryItemSpecificityRank(existing);
+  if (specificityDifference !== 0) {
+    return specificityDifference > 0;
+  }
+
+  const stableRouteDifference =
+    Number(hasWorkspaceMediaLibraryStableAssetUrl(candidate)) -
+    Number(hasWorkspaceMediaLibraryStableAssetUrl(existing));
+  if (stableRouteDifference !== 0) {
+    return stableRouteDifference > 0;
+  }
+
+  const sourceDifference = getWorkspaceMediaLibrarySourceRank(candidate) - getWorkspaceMediaLibrarySourceRank(existing);
+  if (sourceDifference !== 0) {
+    return sourceDifference > 0;
+  }
+
+  return candidate.createdAt > existing.createdAt;
+};
+
+export const dedupeWorkspaceMediaLibraryPageItems = (items: WorkspaceMediaLibraryItem[]) => {
+  const sortedItems = sortWorkspaceMediaLibraryItemsNewestFirst(items);
+  const itemIndexesByPrimaryKey = new Map<string, number>();
+  const itemIndexesByVideoModeSlot = new Map<string, number>();
+  const itemIndexesByAssetId = new Map<number, number>();
+  const result: WorkspaceMediaLibraryItem[] = [];
+  const indexKeys = new Map<number, { assetId: number | null; primaryKey: string; videoModeSlotKey: string | null }>();
+
+  const unregisterIndex = (index: number) => {
+    const keys = indexKeys.get(index);
+    if (!keys) {
+      return;
+    }
+
+    if (itemIndexesByPrimaryKey.get(keys.primaryKey) === index) {
+      itemIndexesByPrimaryKey.delete(keys.primaryKey);
+    }
+
+    if (keys.videoModeSlotKey && itemIndexesByVideoModeSlot.get(keys.videoModeSlotKey) === index) {
+      itemIndexesByVideoModeSlot.delete(keys.videoModeSlotKey);
+    }
+
+    if (keys.assetId && itemIndexesByAssetId.get(keys.assetId) === index) {
+      itemIndexesByAssetId.delete(keys.assetId);
+    }
+  };
+
+  const registerItemAtIndex = (index: number, item: WorkspaceMediaLibraryItem) => {
+    const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
+    const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
+    const assetId = getPositiveWorkspaceMediaLibraryAssetId(item.assetId);
+
+    itemIndexesByPrimaryKey.set(primaryKey, index);
+    if (videoModeSlotKey) {
+      itemIndexesByVideoModeSlot.set(videoModeSlotKey, index);
+    }
+
+    if (assetId) {
+      itemIndexesByAssetId.set(assetId, index);
+    }
+
+    indexKeys.set(index, {
+      assetId,
+      primaryKey,
+      videoModeSlotKey,
+    });
+  };
+
+  const pushItem = (item: WorkspaceMediaLibraryItem) => {
+    const nextIndex = result.length;
+    result.push(item);
+    registerItemAtIndex(nextIndex, item);
+  };
+
+  const replaceItem = (index: number, item: WorkspaceMediaLibraryItem) => {
+    unregisterIndex(index);
+    result[index] = item;
+    registerItemAtIndex(index, item);
+  };
+
+  for (const item of sortedItems) {
+    const primaryKey = getWorkspaceMediaLibraryResolvedDedupeKey(item);
+    const videoModeSlotKey = getWorkspaceMediaLibraryVideoModeSlotKey(item);
+    const assetId = getPositiveWorkspaceMediaLibraryAssetId(item.assetId);
+    const existingPrimaryIndex = itemIndexesByPrimaryKey.get(primaryKey);
+    const existingVideoModeSlotIndex = videoModeSlotKey ? itemIndexesByVideoModeSlot.get(videoModeSlotKey) : undefined;
+    const existingAssetIndex = assetId ? itemIndexesByAssetId.get(assetId) : undefined;
+    const existingIndex = existingAssetIndex ?? existingPrimaryIndex ?? existingVideoModeSlotIndex;
+
+    if (existingIndex === undefined) {
+      pushItem(item);
+      continue;
+    }
+
+    const existingItem = result[existingIndex];
+    if (!existingItem) {
+      replaceItem(existingIndex, item);
+      continue;
+    }
+
+    if (
+      existingVideoModeSlotIndex === existingIndex &&
+      existingAssetIndex === undefined &&
+      existingPrimaryIndex === undefined &&
+      !shouldWorkspaceMediaLibraryCollapseVideoModeSlotCollision(existingItem, item)
+    ) {
+      pushItem(item);
+      continue;
+    }
+
+    if (shouldPreferWorkspaceMediaLibraryAssetDuplicate(item, existingItem)) {
+      replaceItem(existingIndex, item);
+    }
+  }
+
+  return result;
 };
 
 export const buildWorkspaceMediaLibraryItemDedupeKey = (options: {

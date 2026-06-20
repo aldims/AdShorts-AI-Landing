@@ -1,7 +1,7 @@
 import {
   areWorkspaceMediaLibraryUrlsEqual,
   createWorkspaceMediaLibraryItem,
-  dedupeWorkspaceMediaLibraryItems,
+  dedupeWorkspaceMediaLibraryPageItems,
   getWorkspaceMediaLibraryUrlMarker,
   getWorkspaceImageDownloadName,
   getWorkspaceProjectDisplayTitle,
@@ -610,56 +610,7 @@ const buildWorkspaceDurableMediaAssetPosterUrlFromIndexedItem = (
   return `${posterUrl.pathname}${posterUrl.search}`;
 };
 
-const getWorkspaceMediaLibraryItemSpecificityRank = (item: WorkspaceMediaLibraryItem) => {
-  if (item.kind === "character_reference" || item.kind === "scene_reference") {
-    return 4;
-  }
-
-  if (item.kind === "photo_animation" || item.kind === "talking_photo" || item.kind === "image_edit") {
-    return 3;
-  }
-
-  if (item.kind === "ai_video" || item.kind === "ai_photo") {
-    return 2;
-  }
-
-  return 1;
-};
-
-export const dedupeWorkspaceMediaLibraryPageItems = (items: WorkspaceMediaLibraryItem[]) => {
-  const dedupedItems = dedupeWorkspaceMediaLibraryItems(items);
-  const itemIndexesByAssetId = new Map<number, number>();
-  const result: WorkspaceMediaLibraryItem[] = [];
-
-  for (const item of dedupedItems) {
-    const assetId =
-      typeof item.assetId === "number" && item.assetId > 0
-        ? item.assetId
-        : null;
-
-    if (!assetId || item.kind === "character_reference" || item.kind === "scene_reference") {
-      result.push(item);
-      continue;
-    }
-
-    const existingIndex = itemIndexesByAssetId.get(assetId);
-    if (existingIndex === undefined) {
-      itemIndexesByAssetId.set(assetId, result.length);
-      result.push(item);
-      continue;
-    }
-
-    const existingItem = result[existingIndex];
-    if (
-      getWorkspaceMediaLibraryItemSpecificityRank(item) >
-      getWorkspaceMediaLibraryItemSpecificityRank(existingItem)
-    ) {
-      result[existingIndex] = item;
-    }
-  }
-
-  return result;
-};
+export { dedupeWorkspaceMediaLibraryPageItems };
 
 export const buildWorkspaceDurableMediaLibraryItem = (
   rawAsset: AdsflowWebMediaLibraryAssetPayload,

@@ -436,6 +436,7 @@ import {
 import { WorkspaceContentPlanPanel } from "../features/workspace/workspace-content-plan-panel";
 import {
   WorkspaceLocalExampleModal,
+  WorkspaceMediaLibraryDeleteConfirmModal,
   WorkspaceProjectDeleteModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
@@ -794,9 +795,12 @@ import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 import {
-  dedupeWorkspaceMediaLibraryItems,
+  dedupeWorkspaceMediaLibraryPageItems,
+  formatWorkspaceMediaLibraryCreatedAt,
+  hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl,
   getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceProjectDisplayTitle,
+  isWorkspaceMediaLibraryItemDurableForStorage,
   isWorkspaceMediaLibraryItemHidden,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
@@ -1303,6 +1307,31 @@ const resolveStudioCreateInitialSettings = (
     voiceIdsByLanguage,
   };
 };
+
+const MEDIA_LIBRARY_VIRTUAL_MIN_COLUMN_WIDTH_PX = 118;
+const MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX = 10;
+const MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS = 3;
+const MEDIA_LIBRARY_CARD_HEIGHT_RATIO = 16 / 9;
+
+type MediaLibraryVirtualLayout = {
+  cardHeight: number;
+  columnWidth: number;
+  columns: number;
+  endIndex: number;
+  gap: number;
+  startIndex: number;
+  totalHeight: number;
+};
+
+const createEmptyMediaLibraryVirtualLayout = (): MediaLibraryVirtualLayout => ({
+  cardHeight: 0,
+  columnWidth: 0,
+  columns: 1,
+  endIndex: 0,
+  gap: MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX,
+  startIndex: 0,
+  totalHeight: 0,
+});
 
 export function WorkspacePage({
   defaultTab,
@@ -1835,6 +1864,12 @@ export function WorkspacePage({
   const [isMediaLibraryLoading, setIsMediaLibraryLoading] = useState(false);
   const [isMediaLibraryLoadingMore, setIsMediaLibraryLoadingMore] = useState(false);
   const [mediaLibraryReloadToken, setMediaLibraryReloadToken] = useState(0);
+  const [mediaLibraryPendingDeleteItem, setMediaLibraryPendingDeleteItem] = useState<WorkspaceMediaLibraryItem | null>(null);
+  const [mediaLibraryDeleteError, setMediaLibraryDeleteError] = useState<string | null>(null);
+  const [isMediaLibraryDeleteSubmitting, setIsMediaLibraryDeleteSubmitting] = useState(false);
+  const [mediaLibraryVirtualLayout, setMediaLibraryVirtualLayout] = useState<MediaLibraryVirtualLayout>(
+    createEmptyMediaLibraryVirtualLayout,
+  );
   const [contentPlans, setContentPlans] = useState<WorkspaceContentPlan[]>([]);
   const [contentPlansError, setContentPlansError] = useState<string | null>(null);
   const [hasLoadedContentPlans, setHasLoadedContentPlans] = useState(false);
@@ -1881,6 +1916,7 @@ export function WorkspacePage({
   const [publishCalendarMonth, setPublishCalendarMonth] = useState(() => startOfPublishMonth(new Date()));
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaLibraryScrollRootRef = useRef<HTMLDivElement | null>(null);
+  const mediaLibraryGridRef = useRef<HTMLDivElement | null>(null);
   const mediaLibraryLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const mediaLibraryLoadMoreAbortControllerRef = useRef<AbortController | null>(null);
   const mediaLibraryLoadMoreCursorRef = useRef<string | null>(null);
@@ -2352,7 +2388,7 @@ export function WorkspacePage({
     };
   }, [createMode, isContentPlanVisible, updateContentPlanVisibility]);
 
-  const dismissMediaLibraryItem = useCallback(
+  const hideMediaLibraryItem = useCallback(
     (item: WorkspaceMediaLibraryItem) => {
       const hiddenKeys = getWorkspaceMediaLibraryHiddenIdentityKeys(item);
       const hiddenKeySet = new Set(hiddenKeys);
@@ -2372,48 +2408,95 @@ export function WorkspacePage({
       setGeneratedMediaLibraryEntries((current) =>
         current.filter((entry) => !doesMatchDismissedItem(entry.item)),
       );
-
-      if (
-        (item.kind === "character_reference" || item.kind === "scene_reference") &&
-        typeof item.referenceId === "string" &&
-        item.referenceId.trim()
-      ) {
-        void fetch(`/api/workspace/references/${encodeURIComponent(item.referenceId)}`, {
-          method: "DELETE",
-        }).then(async (response) => {
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-            throw new Error(payload?.error ?? "Не удалось удалить референс из медиатеки.");
-          }
-
-          setSavedWorkspaceReferences((current) => current.filter((reference) => reference.id !== item.referenceId));
-          setMediaLibraryReloadToken((current) => current + 1);
-        }).catch((error) => {
-          setMediaLibraryError(error instanceof Error ? error.message : "Не удалось удалить референс из медиатеки.");
-          setMediaLibraryReloadToken((current) => current + 1);
-        });
-        return;
-      }
-
-      if (typeof item.assetId === "number" && item.assetId > 0) {
-        void fetch(`/api/workspace/media-library/${encodeURIComponent(String(item.assetId))}`, {
-          method: "DELETE",
-        }).then(async (response) => {
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-            throw new Error(payload?.error ?? "Не удалось удалить asset из медиатеки.");
-          }
-
-          setMediaLibraryReloadToken((current) => current + 1);
-        }).catch((error) => {
-          setMediaLibraryError(error instanceof Error ? error.message : "Не удалось удалить asset из медиатеки.");
-          setMediaLibraryReloadToken((current) => current + 1);
-        });
-        return;
-      }
     },
     [session.email],
   );
+
+  const requestMediaLibraryItemDelete = useCallback((item: WorkspaceMediaLibraryItem) => {
+    setMediaLibraryDeleteError(null);
+    setMediaLibraryPendingDeleteItem(item);
+  }, []);
+
+  const confirmMediaLibraryItemDelete = useCallback(async () => {
+    const item = mediaLibraryPendingDeleteItem;
+    if (!item || isMediaLibraryDeleteSubmitting) {
+      return;
+    }
+
+    const isReference =
+      (item.kind === "character_reference" || item.kind === "scene_reference") &&
+      typeof item.referenceId === "string" &&
+      item.referenceId.trim();
+    const hasAssetId = typeof item.assetId === "number" && item.assetId > 0;
+
+    if (!isReference && !hasAssetId) {
+      hideMediaLibraryItem(item);
+      if (
+        mediaLibraryPreviewModal &&
+        isWorkspaceMediaLibraryItemHidden(
+          mediaLibraryPreviewModal,
+          new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(item)),
+        )
+      ) {
+        setMediaLibraryPreviewModal(null);
+      }
+      setMediaLibraryPendingDeleteItem(null);
+      setMediaLibraryDeleteError(null);
+      return;
+    }
+
+    setIsMediaLibraryDeleteSubmitting(true);
+    setMediaLibraryDeleteError(null);
+
+    try {
+      if (isReference) {
+        const response = await fetch(`/api/workspace/references/${encodeURIComponent(item.referenceId ?? "")}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Не удалось удалить референс из медиатеки.");
+        }
+
+        setSavedWorkspaceReferences((current) => current.filter((reference) => reference.id !== item.referenceId));
+      } else {
+        const response = await fetch(`/api/workspace/media-library/${encodeURIComponent(String(item.assetId))}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Не удалось удалить media asset из медиатеки.");
+        }
+      }
+
+      hideMediaLibraryItem(item);
+      if (
+        mediaLibraryPreviewModal &&
+        isWorkspaceMediaLibraryItemHidden(
+          mediaLibraryPreviewModal,
+          new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(item)),
+        )
+      ) {
+        setMediaLibraryPreviewModal(null);
+      }
+      setMediaLibraryPendingDeleteItem(null);
+      setMediaLibraryDeleteError(null);
+      setMediaLibraryReloadToken((current) => current + 1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось удалить элемент из медиатеки.";
+      setMediaLibraryDeleteError(message);
+      setMediaLibraryError(message);
+    } finally {
+      setIsMediaLibraryDeleteSubmitting(false);
+    }
+  }, [
+    hideMediaLibraryItem,
+    isMediaLibraryDeleteSubmitting,
+    mediaLibraryPendingDeleteItem,
+    mediaLibraryPreviewModal,
+  ]);
   const isSegmentVisualGenerationPending = useCallback(
     (segmentIndex: number) =>
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, segmentIndex) ||
@@ -3083,6 +3166,7 @@ export function WorkspacePage({
     isLocalExampleModalOpen ||
     isSegmentEditorResetConfirmOpen ||
     segmentEditorPendingDeleteIndex !== null ||
+    Boolean(mediaLibraryPendingDeleteItem) ||
     Boolean(projectPendingDelete) ||
     Boolean(insufficientCreditsContext);
 
@@ -3220,6 +3304,15 @@ export function WorkspacePage({
     setProjectPendingDeleteProjects([]);
   };
 
+  const closeMediaLibraryDeleteModal = () => {
+    if (isMediaLibraryDeleteSubmitting) {
+      return;
+    }
+
+    setMediaLibraryPendingDeleteItem(null);
+    setMediaLibraryDeleteError(null);
+  };
+
   const closeSegmentEditorDeleteModal = () => {
     setSegmentEditorPendingDeleteIndex(null);
   };
@@ -3282,6 +3375,10 @@ export function WorkspacePage({
           closeProjectDeleteModal();
           return;
         }
+        if (mediaLibraryPendingDeleteItem) {
+          closeMediaLibraryDeleteModal();
+          return;
+        }
         if (segmentEditorPendingDeleteIndex !== null) {
           closeSegmentEditorDeleteModal();
           return;
@@ -3319,15 +3416,20 @@ export function WorkspacePage({
     isPublishModalOpen,
     isSegmentEditorResetConfirmOpen,
     isSegmentAiPhotoModalOpen,
+    mediaLibraryPendingDeleteItem,
     projectPendingDelete,
     segmentEditorPendingDeleteIndex,
     isSegmentEditorVoiceoverPreviewRequiredModalOpen,
     isProjectDeleteSubmitting,
+    isMediaLibraryDeleteSubmitting,
   ]);
 
   useEffect(() => {
     if (activeTab !== "studio" && isAnyWorkspaceModalOpen) {
       closeInsufficientCreditsModal();
+      setMediaLibraryPendingDeleteItem(null);
+      setMediaLibraryDeleteError(null);
+      setIsMediaLibraryDeleteSubmitting(false);
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
       setSegmentEditorPendingDeleteIndex(null);
@@ -5356,7 +5458,7 @@ export function WorkspacePage({
         project: matchingProject,
       });
 
-      return buildWorkspaceMediaLibraryDraftItems(project, draft);
+      return buildWorkspaceMediaLibraryDraftItems(project, draft).filter(isWorkspaceMediaLibraryItemDurableForStorage);
     });
   }, [generatedVideo, projects, segmentEditorDraft?.projectId, storedSegmentEditorDrafts]);
   const upsertGeneratedMediaLibraryEntry = useCallback(
@@ -5431,18 +5533,34 @@ export function WorkspacePage({
   const draftMediaLibraryItems = useMemo(
     () =>
       segmentEditorDraft && currentDraftMediaLibraryProject
-        ? buildWorkspaceMediaLibraryDraftItems(currentDraftMediaLibraryProject, segmentEditorDraft)
+        ? buildWorkspaceMediaLibraryDraftItems(currentDraftMediaLibraryProject, segmentEditorDraft).filter(
+            (item) => !hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl(item),
+          )
         : [],
     [currentDraftMediaLibraryProject, segmentEditorDraft],
   );
   const resolvedMediaLibraryItems = useMemo(() => {
     return sortWorkspaceMediaLibraryItemsNewestFirst(
-      dedupeWorkspaceMediaLibraryItems(
+      dedupeWorkspaceMediaLibraryPageItems(
         [...liveMediaLibraryItems, ...draftMediaLibraryItems, ...storedDraftMediaLibraryItems, ...mediaLibraryItems],
       ),
     );
   }, [draftMediaLibraryItems, liveMediaLibraryItems, mediaLibraryItems, storedDraftMediaLibraryItems]);
   const hiddenMediaLibraryItemKeySet = useMemo(() => new Set(hiddenMediaLibraryItemKeys), [hiddenMediaLibraryItemKeys]);
+  const pendingMediaLibraryDeleteIdentityKeySet = useMemo(
+    () =>
+      mediaLibraryPendingDeleteItem
+        ? new Set(getWorkspaceMediaLibraryHiddenIdentityKeys(mediaLibraryPendingDeleteItem))
+        : null,
+    [mediaLibraryPendingDeleteItem],
+  );
+  const mediaLibraryPendingDeleteItemLabel = mediaLibraryPendingDeleteItem
+    ? getWorkspaceMediaLibraryItemKindLabel(
+        mediaLibraryPendingDeleteItem.kind,
+        mediaLibraryPendingDeleteItem.assetKind,
+        locale,
+      )
+    : "";
   const hiddenLoadedPersistedMediaLibraryItemsCount = useMemo(
     () =>
       resolvedMediaLibraryItems.filter(
@@ -5537,9 +5655,67 @@ export function WorkspacePage({
   const visibleTalkingPhotoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "talking_photo").length;
   const visibleCharacterReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "character_reference").length;
   const visibleSceneReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "scene_reference").length;
-  const visibleAiPhotoGroupMediaItemsCount = visibleAiPhotoMediaItemsCount + visibleImageEditMediaItemsCount;
-  const visibleAiVideoGroupMediaItemsCount =
-    visibleAiVideoMediaItemsCount + visiblePhotoAnimationMediaItemsCount + visibleTalkingPhotoMediaItemsCount;
+  const allMediaLibraryTypeFilterOptions: Array<{ count: number; filter: WorkspaceMediaLibraryFilter; label: string }> = [
+    {
+      count: visibleAiPhotoMediaItemsCount,
+      filter: "ai_photo",
+      label: workspaceText(locale, "ИИ фото", "AI photos"),
+    },
+    {
+      count: visibleImageEditMediaItemsCount,
+      filter: "image_edit",
+      label: workspaceText(locale, "Дорисовка", "Image edits"),
+    },
+    {
+      count: visibleAiVideoMediaItemsCount,
+      filter: "ai_video",
+      label: workspaceText(locale, "ИИ видео", "AI videos"),
+    },
+    {
+      count: visiblePhotoAnimationMediaItemsCount,
+      filter: "photo_animation",
+      label: workspaceText(locale, "Анимация фото", "Photo animations"),
+    },
+    {
+      count: visibleTalkingPhotoMediaItemsCount,
+      filter: "talking_photo",
+      label: workspaceText(locale, "Говорящий персонаж", "Talking character"),
+    },
+    {
+      count: visibleCharacterReferenceMediaItemsCount,
+      filter: "characters",
+      label: workspaceText(locale, "Персонажи", "Characters"),
+    },
+    {
+      count: visibleSceneReferenceMediaItemsCount,
+      filter: "scenes",
+      label: workspaceText(locale, "Сцены", "Scenes"),
+    },
+  ];
+  const mediaLibraryTypeFilterOptions = allMediaLibraryTypeFilterOptions.filter(
+    (option) => option.count > 0 || mediaLibraryFilter === option.filter,
+  );
+  const mediaLibraryActiveFilterLabel =
+    mediaLibraryFilter === "all"
+      ? workspaceText(locale, "медиа", "media")
+      : mediaLibraryTypeFilterOptions.find((option) => option.filter === mediaLibraryFilter)?.label ??
+        workspaceText(locale, "медиа", "media");
+  const mediaLibraryEmptyTitle =
+    mediaLibraryFilter === "characters"
+      ? workspaceText(locale, "Нет персонажей", "No characters")
+      : mediaLibraryFilter === "scenes"
+        ? workspaceText(locale, "Нет сцен", "No scenes")
+        : workspaceText(locale, `Нет ${mediaLibraryActiveFilterLabel.toLowerCase()}`, `No ${mediaLibraryActiveFilterLabel.toLowerCase()}`);
+  const mediaLibraryEmptyDescription =
+    mediaLibraryFilter === "characters"
+      ? workspaceText(locale, "Сохраненные персонажи появятся здесь после создания или сохранения.", "Saved characters will appear here after creation or saving.")
+      : mediaLibraryFilter === "scenes"
+        ? workspaceText(locale, "Сохраненные сцены появятся здесь после создания или сохранения.", "Saved scenes will appear here after creation or saving.")
+        : workspaceText(
+            locale,
+            `В медиатеке сейчас нет карточек типа «${mediaLibraryActiveFilterLabel}».`,
+            `No ${mediaLibraryActiveFilterLabel.toLowerCase()} items are available in the media library right now.`,
+          );
   const filteredVisibleMediaLibraryItems = useMemo(() => {
     if (mediaLibraryFilter === "photo") {
       return visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo" || item.kind === "image_edit");
@@ -5549,6 +5725,26 @@ export function WorkspacePage({
       return visibleMediaLibraryItems.filter(
         (item) => item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo",
       );
+    }
+
+    if (mediaLibraryFilter === "ai_photo") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo");
+    }
+
+    if (mediaLibraryFilter === "image_edit") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "image_edit");
+    }
+
+    if (mediaLibraryFilter === "ai_video") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "ai_video");
+    }
+
+    if (mediaLibraryFilter === "photo_animation") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation");
+    }
+
+    if (mediaLibraryFilter === "talking_photo") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "talking_photo");
     }
 
     if (mediaLibraryFilter === "characters") {
@@ -5561,6 +5757,146 @@ export function WorkspacePage({
 
     return visibleMediaLibraryItems;
   }, [mediaLibraryFilter, visibleMediaLibraryItems]);
+  useEffect(() => {
+    if (mediaLibraryFilter === "photo" || mediaLibraryFilter === "video") {
+      setMediaLibraryFilter("all");
+    }
+  }, [mediaLibraryFilter]);
+  useLayoutEffect(() => {
+    const root = mediaLibraryScrollRootRef.current;
+    const grid = mediaLibraryGridRef.current;
+    const itemCount = filteredVisibleMediaLibraryItems.length;
+
+    if (!root || !grid || itemCount <= 0) {
+      setMediaLibraryVirtualLayout((current) =>
+        current.totalHeight === 0 && current.endIndex === 0 ? current : createEmptyMediaLibraryVirtualLayout(),
+      );
+      return;
+    }
+
+    let frameId: number | null = null;
+    const measure = () => {
+      frameId = null;
+      const gridWidth = grid.clientWidth;
+      if (gridWidth <= 0) {
+        return;
+      }
+
+      const computedGridStyle = window.getComputedStyle(grid);
+      const parsedGap = Number.parseFloat(
+        computedGridStyle.getPropertyValue("--studio-media-library-grid-gap") ||
+          computedGridStyle.columnGap ||
+          computedGridStyle.gap ||
+          "",
+      );
+      const gap = Number.isFinite(parsedGap) ? parsedGap : MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX;
+      const columns = Math.max(
+        1,
+        Math.floor((gridWidth + gap) / (MEDIA_LIBRARY_VIRTUAL_MIN_COLUMN_WIDTH_PX + gap)),
+      );
+      const columnWidth = Math.max(1, (gridWidth - gap * Math.max(0, columns - 1)) / columns);
+      const cardHeight = columnWidth * MEDIA_LIBRARY_CARD_HEIGHT_RATIO;
+      const rowStride = cardHeight + gap;
+      const rowCount = Math.ceil(itemCount / columns);
+      const totalHeight = rowCount > 0 ? rowCount * cardHeight + Math.max(0, rowCount - 1) * gap : 0;
+      const rootRect = root.getBoundingClientRect();
+      const gridRect = grid.getBoundingClientRect();
+      const gridScrollTop = Math.max(0, rootRect.top - gridRect.top);
+      const viewportHeight = root.clientHeight || window.innerHeight;
+      const startRow = Math.max(0, Math.floor(gridScrollTop / rowStride) - MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS);
+      const endRow = Math.min(
+        rowCount,
+        Math.ceil((gridScrollTop + viewportHeight) / rowStride) + MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS,
+      );
+      const startIndex = Math.min(itemCount, startRow * columns);
+      const endIndex = Math.min(itemCount, Math.max(startIndex, endRow * columns));
+
+      setMediaLibraryVirtualLayout((current) => {
+        if (
+          current.cardHeight === cardHeight &&
+          current.columnWidth === columnWidth &&
+          current.columns === columns &&
+          current.endIndex === endIndex &&
+          current.gap === gap &&
+          current.startIndex === startIndex &&
+          current.totalHeight === totalHeight
+        ) {
+          return current;
+        }
+
+        return {
+          cardHeight,
+          columnWidth,
+          columns,
+          endIndex,
+          gap,
+          startIndex,
+          totalHeight,
+        };
+      });
+    };
+
+    const scheduleMeasure = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    root.addEventListener("scroll", scheduleMeasure, { passive: true });
+    window.addEventListener("resize", scheduleMeasure);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            scheduleMeasure();
+          });
+    resizeObserver?.observe(root);
+    resizeObserver?.observe(grid);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      root.removeEventListener("scroll", scheduleMeasure);
+      window.removeEventListener("resize", scheduleMeasure);
+      resizeObserver?.disconnect();
+    };
+  }, [filteredVisibleMediaLibraryItems.length]);
+  const isMediaLibraryVirtualGridReady =
+    filteredVisibleMediaLibraryItems.length > 0 &&
+    mediaLibraryVirtualLayout.columnWidth > 0 &&
+    mediaLibraryVirtualLayout.cardHeight > 0;
+  const renderedMediaLibraryVirtualItems = useMemo(() => {
+    if (!isMediaLibraryVirtualGridReady) {
+      return filteredVisibleMediaLibraryItems.map((item, index) => ({
+        index,
+        item,
+        style: null as CSSProperties | null,
+      }));
+    }
+
+    return filteredVisibleMediaLibraryItems
+      .slice(mediaLibraryVirtualLayout.startIndex, mediaLibraryVirtualLayout.endIndex)
+      .map((item, offset) => {
+        const index = mediaLibraryVirtualLayout.startIndex + offset;
+        const row = Math.floor(index / mediaLibraryVirtualLayout.columns);
+        const column = index % mediaLibraryVirtualLayout.columns;
+
+        return {
+          index,
+          item,
+          style: {
+            height: `${mediaLibraryVirtualLayout.cardHeight}px`,
+            transform: `translate3d(${column * (mediaLibraryVirtualLayout.columnWidth + mediaLibraryVirtualLayout.gap)}px, ${row * (mediaLibraryVirtualLayout.cardHeight + mediaLibraryVirtualLayout.gap)}px, 0)`,
+            width: `${mediaLibraryVirtualLayout.columnWidth}px`,
+          } satisfies CSSProperties,
+        };
+      });
+  }, [filteredVisibleMediaLibraryItems, isMediaLibraryVirtualGridReady, mediaLibraryVirtualLayout]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
   const segmentReferenceSceneOptions = useMemo(
@@ -31661,73 +31997,65 @@ export function WorkspacePage({
                       >
                         {mediaLibraryAllPillLabel}
                       </button>
-                      <button
-                        className={`studio-media-library__pill${mediaLibraryFilter === "photo" ? " is-active" : ""}`}
-                        type="button"
-                        aria-pressed={mediaLibraryFilter === "photo"}
-                        onClick={() => setMediaLibraryFilter((current) => (current === "photo" ? "all" : "photo"))}
-                      >
-                        {workspaceText(locale, "ИИ фото", "AI photos")}: {visibleAiPhotoGroupMediaItemsCount}
-                      </button>
-                      <button
-                        className={`studio-media-library__pill${mediaLibraryFilter === "video" ? " is-active" : ""}`}
-                        type="button"
-                        aria-pressed={mediaLibraryFilter === "video"}
-                        onClick={() => setMediaLibraryFilter((current) => (current === "video" ? "all" : "video"))}
-                      >
-                        {workspaceText(locale, "ИИ видео", "AI videos")}: {visibleAiVideoGroupMediaItemsCount}
-                      </button>
-                      <button
-                        className={`studio-media-library__pill${mediaLibraryFilter === "characters" ? " is-active" : ""}`}
-                        type="button"
-                        aria-pressed={mediaLibraryFilter === "characters"}
-                        onClick={() => setMediaLibraryFilter((current) => (current === "characters" ? "all" : "characters"))}
-                      >
-                        {workspaceText(locale, "Персонажи", "Characters")}: {visibleCharacterReferenceMediaItemsCount}
-                      </button>
-                      <button
-                        className={`studio-media-library__pill${mediaLibraryFilter === "scenes" ? " is-active" : ""}`}
-                        type="button"
-                        aria-pressed={mediaLibraryFilter === "scenes"}
-                        onClick={() => setMediaLibraryFilter((current) => (current === "scenes" ? "all" : "scenes"))}
-                      >
-                        {workspaceText(locale, "Сцены", "Scenes")}: {visibleSceneReferenceMediaItemsCount}
-                      </button>
+                      {mediaLibraryTypeFilterOptions.map((option) => (
+                        <button
+                          key={option.filter}
+                          className={`studio-media-library__pill${mediaLibraryFilter === option.filter ? " is-active" : ""}`}
+                          type="button"
+                          aria-pressed={mediaLibraryFilter === option.filter}
+                          onClick={() =>
+                            setMediaLibraryFilter((current) => (current === option.filter ? "all" : option.filter))
+                          }
+                        >
+                          {option.label}: {option.count}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
                   {filteredVisibleMediaLibraryItems.length > 0 ? (
-                    <div className="studio-media-library__grid">
-                      {filteredVisibleMediaLibraryItems.map((item) => {
+                    <div
+                      ref={mediaLibraryGridRef}
+                      className={`studio-media-library__grid${isMediaLibraryVirtualGridReady ? " studio-media-library__grid--virtual" : ""}`}
+                      style={isMediaLibraryVirtualGridReady ? { height: `${mediaLibraryVirtualLayout.totalHeight}px` } : undefined}
+                    >
+                      {renderedMediaLibraryVirtualItems.map(({ item, style }) => {
                       const itemKindLabel = getWorkspaceMediaLibraryItemKindLabel(item.kind, item.assetKind, locale);
                       const itemKindLabelLower = itemKindLabel.toLowerCase();
+                      const itemCreatedAtLabel = formatWorkspaceMediaLibraryCreatedAt(item.createdAt, locale);
+                      const itemSegmentLabel = workspaceText(locale, `сегмент ${item.segmentNumber}`, `segment ${item.segmentNumber}`);
                       const canDownloadSegment = Boolean(item.downloadUrl);
                       const openPhotoLabel = workspaceText(
                         locale,
-                        `Открыть ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`,
-                        `Open ${itemKindLabelLower}, project ${item.projectTitle}, segment ${item.segmentNumber}`,
+                        `Открыть ${itemKindLabelLower}, создано ${itemCreatedAtLabel}, ${itemSegmentLabel}`,
+                        `Open ${itemKindLabelLower}, created ${itemCreatedAtLabel}, ${itemSegmentLabel}`,
                       );
                       const deletePhotoLabel = workspaceText(
                         locale,
-                        `Удалить из медиатеки ${itemKindLabelLower}, проект ${item.projectTitle}, сегмент ${item.segmentNumber}`,
-                        `Delete ${itemKindLabelLower} from media library, project ${item.projectTitle}, segment ${item.segmentNumber}`,
+                        `Удалить из медиатеки ${itemKindLabelLower}, создано ${itemCreatedAtLabel}, ${itemSegmentLabel}`,
+                        `Delete ${itemKindLabelLower} from media library, created ${itemCreatedAtLabel}, ${itemSegmentLabel}`,
                       );
                       const mediaLibrarySurface = getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-library-tile");
+                      const isDeletingMediaLibraryItem = Boolean(
+                        isMediaLibraryDeleteSubmitting &&
+                        pendingMediaLibraryDeleteIdentityKeySet &&
+                        isWorkspaceMediaLibraryItemHidden(item, pendingMediaLibraryDeleteIdentityKeySet),
+                      );
 
-                      return (
+                      const mediaLibraryCard = (
                         <article
-                          key={`media-library:${item.itemKey}`}
                           className={`studio-media-library__card ${
                             item.previewKind === "video"
                               ? "studio-media-library__card--video"
                               : "studio-media-library__card--photo"
-                          }`}
+                          }${isDeletingMediaLibraryItem ? " is-deleting" : ""}`}
                         >
                           <div className="studio-media-library__frame">
                             <button
                               className="studio-media-library__card-hitbox"
                               type="button"
                               aria-label={openPhotoLabel}
+                              disabled={isDeletingMediaLibraryItem}
                               onClick={() => {
                                 void handleOpenMediaLibraryItem(item);
                               }}
@@ -31749,6 +32077,12 @@ export function WorkspacePage({
                                   previewUrl={mediaLibrarySurface.displayUrl ?? item.previewUrl}
                                   previewKind={mediaLibrarySurface.previewKind}
                                 />
+                                <span className="studio-media-library__meta" aria-hidden="true">
+                                  <span className="studio-media-library__kind">{itemKindLabel}</span>
+                                  <span className="studio-media-library__source" title={`${itemCreatedAtLabel} · ${itemSegmentLabel}`}>
+                                    {itemCreatedAtLabel} · {itemSegmentLabel}
+                                  </span>
+                                </span>
                               </span>
                             </button>
                             <a
@@ -31780,26 +32114,43 @@ export function WorkspacePage({
                               type="button"
                               aria-label={deletePhotoLabel}
                               title={workspaceText(locale, "Удалить из медиатеки", "Delete from media library")}
+                              disabled={isDeletingMediaLibraryItem}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                dismissMediaLibraryItem(item);
+                                requestMediaLibraryItemDelete(item);
                               }}
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                                <path d="M4 7h16" strokeLinecap="round" />
-                                <path d="M9 3h6" strokeLinecap="round" />
-                                <path d="M10 11v6" strokeLinecap="round" />
-                                <path d="M14 11v6" strokeLinecap="round" />
-                                <path
-                                  d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
+                              {isDeletingMediaLibraryItem ? (
+                                <span className="studio-media-library__delete-spinner" aria-hidden="true"></span>
+                              ) : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                  <path d="M4 7h16" strokeLinecap="round" />
+                                  <path d="M9 3h6" strokeLinecap="round" />
+                                  <path d="M10 11v6" strokeLinecap="round" />
+                                  <path d="M14 11v6" strokeLinecap="round" />
+                                  <path
+                                    d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              )}
                             </button>
                           </div>
                         </article>
                         );
+
+                      return style ? (
+                        <div
+                          key={`media-library-cell:${item.itemKey}`}
+                          className="studio-media-library__virtual-cell"
+                          style={style}
+                        >
+                          {mediaLibraryCard}
+                        </div>
+                      ) : (
+                        <Fragment key={`media-library:${item.itemKey}`}>{mediaLibraryCard}</Fragment>
+                      );
                       })}
                     </div>
                   ) : isMediaLibraryLoading ? (
@@ -31816,22 +32167,10 @@ export function WorkspacePage({
                         </svg>
                       </div>
                       <strong>
-                        {mediaLibraryFilter === "photo"
-                          ? workspaceText(locale, "Нет ИИ фото", "No AI photos")
-                          : mediaLibraryFilter === "characters"
-                            ? workspaceText(locale, "Нет персонажей", "No characters")
-                            : mediaLibraryFilter === "scenes"
-                              ? workspaceText(locale, "Нет сцен", "No scenes")
-                              : workspaceText(locale, "Нет ИИ видео", "No AI videos")}
+                        {mediaLibraryEmptyTitle}
                       </strong>
                       <p>
-                        {mediaLibraryFilter === "photo"
-                          ? workspaceText(locale, "В медиатеке сейчас нет доступных фото для этого фильтра.", "No photos are available for this filter right now.")
-                          : mediaLibraryFilter === "characters"
-                            ? workspaceText(locale, "Сохраненные персонажи появятся здесь после создания или сохранения.", "Saved characters will appear here after creation or saving.")
-                            : mediaLibraryFilter === "scenes"
-                              ? workspaceText(locale, "Сохраненные сцены появятся здесь после создания или сохранения.", "Saved scenes will appear here after creation or saving.")
-                              : workspaceText(locale, "В медиатеке сейчас нет доступных видео для этого фильтра.", "No videos are available for this filter right now.")}
+                        {mediaLibraryEmptyDescription}
                       </p>
                       <button
                         className="studio-projects__retry"
@@ -32080,6 +32419,16 @@ export function WorkspacePage({
           onClose={closeSegmentEditorDeleteModal}
           onConfirm={confirmDeleteSegmentEditorSegment}
           segmentSummary={segmentEditorPendingDeleteSummary}
+        />
+
+        <WorkspaceMediaLibraryDeleteConfirmModal
+          error={mediaLibraryDeleteError}
+          isSubmitting={isMediaLibraryDeleteSubmitting}
+          item={mediaLibraryPendingDeleteItem}
+          itemLabel={mediaLibraryPendingDeleteItemLabel}
+          locale={locale}
+          onClose={closeMediaLibraryDeleteModal}
+          onDelete={confirmMediaLibraryItemDelete}
         />
 
         <WorkspaceProjectDeleteModal
@@ -33016,9 +33365,15 @@ export function WorkspacePage({
             )
           : null}
         <WorkspaceMediaLibraryPreviewModal
+          isDeleteSubmitting={isMediaLibraryDeleteSubmitting}
           item={mediaLibraryPreviewModal}
           locale={locale}
           onClose={closePreviewModals}
+          onDelete={() => {
+            if (mediaLibraryPreviewModal) {
+              requestMediaLibraryItemDelete(mediaLibraryPreviewModal);
+            }
+          }}
           onVideoRef={(element) => {
             mediaLibraryPreviewVideoRef.current = element;
           }}

@@ -1,14 +1,19 @@
 import type { CSSProperties, SyntheticEvent as ReactSyntheticEvent } from "react";
 import type { Locale } from "../../lib/i18n";
-import type { WorkspaceMediaLibraryItem } from "../../lib/workspaceMediaLibrary";
+import {
+  formatWorkspaceMediaLibraryCreatedAt,
+  type WorkspaceMediaLibraryItem,
+} from "../../lib/workspaceMediaLibrary";
 import type { WorkspaceResolvedMediaSurface } from "../../lib/workspaceResolvedMedia";
 import { workspaceText } from "./workspace-page-model";
 import { WorkspaceModalVideoPlayer } from "./workspace-preview-components";
 
 type WorkspaceMediaLibraryPreviewModalProps = {
+  isDeleteSubmitting: boolean;
   item: WorkspaceMediaLibraryItem | null;
   locale: Locale;
   onClose: () => void;
+  onDelete: () => void;
   onVideoRef: (element: HTMLVideoElement | null) => void;
   posterUrl: string | null;
   surface: WorkspaceResolvedMediaSurface | null;
@@ -18,9 +23,11 @@ type WorkspaceMediaLibraryPreviewModalProps = {
 };
 
 export function WorkspaceMediaLibraryPreviewModal({
+  isDeleteSubmitting,
   item,
   locale,
   onClose,
+  onDelete,
   onVideoRef,
   posterUrl,
   surface,
@@ -31,6 +38,9 @@ export function WorkspaceMediaLibraryPreviewModal({
   if (!item) {
     return null;
   }
+
+  const canDownload = Boolean(item.downloadUrl);
+  const createdAtLabel = formatWorkspaceMediaLibraryCreatedAt(item.createdAt, locale);
 
   return (
     <div
@@ -46,6 +56,58 @@ export function WorkspaceMediaLibraryPreviewModal({
         onClick={onClose}
       />
       <div className="studio-video-modal__panel studio-video-modal__panel--video-only" role="document">
+        <div className="studio-video-modal__media-header">
+          <div className="studio-video-modal__media-title">
+            <span>{title}</span>
+            <strong>{createdAtLabel}</strong>
+            <small>{workspaceText(locale, `Сегмент ${item.segmentNumber}`, `Segment ${item.segmentNumber}`)}</small>
+          </div>
+          <div className="studio-video-modal__media-actions">
+            <a
+              className={`studio-video-modal__top-action${canDownload ? "" : " is-disabled"}`}
+              href={item.downloadUrl ?? undefined}
+              download={item.downloadName}
+              aria-label={workspaceText(locale, "Скачать визуал", "Download visual")}
+              title={workspaceText(locale, "Скачать визуал", "Download visual")}
+              tabIndex={canDownload ? 0 : -1}
+              onClick={(event) => {
+                if (!canDownload) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </a>
+            <button
+              className="studio-video-modal__top-action studio-video-modal__top-action--danger"
+              type="button"
+              aria-label={workspaceText(locale, "Удалить из медиатеки", "Delete from media library")}
+              title={workspaceText(locale, "Удалить из медиатеки", "Delete from media library")}
+              disabled={isDeleteSubmitting}
+              onClick={onDelete}
+            >
+              {isDeleteSubmitting ? (
+                <span className="studio-video-modal__top-action-spinner" aria-hidden="true"></span>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M4 7h16" strokeLinecap="round" />
+                  <path d="M9 3h6" strokeLinecap="round" />
+                  <path d="M10 11v6" strokeLinecap="round" />
+                  <path d="M14 11v6" strokeLinecap="round" />
+                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
         <button className="studio-video-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть просмотр визуала", "Close visual preview")} onClick={onClose}>
           ×
         </button>
@@ -67,25 +129,6 @@ export function WorkspaceMediaLibraryPreviewModal({
                 preload={surface?.preloadPolicy ?? "auto"}
                 preferMutedAutoplay={surface?.preferMutedAutoplay ?? true}
                 src={surface?.viewerUrl ?? item.previewUrl}
-                topActions={
-                  <a
-                    className="studio-video-modal__top-action"
-                    href={item.downloadUrl ?? item.previewUrl}
-                    download={item.downloadName}
-                    aria-label={workspaceText(locale, "Скачать визуал", "Download visual")}
-                    title={workspaceText(locale, "Скачать визуал", "Download visual")}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
-                        stroke="currentColor"
-                        strokeWidth="1.9"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </a>
-                }
                 videoKey={`media-library-preview:${item.itemKey}:${surface?.viewerUrl ?? item.previewUrl}`}
                 videoRef={onVideoRef}
                 volume={volume}
