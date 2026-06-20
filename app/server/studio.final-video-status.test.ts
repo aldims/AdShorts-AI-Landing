@@ -247,4 +247,53 @@ describe("studio final video status", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
+
+  it("drops orphan done latest generation during bootstrap when no playable media can be resolved", async () => {
+    const { getWorkspaceBootstrap } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname === "/api/web/bootstrap") {
+          return jsonResponse({
+            latest_generation: {
+              generated_at: "2026-05-02T03:41:28.690Z",
+              job_id: "orphan-done",
+              status: "done",
+              task_type: "video.generate",
+            },
+            studio_options: {},
+            user: {
+              balance: 10,
+              plan: "START",
+              start_plan_used: true,
+              user_id: 123,
+            },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations/orphan-done") {
+          return jsonResponse({
+            generated_at: "2026-05-02T03:41:28.690Z",
+            job_id: "orphan-done",
+            status: "done",
+            task_type: "video.generate",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const bootstrap = await getWorkspaceBootstrap({
+      email: "orphan-done@example.test",
+      name: "Orphan Done",
+    });
+
+    expect(bootstrap.latestGeneration).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
 });

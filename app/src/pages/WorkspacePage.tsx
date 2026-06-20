@@ -20300,10 +20300,11 @@ export function WorkspacePage({
         }
 
         if (latestGeneration.status === "done") {
-          setStatus(workspaceText(locale, "Подготавливаем видео...", "Preparing video..."));
-          void pollGenerationJob(latestGeneration.jobId, "preparing_preview", {
-            generationUiSource: "bootstrap",
-          });
+          suppressProjectFallbackPreviewRef.current = false;
+          setGenerateError(null);
+          setStatus("");
+          setIsGenerating(false);
+          setGenerationUiSource("idle");
           return;
         }
 

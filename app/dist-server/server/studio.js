@@ -3670,7 +3670,23 @@ export async function getWorkspaceBootstrap(user, options = {}) {
             ? await getWorkspaceGenerationHistoryEntry(user, String(payload.latest_generation.job_id)).catch(() => null)
             : null;
         const deletedProjects = await deletedProjectsPromise;
-        const latestGeneration = removeDeletedStudioGenerationStatus(await prepareStudioLatestGenerationForBootstrap(buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry), user), deletedProjects);
+        let latestGeneration = removeDeletedStudioGenerationStatus(await prepareStudioLatestGenerationForBootstrap(buildLatestGenerationStatus(payload.latest_generation, latestHistoryEntry), user), deletedProjects);
+        if (latestGeneration?.status === "done" && !latestGeneration.generation) {
+            try {
+                const historyGeneration = await findWorkspaceHistoryFallbackGeneration(user, [], deletedProjects);
+                latestGeneration = historyGeneration
+                    ? {
+                        generation: historyGeneration,
+                        jobId: historyGeneration.id,
+                        status: "done",
+                    }
+                    : null;
+            }
+            catch (historyError) {
+                console.error("[studio] Failed to load workspace history fallback generation", historyError);
+                latestGeneration = null;
+            }
+        }
         if (latestGeneration) {
             try {
                 await syncStudioGenerationStatusToHistory(user, latestGeneration, {
