@@ -1233,11 +1233,11 @@ const resolveStoredStudioCreateMusicType = (
 ): StudioMusicType => {
   const fallbackNonCustomMusicType = fallbackMusicType === "custom" ? "ai" : fallbackMusicType;
   const normalized = normalizeStoredStudioCreateTextValue(value);
-  if (normalized && normalized !== "custom") {
+  if (normalized && normalized !== "custom" && normalized !== "none") {
     return studioMusicOptions.find((option) => option.id === normalized)?.id ?? fallbackNonCustomMusicType;
   }
 
-  return fallbackNonCustomMusicType;
+  return fallbackNonCustomMusicType === "none" ? "ai" : fallbackNonCustomMusicType;
 };
 
 const resolveStoredStudioCreateVideoMode = (
@@ -1282,12 +1282,9 @@ const resolveStudioCreateInitialSettings = (
   );
   voiceIdsByLanguage[language] = voiceId;
 
-  const voiceEnabled =
-    typeof storedSettings?.voiceEnabled === "boolean" ? storedSettings.voiceEnabled : fallbackSettings.voiceEnabled;
-  const requestedSubtitleEnabled =
-    typeof storedSettings?.subtitleEnabled === "boolean"
-      ? storedSettings.subtitleEnabled
-      : fallbackSettings.subtitleEnabled;
+  // Persisted "off" toggles should not become the default for a fresh Studio create flow.
+  const voiceEnabled = fallbackSettings.voiceEnabled;
+  const requestedSubtitleEnabled = fallbackSettings.subtitleEnabled;
   const musicType = resolveStoredStudioCreateMusicType(storedSettings?.musicType, fallbackSettings.musicType);
   const defaultMusicName = getStudioMusicPreviewTrackName(musicType);
   const storedMusicName = normalizeStoredStudioCreateTextValue(storedSettings?.musicName);
@@ -5076,6 +5073,13 @@ export function WorkspacePage({
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
   const isGeneratedVideoPlaybackBroken = isStudioVideoMarkedFailed(generatedVideo?.videoUrl);
+  const studioInlinePreview =
+    visibleGeneratedVideo && visibleGeneratedVideoPlaybackUrl && !isGeneratedVideoPlaybackBroken
+      ? {
+          playbackUrl: visibleGeneratedVideoPlaybackUrl,
+          video: visibleGeneratedVideo,
+        }
+      : null;
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
     : isPreviewModalOpen
@@ -9144,10 +9148,14 @@ export function WorkspacePage({
             width: `min(${adaptivePromptPanelWidth}px, calc(100vw - 48px))`,
           }
         : undefined;
+  const hasLongStudioTopicPrompt = topicInput.trim().length > 72 || /[\r\n]/.test(topicInput);
+  const shouldUseExpandedStudioPrompt = composerSourceIdea !== null || hasLongStudioTopicPrompt;
   const hasStudioPromptAuxiliaryContent =
-    composerSourceIdea !== null || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
+    shouldUseExpandedStudioPrompt || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
     hasStudioPromptAuxiliaryContent ? "" : " studio-canvas-prompt__inner--compact"
+  }${shouldUseExpandedStudioPrompt ? " studio-canvas-prompt__inner--expanded" : ""}${
+    composerSourceIdea ? " studio-canvas-prompt__inner--with-source" : ""
   }`;
 
   useEffect(() => {
@@ -30917,7 +30925,11 @@ export function WorkspacePage({
   return (
     <>
       <div
-        className={`route-page studio-canvas-route${isSegmentEditorPageActive ? " is-segment-editor" : ""}`}
+        className={`route-page studio-canvas-route${isSegmentEditorPageActive ? " is-segment-editor" : ""}${
+          shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
+        }${
+          composerSourceIdea ? " has-composer-source" : ""
+        }`}
         hidden={!isStudioRouteVisible}
       >
         <header className="site-header site-header--workspace">
@@ -30991,7 +31003,11 @@ export function WorkspacePage({
                   </div>
                 ) : null}
                 <div className="studio-canvas-create-layout">
-                <div className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
+                <div
+                  className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}${
+                    studioInlinePreview ? " has-video-preview" : ""
+                  }`}
+                >
                   {createMode === "segment-editor" && segmentEditorDraft && activeSegment ? (
                     <div className="studio-segment-editor">
                       <div
@@ -31589,15 +31605,15 @@ export function WorkspacePage({
                       </>
                     )}
                   </div>
-                ) : visibleGeneratedVideo && visibleGeneratedVideoPlaybackUrl && !isGeneratedVideoPlaybackBroken ? (
+                ) : studioInlinePreview ? (
                   <div className="studio-canvas-preview__player-shell">
                     <WorkspaceModalVideoPlayer
                       autoPlay={false}
                       onError={() => handleStudioPreviewVideoError()}
                       poster={studioPreviewPosterUrl ?? undefined}
                       preload="metadata"
-                      src={visibleGeneratedVideoPlaybackUrl}
-                      videoKey={visibleGeneratedVideo.id}
+                      src={studioInlinePreview.playbackUrl}
+                      videoKey={studioInlinePreview.video.id}
                       videoRef={(element) => {
                         previewVideoRef.current = element;
                       }}
@@ -31656,12 +31672,16 @@ export function WorkspacePage({
               </div>
 
               {createMode !== "segment-editor" ? (
-              <div className="studio-canvas-prompt">
                 <div
-                ref={promptInnerRef}
-                  className={studioPromptInnerClassName}
-                  style={promptInnerStyle}
+                  className={`studio-canvas-prompt${shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""}${
+                    composerSourceIdea ? " has-composer-source" : ""
+                  }`}
                 >
+                  <div
+                    ref={promptInnerRef}
+                    className={studioPromptInnerClassName}
+                    style={promptInnerStyle}
+                  >
                   <div className="studio-canvas-prompt__editor-layout">
                     <div className="studio-canvas-prompt__editor-pane">
                       <>

@@ -26,7 +26,10 @@ describe("PrimarySiteNav", () => {
       />,
     );
 
-    expect(screen.getByRole("navigation", { name: "Разделы студии" })).toBeTruthy();
+    const studioNavigation = screen.getByRole("navigation", { name: "Разделы студии" });
+
+    expect(studioNavigation).toBeTruthy();
+    expect(studioNavigation.querySelector(".site-nav__selection")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Создать Shorts" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Проекты" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Медиатека" })).toBeTruthy();

@@ -336,11 +336,61 @@ textarea {
 
 .site-nav__content {
   display: flex;
+  position: relative;
+  isolation: isolate;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+}
+
+.site-nav__selection {
+  display: none;
+}
+
+@media (min-width: 641px) {
+  .site-nav--studio-tabs .site-nav__selection {
+    display: block;
+    position: absolute;
+    z-index: 0;
+    inset: 0 auto 0 0;
+    width: var(--site-nav-selection-width, 0px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.024)),
+      rgba(255, 255, 255, 0.018);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.13),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.018),
+      0 8px 20px rgba(4, 8, 18, 0.14);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(var(--site-nav-selection-x, 0px), 0, 0);
+    transition: opacity 0.16s ease;
+    will-change: width, transform;
+  }
+
+  .site-nav--studio-tabs .site-nav__content[data-selection-ready="true"] > .site-nav__selection {
+    opacity: 1;
+    transition:
+      width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.16s ease;
+  }
+
+  .site-nav--studio-tabs .site-nav__content > .site-nav__item {
+    z-index: 1;
+  }
+
+  .site-nav--studio-tabs .site-nav__content > .site-nav__item--active {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .site-nav__item {
@@ -21697,6 +21747,12 @@ textarea {
   max-height: var(--studio-preview-available-height);
   transform: translateY(-10px);
   margin: 0 auto;
+}
+
+.studio-canvas-preview.has-video-preview {
+  width: min(calc(var(--studio-preview-available-height) * 0.5625), 620px, calc(100vw - 48px));
+  max-width: none;
+  max-height: var(--studio-preview-available-height);
 }
 
 /* Ambient orb под карточкой */
@@ -43341,6 +43397,135 @@ html, body {
 @media (max-width: 380px) {
   .studio-canvas-route .site-header--workspace {
     --studio-header-control-height: 34px;
+  }
+}
+
+/* Long pasted prompts need a taller composer and a smaller preview above it. */
+.studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) {
+  --studio-prompt-reserve: clamp(210px, 22vh, 244px);
+  --studio-prompt-panel-source-height: 180px;
+  --studio-prompt-card-gap: 22px;
+}
+
+.studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) .studio-canvas-preview:not(.is-segment-editor) {
+  max-height: min(var(--studio-preview-available-height), 610px);
+  transform: none;
+}
+
+.studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) .studio-canvas-preview.has-video-preview:not(.is-segment-editor) {
+  width: min(calc(var(--studio-preview-available-height) * 0.5625), 620px, calc(100vw - 48px));
+  max-height: var(--studio-preview-available-height);
+}
+
+.studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__inner,
+.studio-canvas-prompt__inner--expanded {
+  height: min(var(--studio-prompt-panel-source-height), calc(var(--studio-viewport-height) - var(--studio-header-reserve) - 24px));
+  min-height: min(var(--studio-prompt-panel-source-height), calc(var(--studio-viewport-height) - var(--studio-header-reserve) - 24px));
+  max-height: min(var(--studio-prompt-panel-source-height), calc(var(--studio-viewport-height) - var(--studio-header-reserve) - 24px));
+  overflow: hidden;
+}
+
+.studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__editor-layout,
+.studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__editor-pane {
+  height: 100%;
+}
+
+.studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__editor-pane {
+  justify-content: space-between;
+}
+
+.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__head {
+  align-items: center;
+}
+
+.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__source {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__source strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__textarea {
+  min-height: 58px;
+  max-height: 74px;
+  line-height: 1.4;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 641px) {
+  .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) .studio-canvas-content {
+    justify-content: flex-end;
+    padding-bottom: calc(var(--studio-prompt-panel-source-height) + var(--studio-prompt-card-gap));
+  }
+
+  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 108px;
+    grid-template-areas: "chips submit";
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__chips {
+    display: grid;
+    grid-area: chips;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__submit {
+    grid-area: submit;
+    align-self: center;
+    justify-self: stretch;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__btn {
+    width: 100%;
+    height: 38px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) {
+    --studio-prompt-reserve: 226px;
+    --studio-prompt-panel-source-height: 180px;
+  }
+
+  .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) .studio-canvas-preview:not(.is-segment-editor) {
+    max-height: min(var(--studio-preview-available-height), 590px);
+    transform: none;
+  }
+
+  .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) .studio-canvas-preview.has-video-preview:not(.is-segment-editor) {
+    width: min(calc(var(--studio-preview-available-height) * 0.5625), 620px, calc(100vw - 48px));
+    max-height: var(--studio-preview-available-height);
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) {
+    --studio-prompt-reserve: 314px;
+    --studio-prompt-panel-source-height: 274px;
+  }
+
+  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__textarea {
+    min-height: 58px;
+    max-height: 70px;
   }
 }
 

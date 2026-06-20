@@ -8,7 +8,7 @@ Goal: push Russian-language organic growth through relevant RU directories and s
 
 URL: https://productradar.ru/submit
 
-Status: ready, needs owner login.
+Status: submitted by owner, awaiting moderation/publication.
 
 Use fields from:
 `seo-external-layer/ru-organic-submission-fields-2026-06-20.md` -> `Product Radar`.
@@ -18,14 +18,14 @@ Recommended categories:
 - Маркетинг и продажи
 - Инструменты и сервисы для продукта
 
-Confirmation needed before:
-final product submission.
+Next action:
+check whether the public card appears, then add the published URL to `directory-tracker.csv`.
 
 ## 2. NeiroAI
 
 URL: https://neiroai.ru/dobavlenie-neyroseti
 
-Status: ready to fill.
+Status: submitted, awaiting moderation/publication.
 
 Recommended values:
 - Для кого: Маркетологам, Блогерам, Копирайтерам
@@ -33,16 +33,16 @@ Recommended values:
 - Задачи: Создать видео, Создать контент, Синтезировать голос, Преобразовать текст в речь, Создать текст, Создать фон, Отредактировать видео
 
 Target link:
-https://adshortsai.com/neyroset-dlya-sozdaniya-shorts/
+https://adshortsai.com/
 
-Confirmation needed before:
-form submission.
+Next action:
+check whether the public card appears, then add the published URL to `directory-tracker.csv`.
 
 ## 3. AiLib
 
 URL: https://ailib.ru/add-ai/free/
 
-Status: ready to fill.
+Status: submitted by owner on 2026-06-20, awaiting moderation/publication.
 
 Fields:
 - E-mail: support@adshortsai.com
@@ -52,54 +52,45 @@ Fields:
 - Сфера применения: Реклама и SMM, Видео, Блогинг, Озвучка
 - Задача: Создать видео, Создать контент, Озвучка, Преобразовать текст в речь
 
-Confirmation needed before:
-form submission.
+Next action:
+check whether the public card appears, then add the published URL to `directory-tracker.csv`.
 
 ## 4. AiLibri
 
 URL: https://ailibri.com/addai
 
-Status: ready by email/brief.
+Status: deprioritized for the current fast/free directory sprint.
 
-Action:
-fill their brief and email it to `hi@ailibri.com`.
+Reason:
+no simple self-serve submission; the page asks to fill a short brief and email it to `hi@ailibri.com`, and also frames promotion through advertising/cooperation.
 
-Use draft:
-`seo-external-layer/ru-organic-email-drafts-2026-06-20.md` -> `AiLibri`.
-
-Confirmation needed before:
-sending email.
+Next action:
+skip now; revisit later only if we decide to do editorial outreach or paid placements.
 
 ## 5. pickTech
 
 URL: https://picktech.ru/partners/partner/
 
-Status: ready, needs owner/company registration.
+Status: deprioritized for the current fast/free directory sprint.
 
-Positioning:
-web service for SMM/AI-video/short-form video production.
+Reason:
+partner page is aimed at IT vendors/integrators, B2B deals, and PPC/PPL lead generation; this is a weak fit for the current organic sprint.
 
-Target link:
-https://adshortsai.com/shorts-dlya-prodazh/
-
-Confirmation needed before:
-registration form submission.
+Next action:
+skip now; revisit only if AdShorts AI is positioned as B2B software for SMM/marketing teams.
 
 ## 6. A2IS
 
 Instruction URL:
 https://a2is.ru/publications/crm/funtsional-kabineta-razrabotchika
 
-Status: ready, needs developer account registration.
+Status: published on 2026-06-20.
 
-Recommended one free category:
-Программы для маркетинга в социальных сетях.
+Public URL:
+https://a2is.ru/catalog/montazh-video/adshorts-ai
 
-Alternative:
-Программы для монтажа видео.
-
-Confirmation needed before:
-developer registration and product moderation submission.
+Next action:
+check whether the external site link is displayed after full save/moderation, then check Google/Yandex indexing.
 
 ## 7. OnReport
 

@@ -1,9 +1,10 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { defineMessages, useLocale } from "../lib/i18n";
 import { type StudioEntryIntentSection } from "../lib/studio-entry-intent";
 
 type NavItem = "examples" | "home" | "pricing" | "studio";
+type StudioNavItem = StudioEntryIntentSection | "pricing";
 
 type Props = {
   activeItem?: NavItem | null;
@@ -77,6 +78,8 @@ export function PrimarySiteNav({
   const compactMenuId = useId();
   const [isStudioMenuOpen, setIsStudioMenuOpen] = useState(false);
   const [isCompactMenuOpen, setIsCompactMenuOpen] = useState(false);
+  const studioTabsContentRef = useRef<HTMLDivElement | null>(null);
+  const studioTabItemRefs = useRef<Partial<Record<StudioNavItem, HTMLElement | null>>>({});
 
   useEffect(() => {
     if (isStudioActive) {
@@ -97,6 +100,58 @@ export function PrimarySiteNav({
   useEffect(() => {
     setIsCompactMenuOpen(false);
   }, [activeItem, activeStudioSection, preferStudioSections]);
+
+  useEffect(() => {
+    if (!shouldRenderStudioSections) {
+      return;
+    }
+
+    const content = studioTabsContentRef.current;
+    const activeStudioNavItem: StudioNavItem =
+      activeItem === "pricing" ? "pricing" : resolvedActiveStudioSection ?? "create";
+    const activeElement = studioTabItemRefs.current[activeStudioNavItem];
+
+    if (!content || !activeElement) {
+      return;
+    }
+
+    const selection = content.querySelector<HTMLElement>(".site-nav__selection");
+    let readyAnimationFrameId = 0;
+    const updateSelection = () => {
+      const contentRect = content.getBoundingClientRect();
+      const activeRect = activeElement.getBoundingClientRect();
+
+      content.style.setProperty("--site-nav-selection-x", `${activeRect.left - contentRect.left}px`);
+      content.style.setProperty("--site-nav-selection-width", `${activeRect.width}px`);
+
+      if (content.dataset.selectionReady !== "true" && readyAnimationFrameId === 0) {
+        selection?.getBoundingClientRect();
+        readyAnimationFrameId = window.requestAnimationFrame(() => {
+          content.dataset.selectionReady = "true";
+          readyAnimationFrameId = 0;
+        });
+      }
+    };
+
+    updateSelection();
+    window.addEventListener("resize", updateSelection);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateSelection);
+    resizeObserver?.observe(content);
+    resizeObserver?.observe(activeElement);
+
+    return () => {
+      window.cancelAnimationFrame(readyAnimationFrameId);
+      window.removeEventListener("resize", updateSelection);
+      resizeObserver?.disconnect();
+    };
+  }, [
+    activeItem,
+    projectsCount,
+    resolvedActiveStudioSection,
+    shouldRenderStudioSections,
+  ]);
 
   const handleStudioSectionSelect = (section: StudioEntryIntentSection) => {
     setIsCompactMenuOpen(false);
@@ -150,7 +205,8 @@ export function PrimarySiteNav({
         aria-label={t(navMessages.ariaStudioSections)}
       >
         {compactToggle}
-        <div id={compactMenuId} className="site-nav__content">
+        <div ref={studioTabsContentRef} id={compactMenuId} className="site-nav__content">
+          <span className="site-nav__selection" aria-hidden="true" />
           {([
             { id: "create", label: t(navMessages.studioCreate) },
             { id: "projects", label: t(navMessages.projects) },
@@ -158,6 +214,9 @@ export function PrimarySiteNav({
           ] as Array<{ id: StudioEntryIntentSection; label: string }>).map((item) => (
             <button
               key={item.id}
+              ref={(element) => {
+                studioTabItemRefs.current[item.id] = element;
+              }}
               className={`site-nav__item route-button${resolvedActiveStudioSection === item.id ? " site-nav__item--active" : ""}`}
               type="button"
               onClick={() => handleStudioSectionSelect(item.id)}
@@ -167,6 +226,9 @@ export function PrimarySiteNav({
             </button>
           ))}
           <Link
+            ref={(element) => {
+              studioTabItemRefs.current.pricing = element;
+            }}
             className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
             to={localizePath("/pricing/")}
             state={{ fromStudio: true }}
