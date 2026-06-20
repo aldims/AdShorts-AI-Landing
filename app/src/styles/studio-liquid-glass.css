@@ -3894,3 +3894,106 @@
     line-height: 1.35 !important;
   }
 }
+
+/*
+ * Adaptive studio header nav: keep the full-size menu while there is room,
+ * then compact only when the neighboring studio controls would collide.
+ */
+@media (min-width: 641px) {
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    width: fit-content !important;
+    min-width: 0 !important;
+    max-width: min(100%, calc(100vw - 320px)) !important;
+    min-height: 54px !important;
+    padding: 6px !important;
+    gap: 6px !important;
+    overflow: visible !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content {
+    width: auto !important;
+    max-width: 100% !important;
+    gap: 6px !important;
+    overflow: visible !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 20px !important;
+    gap: 10px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item > span:first-child {
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 920px) {
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    max-width: min(100%, calc(100vw - 280px)) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content {
+    overflow: hidden !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item {
+    flex: 1 1 0 !important;
+    padding: 0 14px !important;
+    font-size: 0.9rem !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item > span:first-child {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-canvas-route .site-header--workspace {
+    --studio-mobile-mode-switch-width: 128px;
+    --studio-mobile-nav-min-width: 112px;
+    --studio-mobile-nav-max-width: 220px;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch .studio-create-mode-switch {
+    flex: 0 0 var(--studio-mobile-mode-switch-width) !important;
+    width: var(--studio-mobile-mode-switch-width) !important;
+    min-width: var(--studio-mobile-mode-switch-width) !important;
+    max-width: var(--studio-mobile-mode-switch-width) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster .site-nav,
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster .site-nav--studio-tabs,
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch .site-nav,
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch .site-nav--studio-tabs {
+    flex: 1 1 var(--studio-mobile-nav-max-width) !important;
+    width: auto !important;
+    min-width: var(--studio-mobile-nav-min-width) !important;
+    max-width: var(--studio-mobile-nav-max-width) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .studio-canvas-route .site-header--workspace {
+    --studio-mobile-mode-switch-width: 112px;
+    --studio-mobile-nav-min-width: 92px;
+    --studio-mobile-nav-max-width: 136px;
+  }
+}
+
+@media (max-width: 380px) {
+  .studio-canvas-route .site-header--workspace {
+    --studio-mobile-mode-switch-width: 104px;
+    --studio-mobile-nav-min-width: 82px;
+    --studio-mobile-nav-max-width: 104px;
+  }
+}
