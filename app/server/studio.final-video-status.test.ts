@@ -88,6 +88,69 @@ describe("studio final video status", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
+  it("falls back to legacy project video download when done status omits final media metadata", async () => {
+    const { getStudioGenerationStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname === "/api/web/generations/job-legacy-project-download") {
+          return jsonResponse({
+            ad_id: 3847,
+            generated_at: "2026-06-14T01:06:38.799853+00:00",
+            job_id: "job-legacy-project-download",
+            project_status: "ready",
+            ready: true,
+            ready_reason: "ready",
+            status: "done",
+          });
+        }
+
+        if (url.pathname === "/api/projects/3847/media") {
+          return jsonResponse({
+            assets: [
+              {
+                id: 5835,
+                kind: "source_upload",
+                media_type: "video",
+                status: "ready",
+              },
+            ],
+            project_id: 3847,
+          });
+        }
+
+        if (url.pathname === "/api/video/download/3847") {
+          return new Response(new Uint8Array([0, 0, 0, 0]), {
+            headers: {
+              "Content-Length": "4",
+              "Content-Type": "video/mp4",
+            },
+            status: 200,
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioGenerationStatus("job-legacy-project-download", {
+      email: "legacy-download@example.test",
+      name: "Legacy Download",
+    });
+
+    const fallbackUrl = new URL(status.generation?.videoFallbackUrl ?? "", "http://localhost");
+
+    expect(status.status).toBe("done");
+    expect(status.error).toBeUndefined();
+    expect(status.generation?.finalAsset?.downloadPath).toBe("/api/video/download/3847");
+    expect(fallbackUrl.searchParams.get("path")).toBe("https://adsflow.test/api/video/download/3847");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
   it("resolves a done latest generation during workspace bootstrap when only project media has the final video", async () => {
     const { getWorkspaceBootstrap } = await loadStudioModule();
     const { getWorkspaceGenerationHistoryEntry, saveWorkspaceGenerationHistory } = await import("./workspace-history.js");

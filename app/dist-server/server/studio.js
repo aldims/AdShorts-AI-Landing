@@ -1084,6 +1084,10 @@ const normalizeAdsflowFinalVideoCandidatePath = (value) => {
     const normalized = normalizeGenerationText(value);
     return normalized && isPlayableStudioVideoPath(normalized) ? normalized : null;
 };
+const buildAdsflowLegacyProjectVideoDownloadPath = (adId) => {
+    const normalizedAdId = normalizePositiveInteger(adId);
+    return normalizedAdId ? `/api/video/download/${normalizedAdId}` : null;
+};
 const getAdsflowFinalVideoAssetPayloads = (payload) => ADSFLOW_FINAL_VIDEO_ASSET_FIELDS
     .map((fieldName) => payload?.[fieldName])
     .filter((value) => Boolean(value && typeof value === "object"));
@@ -5916,6 +5920,17 @@ export async function getStudioGenerationStatus(jobId, user) {
             });
         }
     }
+    if (!downloadPath &&
+        payload.ad_id &&
+        canExposeStudioFinalVideoFromStatus({
+            downloadPath,
+            error: payload.error,
+            projectStatus: payload.project_status,
+            readyReason: payload.ready_reason,
+            status,
+        })) {
+        downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(payload.ad_id);
+    }
     const payloadWithResolvedVideo = {
         ...payload,
         download_path: downloadPath ?? payload.download_path ?? null,
@@ -6024,8 +6039,20 @@ const getStudioVideoProxyTargetFromWorkspaceHistory = async (jobId, user, extern
     const historyAssetDownloadPath = historyEntry?.finalAssetId ? `/api/media/${historyEntry.finalAssetId}/download` : null;
     let downloadPath = normalizeGenerationText(historyEntry?.downloadPath) || normalizeGenerationText(historyAssetDownloadPath);
     if (!downloadPath && historyEntry?.adId) {
-        const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(historyEntry.adId, user, safeJobId);
-        downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }) ?? "";
+        try {
+            const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(historyEntry.adId, user, safeJobId);
+            downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }) ?? "";
+        }
+        catch (error) {
+            console.warn("[studio] Failed to resolve history playback from AdsFlow project media", {
+                adId: historyEntry.adId,
+                error: error instanceof Error ? error.message : "Unknown project media error.",
+                jobId: safeJobId,
+            });
+        }
+        if (!downloadPath) {
+            downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(historyEntry.adId) ?? "";
+        }
     }
     if (!downloadPath) {
         return null;
@@ -6049,6 +6076,9 @@ export async function getStudioVideoProxyTarget(jobId, user) {
                     error: error instanceof Error ? error.message : "Unknown project media error.",
                     jobId: normalizeGenerationText(jobId),
                 });
+            }
+            if (!downloadPath) {
+                downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(payload.ad_id);
             }
         }
         if (!canExposeStudioFinalVideoFromStatus({

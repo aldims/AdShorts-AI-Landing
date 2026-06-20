@@ -2240,6 +2240,11 @@ const normalizeAdsflowFinalVideoCandidatePath = (value: unknown) => {
   return normalized && isPlayableStudioVideoPath(normalized) ? normalized : null;
 };
 
+const buildAdsflowLegacyProjectVideoDownloadPath = (adId: unknown) => {
+  const normalizedAdId = normalizePositiveInteger(adId);
+  return normalizedAdId ? `/api/video/download/${normalizedAdId}` : null;
+};
+
 const getAdsflowFinalVideoAssetPayloads = (payload: AdsflowFinalVideoPayload | null | undefined) =>
   ADSFLOW_FINAL_VIDEO_ASSET_FIELDS
     .map((fieldName) => payload?.[fieldName])
@@ -8611,6 +8616,20 @@ export async function getStudioGenerationStatus(jobId: string, user: StudioUser)
     }
   }
 
+  if (
+    !downloadPath &&
+    payload.ad_id &&
+    canExposeStudioFinalVideoFromStatus({
+      downloadPath,
+      error: payload.error,
+      projectStatus: payload.project_status,
+      readyReason: payload.ready_reason,
+      status,
+    })
+  ) {
+    downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(payload.ad_id);
+  }
+
   const payloadWithResolvedVideo: AdsflowJobStatusResponse = {
     ...payload,
     download_path: downloadPath ?? payload.download_path ?? null,
@@ -8736,8 +8755,19 @@ const getStudioVideoProxyTargetFromWorkspaceHistory = async (
   let downloadPath = normalizeGenerationText(historyEntry?.downloadPath) || normalizeGenerationText(historyAssetDownloadPath);
 
   if (!downloadPath && historyEntry?.adId) {
-    const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(historyEntry.adId, user, safeJobId);
-    downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }) ?? "";
+    try {
+      const projectFinalVideoAsset = await fetchAdsflowProjectFinalVideoAsset(historyEntry.adId, user, safeJobId);
+      downloadPath = resolveAdsflowFinalVideoDownloadPath({ asset: projectFinalVideoAsset }) ?? "";
+    } catch (error) {
+      console.warn("[studio] Failed to resolve history playback from AdsFlow project media", {
+        adId: historyEntry.adId,
+        error: error instanceof Error ? error.message : "Unknown project media error.",
+        jobId: safeJobId,
+      });
+    }
+    if (!downloadPath) {
+      downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(historyEntry.adId) ?? "";
+    }
   }
 
   if (!downloadPath) {
@@ -8764,6 +8794,9 @@ export async function getStudioVideoProxyTarget(jobId: string, user: StudioUser)
           error: error instanceof Error ? error.message : "Unknown project media error.",
           jobId: normalizeGenerationText(jobId),
         });
+      }
+      if (!downloadPath) {
+        downloadPath = buildAdsflowLegacyProjectVideoDownloadPath(payload.ad_id);
       }
     }
 
