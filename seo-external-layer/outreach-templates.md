@@ -1,39 +1,45 @@
 # Outreach Templates
 
-Updated: 2026-05-23
+Updated: 2026-06-20
 
-Keep every message short, specific and honest. The goal is not mass spam; the goal is relevant citations, directory listings, reviews and resource-page links.
+Keep every message short, specific and honest. The current sprint is only for Russian-language organic growth: Russian pages, Russian copy and relevant Russian-language placements.
+
+## English Templates
+
+Paused for the current sprint. Do not use English outreach until the international track becomes active again.
 
 ## Directory Submission Note
 
-Subject: AdShorts AI submission for your AI video tools directory
+Тема: AdShorts AI для каталога AI-инструментов
 
-Hi,
+Здравствуйте.
 
-I am submitting AdShorts AI for your directory. It is an AI video maker that creates YouTube Shorts, Reels and TikTok videos from a topic or offer, including script, voiceover, subtitles, music and visuals.
+Предлагаю AdShorts AI для вашего каталога. Это веб-сервис для создания коротких вертикальных видео: тема или оффер превращается в сценарий, озвучку, субтитры, музыку, визуальный фон и черновик ролика для Shorts/Reels/TikTok.
 
-Product URL: https://adshortsai.com/en/
-Press kit: https://adshortsai.com/en/press/
-Category: AI video generator / creator tools / social media
+Сайт: https://adshortsai.com/
+Пресс-кит: https://adshortsai.com/press/
+Категория: AI-видео / SMM / генерация видео / инструменты для авторов
 
-The listing copy, logo and product facts are available in the press kit. Happy to provide more details if needed.
+Если формат подходит, могу прислать короткий демо-ролик, скриншоты или описание под ваш стиль.
 
-Thanks.
+Спасибо.
 
 ## Review / Roundup Pitch
 
-Subject: Possible fit for your AI video tools roundup
+Тема: Возможное дополнение для подборки AI-инструментов для видео
 
-Hi,
+Здравствуйте.
 
-I found your article about AI tools for video and short-form content. AdShorts AI may be a relevant addition if you cover tools for YouTube Shorts, Reels, TikTok or faceless video workflows.
+Нашел вашу подборку AI-инструментов для видео и короткого контента. AdShorts AI может быть релевантным дополнением, если вы покрываете сервисы для YouTube Shorts, Reels, TikTok, SMM или видео без лица.
 
-It turns a topic or short brief into a vertical video with AI script, voiceover, subtitles, music and visuals. The official press kit is here:
-https://adshortsai.com/en/press/
+Сервис превращает тему или короткий бриф в вертикальное видео со сценарием, озвучкой, субтитрами, музыкой и визуальным фоном.
 
-If useful, I can send a short demo clip or a concise product summary for your review.
+Сайт: https://adshortsai.com/
+Пресс-кит: https://adshortsai.com/press/
 
-Thanks.
+Если полезно, могу прислать короткое демо или описание под формат вашей подборки.
+
+Спасибо.
 
 ## Russian Outreach
 
@@ -41,7 +47,7 @@ Thanks.
 
 Здравствуйте.
 
-Предлагаю AdShorts AI для вашей подборки инструментов для видео, SMM или YouTube Shorts. Это AI-сервис, который собирает короткий вертикальный ролик из темы или оффера: сценарий, озвучка, субтитры, музыка и визуальный фон.
+Предлагаю AdShorts AI для вашей подборки инструментов для видео, SMM или YouTube Shorts. Это AI-инструмент, который собирает короткий вертикальный ролик из темы или оффера: сценарий, озвучка, субтитры, музыка и визуальный фон.
 
 Сайт: https://adshortsai.com/
 Пресс-кит: https://adshortsai.com/press/
@@ -84,7 +90,7 @@ Thanks.
 
 Здравствуйте.
 
-У нас есть российский AI-сервис AdShorts AI для создания коротких вертикальных видео: тема -> сценарий -> озвучка -> субтитры -> музыка -> видеофон -> готовый Shorts/Reels/TikTok.
+AdShorts AI - AI-инструмент для создания коротких вертикальных видео: тема -> сценарий -> озвучка -> субтитры -> музыка -> видеофон -> готовый Shorts/Reels/TikTok.
 
 Это может быть полезно вашей аудитории: авторам YouTube, SMM-специалистам, предпринимателям и тем, кто тестирует органический трафик из коротких видео.
 
@@ -95,16 +101,16 @@ Thanks.
 
 ## Community Post Draft
 
-Title: I built an AI tool that turns a topic into a ready-to-edit YouTube Short
+Заголовок: Собрал веб-сервис, который превращает тему в черновик Shorts/Reels/TikTok
 
-I am building AdShorts AI, a tool for creators and small teams who need to publish short-form videos consistently without editing every clip from scratch.
+Делаю AdShorts AI - инструмент для авторов, SMM-команд и небольших бизнесов, которым нужно регулярно выпускать короткие вертикальные видео без ручного монтажа каждого ролика с нуля.
 
-The workflow is simple: enter a topic or offer, get a script, voiceover, subtitles, music, visuals and a vertical video. The goal is not to replace creative direction, but to make testing hooks and publishing batches faster.
+Логика простая: вводишь тему или оффер, получаешь сценарий, озвучку, субтитры, музыку, визуальный фон и черновик вертикального видео. Задача не заменить креатив, а ускорить тестирование хуков и серийный выпуск контента.
 
-I am looking for feedback on the workflow and output quality:
-https://adshortsai.com/en/
+Буду полезна обратная связь по workflow и качеству результата:
+https://adshortsai.com/
 
-Press kit and concise product facts:
-https://adshortsai.com/en/press/
+Короткие факты и материалы:
+https://adshortsai.com/press/
 
-Specific feedback that would help: where would this fail in your Shorts/Reels/TikTok workflow, and what would you need before using it regularly?
+Особенно интересно: где такой процесс ломается в реальной работе с Shorts/Reels/TikTok и чего не хватает, чтобы использовать его регулярно?

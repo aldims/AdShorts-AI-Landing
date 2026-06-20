@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteHost = "adshortsai.com";
 const indexNowKey = "7bc3b66e6b0d381d51ec10ea138cb3a51ff94b43c24c414d3a33de656dd3d7c5";
-const defaultLastmod = "2026-06-17";
+const defaultLastmod = "2026-06-18";
 const endpoints = [
   "https://www.bing.com/indexnow",
   "https://yandex.com/indexnow",

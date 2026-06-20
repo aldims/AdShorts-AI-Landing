@@ -1,63 +1,38 @@
-# AdShorts AI External SEO Submission Kit
+# AdShorts AI RU Organic Submission Kit
 
-Updated: 2026-05-23
+Updated: 2026-06-20
 
-Use this file when submitting AdShorts AI to AI directories, launch platforms, SaaS directories, newsletters, review sites and creator-tool roundups.
+Use this file for the current Russian organic SEO sprint: Russian-language AI directories, SaaS/startup catalogs, creator-tool roundups, VC/Dzen, Telegram/VK communities and Russian marketing media.
 
-Current go-to-market priority: Russian market first. Use Russian copy and Russian URLs for Startpack, AI catalogs, VC/Habr, Telegram/VK communities and Russian marketing media. Use English copy only for international backlog placements.
+Current go-to-market priority: Russian-language organic demand. Do not use English copy, English URLs or international launch platforms in this sprint.
 
 ## Canonical URLs
 
-- Primary English URL: https://adshortsai.com/en/
-- Primary Russian URL: https://adshortsai.com/
-- Press kit EN: https://adshortsai.com/en/press/
+- Primary URL: https://adshortsai.com/
 - Press kit RU: https://adshortsai.com/press/
-- Examples EN: https://adshortsai.com/en/examples/
 - Examples RU: https://adshortsai.com/examples/
-- Pricing EN: https://adshortsai.com/en/pricing/
 - Pricing RU: https://adshortsai.com/pricing/
+- Guides hub RU: https://adshortsai.com/shorts-guides/
 - Logo: https://adshortsai.com/logo.png?v=2
 
 ## Product Facts
 
 - Product name: AdShorts AI
-- Category: AI video generator, YouTube Shorts generator, short-form video tool
-- Format: Web studio + Telegram bot
+- Category: AI video generator, YouTube Shorts generator, short-form video tool, SMM tool
+- Format: Web studio
 - Audience: YouTube creators, SMM teams, small businesses, agencies, founders
 - Contact: support@adshortsai.com
 - Pricing angle: free start, paid plans for regular short-form production
-
-## English Copy
-
-### One-Liner
-
-AdShorts AI creates YouTube Shorts, Reels and TikTok videos from an idea with AI script, voiceover, subtitles and visuals.
-
-### Short Description
-
-AdShorts AI is an AI video maker for short-form content. It turns a topic or offer into a vertical video with script, voiceover, subtitles, music and visuals, then lets creators edit and publish faster.
-
-### Long Description
-
-AdShorts AI helps creators, social media teams and small businesses produce short-form videos for YouTube Shorts, Instagram Reels and TikTok without editing every video from scratch. The product generates a script, voiceover, subtitles, music, visual background and a ready-to-edit vertical video from a topic or short brief. It is built for repeatable content workflows: testing hooks, creating batches, publishing more consistently and turning short-form video into an organic traffic channel.
-
-### Feature Bullets
-
-- Generate short-form video scripts from a topic, idea or offer.
-- Add AI voiceover, subtitles, music and visual backgrounds.
-- Edit text, voice, subtitles and visual details in the studio.
-- Create batches of Shorts for regular publishing.
-- Use examples and pricing pages as proof points for directory reviews.
-
-### Tags
-
-AI video generator, YouTube Shorts generator, Shorts automation, Reels generator, TikTok video maker, faceless video generator, AI subtitles, creator tools, social media tools, short-form video.
 
 ## Russian Copy
 
 ### One-Liner
 
 AdShorts AI создает YouTube Shorts, Reels и TikTok из идеи: сценарий, озвучка, субтитры, музыка и визуал собираются автоматически.
+
+### Neutral One-Liner for Catalogs
+
+AdShorts AI помогает быстро собирать короткие вертикальные видео для YouTube Shorts, Reels и TikTok: сценарий, озвучка, субтитры, музыка и визуал в одном процессе.
 
 ### Short Description
 
@@ -79,21 +54,52 @@ AdShorts AI помогает авторам, SMM-командам, малому 
 
 AI генератор видео, генератор Shorts, YouTube Shorts, Reels, TikTok, видео без лица, субтитры, SMM, контент для бизнеса, короткие видео.
 
-## Preferred Anchor Text
+## Russian Directory Form Copy
 
-- AI Shorts generator
-- YouTube Shorts generator
-- AI video maker for Shorts
-- faceless YouTube Shorts generator
+### Product Radar
+
+Название: AdShorts AI
+
+Короткое описание: AI-инструмент для создания коротких вертикальных видео: тема -> сценарий -> озвучка -> субтитры -> музыка -> визуал -> готовый Shorts/Reels/TikTok.
+
+Категории: Искусственный интеллект; Маркетинг и продажи; Инструменты для продукта; SMM и контент, если доступно.
+
+Ссылка: https://adshortsai.com/
+
+### NeiroAI / AiLib / AiLibri
+
+Название: AdShorts AI
+
+Описание: AdShorts AI превращает тему, идею или оффер в короткое вертикальное видео для YouTube Shorts, Reels и TikTok. Сервис помогает подготовить сценарий, озвучку, субтитры, музыку, визуальный фон и черновик ролика, который можно быстро доработать перед публикацией.
+
+Сфера применения: генерация видео, SMM, YouTube Shorts, Reels, TikTok, видео без лица, субтитры, озвучка.
+
+Ссылка: https://adshortsai.com/
+
+### pickTech / A2IS
+
+Название продукта: AdShorts AI
+
+Описание для каталога ПО: AdShorts AI - веб-сервис для создания коротких вертикальных видео. Подходит авторам, SMM-командам, малому бизнесу и агентствам, которым нужно регулярно выпускать Shorts/Reels/TikTok без ручного монтажа каждого ролика с нуля.
+
+Категории: AI-видео; SMM; Интернет-маркетинг; Маркетинг; Автоматизация контента.
+
+## Preferred RU Anchor Text
+
 - генератор Shorts
 - AI генератор видео для Shorts
+- нейросеть для создания Shorts
+- сервис для создания Shorts
+- автоматическое создание Shorts
+- AI озвучка для Shorts
+- массовое создание Shorts
 
 ## Submission Rules
 
-- Russian market first: use https://adshortsai.com/ for Russian-language directories, communities and media.
+- Use https://adshortsai.com/ for Russian-language directories, communities and media.
 - Use https://adshortsai.com/press/ when a Russian platform asks for a press kit, facts, logo, screenshots or contact.
-- Use the English URL for international directories only when working through the backlog: https://adshortsai.com/en/
 - Add the press kit URL when a form asks for media kit, screenshots, logo, facts or contact.
-- Prefer category labels like Video Generation, Social Media, Creator Tools, Marketing, Automation.
+- Prefer category labels like AI-видео, SMM, маркетинг, YouTube Shorts, генерация видео, автоматизация контента.
 - Do not promise guaranteed views, revenue or ranking.
 - Track every submission in `seo-external-layer/directory-tracker.csv`.
+- Do not submit public forms without final owner confirmation.
