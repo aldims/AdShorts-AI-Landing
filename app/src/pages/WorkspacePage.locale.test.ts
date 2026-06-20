@@ -7167,6 +7167,45 @@ describe("WorkspacePage studio locale defaults", () => {
     }));
   });
 
+  it("marks only user-selected segment durations as manual timing changes", async () => {
+    const autoVisualSegment = createDraftSegment({
+      duration: 3.8,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 3.8,
+      manualDurationSeconds: 3.8,
+      mediaType: "video",
+    });
+    const userSelectedSegment = createDraftSegment({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+    });
+
+    const autoResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(autoVisualSegment), { language: "ru" });
+    const userSelectedResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(userSelectedSegment), { language: "ru" });
+
+    expect(autoResult.payload.segments[0]).toEqual(expect.objectContaining({
+      durationMode: "manual",
+      durationSyncModeUserSelected: false,
+      manualDurationSeconds: 3.8,
+      manualTimingUserChanged: false,
+      manual_timing_user_changed: false,
+    }));
+    expect(userSelectedResult.payload.segments[0]).toEqual(expect.objectContaining({
+      durationMode: "manual",
+      durationSyncModeUserSelected: true,
+      manualDurationSeconds: 5,
+      manualTimingUserChanged: true,
+      manual_timing_user_changed: true,
+    }));
+  });
+
   it("includes per-scene subtitle disable override without changing the shared segment text", async () => {
     const segment = createDraftSegment({
       subtitleType: "none",

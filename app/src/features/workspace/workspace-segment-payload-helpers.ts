@@ -70,6 +70,8 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   duration_sync_mode_user_selected?: boolean | null;
   endTime?: number;
   index: number;
+  manualTimingUserChanged?: boolean;
+  manual_timing_user_changed?: boolean;
   manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
@@ -283,6 +285,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
         : normalizeWorkspaceSegmentDurationMode(segment.durationMode);
     const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
     const durationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
+    const manualTimingUserChanged = durationMode === "manual" && durationSyncModeUserSelected;
     const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
     const startTime = timelineCursor;
     const sourceStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
@@ -382,6 +385,8 @@ export const buildWorkspaceSegmentEditorPayload = async (
       endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
       index: segment.index,
+      manualTimingUserChanged,
+      manual_timing_user_changed: manualTimingUserChanged,
       manualDurationSeconds: roundedManualDurationSeconds,
       resetVisual: Boolean(segment.visualReset),
       sceneSoundAssetId,

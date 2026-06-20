@@ -1151,6 +1151,10 @@ textarea {
 .site-header--workspace .site-nav--studio-tabs .site-nav__item {
   flex: 0 0 auto;
   width: auto;
+  min-height: 42px;
+  padding: 0 20px;
+  gap: 10px;
+  font-size: 0.95rem;
 }
 
 .site-header--workspace .site-nav--studio-tabs .site-nav__item > span:first-child {
@@ -42713,10 +42717,15 @@ html, body {
 }
 
 @media (min-width: 641px) and (max-width: 1500px) {
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    height: auto !important;
+    min-height: 54px !important;
+  }
+
   .site-header--workspace .site-nav--studio-tabs {
     width: fit-content !important;
     max-width: min(100%, calc(100vw - 320px)) !important;
-    gap: 4px !important;
+    gap: 6px !important;
     padding: 4px !important;
     overflow: hidden !important;
   }
@@ -42730,7 +42739,7 @@ html, body {
     display: flex !important;
     width: auto !important;
     max-width: 100% !important;
-    gap: 4px !important;
+    gap: 6px !important;
     padding: 0 !important;
     border: 0 !important;
     background: transparent !important;
@@ -42739,16 +42748,21 @@ html, body {
     overflow: hidden !important;
   }
 
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item {
+    height: 42px !important;
+    min-height: 42px !important;
+  }
+
   .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item {
     width: auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
     flex: 1 1 auto !important;
     justify-content: center !important;
-    min-height: 34px !important;
-    padding: 0 clamp(8px, 0.72vw, 12px) !important;
-    font-size: clamp(0.68rem, 0.72vw, 0.82rem) !important;
-    gap: 6px !important;
+    min-height: 42px !important;
+    padding: 0 clamp(12px, 1.35vw, 15px) !important;
+    font-size: 0.92rem !important;
+    gap: 10px !important;
   }
 
   .site-header--workspace .site-nav--studio-tabs .site-nav__content .site-nav__item > span:first-child {
