@@ -4649,6 +4649,38 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("keeps exact project voice source window even when visual drift is small", () => {
+    const segment = createDraftSegment({
+      duration: 6.71,
+      endTime: 17.72,
+      index: 2,
+      speechDuration: 6.88,
+      speechEndTime: 18.06,
+      speechStartTime: 11.18,
+      startTime: 11.01,
+      text: "Third",
+      voiceSourceEndTime: 18.06,
+      voiceSourceStartTime: 11.18,
+    });
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, createDraftSession(segment));
+
+    expect(previewRange).toEqual({
+      endTime: 18.06,
+      startTime: 11.18,
+    });
+    expect(
+      resolveWorkspaceSegmentProjectVoiceoverFullPreviewAudioRange({
+        previewRange,
+        segment,
+        timelineEndTime: 17.72,
+        timelineStartTime: 11.01,
+      }),
+    ).toEqual({
+      sourceStartTime: 11.18,
+      timelineEndTime: 17.89,
+    });
+  });
+
   it("normalizes project voice source aliases from fresh segment refreshes", () => {
     const segment = createDraftSegment({
       duration: 5,

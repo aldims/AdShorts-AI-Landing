@@ -323,6 +323,8 @@ const normalizeNumber = (value: unknown) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const roundSegmentEditorTimelineSeconds = (value: number) => Math.round(value * 1000) / 1000;
+
 const normalizeSegmentDurationMode = (value: unknown): "auto" | "manual" => {
   const normalized = normalizeText(value).toLowerCase();
   return normalized === "manual" ? "manual" : "auto";
@@ -1534,6 +1536,156 @@ const getSegmentEditorSpeechWordsRange = (segment: Pick<WorkspaceSegmentEditorSe
   return { endTime, startTime };
 };
 
+const tokenizeSegmentEditorSpeechBoundaryText = (value: unknown) =>
+  normalizeText(value)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/gu)
+    .filter(Boolean);
+
+const getSegmentEditorSpeechWordTokenItems = (speechWords: WorkspaceSegmentEditorSpeechWord[]) =>
+  speechWords.flatMap((word, wordIndex) =>
+    tokenizeSegmentEditorSpeechBoundaryText(word.text).map((token) => ({
+      token,
+      wordIndex,
+    })),
+  );
+
+const doSegmentEditorTokensEqual = (left: string[], right: string[]) =>
+  left.length === right.length && left.every((token, index) => token === right[index]);
+
+const isSegmentEditorTokenPrefix = (prefix: string[], tokens: string[]) =>
+  prefix.length <= tokens.length && prefix.every((token, index) => token === tokens[index]);
+
+const cloneWorkspaceSegmentEditorSpeechWord = (
+  word: WorkspaceSegmentEditorSpeechWord,
+): WorkspaceSegmentEditorSpeechWord => ({ ...word });
+
+const cloneWorkspaceSegmentEditorSegmentForRepair = (
+  segment: WorkspaceSegmentEditorSegment,
+): WorkspaceSegmentEditorSegment => ({
+  ...segment,
+  speechWords: segment.speechWords.map(cloneWorkspaceSegmentEditorSpeechWord),
+});
+
+const applySegmentEditorSpeechWordsRange = (segment: WorkspaceSegmentEditorSegment) => {
+  const range = getSegmentEditorSpeechWordsRange(segment);
+  if (!range) {
+    return;
+  }
+
+  const speechStartTime = roundSegmentEditorTimelineSeconds(range.startTime);
+  const speechEndTime = roundSegmentEditorTimelineSeconds(range.endTime);
+  const speechDuration = roundSegmentEditorTimelineSeconds(Math.max(0, speechEndTime - speechStartTime));
+
+  segment.speechDuration = speechDuration;
+  segment.speechEndTime = speechEndTime;
+  segment.speechStartTime = speechStartTime;
+  segment.voiceSourceDuration = speechDuration;
+  segment.voiceSourceEndTime = speechEndTime;
+  segment.voiceSourceStartTime = speechStartTime;
+};
+
+const setWorkspaceSegmentEditorSegmentEndTime = (
+  segment: WorkspaceSegmentEditorSegment,
+  endTime: number,
+) => {
+  const normalizedEndTime = roundSegmentEditorTimelineSeconds(Math.max(segment.startTime, endTime));
+  segment.endTime = normalizedEndTime;
+  segment.duration = roundSegmentEditorTimelineSeconds(Math.max(0, normalizedEndTime - segment.startTime));
+};
+
+const setWorkspaceSegmentEditorSegmentStartTime = (
+  segment: WorkspaceSegmentEditorSegment,
+  startTime: number,
+) => {
+  const normalizedStartTime = roundSegmentEditorTimelineSeconds(Math.max(0, Math.min(startTime, segment.endTime)));
+  segment.startTime = normalizedStartTime;
+  segment.duration = roundSegmentEditorTimelineSeconds(Math.max(0, segment.endTime - normalizedStartTime));
+};
+
+const canRepairWorkspaceSegmentEditorSharedVoiceoverBoundary = (
+  current: WorkspaceSegmentEditorSegment,
+  next: WorkspaceSegmentEditorSegment,
+) =>
+  normalizePositiveProjectId(current.voiceoverAssetId ?? current.voiceover?.media_asset_id) === null &&
+  normalizePositiveProjectId(next.voiceoverAssetId ?? next.voiceover?.media_asset_id) === null;
+
+const repairWorkspaceSegmentEditorSpeechWordBoundaries = (
+  segments: WorkspaceSegmentEditorSegment[],
+): WorkspaceSegmentEditorSegment[] => {
+  const repairedSegments = segments.map(cloneWorkspaceSegmentEditorSegmentForRepair);
+  let didRepair = false;
+
+  for (let index = 0; index < repairedSegments.length - 1; index += 1) {
+    const current = repairedSegments[index];
+    const next = repairedSegments[index + 1];
+    if (!current || !next || !canRepairWorkspaceSegmentEditorSharedVoiceoverBoundary(current, next)) {
+      continue;
+    }
+
+    const currentTextTokens = tokenizeSegmentEditorSpeechBoundaryText(current.text);
+    const nextTextTokens = tokenizeSegmentEditorSpeechBoundaryText(next.text);
+    if (currentTextTokens.length === 0 || nextTextTokens.length === 0) {
+      continue;
+    }
+
+    const currentSpeechTokenItems = getSegmentEditorSpeechWordTokenItems(current.speechWords);
+    const nextSpeechTokenItems = getSegmentEditorSpeechWordTokenItems(next.speechWords);
+    const currentSpeechTokens = currentSpeechTokenItems.map((item) => item.token);
+    const nextSpeechTokens = nextSpeechTokenItems.map((item) => item.token);
+    if (
+      currentSpeechTokens.length === 0 ||
+      currentSpeechTokens.length >= currentTextTokens.length ||
+      !isSegmentEditorTokenPrefix(currentSpeechTokens, currentTextTokens)
+    ) {
+      continue;
+    }
+
+    const missingCurrentTextTokens = currentTextTokens.slice(currentSpeechTokens.length);
+    if (
+      missingCurrentTextTokens.length === 0 ||
+      !isSegmentEditorTokenPrefix(missingCurrentTextTokens, nextSpeechTokens) ||
+      !doSegmentEditorTokensEqual(nextSpeechTokens.slice(missingCurrentTextTokens.length), nextTextTokens)
+    ) {
+      continue;
+    }
+
+    const lastMovedToken = nextSpeechTokenItems[missingCurrentTextTokens.length - 1] ?? null;
+    if (!lastMovedToken || nextSpeechTokenItems[missingCurrentTextTokens.length]?.wordIndex === lastMovedToken.wordIndex) {
+      continue;
+    }
+
+    const moveWordCount = lastMovedToken.wordIndex + 1;
+    const movedWords = next.speechWords.slice(0, moveWordCount).map(cloneWorkspaceSegmentEditorSpeechWord);
+    const remainingNextWords = next.speechWords.slice(moveWordCount).map(cloneWorkspaceSegmentEditorSpeechWord);
+    if (movedWords.length === 0 || remainingNextWords.length === 0) {
+      continue;
+    }
+
+    current.speechWords = [
+      ...current.speechWords.map(cloneWorkspaceSegmentEditorSpeechWord),
+      ...movedWords,
+    ];
+    next.speechWords = remainingNextWords;
+    applySegmentEditorSpeechWordsRange(current);
+    applySegmentEditorSpeechWordsRange(next);
+
+    const currentSpeechRange = getSegmentEditorSpeechWordsRange(current);
+    const nextSpeechRange = getSegmentEditorSpeechWordsRange(next);
+    if (currentSpeechRange && nextSpeechRange) {
+      const repairedBoundary = roundSegmentEditorTimelineSeconds(
+        Math.max(current.endTime, next.startTime, currentSpeechRange.endTime, nextSpeechRange.startTime),
+      );
+      setWorkspaceSegmentEditorSegmentEndTime(current, repairedBoundary);
+      setWorkspaceSegmentEditorSegmentStartTime(next, Math.max(next.startTime, repairedBoundary));
+    }
+
+    didRepair = true;
+  }
+
+  return didRepair ? repairedSegments : segments;
+};
+
 const hasSegmentEditorAuthoritativeSpeechTiming = (
   segment: Pick<
     WorkspaceSegmentEditorSegment,
@@ -2477,7 +2629,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     ] as const),
   );
   const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
-  const segments = (payload.segments ?? [])
+  const rawSegments = (payload.segments ?? [])
     .map((segment, fallbackIndex) =>
       buildWorkspaceSegmentEditorSegment(
         sessionProjectId,
@@ -2497,6 +2649,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     )
     .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
     .sort((left, right) => left.index - right.index);
+  const segments = repairWorkspaceSegmentEditorSpeechWordBoundaries(rawSegments);
 
   if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
     throw new WorkspaceSegmentEditorError("Для этого проекта пока нет данных сегментов.", 409);

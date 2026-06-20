@@ -21,6 +21,7 @@ import {
   createWorkspaceSegmentEditorDraftSession,
   normalizeLegacyWorkspaceSegmentEditorDraftSession,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  repairWorkspaceSegmentEditorSpeechWordBoundaries,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentBoundaryTiming,
@@ -161,6 +162,90 @@ it("recognizes talking photo assets by library kind", () => {
       storageKey: null,
     }),
   ).toBe(true);
+});
+
+it("repairs repeated speech words that leaked into the next project voiceover scene", () => {
+  const sceneFive = createProjectVoiceoverSegment({
+    duration: 6.72,
+    endTime: 30.52,
+    index: 4,
+    speechDuration: 6.72,
+    speechEndTime: 30.52,
+    speechStartTime: 23.8,
+    speechWords: [
+      { confidence: 0, endTime: 24.02, startTime: 23.8, text: "Но" },
+      { confidence: 0, endTime: 24.44, startTime: 24.02, text: "против" },
+      { confidence: 0, endTime: 25.04, startTime: 24.44, text: "мощи" },
+      { confidence: 0, endTime: 25.68, startTime: 25.04, text: "Сусаноо" },
+      { confidence: 0, endTime: 26.42, startTime: 25.68, text: "обычные" },
+      { confidence: 0, endTime: 27.16, startTime: 26.42, text: "технологии" },
+      { confidence: 0, endTime: 27.84, startTime: 27.16, text: "Готэма" },
+      { confidence: 0, endTime: 28.78, startTime: 27.84, text: "окажутся" },
+      { confidence: 0, endTime: 29.3, startTime: 28.78, text: "практически" },
+      { confidence: 0, endTime: 30.52, startTime: 30, text: "бесполезными" },
+    ],
+    startTime: 23.8,
+    text: "Но против мощи Сусаноо обычные технологии Готэма окажутся практически бесполезными в финале.",
+    voiceoverAsset: null,
+    voiceoverAssetId: null,
+    voiceoverTextHash: null,
+    voiceoverVoiceType: null,
+    voiceover_asset_id: null,
+  });
+  const sceneSix = createProjectVoiceoverSegment({
+    duration: 7.793,
+    endTime: 38.313,
+    index: 5,
+    speechDuration: 7.24,
+    speechEndTime: 37.76,
+    speechStartTime: 30.52,
+    speechWords: [
+      { confidence: 0, endTime: 30.7, startTime: 30.52, text: "в" },
+      { confidence: 0, endTime: 30.96, startTime: 30.7, text: "финале." },
+      { confidence: 0, endTime: 31.18, startTime: 30.96, text: "В" },
+      { confidence: 0, endTime: 32.44, startTime: 31.88, text: "этой" },
+      { confidence: 0, endTime: 33.02, startTime: 32.44, text: "битве" },
+      { confidence: 0, endTime: 33.82, startTime: 33.02, text: "гениальный" },
+      { confidence: 0, endTime: 34.4, startTime: 33.82, text: "интеллект" },
+      { confidence: 0, endTime: 35.18, startTime: 34.4, text: "проигрывает" },
+      { confidence: 0, endTime: 35.94, startTime: 35.18, text: "божественной" },
+      { confidence: 0, endTime: 36.44, startTime: 35.94, text: "силе" },
+      { confidence: 0, endTime: 36.88, startTime: 36.44, text: "клана" },
+      { confidence: 0, endTime: 37.76, startTime: 36.88, text: "Учиха." },
+    ],
+    startTime: 30.52,
+    text: "В этой битве гениальный интеллект проигрывает божественной силе клана Учиха.",
+    voiceoverAsset: null,
+    voiceoverAssetId: null,
+    voiceoverTextHash: null,
+    voiceoverVoiceType: null,
+    voiceover_asset_id: null,
+  });
+
+  const repaired = repairWorkspaceSegmentEditorSpeechWordBoundaries([sceneFive, sceneSix]);
+
+  expect(repaired[0]?.speechWords.slice(-2).map((word) => word.text)).toEqual(["в", "финале."]);
+  expect(repaired[0]).toEqual(expect.objectContaining({
+    duration: 7.16,
+    endTime: 30.96,
+    speechDuration: 7.16,
+    speechEndTime: 30.96,
+    speechStartTime: 23.8,
+    voiceSourceDuration: 7.16,
+    voiceSourceEndTime: 30.96,
+    voiceSourceStartTime: 23.8,
+  }));
+  expect(repaired[1]?.speechWords[0]?.text).toBe("В");
+  expect(repaired[1]).toEqual(expect.objectContaining({
+    duration: 7.353,
+    speechDuration: 6.8,
+    speechEndTime: 37.76,
+    speechStartTime: 30.96,
+    startTime: 30.96,
+    voiceSourceDuration: 6.8,
+    voiceSourceEndTime: 37.76,
+    voiceSourceStartTime: 30.96,
+  }));
 });
 
 describe("workspace segment editor scene sound preview", () => {
@@ -1303,6 +1388,52 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 4,
       manualDurationSeconds: null,
       startTime: 0,
+    }));
+  });
+
+  it("does not let project voiceover speech boundaries override a user-selected voiceover duration", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      currentSourceKind: "upload",
+      duration: 4.82,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 4.82,
+      index: 0,
+      mediaType: "video",
+      speechDuration: 4.82,
+      speechEndTime: 4.82,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 4.82,
+      voiceSourceEndTime: 4.82,
+      voiceSourceStartTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      duration: 6,
+      endTime: 11.1,
+      index: 1,
+      speechDuration: 5.6,
+      speechEndTime: 10.7,
+      speechStartTime: 5.1,
+      startTime: 5.1,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 4.82,
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 4.82,
+      startTime: 0,
+      voiceSourceDuration: 4.82,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 4.82,
     }));
   });
 

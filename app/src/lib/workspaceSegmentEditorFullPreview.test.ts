@@ -21,6 +21,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGateKeepAliveTracks,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
@@ -67,6 +68,35 @@ describe("workspace segment editor full preview", () => {
       [1, 7.4],
       [3, 9.5],
     ]);
+  });
+
+  it("uses project voice boundaries instead of stretched visual starts for full-preview scene timing", () => {
+    const visualSegments = [
+      { endTime: 5.1, index: 0, startTime: 0, voiceBoundaryEndTime: 4.82, voiceBoundaryStartTime: 0 },
+      { endTime: 11.01, index: 1, startTime: 5.1, voiceBoundaryEndTime: 10.84, voiceBoundaryStartTime: 5.1 },
+      { endTime: 17.72, index: 2, startTime: 11.01, voiceBoundaryEndTime: 18.06, voiceBoundaryStartTime: 11.18 },
+      { endTime: 25.753, index: 3, startTime: 17.72, voiceBoundaryEndTime: 23.48, voiceBoundaryStartTime: 18.36 },
+      { endTime: 32.913, index: 4, startTime: 25.753, voiceBoundaryEndTime: 30.96, voiceBoundaryStartTime: 23.8 },
+      { endTime: 39.713, index: 5, startTime: 32.913, voiceBoundaryEndTime: 37.76, voiceBoundaryStartTime: 30.96 },
+    ];
+
+    expect(resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments(visualSegments)).toEqual([
+      expect.objectContaining({ endTime: 5.1, index: 0, startTime: 0 }),
+      expect.objectContaining({ endTime: 11.18, index: 1, startTime: 5.1 }),
+      expect.objectContaining({ endTime: 18.36, index: 2, startTime: 11.18 }),
+      expect.objectContaining({ endTime: 23.8, index: 3, startTime: 18.36 }),
+      expect.objectContaining({ endTime: 30.96, index: 4, startTime: 23.8 }),
+      expect.objectContaining({ endTime: 37.76, index: 5, startTime: 30.96 }),
+    ]);
+  });
+
+  it("keeps visual segment timing when a complete project voice boundary set is unavailable", () => {
+    const visualSegments = [
+      { endTime: 4, index: 0, startTime: 0, voiceBoundaryEndTime: 3.8, voiceBoundaryStartTime: 0 },
+      { endTime: 8, index: 1, startTime: 4 },
+    ];
+
+    expect(resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments(visualSegments)).toBe(visualSegments);
   });
 
   it("adds a small voice tail without crossing into the next shared audio source window", () => {

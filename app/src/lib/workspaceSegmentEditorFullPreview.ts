@@ -119,6 +119,11 @@ export type WorkspaceSegmentEditorFullPreviewSharedAudioSourceSegment = {
   segmentIndex: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewVoiceBoundarySegment = WorkspaceSegmentEditorFullPreviewSegment & {
+  voiceBoundaryEndTime?: number | null;
+  voiceBoundaryStartTime?: number | null;
+};
+
 const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
@@ -168,6 +173,76 @@ export const resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes
   });
 
   return startTimeBySegmentIndex;
+};
+
+export const resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments = <
+  Segment extends WorkspaceSegmentEditorFullPreviewVoiceBoundarySegment,
+>(
+  segments: Segment[],
+): Segment[] => {
+  if (segments.length === 0) {
+    return segments;
+  }
+
+  const normalizedSegments = segments.map((segment) => {
+    const startTime = normalizePreviewTime(segment.startTime) ?? 0;
+    const endTime = Math.max(startTime, normalizePreviewTime(segment.endTime) ?? startTime);
+    const voiceBoundaryStartTime = normalizePreviewTime(segment.voiceBoundaryStartTime);
+    const voiceBoundaryEndTime = normalizePreviewTime(segment.voiceBoundaryEndTime);
+
+    return {
+      endTime,
+      segment,
+      startTime,
+      voiceBoundaryEndTime,
+      voiceBoundaryStartTime,
+    };
+  });
+
+  if (
+    normalizedSegments.some(
+      ({ voiceBoundaryEndTime, voiceBoundaryStartTime }) =>
+        voiceBoundaryStartTime === null ||
+        voiceBoundaryEndTime === null ||
+        voiceBoundaryEndTime <= voiceBoundaryStartTime,
+    )
+  ) {
+    return segments;
+  }
+
+  for (let index = 1; index < normalizedSegments.length; index += 1) {
+    const previousStartTime = normalizedSegments[index - 1]?.voiceBoundaryStartTime;
+    const nextStartTime = normalizedSegments[index]?.voiceBoundaryStartTime;
+    if (
+      previousStartTime === null ||
+      nextStartTime === null ||
+      nextStartTime < previousStartTime - 0.001
+    ) {
+      return segments;
+    }
+  }
+
+  return normalizedSegments.map(({ segment, startTime: baseStartTime, voiceBoundaryEndTime, voiceBoundaryStartTime }, index) => {
+    const resolvedStartTime =
+      index === 0
+        ? Math.min(baseStartTime, voiceBoundaryStartTime ?? baseStartTime)
+        : voiceBoundaryStartTime ?? baseStartTime;
+    const nextVoiceBoundaryStartTime = normalizedSegments[index + 1]?.voiceBoundaryStartTime ?? null;
+    const resolvedEndTime =
+      nextVoiceBoundaryStartTime !== null && nextVoiceBoundaryStartTime > resolvedStartTime
+        ? nextVoiceBoundaryStartTime
+        : Math.max(resolvedStartTime, voiceBoundaryEndTime ?? resolvedStartTime);
+
+    if (resolvedEndTime <= resolvedStartTime) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      endTime: roundPreviewTime(resolvedEndTime),
+      startTime: roundPreviewTime(resolvedStartTime),
+    };
+  });
 };
 
 export const clampWorkspaceSegmentEditorFullPreviewTime = (

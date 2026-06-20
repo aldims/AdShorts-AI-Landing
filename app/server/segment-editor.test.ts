@@ -1706,6 +1706,97 @@ describe("segment editor asset lifecycle mapping", () => {
     }));
   });
 
+  it("repairs saved speech word boundaries before they reach the preview session", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3940,
+      {
+        project_id: 3940,
+        segments: [
+          {
+            duration: 6.72,
+            end_time: 30.52,
+            index: 4,
+            speech_duration: 6.72,
+            speech_end_time: 30.52,
+            speech_start_time: 23.8,
+            speech_words: [
+              { end_time: 24.08, start_time: 23.8, text: "Но" },
+              { end_time: 24.56, start_time: 24.12, text: "против" },
+              { end_time: 25.04, start_time: 24.6, text: "скрытых" },
+              { end_time: 25.64, start_time: 25.08, text: "гендзюцу" },
+              { end_time: 25.86, start_time: 25.68, text: "и" },
+              { end_time: 26.48, start_time: 25.9, text: "внезапных" },
+              { end_time: 26.92, start_time: 26.52, text: "атак" },
+              { end_time: 27.22, start_time: 26.96, text: "его" },
+              { end_time: 27.82, start_time: 27.26, text: "гаджеты" },
+              { end_time: 28.24, start_time: 27.86, text: "могли" },
+              { end_time: 28.48, start_time: 28.28, text: "бы" },
+              { end_time: 29.2, start_time: 28.52, text: "оказаться" },
+              { end_time: 30.52, start_time: 29.24, text: "бесполезными" },
+            ],
+            start_time: 23.8,
+            text: "Но против скрытых гендзюцу и внезапных атак его гаджеты могли бы оказаться бесполезными в финале.",
+          },
+          {
+            duration: 7.793,
+            end_time: 38.313,
+            index: 5,
+            speech_duration: 7.36,
+            speech_end_time: 37.88,
+            speech_start_time: 30.52,
+            speech_words: [
+              { end_time: 30.7, start_time: 30.52, text: "в" },
+              { end_time: 30.96, start_time: 30.72, text: "финале." },
+              { end_time: 31.14, start_time: 30.96, text: "В" },
+              { end_time: 31.46, start_time: 31.18, text: "этой" },
+              { end_time: 31.92, start_time: 31.5, text: "битве" },
+              { end_time: 32.5, start_time: 31.96, text: "победила" },
+              { end_time: 32.76, start_time: 32.54, text: "бы" },
+              { end_time: 33.44, start_time: 32.8, text: "стратегия" },
+              { end_time: 37.88, start_time: 33.48, text: "Учиха." },
+            ],
+            start_time: 30.52,
+            text: "В этой битве победила бы стратегия Учиха.",
+          },
+        ],
+        tts_asset_id: 394000,
+        voice_type: "Boris",
+      },
+      {
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 3940,
+        },
+      },
+    );
+
+    const sceneFive = session.segments[0];
+    const sceneSix = session.segments[1];
+    expect(sceneFive?.speechWords.slice(-2).map((word) => word.text)).toEqual(["в", "финале."]);
+    expect(sceneFive).toEqual(expect.objectContaining({
+      duration: 7.16,
+      endTime: 30.96,
+      speechDuration: 7.16,
+      speechEndTime: 30.96,
+      speechStartTime: 23.8,
+      voiceSourceDuration: 7.16,
+      voiceSourceEndTime: 30.96,
+      voiceSourceStartTime: 23.8,
+    }));
+    expect(sceneSix?.speechWords[0]?.text).toBe("В");
+    expect(sceneSix).toEqual(expect.objectContaining({
+      duration: 7.353,
+      speechDuration: 6.92,
+      speechEndTime: 37.88,
+      speechStartTime: 30.96,
+      startTime: 30.96,
+      voiceSourceDuration: 6.92,
+      voiceSourceEndTime: 37.88,
+      voiceSourceStartTime: 30.96,
+    }));
+  });
+
   it("uses project details timeline over a stale voiceover-trimmed segment editor payload", () => {
     const session = buildWorkspaceSegmentEditorSessionFromPayload(
       3813,

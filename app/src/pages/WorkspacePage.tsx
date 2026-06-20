@@ -230,6 +230,8 @@ import {
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
+  getWorkspaceSegmentVoiceSourceEndTime,
+  getWorkspaceSegmentVoiceSourceStartTime,
   getWorkspaceSegmentVoiceOverrideId,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
@@ -828,6 +830,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
@@ -21967,6 +21970,7 @@ export function WorkspacePage({
       durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
+      voiceoverDurationSeconds?: number | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -21975,10 +21979,19 @@ export function WorkspacePage({
       return null;
     }
 
-    const effectiveVoiceoverDurationSeconds = getSegmentTimelineEffectiveVoiceoverDurationSeconds(
-      currentSegment,
-      currentDraft,
+    const hasExplicitVoiceoverDurationSeconds = Object.prototype.hasOwnProperty.call(
+      options ?? {},
+      "voiceoverDurationSeconds",
     );
+    const explicitVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+      options?.voiceoverDurationSeconds,
+    );
+    const effectiveVoiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
+      ? explicitVoiceoverDurationSeconds
+      : getSegmentTimelineEffectiveVoiceoverDurationSeconds(
+          currentSegment,
+          currentDraft,
+        );
     let timing = resolveWorkspaceSegmentBoundaryTiming(currentSegment, requestedBoundaryTime, currentDraft, {
       voiceoverDurationSeconds: effectiveVoiceoverDurationSeconds,
     });
@@ -22081,14 +22094,17 @@ export function WorkspacePage({
       );
       const staleSpeechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration);
       const staleVoiceSourceDurationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+      const shouldPinSelectedVoiceoverDuration =
+        durationSyncMode === "voiceover" && normalizedEffectiveVoiceoverDurationSeconds !== null;
       const shouldRefreshStaleVoiceDuration =
-        normalizedEffectiveVoiceoverDurationSeconds !== null &&
+        shouldPinSelectedVoiceoverDuration ||
+        (normalizedEffectiveVoiceoverDurationSeconds !== null &&
         [staleSpeechDurationSeconds, staleVoiceSourceDurationSeconds].some(
           (durationSeconds) =>
             durationSeconds !== null &&
             durationSeconds >
               normalizedEffectiveVoiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
-        );
+        ));
       const refreshedSpeechEndTime = shouldRefreshStaleVoiceDuration
         ? roundWorkspaceSegmentTimelineSeconds(timing.segmentStartTime + normalizedEffectiveVoiceoverDurationSeconds)
         : segment.speechEndTime;
@@ -22131,6 +22147,7 @@ export function WorkspacePage({
       durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
+      voiceoverDurationSeconds?: number | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -22418,6 +22435,7 @@ export function WorkspacePage({
       durationSyncMode?: WorkspaceSegmentEditorDraftSegment["durationSyncMode"];
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
+      voiceoverDurationSeconds?: number | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -22493,6 +22511,7 @@ export function WorkspacePage({
         durationSyncMode: videoTrimDuration.durationSyncMode,
         maximumDurationSeconds: videoTrimDuration.maximumDurationSeconds,
         sourceDurationSeconds: videoTrimDuration.maximumDurationSeconds,
+        voiceoverDurationSeconds: videoTrimDuration.minimumDurationSeconds,
       });
     }
 
@@ -22531,6 +22550,7 @@ export function WorkspacePage({
     return applySegmentTimelineDurationValue(segmentIndex, nextDurationSeconds, {
       durationSyncMode: shouldApplyTrimToVoiceover ? "voiceover" : "visual",
       sourceDurationSeconds: sourceVideoDurationSeconds,
+      ...(voiceoverDurationSeconds !== null ? { voiceoverDurationSeconds } : {}),
     });
   };
   const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
@@ -22941,7 +22961,46 @@ export function WorkspacePage({
         startTime: span.startTime,
       });
     });
-    return previewSegments;
+    if (!segmentEditorDraft || previewSegments.length === 0) {
+      return previewSegments;
+    }
+
+    const voiceBoundarySegments = previewSegments.map((previewSegment, arrayIndex) => {
+      const segment = segmentEditorDraft.segments[arrayIndex];
+      if (!segment || segment.index !== previewSegment.index || !studioSidebarVoiceEnabled) {
+        return previewSegment;
+      }
+
+      const hasProjectTimelineVoiceover = canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, segmentEditorDraft, {
+        baselineSession: segmentEditorChangeDisplayBaseSession,
+        isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
+      });
+      const isVoiceAudioStale =
+        !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, segmentEditorDraft) && !hasProjectTimelineVoiceover;
+      const voiceOption = getSegmentTimelineVoiceOption(segment);
+      const voiceoverAudioPreviewSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+        allowFinalVideoStaleProjectTimelineFallback: hasProjectTimelineVoiceover,
+        allowProjectTimelineFallback: true,
+        isVoiceAudioStale,
+        segment,
+        session: segmentEditorDraft,
+        voiceEnabled: studioSidebarVoiceEnabled,
+        voiceOption,
+      });
+      if (voiceoverAudioPreviewSource.sourceKind !== "project" || !voiceoverAudioPreviewSource.previewRange) {
+        return previewSegment;
+      }
+
+      return {
+        ...previewSegment,
+        voiceBoundaryEndTime:
+          getWorkspaceSegmentVoiceSourceEndTime(segment) ?? voiceoverAudioPreviewSource.previewRange.endTime,
+        voiceBoundaryStartTime:
+          getWorkspaceSegmentVoiceSourceStartTime(segment) ?? voiceoverAudioPreviewSource.previewRange.startTime,
+      };
+    });
+
+    return resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments(voiceBoundarySegments);
   };
   const getSegmentEditorFullPreviewDurationSeconds = () => {
     const previewSegments = getSegmentEditorFullPreviewSegments();
@@ -26929,7 +26988,9 @@ export function WorkspacePage({
                 isImageDurationSegment,
                 locale,
                 segmentSlotDurationSeconds,
-                videoVisualDurationSeconds: segmentVideoVisualDurationBadgeSeconds,
+                videoVisualDurationSeconds: isSegmentVideoTrimmedToVoiceover
+                  ? null
+                  : segmentVideoVisualDurationBadgeSeconds,
               });
               const segmentVisualDurationBadgeLabel = segmentVisualDurationDisplay.badgeLabel;
               const segmentVisualDurationLabel = segmentVisualDurationDisplay.durationLabel;
