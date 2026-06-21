@@ -3901,12 +3901,23 @@
  * then compact only when the neighboring studio controls would collide.
  */
 @media (min-width: 641px) {
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster {
+    top: calc(50% - 4px) !important;
+    align-items: center !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch {
+    align-items: center !important;
+  }
+
   .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    box-sizing: border-box !important;
+    height: var(--studio-header-control-height) !important;
     width: fit-content !important;
     min-width: 0 !important;
     max-width: min(100%, calc(100vw - 320px)) !important;
-    min-height: 54px !important;
-    padding: 6px !important;
+    min-height: var(--studio-header-control-height) !important;
+    padding: 5px !important;
     gap: 6px !important;
     overflow: visible !important;
   }
@@ -3922,8 +3933,8 @@
     flex: 0 0 auto !important;
     width: auto !important;
     min-width: 0 !important;
-    height: 42px !important;
-    min-height: 42px !important;
+    height: calc(var(--studio-header-control-height) - 10px) !important;
+    min-height: calc(var(--studio-header-control-height) - 10px) !important;
     padding: 0 20px !important;
     gap: 10px !important;
     font-size: 0.95rem !important;
@@ -4217,10 +4228,12 @@
   }
 
   .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    box-sizing: border-box !important;
+    height: var(--studio-header-control-height) !important;
     width: fit-content !important;
     max-width: 100% !important;
-    min-height: 44px !important;
-    padding: 4px !important;
+    min-height: var(--studio-header-control-height) !important;
+    padding: 3px !important;
     gap: 3px !important;
     overflow: visible !important;
   }
@@ -4236,8 +4249,8 @@
     flex: 0 0 auto !important;
     width: auto !important;
     max-width: none !important;
-    height: 36px !important;
-    min-height: 36px !important;
+    height: calc(var(--studio-header-control-height) - 8px) !important;
+    min-height: calc(var(--studio-header-control-height) - 8px) !important;
     padding: 0 8px !important;
     gap: 5px !important;
     font-size: 0.76rem !important;
@@ -4258,7 +4271,7 @@
   }
 
   .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__selection {
-    height: 36px !important;
+    height: calc(var(--studio-header-control-height) - 8px) !important;
   }
 
   .studio-canvas-route .site-header--workspace .site-nav__studio-count {
