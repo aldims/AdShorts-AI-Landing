@@ -397,6 +397,7 @@ import {
   getStudioViewFromRouteSection,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   type StudioRouteMode,
@@ -969,6 +970,7 @@ export {
 export {
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   buildStudioRouteUrl,
@@ -1968,6 +1970,7 @@ export function WorkspacePage({
   const segmentEditorRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorHandledRouteRestoreKeyRef = useRef<string | null>(null);
   const segmentEditorFreshRouteFetchKeyRef = useRef<string | null>(null);
+  const segmentEditorFreshRouteAttemptedKeyRef = useRef<string | null>(null);
   const segmentEditorPendingRouteSyncKeyRef = useRef<string | null>(null);
   const segmentEditorExplicitStructureChangeProjectIdsRef = useRef<Set<number>>(new Set());
   const segmentEditorConsumedSourceResetProjectIdsRef = useRef<Set<number>>(new Set());
@@ -10069,6 +10072,7 @@ export function WorkspacePage({
     segmentEditorRouteRestoreKeyRef.current = null;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
     segmentEditorFreshRouteFetchKeyRef.current = null;
+    segmentEditorFreshRouteAttemptedKeyRef.current = null;
     segmentEditorPendingRouteSyncKeyRef.current = null;
     setSegmentEditorLoadedSession(null);
     setSegmentEditorAppliedSession(null);
@@ -10791,6 +10795,7 @@ export function WorkspacePage({
         segmentEditorRouteRestoreKeyRef.current = null;
         segmentEditorHandledRouteRestoreKeyRef.current = null;
         segmentEditorFreshRouteFetchKeyRef.current = null;
+        segmentEditorFreshRouteAttemptedKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("projects");
@@ -10807,6 +10812,7 @@ export function WorkspacePage({
         segmentEditorRouteRestoreKeyRef.current = null;
         segmentEditorHandledRouteRestoreKeyRef.current = null;
         segmentEditorFreshRouteFetchKeyRef.current = null;
+        segmentEditorFreshRouteAttemptedKeyRef.current = null;
         setSegmentEditorDraft(null);
         setCreateMode("default");
         setStudioView("media");
@@ -10830,6 +10836,7 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorFreshRouteAttemptedKeyRef.current = null;
       if (shouldRestoreGeneratedVideoActions && generatedVideo) {
         setGeneratedVideoActionMode("expanded");
         updateDismissedStudioPreviewKey(null);
@@ -10851,6 +10858,7 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorFreshRouteAttemptedKeyRef.current = null;
       segmentEditorPendingRouteSyncKeyRef.current = null;
       return;
     }
@@ -10863,6 +10871,7 @@ export function WorkspacePage({
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorFreshRouteAttemptedKeyRef.current = null;
       segmentEditorPendingRouteSyncKeyRef.current = null;
       hasProcessedInitialSegmentEditorEditRouteRef.current = false;
       return;
@@ -10892,6 +10901,8 @@ export function WorkspacePage({
     if (shouldResetConsumedRouteState) {
       markSegmentEditorConsumedSourceProjectReset(routeProjectId);
       clearPersistedSegmentEditorStateForProject(routeProjectId);
+      segmentEditorFreshRouteFetchKeyRef.current = null;
+      segmentEditorFreshRouteAttemptedKeyRef.current = null;
       if (segmentEditorDraftRef.current?.projectId === routeProjectId) {
         segmentEditorDraftRef.current = null;
       }
@@ -10946,11 +10957,18 @@ export function WorkspacePage({
     }
 
     const requestFreshRouteSession = () => {
-      if (segmentEditorFreshRouteFetchKeyRef.current === restoreKey) {
+      if (
+        !shouldRequestWorkspaceSegmentEditorFreshRouteSession(
+          restoreKey,
+          segmentEditorFreshRouteFetchKeyRef.current,
+          segmentEditorFreshRouteAttemptedKeyRef.current,
+        )
+      ) {
         return;
       }
 
       segmentEditorFreshRouteFetchKeyRef.current = restoreKey;
+      segmentEditorFreshRouteAttemptedKeyRef.current = restoreKey;
       void ensureSegmentEditorDraftForProject(routeProjectId, {
         bypassCache: true,
         initialSegmentIndex: requestedSegmentIndex,
@@ -10997,6 +11015,7 @@ export function WorkspacePage({
     if (shouldRefreshInitialEditRoute) {
       segmentEditorRouteRestoreKeyRef.current = restoreKey;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
+      segmentEditorFreshRouteAttemptedKeyRef.current = restoreKey;
       void ensureSegmentEditorDraftForProject(routeProjectId, {
         bypassCache: true,
         discardLocalDraft: true,
@@ -11076,6 +11095,7 @@ export function WorkspacePage({
 
     segmentEditorRouteRestoreKeyRef.current = restoreKey;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
+    segmentEditorFreshRouteAttemptedKeyRef.current = restoreKey;
     void ensureSegmentEditorDraftForProject(routeProjectId, {
       initialSegmentIndex: requestedSegmentIndex,
       initialSegmentMode: "route",

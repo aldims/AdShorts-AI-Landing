@@ -38758,13 +38758,14 @@ html, body {
 
 @media (max-width: 1180px) {
   .pricing-max-hero {
-    padding-top: 230px !important;
+    padding-top: 136px !important;
   }
 }
 
 @media (max-width: 640px) {
   .pricing-max-hero {
-    padding-top: 300px !important;
+    padding-top: calc(96px + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 20px !important;
   }
 
   .pricing-max-international-hero {

@@ -132,6 +132,7 @@ import {
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
@@ -2543,6 +2544,14 @@ describe("WorkspacePage studio route transitions", () => {
 
     expect(shouldResetWorkspaceSegmentEditorConsumedSourceProject(3731, true, resetProjectIds)).toBe(false);
     expect(shouldResetWorkspaceSegmentEditorConsumedSourceProject(3732, false, resetProjectIds)).toBe(false);
+  });
+
+  it("requests only one fresh edit-route session per route key", () => {
+    expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", null, null)).toBe(true);
+    expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", "3731:1", null)).toBe(false);
+    expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", null, "3731:1")).toBe(false);
+    expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:2", null, "3731:1")).toBe(true);
+    expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("", null, null)).toBe(false);
   });
 
   it("does not reopen an already handled active edit-route draft", () => {

@@ -86,6 +86,19 @@ export const resolveWorkspaceSegmentEditorPendingRouteSync = (
   };
 };
 
+export const shouldRequestWorkspaceSegmentEditorFreshRouteSession = (
+  restoreKey: string | null | undefined,
+  inFlightRouteKey: string | null,
+  attemptedRouteKey: string | null,
+) => {
+  const normalizedRestoreKey = String(restoreKey ?? "").trim();
+  if (!normalizedRestoreKey) {
+    return false;
+  }
+
+  return inFlightRouteKey !== normalizedRestoreKey && attemptedRouteKey !== normalizedRestoreKey;
+};
+
 export const shouldResetWorkspaceSegmentEditorConsumedSourceProject = (
   projectId: number | null | undefined,
   isConsumedSourceProject: boolean,

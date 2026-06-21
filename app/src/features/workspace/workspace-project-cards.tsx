@@ -328,13 +328,13 @@ export function WorkspaceProjectCard({
           <button
             className="studio-canvas-preview__quick-action"
             type="button"
-            aria-label={workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")}
+            aria-label={workspaceText(locale, "Открыть Shorts по сценам", "Open Shorts by segments")}
             title={
               canEditProject
-                ? workspaceText(locale, "Открыть Shorts по сегментам", "Open Shorts by segments")
+                ? workspaceText(locale, "Открыть Shorts по сценам", "Open Shorts by segments")
                 : workspaceText(
                     locale,
-                    "Shorts по сегментам доступны после готовности проекта",
+                    "Shorts по сценам доступны после готовности проекта",
                     "Segment editor is available after the project is ready",
                   )
             }
