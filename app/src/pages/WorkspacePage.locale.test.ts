@@ -4845,7 +4845,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
   });
 
-  it("uses project voiceover ranges for full preview and segment proxy for scene preview", () => {
+  it("uses a segment voiceover proxy when a preview explicitly prefers scene-isolated audio", () => {
     const segment = createDraftSegment({
       duration: 4.4,
       endTime: 12.4,

@@ -404,13 +404,28 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
         boundaryEnabled && !hasManualDurationBoundary && previousSegment !== undefined && nextSegment !== undefined
           ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment)
           : null;
-      boundaries.push(speechBoundary ?? rebuiltBoundary ?? boundaries[boundaries.length - 1] ?? 0);
+      const previousBoundary = boundaries[boundaries.length - 1] ?? 0;
+      const rebuiltDuration = normalizeWorkspaceSegmentTimelineTimeValue(nextSegments[index]?.duration);
+      const minimumBoundary =
+        rebuiltDuration !== null ? roundWorkspaceSegmentTimelineSeconds(previousBoundary + rebuiltDuration) : null;
+      boundaries.push(
+        roundWorkspaceSegmentTimelineSeconds(
+          Math.max(
+            speechBoundary ?? rebuiltBoundary ?? previousBoundary,
+            minimumBoundary ?? previousBoundary,
+          ),
+        ),
+      );
     }
 
     const lastSourceSegment = segments[segments.length - 1];
     const lastRebuiltSegment = nextSegments[nextSegments.length - 1];
     const lastSpeechRange = lastSourceSegment ? getWorkspaceSegmentTimelineSpeechRange(lastSourceSegment) : null;
     const rebuiltTimelineEnd = normalizeWorkspaceSegmentTimelineTimeValue(lastRebuiltSegment?.endTime) ?? cursor;
+    const lastDuration = normalizeWorkspaceSegmentTimelineTimeValue(lastRebuiltSegment?.duration);
+    const lastMinimumTimelineEnd = roundWorkspaceSegmentTimelineSeconds(
+      (boundaries[boundaries.length - 1] ?? 0) + (lastDuration ?? 0),
+    );
     const sourceTimelineEnd =
       options.preserveSourceTimelineEnd && lastSourceSegment
         ? normalizeWorkspaceSegmentTimelineTimeValue(lastSourceSegment.endTime) ??
@@ -418,7 +433,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
         : null;
     boundaries.push(
       roundWorkspaceSegmentTimelineSeconds(
-        Math.max(rebuiltTimelineEnd, sourceTimelineEnd ?? 0, lastSpeechRange?.endTime ?? 0),
+        Math.max(rebuiltTimelineEnd, sourceTimelineEnd ?? 0, lastSpeechRange?.endTime ?? 0, lastMinimumTimelineEnd),
       ),
     );
 

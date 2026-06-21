@@ -23,6 +23,8 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
+  resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime,
+  resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
@@ -70,6 +72,93 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
+  it("keeps shared project voiceover source windows aligned with manual visual scene timings", () => {
+    const sourceStartTimes = resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes([
+      { assetKey: "project-voice", durationSeconds: 3.2, segmentIndex: 0 },
+      { assetKey: "project-voice", durationSeconds: 4.2, segmentIndex: 1 },
+    ]);
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+        {
+          key: "voice-1",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: sourceStartTimes.get(0),
+          timelineEndTime: 5,
+          timelineStartTime: 0,
+          url: "/project-voice.mp3?v=scene-1",
+        },
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: sourceStartTimes.get(1),
+          timelineEndTime: 9.2,
+          timelineStartTime: 5,
+          url: "/project-voice.mp3?v=scene-2",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-1",
+        sourceStartTime: 0,
+        timelineEndTime: 3.2,
+        timelineStartTime: 0,
+      }),
+      expect.objectContaining({
+        key: "voice-2",
+        sourceStartTime: 3.2,
+        timelineEndTime: 9.2,
+        timelineStartTime: 5,
+      }),
+    ]);
+  });
+
+  it("prefers explicit project voice source starts over duration-derived starts", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime({
+        durationDerivedSourceStartTime: 3.16,
+        explicitSourceStartTime: 3.88,
+      }),
+    ).toBe(3.88);
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime({
+        durationDerivedSourceStartTime: 3.16,
+        explicitSourceStartTime: null,
+      }),
+    ).toBe(3.16);
+  });
+
+  it("ends project voice tracks by their own speech duration instead of the next source boundary", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime({
+        timelineEndTime: 5,
+        timelineStartTime: 0,
+        voiceDurationSeconds: 3.16,
+      }),
+    ).toBe(3.16);
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime({
+        timelineEndTime: 10,
+        timelineStartTime: 5,
+        voiceDurationSeconds: 4.22,
+      }),
+    ).toBe(9.22);
+  });
+
+  it("keeps project voice tracks bounded by the visual scene end", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime({
+        timelineEndTime: 12.45,
+        timelineStartTime: 10.04,
+        voiceDurationSeconds: 3.66,
+      }),
+    ).toBe(12.45);
+  });
+
   it("uses project voice boundaries instead of stretched visual starts for full-preview scene timing", () => {
     const visualSegments = [
       { endTime: 5.1, index: 0, startTime: 0, voiceBoundaryEndTime: 4.82, voiceBoundaryStartTime: 0 },
@@ -97,6 +186,17 @@ describe("workspace segment editor full preview", () => {
     ];
 
     expect(resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments(visualSegments)).toBe(visualSegments);
+  });
+
+  it("keeps visual segment timing when project voice boundaries are disabled", () => {
+    const visualSegments = [
+      { endTime: 5, index: 0, startTime: 0, voiceBoundaryEndTime: 3, voiceBoundaryStartTime: 0 },
+      { endTime: 10, index: 1, startTime: 5, voiceBoundaryEndTime: 8, voiceBoundaryStartTime: 3 },
+    ];
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments(visualSegments, { enabled: false }),
+    ).toBe(visualSegments);
   });
 
   it("adds a small voice tail without crossing into the next shared audio source window", () => {
@@ -350,6 +450,30 @@ describe("workspace segment editor full preview", () => {
       { endTime: 35.727, index: 6, startTime: 31.767 },
       { endTime: 41.177, index: 7, startTime: 35.727 },
       { endTime: 46.677, index: 8, startTime: 41.177 },
+    ]);
+  });
+
+  it("keeps the next scene after an isolated segment voice proxy that is longer than the visual slot", () => {
+    const baseSegments = [
+      { endTime: 2.4, index: 0, startTime: 0 },
+      { endTime: 6.4, index: 1, startTime: 2.4 },
+    ];
+    const queuedVoiceTracks = resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+      {
+        key: "voice-0-proxy",
+        kind: "voice",
+        previewArrayIndex: 0,
+        sourceKind: "isolated",
+        sourceStartTime: 0,
+        timelineEndTime: 3.7,
+        timelineStartTime: 0,
+        url: "/api/workspace/project-segment-voiceover?segmentIndex=0",
+      },
+    ]);
+
+    expect(resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments(baseSegments, queuedVoiceTracks)).toEqual([
+      { endTime: 3.7, index: 0, startTime: 0 },
+      { endTime: 7.7, index: 1, startTime: 3.7 },
     ]);
   });
 

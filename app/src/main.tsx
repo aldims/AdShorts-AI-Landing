@@ -12,6 +12,17 @@ if (!appElement) {
   throw new Error("App root element was not found.");
 }
 
+const platformSource =
+  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ||
+  navigator.platform ||
+  navigator.userAgent ||
+  "";
+const isWindowsPlatform = /win/i.test(platformSource);
+const isMacPlatform = /mac/i.test(platformSource) && !isWindowsPlatform;
+
+document.documentElement.classList.toggle("platform-windows", isWindowsPlatform);
+document.documentElement.classList.toggle("platform-macos", isMacPlatform);
+
 appElement.replaceChildren();
 
 ReactDOM.createRoot(appElement).render(

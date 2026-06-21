@@ -175,11 +175,57 @@ export const resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes
   return startTimeBySegmentIndex;
 };
 
+export const resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime = (options: {
+  durationDerivedSourceStartTime?: number | null;
+  explicitSourceStartTime?: number | null;
+}) => {
+  const normalizeOptionalSourceStartTime = (value: number | null | undefined) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    return normalizePreviewTime(value);
+  };
+  const explicitSourceStartTime = normalizeOptionalSourceStartTime(options.explicitSourceStartTime);
+  if (explicitSourceStartTime !== null) {
+    return roundPreviewTime(explicitSourceStartTime);
+  }
+
+  const durationDerivedSourceStartTime = normalizeOptionalSourceStartTime(options.durationDerivedSourceStartTime);
+  return durationDerivedSourceStartTime !== null ? roundPreviewTime(durationDerivedSourceStartTime) : null;
+};
+
+export const resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime = (options: {
+  timelineEndTime?: number | null;
+  timelineStartTime: number;
+  voiceDurationSeconds?: number | null;
+}) => {
+  const timelineStartTime = normalizePreviewTime(options.timelineStartTime) ?? 0;
+  const voiceDurationSeconds = normalizePreviewTime(options.voiceDurationSeconds);
+  if (voiceDurationSeconds === null || voiceDurationSeconds <= 0) {
+    return null;
+  }
+
+  const timelineEndTime = normalizePreviewTime(options.timelineEndTime);
+  const durationEndTime = timelineStartTime + voiceDurationSeconds;
+  const resolvedEndTime = timelineEndTime !== null
+    ? Math.min(timelineEndTime, durationEndTime)
+    : durationEndTime;
+  return resolvedEndTime > timelineStartTime ? roundPreviewTime(resolvedEndTime) : null;
+};
+
 export const resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments = <
   Segment extends WorkspaceSegmentEditorFullPreviewVoiceBoundarySegment,
 >(
   segments: Segment[],
+  options?: {
+    enabled?: boolean;
+  },
 ): Segment[] => {
+  if (options?.enabled === false) {
+    return segments;
+  }
+
   if (segments.length === 0) {
     return segments;
   }

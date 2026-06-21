@@ -395,6 +395,8 @@ export type WorkspaceSegmentEditorFullPreviewAudioTrack = {
   timelineEndTime: number;
   timelineStartTime: number;
   url: string;
+  voiceFallbackReason?: string | null;
+  voiceSourceKind?: "embedded" | "project" | "scene" | "segment" | null;
 };
 
 export type WorkspaceSegmentEditorFullPreviewDebugWindow = Window & {

@@ -608,6 +608,77 @@ describe("workspace segment editor timeline", () => {
     }));
   });
 
+  it("does not let speech boundaries squeeze an automatic scene below its voice duration after earlier manual edits", () => {
+    const firstSegment = createSegment({
+      duration: 3.88,
+      durationMode: "manual",
+      endTime: 3.88,
+      manualDurationSeconds: 5,
+      mediaType: "photo",
+      speechDuration: 3.16,
+      speechEndTime: 3.16,
+      speechStartTime: 0,
+      text: "first scene",
+    });
+    const secondSegment = createSegment({
+      duration: 4.78,
+      durationMode: "manual",
+      endTime: 8.66,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: 4.22,
+      speechEndTime: 8.1,
+      speechStartTime: 3.88,
+      startTime: 3.88,
+      text: "second scene",
+    });
+    const thirdSegment = createSegment({
+      duration: 3.92,
+      endTime: 12.58,
+      mediaType: "photo",
+      speechDuration: 3.66,
+      speechEndTime: 12.32,
+      speechStartTime: 8.66,
+      startTime: 8.66,
+      text: "third scene",
+    });
+    const fourthSegment = createSegment({
+      duration: 4.48,
+      endTime: 17.06,
+      mediaType: "photo",
+      speechDuration: 4.12,
+      speechEndTime: 16.7,
+      speechStartTime: 12.58,
+      startTime: 12.58,
+      text: "fourth scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline(
+      [firstSegment, secondSegment, thirdSegment, fourthSegment],
+      {
+        speechBoundaryEnabled: true,
+        visualKind: (segment) => segment.mediaType === "video" ? "video" : "image",
+        voiceEnabled: true,
+      },
+    );
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 5,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 10,
+      startTime: 5,
+    }));
+    expect(rebuilt[2]).toEqual(expect.objectContaining({
+      duration: 3.66,
+      endTime: 13.66,
+      startTime: 10,
+    }));
+  });
+
   it("ignores text for silent stills when subtitles are disabled", () => {
     const segment = createSegment({
       duration: null,

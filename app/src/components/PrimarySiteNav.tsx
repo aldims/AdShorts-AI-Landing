@@ -115,22 +115,13 @@ export function PrimarySiteNav({
       return;
     }
 
-    const selection = content.querySelector<HTMLElement>(".site-nav__selection");
-    let readyAnimationFrameId = 0;
     const updateSelection = () => {
       const contentRect = content.getBoundingClientRect();
       const activeRect = activeElement.getBoundingClientRect();
 
       content.style.setProperty("--site-nav-selection-x", `${activeRect.left - contentRect.left}px`);
       content.style.setProperty("--site-nav-selection-width", `${activeRect.width}px`);
-
-      if (content.dataset.selectionReady !== "true" && readyAnimationFrameId === 0) {
-        selection?.getBoundingClientRect();
-        readyAnimationFrameId = window.requestAnimationFrame(() => {
-          content.dataset.selectionReady = "true";
-          readyAnimationFrameId = 0;
-        });
-      }
+      content.dataset.selectionReady = activeRect.width > 0 ? "true" : "false";
     };
 
     updateSelection();
@@ -142,7 +133,7 @@ export function PrimarySiteNav({
     resizeObserver?.observe(activeElement);
 
     return () => {
-      window.cancelAnimationFrame(readyAnimationFrameId);
+      delete content.dataset.selectionReady;
       window.removeEventListener("resize", updateSelection);
       resizeObserver?.disconnect();
     };

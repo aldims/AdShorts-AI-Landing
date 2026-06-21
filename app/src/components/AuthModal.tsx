@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import googleLogoUrl from "../assets/google-g-logo.svg";
 import telegramLogoUrl from "../assets/telegram-logo.svg";
 import { authClient } from "../lib/auth-client";
+import { clearPendingAuthFlow, writePendingAuthFlow } from "../lib/auth-funnel";
 import { logClientEvent } from "../lib/client-log";
 import { useLocale, type Locale } from "../lib/i18n";
 
@@ -157,6 +158,16 @@ const readResponseErrorMessage = async (response: Response, fallback: string) =>
 };
 
 const normalizeEmailCode = (value: string) => value.replace(/\D/g, "").slice(0, 6);
+
+const getAuthAnalyticsPath = () => {
+  if (typeof window === "undefined") return null;
+  return `${window.location.pathname}${window.location.search}`;
+};
+
+const getAuthAnalyticsErrorMessage = (error: unknown) => {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return message.trim().slice(0, 240) || null;
+};
 
 const hasTelegramAuthorizationUrl = (
   config: TelegramAuthConfig | null,
@@ -440,16 +451,43 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
     return `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
   }, []);
 
+  const trackAuthEvent = (
+    eventName: string,
+    payload: Record<string, unknown> = {},
+    level: Parameters<typeof logClientEvent>[2] = "info",
+  ) => {
+    void logClientEvent(
+      eventName,
+      {
+        authMode: mode,
+        emailCodeStep,
+        lang: locale,
+        path: getAuthAnalyticsPath(),
+        ...payload,
+      },
+      level,
+    );
+  };
+
+  const handleUserClose = (reason: "backdrop" | "button" | "escape") => {
+    clearPendingAuthFlow();
+    trackAuthEvent("auth_modal_close", {
+      busyAction,
+      reason,
+    });
+    onClose();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleUserClose("escape");
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [busyAction, emailCodeStep, isOpen, locale, mode, onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -461,6 +499,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
           const message = resolveAuthActionErrorMessage(new Error(String(response.status)), getAuthBackendUnavailableMessage());
           setAuthBackendIssue(message);
           setFeedback({ kind: "error", message });
+          trackAuthEvent("auth_status_error", { statusCode: response.status }, "warn");
           return;
         }
 
@@ -471,6 +510,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         const message = resolveAuthActionErrorMessage(error, getAuthBackendUnavailableMessage());
         setAuthBackendIssue(message);
         setFeedback({ kind: "error", message });
+        trackAuthEvent("auth_status_error", { errorMessage: getAuthAnalyticsErrorMessage(error) }, "warn");
       }
     };
 
@@ -543,11 +583,17 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
     setDevEmailPreview(null);
 
     if (authBackendIssue) {
+      clearPendingAuthFlow();
+      trackAuthEvent("auth_email_code_request_blocked", { reason: "backend_issue" }, "warn");
       setFeedback({ kind: "error", message: authBackendIssue });
       return;
     }
 
     if (emailCodeStep === "email") {
+      clearPendingAuthFlow();
+      trackAuthEvent("auth_email_code_request_start", {
+        hasEmail: Boolean(email.trim()),
+      });
       setBusyAction("email-code-request");
       try {
         const response = await fetch("/api/auth/email-code/request", {
@@ -558,17 +604,25 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         });
 
         if (!response.ok) {
+          const message = await readResponseErrorMessage(
+            response,
+            locale === "en" ? "Could not send the sign-in code." : "Не удалось отправить код для входа.",
+          );
+          trackAuthEvent("auth_email_code_request_error", {
+            errorMessage: message,
+            statusCode: response.status,
+          }, "warn");
           setFeedback({
             kind: "error",
-            message: await readResponseErrorMessage(
-              response,
-              locale === "en" ? "Could not send the sign-in code." : "Не удалось отправить код для входа.",
-            ),
+            message,
           });
           setBusyAction(null);
           return;
         }
 
+        trackAuthEvent("auth_email_code_request_success", {
+          mailMode: status.mailMode,
+        });
         setEmailCode("");
         setEmailCodeStep("code");
         setFeedback({
@@ -587,6 +641,9 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
           await loadDevEmailPreview();
         }
       } catch (error) {
+        trackAuthEvent("auth_email_code_request_error", {
+          errorMessage: getAuthAnalyticsErrorMessage(error),
+        }, "warn");
         setFeedback({
           kind: "error",
           message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not send the sign-in code." : "Не удалось отправить код для входа."),
@@ -605,6 +662,9 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
     }
 
     if (normalizedEmailCode.length !== 6) {
+      trackAuthEvent("auth_email_code_verify_invalid", {
+        codeLength: normalizedEmailCode.length,
+      }, "warn");
       setFeedback({
         kind: "error",
         message: locale === "en" ? "Enter the 6-digit code from the email." : "Введите 6-значный код из письма.",
@@ -612,6 +672,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       return;
     }
 
+    trackAuthEvent("auth_email_code_verify_start");
     setBusyAction("email-code-verify");
     try {
       const response = await fetch("/api/auth/email-code/verify", {
@@ -622,18 +683,24 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       });
 
       if (!response.ok) {
+        const message = await readResponseErrorMessage(
+          response,
+          locale === "en" ? "Could not verify the sign-in code." : "Не удалось проверить код.",
+        );
+        trackAuthEvent("auth_email_code_verify_error", {
+          errorMessage: message,
+          statusCode: response.status,
+        }, "warn");
         setFeedback({
           kind: "error",
-          message: await readResponseErrorMessage(
-            response,
-            locale === "en" ? "Could not verify the sign-in code." : "Не удалось проверить код.",
-          ),
+          message,
         });
         setBusyAction(null);
         return;
       }
 
       const result = (await response.json()) as { redirectTo?: unknown };
+      trackAuthEvent("auth_email_code_verify_success");
       void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
         authProvider: "email-code",
         lang: locale,
@@ -645,6 +712,9 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       const redirectTo = typeof result.redirectTo === "string" && result.redirectTo ? result.redirectTo : "/app/studio";
       window.location.assign(redirectTo);
     } catch (error) {
+      trackAuthEvent("auth_email_code_verify_error", {
+        errorMessage: getAuthAnalyticsErrorMessage(error),
+      }, "warn");
       setFeedback({
         kind: "error",
         message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not verify the sign-in code." : "Не удалось проверить код."),
@@ -655,28 +725,53 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
   };
 
   const handleGoogleSignIn = async () => {
+    trackAuthEvent("auth_provider_start", { authProvider: "google" });
     setBusyAction("google");
     setFeedback(null);
     if (authBackendIssue) {
+      trackAuthEvent("auth_provider_blocked", {
+        authProvider: "google",
+        reason: "backend_issue",
+      }, "warn");
+      clearPendingAuthFlow();
       setFeedback({ kind: "error", message: authBackendIssue });
       setBusyAction(null);
       return;
     }
 
     try {
+      writePendingAuthFlow({
+        authMode: mode,
+        authProvider: "google",
+        lang: locale,
+        path: getAuthAnalyticsPath(),
+      });
       const { error } = await authClient.signIn.social({
         callbackURL,
         provider: "google",
       });
 
       if (error) {
+        clearPendingAuthFlow();
+        trackAuthEvent("auth_provider_error", {
+          authProvider: "google",
+          errorMessage: getAuthAnalyticsErrorMessage(error),
+        }, "warn");
         setFeedback({
           kind: "error",
           message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not start Google sign-in." : "Не удалось запустить вход через Google."),
         });
         setBusyAction(null);
+        return;
       }
+
+      trackAuthEvent("auth_provider_redirect_started", { authProvider: "google" });
     } catch (error) {
+      clearPendingAuthFlow();
+      trackAuthEvent("auth_provider_error", {
+        authProvider: "google",
+        errorMessage: getAuthAnalyticsErrorMessage(error),
+      }, "warn");
       setFeedback({
         kind: "error",
         message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not start Google sign-in." : "Не удалось запустить вход через Google."),
@@ -686,16 +781,29 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
   };
 
   const handleTelegramSignIn = async () => {
+    trackAuthEvent("auth_provider_start", {
+      authProvider: "telegram",
+      flow: telegramConfig?.flow ?? null,
+    });
+    clearPendingAuthFlow();
     setBusyAction("telegram");
     setFeedback(null);
 
     if (authBackendIssue) {
+      trackAuthEvent("auth_provider_blocked", {
+        authProvider: "telegram",
+        reason: "backend_issue",
+      }, "warn");
       setFeedback({ kind: "error", message: authBackendIssue });
       setBusyAction(null);
       return;
     }
 
     if (!status.telegramEnabled) {
+      trackAuthEvent("auth_provider_blocked", {
+        authProvider: "telegram",
+        reason: "not_configured",
+      }, "warn");
       setFeedback({
         kind: "error",
         message: locale === "en" ? "Telegram sign-in is not configured." : "Вход через Telegram не настроен.",
@@ -704,8 +812,13 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       return;
     }
 
+    let didTrackProviderError = false;
     try {
       if (!telegramConfig || !isTelegramReady) {
+        trackAuthEvent("auth_provider_blocked", {
+          authProvider: "telegram",
+          reason: "not_ready",
+        }, "warn");
         throw new Error(
           locale === "en"
             ? "Telegram sign-in is still loading. Try again in a second."
@@ -722,6 +835,10 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       }
 
       if (loginPayload.signedIn) {
+        trackAuthEvent("auth_provider_success", {
+          authProvider: "telegram",
+          flow: telegramConfig.flow ?? null,
+        });
         void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
           authProvider: "telegram",
           lang: locale,
@@ -739,6 +856,10 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         throw new Error(locale === "en" ? "Telegram did not return an ID token." : "Telegram не вернул ID token.");
       }
 
+      trackAuthEvent("auth_provider_callback_start", {
+        authProvider: "telegram",
+        flow: telegramConfig.flow ?? null,
+      });
       const callbackResponse = await fetch("/api/auth/telegram/callback", {
         body: JSON.stringify(callbackBody),
         credentials: "include",
@@ -747,15 +868,27 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       });
 
       if (!callbackResponse.ok) {
+        const message = await readResponseErrorMessage(
+          callbackResponse,
+          locale === "en" ? "Could not sign in with Telegram." : "Не удалось войти через Telegram.",
+        );
+        didTrackProviderError = true;
+        trackAuthEvent("auth_provider_error", {
+          authProvider: "telegram",
+          errorMessage: message,
+          flow: telegramConfig.flow ?? null,
+          statusCode: callbackResponse.status,
+        }, "warn");
         throw new Error(
-          await readResponseErrorMessage(
-            callbackResponse,
-            locale === "en" ? "Could not sign in with Telegram." : "Не удалось войти через Telegram.",
-          ),
+          message,
         );
       }
 
       const result = (await callbackResponse.json()) as { redirectTo?: unknown };
+      trackAuthEvent("auth_provider_success", {
+        authProvider: "telegram",
+        flow: telegramConfig.flow ?? null,
+      });
       void logClientEvent(mode === "signup" ? "signup_complete" : "signin_complete", {
         authProvider: "telegram",
         lang: locale,
@@ -767,6 +900,13 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
       const redirectTo = typeof result.redirectTo === "string" && result.redirectTo ? result.redirectTo : "/app/studio";
       window.location.assign(redirectTo);
     } catch (error) {
+      if (!didTrackProviderError) {
+        trackAuthEvent("auth_provider_error", {
+          authProvider: "telegram",
+          errorMessage: getAuthAnalyticsErrorMessage(error),
+          flow: telegramConfig?.flow ?? null,
+        }, "warn");
+      }
       setFeedback({
         kind: "error",
         message: resolveAuthActionErrorMessage(error, locale === "en" ? "Could not sign in with Telegram." : "Не удалось войти через Telegram."),
@@ -790,10 +930,10 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
         className="signup-modal__backdrop route-close"
         type="button"
         aria-label={closeLabel}
-        onClick={onClose}
+        onClick={() => handleUserClose("backdrop")}
       />
       <div className="signup-modal__panel" role="document">
-        <button className="signup-modal__close route-close" type="button" aria-label={closeLabel} onClick={onClose}>
+        <button className="signup-modal__close route-close" type="button" aria-label={closeLabel} onClick={() => handleUserClose("button")}>
           ×
         </button>
         <h2 id="signup-modal-title">{content.title}</h2>
@@ -872,6 +1012,7 @@ export function AuthModal({ isOpen, mode, onClose, onSignedIn }: Props) {
                 type="button"
                 disabled={isBusy}
                 onClick={() => {
+                  trackAuthEvent("auth_email_code_change");
                   setEmailCode("");
                   setEmailCodeStep("email");
                   setFeedback(null);

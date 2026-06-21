@@ -24,6 +24,11 @@ const renderAuthModal = (
     </MemoryRouter>,
   );
 
+const readClientEventBodies = () =>
+  vi.mocked(fetch).mock.calls
+    .filter(([input]) => String(input) === "/api/client-events")
+    .map(([, init]) => JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}")) as { event?: string; payload?: Record<string, unknown> });
+
 describe("AuthModal", () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -177,6 +182,24 @@ describe("AuthModal", () => {
     );
     expect((await screen.findByLabelText("Код из письма")).getAttribute("placeholder")).toBe("Введите код");
     expect(screen.getByRole("button", { name: "Войти" })).toBeTruthy();
+  });
+
+  it("logs email-code funnel events without sending the email address", async () => {
+    renderAuthModal("signup");
+
+    await waitFor(() => expect(screen.getByText("Google")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Получить код" }));
+
+    await waitFor(() => {
+      const events = readClientEventBodies().map((body) => body.event);
+      expect(events).toContain("auth_email_code_request_start");
+      expect(events).toContain("auth_email_code_request_success");
+    });
+
+    expect(JSON.stringify(readClientEventBodies())).not.toContain("user@example.com");
   });
 
   it("does not rely on native pattern validation for the email code", async () => {

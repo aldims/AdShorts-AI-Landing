@@ -2,6 +2,7 @@ import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { authClient } from "./lib/auth-client";
+import { clearPendingAuthFlow, readPendingAuthFlow } from "./lib/auth-funnel";
 import { logClientEvent } from "./lib/client-log";
 import {
   LocaleProvider,
@@ -686,6 +687,37 @@ export function App() {
 
     syncMetrikaUserId(workspaceProfile.userId);
   }, [session?.email, workspaceProfile?.userId]);
+
+  useEffect(() => {
+    if (!session?.email) {
+      return;
+    }
+
+    const pendingAuthFlow = readPendingAuthFlow();
+    if (!pendingAuthFlow) {
+      return;
+    }
+
+    clearPendingAuthFlow();
+    const returnPath = `${location.pathname}${location.search}`;
+    const pendingStartedAtMs = Date.parse(pendingAuthFlow.startedAt);
+    const pendingAgeMs = Number.isFinite(pendingStartedAtMs) ? Math.max(0, Date.now() - pendingStartedAtMs) : null;
+
+    void logClientEvent("auth_provider_return_success", {
+      authMode: pendingAuthFlow.authMode,
+      authProvider: pendingAuthFlow.authProvider,
+      lang: pendingAuthFlow.lang || locale,
+      path: pendingAuthFlow.path ?? returnPath,
+      pendingAgeMs,
+      returnPath,
+    });
+    void logClientEvent(pendingAuthFlow.authMode === "signup" ? "signup_complete" : "signin_complete", {
+      authProvider: pendingAuthFlow.authProvider,
+      lang: pendingAuthFlow.lang || locale,
+      path: pendingAuthFlow.path ?? returnPath,
+      returnPath,
+    });
+  }, [locale, location.pathname, location.search, session?.email]);
 
   const shouldBlockWorkspaceRoute = Boolean(session && !isWorkspaceProfileVerified && isWorkspaceProfilePending);
 
