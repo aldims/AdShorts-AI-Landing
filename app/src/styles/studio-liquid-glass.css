@@ -4319,6 +4319,102 @@
   }
 }
 
+/* Scale the single-row studio header evenly before it reaches the tablet layout. */
+@media (min-width: 961px) and (max-width: 1180px) {
+  .studio-canvas-route .site-header--workspace {
+    --studio-header-control-height: clamp(46px, 4.7vw, 54px);
+    --studio-header-control-gap: clamp(4px, 0.55vw, 6px);
+    --studio-header-nav-padding-x: clamp(12px, 1.35vw, 16px);
+    --studio-header-mode-padding-x: clamp(8px, 0.95vw, 11px);
+    --studio-header-nav-font-size: clamp(0.84rem, 1.35vw, 0.92rem);
+    --studio-header-mode-font-size: clamp(0.7rem, 1.05vw, 0.76rem);
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__inner {
+    align-items: center !important;
+    min-height: calc(var(--studio-header-control-height) + 16px) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster,
+  .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch,
+  .studio-canvas-route .site-header--workspace .site-header__actions {
+    align-items: center !important;
+    height: var(--studio-header-control-height) !important;
+    min-height: var(--studio-header-control-height) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__actions {
+    gap: var(--studio-header-control-gap) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .brand img,
+  .studio-canvas-route .site-header--workspace .studio-create-mode-switch,
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs,
+  .studio-canvas-route .site-header--workspace .language-switcher__trigger,
+  .studio-canvas-route .site-header--workspace .site-header__plan,
+  .studio-canvas-route .site-header--workspace .site-header__credits,
+  .studio-canvas-route .site-header--workspace .site-header__account {
+    align-self: center !important;
+    box-sizing: border-box !important;
+    height: var(--studio-header-control-height) !important;
+    min-height: var(--studio-header-control-height) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .brand img,
+  .studio-canvas-route .site-header--workspace .site-header__account {
+    width: var(--studio-header-control-height) !important;
+    min-width: var(--studio-header-control-height) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .studio-create-mode-switch,
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    padding: 0 !important;
+    gap: var(--studio-header-control-gap) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content {
+    gap: var(--studio-header-control-gap) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn,
+  .studio-canvas-route
+    .site-header--workspace
+    .site-nav--studio-tabs
+    .site-nav__content
+    > .site-nav__item,
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__selection {
+    height: var(--studio-header-control-height) !important;
+    min-height: var(--studio-header-control-height) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn {
+    min-width: clamp(64px, 6.8vw, 76px) !important;
+    padding-inline: var(--studio-header-mode-padding-x) !important;
+    font-size: var(--studio-header-mode-font-size) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content > .site-nav__item {
+    padding-inline: var(--studio-header-nav-padding-x) !important;
+    gap: clamp(6px, 0.8vw, 10px) !important;
+    font-size: var(--studio-header-nav-font-size) !important;
+    line-height: 1 !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .language-switcher__trigger,
+  .studio-canvas-route .site-header--workspace .site-header__plan,
+  .studio-canvas-route .site-header--workspace .site-header__credits {
+    justify-content: center !important;
+    padding-inline: clamp(7px, 0.85vw, 10px) !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-nav__studio-count {
+    min-width: clamp(14px, 1.45vw, 16px) !important;
+    height: clamp(14px, 1.45vw, 16px) !important;
+    padding-inline: 4px !important;
+    font-size: clamp(0.56rem, 0.7vw, 0.6rem) !important;
+  }
+}
+
 /* Keep the wide desktop workspace header visually even: equal tabs, equal action pills. */
 @media (min-width: 1440px) {
   .studio-canvas-route .site-header--workspace {
@@ -4437,7 +4533,7 @@
   }
 }
 
-@media (min-width: 961px) {
+@media (min-width: 1181px) {
   .studio-canvas-route .site-header--workspace {
     --studio-header-control-height: 54px;
   }
