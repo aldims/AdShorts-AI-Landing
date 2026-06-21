@@ -4258,8 +4258,8 @@
   }
 }
 
-/* Keep every studio tab readable on compact desktop widths. */
-@media (min-width: 641px) and (max-width: 1040px) {
+/* Keep every studio tab readable only after the full-size menu no longer fits. */
+@media (min-width: 641px) and (max-width: 960px) {
   .studio-canvas-route .site-header--workspace {
     --studio-header-control-height: 40px;
   }
@@ -4434,6 +4434,12 @@
   .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__selection {
     height: var(--studio-header-control-height) !important;
     min-height: var(--studio-header-control-height) !important;
+  }
+}
+
+@media (min-width: 961px) {
+  .studio-canvas-route .site-header--workspace {
+    --studio-header-control-height: 54px;
   }
 }
 
