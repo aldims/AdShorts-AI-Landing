@@ -528,6 +528,23 @@ const inferWorkspaceSegmentEditorProjectVoiceoverVoiceType = (
   return firstVoiceId && voiceIds.every((voiceId) => voiceId === firstVoiceId) ? firstVoiceId : null;
 };
 
+const inferWorkspaceSegmentEditorUniformSceneVoiceoverVoiceType = (
+  session: Pick<WorkspaceSegmentEditorSession, "segments"> | null | undefined,
+) => {
+  const segments = session?.segments ?? [];
+  if (segments.length < 2) {
+    return null;
+  }
+
+  const voiceIds = segments.map((segment) => normalizeWorkspaceSegmentEditorSetting(segment.voiceoverVoiceType));
+  if (voiceIds.some((voiceId) => !voiceId || voiceId === "none")) {
+    return null;
+  }
+
+  const firstVoiceId = voiceIds[0];
+  return firstVoiceId && voiceIds.every((voiceId) => voiceId === firstVoiceId) ? firstVoiceId : null;
+};
+
 export const getWorkspaceSegmentEditorProjectVoiceType = (
   session: Pick<WorkspaceSegmentEditorSession, "segments" | "ttsAssetId" | "voiceType"> | null | undefined,
 ) => {
@@ -538,6 +555,7 @@ export const getWorkspaceSegmentEditorProjectVoiceType = (
 
   return (
     inferWorkspaceSegmentEditorUniformVoiceType(session) ??
+    inferWorkspaceSegmentEditorUniformSceneVoiceoverVoiceType(session) ??
     configuredVoiceType ??
     inferWorkspaceSegmentEditorProjectVoiceoverVoiceType(session)
   );
@@ -6551,6 +6569,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
     preserveExistingStillDurations: (segment) =>
       shouldPreserveWorkspaceSegmentExistingStillDuration(segment, session),
+    minimumDurationSeconds: (segment) => getWorkspaceSegmentManualDurationMinimum(segment, session),
     zeroDuration: isWorkspaceSegmentEditorDraftSegmentEmpty,
   });
 };

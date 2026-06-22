@@ -773,13 +773,29 @@ const resolveWorkspaceSegmentSpeechActiveWordIndex = (
     return null;
   }
 
-  const baseline =
+  const visibleWordCount = normalizedTextWords.length;
+  const timelineBaseline =
     (typeof segment.speechStartTime === "number" && Number.isFinite(segment.speechStartTime) ? segment.speechStartTime : null) ??
     (typeof segment.startTime === "number" && Number.isFinite(segment.startTime) ? segment.startTime : null) ??
     segment.speechWords[0]?.startTime ??
     0;
+  const speechEndTime =
+    typeof segment.speechEndTime === "number" && Number.isFinite(segment.speechEndTime) ? segment.speechEndTime : null;
+  const timelineSpeechDuration =
+    speechEndTime !== null && speechEndTime > timelineBaseline ? speechEndTime - timelineBaseline : null;
+  const playbackDuration = getWorkspaceSegmentEditorPlaybackDuration(segment, textWords.length, {
+    preferEstimatedDuration: true,
+  });
+  const lastVisibleSpeechWord = normalizedSpeechWords[visibleWordCount - 1] ?? normalizedSpeechWords[normalizedSpeechWords.length - 1];
+  const firstSpeechWordStart = normalizedSpeechWords[0]?.startTime ?? 0;
+  const lastSpeechWordEnd = lastVisibleSpeechWord?.endTime ?? firstSpeechWordStart;
+  const localTimingDuration = timelineSpeechDuration ?? playbackDuration;
+  const usesLocalSpeechWordTiming =
+    timelineBaseline > 0.05 &&
+    firstSpeechWordStart < timelineBaseline - 0.05 &&
+    lastSpeechWordEnd <= localTimingDuration + 0.5;
+  const baseline = usesLocalSpeechWordTiming ? 0 : timelineBaseline;
   const currentTime = Math.max(0, clipCurrentTime);
-  const visibleWordCount = normalizedTextWords.length;
 
   for (let index = 0; index < visibleWordCount; index += 1) {
     const word = normalizedSpeechWords[index];

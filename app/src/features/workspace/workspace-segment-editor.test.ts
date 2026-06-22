@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
+  applyWorkspaceSegmentEditorSceneVoiceOverride,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
+  getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentSelectedVisualPreviewKind,
@@ -162,6 +164,91 @@ it("recognizes talking photo assets by library kind", () => {
       storageKey: null,
     }),
   ).toBe(true);
+});
+
+it("applies a voice override only to the selected scene", () => {
+  const firstSegment = createProjectVoiceoverSegment({
+    index: 0,
+    voiceoverAsset: {
+      assetId: 801,
+      durationSeconds: 4.1,
+      fileName: "scene-1.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/801",
+      source: "media-library",
+    },
+  });
+  const secondSegment = createProjectVoiceoverSegment({
+    index: 1,
+    startTime: 4.1,
+    endTime: 8.2,
+    voiceoverAsset: {
+      assetId: 802,
+      durationSeconds: 4.1,
+      fileName: "scene-2.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/802",
+      source: "media-library",
+    },
+  });
+  const draft = createProjectVoiceoverDraft([firstSegment, secondSegment]);
+
+  const updatedDraft = applyWorkspaceSegmentEditorSceneVoiceOverride(draft, 0, "Russian_BrightHeroine");
+
+  expect(updatedDraft.voiceType).toBe(draft.voiceType);
+  expect(updatedDraft.segments[0]).toEqual(
+    expect.objectContaining({
+      voiceType: "Russian_BrightHeroine",
+      voiceoverAsset: null,
+      voiceoverLanguage: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    }),
+  );
+  expect(updatedDraft.segments[1]).toBe(secondSegment);
+});
+
+it("infers the project voice from uniform scene voiceovers when the stored project voice is stale", () => {
+  const firstSegment = createProjectVoiceoverSegment({
+    index: 0,
+    voiceoverAsset: {
+      assetId: 811,
+      durationSeconds: 4.1,
+      fileName: "scene-1.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/811",
+      source: "media-library",
+    },
+    voiceoverVoiceType: "Russian_BrightHeroine",
+    voiceType: null,
+  });
+  const secondSegment = createProjectVoiceoverSegment({
+    index: 1,
+    startTime: 4.1,
+    endTime: 8.2,
+    voiceoverAsset: {
+      assetId: 812,
+      durationSeconds: 4.1,
+      fileName: "scene-2.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/812",
+      source: "media-library",
+    },
+    voiceoverVoiceType: "Russian_BrightHeroine",
+    voiceType: null,
+  });
+
+  expect(
+    getWorkspaceSegmentEditorProjectVoiceType({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: null,
+      voiceType: "English_ManWithDeepVoice",
+    }),
+  ).toBe("Russian_BrightHeroine");
 });
 
 it("repairs repeated speech words that leaked into the next project voiceover scene", () => {
@@ -3418,14 +3505,14 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 5.25,
-      endTime: 5.25,
+      duration: 5.3,
+      endTime: 5.3,
       speechDuration: 5.1,
       startTime: 0,
     }));
     expect(rebuilt.segments[1]).toEqual(expect.objectContaining({
-      endTime: 10.8,
-      startTime: 5.25,
+      endTime: 10.9,
+      startTime: 5.3,
     }));
   });
 
@@ -3461,10 +3548,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.22,
+      duration: 2.42,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.22,
+      endTime: 2.42,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3500,10 +3587,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.2,
+      duration: 11.4,
       durationMode: "auto",
       durationSyncMode: "visual",
-      endTime: 11.2,
+      endTime: 11.4,
       manualDurationSeconds: null,
       startTime: 0,
       voiceSourceDuration: 11.2,
@@ -3535,9 +3622,42 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.2,
+      duration: 11.4,
       durationMode: "auto",
-      endTime: 11.2,
+      endTime: 11.4,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("normalizes photo scene duration to the same voiceover minimum used by manual edits", () => {
+    const segment = createProjectVoiceoverSegment({
+      duration: 6.8,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 6.8,
+      manualDurationSeconds: null,
+      mediaType: "photo",
+      speechDuration: 6.9,
+      speechDurationSource: "audio",
+      speechEndTime: 6.9,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 6.9,
+      voiceSourceEndTime: 6.9,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 7.1,
+      durationMode: "auto",
+      endTime: 7.1,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3568,9 +3688,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.2,
+      duration: 2.4,
       durationMode: "auto",
-      endTime: 2.2,
+      endTime: 2.4,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3636,9 +3756,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 1.7,
+      duration: 1.9,
       durationMode: "auto",
-      endTime: 1.7,
+      endTime: 1.9,
       manualDurationSeconds: null,
       startTime: 0,
     }));

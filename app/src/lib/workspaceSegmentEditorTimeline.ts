@@ -218,6 +218,7 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   segment: T,
   options?: {
     fallbackDuration?: number | null;
+    minimumDurationSeconds?: number | null;
     preferEstimatedDuration?: boolean;
     preserveExistingStillDuration?: boolean;
     stillNoTextFallbackDuration?: number | null;
@@ -241,10 +242,12 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   const durationSyncMode = String(segment.durationSyncMode ?? "").trim().toLowerCase();
   const durationSyncModeUserSelected = segment.durationSyncModeUserSelected === true;
   const shouldSyncVideoToVoiceover = visualKind === "video" && durationSyncMode === "voiceover";
+  const explicitMinimumDuration = normalizeWorkspaceSegmentManualDurationSeconds(options?.minimumDurationSeconds);
   const voiceMinimumDuration = voiceDuration;
   const minimumDuration = Math.max(
     WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
     voiceMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+    explicitMinimumDuration ?? WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
   );
   const timelineDuration =
     getWorkspaceSegmentEditorDisplayEndTime(segment) - getWorkspaceSegmentEditorDisplayStartTime(segment);
@@ -289,12 +292,12 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
     if (options?.preserveExistingStillDuration && existingStillDuration !== null) {
       return Math.max(
         WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
-        voiceDuration,
+        minimumDuration,
         existingStillDuration,
       );
     }
 
-    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
+    return minimumDuration;
   }
 
   if (options?.subtitleEnabled === false && visualKind === "image") {
@@ -320,6 +323,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
   segments: T[],
   options?: {
     preferEstimatedDuration?: (segment: T) => boolean;
+    minimumDurationSeconds?: (segment: T) => number | null | undefined;
     stillNoTextFallbackDuration?: number | null;
     subtitleEnabled?: boolean | ((segment: T) => boolean);
     visualDurationSeconds?: (segment: T) => number | null | undefined;
@@ -350,6 +354,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
       ? 0
       : roundWorkspaceSegmentTimelineSeconds(resolveWorkspaceSegmentDuration(segment, {
           fallbackDuration: segment.duration,
+          minimumDurationSeconds: options?.minimumDurationSeconds?.(segment) ?? null,
           preferEstimatedDuration: options?.preferEstimatedDuration?.(segment) ?? false,
           preserveExistingStillDuration: preserveExistingStillDuration ?? false,
           stillNoTextFallbackDuration: options?.stillNoTextFallbackDuration,

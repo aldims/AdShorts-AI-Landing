@@ -232,6 +232,19 @@ export const resolveWorkspaceSegmentGeneratedVoiceoverEdited = (options: {
         (options.currentVoiceoverLanguage ?? null) !== (options.baselineVoiceoverLanguage ?? null)),
   );
 
+export const shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited = (options: {
+  hasExplicitSegmentVoiceOverride: boolean;
+  isGeneratedVoiceoverEdited: boolean;
+  isGlobalVoiceEdited: boolean;
+  isTextEdited: boolean;
+  isUnrenderedSceneVoiceoverAsset: boolean;
+}) => {
+  const hasSceneScopedVoiceChange =
+    options.hasExplicitSegmentVoiceOverride || options.isTextEdited;
+
+  return hasSceneScopedVoiceChange && (options.isGeneratedVoiceoverEdited || options.isUnrenderedSceneVoiceoverAsset);
+};
+
 export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   canForwardText: boolean;
   canForwardVoice: boolean;

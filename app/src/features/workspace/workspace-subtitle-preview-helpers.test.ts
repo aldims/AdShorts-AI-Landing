@@ -60,4 +60,31 @@ describe("workspace segment subtitle preview helpers", () => {
     expect(words.map((word) => word.text)).toEqual(["one", "two", "three"]);
     expect(words.find((word) => word.state === "active")?.text).toBe("three");
   });
+
+  it("uses local word timings for a scene voiceover that starts later on the project timeline", () => {
+    const words = flattenWords(
+      buildWorkspaceSegmentSubtitlePreviewLines({
+        clipCurrentTime: 1.5,
+        isPlaying: true,
+        segment: createSegment({
+          startTime: 7,
+          endTime: 12,
+          speechStartTime: 7,
+          speechEndTime: 10,
+          speechWords: [
+            { confidence: 1, startTime: 0, endTime: 1, text: "one" },
+            { confidence: 1, startTime: 1, endTime: 2, text: "two" },
+            { confidence: 1, startTime: 2, endTime: 3, text: "three" },
+          ],
+        }),
+        style: subtitleStyle,
+      }),
+    );
+
+    expect(words.map((word) => `${word.text}:${word.state}`)).toEqual([
+      "one:past",
+      "two:active",
+      "three:future",
+    ]);
+  });
 });

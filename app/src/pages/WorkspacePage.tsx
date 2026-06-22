@@ -237,6 +237,7 @@ import {
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
+  inferWorkspaceSegmentEditorUniformVoiceType,
   isWorkspaceSegmentPersistedForVisualJobBinding,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentDraftTextEdited,
@@ -533,7 +534,6 @@ import {
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_PROGRESS_SECONDS,
-  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_DEBUG_STORAGE_KEY,
@@ -761,6 +761,7 @@ import {
   resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
+  shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
 } from "../features/workspace/workspace-utils";
 import type {
   StudioBrandLogoFile,
@@ -999,6 +1000,7 @@ export {
   resolveWorkspaceSegmentPhotoDurationVoiceoverGuard,
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
+  shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
 } from "../features/workspace/workspace-utils";
 export {
   buildWorkspaceReferenceAiPrompt,
@@ -7024,6 +7026,9 @@ export function WorkspacePage({
       getWorkspaceSegmentEditorProjectVoiceType(segmentEditorDraft) !==
         getWorkspaceSegmentEditorProjectVoiceType(segmentEditorChangeDisplayBaseSession),
   );
+  const uniformSegmentEditorVoiceOverrideId = segmentEditorDraft
+    ? inferWorkspaceSegmentEditorUniformVoiceType(segmentEditorDraft)
+    : null;
   const activeSegmentVoiceRawOverrideId = getWorkspaceSegmentVoiceOverrideId(activeSegment);
   const activeSegmentVoiceDisabled = activeSegmentVoiceRawOverrideId === "none";
   const activeSegmentVoiceOverrideOption = getStudioVoiceOptionById(activeSegmentVoiceRawOverrideId);
@@ -12023,13 +12028,14 @@ export function WorkspacePage({
       getStudioVoiceOptionById(voiceId)?.id ?? resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
     selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(nextVoiceId) ?? selectedLanguage] = nextVoiceId;
     setSegmentEditorVideoError(null);
-    updateSegmentEditorDraft((currentDraft) =>
-      applyWorkspaceSegmentEditorSceneVoiceOverride(
+    updateSegmentEditorDraft((currentDraft) => {
+      const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType);
+      return applyWorkspaceSegmentEditorSceneVoiceOverride(
         currentDraft,
         activeSegment.index,
-        studioSidebarVoiceEnabled && nextVoiceId === studioSidebarVoiceId ? null : nextVoiceId,
-      ),
-    );
+        inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId,
+      );
+    });
   };
 
   const handleSegmentEditorSceneVoiceToggle = (enabled: boolean) => {
@@ -21824,13 +21830,14 @@ export function WorkspacePage({
     stopSegmentTimelineVoicePreview();
     setSegmentEditorVideoError(null);
     clearSegmentEditorVoiceoverError(segmentIndex);
-    updateSegmentEditorDraft((currentDraft) =>
-      applyWorkspaceSegmentEditorSceneVoiceOverride(
+    updateSegmentEditorDraft((currentDraft) => {
+      const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType);
+      return applyWorkspaceSegmentEditorSceneVoiceOverride(
         currentDraft,
         segmentIndex,
-        nextVoiceId,
-      ),
-    );
+        inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId,
+      );
+    });
   };
   const handleSegmentTimelineVoiceLanguageSelect = (segmentIndex: number, language: StudioLanguage) => {
     const nextVoiceId = resolveStudioVoiceIdForLanguage(
@@ -23743,24 +23750,10 @@ export function WorkspacePage({
           voiceDuckingStrength: options.voiceDuckingStrength,
         });
   };
-  const getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds = (
-    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
-  ) =>
-    isSegmentEditorFullPreviewVoiceAudioTrack(track)
-      ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS
-      : track.kind === "music"
-        ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS
-        : WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS;
-  const getSegmentEditorFullPreviewAudibleSyncLeadToleranceSeconds = (
-    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
-  ) =>
-    isSegmentEditorFullPreviewVoiceAudioTrack(track)
-      ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS
-      : getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds(track);
   const ensureSegmentEditorFullPreviewAudioElementAudibleSync = (
     track: WorkspaceSegmentEditorFullPreviewAudioTrack,
     element: HTMLMediaElement,
-    currentTime: number,
+    _currentTime: number,
   ) => {
     if (element.paused || element.ended) {
       return false;
@@ -23774,39 +23767,7 @@ export function WorkspacePage({
       return false;
     }
 
-    const expectedSourceTime = getSegmentEditorFullPreviewTrackSourceTime(track, currentTime, element);
-    const mediaCurrentTime = Number.isFinite(element.currentTime) ? Math.max(0, element.currentTime) : null;
-    if (!Number.isFinite(expectedSourceTime) || mediaCurrentTime === null) {
-      muteSegmentEditorFullPreviewAudioElement(element, track, {
-        fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
-      });
-      return false;
-    }
-
-    const lagToleranceSeconds = getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds(track);
-    const leadToleranceSeconds = getSegmentEditorFullPreviewAudibleSyncLeadToleranceSeconds(track);
-    const shouldSeekForAudibleSync =
-      mediaCurrentTime + lagToleranceSeconds < expectedSourceTime ||
-      mediaCurrentTime - expectedSourceTime > leadToleranceSeconds;
-    if (!shouldSeekForAudibleSync) {
-      return true;
-    }
-
-    muteSegmentEditorFullPreviewAudioElement(element, track, {
-      fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
-    });
-    if (element.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      writeSegmentEditorFullPreviewDebugTrace("audio.seek.audible-sync", {
-        ...getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
-        targetSourceTime: roundWorkspaceSegmentTimelineSeconds(expectedSourceTime),
-      });
-      try {
-        element.currentTime = expectedSourceTime;
-      } catch {
-        // Browser can reject a range seek while media metadata is changing.
-      }
-    }
-    return false;
+    return true;
   };
   const makeSegmentEditorFullPreviewAudioElementAudibleAfterPlay = (
     track: WorkspaceSegmentEditorFullPreviewAudioTrack,
@@ -27584,8 +27545,14 @@ export function WorkspacePage({
               });
               const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
               const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.voiceType);
+              const isUniformProjectVoiceOverride = Boolean(
+                segmentVoiceOverrideId &&
+                  uniformSegmentEditorVoiceOverrideId &&
+                  segmentVoiceOverrideId === uniformSegmentEditorVoiceOverrideId,
+              );
               const hasExplicitSegmentVoiceOverride = Boolean(
                 segmentVoiceOverrideId &&
+                  !isUniformProjectVoiceOverride &&
                   (!inheritedProjectVoiceId || segmentVoiceOverrideId !== inheritedProjectVoiceId),
               );
               const isFreshLoadedVoiceoverAssetOnly = Boolean(
@@ -27604,8 +27571,13 @@ export function WorkspacePage({
               );
               const isDisplayedVoiceSettingsEdited =
                 isVoiceSettingsEdited && !isFreshLoadedVoiceoverAssetOnly && !shouldSuppressInheritedProjectVoiceEdited;
-              const isDisplayedGeneratedVoiceoverEdited =
-                isGeneratedVoiceoverTrackEdited || isUnrenderedSceneVoiceoverAsset;
+              const isDisplayedGeneratedVoiceoverEdited = shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited({
+                hasExplicitSegmentVoiceOverride,
+                isGeneratedVoiceoverEdited: isGeneratedVoiceoverTrackEdited,
+                isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
+                isTextEdited: isVoiceTextEdited,
+                isUnrenderedSceneVoiceoverAsset,
+              });
               const hasProjectTimelineVoiceover = canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, segmentEditorDraft, {
                 baselineSession: segmentEditorChangeDisplayBaseSession,
                 isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
@@ -27814,6 +27786,7 @@ export function WorkspacePage({
                 isTextEdited: isVoiceTextEdited,
                 isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
               });
+              const isVoiceCellEdited = isDisplayedGeneratedVoiceoverEdited || isDisplayedVoiceSettingsEdited;
 
               return (
                 <div
@@ -27831,11 +27804,11 @@ export function WorkspacePage({
                       usesEmbeddedTalkingPhotoAudio && voiceoverAudioUrl ? " is-listenable" : ""
                     }${
                       isSegmentEditorTimelineSpanActiveForRender(span) ? " is-active" : ""
-                    }${voiceTimelineState.isEdited ? " is-edited" : ""}${
+                    }${isVoiceCellEdited ? " is-edited" : ""}${
                       isVoiceoverGenerationPending ? " is-pending" : ""
                     }`}
                     data-edited-label={
-                      voiceTimelineState.isEdited && !isVoiceoverGenerationPending
+                      isVoiceCellEdited && !isVoiceoverGenerationPending
                         ? workspaceText(locale, "Изменен", "Changed")
                         : undefined
                     }
@@ -31495,7 +31468,27 @@ export function WorkspacePage({
                                   isFullPreviewUpcomingCard ||
                                   shouldKeepPausedVideoMounted ||
                                   segmentMediaSurface.mountVideoWhenIdle;
-                                const subtitlePreviewTime = isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0;
+                                const fullPreviewSubtitleTime =
+                                  isFullPreviewCurrentCard && segmentEditorFullPreviewResolvedSegmentForRender
+                                    ? Math.min(
+                                        Math.max(
+                                          0,
+                                          segmentEditorFullPreviewResolvedSegmentForRender.endTime -
+                                            segmentEditorFullPreviewResolvedSegmentForRender.startTime,
+                                        ),
+                                        Math.max(
+                                          0,
+                                          segmentEditorFullPreviewTime -
+                                            segmentEditorFullPreviewResolvedSegmentForRender.startTime,
+                                        ),
+                                      )
+                                    : null;
+                                const isSubtitlePreviewPlaying =
+                                  fullPreviewSubtitleTime !== null
+                                    ? segmentEditorFullPreviewStatus === "playing"
+                                    : isSegmentPlaying;
+                                const subtitlePreviewTime =
+                                  fullPreviewSubtitleTime ?? (isSegmentPlaying ? segmentEditorPreviewTimes[segmentPlaybackIndex] ?? 0 : 0);
                                 const segmentSourceDisplayLabel = getWorkspaceSegmentDraftSourceDisplayLabel(segmentSourceLabel, locale);
                                 const baselineVisualSegment = segmentEditorChangeDisplayBaseSession?.segments.find(
                                   (baselineSegment) => baselineSegment.index === segment.index,
@@ -31520,7 +31513,7 @@ export function WorkspacePage({
                                   },
                                 );
                                 const shouldShowEditableSubtitleOverlay =
-                                  isActiveCard && segmentEffectiveSubtitleSettings.isEnabled;
+                                  (isActiveCard || isFullPreviewCurrentCard) && segmentEffectiveSubtitleSettings.isEnabled;
 
                                 return (
                                   <div
@@ -31694,7 +31687,7 @@ export function WorkspacePage({
                                       {shouldShowEditableSubtitleOverlay ? (
                                         <WorkspaceSegmentSubtitleOverlay
                                           clipCurrentTime={subtitlePreviewTime}
-                                          isPlaying={isSegmentPlaying}
+                                          isPlaying={isSubtitlePreviewPlaying}
                                           segment={segment}
                                           segmentNumber={segmentNumber}
                                           subtitleColorId={segmentEffectiveSubtitleSettings.subtitleColorId}

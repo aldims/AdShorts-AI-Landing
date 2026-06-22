@@ -165,6 +165,33 @@ describe("workspace segment editor timeline", () => {
     expect(resolveWorkspaceSegmentDuration(segment, { voiceEnabled: true })).toBeCloseTo(4.25, 6);
   });
 
+  it("uses the caller-provided minimum as the initial still scene duration", () => {
+    const segment = createSegment({
+      duration: 6.9,
+      durationMode: "auto",
+      endTime: 6.9,
+      mediaType: "photo",
+      speechDuration: 6.9,
+      speechEndTime: 6.9,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "voice needs a small hold after it finishes",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([segment], {
+      minimumDurationSeconds: () => 7.1,
+      visualKind: () => "image",
+      voiceDurationSeconds: () => 6.9,
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 7.1,
+      endTime: 7.1,
+      startTime: 0,
+    }));
+  });
+
   it("allows manual duration longer than speech without extending speech timing", () => {
     const segment = createSegment({
       durationMode: "manual",
