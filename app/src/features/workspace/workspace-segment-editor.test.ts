@@ -596,6 +596,77 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
   });
 
+  it("does not warn when an ffmpeg-rendered photo segment is shorter than voiceover", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 6670,
+        durationSeconds: 6.52,
+        kind: "current_rendered_segment",
+        libraryKind: "photo_animation",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        renderedAnimationMode: "ffmpeg",
+        renderedViaI2v: false,
+        role: "rendered_segment",
+        sourceKind: "ai_generated",
+      } as any,
+      duration: 8.46,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      endTime: 8.46,
+      manualDurationSeconds: 8.46,
+      mediaType: "video",
+      speechDuration: 8.46,
+      speechEndTime: 8.46,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createProjectVoiceoverDraft([segment]), {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 6.52,
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps warning when a real i2v photo animation is shorter than voiceover", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 6671,
+        durationSeconds: 6.52,
+        kind: "current_rendered_segment",
+        libraryKind: "photo_animation",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        renderedAnimationMode: "i2v",
+        renderedViaI2v: true,
+        role: "rendered_segment",
+        sourceKind: "ai_generated",
+      } as any,
+      duration: 8.46,
+      endTime: 8.46,
+      mediaType: "video",
+      speechDuration: 8.46,
+      speechEndTime: 8.46,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createProjectVoiceoverDraft([segment]), {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 6.52,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 6.52,
+      voiceoverDurationSeconds: 8.46,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
   it("uses the selected draft video as the AI duration extension base source", () => {
     const selectedVideo = {
       assetId: 606,

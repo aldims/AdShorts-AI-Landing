@@ -24,6 +24,8 @@ export type WorkspaceMediaAssetRef = {
   originalUrl: string | null;
   playbackUrl: string | null;
   projectId: number | null;
+  renderedAnimationMode?: string | null;
+  renderedViaI2v?: boolean | null;
   role: string | null;
   segmentIndex: number | null;
   sourceKind: string | null;

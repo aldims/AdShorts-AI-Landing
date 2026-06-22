@@ -772,6 +772,56 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.segments[0]?.originalAsset?.mediaType).toBe("photo");
   });
 
+  it("preserves rendered photo animation metadata on segment media assets", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      3957,
+      {
+        project_id: 3957,
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 6.52,
+            index: 0,
+            media_type: "video",
+            original_video: "original-marker",
+            text: "Segment",
+          },
+        ],
+        title: "Rendered photo project",
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            current_rendered_segments: [
+              {
+                download_url: "/api/media/6670/download",
+                duration: 6.52,
+                library_kind: "photo_animation",
+                media_asset_id: 6670,
+                media_type: "video",
+                rendered_animation_mode: "ffmpeg",
+                rendered_via_i2v: false,
+                source: "rendered_segment",
+              },
+            ],
+            source_video_urls: [
+              {
+                download_url: "/api/media/6610/download",
+                media_asset_id: 6610,
+                media_type: "photo",
+                source: "ai_generated",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session.segments[0]?.currentAsset?.libraryKind).toBe("photo_animation");
+    expect(session.segments[0]?.currentAsset?.renderedAnimationMode).toBe("ffmpeg");
+    expect(session.segments[0]?.currentAsset?.renderedViaI2v).toBe(false);
+  });
+
   it("resolves custom music metadata from project details for segment editor reuse", () => {
     const metadata = resolveWorkspaceSegmentEditorCustomMusicMetadata({
       generation_settings: {

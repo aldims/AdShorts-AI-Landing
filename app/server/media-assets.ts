@@ -32,6 +32,8 @@ export type AdsflowMediaAssetPayload = {
   mime_type?: string | null;
   original_url?: string | null;
   project_id?: number | string | null;
+  rendered_animation_mode?: string | null;
+  rendered_via_i2v?: boolean | string | number | null;
   role?: string | null;
   segment_index?: number | string | null;
   source_kind?: string | null;
@@ -113,6 +115,8 @@ export const buildWorkspaceMediaAssetRef = (
   const mimeType = normalizeText(value.mime_type) || null;
   const originalUrl = normalizeText(value.original_url) || null;
   const projectId = normalizeInteger(value.project_id);
+  const renderedAnimationMode = normalizeText(value.rendered_animation_mode) || null;
+  const renderedViaI2v = normalizeBoolean(value.rendered_via_i2v);
   const role = normalizeText(value.role) || kind;
   const segmentIndex = normalizeInteger(value.segment_index);
   const sourceKind = normalizeText(value.source_kind) || null;
@@ -143,6 +147,8 @@ export const buildWorkspaceMediaAssetRef = (
     originalUrl,
     playbackUrl: downloadPath || downloadUrl || null,
     projectId,
+    renderedAnimationMode,
+    renderedViaI2v,
     role,
     segmentIndex,
     sourceKind,
@@ -187,6 +193,8 @@ export const mergeWorkspaceMediaAssetRefs = (
     originalUrl: primary.originalUrl ?? fallback.originalUrl,
     playbackUrl: primary.playbackUrl ?? fallback.playbackUrl,
     projectId: primary.projectId ?? fallback.projectId,
+    renderedAnimationMode: primary.renderedAnimationMode ?? fallback.renderedAnimationMode,
+    renderedViaI2v: primary.renderedViaI2v ?? fallback.renderedViaI2v,
     role: primary.role ?? fallback.role,
     segmentIndex: primary.segmentIndex ?? fallback.segmentIndex,
     sourceKind: primary.sourceKind ?? fallback.sourceKind,

@@ -1511,8 +1511,39 @@ export const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDr
   );
 };
 
-export const normalizeWorkspaceMediaAssetToken = (value: string | null | undefined) =>
+export const normalizeWorkspaceMediaAssetToken = (value: unknown) =>
   String(value ?? "").trim().toLowerCase();
+
+const normalizeWorkspaceMediaAssetBoolean = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return true;
+  }
+
+  if (normalized === "false" || normalized === "0") {
+    return false;
+  }
+
+  return null;
+};
+
+const getWorkspaceMediaAssetRenderedAnimationMode = (asset: WorkspaceMediaAssetRef | null | undefined) =>
+  normalizeWorkspaceMediaAssetToken(
+    asset?.renderedAnimationMode ?? (asset as { rendered_animation_mode?: string | null } | null | undefined)?.rendered_animation_mode,
+  );
+
+const getWorkspaceMediaAssetRenderedViaI2v = (asset: WorkspaceMediaAssetRef | null | undefined) =>
+  normalizeWorkspaceMediaAssetBoolean(
+    asset?.renderedViaI2v ?? (asset as { rendered_via_i2v?: boolean | string | number | null } | null | undefined)?.rendered_via_i2v,
+  );
 
 export const getWorkspaceMediaAssetSignature = (asset: WorkspaceMediaAssetRef | null | undefined) =>
   [
@@ -1520,6 +1551,8 @@ export const getWorkspaceMediaAssetSignature = (asset: WorkspaceMediaAssetRef | 
     asset?.libraryKind,
     asset?.role,
     asset?.sourceKind,
+    asset?.renderedAnimationMode,
+    String(asset?.renderedViaI2v ?? ""),
     asset?.storageKey,
     asset?.downloadPath,
     asset?.downloadUrl,
@@ -1617,10 +1650,52 @@ export const isWorkspaceAiPhotoRenderedStillAsset = (asset: WorkspaceMediaAssetR
   return isRenderedSegment && hasAiPhotoMarker && (libraryKind === "ai_photo" || sourceKind === "ai_generated");
 };
 
+export const isWorkspaceHoldableRenderedPhotoVisualAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
+  if (!isWorkspaceVideoMediaAsset(asset)) {
+    return false;
+  }
+
+  const signature = getWorkspaceMediaAssetSignature(asset);
+  const libraryKind = normalizeWorkspaceMediaAssetToken(asset?.libraryKind);
+  const renderedAnimationMode = getWorkspaceMediaAssetRenderedAnimationMode(asset);
+  const renderedViaI2v = getWorkspaceMediaAssetRenderedViaI2v(asset);
+  const isRenderedSegment =
+    signature.includes("rendered_segment") ||
+    signature.includes("current_rendered_segment") ||
+    signature.includes("/rendered_segment/");
+  const hasPhotoMarker =
+    libraryKind === "photo_animation" ||
+    libraryKind === "ai_photo" ||
+    signature.includes("photo_animation") ||
+    signature.includes("photo-animation") ||
+    signature.includes("source_ai_image") ||
+    signature.includes("ai_photo") ||
+    signature.includes("ai-photo");
+  const hasGeneratedVideoMarker =
+    renderedViaI2v === true ||
+    renderedAnimationMode === "i2v" ||
+    signature.includes("wavespeed") ||
+    signature.includes("deapi");
+  const hasStillRenderMarker =
+    renderedAnimationMode === "ffmpeg" ||
+    renderedAnimationMode === "still" ||
+    renderedAnimationMode === "image" ||
+    signature.includes("rendered_segment_cache") ||
+    signature.includes("segment_animation_fallback");
+
+  return isRenderedSegment && hasPhotoMarker && hasStillRenderMarker && !hasGeneratedVideoMarker;
+};
+
 export const isWorkspaceSegmentAiPhotoRenderedStill = (segment: WorkspaceSegmentEditorDraftSegment) =>
   Boolean(
     isWorkspaceAiPhotoRenderedStillAsset(segment.currentAsset) ||
       isWorkspaceAiPhotoRenderedStillAsset(segment.originalAsset),
+  );
+
+export const isWorkspaceSegmentHoldableRenderedPhotoVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  Boolean(
+    isWorkspaceHoldableRenderedPhotoVisualAsset(segment.currentAsset) ||
+      isWorkspaceHoldableRenderedPhotoVisualAsset(segment.originalAsset),
   );
 
 export const hasWorkspaceSegmentExplicitDraftVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
@@ -4906,6 +4981,10 @@ export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
   }
 
   if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return null;
+  }
+
+  if (isWorkspaceSegmentHoldableRenderedPhotoVisual(segment)) {
     return null;
   }
 

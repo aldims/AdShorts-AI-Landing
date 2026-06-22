@@ -1425,6 +1425,8 @@ const buildSegmentMediaAssetFromEntry = (
     mime_type: entry?.mime_type ?? null,
     original_url: entry?.url ?? null,
     project_id: options?.projectId ?? null,
+    rendered_animation_mode: entry?.rendered_animation_mode ?? null,
+    rendered_via_i2v: entry?.rendered_via_i2v ?? null,
     role: entryRole,
     segment_index: options?.segmentIndex ?? null,
     source_kind: detectWorkspaceSegmentSourceKind(entry),
