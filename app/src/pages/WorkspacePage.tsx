@@ -533,6 +533,7 @@ import {
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_PROGRESS_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_DEBUG_STORAGE_KEY,
@@ -23742,6 +23743,71 @@ export function WorkspacePage({
           voiceDuckingStrength: options.voiceDuckingStrength,
         });
   };
+  const getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds = (
+    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
+  ) =>
+    isSegmentEditorFullPreviewVoiceAudioTrack(track)
+      ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS
+      : track.kind === "music"
+        ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS
+        : WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_SEEK_TOLERANCE_SECONDS;
+  const getSegmentEditorFullPreviewAudibleSyncLeadToleranceSeconds = (
+    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
+  ) =>
+    isSegmentEditorFullPreviewVoiceAudioTrack(track)
+      ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_LEAD_TOLERANCE_SECONDS
+      : getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds(track);
+  const ensureSegmentEditorFullPreviewAudioElementAudibleSync = (
+    track: WorkspaceSegmentEditorFullPreviewAudioTrack,
+    element: HTMLMediaElement,
+    currentTime: number,
+  ) => {
+    if (element.paused || element.ended) {
+      return false;
+    }
+
+    if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || element.seeking) {
+      muteSegmentEditorFullPreviewAudioElement(element, track, {
+        fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
+      });
+      ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+      return false;
+    }
+
+    const expectedSourceTime = getSegmentEditorFullPreviewTrackSourceTime(track, currentTime, element);
+    const mediaCurrentTime = Number.isFinite(element.currentTime) ? Math.max(0, element.currentTime) : null;
+    if (!Number.isFinite(expectedSourceTime) || mediaCurrentTime === null) {
+      muteSegmentEditorFullPreviewAudioElement(element, track, {
+        fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
+      });
+      return false;
+    }
+
+    const lagToleranceSeconds = getSegmentEditorFullPreviewAudibleSyncLagToleranceSeconds(track);
+    const leadToleranceSeconds = getSegmentEditorFullPreviewAudibleSyncLeadToleranceSeconds(track);
+    const shouldSeekForAudibleSync =
+      mediaCurrentTime + lagToleranceSeconds < expectedSourceTime ||
+      mediaCurrentTime - expectedSourceTime > leadToleranceSeconds;
+    if (!shouldSeekForAudibleSync) {
+      return true;
+    }
+
+    muteSegmentEditorFullPreviewAudioElement(element, track, {
+      fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
+    });
+    if (element.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      writeSegmentEditorFullPreviewDebugTrace("audio.seek.audible-sync", {
+        ...getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
+        targetSourceTime: roundWorkspaceSegmentTimelineSeconds(expectedSourceTime),
+      });
+      try {
+        element.currentTime = expectedSourceTime;
+      } catch {
+        // Browser can reject a range seek while media metadata is changing.
+      }
+    }
+    return false;
+  };
   const makeSegmentEditorFullPreviewAudioElementAudibleAfterPlay = (
     track: WorkspaceSegmentEditorFullPreviewAudioTrack,
     element: HTMLMediaElement,
@@ -23758,6 +23824,10 @@ export function WorkspacePage({
       segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key) ||
       !isSegmentEditorFullPreviewAudioTrackActive(track, options.currentTime, element)
     ) {
+      return;
+    }
+
+    if (!ensureSegmentEditorFullPreviewAudioElementAudibleSync(track, element, options.currentTime)) {
       return;
     }
 
@@ -25136,6 +25206,10 @@ export function WorkspacePage({
           },
         );
       } else {
+        if (!ensureSegmentEditorFullPreviewAudioElementAudibleSync(track, element, currentTime)) {
+          return;
+        }
+
         applySegmentEditorFullPreviewAudioElementVolume(track, element, {
           currentTime,
           voiceDuckingStrength,
@@ -25653,8 +25727,6 @@ export function WorkspacePage({
     setSegmentEditorFullPreviewPlaybackTime(safeTime);
     segmentEditorFullPreviewLastFrameAtRef.current = null;
     syncSegmentEditorFullPreviewVisual(safeTime, { playVideo: false });
-    ensureSegmentEditorFullPreviewPreparedAudioTracks({ currentTime: safeTime });
-    pauseInactiveSegmentEditorFullPreviewAudioTracks(new Set());
     return safeTime;
   };
   const handleSegmentEditorFullPreviewScrubPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -25675,9 +25747,9 @@ export function WorkspacePage({
     event.currentTarget.setPointerCapture(event.pointerId);
     setSegmentEditorFullPreviewIsScrubbing(true);
 
-    if (segmentEditorFullPreviewStatusRef.current === "playing") {
-      stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
-    } else if (segmentEditorFullPreviewStatusRef.current === "idle") {
+    if (segmentEditorFullPreviewStatusRef.current !== "idle") {
+      stopSegmentEditorFullPreview({ status: "paused" });
+    } else {
       setSegmentEditorFullPreviewPlaybackStatus("paused");
     }
 
