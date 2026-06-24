@@ -3731,6 +3731,120 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("preserves a loaded project photo slot duration when source kind metadata is missing", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3978&segmentIndex=0&source=original",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3978&segmentIndex=0&source=original&delivery=preview",
+      currentSourceKind: "unknown",
+      duration: 5.06,
+      endTime: 5.06,
+      mediaType: "photo",
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=3978&segmentIndex=0&source=original",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=3978&segmentIndex=0&source=original&delivery=preview",
+      originalSourceKind: "unknown",
+      speechDuration: 4.64,
+      speechDurationSource: "audio",
+      speechEndTime: 4.64,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceSourceDuration: 4.64,
+      voiceSourceEndTime: 4.64,
+      voiceSourceStartTime: 0,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 5.06,
+      durationMode: "auto",
+      endTime: 5.06,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
+  it("keeps an untouched fifth project scene duration when another scene receives a long photo animation", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 3.9,
+      endTime: 3.9,
+      index: 0,
+      mediaType: "photo",
+      speechDuration: 3.7,
+      speechDurationSource: "audio",
+      speechEndTime: 3.7,
+      speechStartTime: 0,
+      voiceSourceDuration: 3.7,
+      voiceSourceEndTime: 3.7,
+      voiceSourceStartTime: 0,
+    });
+    const animatedSecondSegment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        durationSeconds: 30,
+        fileName: "scene-2-animation.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/902/playback",
+        source: "media-library",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      duration: 30,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 33.9,
+      index: 1,
+      manualDurationSeconds: 30,
+      mediaType: "photo",
+      speechDuration: 4.3,
+      speechDurationSource: "audio",
+      speechEndTime: 8.2,
+      speechStartTime: 3.9,
+      startTime: 3.9,
+      videoAction: "photo_animation",
+      voiceSourceDuration: 4.3,
+      voiceSourceEndTime: 8.2,
+      voiceSourceStartTime: 3.9,
+    });
+    const fifthSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3999&segmentIndex=4&source=original",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3999&segmentIndex=4&source=original&delivery=preview",
+      currentSourceKind: "unknown",
+      duration: 4.9,
+      endTime: 38.8,
+      index: 4,
+      mediaType: "photo",
+      originalPlaybackUrl: "/api/workspace/project-segment-video?projectId=3999&segmentIndex=4&source=original",
+      originalPreviewUrl: "/api/workspace/project-segment-video?projectId=3999&segmentIndex=4&source=original&delivery=preview",
+      originalSourceKind: "unknown",
+      speechDuration: 4.7,
+      speechDurationSource: "audio",
+      speechEndTime: 38.6,
+      speechStartTime: 33.9,
+      startTime: 33.9,
+      voiceSourceDuration: 4.7,
+      voiceSourceEndTime: 38.6,
+      voiceSourceStartTime: 33.9,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([firstSegment, animatedSecondSegment, fifthSegment]),
+      { preserveSourceTimelineEnd: false },
+    );
+    const rebuiltFifthSegment = rebuilt.segments.find((segment) => segment.index === 4);
+
+    expect(rebuilt.segments.find((segment) => segment.index === 1)).toEqual(expect.objectContaining({
+      duration: 30,
+      manualDurationSeconds: 30,
+    }));
+    expect(rebuiltFifthSegment).toEqual(expect.objectContaining({
+      duration: 4.9,
+      manualDurationSeconds: null,
+      startTime: 33.9,
+    }));
+  });
+
   it("drops a stale seven-second photo duration from a 1.7-second voiceover scene", () => {
     const segment = createProjectVoiceoverSegment({
       duration: 7,
