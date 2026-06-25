@@ -706,6 +706,70 @@ describe("workspace segment editor timeline", () => {
     }));
   });
 
+  it("keeps following still durations after a user-selected manual edit shifts the timeline", () => {
+    const editedSegment = createSegment({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 3,
+      mediaType: "photo",
+      speechDuration: 2,
+      speechEndTime: 2,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "edited scene",
+    });
+    const followingStillSegment = createSegment({
+      duration: 5,
+      endTime: 10,
+      mediaType: "photo",
+      speechDuration: 2,
+      speechEndTime: 7,
+      speechStartTime: 5,
+      startTime: 5,
+      text: "following scene",
+    });
+    const nextStillSegment = createSegment({
+      duration: 5,
+      endTime: 15,
+      mediaType: "photo",
+      speechDuration: 2,
+      speechEndTime: 14,
+      speechStartTime: 12,
+      startTime: 10,
+      text: "next scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline(
+      [editedSegment, followingStillSegment, nextStillSegment],
+      {
+        preserveExistingStillDurations: true,
+        preserveSourceTimelineEnd: false,
+        speechBoundaryEnabled: true,
+        visualKind: () => "image",
+        voiceEnabled: true,
+      },
+    );
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 3,
+      endTime: 3,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 8,
+      startTime: 3,
+    }));
+    expect(rebuilt[2]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 13,
+      startTime: 8,
+    }));
+  });
+
   it("ignores text for silent stills when subtitles are disabled", () => {
     const segment = createSegment({
       duration: null,

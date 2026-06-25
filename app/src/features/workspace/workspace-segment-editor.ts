@@ -6664,6 +6664,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "subtitleType" | "ttsAssetId" | "voiceType"> | null,
   options?: {
     preserveSpeechBoundaries?: boolean;
+    preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
     preserveSourceTimelineEnd?: boolean;
   },
 ) => {
@@ -6724,6 +6725,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   });
   const shouldRepairUserSelectedStillDurations =
     hasWorkspaceSegmentUserSelectedStillDurationSlotConflict(syncedSegments);
+  const preserveExistingStillDurationsOverride = options?.preserveExistingStillDurations;
 
   return rebuildWorkspaceSegmentEditorTimeline(syncedSegments, {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
@@ -6743,7 +6745,11 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     preserveSourceTimelineEnd:
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
     preserveExistingStillDurations: (segment) =>
-      shouldPreserveWorkspaceSegmentExistingStillDuration(segment, session),
+      typeof preserveExistingStillDurationsOverride === "function"
+        ? preserveExistingStillDurationsOverride(segment)
+        : typeof preserveExistingStillDurationsOverride === "boolean"
+          ? preserveExistingStillDurationsOverride
+          : shouldPreserveWorkspaceSegmentExistingStillDuration(segment, session),
     preserveExistingStillDurationsExact: (segment) =>
       isWorkspaceSegmentPersistedStillSlot(segment),
     minimumDurationSeconds: (segment) => getWorkspaceSegmentManualDurationMinimum(segment, session),
@@ -6755,6 +6761,7 @@ export const rebuildWorkspaceSegmentEditorDraftSessionTimeline = (
   session: WorkspaceSegmentEditorDraftSession,
   options?: {
     preserveSpeechBoundaries?: boolean;
+    preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
     preserveSourceTimelineEnd?: boolean;
   },
 ): WorkspaceSegmentEditorDraftSession => {

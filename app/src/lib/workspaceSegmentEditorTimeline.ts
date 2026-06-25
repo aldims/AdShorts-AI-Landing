@@ -76,6 +76,11 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
 const areTimelineNumbersEqual = (left: number | null, right: number | null) =>
   left !== null && right !== null && Math.abs(left - right) <= WORKSPACE_SEGMENT_TIMELINE_EPSILON;
 
+const hasUserSelectedManualTimelineDuration = <T extends WorkspaceSegmentTimelineSegment>(segment: T | undefined) =>
+  segment?.durationMode === "manual" &&
+  segment.durationSyncModeUserSelected === true &&
+  normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
+
 const getWorkspaceSegmentTimelineSpeechWordsRange = <T extends WorkspaceSegmentTimelineSegment>(segment: T) => {
   const speechWords = Array.isArray(segment.speechWords) ? segment.speechWords : [];
   const firstSpeechWord = speechWords[0] ?? null;
@@ -411,6 +416,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
 
   if (options?.speechBoundaryEnabled && options?.preserveSpeechBoundaries !== false && nextSegments.length > 1) {
     const boundaries: number[] = [0];
+    let hasUserSelectedManualDurationBeforeBoundary = false;
     for (let index = 0; index < nextSegments.length - 1; index += 1) {
       const previousSegment = segments[index];
       const nextSegment = segments[index + 1];
@@ -426,8 +432,19 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
           segment?.durationMode === "manual" &&
           normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null,
       );
+      const hasUserSelectedManualDurationAtBoundary =
+        hasUserSelectedManualDurationBeforeBoundary ||
+        hasUserSelectedManualTimelineDuration(previousSegment) ||
+        hasUserSelectedManualTimelineDuration(nextSegments[index]);
+      const shouldIgnoreSourceSpeechBoundary =
+        options.preserveSourceTimelineEnd === false &&
+        hasUserSelectedManualDurationAtBoundary;
       const speechBoundary =
-        boundaryEnabled && !hasManualDurationBoundary && previousSegment !== undefined && nextSegment !== undefined
+        boundaryEnabled &&
+        !hasManualDurationBoundary &&
+        !shouldIgnoreSourceSpeechBoundary &&
+        previousSegment !== undefined &&
+        nextSegment !== undefined
           ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment)
           : null;
       const previousBoundary = boundaries[boundaries.length - 1] ?? 0;
@@ -442,6 +459,9 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
           ),
         ),
       );
+      hasUserSelectedManualDurationBeforeBoundary =
+        hasUserSelectedManualDurationAtBoundary ||
+        hasUserSelectedManualTimelineDuration(segments[index + 1]);
     }
 
     const lastSourceSegment = segments[segments.length - 1];
@@ -457,9 +477,13 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
         ? normalizeWorkspaceSegmentTimelineTimeValue(lastSourceSegment.endTime) ??
           getWorkspaceSegmentEditorDisplayEndTime(lastSourceSegment)
         : null;
+    const sourceSpeechTimelineEnd =
+      options.preserveSourceTimelineEnd === false && hasUserSelectedManualDurationBeforeBoundary
+        ? null
+        : lastSpeechRange?.endTime;
     boundaries.push(
       roundWorkspaceSegmentTimelineSeconds(
-        Math.max(rebuiltTimelineEnd, sourceTimelineEnd ?? 0, lastSpeechRange?.endTime ?? 0, lastMinimumTimelineEnd),
+        Math.max(rebuiltTimelineEnd, sourceTimelineEnd ?? 0, sourceSpeechTimelineEnd ?? 0, lastMinimumTimelineEnd),
       ),
     );
 

@@ -11230,6 +11230,7 @@ export function WorkspacePage({
     targetSegmentIndex: number,
     updater: (segment: WorkspaceSegmentEditorDraftSegment) => WorkspaceSegmentEditorDraftSegment,
     options?: {
+      preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
       preserveSourceTimelineEnd?: boolean;
     },
   ) => {
@@ -11325,6 +11326,7 @@ export function WorkspacePage({
   const updateSegmentEditorDraft = (
     updater: (draft: WorkspaceSegmentEditorDraftSession) => WorkspaceSegmentEditorDraftSession,
     options?: {
+      preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
       preserveSourceTimelineEnd?: boolean;
     },
   ) => {
@@ -11369,7 +11371,10 @@ export function WorkspacePage({
     const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
       ...currentDraft,
       segments: nextSegments,
-    }, { preserveSourceTimelineEnd: false });
+    }, {
+      preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
+      preserveSourceTimelineEnd: false,
+    });
     segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft(nextDraft);
   }, [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorDraft]);
@@ -22237,7 +22242,10 @@ export function WorkspacePage({
         voice_source_end_time: shouldRefreshStaleVoiceDuration ? null : segment.voice_source_end_time,
         voice_source_start_time: shouldRefreshStaleVoiceDuration ? null : segment.voice_source_start_time,
       };
-    }, { preserveSourceTimelineEnd: false });
+    }, {
+      preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
+      preserveSourceTimelineEnd: false,
+    });
     return timing;
   };
   const applySegmentTimelineManualDuration = (
