@@ -4612,7 +4612,7 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
 export const getWorkspaceSegmentManualDurationMinimum = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
-    Partial<Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId">>) | null,
+    Partial<Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId">>) | null,
   options?: {
     voiceoverDurationSeconds?: number | null;
   },
@@ -4624,10 +4624,16 @@ export const getWorkspaceSegmentManualDurationMinimum = (
   const explicitVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
     options?.voiceoverDurationSeconds,
   );
+  const shouldIgnoreStaleVoiceoverTiming = Boolean(
+    !hasExplicitVoiceoverDurationSeconds &&
+      isWorkspaceSegmentDraftTextEdited(segment) &&
+      !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, session),
+  );
   const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)
     ? getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
         allowEmbeddedVisualFallback: false,
-        allowEstimated: false,
+        allowEstimated: shouldIgnoreStaleVoiceoverTiming,
+        isStale: shouldIgnoreStaleVoiceoverTiming,
       })?.durationSeconds ?? null
     : null;
   const voiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds

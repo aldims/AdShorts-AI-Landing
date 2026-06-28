@@ -21954,6 +21954,7 @@ export function WorkspacePage({
     draft: WorkspaceSegmentEditorDraftSession,
     options?: {
       voiceoverDurationSeconds?: number | null;
+      voiceoverDurationSource?: "actual" | "estimated" | null;
     },
   ) => {
     if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "image") {
@@ -21972,10 +21973,10 @@ export function WorkspacePage({
         ? explicitVoiceoverDurationSeconds !== null
           ? {
               durationSeconds: explicitVoiceoverDurationSeconds,
-              source: "actual" as const,
+              source: options?.voiceoverDurationSource ?? ("actual" as const),
             }
           : null
-        : getSegmentTimelineVoiceoverDurationInfo(segment, draft);
+        : getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft);
     const guard = resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(
       requestedDurationSeconds,
       voiceoverDurationInfo?.durationSeconds,
@@ -22076,6 +22077,7 @@ export function WorkspacePage({
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
       voiceoverDurationSeconds?: number | null;
+      voiceoverDurationSource?: "actual" | "estimated" | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -22091,12 +22093,15 @@ export function WorkspacePage({
     const explicitVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
       options?.voiceoverDurationSeconds,
     );
-    const effectiveVoiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
-      ? explicitVoiceoverDurationSeconds
-      : getSegmentTimelineEffectiveVoiceoverDurationSeconds(
-          currentSegment,
-          currentDraft,
-        );
+    const effectiveVoiceoverDurationInfo = hasExplicitVoiceoverDurationSeconds
+      ? explicitVoiceoverDurationSeconds !== null
+        ? {
+            durationSeconds: explicitVoiceoverDurationSeconds,
+            source: options?.voiceoverDurationSource ?? ("actual" as const),
+          }
+        : null
+      : getSegmentTimelineEffectiveVoiceoverDurationInfo(currentSegment, currentDraft);
+    const effectiveVoiceoverDurationSeconds = effectiveVoiceoverDurationInfo?.durationSeconds ?? null;
     let timing = resolveWorkspaceSegmentBoundaryTiming(currentSegment, requestedBoundaryTime, currentDraft, {
       voiceoverDurationSeconds: effectiveVoiceoverDurationSeconds,
     });
@@ -22135,6 +22140,7 @@ export function WorkspacePage({
       currentDraft,
       {
         voiceoverDurationSeconds: effectiveVoiceoverDurationSeconds,
+        voiceoverDurationSource: effectiveVoiceoverDurationInfo?.source ?? null,
       },
     );
     if (photoAudioGuard) {
@@ -22256,6 +22262,7 @@ export function WorkspacePage({
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
       voiceoverDurationSeconds?: number | null;
+      voiceoverDurationSource?: "actual" | "estimated" | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -22544,6 +22551,7 @@ export function WorkspacePage({
       maximumDurationSeconds?: number | null;
       sourceDurationSeconds?: number | null;
       voiceoverDurationSeconds?: number | null;
+      voiceoverDurationSource?: "actual" | "estimated" | null;
     },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
@@ -22596,11 +22604,11 @@ export function WorkspacePage({
       currentSegment && segmentTimelineDurationSourceOverride?.segmentIndex === currentSegment.index
         ? segmentTimelineDurationSourceOverride.durationSeconds
         : null;
-    const voiceoverDurationSeconds = currentSegment
-      ? getSegmentTimelineVoiceoverDurationInfo(currentSegment, currentDraft, {
-          allowEmbeddedVisualFallback: false,
-        })?.durationSeconds ?? null
-      : null;
+    const voiceoverDurationInfo =
+      currentSegment && currentDraft
+        ? getSegmentTimelineEffectiveVoiceoverDurationInfo(currentSegment, currentDraft)
+        : null;
+    const voiceoverDurationSeconds = voiceoverDurationInfo?.durationSeconds ?? null;
     const sourceVideoDurationSeconds = currentSegment
       ? getWorkspaceSegmentDurationExtensionSourceDurationSeconds(currentSegment, baselineSegment, {
           sourceDurationSeconds: sourceOverrideDurationSeconds,
@@ -22620,6 +22628,7 @@ export function WorkspacePage({
         maximumDurationSeconds: videoTrimDuration.maximumDurationSeconds,
         sourceDurationSeconds: videoTrimDuration.maximumDurationSeconds,
         voiceoverDurationSeconds: videoTrimDuration.minimumDurationSeconds,
+        voiceoverDurationSource: voiceoverDurationInfo?.source ?? null,
       });
     }
 
@@ -22659,6 +22668,7 @@ export function WorkspacePage({
       durationSyncMode: shouldApplyTrimToVoiceover ? "voiceover" : "visual",
       sourceDurationSeconds: sourceVideoDurationSeconds,
       ...(voiceoverDurationSeconds !== null ? { voiceoverDurationSeconds } : {}),
+      ...(voiceoverDurationInfo?.source ? { voiceoverDurationSource: voiceoverDurationInfo.source } : {}),
     });
   };
   const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
@@ -22692,7 +22702,7 @@ export function WorkspacePage({
 
     return getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, durationSession, options);
   };
-  const getSegmentTimelineEffectiveVoiceoverDurationSeconds = (
+  const getSegmentTimelineEffectiveVoiceoverDurationInfo = (
     segment: WorkspaceSegmentEditorDraftSegment,
     draft: WorkspaceSegmentEditorDraftSession,
   ) => {
@@ -22778,18 +22788,27 @@ export function WorkspacePage({
         embeddedTalkingPhotoVisualDurationSeconds === null ||
         measuredVoiceoverDurationSeconds + 0.04 < embeddedTalkingPhotoVisualDurationSeconds);
     if (!usesEmbeddedTalkingPhotoAudio && measuredVoiceoverDurationSeconds !== null) {
-      return measuredVoiceoverDurationSeconds;
+      return {
+        durationSeconds: measuredVoiceoverDurationSeconds,
+        source: "actual" as const,
+      };
     }
     if (shouldUseMeasuredEmbeddedTalkingPhotoAudioDuration) {
-      return measuredVoiceoverDurationSeconds;
+      return {
+        durationSeconds: measuredVoiceoverDurationSeconds,
+        source: "actual" as const,
+      };
     }
     if (embeddedTalkingPhotoKnownAudioDurationSeconds !== null) {
-      return embeddedTalkingPhotoKnownAudioDurationSeconds;
+      return {
+        durationSeconds: embeddedTalkingPhotoKnownAudioDurationSeconds,
+        source: "actual" as const,
+      };
     }
 
     const fallbackVoiceoverDurationInfo = getSegmentTimelineVoiceoverDurationInfo(segment, draft, {
       allowEmbeddedVisualFallback: false,
-      allowEstimated: false,
+      allowEstimated: isVoiceAudioStale,
       isStale: isVoiceAudioStale,
     });
     const fallbackVoiceoverDurationSeconds = fallbackVoiceoverDurationInfo?.durationSeconds ?? null;
@@ -22804,13 +22823,18 @@ export function WorkspacePage({
       currentSlotDurationSeconds !== null &&
       segment.speechDurationSource !== "audio" &&
       getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image" &&
+      fallbackVoiceoverDurationInfo?.source === "actual" &&
       areWorkspaceSegmentDurationValuesEqual(fallbackVoiceoverDurationSeconds, currentSlotDurationSeconds);
     if (shouldIgnoreSceneDurationEcho) {
       return null;
     }
 
-    return fallbackVoiceoverDurationSeconds;
+    return fallbackVoiceoverDurationInfo;
   };
+  const getSegmentTimelineEffectiveVoiceoverDurationSeconds = (
+    segment: WorkspaceSegmentEditorDraftSegment,
+    draft: WorkspaceSegmentEditorDraftSession,
+  ) => getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft)?.durationSeconds ?? null;
   const writeSegmentEditorVoiceDurationDebugTrace = (event: string, payload: Record<string, unknown> = {}) => {
     if (!isSegmentEditorFullPreviewDebugEnabled() || typeof window === "undefined") {
       return;
@@ -25906,10 +25930,8 @@ export function WorkspacePage({
         },
       )
     : null;
-  const segmentTimelineDurationMenuVoiceoverInfo = segmentTimelineDurationMenuSegment
-    ? getSegmentTimelineVoiceoverDurationInfo(segmentTimelineDurationMenuSegment, segmentEditorDraft, {
-        allowEmbeddedVisualFallback: false,
-      })
+  const segmentTimelineDurationMenuVoiceoverInfo = segmentTimelineDurationMenuSegment && segmentEditorDraft
+    ? getSegmentTimelineEffectiveVoiceoverDurationInfo(segmentTimelineDurationMenuSegment, segmentEditorDraft)
     : null;
   const segmentTimelineDurationMenuVoiceoverSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.durationSeconds ?? null;
