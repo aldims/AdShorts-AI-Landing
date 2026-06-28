@@ -546,14 +546,19 @@ export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (
         draftSession: draft,
       })
     : false;
-  const allowFinalVideoStaleProjectTimelineFallback =
-    options?.isGlobalVoiceEdited !== true &&
-    !isDraftGlobalVoiceEdited &&
-    !isVoiceSettingsEdited &&
-    !isWorkspaceSegmentDraftTextEdited(segment);
+  const isTextEdited = isWorkspaceSegmentDraftTextEdited(segment);
+
+  if (
+    options?.isGlobalVoiceEdited === true ||
+    isDraftGlobalVoiceEdited ||
+    isVoiceSettingsEdited ||
+    isTextEdited
+  ) {
+    return isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, draft);
+  }
 
   return isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, draft, {
-    allowFinalVideoStaleWithMissingVoiceoverMetadata: allowFinalVideoStaleProjectTimelineFallback,
+    allowFinalVideoStaleWithMissingVoiceoverMetadata: true,
     allowMissingVoiceoverMetadata: true,
   });
 };

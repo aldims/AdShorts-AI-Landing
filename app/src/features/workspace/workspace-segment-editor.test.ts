@@ -2494,6 +2494,128 @@ describe("workspace segment editor project voiceover timeline", () => {
     ).toBe(true);
   });
 
+  it("reuses project TTS only for unchanged scenes after one scene text edit", () => {
+    const firstOriginalText = "Влейте молоко и перемешайте.";
+    const firstEditedText = "Влейте молоко и тщательно перемешайте.";
+    const secondText = "Поставьте тесто на десять минут.";
+    const baselineFirstSegment = createProjectVoiceoverSegment({
+      duration: 1.962,
+      durationMode: "manual",
+      endTime: 1.962,
+      index: 0,
+      manualDurationSeconds: 1.962,
+      originalText: firstOriginalText,
+      originalTextByLanguage: { ru: firstOriginalText },
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      text: firstOriginalText,
+      textByLanguage: { ru: firstOriginalText },
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const baselineSecondSegment = createProjectVoiceoverSegment({
+      duration: 2.4,
+      durationMode: "manual",
+      endTime: 4.362,
+      index: 1,
+      manualDurationSeconds: 2.4,
+      originalText: secondText,
+      originalTextByLanguage: { ru: secondText },
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      startTime: 1.962,
+      text: secondText,
+      textByLanguage: { ru: secondText },
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const editedFirstSegment = {
+      ...baselineFirstSegment,
+      text: firstEditedText,
+      textByLanguage: { ru: firstEditedText },
+    };
+    const baselineSession = {
+      ...createProjectVoiceoverDraft([baselineFirstSegment, baselineSecondSegment]),
+      finalVideoStale: false,
+    };
+    const session = {
+      ...createProjectVoiceoverDraft([editedFirstSegment, baselineSecondSegment]),
+      finalVideoStale: true,
+    };
+
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(editedFirstSegment, session, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(false);
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(baselineSecondSegment, session, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not reuse stale project TTS without metadata after a scene voice override", () => {
+    const text = "Влейте молоко и перемешайте.";
+    const baselineSegment = createProjectVoiceoverSegment({
+      duration: 1.962,
+      durationMode: "manual",
+      endTime: 24.919,
+      index: 2,
+      manualDurationSeconds: 1.962,
+      originalText: text,
+      originalTextByLanguage: { ru: text },
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      startTime: 22.957,
+      text,
+      textByLanguage: { ru: text },
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const segment = {
+      ...baselineSegment,
+      voiceType: "Russian_BrightHeroine",
+    };
+    const baselineSession = {
+      ...createProjectVoiceoverDraft([baselineSegment]),
+      finalVideoStale: false,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+    const session = {
+      ...createProjectVoiceoverDraft([segment]),
+      finalVideoStale: true,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, session, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(false);
+  });
+
   it("does not reuse stale project TTS without metadata after a global voice change", () => {
     const text = "Влейте молоко и перемешайте.";
     const baselineSegment = createProjectVoiceoverSegment({

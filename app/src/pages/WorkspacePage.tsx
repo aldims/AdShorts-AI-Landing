@@ -13278,7 +13278,6 @@ export function WorkspacePage({
             })
           : segment,
       ),
-      ttsAssetId: null,
     }));
   };
 
@@ -15700,7 +15699,6 @@ export function WorkspacePage({
             })
           : segment,
       ),
-      ttsAssetId: null,
     }));
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
@@ -15918,7 +15916,6 @@ export function WorkspacePage({
             })
           : segment,
       ),
-      ttsAssetId: null,
     }));
     logSegmentEditorDiagnostics("client.segment-editor.talking-photo.resume", {
       jobId: job.jobId,
@@ -21706,7 +21703,6 @@ export function WorkspacePage({
             })
           : segment,
       ),
-      ttsAssetId: null,
     }));
   };
   const handleSegmentTimelineSubtitleDisable = (segmentIndex: number) => {
@@ -22831,10 +22827,6 @@ export function WorkspacePage({
 
     return fallbackVoiceoverDurationInfo;
   };
-  const getSegmentTimelineEffectiveVoiceoverDurationSeconds = (
-    segment: WorkspaceSegmentEditorDraftSegment,
-    draft: WorkspaceSegmentEditorDraftSession,
-  ) => getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft)?.durationSeconds ?? null;
   const writeSegmentEditorVoiceDurationDebugTrace = (event: string, payload: Record<string, unknown> = {}) => {
     if (!isSegmentEditorFullPreviewDebugEnabled() || typeof window === "undefined") {
       return;

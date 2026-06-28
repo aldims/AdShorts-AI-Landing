@@ -4639,9 +4639,16 @@ export const getWorkspaceSegmentManualDurationMinimum = (
   const voiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
     ? explicitVoiceoverDurationSeconds
     : fallbackVoiceoverDurationSeconds;
+  const isImageVisualSegment = getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image";
+  const shouldUseExactFreshSceneVoiceoverMinimum =
+    isImageVisualSegment &&
+    voiceoverDurationSeconds !== null &&
+    isWorkspaceSegmentVoiceoverAssetFresh(segment, session);
   const visualMinimumDurationSeconds =
-    getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image"
-      ? getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(voiceoverDurationSeconds)
+    isImageVisualSegment
+      ? shouldUseExactFreshSceneVoiceoverMinimum
+        ? roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds)
+        : getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(voiceoverDurationSeconds)
       : voiceoverDurationSeconds;
 
   return Math.max(1, visualMinimumDurationSeconds ?? 1);

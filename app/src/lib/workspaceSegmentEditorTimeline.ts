@@ -432,7 +432,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
           segment?.durationMode === "manual" &&
           normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null,
       );
-      const hasUserSelectedManualDurationAtBoundary =
+      const hasUserSelectedManualDurationAtBoundary: boolean =
         hasUserSelectedManualDurationBeforeBoundary ||
         hasUserSelectedManualTimelineDuration(previousSegment) ||
         hasUserSelectedManualTimelineDuration(nextSegments[index]);
