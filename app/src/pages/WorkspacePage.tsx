@@ -19793,6 +19793,17 @@ export function WorkspacePage({
     element.addEventListener("loadeddata", handlePlaybackRetry, { once: true });
     element.addEventListener("canplay", handlePlaybackRetry, { once: true });
 
+    if (element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      const startedImmediately = await tryStartPlayback();
+      if (startedImmediately || cancelled) {
+        cleanupRetryListeners();
+        if (cancelled) {
+          clearPlaybackRequestCleanup();
+        }
+        return;
+      }
+    }
+
     await new Promise<void>((resolve) => {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
@@ -19807,8 +19818,8 @@ export function WorkspacePage({
       return;
     }
 
-    const startedImmediately = await tryStartPlayback();
-    if (startedImmediately || cancelled) {
+    const startedAfterFrameWait = await tryStartPlayback();
+    if (startedAfterFrameWait || cancelled) {
       cleanupRetryListeners();
       if (cancelled) {
         clearPlaybackRequestCleanup();
