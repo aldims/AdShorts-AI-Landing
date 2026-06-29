@@ -301,12 +301,20 @@ const pickProjectMediaEntries = (...candidates) => {
     return [];
 };
 const detectWorkspaceSegmentSourceKind = (entry) => {
-    const source = normalizeText(entry?.source_kind || entry?.source).toLowerCase();
+    const source = [entry?.source_kind, entry?.media_source_kind, entry?.source, entry?.media_source]
+        .map((value) => normalizeText(value).toLowerCase())
+        .find((value) => value && value !== "unknown") ?? "";
     const renderedAnimationMode = normalizeText(entry?.rendered_animation_mode).toLowerCase();
     const renderedViaI2v = entry?.rendered_via_i2v === true ||
         entry?.rendered_via_i2v === 1 ||
         normalizeText(entry?.rendered_via_i2v).toLowerCase() === "true";
-    if (source === "ai_generated" || source === "ai" || source === "generated") {
+    if (source === "ai_generated" ||
+        source === "ai" ||
+        source === "generated" ||
+        source === "source_ai_image" ||
+        source === "ai_image" ||
+        source === "ai_photo" ||
+        source === "ai_video") {
         return "ai_generated";
     }
     if (source === "pexels" ||
@@ -324,9 +332,18 @@ const detectWorkspaceSegmentSourceKind = (entry) => {
         return "upload";
     }
     const identifier = normalizeText(entry?.id).toLowerCase();
-    const localPath = normalizeText(entry?.local_path).toLowerCase();
+    const localPath = normalizeText(entry?.local_path || entry?.media_local_path).toLowerCase();
     const storageKey = normalizeText(entry?.storage_key).toLowerCase();
-    const joinedUrls = [entry?.url, entry?.download_url, entry?.preview].map((value) => normalizeText(value).toLowerCase()).join(" ");
+    const joinedUrls = [
+        entry?.url,
+        entry?.download_url,
+        entry?.preview,
+        entry?.media_url,
+        entry?.media_download_url,
+        entry?.media_preview_url,
+        entry?.media_thumbnail_url,
+        entry?.media_provider_url,
+    ].map((value) => normalizeText(value).toLowerCase()).join(" ");
     if (identifier.startsWith("aiimg_") ||
         renderedViaI2v ||
         renderedAnimationMode === "i2v" ||
@@ -1825,6 +1842,11 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         currentAsset?.libraryKind,
         originalAsset?.libraryKind,
     ].some((value) => normalizeText(value).replace(/-/g, "_").toLowerCase() === "talking_photo");
+    const payloadSourceKind = detectWorkspaceSegmentSourceKind(payload);
+    const currentSourceKind = detectWorkspaceSegmentSourceKind(currentEntry);
+    const originalSourceKind = detectWorkspaceSegmentSourceKind(originalEntry);
+    const resolvedCurrentSourceKind = currentSourceKind !== "unknown" ? currentSourceKind : payloadSourceKind;
+    const resolvedOriginalSourceKind = originalSourceKind !== "unknown" ? originalSourceKind : payloadSourceKind;
     return {
         currentAsset,
         currentExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(currentEntry),
@@ -1836,7 +1858,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         currentPreviewUrl: hasCurrentVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "preview", currentVideoMarker)
             : null,
-        currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
+        currentSourceKind: resolvedCurrentSourceKind,
         duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
         durationExtensionSourceDurationSeconds,
         duration_extension_source_duration_seconds: durationExtensionSourceDurationSeconds,
@@ -1859,7 +1881,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         originalPreviewUrl: hasOriginalVideo
             ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
             : null,
-        originalSourceKind: detectWorkspaceSegmentSourceKind(originalEntry),
+        originalSourceKind: resolvedOriginalSourceKind,
         sceneSoundAssetId,
         scene_sound: sceneSound,
         scene_sound_asset_id: sceneSoundAssetId,

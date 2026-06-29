@@ -37,6 +37,14 @@ const normalizeWorkspaceSegmentTimelineTimeValue = (value: unknown) => {
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
 };
 
+const normalizeWorkspaceSegmentTimelineOptionalTimeValue = (value: unknown) => {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+
+  return normalizeWorkspaceSegmentTimelineTimeValue(value);
+};
+
 export const normalizeWorkspaceSegmentManualDurationSeconds = (value: unknown) => {
   const normalizedValue = normalizeWorkspaceSegmentTimelineTimeValue(value);
   return normalizedValue !== null && normalizedValue >= WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS
@@ -130,6 +138,70 @@ export const getWorkspaceSegmentTimelineSpeechRange = <T extends WorkspaceSegmen
     endTime: roundWorkspaceSegmentTimelineSeconds(endTime),
     startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
   };
+};
+
+const shiftWorkspaceSegmentTimelineOptionalTimeValue = <T extends number | null | undefined>(
+  value: T,
+  deltaSeconds: number,
+): T | number => {
+  const normalizedValue = normalizeWorkspaceSegmentTimelineOptionalTimeValue(value);
+  if (normalizedValue === null) {
+    return value;
+  }
+
+  return roundWorkspaceSegmentTimelineSeconds(Math.max(0, normalizedValue + deltaSeconds));
+};
+
+const shiftWorkspaceSegmentSpeechTimingToStart = <T extends WorkspaceSegmentTimelineSegment>(
+  segment: T,
+  nextStartTime: number,
+): T => {
+  const currentStartTime =
+    normalizeWorkspaceSegmentTimelineOptionalTimeValue(segment.startTime) ??
+    getWorkspaceSegmentTimelineSpeechRange(segment)?.startTime ??
+    0;
+  const deltaSeconds = roundWorkspaceSegmentTimelineSeconds(nextStartTime - currentStartTime);
+  if (Math.abs(deltaSeconds) <= WORKSPACE_SEGMENT_TIMELINE_EPSILON) {
+    return segment;
+  }
+
+  let hasChanges = false;
+  const nextSegment = { ...segment };
+  const nextSpeechStartTime = shiftWorkspaceSegmentTimelineOptionalTimeValue(segment.speechStartTime, deltaSeconds);
+  const nextSpeechEndTime = shiftWorkspaceSegmentTimelineOptionalTimeValue(segment.speechEndTime, deltaSeconds);
+  if (nextSpeechStartTime !== segment.speechStartTime) {
+    nextSegment.speechStartTime = nextSpeechStartTime;
+    hasChanges = true;
+  }
+  if (nextSpeechEndTime !== segment.speechEndTime) {
+    nextSegment.speechEndTime = nextSpeechEndTime;
+    hasChanges = true;
+  }
+
+  if (Array.isArray(segment.speechWords)) {
+    let hasWordTimingChanges = false;
+    const nextSpeechWords = segment.speechWords.map((word) => {
+      const nextWordStartTime = shiftWorkspaceSegmentTimelineOptionalTimeValue(word.startTime, deltaSeconds);
+      const nextWordEndTime = shiftWorkspaceSegmentTimelineOptionalTimeValue(word.endTime, deltaSeconds);
+      if (nextWordStartTime === word.startTime && nextWordEndTime === word.endTime) {
+        return word;
+      }
+
+      hasWordTimingChanges = true;
+      return {
+        ...word,
+        endTime: nextWordEndTime,
+        startTime: nextWordStartTime,
+      };
+    });
+
+    if (hasWordTimingChanges) {
+      nextSegment.speechWords = nextSpeechWords;
+      hasChanges = true;
+    }
+  }
+
+  return hasChanges ? nextSegment : segment;
 };
 
 export const resolveWorkspaceSegmentTimelineSpeechBoundaryTime = <T extends WorkspaceSegmentTimelineSegment>(
@@ -397,17 +469,19 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     const currentDuration = normalizeWorkspaceSegmentTimelineTimeValue(segment.duration);
     const currentStartTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.startTime);
     const currentEndTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.endTime);
+    const segmentWithShiftedSpeechTiming = shiftWorkspaceSegmentSpeechTimingToStart(segment, startTime);
     if (
       areTimelineNumbersEqual(currentDuration, duration) &&
       areTimelineNumbersEqual(currentStartTime, startTime) &&
-      areTimelineNumbersEqual(currentEndTime, endTime)
+      areTimelineNumbersEqual(currentEndTime, endTime) &&
+      segmentWithShiftedSpeechTiming === segment
     ) {
       return segment;
     }
 
     hasChanges = true;
     return {
-      ...segment,
+      ...segmentWithShiftedSpeechTiming,
       duration,
       endTime,
       startTime,
@@ -501,17 +575,19 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
         const currentDuration = normalizeWorkspaceSegmentTimelineTimeValue(segment.duration);
         const currentStartTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.startTime);
         const currentEndTime = normalizeWorkspaceSegmentTimelineTimeValue(segment.endTime);
+        const segmentWithShiftedSpeechTiming = shiftWorkspaceSegmentSpeechTimingToStart(segment, startTime);
         if (
           areTimelineNumbersEqual(currentDuration, duration) &&
           areTimelineNumbersEqual(currentStartTime, startTime) &&
-          areTimelineNumbersEqual(currentEndTime, endTime)
+          areTimelineNumbersEqual(currentEndTime, endTime) &&
+          segmentWithShiftedSpeechTiming === segment
         ) {
           return segment;
         }
 
         hasChanges = true;
         return {
-          ...segment,
+          ...segmentWithShiftedSpeechTiming,
           duration,
           endTime,
           startTime,

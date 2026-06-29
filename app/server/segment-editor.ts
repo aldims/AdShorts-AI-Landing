@@ -105,6 +105,14 @@ type AdsflowProjectMediaEntryPayload = {
   link_role?: string | null;
   local_path?: string | null;
   media_asset_id?: number | string | null;
+  media_download_url?: string | null;
+  media_local_path?: string | null;
+  media_preview_url?: string | null;
+  media_provider_url?: string | null;
+  media_source?: string | null;
+  media_source_kind?: string | null;
+  media_thumbnail_url?: string | null;
+  media_url?: string | null;
   media_type?: string | null;
   mime_type?: string | null;
   preview?: string | null;
@@ -698,13 +706,24 @@ const pickProjectMediaEntries = (...candidates: unknown[]) => {
 const detectWorkspaceSegmentSourceKind = (
   entry?: AdsflowProjectMediaEntryPayload | null,
 ): WorkspaceSegmentEditorSourceKind => {
-  const source = normalizeText(entry?.source_kind || entry?.source).toLowerCase();
+  const source =
+    [entry?.source_kind, entry?.media_source_kind, entry?.source, entry?.media_source]
+      .map((value) => normalizeText(value).toLowerCase())
+      .find((value) => value && value !== "unknown") ?? "";
   const renderedAnimationMode = normalizeText(entry?.rendered_animation_mode).toLowerCase();
   const renderedViaI2v =
     entry?.rendered_via_i2v === true ||
     entry?.rendered_via_i2v === 1 ||
     normalizeText(entry?.rendered_via_i2v).toLowerCase() === "true";
-  if (source === "ai_generated" || source === "ai" || source === "generated") {
+  if (
+    source === "ai_generated" ||
+    source === "ai" ||
+    source === "generated" ||
+    source === "source_ai_image" ||
+    source === "ai_image" ||
+    source === "ai_photo" ||
+    source === "ai_video"
+  ) {
     return "ai_generated";
   }
 
@@ -729,9 +748,18 @@ const detectWorkspaceSegmentSourceKind = (
   }
 
   const identifier = normalizeText(entry?.id).toLowerCase();
-  const localPath = normalizeText(entry?.local_path).toLowerCase();
+  const localPath = normalizeText(entry?.local_path || entry?.media_local_path).toLowerCase();
   const storageKey = normalizeText(entry?.storage_key).toLowerCase();
-  const joinedUrls = [entry?.url, entry?.download_url, entry?.preview].map((value) => normalizeText(value).toLowerCase()).join(" ");
+  const joinedUrls = [
+    entry?.url,
+    entry?.download_url,
+    entry?.preview,
+    entry?.media_url,
+    entry?.media_download_url,
+    entry?.media_preview_url,
+    entry?.media_thumbnail_url,
+    entry?.media_provider_url,
+  ].map((value) => normalizeText(value).toLowerCase()).join(" ");
 
   if (
     identifier.startsWith("aiimg_") ||
@@ -2840,6 +2868,11 @@ export const buildWorkspaceSegmentEditorSegment = (
     currentAsset?.libraryKind,
     originalAsset?.libraryKind,
   ].some((value) => normalizeText(value).replace(/-/g, "_").toLowerCase() === "talking_photo");
+  const payloadSourceKind = detectWorkspaceSegmentSourceKind(payload as AdsflowProjectMediaEntryPayload);
+  const currentSourceKind = detectWorkspaceSegmentSourceKind(currentEntry);
+  const originalSourceKind = detectWorkspaceSegmentSourceKind(originalEntry);
+  const resolvedCurrentSourceKind = currentSourceKind !== "unknown" ? currentSourceKind : payloadSourceKind;
+  const resolvedOriginalSourceKind = originalSourceKind !== "unknown" ? originalSourceKind : payloadSourceKind;
 
   return {
     currentAsset,
@@ -2852,7 +2885,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     currentPreviewUrl: hasCurrentVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "current", "preview", currentVideoMarker)
       : null,
-    currentSourceKind: detectWorkspaceSegmentSourceKind(currentEntry),
+    currentSourceKind: resolvedCurrentSourceKind,
     duration: duration > 0 ? duration : Math.max(0, endTime - startTime),
     durationExtensionSourceDurationSeconds,
     duration_extension_source_duration_seconds: durationExtensionSourceDurationSeconds,
@@ -2875,7 +2908,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     originalPreviewUrl: hasOriginalVideo
       ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
       : null,
-    originalSourceKind: detectWorkspaceSegmentSourceKind(originalEntry),
+    originalSourceKind: resolvedOriginalSourceKind,
     sceneSoundAssetId,
     scene_sound: sceneSound,
     scene_sound_asset_id: sceneSoundAssetId,

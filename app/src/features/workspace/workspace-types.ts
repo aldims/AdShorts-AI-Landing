@@ -194,6 +194,8 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   durationSyncModeUserSelected?: boolean | null;
   duration_sync_mode_user_selected?: boolean | null;
   durationExtensionSourceDurationSeconds?: number | null;
+  estimatedVoiceoverDurationSeconds?: number | null;
+  estimatedVoiceoverTextHash?: string | null;
   originalText: string;
   originalTextByLanguage: WorkspaceSegmentEditorLocalizedTextMap;
   photoAnimationSourceAsset: StudioCustomVideoFile | null;

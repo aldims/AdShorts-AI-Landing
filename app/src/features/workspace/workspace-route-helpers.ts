@@ -99,6 +99,12 @@ export const shouldRequestWorkspaceSegmentEditorFreshRouteSession = (
   return inFlightRouteKey !== normalizedRestoreKey && attemptedRouteKey !== normalizedRestoreKey;
 };
 
+export const shouldRequestWorkspaceSegmentEditorOpenRouteRefresh = (
+  didReachPendingRoute: boolean,
+  isSegmentEditorLoading: boolean,
+  hasSegmentEditorError: boolean,
+) => !didReachPendingRoute && !isSegmentEditorLoading && !hasSegmentEditorError;
+
 export const shouldResetWorkspaceSegmentEditorConsumedSourceProject = (
   projectId: number | null | undefined,
   isConsumedSourceProject: boolean,

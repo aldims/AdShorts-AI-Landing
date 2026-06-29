@@ -929,7 +929,11 @@ const getWorkspaceSegmentPersistedSourceLabel = (segment: WorkspaceSegmentEditor
     return "Свой визуал";
   }
 
-  return "Сток";
+  if (persistedSourceKind === "stock") {
+    return "Сток";
+  }
+
+  return "";
 };
 
 export const getWorkspaceSegmentDraftSourceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {

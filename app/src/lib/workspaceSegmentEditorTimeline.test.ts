@@ -45,6 +45,47 @@ describe("workspace segment editor timeline", () => {
     expect(rebuilt[1]?.endTime).toBeCloseTo(5.4, 6);
   });
 
+  it("moves speech metadata with its segment when a rebuild shifts the timeline", () => {
+    const firstSegment = createSegment({
+      duration: 4,
+      endTime: 4,
+      mediaType: "photo",
+      text: "first scene",
+    });
+    const shiftedSegment = createSegment({
+      duration: 3,
+      endTime: 11,
+      mediaType: "photo",
+      speechDuration: 2,
+      speechEndTime: 10.2,
+      speechStartTime: 8.2,
+      speechWords: [
+        { startTime: 8.2, endTime: 8.5 },
+        { startTime: 9.8, endTime: 10.2 },
+      ],
+      startTime: 8,
+      text: "shifted scene",
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, shiftedSegment], {
+      preserveExistingStillDurations: true,
+      visualKind: () => "image",
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 3,
+      endTime: 7,
+      speechEndTime: 6.2,
+      speechStartTime: 4.2,
+      startTime: 4,
+    }));
+    expect(rebuilt[1]?.speechWords).toEqual([
+      { startTime: 4.2, endTime: 4.5 },
+      { startTime: 5.8, endTime: 6.2 },
+    ]);
+  });
+
   it("prefers text-estimated duration for synthetic still segments", () => {
     const syntheticStillSegment = createSegment({
       duration: 6,
@@ -592,6 +633,8 @@ describe("workspace segment editor timeline", () => {
     expect(rebuilt[1]).toEqual(expect.objectContaining({
       duration: 6.1,
       endTime: 10.32,
+      speechEndTime: 9.66,
+      speechStartTime: 4.22,
       startTime: 4.22,
     }));
   });

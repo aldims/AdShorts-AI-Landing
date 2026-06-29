@@ -6,6 +6,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
 import {
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
+  clearWorkspaceSegmentEditorVoiceoverGenerationState,
   createWorkspaceSegmentEditorDraftSession,
   getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEditorProjectVoiceType,
@@ -41,6 +42,7 @@ import {
   resolveWorkspaceSegmentEditorEffectiveBrandState,
 } from "../features/workspace/workspace-brand-helpers";
 import {
+  applyWorkspaceSegmentMeasuredSceneVoiceoverDuration,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceSegmentEditorPayload,
   buildStudioRouteUrl,
@@ -135,6 +137,7 @@ import {
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
@@ -2318,6 +2321,161 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(isWorkspaceSegmentEditorDraftSegmentEmpty(nextSegments[0])).toBe(true);
   });
 
+  it("does not stretch later segments after deleting a middle scene and editing earlier voice text", () => {
+    const sourceSegments = [
+      {
+        duration: 6.44,
+        speechDuration: 6.12,
+        text: "Чемпионат мира 2026 года в Северной Америке перевернет все футбольные расклады!",
+      },
+      {
+        duration: 6.2,
+        speechDuration: 5.78,
+        text: "Третье место забирает дерзкая Колумбия благодаря своей невероятной физике и дисциплине.",
+      },
+      {
+        duration: 5.96,
+        speechDuration: 5.62,
+        text: "Вторыми станут французы, ведь глубина их состава позволяет выставить два равноценных ростера.",
+      },
+      {
+        duration: 6.92,
+        speechDuration: 6.92,
+        text: "Но скептики уверены, что европейский прагматизм всегда побеждает южноамериканский яркий карнавал.",
+      },
+      {
+        duration: 8.14,
+        speechDuration: 7.78,
+        text: "Однако нынешняя Бразилия нашла идеальный баланс между техникой Винисиуса и железной обороной.",
+      },
+      {
+        duration: 5.895,
+        speechDuration: 5.44,
+        text: "Именно пентакампеоны выглядят главными претендентами на золото. А какой ваш топ три?",
+      },
+    ].reduce<{
+      cursor: number;
+      segments: DraftSegment[];
+    }>((result, source, index) => {
+      const startTime = Number(result.cursor.toFixed(3));
+      const endTime = Number((startTime + source.duration).toFixed(3));
+      result.segments.push(createDraftSegment({
+        currentAsset: createMediaAsset(900 + index, { mediaType: "photo", sourceKind: "ai_generated" }),
+        currentPreviewUrl: `/api/workspace/project-segment-poster?projectId=4056&segmentIndex=${index}`,
+        currentSourceKind: "ai_generated",
+        duration: source.duration,
+        durationMode: "auto",
+        endTime,
+        index,
+        mediaType: "photo",
+        originalAsset: createMediaAsset(800 + index, { mediaType: "photo", sourceKind: "ai_generated" }),
+        originalPreviewUrl: `/api/workspace/project-segment-poster?projectId=4056&segmentIndex=${index}&source=original`,
+        originalSourceKind: "ai_generated",
+        speechDuration: source.speechDuration,
+        speechDurationSource: "audio",
+        speechEndTime: Number((startTime + source.speechDuration).toFixed(3)),
+        speechStartTime: startTime,
+        speechWords: [
+          { confidence: 1, endTime: Number((startTime + source.speechDuration).toFixed(3)), startTime, text: "word" },
+        ],
+        startTime,
+        text: source.text,
+        textByLanguage: { ru: source.text },
+      }));
+      result.cursor = endTime;
+      return result;
+    }, { cursor: 0, segments: [] }).segments;
+    const sourceDraft = {
+      ...createDraftSession(sourceSegments[0]!),
+      projectId: 4056,
+      segments: sourceSegments,
+      ttsAssetId: 123,
+    };
+    const afterDelete = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...sourceDraft,
+      segments: resolveWorkspaceSegmentEditorSegmentsAfterDelete(sourceDraft, 4),
+    }, {
+      preserveSpeechBoundaries: false,
+      preserveSourceTimelineEnd: false,
+    });
+    const editedFirstText = "Чемпионат мира 2026 в Северной Америке перевернет все футбольные расклады!";
+    const afterTextEdit = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...afterDelete,
+      segments: afterDelete.segments.map((segment) =>
+        segment.index === 0
+          ? clearWorkspaceSegmentEditorVoiceoverGenerationState({
+              ...segment,
+              text: editedFirstText,
+              textByLanguage: { ru: editedFirstText },
+            }, {
+              preserveUserSelectedVisualDuration: false,
+              previousText: segment.text,
+              resetTimelineToEstimatedVoiceover: true,
+              session: afterDelete,
+            })
+          : segment,
+      ),
+      ttsAssetId: null,
+    }, {
+      preserveExistingStillDurations: false,
+      preserveSpeechBoundaries: false,
+      preserveSourceTimelineEnd: false,
+    });
+
+    expect(afterTextEdit.segments.map((segment) => Number(segment.duration.toFixed(1)))).toEqual([
+      5.8,
+      5.8,
+      5.6,
+      6.9,
+      5.4,
+    ]);
+    expect(afterTextEdit.segments[3]).toEqual(expect.objectContaining({
+      duration: 6.92,
+      text: sourceSegments[3]?.text,
+    }));
+    expect(afterTextEdit.segments[4]).toEqual(expect.objectContaining({
+      duration: 5.44,
+      text: sourceSegments[5]?.text,
+    }));
+
+    const corruptedLiveDraft = {
+      ...afterDelete,
+      segments: afterDelete.segments.map((segment) => {
+        if (segment.index === 3) {
+          return {
+            ...segment,
+            duration: 11,
+            endTime: 29.2,
+            startTime: 18.2,
+          };
+        }
+        if (segment.index === 5) {
+          return {
+            ...segment,
+            duration: 9.5,
+            endTime: 38.7,
+            startTime: 29.2,
+          };
+        }
+        return segment;
+      }),
+    };
+    const repairedLiveDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(corruptedLiveDraft, {
+      preserveExistingStillDurations: false,
+      preserveSpeechBoundaries: false,
+      preserveSourceTimelineEnd: false,
+    });
+
+    expect(repairedLiveDraft.segments[3]).toEqual(expect.objectContaining({
+      duration: 6.92,
+      text: sourceSegments[3]?.text,
+    }));
+    expect(repairedLiveDraft.segments[4]).toEqual(expect.objectContaining({
+      duration: 5.44,
+      text: sourceSegments[5]?.text,
+    }));
+  });
+
   it("does not hydrate a blank inserted segment from a generated media entry with the same index", () => {
     const sourceSegment = createDraftSegment({ index: 0, text: "Source segment" });
     const emptySegment = createWorkspaceSegmentEditorInsertedSegment({
@@ -2555,6 +2713,13 @@ describe("WorkspacePage studio route transitions", () => {
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", null, "3731:1")).toBe(false);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:2", null, "3731:1")).toBe(true);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("", null, null)).toBe(false);
+  });
+
+  it("does not refresh an already open edit route after local scene navigation", () => {
+    expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(true, false, false)).toBe(false);
+    expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, true, false)).toBe(false);
+    expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, false, true)).toBe(false);
+    expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, false, false)).toBe(true);
   });
 
   it("does not reopen an already handled active edit-route draft", () => {
@@ -3505,12 +3670,15 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedDraft.segments[1]).toMatchObject({
       speechDuration: 4.78,
       speechDurationSource: "audio",
-      speechEndTime: 10.4,
-      speechStartTime: 5.62,
+      speechEndTime: 10.17,
+      speechStartTime: 5.39,
       voiceoverAsset: null,
       voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Second"),
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
     });
+    expect(refreshedDraft.segments[1]?.speechWords).toEqual([
+      { confidence: 1, endTime: 10.05, startTime: 5.47, text: "Second" },
+    ]);
   });
 
   it("adopts the fresh project voice after whole-video voiceover generation", () => {
@@ -5597,6 +5765,60 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 12.1)).toBe(false);
   });
 
+  it("keeps a user-selected photo duration when measured scene voiceover is longer", () => {
+    const voiceText = "Длинная озвучка для короткой фото сцены";
+    const segment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 4,
+      index: 0,
+      manualDurationSeconds: 4,
+      mediaType: "photo",
+      speechDuration: null,
+      speechDurationSource: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      startTime: 0,
+      text: voiceText,
+      voiceoverAsset: {
+        assetId: 781,
+        durationSeconds: 4,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/segment-voiceover/jobs/job-6/audio",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(voiceText),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const measured = applyWorkspaceSegmentMeasuredSceneVoiceoverDuration(segment, {
+      durationSeconds: 6.1,
+      latestSceneVoiceoverAudioUrl: "/api/studio/segment-voiceover/jobs/job-6/audio",
+      speechStartTime: 0,
+    });
+
+    expect(measured).toEqual(expect.objectContaining({
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 4,
+      manualDurationSeconds: 4,
+      speechDuration: 6.1,
+      speechDurationSource: "audio",
+      speechEndTime: 6.1,
+      speechStartTime: 0,
+      startTime: 0,
+      voiceoverAsset: expect.objectContaining({
+        durationSeconds: 6.1,
+      }),
+    }));
+  });
+
   it("keeps a user-selected full video duration when voiceover is shorter", () => {
     const voiceText = "Короткая озвучка";
     const segment = createDraftSegment({
@@ -5700,11 +5922,11 @@ describe("WorkspacePage studio locale defaults", () => {
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      endTime: 5,
-      manualDurationSeconds: 5,
+      duration: 3,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 3,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
@@ -5761,17 +5983,17 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 5,
-      manualDurationSeconds: 5,
+      endTime: 2.3,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 5,
+      startTime: 2.3,
     }));
   });
 
@@ -5888,13 +6110,13 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 16.4,
-      manualDurationSeconds: 5,
+      endTime: 13.7,
+      manualDurationSeconds: null,
       startTime: 11.4,
     }));
   });
@@ -5951,8 +6173,12 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      endTime: 16.4,
+      duration: 2.3,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 13.7,
+      manualDurationSeconds: null,
       startTime: 11.4,
     }));
   });
@@ -6019,7 +6245,7 @@ describe("WorkspacePage studio locale defaults", () => {
     }));
   });
 
-  it("trims a voiceover-selected video duration back to the shorter voiceover", () => {
+  it("trims a voiceover-owned video duration back to the shorter voiceover", () => {
     const voiceText = "Взбейте яйца с сахаром и солью.";
     const segment = createDraftSegment({
       customVideo: {
@@ -6061,16 +6287,16 @@ describe("WorkspacePage studio locale defaults", () => {
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      endTime: 5,
-      manualDurationSeconds: 5,
+      duration: 2.3,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.3,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
 
-  it("preserves scene timing when a freshly generated voiceover is shorter", () => {
+  it("syncs scene timing when a freshly generated voiceover is shorter", () => {
     const voiceText = "Короткая озвучка задает новый тайминг";
     const firstSegment = createDraftSegment({
       duration: 8,
@@ -6110,15 +6336,15 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 8,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      endTime: 8,
-      manualDurationSeconds: 8,
+      duration: 3.2,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 3.2,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 8,
+      startTime: 3.2,
     }));
   });
 
@@ -8947,6 +9173,22 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(getWorkspaceSegmentDraftSourceLabel(resetSegment)).toBe("ИИ фото");
     expect(getWorkspaceSegmentDraftSourceDisplayLabel(getWorkspaceSegmentDraftSourceLabel(resetSegment), "en")).toBe("AI photo");
+  });
+
+  it("shows stock only when the persisted media source is actually known", () => {
+    const stockSegment = createDraftSegment({
+      currentSourceKind: "stock",
+      mediaType: "photo",
+      originalSourceKind: "stock",
+    });
+    const unknownSegment = createDraftSegment({
+      currentSourceKind: "unknown",
+      originalSourceKind: "unknown",
+    });
+
+    expect(getWorkspaceSegmentDraftSourceLabel(stockSegment)).toBe("Сток");
+    expect(getWorkspaceSegmentDraftSourceDisplayLabel(getWorkspaceSegmentDraftSourceLabel(stockSegment), "en")).toBe("Stock");
+    expect(getWorkspaceSegmentDraftSourceLabel(unknownSegment)).toBe("");
   });
 
   it("keeps an applied AI photo reset as a pending segment change", () => {
