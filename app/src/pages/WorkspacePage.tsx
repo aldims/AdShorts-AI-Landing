@@ -1738,12 +1738,23 @@ export function WorkspacePage({
   } | null>(null);
   const [segmentTimelineVoicePreviewingVoiceId, setSegmentTimelineVoicePreviewingVoiceId] =
     useState<StudioVoiceOption["id"] | null>(null);
-  const [segmentTimelineRedoSnapshots, setSegmentTimelineRedoSnapshots] = useState<
+  const [segmentTimelineRedoSnapshots, setSegmentTimelineRedoSnapshotsState] = useState<
     Record<string, WorkspaceSegmentTimelineRedoSnapshot>
   >({});
+  const segmentTimelineRedoSnapshotsRef = useRef<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>({});
+  const setSegmentTimelineRedoSnapshots = useCallback((
+    nextValue: SetStateAction<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>,
+  ) => {
+    const nextSnapshots =
+      typeof nextValue === "function"
+        ? nextValue(segmentTimelineRedoSnapshotsRef.current)
+        : nextValue;
+    segmentTimelineRedoSnapshotsRef.current = nextSnapshots;
+    setSegmentTimelineRedoSnapshotsState(nextSnapshots);
+  }, []);
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
-  }, [segmentEditorLoadedSession?.projectId]);
+  }, [segmentEditorLoadedSession?.projectId, setSegmentTimelineRedoSnapshots]);
   useEffect(() => {
     setSegmentTimelineVisualDurationInputDraft(null);
   }, [segmentEditorLoadedSession?.projectId]);
@@ -13068,7 +13079,8 @@ export function WorkspacePage({
     kind: WorkspaceSegmentTimelineHistoryKind,
     segmentIndex?: number | null,
   ) => {
-    if (isSegmentEditorStructureActionBusy || !segmentEditorDraft) {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (isSegmentEditorStructureActionBusy || !currentDraft) {
       return;
     }
 
@@ -13083,7 +13095,7 @@ export function WorkspacePage({
 
       setSegmentTimelineRedoSnapshots((current) => ({
         ...current,
-        [historyKey]: createSegmentTimelineMusicRedoSnapshot(segmentEditorDraft),
+        [historyKey]: createSegmentTimelineMusicRedoSnapshot(currentDraft),
       }));
       applySegmentTimelineMusicSnapshot({
         customMusicAssetId: baselineSession.customMusicAssetId ?? null,
@@ -13102,7 +13114,7 @@ export function WorkspacePage({
       return;
     }
 
-    const currentSegment = getSegmentEditorDraftSegmentByIndex(segmentEditorDraft, safeSegmentIndex);
+    const currentSegment = getSegmentEditorDraftSegmentByIndex(currentDraft, safeSegmentIndex);
     if (!currentSegment) {
       return;
     }
@@ -13155,7 +13167,7 @@ export function WorkspacePage({
     }
 
     const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
-    const snapshot = segmentTimelineRedoSnapshots[historyKey];
+    const snapshot = segmentTimelineRedoSnapshotsRef.current[historyKey];
     if (!snapshot || snapshot.kind !== kind) {
       return;
     }

@@ -2448,7 +2448,7 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
   snapshot: WorkspaceSegmentEditorDraftSegment,
   kind: Exclude<WorkspaceSegmentTimelineHistoryKind, "music">,
 ): WorkspaceSegmentEditorDraftSegment => {
-  const restoreVoiceoverState = (
+  const restoreSpeechTimingState = (
     nextSegment: WorkspaceSegmentEditorDraftSegment,
     sourceSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
   ): WorkspaceSegmentEditorDraftSegment => ({
@@ -2461,6 +2461,12 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
     voiceSourceDuration: sourceSegment?.voiceSourceDuration ?? null,
     voiceSourceEndTime: sourceSegment?.voiceSourceEndTime ?? null,
     voiceSourceStartTime: sourceSegment?.voiceSourceStartTime ?? null,
+  });
+  const restoreVoiceoverState = (
+    nextSegment: WorkspaceSegmentEditorDraftSegment,
+    sourceSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  ): WorkspaceSegmentEditorDraftSegment => ({
+    ...restoreSpeechTimingState(nextSegment, sourceSegment),
     voiceoverAsset: cloneStudioCustomVideoFile(sourceSegment?.voiceoverAsset ?? null),
     voiceoverLanguage: sourceSegment?.voiceoverLanguage ?? null,
     voiceoverTextHash: sourceSegment?.voiceoverTextHash ?? null,
@@ -2500,35 +2506,38 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
     return restoreWorkspaceSegmentSceneSoundState(segment, snapshot);
   }
 
+  const restoredVisualSegment = {
+    ...segment,
+    aiPhotoAsset: cloneStudioCustomVideoFile(snapshot.aiPhotoAsset),
+    aiPhotoGeneratedFromPrompt: snapshot.aiPhotoGeneratedFromPrompt,
+    aiPhotoPrompt: snapshot.aiPhotoPrompt,
+    aiPhotoPromptInitialized: snapshot.aiPhotoPromptInitialized,
+    aiVideoAsset: cloneStudioCustomVideoFile(snapshot.aiVideoAsset),
+    aiVideoGeneratedMode: snapshot.aiVideoGeneratedMode,
+    aiVideoGeneratedFromPrompt: snapshot.aiVideoGeneratedFromPrompt,
+    aiVideoPrompt: snapshot.aiVideoPrompt,
+    aiVideoPromptInitialized: snapshot.aiVideoPromptInitialized,
+    currentAsset: cloneWorkspaceMediaAssetRef(snapshot.currentAsset),
+    currentExternalPlaybackUrl: snapshot.currentExternalPlaybackUrl,
+    currentExternalPreviewUrl: snapshot.currentExternalPreviewUrl,
+    currentPlaybackUrl: snapshot.currentPlaybackUrl,
+    currentPosterUrl: snapshot.currentPosterUrl,
+    currentPreviewUrl: snapshot.currentPreviewUrl,
+    currentSourceKind: snapshot.currentSourceKind,
+    customVideo: cloneStudioCustomVideoFile(snapshot.customVideo),
+    imageEditAsset: cloneStudioCustomVideoFile(snapshot.imageEditAsset),
+    imageEditGeneratedFromPrompt: snapshot.imageEditGeneratedFromPrompt,
+    imageEditPrompt: snapshot.imageEditPrompt,
+    imageEditPromptInitialized: snapshot.imageEditPromptInitialized,
+    mediaType: snapshot.mediaType,
+    photoAnimationSourceAsset: cloneStudioCustomVideoFile(snapshot.photoAnimationSourceAsset),
+    videoAction: snapshot.videoAction,
+    visualReset: snapshot.visualReset,
+  };
   return restoreWorkspaceSegmentTimelineDurationState(
-    {
-      ...segment,
-      aiPhotoAsset: cloneStudioCustomVideoFile(snapshot.aiPhotoAsset),
-      aiPhotoGeneratedFromPrompt: snapshot.aiPhotoGeneratedFromPrompt,
-      aiPhotoPrompt: snapshot.aiPhotoPrompt,
-      aiPhotoPromptInitialized: snapshot.aiPhotoPromptInitialized,
-      aiVideoAsset: cloneStudioCustomVideoFile(snapshot.aiVideoAsset),
-      aiVideoGeneratedMode: snapshot.aiVideoGeneratedMode,
-      aiVideoGeneratedFromPrompt: snapshot.aiVideoGeneratedFromPrompt,
-      aiVideoPrompt: snapshot.aiVideoPrompt,
-      aiVideoPromptInitialized: snapshot.aiVideoPromptInitialized,
-      currentAsset: cloneWorkspaceMediaAssetRef(snapshot.currentAsset),
-      currentExternalPlaybackUrl: snapshot.currentExternalPlaybackUrl,
-      currentExternalPreviewUrl: snapshot.currentExternalPreviewUrl,
-      currentPlaybackUrl: snapshot.currentPlaybackUrl,
-      currentPosterUrl: snapshot.currentPosterUrl,
-      currentPreviewUrl: snapshot.currentPreviewUrl,
-      currentSourceKind: snapshot.currentSourceKind,
-      customVideo: cloneStudioCustomVideoFile(snapshot.customVideo),
-      imageEditAsset: cloneStudioCustomVideoFile(snapshot.imageEditAsset),
-      imageEditGeneratedFromPrompt: snapshot.imageEditGeneratedFromPrompt,
-      imageEditPrompt: snapshot.imageEditPrompt,
-      imageEditPromptInitialized: snapshot.imageEditPromptInitialized,
-      mediaType: snapshot.mediaType,
-      photoAnimationSourceAsset: cloneStudioCustomVideoFile(snapshot.photoAnimationSourceAsset),
-      videoAction: snapshot.videoAction,
-      visualReset: snapshot.visualReset,
-    },
+    getWorkspaceSegmentLatestVisualAction(snapshot) === "talking_photo"
+      ? restoreSpeechTimingState(restoredVisualSegment, snapshot)
+      : restoredVisualSegment,
     snapshot,
   );
 };

@@ -909,6 +909,97 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("restores talking photo visual snapshots with embedded audio timing", () => {
+    const currentSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/projects/77/segments/0/original",
+      currentPreviewUrl: "/api/workspace/projects/77/segments/0/original",
+      duration: 4,
+      endTime: 4,
+      mediaType: "video",
+      speechDuration: null,
+      speechDurationSource: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      speechWords: [],
+      videoAction: "original",
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+    });
+    const snapshot = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 909,
+        durationSeconds: 4.9,
+        fileName: "talking-photo.mp4",
+        fileSize: 2048,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/909",
+        source: "media-library",
+      },
+      aiVideoGeneratedFromPrompt: "Привет от ведущего",
+      aiVideoGeneratedMode: "talking_photo",
+      aiVideoPrompt: "Привет от ведущего",
+      aiVideoPromptInitialized: true,
+      currentAsset: {
+        assetId: 909,
+        durationSeconds: 4.9,
+        kind: "segment_current",
+        libraryKind: "talking_photo",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        sourceKind: "generated",
+      } as any,
+      currentPlaybackUrl: "/api/workspace/media-assets/909/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/909/preview",
+      duration: 4.9,
+      endTime: 4.9,
+      mediaType: "video",
+      photoAnimationSourceAsset: {
+        assetId: 808,
+        fileName: "speaker.png",
+        fileSize: 1024,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/808",
+        source: "media-library",
+      },
+      speechDuration: 4.6,
+      speechDurationSource: "audio",
+      speechEndTime: 4.6,
+      speechStartTime: 0,
+      speechWords: [{ confidence: 0.95, endTime: 0.55, startTime: 0, text: "Привет" }],
+      videoAction: "talking_photo",
+      voiceSourceDuration: 4.6,
+      voiceSourceEndTime: 4.6,
+      voiceSourceStartTime: 0,
+    });
+
+    const restored = restoreWorkspaceSegmentTimelineSnapshot(currentSegment, snapshot, "visual");
+
+    expect(restored).toEqual(expect.objectContaining({
+      aiVideoGeneratedFromPrompt: "Привет от ведущего",
+      aiVideoGeneratedMode: "talking_photo",
+      aiVideoPrompt: "Привет от ведущего",
+      aiVideoPromptInitialized: true,
+      currentPlaybackUrl: "/api/workspace/media-assets/909/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/909/preview",
+      duration: 4.9,
+      endTime: 4.9,
+      mediaType: "video",
+      speechDuration: 4.6,
+      speechDurationSource: "audio",
+      speechEndTime: 4.6,
+      speechStartTime: 0,
+      videoAction: "talking_photo",
+      voiceSourceDuration: 4.6,
+      voiceSourceEndTime: 4.6,
+      voiceSourceStartTime: 0,
+    }));
+    expect(restored.aiVideoAsset).toEqual(expect.objectContaining({ assetId: 909 }));
+    expect(restored.photoAnimationSourceAsset).toEqual(expect.objectContaining({ assetId: 808 }));
+    expect(restored.speechWords).toEqual([{ confidence: 0.95, endTime: 0.55, startTime: 0, text: "Привет" }]);
+    expect(restored.speechWords).not.toBe(snapshot.speechWords);
+  });
+
   it("restores baseline visual timeline duration when resetting generated visual to original", () => {
     const currentSegment = createProjectVoiceoverSegment({
       aiPhotoAsset: {
