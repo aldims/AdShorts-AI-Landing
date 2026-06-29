@@ -4096,7 +4096,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
             console.error("[studio] Failed to persist queued generation", error);
         }
         return {
-            addWatermark: shouldAddWatermark,
             jobId,
             profile: creditReservation.profile,
             status: String(payload.status ?? "queued"),

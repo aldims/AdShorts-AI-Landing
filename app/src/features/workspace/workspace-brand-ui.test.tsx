@@ -23,7 +23,6 @@ describe("workspace segment editor brand UI", () => {
         brandText="Acme"
         editable
         hasBranding
-        hasSystemWatermark={false}
         locale="ru"
         onEdit={vi.fn()}
       />,
@@ -31,5 +30,22 @@ describe("workspace segment editor brand UI", () => {
 
     expect(screen.getByRole("button", { name: "Бренд ✏️" }).textContent).toContain("Бренд ✏️");
     expect(screen.queryByText("Изменить бренд")).toBeNull();
+  });
+
+  it("does not render the system watermark as brand text", () => {
+    render(
+      <WorkspaceSegmentEditorBrandOverlay
+        brandLogoPreviewUrl={null}
+        brandSummary=""
+        brandText=""
+        editable
+        hasBranding={false}
+        locale="ru"
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Сделано в adshortsai.com")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Бренд ✏️" })).toBeNull();
   });
 });

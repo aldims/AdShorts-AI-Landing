@@ -8,7 +8,6 @@ type WorkspaceSegmentEditorBrandOverlayProps = {
   brandText: string;
   editable?: boolean;
   hasBranding: boolean;
-  hasSystemWatermark: boolean;
   locale: Locale;
   onEdit: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   variant?: "card" | "thumb" | "ghost";
@@ -20,28 +19,21 @@ export function WorkspaceSegmentEditorBrandOverlay({
   brandText,
   editable = false,
   hasBranding,
-  hasSystemWatermark,
   locale,
   onEdit,
   variant = "card",
 }: WorkspaceSegmentEditorBrandOverlayProps) {
-  if (!hasBranding && !hasSystemWatermark) {
+  if (!hasBranding) {
     return null;
   }
 
   const normalizedBrandText = brandText.trim();
-  const systemWatermarkText = workspaceText(locale, "Сделано в adshortsai.com", "Made with adshortsai.com");
   const editBrandLabel = workspaceText(locale, "Бренд ✏️", "Brand ✏️");
-  const brandTitle = [
-    hasBranding ? brandSummary : "",
-    hasSystemWatermark ? systemWatermarkText : "",
-  ].filter(Boolean).join(" · ");
+  const brandTitle = brandSummary;
   const isEditable = variant === "card" && editable;
   const brandOverlayBaseClassName = `studio-segment-editor__brand-overlay studio-segment-editor__brand-overlay--${variant}${
     brandLogoPreviewUrl ? " has-logo" : ""
-  }${normalizedBrandText || hasSystemWatermark ? " has-text" : ""}${
-    hasSystemWatermark ? " has-system-watermark" : ""
-  }`;
+  }${normalizedBrandText ? " has-text" : ""}`;
   const brandOverlayClassName = `${brandOverlayBaseClassName}${
     isEditable ? " studio-segment-editor__brand-overlay--editable" : ""
   }`;
@@ -49,9 +41,6 @@ export function WorkspaceSegmentEditorBrandOverlay({
     <>
       {brandLogoPreviewUrl ? <img src={brandLogoPreviewUrl} alt="" /> : null}
       {normalizedBrandText ? <span className="studio-segment-editor__brand-value">{normalizedBrandText}</span> : null}
-      {hasSystemWatermark ? (
-        <span className="studio-segment-editor__brand-value">{systemWatermarkText}</span>
-      ) : null}
     </>
   );
 

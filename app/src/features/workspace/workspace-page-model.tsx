@@ -169,7 +169,6 @@ export const isStudioGenerationUserFacing = (
 ) => isGenerating && generationUiSource !== "idle";
 
 export type StudioGenerationJob = {
-  addWatermark?: boolean;
   jobId: string;
   profile: WorkspaceProfile;
   status: string;

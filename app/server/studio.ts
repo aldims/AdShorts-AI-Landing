@@ -820,7 +820,6 @@ export type StudioGeneration = {
 };
 
 export type StudioGenerationJob = {
-  addWatermark: boolean;
   jobId: string;
   profile: WorkspaceProfile;
   status: string;
@@ -6195,7 +6194,6 @@ export async function createStudioGenerationJob(
     }
 
     return {
-      addWatermark: shouldAddWatermark,
       jobId,
       profile: creditReservation.profile,
       status: String(payload.status ?? "queued"),
