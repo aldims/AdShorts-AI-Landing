@@ -394,6 +394,7 @@ import {
   getStudioRouteSection,
   getStudioRouteState,
   getStudioViewFromRouteSection,
+  resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
@@ -978,6 +979,7 @@ export {
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "../lib/workspaceSegmentPreview";
 export {
+  resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
@@ -10209,19 +10211,29 @@ export function WorkspacePage({
       title: workspaceText(locale, "Новый Shorts", "New Shorts"),
     });
 
-  const openScratchSegmentEditor = (options?: { replaceRoute?: boolean }) => {
-    const storedScratchDraft = readStoredWorkspaceSegmentEditorScratchDraft(session.email);
+  const openScratchSegmentEditor = (options?: { forceFreshDraft?: boolean; replaceRoute?: boolean }) => {
+    const storedScratchDraft = options?.forceFreshDraft
+      ? null
+      : readStoredWorkspaceSegmentEditorScratchDraft(session.email);
     const restoredScratchDraft = storedScratchDraft
       ? hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(storedScratchDraft, generatedMediaLibraryEntries)
       : null;
+    const scratchDraftOpenSource = resolveWorkspaceSegmentEditorScratchDraftOpenSource({
+      forceFreshDraft: options?.forceFreshDraft,
+      hasCurrentScratchDraft: Boolean(segmentEditorDraft && isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft)),
+      hasStoredScratchDraft: Boolean(restoredScratchDraft && isWorkspaceSegmentEditorScratchDraft(restoredScratchDraft)),
+    });
     const nextDraft =
-      segmentEditorDraft && isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft)
+      scratchDraftOpenSource === "current" && segmentEditorDraft
         ? segmentEditorDraft
-        : restoredScratchDraft && isWorkspaceSegmentEditorScratchDraft(restoredScratchDraft)
+        : scratchDraftOpenSource === "stored" && restoredScratchDraft
           ? restoredScratchDraft
           : createScratchSegmentEditorDraft();
 
     cancelPendingSegmentEditorLoad("segment-editor-scratch");
+    if (scratchDraftOpenSource === "fresh") {
+      removeStoredWorkspaceSegmentEditorScratchDraft(session.email);
+    }
     segmentEditorRouteRestoreKeyRef.current = null;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
     segmentEditorFreshRouteFetchKeyRef.current = null;
@@ -10260,7 +10272,7 @@ export function WorkspacePage({
       return;
     }
 
-    openScratchSegmentEditor({ replaceRoute: true });
+    openScratchSegmentEditor({ forceFreshDraft: true, replaceRoute: true });
   }, [
     createMode,
     generatedMediaLibraryEntries,
@@ -10950,7 +10962,7 @@ export function WorkspacePage({
 
   const handleStudioCreateScenesModeSelect = () => {
     suppressScratchSegmentEditorRouteOpenRef.current = false;
-    openScratchSegmentEditor({ replaceRoute: true });
+    openScratchSegmentEditor({ forceFreshDraft: true, replaceRoute: true });
   };
 
   const handleStudioTopMenuSelect = (section: StudioEntryIntentSection) => {

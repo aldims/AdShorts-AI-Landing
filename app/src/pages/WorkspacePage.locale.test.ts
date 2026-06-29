@@ -136,6 +136,7 @@ import {
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
@@ -2753,6 +2754,28 @@ describe("WorkspacePage studio route transitions", () => {
     expect(buildStudioRouteUrl("?mode=scenes", "edit", { projectId: 42, segmentIndex: 1 })).toBe(
       "/app/studio?section=edit&projectId=42&segment=1",
     );
+  });
+
+  it("starts scene creation from a fresh draft when requested explicitly", () => {
+    expect(
+      resolveWorkspaceSegmentEditorScratchDraftOpenSource({
+        forceFreshDraft: true,
+        hasCurrentScratchDraft: true,
+        hasStoredScratchDraft: true,
+      }),
+    ).toBe("fresh");
+    expect(
+      resolveWorkspaceSegmentEditorScratchDraftOpenSource({
+        hasCurrentScratchDraft: true,
+        hasStoredScratchDraft: true,
+      }),
+    ).toBe("current");
+    expect(
+      resolveWorkspaceSegmentEditorScratchDraftOpenSource({
+        hasStoredScratchDraft: true,
+      }),
+    ).toBe("stored");
+    expect(resolveWorkspaceSegmentEditorScratchDraftOpenSource({})).toBe("fresh");
   });
 });
 

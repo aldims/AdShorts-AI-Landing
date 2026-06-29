@@ -105,6 +105,30 @@ export const shouldRequestWorkspaceSegmentEditorOpenRouteRefresh = (
   hasSegmentEditorError: boolean,
 ) => !didReachPendingRoute && !isSegmentEditorLoading && !hasSegmentEditorError;
 
+export type WorkspaceSegmentEditorScratchDraftOpenSource = "current" | "stored" | "fresh";
+
+export const resolveWorkspaceSegmentEditorScratchDraftOpenSource = (
+  options: {
+    forceFreshDraft?: boolean;
+    hasCurrentScratchDraft?: boolean;
+    hasStoredScratchDraft?: boolean;
+  },
+): WorkspaceSegmentEditorScratchDraftOpenSource => {
+  if (options.forceFreshDraft) {
+    return "fresh";
+  }
+
+  if (options.hasCurrentScratchDraft) {
+    return "current";
+  }
+
+  if (options.hasStoredScratchDraft) {
+    return "stored";
+  }
+
+  return "fresh";
+};
+
 export const shouldResetWorkspaceSegmentEditorConsumedSourceProject = (
   projectId: number | null | undefined,
   isConsumedSourceProject: boolean,
