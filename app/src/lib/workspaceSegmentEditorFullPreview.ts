@@ -129,7 +129,58 @@ const normalizePreviewTime = (value: unknown) => {
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
 };
 
+const normalizePreviewSegmentBinding = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numeric = Number(value);
+  return Number.isInteger(numeric) ? numeric : null;
+};
+
 const roundPreviewTime = (value: number) => Number(value.toFixed(3));
+
+const doWorkspaceSegmentEditorFullPreviewVoiceTrackBindingsMatch = (
+  previousTrack: Pick<WorkspaceSegmentEditorFullPreviewVoiceQueueTrack, "previewArrayIndex" | "segmentIndex">,
+  nextTrack: Pick<WorkspaceSegmentEditorFullPreviewVoiceQueueTrack, "previewArrayIndex" | "segmentIndex">,
+) => {
+  const previousArrayIndex = normalizePreviewSegmentBinding(previousTrack.previewArrayIndex);
+  const nextArrayIndex = normalizePreviewSegmentBinding(nextTrack.previewArrayIndex);
+  if (previousArrayIndex !== null || nextArrayIndex !== null) {
+    return previousArrayIndex !== null && nextArrayIndex !== null && previousArrayIndex === nextArrayIndex;
+  }
+
+  const previousSegmentIndex = normalizePreviewSegmentBinding(previousTrack.segmentIndex);
+  const nextSegmentIndex = normalizePreviewSegmentBinding(nextTrack.segmentIndex);
+  if (previousSegmentIndex !== null || nextSegmentIndex !== null) {
+    return previousSegmentIndex !== null && nextSegmentIndex !== null && previousSegmentIndex === nextSegmentIndex;
+  }
+
+  return true;
+};
+
+export const shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment = (
+  track: Pick<WorkspaceSegmentEditorFullPreviewVoiceQueueTrack, "previewArrayIndex" | "segmentIndex">,
+  segment: Pick<WorkspaceSegmentEditorFullPreviewResolvedSegment, "arrayIndex" | "segmentIndex"> | null | undefined,
+) => {
+  if (!segment) {
+    return true;
+  }
+
+  const trackArrayIndex = normalizePreviewSegmentBinding(track.previewArrayIndex);
+  const segmentArrayIndex = normalizePreviewSegmentBinding(segment.arrayIndex);
+  if (trackArrayIndex !== null && segmentArrayIndex !== null) {
+    return trackArrayIndex === segmentArrayIndex;
+  }
+
+  const trackSegmentIndex = normalizePreviewSegmentBinding(track.segmentIndex);
+  const segmentIndex = normalizePreviewSegmentBinding(segment.segmentIndex);
+  if (trackSegmentIndex !== null && segmentIndex !== null) {
+    return trackSegmentIndex === segmentIndex;
+  }
+
+  return true;
+};
 
 const getWorkspaceSegmentEditorFullPreviewAudioSourceIdentityKey = (url: string | null | undefined) => {
   const trimmedUrl = String(url ?? "").trim();
@@ -675,7 +726,8 @@ export const mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks = <
       previousTimelineStartTime === null ||
       previousTimelineEndTime === null ||
       previousSourceStartTime === null ||
-      previousSourceIdentityKey !== sourceIdentityKey
+      previousSourceIdentityKey !== sourceIdentityKey ||
+      !doWorkspaceSegmentEditorFullPreviewVoiceTrackBindingsMatch(previousTrack, track)
     ) {
       mergedTracks.push(track);
       return;

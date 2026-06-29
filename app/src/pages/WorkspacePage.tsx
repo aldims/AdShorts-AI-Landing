@@ -845,6 +845,7 @@ import {
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
   type WorkspaceSegmentEditorFullPreviewAudioPreparationResult,
@@ -24044,16 +24045,29 @@ export function WorkspacePage({
   ) => {
     const nonVoiceTracks = tracks.filter((track) => !isSegmentEditorFullPreviewVoiceAudioTrack(track));
     const voiceTracks = tracks.filter(isSegmentEditorFullPreviewVoiceAudioTrack);
+    const resolvedSegment =
+      typeof options?.currentTime === "number"
+        ? resolveWorkspaceSegmentEditorFullPreviewSegment(
+            getSegmentEditorFullPreviewSegments(),
+            options.currentTime,
+          )
+        : null;
     const playableVoiceTracks =
       typeof options?.currentTime === "number"
-        ? voiceTracks.filter(
-            (track) =>
-              !isSegmentEditorFullPreviewAudioTrackExhausted(
-                track,
-                options.currentTime!,
-                options.audioElements?.[track.key],
-              ),
-          )
+        ? voiceTracks.filter((track) => {
+            if (
+              resolvedSegment &&
+              !shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment(track, resolvedSegment)
+            ) {
+              return false;
+            }
+
+            return !isSegmentEditorFullPreviewAudioTrackExhausted(
+              track,
+              options.currentTime!,
+              options.audioElements?.[track.key],
+            );
+          })
         : voiceTracks;
     return selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks([
       ...nonVoiceTracks,
@@ -24929,7 +24943,7 @@ export function WorkspacePage({
       }
 
       element.volume = 0;
-      if (!isVoiceTrack || isActiveTrack || options?.fromUserGesture) {
+      if (!isVoiceTrack || isActiveTrack) {
         unlockSegmentEditorFullPreviewAudioElement(track, element, options);
       }
     });
@@ -25050,6 +25064,9 @@ export function WorkspacePage({
   const prepareSegmentEditorFullPreviewAudioAtTime = async (
     currentTime: number,
     token: number,
+    options?: {
+      requireAllVoiceTracks?: boolean;
+    },
   ): Promise<WorkspaceSegmentEditorFullPreviewAudioPreparationResult> => {
     if (typeof document === "undefined" || typeof window === "undefined") {
       return "not-ready";
@@ -25073,14 +25090,27 @@ export function WorkspacePage({
       },
     );
     const startMinimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-    const requiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
+    const activeRequiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
       managedTracks,
       activeTracks,
       currentTime,
     ).filter((track) => track.kind === "voice");
+    const requiredReadyTrackMap = new Map<string, WorkspaceSegmentEditorFullPreviewAudioTrack>();
+    activeRequiredReadyTracks.forEach((track) => {
+      requiredReadyTrackMap.set(track.key, track);
+    });
+    if (options?.requireAllVoiceTracks) {
+      managedTracks
+        .filter((track) => track.kind === "voice")
+        .forEach((track) => {
+          requiredReadyTrackMap.set(track.key, track);
+        });
+    }
+    const requiredReadyTracks = Array.from(requiredReadyTrackMap.values());
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.start", {
       activeTrackCount: activeTracks.length,
       currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+      requireAllVoiceTracks: Boolean(options?.requireAllVoiceTracks),
       requiredReadyTrackCount: requiredReadyTracks.length,
       trackCount: managedTracks.length,
       tracks: tracks.map(getSegmentEditorFullPreviewAudioTrackDebugSummary),
@@ -25135,12 +25165,10 @@ export function WorkspacePage({
         ({ isReady, track }) => !isReady || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
       );
       if (unreadyTracks.length > 0) {
-        unreadyTracks.forEach(({ element, track }) => {
-          markSegmentEditorFullPreviewAudioTrackFailed(track, element);
-        });
         writeSegmentEditorFullPreviewDebugTrace("audio.prepare.unready", {
           currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
           minimumReadyState: startMinimumReadyState,
+          requireAllVoiceTracks: Boolean(options?.requireAllVoiceTracks),
           tracks: unreadyTracks.map(({ element, track }) =>
             getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
           ),
@@ -25163,6 +25191,13 @@ export function WorkspacePage({
           },
           { level: "warn" },
         );
+        if (options?.requireAllVoiceTracks) {
+          return "not-ready";
+        }
+
+        unreadyTracks.forEach(({ element, track }) => {
+          markSegmentEditorFullPreviewAudioTrackFailed(track, element);
+        });
       }
     }
 
@@ -25729,7 +25764,7 @@ export function WorkspacePage({
       fromUserGesture: options?.fromUserGesture,
     });
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token),
+      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token, { requireAllVoiceTracks: true }),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -25811,7 +25846,7 @@ export function WorkspacePage({
     primeSegmentEditorFullPreviewEmbeddedVisualAudio(safeStartTime, { fromUserGesture: true });
 
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token),
+      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token, { requireAllVoiceTracks: true }),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {

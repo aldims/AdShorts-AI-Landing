@@ -35,6 +35,7 @@ import {
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
 } from "./workspaceSegmentEditorFullPreview";
@@ -411,6 +412,46 @@ describe("workspace segment editor full preview", () => {
         sourceStartTime: 11.599,
         timelineEndTime: 26.725,
         timelineStartTime: 11.599,
+      }),
+    ]);
+  });
+
+  it("keeps continuous project voice tracks separate when they belong to different segments", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks([
+        {
+          key: "voice-2",
+          kind: "voice",
+          previewArrayIndex: 1,
+          segmentIndex: 20,
+          sourceKind: "timeline",
+          sourceStartTime: 11.599,
+          timelineEndTime: 16.641,
+          timelineStartTime: 11.599,
+          url: "/api/workspace/media-assets/6131?v=scene-2",
+        },
+        {
+          key: "voice-3",
+          kind: "voice",
+          previewArrayIndex: 2,
+          segmentIndex: 30,
+          sourceKind: "timeline",
+          sourceStartTime: 16.641,
+          timelineEndTime: 21.683,
+          timelineStartTime: 16.641,
+          url: "/api/workspace/media-assets/6131?v=scene-3",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-2",
+        timelineEndTime: 16.641,
+        timelineStartTime: 11.599,
+      }),
+      expect.objectContaining({
+        key: "voice-3",
+        timelineEndTime: 21.683,
+        timelineStartTime: 16.641,
       }),
     ]);
   });
@@ -807,6 +848,24 @@ describe("workspace segment editor full preview", () => {
       { key: "music", kind: "music", timelineEndTime: 12, timelineStartTime: 0 },
       { key: "voice-1", kind: "voice", timelineEndTime: 4.55, timelineStartTime: 0 },
       { key: "voice-2", kind: "voice", timelineEndTime: 8.4, timelineStartTime: 4 },
+    ]);
+  });
+
+  it("selects only the current segment voice when segment-bound voices overlap", () => {
+    const currentSegment = { arrayIndex: 2, segmentIndex: 30 };
+    const voiceTracks = [
+      { key: "voice-2", kind: "voice", previewArrayIndex: 1, segmentIndex: 20 },
+      { key: "voice-3", kind: "voice", previewArrayIndex: 2, segmentIndex: 30 },
+      { key: "legacy-voice", kind: "voice" },
+    ];
+
+    expect(
+      voiceTracks.filter((track) =>
+        shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment(track, currentSegment),
+      ),
+    ).toEqual([
+      { key: "voice-3", kind: "voice", previewArrayIndex: 2, segmentIndex: 30 },
+      { key: "legacy-voice", kind: "voice" },
     ]);
   });
 
