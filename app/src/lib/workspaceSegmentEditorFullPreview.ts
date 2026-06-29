@@ -593,14 +593,9 @@ export const resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTim
 export const resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds = (options: {
   fallbackDurationSeconds?: number | null;
   measuredDurationSeconds?: number | null;
-  preferFallbackDurationSeconds?: boolean;
 }) => {
   const measuredDurationSeconds = normalizePreviewTime(options.measuredDurationSeconds);
   const fallbackDurationSeconds = normalizePreviewTime(options.fallbackDurationSeconds);
-  if (options.preferFallbackDurationSeconds && fallbackDurationSeconds !== null && fallbackDurationSeconds > 0) {
-    return fallbackDurationSeconds;
-  }
-
   if (measuredDurationSeconds !== null && measuredDurationSeconds > 0) {
     return fallbackDurationSeconds !== null && fallbackDurationSeconds > 0
       ? Math.max(measuredDurationSeconds, fallbackDurationSeconds)

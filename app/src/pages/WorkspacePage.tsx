@@ -23454,7 +23454,6 @@ export function WorkspacePage({
       const voiceoverDurationSeconds = resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
         fallbackDurationSeconds: fallbackVoiceoverDurationSeconds,
         measuredDurationSeconds: measuredVoiceoverDurationSeconds,
-        preferFallbackDurationSeconds: voiceoverAudioPreviewSource.sourceKind === "segment",
       });
 
       return {
