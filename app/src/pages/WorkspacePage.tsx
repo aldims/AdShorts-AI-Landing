@@ -304,12 +304,12 @@ import {
   canReuseWorkspaceSegmentProjectTimelineVoiceover,
   createWorkspaceSegmentEditorComparableDraftSession,
   getWorkspaceSegmentDraftVisualStatus,
+  getWorkspaceSegmentVisualTimelineHistoryState,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
   getWorkspaceSegmentVoiceOverrideForLanguage,
   isWorkspaceSegmentAppliedVisualResetChange,
   isWorkspaceSegmentDraftSceneSoundEdited,
   isWorkspaceSegmentDraftSubtitleEdited,
-  isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
   isWorkspaceSegmentDraftVoiceEdited,
   reorderWorkspaceSegmentEditorSegmentsByIndex,
@@ -13119,6 +13119,26 @@ export function WorkspacePage({
       return;
     }
 
+    if (kind === "visual") {
+      const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+        (segment) => segment.index === safeSegmentIndex,
+      );
+      if (isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
+        return;
+      }
+
+      setSegmentTimelineRedoSnapshots((current) => ({
+        ...current,
+        [historyKey]: {
+          kind,
+          segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+          segmentIndex: safeSegmentIndex,
+        },
+      }));
+      resetSegmentEditorVisualByIndex(safeSegmentIndex);
+      return;
+    }
+
     setSegmentTimelineRedoSnapshots((current) => ({
       ...current,
       [historyKey]: {
@@ -13127,18 +13147,6 @@ export function WorkspacePage({
         segmentIndex: safeSegmentIndex,
       },
     }));
-
-    if (kind === "visual") {
-      const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
-        (segment) => segment.index === safeSegmentIndex,
-      );
-      if (isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
-        restoreSegmentEditorVisualByIndex(safeSegmentIndex);
-      } else {
-        resetSegmentEditorVisualByIndex(safeSegmentIndex);
-      }
-      return;
-    }
 
     if (kind === "sound") {
       resetSegmentEditorSceneSoundByIndex(safeSegmentIndex);
@@ -13169,6 +13177,20 @@ export function WorkspacePage({
     const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
     const snapshot = segmentTimelineRedoSnapshotsRef.current[historyKey];
     if (!snapshot || snapshot.kind !== kind) {
+      if (kind === "visual") {
+        const safeSegmentIndex = Number(segmentIndex);
+        const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+        const currentSegment =
+          currentDraft && Number.isInteger(safeSegmentIndex)
+            ? getSegmentEditorDraftSegmentByIndex(currentDraft, safeSegmentIndex)
+            : null;
+        const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+          (segment) => segment.index === safeSegmentIndex,
+        );
+        if (currentSegment && isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
+          restoreSegmentEditorVisualByIndex(safeSegmentIndex);
+        }
+      }
       return;
     }
 
@@ -27239,10 +27261,13 @@ export function WorkspacePage({
               const shouldShowSegmentDeleteButton =
                 segmentEditorDraft.segments.length > WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS ||
                 !isWorkspaceSegmentEditorDraftSegmentEmpty(segment);
-              const canBackVisual =
-                isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineVisualSegment) ||
-                isWorkspaceSegmentAppliedVisualResetChange(segment, baselineVisualSegment);
-              const canForwardVisual = Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]);
+              const visualHistoryState = getWorkspaceSegmentVisualTimelineHistoryState(
+                segment,
+                baselineVisualSegment,
+                Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]),
+              );
+              const canBackVisual = visualHistoryState.canBack;
+              const canForwardVisual = visualHistoryState.canForward;
               return (
                 <Fragment key={`segment-timeline-visual:${segment.index}`}>
                   <div

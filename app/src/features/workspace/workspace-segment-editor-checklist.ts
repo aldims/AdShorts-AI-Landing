@@ -713,6 +713,19 @@ export const isWorkspaceSegmentAppliedVisualResetChange = (
       isWorkspaceSegmentDraftVisualResettable(baselineSegment),
   );
 
+export const getWorkspaceSegmentVisualTimelineHistoryState = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  hasRedoSnapshot: boolean,
+) => {
+  const isVisualResetChange = isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment);
+
+  return {
+    canBack: !isVisualResetChange && isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment),
+    canForward: hasRedoSnapshot || isVisualResetChange,
+  };
+};
+
 export const buildWorkspaceSegmentEditorChangeChecklist = (
   draft: WorkspaceSegmentEditorDraftSession,
   baseline?: WorkspaceSegmentEditorDraftSession | null,

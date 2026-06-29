@@ -31,7 +31,10 @@ import {
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
-import { isWorkspaceSegmentDraftVoiceEdited } from "../features/workspace/workspace-segment-editor-checklist";
+import {
+  getWorkspaceSegmentVisualTimelineHistoryState,
+  isWorkspaceSegmentDraftVoiceEdited,
+} from "../features/workspace/workspace-segment-editor-checklist";
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   createWorkspaceSegmentEditorProjectBrandState,
@@ -9040,6 +9043,44 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedSegment.currentPreviewUrl).toBe("/api/workspace/media-assets/101");
     expect(getWorkspaceSegmentDraftPreviewUrl(refreshedSegment)).toBe("/api/workspace/media-assets/101");
     expect(getWorkspaceSegmentDraftVisualStatus(refreshedSegment, appliedSegment)).toBe("reset");
+  });
+
+  it("shows visual reset restore on the forward arrow even after redo state is gone", () => {
+    const originalAsset = createMediaAsset(101, {
+      kind: "source_ai_image",
+      mediaType: "photo",
+      role: "segment_original",
+      sourceKind: "ai_generated",
+    });
+    const talkingPhotoAsset = {
+      ...createMediaAsset(7339, {
+        kind: "rendered_segment",
+        mediaType: "video",
+        role: "segment_current",
+        sourceKind: "ai_generated",
+      }),
+      libraryKind: "talking_photo",
+    };
+    const talkingPhotoSegment = createDraftSegment({
+      aiVideoGeneratedMode: "talking_photo",
+      currentAsset: talkingPhotoAsset,
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=4064&segmentIndex=0&source=current",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=4064&segmentIndex=0&source=current&delivery=preview",
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      originalAsset,
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "ai_generated",
+      videoAction: "talking_photo",
+    });
+    const resetSegment = resetWorkspaceSegmentDraftVisualToOriginal(talkingPhotoSegment, 4064);
+
+    expect(getWorkspaceSegmentDraftVisualStatus(resetSegment, talkingPhotoSegment)).toBe("reset");
+    expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+    expect(getWorkspaceSegmentVisualTimelineHistoryState(resetSegment, talkingPhotoSegment, false)).toEqual({
+      canBack: false,
+      canForward: true,
+    });
   });
 
   it("does not keep a draft-only AI photo undo as a pending segment change", () => {
