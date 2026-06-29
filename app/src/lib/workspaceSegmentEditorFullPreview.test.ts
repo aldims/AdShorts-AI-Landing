@@ -173,6 +173,26 @@ describe("workspace segment editor full preview", () => {
     ).toBe(15.759);
   });
 
+  it("prefers known segment speech duration over a longer measured segment proxy file", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
+        fallbackDurationSeconds: 5,
+        measuredDurationSeconds: 5.6,
+        preferFallbackDurationSeconds: true,
+      }),
+    ).toBe(5);
+  });
+
+  it("uses measured segment proxy duration when no known speech duration exists", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
+        fallbackDurationSeconds: null,
+        measuredDurationSeconds: 5.6,
+        preferFallbackDurationSeconds: true,
+      }),
+    ).toBe(5.6);
+  });
+
   it("keeps project voice tracks bounded by the visual scene end", () => {
     expect(
       resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime({
