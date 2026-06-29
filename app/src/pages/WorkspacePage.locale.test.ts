@@ -6760,6 +6760,25 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("hides voice timeline history for embedded talking character audio", () => {
+    const state = resolveWorkspaceSegmentVoiceTimelineState({
+      canForwardText: true,
+      canForwardVoice: true,
+      isGeneratedVoiceoverEdited: true,
+      isTextEdited: true,
+      isVoiceHistoryDisabled: true,
+      isVoiceSettingsEdited: true,
+    });
+
+    expect(state).toEqual({
+      canBack: false,
+      canForward: false,
+      hasHistory: false,
+      historyKind: "text",
+      isEdited: true,
+    });
+  });
+
   it("shows project voiceover progress on every segment sent to generation", () => {
     const targets = [{ index: 0 }, { index: 1 }, { index: 2 }];
 

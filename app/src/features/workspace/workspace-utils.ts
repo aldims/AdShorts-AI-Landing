@@ -249,6 +249,7 @@ export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   canForwardText: boolean;
   canForwardVoice: boolean;
   isGeneratedVoiceoverEdited: boolean;
+  isVoiceHistoryDisabled?: boolean;
   isTextEdited: boolean;
   isVoiceSettingsEdited: boolean;
 }): WorkspaceSegmentVoiceTimelineState => {
@@ -257,13 +258,24 @@ export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   const canBackVoice = options.isVoiceSettingsEdited || options.isGeneratedVoiceoverEdited;
   const canBack = historyKind === "text" ? options.isTextEdited : canBackVoice;
   const canForward = historyKind === "text" ? options.canForwardText : options.canForwardVoice;
+  const isEdited = options.isGeneratedVoiceoverEdited || options.isVoiceSettingsEdited || options.isTextEdited;
+
+  if (options.isVoiceHistoryDisabled) {
+    return {
+      canBack: false,
+      canForward: false,
+      hasHistory: false,
+      historyKind,
+      isEdited,
+    };
+  }
 
   return {
     canBack,
     canForward,
     hasHistory: canBack || canForward,
     historyKind,
-    isEdited: options.isGeneratedVoiceoverEdited || options.isVoiceSettingsEdited || options.isTextEdited,
+    isEdited,
   };
 };
 

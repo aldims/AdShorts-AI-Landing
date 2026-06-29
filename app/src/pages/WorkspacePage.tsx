@@ -27841,6 +27841,7 @@ export function WorkspacePage({
                 canForwardVoice,
                 isGeneratedVoiceoverEdited: isDisplayedGeneratedVoiceoverEdited,
                 isTextEdited: isVoiceTextEdited,
+                isVoiceHistoryDisabled: usesEmbeddedTalkingPhotoAudio,
                 isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
               });
               const isVoiceCellEdited = isDisplayedGeneratedVoiceoverEdited || isDisplayedVoiceSettingsEdited;
