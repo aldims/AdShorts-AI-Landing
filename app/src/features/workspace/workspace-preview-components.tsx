@@ -44,6 +44,7 @@ import type {
 } from "./workspace-types";
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
+const workspaceSegmentPreviewImageRetryDelaysMs = [1000, 2500, 5000, 10000];
 
 type WorkspaceSegmentPreviewCardMediaProps = {
   allowBrowserPosterCapture?: boolean;
@@ -120,6 +121,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [hasPresentedVideoFrame, setHasPresentedVideoFrame] = useState(false);
   const [isImageLoadFailed, setIsImageLoadFailed] = useState(false);
+  const [imageLoadRetryAttempt, setImageLoadRetryAttempt] = useState(0);
   const [previewCandidateIndex, setPreviewCandidateIndex] = useState(0);
   const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
   const normalizedPreviewUrl = previewUrl.trim();
@@ -329,7 +331,30 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   useEffect(() => {
     setImageCandidateIndex(0);
     setIsImageLoadFailed(false);
+    setImageLoadRetryAttempt(0);
   }, [imageCandidateSignature, mediaKey, previewKind]);
+
+  useEffect(() => {
+    if (
+      previewKind !== "image" ||
+      !isImageLoadFailed ||
+      imageLoadRetryAttempt >= workspaceSegmentPreviewImageRetryDelaysMs.length
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setImageCandidateIndex(0);
+      setIsImageLoadFailed(false);
+      setImageLoadRetryAttempt((current) =>
+        Math.min(current + 1, workspaceSegmentPreviewImageRetryDelaysMs.length),
+      );
+    }, workspaceSegmentPreviewImageRetryDelaysMs[imageLoadRetryAttempt]);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [imageLoadRetryAttempt, isImageLoadFailed, previewKind]);
 
   useEffect(() => {
     if (!normalizedPosterUrl) {
@@ -490,6 +515,14 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
         loading={imageLoading}
         decoding="async"
         draggable={false}
+        onLoad={() => {
+          if (isImageLoadFailed) {
+            setIsImageLoadFailed(false);
+          }
+          if (imageLoadRetryAttempt !== 0) {
+            setImageLoadRetryAttempt(0);
+          }
+        }}
         onError={() => {
           if (!advanceImageCandidate()) {
             setIsImageLoadFailed(true);
