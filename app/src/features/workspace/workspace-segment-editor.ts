@@ -3366,7 +3366,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
       canUseLeakedProjectVoiceoverSegmentProxy ||
       canUseSharedProjectVoiceoverSegmentProxy) &&
     projectVoiceoverAssetId !== null
-      ? `${buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)}?v=${encodeURIComponent(version)}`
+      ? buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)
       : null;
   const segmentVoiceoverAudioUrl =
     canUseSegmentVoiceoverAudioProxy
@@ -7049,6 +7049,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   const shouldRepairUserSelectedStillDurations =
     hasWorkspaceSegmentUserSelectedStillDurationSlotConflict(syncedSegments);
   const preserveExistingStillDurationsOverride = options?.preserveExistingStillDurations;
+  const preserveSpeechBoundaries = options?.preserveSpeechBoundaries ?? !hasVoiceoverTimelineDurationReset;
 
   return rebuildWorkspaceSegmentEditorTimeline(syncedSegments, {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
@@ -7064,7 +7065,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
     speechBoundaryEnabled: (previousSegment, nextSegment) =>
       shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
-    preserveSpeechBoundaries: options?.preserveSpeechBoundaries,
+    preserveSpeechBoundaries,
     preserveSourceTimelineEnd:
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),
     preserveExistingStillDurations: (segment) =>

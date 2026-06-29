@@ -3989,18 +3989,23 @@ export function WorkspacePage({
     [getSegmentEditorMeasuredVoiceoverDurationSeconds],
   );
 
+  const segmentEditorActiveIndexSegmentCount = segmentEditorDraft?.segments.length ?? 0;
+
   useEffect(() => {
-    if (!segmentEditorDraft?.segments.length) {
+    if (segmentEditorActiveIndexSegmentCount <= 0) {
       if (hasExplicitSegmentEditorRoute || isSegmentEditorLoading) {
         return;
       }
 
-      setActiveSegmentIndex(0);
+      setActiveSegmentIndex((current) => (current === 0 ? current : 0));
       return;
     }
 
-    setActiveSegmentIndex((current) => Math.min(current, segmentEditorDraft.segments.length - 1));
-  }, [hasExplicitSegmentEditorRoute, isSegmentEditorLoading, segmentEditorDraft]);
+    setActiveSegmentIndex((current) => {
+      const nextIndex = Math.min(current, segmentEditorActiveIndexSegmentCount - 1);
+      return nextIndex === current ? current : nextIndex;
+    });
+  }, [hasExplicitSegmentEditorRoute, isSegmentEditorLoading, segmentEditorActiveIndexSegmentCount]);
 
   useEffect(() => {
     if (segmentEditorAppliedSession) {
@@ -9349,8 +9354,16 @@ export function WorkspacePage({
 
   useEffect(() => {
     if (!isSegmentAiPhotoModalOpen || !segmentAiPhotoModalSegment) {
-      setIsSegmentAiPhotoModalVisible(false);
-      setSegmentAiPhotoModalLibraryRenderCount(SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT);
+      if (isSegmentAiPhotoModalVisible) {
+        setIsSegmentAiPhotoModalVisible(false);
+      }
+      if (segmentAiPhotoModalLibraryRenderCount !== SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT) {
+        setSegmentAiPhotoModalLibraryRenderCount(SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT);
+      }
+      return;
+    }
+
+    if (isSegmentAiPhotoModalVisible) {
       return;
     }
 
@@ -9361,7 +9374,12 @@ export function WorkspacePage({
     return () => {
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [isSegmentAiPhotoModalOpen, segmentAiPhotoModalSegment]);
+  }, [
+    isSegmentAiPhotoModalOpen,
+    isSegmentAiPhotoModalVisible,
+    segmentAiPhotoModalLibraryRenderCount,
+    segmentAiPhotoModalSegment,
+  ]);
 
   useEffect(() => {
     if (!isSegmentAiPhotoModalOpen || !isSegmentAiPhotoModalVisible) {
@@ -23655,8 +23673,8 @@ export function WorkspacePage({
         voiceTracks.push({
           endGraceSeconds: 0,
           key: shouldUseProjectVoiceoverTimelineSource
-            ? `full-preview:voice:${segment.index}:${voiceoverAudioUrl}:${projectVoiceSourceStartTime ?? 0}`
-            : `full-preview:voice:${segment.index}:${voiceoverAudioUrl}`,
+            ? `full-preview:voice:${segment.index}:${voiceoverAudioUrl}:${voiceoverAudioPreviewSource.version}:${projectVoiceSourceStartTime ?? 0}`
+            : `full-preview:voice:${segment.index}:${voiceoverAudioUrl}:${voiceoverAudioPreviewSource.version}`,
           kind: "voice",
           previewArrayIndex: arrayIndex,
           segmentIndex: segment.index,
@@ -25076,9 +25094,6 @@ export function WorkspacePage({
   const prepareSegmentEditorFullPreviewAudioAtTime = async (
     currentTime: number,
     token: number,
-    options?: {
-      requireAllVoiceTracks?: boolean;
-    },
   ): Promise<WorkspaceSegmentEditorFullPreviewAudioPreparationResult> => {
     if (typeof document === "undefined" || typeof window === "undefined") {
       return "not-ready";
@@ -25102,27 +25117,14 @@ export function WorkspacePage({
       },
     );
     const startMinimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-    const activeRequiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
+    const requiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
       managedTracks,
       activeTracks,
       currentTime,
     ).filter((track) => track.kind === "voice");
-    const requiredReadyTrackMap = new Map<string, WorkspaceSegmentEditorFullPreviewAudioTrack>();
-    activeRequiredReadyTracks.forEach((track) => {
-      requiredReadyTrackMap.set(track.key, track);
-    });
-    if (options?.requireAllVoiceTracks) {
-      managedTracks
-        .filter((track) => track.kind === "voice")
-        .forEach((track) => {
-          requiredReadyTrackMap.set(track.key, track);
-        });
-    }
-    const requiredReadyTracks = Array.from(requiredReadyTrackMap.values());
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.start", {
       activeTrackCount: activeTracks.length,
       currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
-      requireAllVoiceTracks: Boolean(options?.requireAllVoiceTracks),
       requiredReadyTrackCount: requiredReadyTracks.length,
       trackCount: managedTracks.length,
       tracks: tracks.map(getSegmentEditorFullPreviewAudioTrackDebugSummary),
@@ -25180,7 +25182,6 @@ export function WorkspacePage({
         writeSegmentEditorFullPreviewDebugTrace("audio.prepare.unready", {
           currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
           minimumReadyState: startMinimumReadyState,
-          requireAllVoiceTracks: Boolean(options?.requireAllVoiceTracks),
           tracks: unreadyTracks.map(({ element, track }) =>
             getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
           ),
@@ -25203,9 +25204,6 @@ export function WorkspacePage({
           },
           { level: "warn" },
         );
-        if (options?.requireAllVoiceTracks) {
-          return "not-ready";
-        }
 
         unreadyTracks.forEach(({ element, track }) => {
           markSegmentEditorFullPreviewAudioTrackFailed(track, element);
@@ -25776,7 +25774,7 @@ export function WorkspacePage({
       fromUserGesture: options?.fromUserGesture,
     });
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token, { requireAllVoiceTracks: true }),
+      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -25858,7 +25856,7 @@ export function WorkspacePage({
     primeSegmentEditorFullPreviewEmbeddedVisualAudio(safeStartTime, { fromUserGesture: true });
 
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token, { requireAllVoiceTracks: true }),
+      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -27984,7 +27982,7 @@ export function WorkspacePage({
               const voiceoverAudioUrl = isSegmentTimelineVoiceGenerationScheduled
                 ? null
                 : embeddedTalkingPhotoAudioUrl ?? voiceoverAudioPreviewSource.audioUrl;
-              const voiceAudioKey = `timeline:voice:${segment.index}:${voiceoverAudioUrl ?? "empty"}`;
+              const voiceAudioKey = `timeline:voice:${segment.index}:${voiceoverAudioUrl ?? "empty"}:${voiceoverAudioPreviewSource.version}`;
               const isVoiceoverGenerationPending = hasWorkspaceSegmentVisualRun(
                 segmentEditorGeneratingVoiceoverRunIds,
                 segment.index,

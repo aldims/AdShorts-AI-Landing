@@ -689,6 +689,48 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
   });
 
+  it("does not preserve stale project voiceover speech boundaries after auto visual duration repair", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 7,
+      endTime: 7,
+      mediaType: "photo",
+      speechDuration: 4.4,
+      speechDurationSource: "audio",
+      speechEndTime: 4.4,
+      speechStartTime: 0,
+      voiceoverAsset: null,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      duration: 5,
+      endTime: 12,
+      index: 1,
+      mediaType: "photo",
+      speechDuration: 5,
+      speechDurationSource: "audio",
+      speechEndTime: 14.4,
+      speechStartTime: 9.4,
+      startTime: 7,
+      voiceoverAsset: null,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: 777,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 4.6,
+      durationMode: "auto",
+      endTime: 4.6,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 4.6,
+    }));
+  });
+
   it("does not warn when an ffmpeg-rendered photo segment is shorter than voiceover", () => {
     const segment = createProjectVoiceoverSegment({
       currentAsset: {
@@ -2671,9 +2713,9 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: "/api/workspace/media-assets/777",
       previewRange: { endTime: 22.957, startTime: 12.957 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777",
       segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
@@ -2726,9 +2768,9 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: "/api/workspace/media-assets/777",
       previewRange: { endTime: 24.919, startTime: 22.957 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777",
       segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
@@ -2976,9 +3018,9 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      audioUrl: "/api/workspace/media-assets/777",
       previewRange: { endTime: 24.919, startTime: 22.957 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777",
       segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
@@ -3346,7 +3388,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
       latestSceneVoiceoverAudioUrl: null,
       previewRange: { endTime: 10.8, startTime: 5.4 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/888",
       segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
@@ -3470,7 +3512,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       latestSceneVoiceoverAudioUrl: null,
       previewRange: { endTime: 10.8, startTime: 5.4 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/888",
       segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       shouldClip: false,
       sourceKind: "segment",
@@ -3554,7 +3596,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       audioUrl: expect.stringContaining("/api/workspace/media-assets/888"),
       latestSceneVoiceoverAudioUrl: null,
       previewRange: { endTime: 2.25, startTime: 0 },
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/888",
       segmentVoiceoverAudioUrl: null,
       shouldClip: true,
       sourceKind: "project",
@@ -3633,9 +3675,9 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      audioUrl: "/api/workspace/media-assets/888",
       latestSceneVoiceoverAudioUrl: null,
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/888?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/888",
       segmentVoiceoverAudioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
       shouldClip: true,
       sourceKind: "project",
@@ -3744,7 +3786,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       }),
     ).toEqual(expect.objectContaining({
       audioUrl: expect.stringContaining("/api/workspace/project-segment-voiceover?"),
-      projectVoiceoverAudioUrl: expect.stringContaining("/api/workspace/media-assets/777?v="),
+      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777",
       segmentVoiceoverAudioUrl: expect.stringContaining("projectId=77"),
       shouldClip: false,
       sourceKind: "segment",

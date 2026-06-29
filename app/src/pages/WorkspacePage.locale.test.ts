@@ -5066,9 +5066,10 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(source.sourceKind).toBe("project");
     expect(source.audioUrl).toBe(source.projectVoiceoverAudioUrl);
-    expect(source.audioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473");
     expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.version).toContain("3473:");
     expect(source.shouldClip).toBe(true);
     expect(source.previewRange).toEqual({
       endTime: 12.81,
@@ -5088,7 +5089,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(timelineSource.audioUrl).toBe(timelineSource.segmentVoiceoverAudioUrl);
     expect(timelineSource.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(timelineSource.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(timelineSource.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(timelineSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
     expect(timelineSource.shouldClip).toBe(false);
   });
 
@@ -5129,7 +5130,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.segmentVoiceoverAudioUrl).toContain("projectId=3727");
     expect(source.segmentVoiceoverAudioUrl).toContain("segmentIndex=6");
-    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/4946?v=");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/4946");
     expect(source.shouldClip).toBe(false);
   });
 
@@ -5217,7 +5218,7 @@ describe("WorkspacePage studio locale defaults", () => {
       expect(getWorkspaceSegmentVoiceOverrideId(loadedSegment)).toBeNull();
       expect(isVoiceAudioStale).toBe(false);
       expect(source.sourceKind).toBe("project");
-      expect(source.audioUrl).toContain("/api/workspace/media-assets/4946?v=");
+      expect(source.audioUrl).toBe("/api/workspace/media-assets/4946");
     }
   });
 
@@ -5314,7 +5315,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(source.audioUrl).toBeNull();
     expect(source.sourceKind).toBeNull();
-    expect(source.projectVoiceoverAudioUrl).toContain("/api/workspace/media-assets/3473?v=");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
     expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.shouldClip).toBe(false);
   });
