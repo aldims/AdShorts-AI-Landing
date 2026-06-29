@@ -35,6 +35,7 @@ import { isWorkspaceSegmentDraftVoiceEdited } from "../features/workspace/worksp
 import { buildWorkspaceSegmentEditorTracks } from "../lib/workspaceSegmentEditorTracks";
 import {
   createWorkspaceSegmentEditorProjectBrandState,
+  resolveWorkspaceGenerationSystemWatermarkOnSuccess,
   resolveWorkspaceSegmentEditorEffectiveBrandState,
 } from "../features/workspace/workspace-brand-helpers";
 import {
@@ -822,6 +823,19 @@ describe("WorkspacePage example prefill settings", () => {
       brandText: "",
       systemWatermarkEnabled: false,
     });
+  });
+
+  it("uses the server watermark result instead of inferring it from the plan", () => {
+    expect(resolveWorkspaceGenerationSystemWatermarkOnSuccess({
+      serverAddWatermark: false,
+    })).toBe(false);
+    expect(resolveWorkspaceGenerationSystemWatermarkOnSuccess({
+      explicitAddWatermarkOverride: true,
+      serverAddWatermark: false,
+    })).toBe(false);
+    expect(resolveWorkspaceGenerationSystemWatermarkOnSuccess({
+      explicitAddWatermarkOverride: true,
+    })).toBe(true);
   });
 
   it("treats dirty segment-editor brand draft as a generation change", () => {

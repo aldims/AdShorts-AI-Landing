@@ -144,6 +144,7 @@ import {
   readStoredStudioBrandSettings,
   readStoredWorkspaceSegmentEditorBrandSnapshot,
   removeStoredWorkspaceSegmentEditorBrandSnapshot,
+  resolveWorkspaceGenerationSystemWatermarkOnSuccess,
   resolveWorkspaceSegmentEditorEffectiveBrandState,
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
   shouldSendWorkspaceSegmentEditorBrandChangeForGeneration,
@@ -18885,9 +18886,6 @@ export function WorkspacePage({
       const effectiveSegmentEditor = options?.segmentEditor ?? effectiveSegmentEditorBuild?.payload;
       const explicitAddWatermarkOverride =
         typeof options?.addWatermark === "boolean" ? options.addWatermark : undefined;
-      const systemWatermarkEnabledOnSuccess =
-        explicitAddWatermarkOverride ?? (workspacePlan === "FREE");
-
       appendStudioFormValue(formData, "prompt", safeTopic);
       appendStudioFormValue(formData, "editedFromProjectAdId", options?.editedFromProjectAdId);
       appendStudioFormValue(formData, "isRegeneration", Boolean(options?.isRegeneration));
@@ -19023,17 +19021,6 @@ export function WorkspacePage({
         formData.append(upload.fieldName, upload.file, upload.fileName);
       });
 
-      const projectBrandStateOnSuccess = createWorkspaceSegmentEditorProjectBrandState({
-        brandLogoFile: effectiveBrandLogoFile
-          ? {
-              ...effectiveBrandLogoFile,
-              ...(brandLogoAssetId ? { assetId: brandLogoAssetId } : {}),
-            }
-          : null,
-        brandText: effectiveBrandText,
-        systemWatermarkEnabled: systemWatermarkEnabledOnSuccess,
-      });
-
       setStatus("Task queued");
       const response = await fetch("/api/studio/generate", {
         method: "POST",
@@ -19067,6 +19054,21 @@ export function WorkspacePage({
             : payload?.error ?? "Failed to create generation task.";
         throw new Error(errorMessage);
       }
+
+      const systemWatermarkEnabledOnSuccess = resolveWorkspaceGenerationSystemWatermarkOnSuccess({
+        explicitAddWatermarkOverride,
+        serverAddWatermark: payload.data.addWatermark,
+      });
+      const projectBrandStateOnSuccess = createWorkspaceSegmentEditorProjectBrandState({
+        brandLogoFile: effectiveBrandLogoFile
+          ? {
+              ...effectiveBrandLogoFile,
+              ...(brandLogoAssetId ? { assetId: brandLogoAssetId } : {}),
+            }
+          : null,
+        brandText: effectiveBrandText,
+        systemWatermarkEnabled: systemWatermarkEnabledOnSuccess,
+      });
 
       applyWorkspaceProfile(payload.data.profile);
       if (isSegmentEditorGeneration) {

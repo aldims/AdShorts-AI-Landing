@@ -350,6 +350,16 @@ export const shouldSendWorkspaceSegmentEditorBrandChangeForGeneration = (
       state.hasSystemWatermarkRemoval,
   );
 
+export const resolveWorkspaceGenerationSystemWatermarkOnSuccess = (options: {
+  explicitAddWatermarkOverride?: boolean;
+  serverAddWatermark?: boolean | null;
+}) =>
+  typeof options.serverAddWatermark === "boolean"
+    ? options.serverAddWatermark
+    : typeof options.explicitAddWatermarkOverride === "boolean"
+      ? options.explicitAddWatermarkOverride
+      : false;
+
 export const resolveWorkspaceSegmentEditorProjectBrandSnapshot = (options: {
   defaultState: WorkspaceSegmentEditorProjectBrandState;
   storedSnapshot?: WorkspaceSegmentEditorProjectBrandSnapshot | null;

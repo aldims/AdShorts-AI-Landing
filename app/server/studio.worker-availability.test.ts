@@ -300,6 +300,7 @@ describe("studio generation worker availability", () => {
       }),
     ).resolves.toEqual(
       expect.objectContaining({
+        addWatermark: true,
         jobId: "job-free-watermark",
         status: "queued",
       }),
@@ -308,6 +309,66 @@ describe("studio generation worker availability", () => {
     expect(calls.find((call) => call.pathname === "/api/web/generations")?.body).toEqual(
       expect.objectContaining({
         add_watermark: true,
+      }),
+    );
+  });
+
+  it("does not report a watermark for FREE generations that consume purchased credits", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 223, plan: "FREE", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-free-purchased-credits",
+            status: "queued",
+            title: "Purchased credits generation",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("A short video about focus", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "en",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        addWatermark: false,
+        jobId: "job-free-purchased-credits",
+        status: "queued",
+      }),
+    );
+
+    expect(calls.find((call) => call.pathname === "/api/web/generations")?.body).toEqual(
+      expect.objectContaining({
+        add_watermark: false,
       }),
     );
   });
