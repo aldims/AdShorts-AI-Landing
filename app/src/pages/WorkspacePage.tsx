@@ -10272,7 +10272,7 @@ export function WorkspacePage({
       return;
     }
 
-    openScratchSegmentEditor({ forceFreshDraft: true, replaceRoute: true });
+    openScratchSegmentEditor({ replaceRoute: true });
   }, [
     createMode,
     generatedMediaLibraryEntries,
