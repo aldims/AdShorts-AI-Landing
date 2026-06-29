@@ -23996,12 +23996,16 @@ export function WorkspacePage({
       return false;
     }
 
-    if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || element.seeking) {
+    if (element.seeking) {
       muteSegmentEditorFullPreviewAudioElement(element, track, {
         fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
       });
       ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
       return false;
+    }
+
+    if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
     }
 
     return true;
