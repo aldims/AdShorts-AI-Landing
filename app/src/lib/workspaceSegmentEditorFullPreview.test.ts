@@ -375,6 +375,42 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
+  it("does not play a direct project voice media asset tail into the next source window", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue([
+        {
+          key: "voice-1",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 0,
+          timelineEndTime: 5.45,
+          timelineStartTime: 0,
+          url: "/api/workspace/media-assets/7399",
+        },
+        {
+          key: "voice-2",
+          kind: "voice",
+          sourceKind: "timeline",
+          sourceStartTime: 5,
+          timelineEndTime: 10,
+          timelineStartTime: 5,
+          url: "/api/workspace/media-assets/7399",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "voice-1",
+        timelineEndTime: 5,
+        timelineStartTime: 0,
+      }),
+      expect.objectContaining({
+        key: "voice-2",
+        timelineEndTime: 10,
+        timelineStartTime: 5,
+      }),
+    ]);
+  });
+
   it("merges continuous project voice tracks from the same source with different cache keys", () => {
     expect(
       mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks([
@@ -452,6 +488,46 @@ describe("workspace segment editor full preview", () => {
         key: "voice-3",
         timelineEndTime: 21.683,
         timelineStartTime: 16.641,
+      }),
+    ]);
+  });
+
+  it("keeps direct project voice media asset tracks separate when they belong to different segments", () => {
+    expect(
+      mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks([
+        {
+          key: "full-preview:voice:1:/api/workspace/media-assets/7399:v1:0",
+          kind: "voice",
+          previewArrayIndex: 0,
+          segmentIndex: 1,
+          sourceKind: "timeline",
+          sourceStartTime: 0,
+          timelineEndTime: 4.4,
+          timelineStartTime: 0,
+          url: "/api/workspace/media-assets/7399",
+        },
+        {
+          key: "full-preview:voice:2:/api/workspace/media-assets/7399:v2:4.4",
+          kind: "voice",
+          previewArrayIndex: 1,
+          segmentIndex: 2,
+          sourceKind: "timeline",
+          sourceStartTime: 4.4,
+          timelineEndTime: 9.9,
+          timelineStartTime: 4.4,
+          url: "/api/workspace/media-assets/7399",
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        key: "full-preview:voice:1:/api/workspace/media-assets/7399:v1:0",
+        timelineEndTime: 4.4,
+        timelineStartTime: 0,
+      }),
+      expect.objectContaining({
+        key: "full-preview:voice:2:/api/workspace/media-assets/7399:v2:4.4",
+        timelineEndTime: 9.9,
+        timelineStartTime: 4.4,
       }),
     ]);
   });
@@ -932,6 +1008,43 @@ describe("workspace segment editor full preview", () => {
     ).toEqual([
       { key: "music", kind: "music", timelineEndTime: 16, timelineStartTime: 0 },
       { key: "voice-1", kind: "voice", timelineEndTime: 3.5, timelineStartTime: 0 },
+    ]);
+  });
+
+  it("does not require future project voice tracks before starting full preview", () => {
+    const tracks = [
+      {
+        key: "full-preview:voice:1:/api/workspace/media-assets/7399:v1:0",
+        kind: "voice",
+        timelineEndTime: 4.4,
+        timelineStartTime: 0,
+      },
+      {
+        key: "full-preview:voice:2:/api/workspace/media-assets/7399:v2:4.4",
+        kind: "voice",
+        timelineEndTime: 9.9,
+        timelineStartTime: 4.4,
+      },
+      { key: "music", kind: "music", timelineEndTime: 24.8, timelineStartTime: 0 },
+    ];
+    const activeTracks = [
+      {
+        key: "full-preview:voice:1:/api/workspace/media-assets/7399:v1:0",
+        kind: "voice",
+        timelineEndTime: 4.4,
+        timelineStartTime: 0,
+      },
+    ];
+
+    expect(
+      selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(tracks, activeTracks, 0),
+    ).toEqual([
+      {
+        key: "full-preview:voice:1:/api/workspace/media-assets/7399:v1:0",
+        kind: "voice",
+        timelineEndTime: 4.4,
+        timelineStartTime: 0,
+      },
     ]);
   });
 

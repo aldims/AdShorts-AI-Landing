@@ -5093,6 +5093,63 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(timelineSource.shouldClip).toBe(false);
   });
 
+  it("keeps full-preview project voiceover invalidation in the version instead of the media asset URL", () => {
+    const segment = createDraftSegment({
+      duration: 4.4,
+      endTime: 4.4,
+      index: 0,
+      speechDuration: 4.36,
+      speechEndTime: 4.36,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First scene",
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("First scene"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const updatedSegment = {
+      ...segment,
+      text: "Updated first scene",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Updated first scene"),
+    };
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 3457,
+      ttsAssetId: 3473,
+    };
+    const updatedSession = {
+      ...session,
+      segments: [updatedSegment],
+    };
+
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+    const updatedSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      segment: updatedSegment,
+      session: updatedSession,
+      voiceEnabled: true,
+      voiceOption: studioVoiceOptionsByLanguage.ru[0],
+    });
+
+    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.audioUrl).not.toContain("?");
+    expect(updatedSource.audioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(updatedSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(updatedSource.audioUrl).not.toContain("?");
+    expect(updatedSource.version).not.toBe(source.version);
+    expect(new URL(source.segmentVoiceoverAudioUrl!, "http://localhost").searchParams.get("v")).toBe(source.version);
+    expect(new URL(updatedSource.segmentVoiceoverAudioUrl!, "http://localhost").searchParams.get("v")).toBe(
+      updatedSource.version,
+    );
+  });
+
   it("allows segment voiceover preview from project TTS timing even when the voice option is legacy", () => {
     const text = "Жарьте на хорошо разогретой сковороде.";
     const segment = createDraftSegment({
