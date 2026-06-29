@@ -214,6 +214,27 @@ export const resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime
   return resolvedEndTime > timelineStartTime ? roundPreviewTime(resolvedEndTime) : null;
 };
 
+export const resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime = (options: {
+  fallbackTimelineEndTimeCandidates: Array<number | null | undefined>;
+  hasTimingData: boolean;
+  timedTimelineEndTimeCandidates: Array<number | null | undefined>;
+  timelineStartTime: number;
+}) => {
+  const timelineStartTime = normalizePreviewTime(options.timelineStartTime) ?? 0;
+  const normalizeCandidates = (candidates: Array<number | null | undefined>) =>
+    candidates
+      .map((value) => normalizePreviewTime(value))
+      .filter((value): value is number => value !== null && value > timelineStartTime);
+
+  const timedCandidates = normalizeCandidates(options.timedTimelineEndTimeCandidates);
+  if (options.hasTimingData && timedCandidates.length > 0) {
+    return roundPreviewTime(Math.max(...timedCandidates));
+  }
+
+  const fallbackCandidates = normalizeCandidates(options.fallbackTimelineEndTimeCandidates);
+  return fallbackCandidates.length > 0 ? roundPreviewTime(Math.max(...fallbackCandidates)) : null;
+};
+
 export const resolveWorkspaceSegmentEditorFullPreviewVoiceBoundarySegments = <
   Segment extends WorkspaceSegmentEditorFullPreviewVoiceBoundarySegment,
 >(

@@ -832,6 +832,7 @@ import {
   mergeWorkspaceSegmentEditorFullPreviewContinuousVoiceTracks,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime,
+  resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
@@ -843,6 +844,7 @@ import {
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
+  shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
   type WorkspaceSegmentEditorFullPreviewAudioPreparationResult,
@@ -23574,6 +23576,8 @@ export function WorkspacePage({
             voiceDurationSeconds: voiceoverDurationSeconds,
           })
         : null;
+      const hasProjectVoiceoverTiming =
+        shouldUseProjectVoiceoverTimelineSource && hasWorkspaceSegmentProjectVoiceoverTimingData(segment);
       const fallbackVoiceTimelineEndTime = shouldUseProjectVoiceoverTimelineSource
         ? mapSourceVoiceTimelineEndTime(
             resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime({
@@ -23594,24 +23598,30 @@ export function WorkspacePage({
         voiceoverPreviewRange.endTime > projectVoiceSourceStartTime
           ? timelineStartTime + (voiceoverPreviewRange.endTime - projectVoiceSourceStartTime)
           : null;
-      const projectVoiceTimelineEndCandidates = [
+      const timedProjectVoiceTimelineEndCandidates = [
         shouldUseProjectVoiceoverTimelineSource
           ? mapSourceVoiceTimelineEndTime(projectVoiceoverFullPreviewRange?.timelineEndTime)
           : projectVoiceoverFullPreviewRange?.timelineEndTime,
         projectPreviewRangeTimelineEndTime,
+      ];
+      const fallbackProjectVoiceTimelineEndCandidates = [
+        projectVoiceTimelineEndTime,
         fallbackVoiceTimelineEndTime,
-      ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-      const resolvedVoiceTimelineEndTimeBase =
-        projectVoiceTimelineEndTime ??
-        (projectVoiceTimelineEndCandidates.length > 0
-          ? Math.max(...projectVoiceTimelineEndCandidates)
-          : fallbackVoiceTimelineEndTime);
+      ];
+      const resolvedVoiceTimelineEndTimeBase = shouldUseProjectVoiceoverTimelineSource
+        ? resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime({
+            fallbackTimelineEndTimeCandidates: fallbackProjectVoiceTimelineEndCandidates,
+            hasTimingData: hasProjectVoiceoverTiming,
+            timedTimelineEndTimeCandidates: timedProjectVoiceTimelineEndCandidates,
+            timelineStartTime,
+          })
+        : fallbackVoiceTimelineEndTime;
       const voiceTimelineEndTimeBase =
         typeof resolvedVoiceTimelineEndTimeBase === "number" && Number.isFinite(resolvedVoiceTimelineEndTimeBase)
           ? resolvedVoiceTimelineEndTimeBase
           : timelineEndTime;
       const projectVoiceEndGraceSeconds =
-        shouldUseProjectVoiceoverTimelineSource && !hasWorkspaceSegmentProjectVoiceoverTimingData(segment)
+        shouldUseProjectVoiceoverTimelineSource && !hasProjectVoiceoverTiming
           ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_UNTIMED_PROJECT_VOICE_END_GRACE_SECONDS
           : WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS;
       const voiceTimelineEndTime =
@@ -24736,6 +24746,24 @@ export function WorkspacePage({
       },
     );
     if (!startGate) {
+      return null;
+    }
+
+    const shouldHoldStartGate = shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate({
+      gateHoldTime: startGate.holdTime,
+      runStartTime: segmentEditorFullPreviewRunStartTimeRef.current,
+      toleranceSeconds: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SYNC_TOLERANCE_SECONDS,
+    });
+    if (!shouldHoldStartGate) {
+      delete segmentEditorFullPreviewAudioStartGateSinceRef.current[startGate.trackKey];
+      writeSegmentEditorFullPreviewDebugTrace("audio.start-gate.skip-transition", {
+        currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+        holdTime: roundWorkspaceSegmentTimelineSeconds(startGate.holdTime),
+        nextTime: roundWorkspaceSegmentTimelineSeconds(desiredTime),
+        runStartTime: roundWorkspaceSegmentTimelineSeconds(segmentEditorFullPreviewRunStartTimeRef.current),
+        token,
+        trackKey: startGate.trackKey,
+      });
       return null;
     }
 

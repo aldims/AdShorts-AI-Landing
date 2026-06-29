@@ -25,6 +25,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime,
+  resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
@@ -147,6 +148,28 @@ describe("workspace segment editor full preview", () => {
         voiceDurationSeconds: 4.22,
       }),
     ).toBe(9.22);
+  });
+
+  it("prefers timed project voice ends over visual duration fallbacks", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime({
+        fallbackTimelineEndTimeCandidates: [15.759],
+        hasTimingData: true,
+        timedTimelineEndTimeCandidates: [15.579, 15.67],
+        timelineStartTime: 10.499,
+      }),
+    ).toBe(15.67);
+  });
+
+  it("uses project voice duration fallback when no timing data exists", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime({
+        fallbackTimelineEndTimeCandidates: [15.759],
+        hasTimingData: false,
+        timedTimelineEndTimeCandidates: [15.579],
+        timelineStartTime: 10.499,
+      }),
+    ).toBe(15.759);
   });
 
   it("keeps project voice tracks bounded by the visual scene end", () => {
