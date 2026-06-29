@@ -258,6 +258,9 @@ export const getWorkspaceSegmentEffectiveSubtitleSettings = (
   const globalEnabled = globalType !== "none";
   const globalVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
   const segmentVoiceType = getWorkspaceSegmentVoiceOverrideId(segment);
+  const hasEmbeddedTalkingPhotoAudio = Boolean(
+    segment && doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment as WorkspaceSegmentEditorDraftSegment),
+  );
   const hasFreshSceneVoiceover = Boolean(
     segment &&
       segmentVoiceType !== "none" &&
@@ -267,9 +270,9 @@ export const getWorkspaceSegmentEffectiveSubtitleSettings = (
       ),
   );
   const voiceEnabled =
-    segmentVoiceType === "none"
-      ? false
-      : globalVoiceEnabled || Boolean(segmentVoiceType) || hasFreshSceneVoiceover;
+    hasEmbeddedTalkingPhotoAudio ||
+    (segmentVoiceType !== "none" &&
+      (globalVoiceEnabled || Boolean(segmentVoiceType) || hasFreshSceneVoiceover));
   const segmentType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
   const segmentStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
   const segmentColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);

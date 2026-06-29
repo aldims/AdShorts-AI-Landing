@@ -7707,7 +7707,8 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceType: "Boris",
     });
 
-    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+    const session = createDraftSession(segment);
+    const result = await buildWorkspaceSegmentEditorPayload(session, { language: "ru" });
 
     expect(result.payload.segments[0]).toMatchObject({
       customVideoAssetId: 909,
@@ -7718,6 +7719,14 @@ describe("WorkspacePage studio locale defaults", () => {
       startTime: 0,
       videoAction: "talking_photo",
       voiceType: "none",
+    });
+    expect(result.payload.segments[0]?.subtitleType).not.toBe("none");
+    expect(getWorkspaceSegmentEffectiveSubtitleSettings(session, segment, {
+      subtitleColorId: "purple",
+      subtitleStyleId: "modern",
+    })).toMatchObject({
+      isEnabled: true,
+      voiceEnabled: true,
     });
   });
 

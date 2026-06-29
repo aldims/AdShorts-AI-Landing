@@ -13,6 +13,7 @@ import {
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
   getStudioCustomVideoFileIdentityKey,
+  doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
   getWorkspaceSegmentCustomPreviewKind,
@@ -329,10 +330,12 @@ export const buildWorkspaceSegmentEditorPayload = async (
       timelineCursor = endTime;
     }
     const segmentVoiceType = isPayloadTalkingPhotoExport ? "none" : getWorkspaceSegmentVoiceOverrideId(segment);
+    const segmentUsesEmbeddedTalkingPhotoAudio =
+      isPayloadTalkingPhotoExport || doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment);
     const segmentHasVoice =
-      segmentVoiceType === "none"
-        ? false
-        : normalizeWorkspaceSegmentEditorSetting(session.voiceType) !== "none" || Boolean(segmentVoiceType);
+      segmentUsesEmbeddedTalkingPhotoAudio ||
+      (segmentVoiceType !== "none" &&
+        (normalizeWorkspaceSegmentEditorSetting(session.voiceType) !== "none" || Boolean(segmentVoiceType)));
     const segmentSubtitleTypeOverride = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
     const segmentSubtitleStyle = segmentHasVoice ? getWorkspaceSegmentSubtitleStyleOverrideId(segment) : null;
     const segmentSubtitleColor = segmentHasVoice ? getWorkspaceSegmentSubtitleColorOverrideId(segment) : null;
