@@ -870,6 +870,7 @@ export const createWorkspaceMediaLibraryProjectFromDraft = (
     posterUrl: null,
     videoFallbackUrl: matchingGeneration?.videoFallbackUrl ?? null,
     videoUrl: matchingGeneration?.videoUrl ?? null,
+    instagramPublication: null,
     youtubePublication: null,
   };
 };

@@ -8122,6 +8122,7 @@ describe("WorkspacePage studio locale defaults", () => {
       versionRootProjectAdId: null,
       videoFallbackUrl: null,
       videoUrl: null,
+      instagramPublication: null,
       youtubePublication: null,
     };
 
