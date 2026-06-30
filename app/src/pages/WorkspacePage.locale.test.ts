@@ -5066,9 +5066,9 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(source.sourceKind).toBe("project");
     expect(source.audioUrl).toBe(source.projectVoiceoverAudioUrl);
-    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(source.version).toContain("3473:");
     expect(source.shouldClip).toBe(true);
     expect(source.previewRange).toEqual({
@@ -5089,7 +5089,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(timelineSource.audioUrl).toBe(timelineSource.segmentVoiceoverAudioUrl);
     expect(timelineSource.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(timelineSource.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
-    expect(timelineSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(timelineSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(timelineSource.shouldClip).toBe(false);
   });
 
@@ -5137,11 +5137,11 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceOption: studioVoiceOptionsByLanguage.ru[0],
     });
 
-    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473");
-    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.audioUrl).toBe("/api/workspace/media-assets/3473/playback");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(source.audioUrl).not.toContain("?");
-    expect(updatedSource.audioUrl).toBe("/api/workspace/media-assets/3473");
-    expect(updatedSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(updatedSource.audioUrl).toBe("/api/workspace/media-assets/3473/playback");
+    expect(updatedSource.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(updatedSource.audioUrl).not.toContain("?");
     expect(updatedSource.version).not.toBe(source.version);
     expect(new URL(source.segmentVoiceoverAudioUrl!, "http://localhost").searchParams.get("v")).toBe(source.version);
@@ -5187,7 +5187,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(source.audioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.segmentVoiceoverAudioUrl).toContain("projectId=3727");
     expect(source.segmentVoiceoverAudioUrl).toContain("segmentIndex=6");
-    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/4946");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/4946/playback");
     expect(source.shouldClip).toBe(false);
   });
 
@@ -5275,7 +5275,7 @@ describe("WorkspacePage studio locale defaults", () => {
       expect(getWorkspaceSegmentVoiceOverrideId(loadedSegment)).toBeNull();
       expect(isVoiceAudioStale).toBe(false);
       expect(source.sourceKind).toBe("project");
-      expect(source.audioUrl).toBe("/api/workspace/media-assets/4946");
+      expect(source.audioUrl).toBe("/api/workspace/media-assets/4946/playback");
     }
   });
 
@@ -5372,7 +5372,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(source.audioUrl).toBeNull();
     expect(source.sourceKind).toBeNull();
-    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473");
+    expect(source.projectVoiceoverAudioUrl).toBe("/api/workspace/media-assets/3473/playback");
     expect(source.segmentVoiceoverAudioUrl).toContain("/api/workspace/project-segment-voiceover?");
     expect(source.shouldClip).toBe(false);
   });

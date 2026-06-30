@@ -993,12 +993,7 @@ export const getStudioSceneSoundAssetPreviewUrl = (
       ? Math.trunc(Number(asset?.assetId))
       : null;
   if (assetId) {
-    return getWorkspaceMediaAssetDurablePreviewUrl({
-      assetId,
-      fileName: asset?.fileName,
-      mimeType: asset?.mimeType,
-      remoteUrl: asset?.remoteUrl,
-    });
+    return buildWorkspaceMediaAssetPlaybackUrl(assetId);
   }
 
   return getStudioCustomAssetPreviewUrl(asset);
@@ -3366,7 +3361,7 @@ export const getWorkspaceSegmentVoiceoverAudioPreviewSource = (options: {
       canUseLeakedProjectVoiceoverSegmentProxy ||
       canUseSharedProjectVoiceoverSegmentProxy) &&
     projectVoiceoverAssetId !== null
-      ? buildWorkspaceMediaAssetProxyUrl(projectVoiceoverAssetId)
+      ? buildWorkspaceMediaAssetPlaybackUrl(projectVoiceoverAssetId)
       : null;
   const segmentVoiceoverAudioUrl =
     canUseSegmentVoiceoverAudioProxy

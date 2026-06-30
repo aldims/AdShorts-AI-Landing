@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearWorkspaceSegmentPreviewTimes,
   filterWorkspaceStillAssetUrls,
   getWorkspaceSegmentPausedPreviewTime,
   isLikelyVideoAssetUrl,
@@ -47,5 +48,14 @@ describe("workspace segment preview helpers", () => {
     expect(getWorkspaceSegmentPausedPreviewTime(0.6)).toBeCloseTo(0.408, 3);
     expect(getWorkspaceSegmentPausedPreviewTime(2)).toBeCloseTo(1.36, 3);
     expect(getWorkspaceSegmentPausedPreviewTime(8)).toBeCloseTo(3.2, 3);
+  });
+
+  it("keeps empty preview-time resets idempotent", () => {
+    const emptyTimes: Record<number, number> = {};
+    const populatedTimes = { 0: 1.2, 2: 0.4 };
+
+    expect(clearWorkspaceSegmentPreviewTimes(emptyTimes)).toBe(emptyTimes);
+    expect(clearWorkspaceSegmentPreviewTimes(populatedTimes)).toEqual({});
+    expect(clearWorkspaceSegmentPreviewTimes(populatedTimes)).not.toBe(populatedTimes);
   });
 });

@@ -819,6 +819,7 @@ import {
 } from "../lib/workspaceProjectStacks";
 import { resolveWorkspaceGenerationMusicRequest } from "../lib/workspaceGenerationMusic";
 import { resolveWorkspaceRegenerationPrompt } from "../lib/workspaceRegenerationPrompt";
+import { clearWorkspaceSegmentPreviewTimes } from "../lib/workspaceSegmentPreview";
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
   getWorkspaceSegmentEditorFullPreviewAudioFadeOptions,
@@ -976,6 +977,7 @@ export {
   shouldShowWorkspaceMediaLibraryLoadingState,
 } from "../features/workspace/workspace-media-library-helpers";
 export {
+  clearWorkspaceSegmentPreviewTimes,
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "../lib/workspaceSegmentPreview";
 export {
@@ -3693,7 +3695,7 @@ export function WorkspacePage({
       clearAllSegmentVisualRuns();
       setIsSegmentEditorLoading(false);
       setIsSegmentEditorPreparingCustomVideo(false);
-      setSegmentEditorPreviewTimes({});
+      setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
       queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       setSegmentEditorPanelHeightLock(null);
@@ -3756,7 +3758,7 @@ export function WorkspacePage({
       setSegmentEditorVideoError(null);
       closeSegmentAiPhotoModal();
       setPlayingSegmentEditorPreviewIndex(null);
-      setSegmentEditorPreviewTimes({});
+      setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
       queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
       setSegmentEditorPanelHeightLock(null);
@@ -3770,7 +3772,7 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     closeSegmentAiPhotoModal({ immediate: true });
     clearAllSegmentVisualRuns();
-    setSegmentEditorPreviewTimes({});
+    setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
     queuedSegmentEditorPlaybackIndexRef.current = null;
     setQueuedSegmentEditorPlaybackIndex(null);
     setSegmentEditorPanelHeightLock(null);
@@ -8742,7 +8744,7 @@ export function WorkspacePage({
     setPlayingSegmentEditorPreviewIndex(null);
     if (options?.resetTime) {
       setSegmentEditorFullPreviewPlaybackTime(0);
-      setSegmentEditorPreviewTimes({});
+      setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
     }
     setSegmentEditorFullPreviewPlaybackStatus(options?.status ?? (options?.resetTime ? "idle" : "paused"));
   };
@@ -8758,7 +8760,7 @@ export function WorkspacePage({
     if (!shouldPreserveMountedPreviewVideos) {
       stopSegmentEditorPreviewVideoElements({ ...options, clearPausedPositions: true });
       setPlayingSegmentEditorPreviewIndex(null);
-      setSegmentEditorPreviewTimes({});
+      setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
     }
     pendingSegmentEditorActivatedPlaybackIndexRef.current = null;
     queuedSegmentEditorPlaybackIndexRef.current = null;
@@ -9477,7 +9479,7 @@ export function WorkspacePage({
     queuedSegmentEditorPlaybackIndexRef.current = nextQueuedSegmentEditorPlaybackIndex;
     setQueuedSegmentEditorPlaybackIndex(nextQueuedSegmentEditorPlaybackIndex);
     setPlayingSegmentEditorPreviewIndex(null);
-    setSegmentEditorPreviewTimes({});
+    setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
     if (shouldStartSyntheticPlayback) {
       startSegmentEditorSyntheticPlayback(
         pendingActivatedPlaybackIndex,

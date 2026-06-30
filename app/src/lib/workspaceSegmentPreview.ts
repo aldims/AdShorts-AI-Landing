@@ -93,3 +93,8 @@ export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
   options.previewKind === "video" &&
   (options.allowVideoPlayback ?? true) &&
   Boolean(options.autoplay || options.isPlaybackRequested);
+
+export const clearWorkspaceSegmentPreviewTimes = <T extends Record<number, number>>(
+  current: T,
+): T | Record<number, number> =>
+  Object.keys(current).length === 0 ? current : {};

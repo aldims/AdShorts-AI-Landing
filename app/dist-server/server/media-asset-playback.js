@@ -27,7 +27,7 @@ const MEDIA_ASSET_PLAYBACK_INTERACTIVE_CONCURRENCY = 3;
 const MEDIA_ASSET_PLAYBACK_BACKGROUND_CONCURRENCY = 1;
 const MEDIA_ASSET_PLAYBACK_ROOT_DIR = join(env.assetCacheDir, "media-asset-playback");
 const MEDIA_ASSET_PLAYBACK_FFMPEG_TIMEOUT_MS = env.upstreamPlaybackPreparationTimeoutMs;
-const MEDIA_ASSET_PLAYBACK_CACHE_VERSION = "v1";
+const MEDIA_ASSET_PLAYBACK_CACHE_VERSION = "v2";
 const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
 const mediaAssetPlaybackStore = createPreparedAssetStore({
     cleanupIntervalMs: MEDIA_ASSET_PLAYBACK_CLEANUP_INTERVAL_MS,
@@ -68,12 +68,33 @@ const markWorkspaceMediaAssetPlaybackFailure = (cacheKey, error) => {
 const clearWorkspaceMediaAssetPlaybackFailure = (cacheKey) => {
     recentMediaAssetPlaybackFailures.delete(cacheKey);
 };
-const inferWorkspaceMediaAssetPlaybackContentType = (value, upstreamUrl) => {
-    const normalized = normalizeText(value).toLowerCase();
+export const inferWorkspaceMediaAssetPlaybackContentType = (value, upstreamUrl) => {
+    const normalized = normalizeText(value).toLowerCase().split(";")[0]?.trim() ?? "";
     if (normalized.startsWith("video/")) {
         return normalized;
     }
+    if (normalized.startsWith("audio/")) {
+        return normalized;
+    }
     const extension = extname(upstreamUrl.pathname).toLowerCase();
+    if (extension === ".mp3") {
+        return "audio/mpeg";
+    }
+    if (extension === ".wav") {
+        return "audio/wav";
+    }
+    if (extension === ".m4a" || extension === ".mp4a") {
+        return "audio/mp4";
+    }
+    if (extension === ".aac") {
+        return "audio/aac";
+    }
+    if (extension === ".ogg" || extension === ".oga") {
+        return "audio/ogg";
+    }
+    if (extension === ".opus") {
+        return "audio/ogg";
+    }
     if (extension === ".webm") {
         return "video/webm";
     }
@@ -85,9 +106,27 @@ const inferWorkspaceMediaAssetPlaybackContentType = (value, upstreamUrl) => {
     }
     return "video/mp4";
 };
-const inferWorkspaceMediaAssetPlaybackExtension = (contentType, upstreamUrl) => {
+export const inferWorkspaceMediaAssetPlaybackExtension = (contentType, upstreamUrl) => {
     const normalizedContentType = normalizeText(contentType).toLowerCase();
     const extension = extname(upstreamUrl.pathname).toLowerCase();
+    if (normalizedContentType === "audio/mpeg" || extension === ".mp3") {
+        return ".mp3";
+    }
+    if (normalizedContentType === "audio/wav" || normalizedContentType === "audio/x-wav" || extension === ".wav") {
+        return ".wav";
+    }
+    if (normalizedContentType === "audio/mp4" || extension === ".m4a" || extension === ".mp4a") {
+        return ".m4a";
+    }
+    if (normalizedContentType === "audio/aac" || extension === ".aac") {
+        return ".aac";
+    }
+    if (normalizedContentType === "audio/ogg" || extension === ".ogg" || extension === ".oga") {
+        return ".ogg";
+    }
+    if (extension === ".opus") {
+        return ".opus";
+    }
     if (normalizedContentType === "video/webm" || extension === ".webm") {
         return ".webm";
     }
@@ -99,6 +138,7 @@ const inferWorkspaceMediaAssetPlaybackExtension = (contentType, upstreamUrl) => 
     }
     return ".mp4";
 };
+const isWorkspaceMediaAssetPlaybackVideoContentType = (contentType) => normalizeText(contentType).toLowerCase().startsWith("video/");
 const downloadWorkspaceMediaAssetPlaybackSource = async (source) => {
     const response = await fetchUpstreamResponse(source.upstreamUrl, {
         headers: {
@@ -163,24 +203,27 @@ const prepareWorkspaceMediaAssetPlaybackAsset = async (source) => {
         return cachedAsset;
     }
     const downloadedSource = await downloadWorkspaceMediaAssetPlaybackSource(source);
+    const shouldRemuxVideo = isWorkspaceMediaAssetPlaybackVideoContentType(downloadedSource.contentType);
     const tempRemuxPath = `${downloadedSource.tempBasePath}-faststart.mp4`;
     let finalContentType = downloadedSource.contentType;
-    let finalFileName = `video${downloadedSource.sourceExtension}`;
+    let finalFileName = `${shouldRemuxVideo ? "video" : "audio"}${downloadedSource.sourceExtension}`;
     let tempOutputPath = downloadedSource.tempDownloadPath;
-    try {
-        await remuxWorkspaceMediaAssetPlaybackFile(downloadedSource.tempDownloadPath, tempRemuxPath);
-        finalContentType = "video/mp4";
-        finalFileName = "video.mp4";
-        tempOutputPath = tempRemuxPath;
-        await rm(downloadedSource.tempDownloadPath, { force: true }).catch(() => undefined);
-    }
-    catch (error) {
-        logServerEvent("warn", "playback.remux-fallback", {
-            assetKind: "media-asset-playback",
-            error,
-            projectId: null,
-        });
-        await rm(tempRemuxPath, { force: true }).catch(() => undefined);
+    if (shouldRemuxVideo) {
+        try {
+            await remuxWorkspaceMediaAssetPlaybackFile(downloadedSource.tempDownloadPath, tempRemuxPath);
+            finalContentType = "video/mp4";
+            finalFileName = "video.mp4";
+            tempOutputPath = tempRemuxPath;
+            await rm(downloadedSource.tempDownloadPath, { force: true }).catch(() => undefined);
+        }
+        catch (error) {
+            logServerEvent("warn", "playback.remux-fallback", {
+                assetKind: "media-asset-playback",
+                error,
+                projectId: null,
+            });
+            await rm(tempRemuxPath, { force: true }).catch(() => undefined);
+        }
     }
     const finalPath = await mediaAssetPlaybackStore.commitFile(source.cacheKey, tempOutputPath, {
         contentType: finalContentType,
