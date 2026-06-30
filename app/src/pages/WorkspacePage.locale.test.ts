@@ -7065,10 +7065,23 @@ describe("WorkspacePage studio locale defaults", () => {
         textByLanguage: { ru: "" },
       })),
     };
+    const recoveredCurrentVisualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        currentAsset: createMediaAsset(704, { mediaType: "photo" }),
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "custom" as const,
+      })),
+    };
 
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(scratchDraft)).toBe(false);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(textDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(persistedOnlyDraft)).toBe(false);
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(recoveredCurrentVisualDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(visualDraft)).toBe(true);
   });
 
@@ -7116,6 +7129,49 @@ describe("WorkspacePage studio locale defaults", () => {
         voiceType: null,
       }),
     );
+  });
+
+  it("exports scratch visual-only current assets as custom media", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        currentAsset: createMediaAsset(704, { mediaType: "photo" }),
+        currentPosterUrl: "/api/workspace/media-assets/704",
+        customVideo: null,
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "custom" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload).toEqual(
+      expect.objectContaining({
+        allowStructureChange: true,
+        source: "scratch",
+      }),
+    );
+    expect(result.payload.projectId).toBeUndefined();
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 704,
+        index: 0,
+        text: "",
+        videoAction: "custom",
+      }),
+    );
+    expect(result.uploads).toHaveLength(0);
   });
 
   it("marks the voice timeline as edited for text-only changes", () => {

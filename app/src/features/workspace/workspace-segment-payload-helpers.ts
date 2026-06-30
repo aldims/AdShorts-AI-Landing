@@ -10,6 +10,7 @@ import {
   resolveStudioCustomAssetDataUrl,
 } from "./workspace-upload-helpers";
 import {
+  createStudioCustomVideoFileFromWorkspaceMediaAsset,
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
   getStudioCustomVideoFileIdentityKey,
@@ -109,6 +110,27 @@ export type WorkspaceSegmentEditorUploadFile = {
   fileName: string;
 };
 
+const resolveWorkspaceSegmentFallbackCustomVisualAsset = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): StudioCustomVideoFile | null => {
+  if (segment.videoAction !== "custom" || segment.customVideo) {
+    return null;
+  }
+
+  const currentVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
+  const originalVisualIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(segment);
+  if (!currentVisualIdentity || currentVisualIdentity === originalVisualIdentity) {
+    return null;
+  }
+
+  return createStudioCustomVideoFileFromWorkspaceMediaAsset(segment.currentAsset, {
+    fallbackFileName: `segment-visual-${segment.index + 1}.bin`,
+    fallbackMimeType: segment.mediaType === "photo" ? "image/jpeg" : "video/mp4",
+    fallbackRemoteUrl: segment.currentPlaybackUrl ?? segment.currentPreviewUrl,
+    posterUrl: segment.currentPosterUrl,
+  });
+};
+
 /** If the user opened a generation mode but never produced an asset, export uses the segment's original media. */
 const resolveWorkspaceSegmentExportVideoAction = (
   segment: WorkspaceSegmentEditorDraftSegment,
@@ -180,7 +202,10 @@ export const buildWorkspaceSegmentEditorPayload = async (
           allowStructureChange: options.allowStructureChange,
           persistedSegmentIndexes: options.persistedSegmentIndexes,
         });
-    const resolvedExportAction = resolveWorkspaceSegmentExportVideoAction(segment);
+    const fallbackCustomVisualAsset = isScratchSession
+      ? resolveWorkspaceSegmentFallbackCustomVisualAsset(segment)
+      : null;
+    const resolvedExportAction = fallbackCustomVisualAsset ? "custom" : resolveWorkspaceSegmentExportVideoAction(segment);
     const exportAction =
       isScratchSession && resolvedExportAction === "original" && !hasWorkspaceSegmentPersistedMediaReference(segment)
         ? "ai"
@@ -201,7 +226,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
           : null;
     const customVisualAsset =
       exportAction === "custom"
-        ? segment.customVideo
+        ? segment.customVideo ?? fallbackCustomVisualAsset
         : exportAction === "image_edit"
           ? segment.imageEditAsset
           : exportAction === "ai_photo"
@@ -230,6 +255,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       isPayloadVisualSameAsOriginal
         ? "original"
         : !isTalkingPhotoExport &&
+          !isScratchSession &&
           payloadVideoAction === "custom" &&
           isWorkspaceSegmentCustomVisualSameAsCurrent(segment, customVisualAsset) &&
           isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment)

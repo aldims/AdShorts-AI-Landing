@@ -1723,8 +1723,15 @@ export const isWorkspaceSegmentHoldableRenderedPhotoVisual = (segment: Workspace
       isWorkspaceHoldableRenderedPhotoVisualAsset(segment.originalAsset),
   );
 
+const hasWorkspaceSegmentCurrentDraftVisualReference = (segment: WorkspaceSegmentEditorDraftSegment) => {
+  const currentVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
+  const originalVisualIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(segment);
+
+  return Boolean(currentVisualIdentity && currentVisualIdentity !== originalVisualIdentity);
+};
+
 export const hasWorkspaceSegmentExplicitDraftVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  (segment.videoAction === "custom" && (Boolean(segment.customVideo) || isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segment))) ||
+  (segment.videoAction === "custom" && (Boolean(segment.customVideo) || hasWorkspaceSegmentCurrentDraftVisualReference(segment))) ||
   (segment.videoAction === "ai_photo" && Boolean(segment.aiPhotoAsset)) ||
   (segment.videoAction === "image_edit" && Boolean(segment.imageEditAsset)) ||
   ((segment.videoAction === "ai" || segment.videoAction === "photo_animation" || segment.videoAction === "talking_photo") &&
