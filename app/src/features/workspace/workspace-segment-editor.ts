@@ -3016,6 +3016,17 @@ export const isWorkspaceSegmentEditorDraftSegmentEmpty = (
       !segment.sceneSoundAsset,
   );
 
+export const hasWorkspaceSegmentEditorRenderableScratchScene = (
+  draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
+) =>
+  Boolean(
+    draft?.segments.some(
+      (segment) =>
+        Boolean(normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) ||
+        hasWorkspaceSegmentExplicitDraftVisual(segment),
+    ),
+  );
+
 export const getWorkspaceSegmentEditorVisibleTimelineDisplayRange = (
   segment: WorkspaceSegmentEditorDraftSegment,
   range: { endTime: number; startTime: number },

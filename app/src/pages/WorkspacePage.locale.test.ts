@@ -123,6 +123,7 @@ import {
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   readStoredWorkspaceSegmentEditorBrandSnapshot,
+  hasWorkspaceSegmentEditorRenderableScratchScene,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
@@ -7020,6 +7021,99 @@ describe("WorkspacePage studio locale defaults", () => {
         index: 0,
         text: "Крупный план продукта на светлом столе",
         videoAction: "ai",
+      }),
+    );
+  });
+
+  it("treats scratch visual-only scenes as valid create input", () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        aiPhotoAsset: {
+          assetId: 701,
+          fileName: "visual-scene.jpg",
+          fileSize: 1200,
+          mimeType: "image/jpeg",
+        },
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "ai_photo" as const,
+      })),
+    };
+    const textDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        text: "Сцена с продуктом",
+      })),
+    };
+    const persistedOnlyDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        currentAsset: createMediaAsset(703, { mediaType: "photo" }),
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+      })),
+    };
+
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(scratchDraft)).toBe(false);
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(textDraft)).toBe(true);
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(persistedOnlyDraft)).toBe(false);
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(visualDraft)).toBe(true);
+  });
+
+  it("exports scratch visual-only scene drafts without voice text", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        aiPhotoAsset: {
+          assetId: 702,
+          fileName: "silent-scene.jpg",
+          fileSize: 1600,
+          mimeType: "image/jpeg",
+        },
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "ai_photo" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload).toEqual(
+      expect.objectContaining({
+        allowStructureChange: true,
+        source: "scratch",
+      }),
+    );
+    expect(result.payload.projectId).toBeUndefined();
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 702,
+        index: 0,
+        text: "",
+        videoAction: "custom",
+        voiceType: null,
       }),
     );
   });

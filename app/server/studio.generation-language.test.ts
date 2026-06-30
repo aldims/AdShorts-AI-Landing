@@ -321,6 +321,48 @@ describe("studio generation language resolution", () => {
     );
   });
 
+  it("accepts scratch visual-only scene-editor payloads without text or voice", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        allowStructureChange: true,
+        source: "scratch",
+        segments: [
+          {
+            customVideoAssetId: 910,
+            duration: 5,
+            endTime: 5,
+            index: 0,
+            startTime: 0,
+            subtitleType: "karaoke",
+            text: "",
+            videoAction: "custom",
+            voiceType: "none",
+          },
+        ],
+      },
+      "en",
+      undefined,
+      { globalVoiceEnabled: false },
+    );
+
+    expect(normalized).toEqual(
+      expect.objectContaining({
+        allowStructureChange: true,
+        projectId: null,
+        source: "scratch",
+      }),
+    );
+    expect(normalized?.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 910,
+        subtitleType: "none",
+        text: "",
+        videoAction: "custom",
+        voiceType: "none",
+      }),
+    );
+  });
+
   it("keeps per-scene subtitle overrides in normalized segment editor payload", () => {
     const normalized = normalizeStudioSegmentEditorPayload(
       {

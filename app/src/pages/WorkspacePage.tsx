@@ -233,6 +233,7 @@ import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
+  hasWorkspaceSegmentEditorRenderableScratchScene,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
@@ -929,6 +930,7 @@ export {
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceoverPreviewRange,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
+  hasWorkspaceSegmentEditorRenderableScratchScene,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentEditorScratchDraft,
@@ -1738,11 +1740,8 @@ export function WorkspacePage({
   const [segmentEditorDraft, setSegmentEditorDraft] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const isScratchSegmentEditorDraft = isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft);
   const isScenesCreateMode = createMode === "segment-editor" && isScratchSegmentEditorDraft;
-  const hasScratchSegmentEditorSceneText =
-    isScratchSegmentEditorDraft &&
-    Boolean(
-      segmentEditorDraft?.segments.some((segment) => normalizeWorkspaceSegmentEditorTextForCompare(segment.text).length > 0),
-    );
+  const hasScratchSegmentEditorRenderableScene =
+    isScratchSegmentEditorDraft && hasWorkspaceSegmentEditorRenderableScratchScene(segmentEditorDraft);
   const hasSegmentEditorTextAndVoiceForSubtitles = (draft: WorkspaceSegmentEditorDraftSession | null) => {
     if (!draft) {
       return false;
@@ -17297,7 +17296,16 @@ export function WorkspacePage({
       .filter(Boolean);
 
     if (sceneLines.length === 0) {
-      return "";
+      if (!hasWorkspaceSegmentEditorRenderableScratchScene(draft)) {
+        return "";
+      }
+
+      const visualScenePrompt =
+        language === "en"
+          ? "Create Shorts from the visual scenes in the editor."
+          : "Создай Shorts из визуальных сцен редактора.";
+
+      return [description ? `${contextLabel}: ${description}` : "", visualScenePrompt].filter(Boolean).join("\n");
     }
 
     return [description ? `${contextLabel}: ${description}` : "", ...sceneLines].filter(Boolean).join("\n");
@@ -17407,8 +17415,8 @@ export function WorkspacePage({
       setSegmentEditorVideoError(
         workspaceText(
           locale,
-          "Добавьте текст хотя бы в одну сцену.",
-          "Add text to at least one scene.",
+          "Добавьте текст или визуал хотя бы в одну сцену.",
+          "Add text or visual to at least one scene.",
         ),
       );
       return;
@@ -21222,13 +21230,13 @@ export function WorkspacePage({
     </aside>
   ) : null;
   const hasSegmentEditorCreateShortsInput = isScratchSegmentEditorDraft
-    ? hasScratchSegmentEditorSceneText
+    ? hasScratchSegmentEditorRenderableScene
     : hasSegmentEditorChanges;
   const segmentEditorCreateShortsEmptyLabel = isScratchSegmentEditorDraft
-    ? workspaceText(locale, "Добавьте текст сцены", "Add scene text")
+    ? workspaceText(locale, "Добавьте текст или визуал", "Add text or visual")
     : workspaceText(locale, "Нет изменений", "No changes");
   const segmentEditorCreateShortsEmptyTitle = isScratchSegmentEditorDraft
-    ? workspaceText(locale, "Добавьте текст хотя бы в одну сцену", "Add text to at least one scene")
+    ? workspaceText(locale, "Добавьте текст или визуал хотя бы в одну сцену", "Add text or visual to at least one scene")
     : workspaceText(locale, "Нет изменений для обновления", "No changes to update");
   const isSegmentEditorCreateShortsDisabled =
     !hasSegmentEditorCreateShortsInput ||
