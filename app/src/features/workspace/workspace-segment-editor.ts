@@ -7451,8 +7451,17 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const freshManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
     normalizedFreshSegment.manualDurationSeconds,
   );
+  const liveVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(liveSegment);
   const normalizedFreshDraftSegment = normalizedFreshSegment as Partial<WorkspaceSegmentEditorDraftSegment>;
   const hasUserSelectedLiveDuration = liveSegment.durationSyncModeUserSelected === true;
+  const shouldAdoptFreshProjectVoiceoverSourceDuration =
+    hasFreshProjectVoiceoverTiming &&
+    freshVoiceSourceDuration !== null &&
+    !hasUserSelectedLiveDuration &&
+    (liveVoiceSourceDuration === null ||
+      !areWorkspaceSegmentDurationValuesEqual(liveVoiceSourceDuration, freshVoiceSourceDuration) ||
+      (liveSlotDurationSeconds !== null &&
+        !areWorkspaceSegmentDurationValuesEqual(liveSlotDurationSeconds, freshVoiceSourceDuration)));
   const shouldAdoptFreshVideoSourceDuration =
     liveSegment.durationSyncModeUserSelected !== true &&
     getWorkspaceSegmentSelectedVisualPreviewKind(liveSegment) === "video" &&
@@ -7474,6 +7483,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     ) &&
     freshManualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < liveManualDurationSeconds;
   const shouldPreserveLiveDuration =
+    !shouldAdoptFreshProjectVoiceoverSourceDuration &&
     !shouldAdoptFreshVideoSourceDuration &&
     !shouldAdoptFreshShorterServerSceneDuration &&
     (hasUserSelectedLiveDuration ||
@@ -7482,7 +7492,9 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
         : options?.preserveUnbaselinedManualDuration !== false &&
           (liveDurationMode === "manual" || liveManualDurationSeconds !== null)));
   const nextDurationExtensionSourceDurationSeconds =
-    shouldPreserveLiveDuration
+    shouldAdoptFreshProjectVoiceoverSourceDuration
+      ? null
+      : shouldPreserveLiveDuration
       ? liveDurationExtensionSourceDurationSeconds
       : freshDurationExtensionSourceDurationSeconds !== null && !hasWorkspaceSegmentExplicitDraftVisual(liveSegment)
         ? freshDurationExtensionSourceDurationSeconds
@@ -7533,13 +7545,19 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     currentPosterUrl: currentVisualSegment.currentPosterUrl,
     currentPreviewUrl: currentVisualSegment.currentPreviewUrl,
     currentSourceKind: currentVisualSegment.currentSourceKind,
-    durationMode: shouldPreserveLiveDuration
+    durationMode: shouldAdoptFreshProjectVoiceoverSourceDuration
+      ? "auto"
+      : shouldPreserveLiveDuration
       ? liveDurationMode
       : normalizeWorkspaceSegmentDurationMode(normalizedFreshSegment.durationMode),
-    durationSyncMode: shouldPreserveLiveDuration
+    durationSyncMode: shouldAdoptFreshProjectVoiceoverSourceDuration
+      ? "voiceover"
+      : shouldPreserveLiveDuration
       ? liveSegment.durationSyncMode
       : normalizedFreshDraftSegment.durationSyncMode,
-    durationSyncModeUserSelected: shouldPreserveLiveDuration
+    durationSyncModeUserSelected: shouldAdoptFreshProjectVoiceoverSourceDuration
+      ? false
+      : shouldPreserveLiveDuration
       ? liveSegment.durationSyncModeUserSelected
       : normalizedFreshDraftSegment.durationSyncModeUserSelected,
     durationExtensionSourceDurationSeconds: nextDurationExtensionSourceDurationSeconds,
@@ -7547,7 +7565,9 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
     imageEditPrompt: liveSegment.imageEditPrompt,
     imageEditPromptInitialized: liveSegment.imageEditPromptInitialized,
-    manualDurationSeconds: shouldPreserveLiveDuration
+    manualDurationSeconds: shouldAdoptFreshProjectVoiceoverSourceDuration
+      ? null
+      : shouldPreserveLiveDuration
       ? liveManualDurationSeconds
       : normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.manualDurationSeconds),
     mediaType: liveSegment.visualReset ? liveSegment.mediaType : normalizedFreshSegment.mediaType,
