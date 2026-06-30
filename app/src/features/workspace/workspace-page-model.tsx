@@ -931,6 +931,16 @@ export const hasWorkspaceSegmentVisualRun = (
 export const hasAnyWorkspaceSegmentVisualRun = (runState: WorkspaceSegmentVisualRunState) =>
   Object.keys(runState).length > 0;
 
+export const isWorkspaceSegmentSceneSoundRunBusy = (
+  segmentIndex: number | null | undefined,
+  options: {
+    hasActiveSceneSoundRun?: boolean;
+    sceneSoundRunState: WorkspaceSegmentVisualRunState;
+  },
+) =>
+  typeof segmentIndex === "number" &&
+  (options.hasActiveSceneSoundRun === true || hasWorkspaceSegmentVisualRun(options.sceneSoundRunState, segmentIndex));
+
 export const clearWorkspaceSegmentVisualRunState = (
   runState: WorkspaceSegmentVisualRunState,
   segmentIndex: number,

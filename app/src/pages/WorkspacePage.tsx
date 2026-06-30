@@ -545,6 +545,7 @@ import {
   WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_TAIL_PADDING_SECONDS,
   hasWorkspaceSegmentVisualRun,
   hasAnyWorkspaceSegmentVisualRun,
+  isWorkspaceSegmentSceneSoundRunBusy,
   clearWorkspaceSegmentVisualRunState,
   STUDIO_PROMPT_PANEL_BASE_WIDTH,
   STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH,
@@ -2362,6 +2363,14 @@ export function WorkspacePage({
   const hasActiveSegmentEditorVisualRunForSegment = (segmentIndex: number | null | undefined) =>
     typeof segmentIndex === "number" &&
     Array.from(segmentEditorActiveVisualRunKeysRef.current).some((key) => key.split(":")[1] === String(segmentIndex));
+  const hasActiveSegmentEditorVisualRunForSegmentScope = (
+    scope: WorkspaceSegmentVisualRunScope,
+    segmentIndex: number | null | undefined,
+  ) =>
+    typeof segmentIndex === "number" &&
+    Array.from(segmentEditorActiveVisualRunKeysRef.current).some(
+      (key) => key.startsWith(`${scope}:`) && key.split(":")[1] === String(segmentIndex),
+    );
   const startSegmentVisualRun = (
     runRef: { current: WorkspaceSegmentVisualRunState },
     setRunState: (value: WorkspaceSegmentVisualRunState | ((current: WorkspaceSegmentVisualRunState) => WorkspaceSegmentVisualRunState)) => void,
@@ -6739,6 +6748,11 @@ export function WorkspacePage({
       hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds, segmentIndex));
+  const isWorkspaceSegmentSceneSoundJobBusy = (segmentIndex: number | null | undefined) =>
+    isWorkspaceSegmentSceneSoundRunBusy(segmentIndex, {
+      hasActiveSceneSoundRun: hasActiveSegmentEditorVisualRunForSegmentScope("scene_sound", segmentIndex),
+      sceneSoundRunState: segmentEditorGeneratingSceneSoundRunIds,
+    });
   const getActiveSegmentEditorVisualJobKind = (): WorkspaceSegmentVisualRunScope | null => {
     if (
       isSegmentEditorGeneratingAiPhoto ||
@@ -16489,8 +16503,8 @@ export function WorkspacePage({
       return;
     }
 
-    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+    if (isWorkspaceSegmentSceneSoundJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения генерации звука текущего сегмента.");
       return;
     }
 
@@ -27184,7 +27198,7 @@ export function WorkspacePage({
     !segmentTimelineSoundMenuSegment ||
       !segmentTimelineSoundMenuPromptNormalized ||
       isSegmentTimelineSoundMenuPending ||
-      isWorkspaceSegmentVisualJobBusy(segmentTimelineSoundMenuSegment.index) ||
+      isWorkspaceSegmentSceneSoundJobBusy(segmentTimelineSoundMenuSegment.index) ||
       isSegmentEditorPreparingCustomVideo,
   );
   const canDeleteSegmentTimelineSoundMenu = Boolean(

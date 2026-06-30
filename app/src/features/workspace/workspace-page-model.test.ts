@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
+  isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
@@ -15,6 +16,32 @@ describe("studio generation visibility", () => {
   it("does not show generation progress when no generation is running", () => {
     expect(isStudioGenerationUserFacing(false, "studio")).toBe(false);
     expect(isStudioGenerationUserFacing(true, "idle")).toBe(false);
+  });
+});
+
+describe("segment scene sound generation availability", () => {
+  it("keeps scene sound available when only another visual generation is active", () => {
+    expect(
+      isWorkspaceSegmentSceneSoundRunBusy(1, {
+        hasActiveSceneSoundRun: false,
+        sceneSoundRunState: {},
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks duplicate scene sound generation for the same segment", () => {
+    expect(
+      isWorkspaceSegmentSceneSoundRunBusy(1, {
+        hasActiveSceneSoundRun: false,
+        sceneSoundRunState: { 1: 3 },
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentSceneSoundRunBusy(1, {
+        hasActiveSceneSoundRun: true,
+        sceneSoundRunState: {},
+      }),
+    ).toBe(true);
   });
 });
 
