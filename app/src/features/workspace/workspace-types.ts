@@ -17,14 +17,22 @@ export type WorkspaceSegmentVoiceTimelineState = {
   isEdited: boolean;
 };
 
-export type WorkspaceProjectYouTubePublication = {
+export type WorkspacePublishPlatform = "instagram" | "youtube";
+
+export type WorkspaceProjectPublication = {
   channelName: string | null;
+  channelPk: number | null;
   link: string | null;
+  platform?: WorkspacePublishPlatform;
+  providerMediaId?: string | null;
   publishedAt: string | null;
   scheduledAt: string | null;
   state: string | null;
   youtubeVideoId: string | null;
 };
+
+export type WorkspaceProjectYouTubePublication = WorkspaceProjectPublication;
+export type WorkspaceProjectInstagramPublication = WorkspaceProjectPublication;
 
 export type WorkspaceProject = {
   adId: number | null;
@@ -46,6 +54,7 @@ export type WorkspaceProject = {
   prefillSettings?: ExamplePrefillStudioSettings | null;
   videoFallbackUrl: string | null;
   videoUrl: string | null;
+  instagramPublication: WorkspaceProjectInstagramPublication | null;
   youtubePublication: WorkspaceProjectYouTubePublication | null;
 };
 

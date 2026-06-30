@@ -11,6 +11,7 @@ import {
   type WorkspacePublishBootstrapPayload,
   type WorkspacePublishChannel,
 } from "./workspace-page-model";
+import type { WorkspacePublishPlatform } from "./workspace-types";
 
 type WorkspacePublishCalendarDay = {
   date: Date;
@@ -49,7 +50,8 @@ type WorkspacePublishModalProps = {
   onDisconnectChannel: () => void | Promise<void>;
   onHashtagsChange: Dispatch<SetStateAction<string>>;
   onModeChange: (nextMode: "now" | "schedule") => void;
-  onStartYouTubeConnect: () => void | Promise<void>;
+  onPlatformChange: (nextPlatform: WorkspacePublishPlatform) => void;
+  onStartPlatformConnect: () => void | Promise<void>;
   onSubmit: () => void | Promise<void>;
   onTimeSelect: (nextTime: string) => void;
   onTitleChange: Dispatch<SetStateAction<string>>;
@@ -57,6 +59,8 @@ type WorkspacePublishModalProps = {
   plannerPopoverRef: RefObject<HTMLDivElement | null>;
   plannerStyle: CSSProperties | null;
   plannerTriggerRef: RefObject<HTMLButtonElement | null>;
+  platform: WorkspacePublishPlatform;
+  platforms: WorkspacePublishPlatform[];
   primaryActionLabel: string;
   publishError: string | null;
   scheduleSummary: string;
@@ -99,7 +103,8 @@ export function WorkspacePublishModal({
   onDisconnectChannel,
   onHashtagsChange,
   onModeChange,
-  onStartYouTubeConnect,
+  onPlatformChange,
+  onStartPlatformConnect,
   onSubmit,
   onTimeSelect,
   onTitleChange,
@@ -107,6 +112,8 @@ export function WorkspacePublishModal({
   plannerPopoverRef,
   plannerStyle,
   plannerTriggerRef,
+  platform,
+  platforms,
   primaryActionLabel,
   publishError,
   scheduleSummary,
@@ -128,6 +135,31 @@ export function WorkspacePublishModal({
     return null;
   }
 
+  const platformLabel = platform === "instagram" ? "Instagram" : "YouTube";
+  const platformProductLabel = platform === "instagram" ? "Instagram Reels" : "YouTube Shorts";
+  const channelSectionLabel = platform === "instagram"
+    ? workspaceText(locale, "Аккаунт", "Account")
+    : workspaceText(locale, "Канал", "Channel");
+  const platformOptions: Array<{
+    id: WorkspacePublishPlatform;
+    eyebrow: string;
+    title: string;
+    description: string;
+  }> = [
+    {
+      id: "youtube" as const,
+      eyebrow: "YouTube",
+      title: "YouTube Shorts",
+      description: workspaceText(locale, "Публикация в подключённый YouTube-канал.", "Publish to a connected YouTube channel."),
+    },
+    {
+      id: "instagram" as const,
+      eyebrow: "Instagram",
+      title: "Instagram Reels",
+      description: workspaceText(locale, "Публикация в подключённый professional аккаунт.", "Publish to a connected professional account."),
+    },
+  ].filter((option) => platforms.includes(option.id));
+
   return (
     <div className="studio-publish-modal" role="dialog" aria-modal="true" aria-labelledby="studio-publish-modal-title">
       <button className="studio-publish-modal__backdrop route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={onClose} />
@@ -138,7 +170,9 @@ export function WorkspacePublishModal({
 
         <div className="studio-publish-modal__header">
           <div className="studio-publish-modal__header-copy">
-            <p className="studio-publish-modal__eyebrow">{workspaceText(locale, "Публикация в YouTube", "YouTube publishing")}</p>
+            <p className="studio-publish-modal__eyebrow">
+              {workspaceText(locale, `Публикация в ${platformLabel}`, `${platformLabel} publishing`)}
+            </p>
             <strong id="studio-publish-modal-title">{targetTitle || workspaceText(locale, "Готово к публикации", "Ready to publish")}</strong>
           </div>
         </div>
@@ -172,7 +206,7 @@ export function WorkspacePublishModal({
                       <p>{successNotice.text}</p>
                       {successNotice.link ? (
                         <a href={successNotice.link} target="_blank" rel="noopener noreferrer">
-                          {workspaceText(locale, "Открыть на YouTube", "Open on YouTube")}
+                          {workspaceText(locale, `Открыть в ${platformLabel}`, `Open on ${platformLabel}`)}
                         </a>
                       ) : null}
                     </div>
@@ -181,7 +215,36 @@ export function WorkspacePublishModal({
                 <section className="studio-publish-modal__section">
                   <div className="studio-publish-modal__section-head">
                     <div>
-                      <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Канал", "Channel")}</span>
+                      <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Платформа", "Platform")}</span>
+                    </div>
+                  </div>
+
+                  <div className="studio-publish-modal__mode-grid studio-publish-modal__platform-grid" role="radiogroup" aria-label={workspaceText(locale, "Платформа публикации", "Publishing platform")}>
+                    {platformOptions.map((option) => {
+                      const isActive = option.id === platform;
+                      return (
+                        <button
+                          key={option.id}
+                          className={`studio-publish-modal__mode-card${isActive ? " is-active" : ""}`}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          disabled={isInFlight || isDisconnectingChannel || isBootstrapLoading}
+                          onClick={() => onPlatformChange(option.id)}
+                        >
+                          <span>{option.eyebrow}</span>
+                          <strong>{option.title}</strong>
+                          <p>{option.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="studio-publish-modal__section">
+                  <div className="studio-publish-modal__section-head">
+                    <div>
+                      <span className="studio-publish-modal__section-kicker">{channelSectionLabel}</span>
                     </div>
                     <div className="studio-publish-modal__section-tools">
                       {selectedChannel ? (
@@ -189,8 +252,8 @@ export function WorkspacePublishModal({
                           className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
                           type="button"
                           disabled={isDisconnectingChannel || isInFlight}
-                          aria-label={workspaceText(locale, "Отключить канал", "Disconnect channel")}
-                          title={workspaceText(locale, "Отключить канал", "Disconnect channel")}
+                          aria-label={platform === "instagram" ? workspaceText(locale, "Отключить аккаунт", "Disconnect account") : workspaceText(locale, "Отключить канал", "Disconnect channel")}
+                          title={platform === "instagram" ? workspaceText(locale, "Отключить аккаунт", "Disconnect account") : workspaceText(locale, "Отключить канал", "Disconnect channel")}
                           onClick={() => void onDisconnectChannel()}
                         >
                           {isDisconnectingChannel ? "…" : "−"}
@@ -201,9 +264,9 @@ export function WorkspacePublishModal({
                           className="studio-publish-modal__utility-btn studio-publish-modal__utility-btn--icon"
                           type="button"
                           disabled={isDisconnectingChannel || isInFlight}
-                          aria-label={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
-                          title={workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
-                          onClick={() => void onStartYouTubeConnect()}
+                          aria-label={platform === "instagram" ? workspaceText(locale, "Подключить ещё аккаунт", "Connect another account") : workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
+                          title={platform === "instagram" ? workspaceText(locale, "Подключить ещё аккаунт", "Connect another account") : workspaceText(locale, "Подключить ещё канал", "Connect another channel")}
+                          onClick={() => void onStartPlatformConnect()}
                         >
                           +
                         </button>
@@ -212,7 +275,7 @@ export function WorkspacePublishModal({
                   </div>
 
                   {channels.length ? (
-                    <div className="studio-publish-modal__channel-grid" role="radiogroup" aria-label={workspaceText(locale, "Канал YouTube", "YouTube channel")}>
+                    <div className="studio-publish-modal__channel-grid" role="radiogroup" aria-label={platform === "instagram" ? workspaceText(locale, "Аккаунт Instagram", "Instagram account") : workspaceText(locale, "Канал YouTube", "YouTube channel")}>
                       {channels.map((channel) => {
                         const isSelected = channel.pk === selectedChannelPk;
 
@@ -241,7 +304,7 @@ export function WorkspacePublishModal({
                       <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                       <div>
                         <strong>{workspaceText(locale, "Синхронизируем каналы", "Syncing channels")}</strong>
-                        <p>{workspaceText(locale, "Окно уже готово, список подключённых YouTube-каналов подтягивается фоном.", "The dialog is ready while connected YouTube channels load in the background.")}</p>
+                        <p>{workspaceText(locale, `Окно уже готово, список подключённых ${platformProductLabel} подтягивается фоном.`, `The dialog is ready while connected ${platformProductLabel} accounts load in the background.`)}</p>
                       </div>
                     </div>
                   ) : bootstrapError ? (
@@ -260,11 +323,15 @@ export function WorkspacePublishModal({
                         </svg>
                       </div>
                       <div className="studio-publish-modal__empty-copy">
-                        <strong>{workspaceText(locale, "Канал ещё не подключён", "No channel connected yet")}</strong>
-                        <p>{workspaceText(locale, "Подключите YouTube-канал и публикуйте Shorts прямо из студии.", "Connect a YouTube channel and publish Shorts directly from the studio.")}</p>
+                        <strong>{platform === "instagram" ? workspaceText(locale, "Аккаунт ещё не подключён", "No account connected yet") : workspaceText(locale, "Канал ещё не подключён", "No channel connected yet")}</strong>
+                        <p>
+                          {platform === "instagram"
+                            ? workspaceText(locale, "Подключите Instagram professional аккаунт и публикуйте Reels прямо из студии.", "Connect an Instagram professional account and publish Reels directly from the studio.")
+                            : workspaceText(locale, "Подключите YouTube-канал и публикуйте Shorts прямо из студии.", "Connect a YouTube channel and publish Shorts directly from the studio.")}
+                        </p>
                       </div>
-                      <button className="studio-publish-modal__primary-btn" type="button" onClick={() => void onStartYouTubeConnect()}>
-                        {workspaceText(locale, "Подключить YouTube", "Connect YouTube")}
+                      <button className="studio-publish-modal__primary-btn" type="button" onClick={() => void onStartPlatformConnect()}>
+                        {platform === "instagram" ? workspaceText(locale, "Подключить Instagram", "Connect Instagram") : workspaceText(locale, "Подключить YouTube", "Connect YouTube")}
                       </button>
                     </div>
                   )}
@@ -336,7 +403,7 @@ export function WorkspacePublishModal({
                     >
                       <span>{workspaceText(locale, "Сразу", "Now")}</span>
                       <strong>{workspaceText(locale, "Опубликовать сейчас", "Publish now")}</strong>
-                      <p>{workspaceText(locale, "Shorts уйдёт в канал сразу после подтверждения.", "The Shorts will go to the channel right after confirmation.")}</p>
+                      <p>{workspaceText(locale, `${platformProductLabel} уйдёт сразу после подтверждения.`, `${platformProductLabel} will publish right after confirmation.`)}</p>
                     </button>
                     <button
                       className={`studio-publish-modal__mode-card${mode === "schedule" ? " is-active" : ""}`}

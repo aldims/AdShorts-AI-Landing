@@ -94,6 +94,13 @@ export type WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions = {
   rejectedPlayTrackCount: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions = {
+  allowPlayBeforeReady: boolean;
+  hasFailedTrack: boolean;
+  hasMediaError: boolean;
+  isReady: boolean;
+};
+
 export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
   sourceKind: "isolated" | "timeline";
   sourceStartTime: number;
@@ -1163,6 +1170,22 @@ export const isWorkspaceSegmentEditorFullPreviewAudioReadyState = (
   Number.isFinite(readyState) &&
   Number.isFinite(minimumReadyState) &&
   readyState >= Math.max(0, minimumReadyState);
+
+export const shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation = ({
+  allowPlayBeforeReady,
+  hasFailedTrack,
+  hasMediaError,
+  isReady,
+}: WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions) =>
+  hasFailedTrack || hasMediaError || (!allowPlayBeforeReady && !isReady);
+
+export const shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio = ({
+  allowPlayBeforeReady,
+  hasFailedTrack,
+  hasMediaError,
+  isReady,
+}: WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions) =>
+  !hasFailedTrack && !hasMediaError && (allowPlayBeforeReady || isReady);
 
 export const resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult = ({
   activeTrackCount,

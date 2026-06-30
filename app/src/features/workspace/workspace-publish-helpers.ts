@@ -1,5 +1,5 @@
 import type { Locale } from "../../lib/i18n";
-import type { WorkspaceProjectYouTubePublication } from "./workspace-types";
+import type { WorkspaceProjectPublication } from "./workspace-types";
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 
@@ -157,8 +157,8 @@ export const normalizePublishDateTimeInput = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 };
 
-export const getYouTubePublicationMetaLabel = (
-  publication: WorkspaceProjectYouTubePublication | null | undefined,
+export const getPublicationMetaLabel = (
+  publication: WorkspaceProjectPublication | null | undefined,
   locale: Locale = "ru",
 ) => {
   if (!publication) return "";
@@ -184,6 +184,8 @@ export const getYouTubePublicationMetaLabel = (
     : "";
 };
 
+export const getYouTubePublicationMetaLabel = getPublicationMetaLabel;
+
 export const normalizePublishJobStatus = (value: string | null | undefined) =>
   String(value ?? "")
     .trim()
@@ -198,17 +200,19 @@ export const isPublishJobSuccessStatus = (status: string) =>
 export const isPublishJobFailureStatus = (status: string) =>
   ["canceled", "cancelled", "error", "errored", "failed", "timeout"].includes(status);
 
-export const hasConfirmedYouTubePublication = (publication: WorkspaceProjectYouTubePublication | null | undefined) => {
+export const hasConfirmedPublication = (publication: WorkspaceProjectPublication | null | undefined) => {
   if (!publication) return false;
 
   const state = normalizePublishJobStatus(publication.state);
   if (state === "published") {
-    return Boolean(publication.link || publication.youtubeVideoId || publication.publishedAt);
+    return Boolean(publication.link || publication.providerMediaId || publication.youtubeVideoId || publication.publishedAt);
   }
 
   if (state === "scheduled") {
-    return Boolean(publication.scheduledAt || publication.link || publication.youtubeVideoId);
+    return Boolean(publication.scheduledAt || publication.link || publication.providerMediaId || publication.youtubeVideoId);
   }
 
-  return Boolean(publication.link || publication.youtubeVideoId || publication.publishedAt || publication.scheduledAt);
+  return Boolean(publication.link || publication.providerMediaId || publication.youtubeVideoId || publication.publishedAt || publication.scheduledAt);
 };
+
+export const hasConfirmedYouTubePublication = hasConfirmedPublication;

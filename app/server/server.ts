@@ -29,11 +29,15 @@ import {
   updateWorkspaceContentPlanIdeaUsedState,
 } from "./content-plans.js";
 import {
+  disconnectWorkspaceInstagramChannel,
   disconnectWorkspaceYoutubeChannel,
+  getWorkspaceInstagramConnectUrl,
   getWorkspacePublishBootstrap,
   getWorkspacePublishJobStatus,
   getWorkspaceYoutubeConnectUrl,
   isWorkspacePublishSuccessStatus,
+  normalizeWorkspacePublishPlatform,
+  startWorkspaceInstagramPublish,
   startWorkspaceYoutubePublish,
 } from "./publish.js";
 import {
@@ -340,6 +344,7 @@ const compactJsonParser = express.json({ limit: "128kb" });
 const largeJsonParser = express.json({ limit: "90mb" });
 const largeJsonPathPrefixes = [
   "/api/studio/",
+  "/api/workspace/instagram",
   "/api/workspace/publish",
   "/api/workspace/youtube",
 ];
@@ -3532,7 +3537,8 @@ app.post("/api/workspace/publish/bootstrap", async (req, res) => {
   }
 
   try {
-    const data = await getWorkspacePublishBootstrap(session.user, videoProjectId);
+    const platform = normalizeWorkspacePublishPlatform(req.body?.platform);
+    const data = await getWorkspacePublishBootstrap(session.user, videoProjectId, platform);
     res.json({ data });
   } catch (error) {
     console.error("[workspace] Failed to bootstrap publish modal", error);
@@ -3561,6 +3567,29 @@ app.post("/api/workspace/youtube/connect-url", async (req, res) => {
     console.error("[workspace] Failed to build YouTube connect url", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to build YouTube connect url.",
+    });
+  }
+});
+
+app.post("/api/workspace/instagram/connect-url", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const url = await getWorkspaceInstagramConnectUrl(session.user, {
+      videoProjectId: Number(req.body?.videoProjectId ?? 0) || null,
+    });
+    res.json({ data: { url } });
+  } catch (error) {
+    console.error("[workspace] Failed to build Instagram connect url", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to build Instagram connect url.",
     });
   }
 });
@@ -3598,6 +3627,43 @@ app.post("/api/workspace/youtube/disconnect", async (req, res) => {
     console.error("[workspace] Failed to disconnect YouTube channel", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to disconnect YouTube channel.",
+    });
+  }
+});
+
+app.post("/api/workspace/instagram/disconnect", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const videoProjectId = Number(req.body?.videoProjectId ?? 0);
+  const channelPk = Number(req.body?.channelPk ?? 0);
+
+  if (!Number.isFinite(videoProjectId) || videoProjectId <= 0) {
+    res.status(400).json({ error: "Video project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(channelPk) || channelPk <= 0) {
+    res.status(400).json({ error: "Instagram account is required." });
+    return;
+  }
+
+  try {
+    const data = await disconnectWorkspaceInstagramChannel(session.user, {
+      channelPk,
+      videoProjectId,
+    });
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to disconnect Instagram account", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to disconnect Instagram account.",
     });
   }
 });
@@ -3648,6 +3714,56 @@ app.post("/api/workspace/publish/youtube", async (req, res) => {
     console.error("[workspace] Failed to queue YouTube publish", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to queue YouTube publish.",
+    });
+  }
+});
+
+app.post("/api/workspace/publish/instagram", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const videoProjectId = Number(req.body?.videoProjectId ?? 0);
+  const channelPk = Number(req.body?.channelPk ?? 0);
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const description = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+  const hashtags = typeof req.body?.hashtags === "string" ? req.body.hashtags.trim() : "";
+  const publishAt = typeof req.body?.publishAt === "string" ? req.body.publishAt.trim() : "";
+
+  if (!Number.isFinite(videoProjectId) || videoProjectId <= 0) {
+    res.status(400).json({ error: "Video project id is required." });
+    return;
+  }
+
+  if (!Number.isFinite(channelPk) || channelPk <= 0) {
+    res.status(400).json({ error: "Instagram account is required." });
+    return;
+  }
+
+  if (!title) {
+    res.status(400).json({ error: "Publish title is required." });
+    return;
+  }
+
+  try {
+    const data = await startWorkspaceInstagramPublish(session.user, {
+      channelPk,
+      description,
+      hashtags,
+      publishAt: publishAt || null,
+      title,
+      videoProjectId,
+    });
+    res.json({ data });
+  } catch (error) {
+    console.error("[workspace] Failed to queue Instagram publish", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to queue Instagram publish.",
     });
   }
 });

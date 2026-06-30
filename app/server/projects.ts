@@ -75,6 +75,14 @@ type AdsflowAdminVideoItem = {
   status?: string | null;
   user_id?: number;
   version_index?: number | string | null;
+  instagram_channel_pk?: number | string | null;
+  instagram_channel_name?: string | null;
+  instagram_media_id?: string | null;
+  instagram_publish_state?: string | null;
+  instagram_published_at?: string | null;
+  instagram_published_link?: string | null;
+  instagram_scheduled_at?: string | null;
+  youtube_channel_pk?: number | string | null;
   youtube_channel_name?: string | null;
   youtube_publish_state?: string | null;
   youtube_published_at?: string | null;
@@ -89,11 +97,26 @@ type AdsflowAdminVideosResponse = {
 
 export type WorkspaceProjectYouTubePublication = {
   channelName: string | null;
+  channelPk: number | null;
   link: string | null;
+  platform?: "instagram" | "youtube";
+  providerMediaId?: string | null;
   publishedAt: string | null;
   scheduledAt: string | null;
   state: string | null;
   youtubeVideoId: string | null;
+};
+
+export type WorkspaceProjectInstagramPublication = {
+  channelName: string | null;
+  channelPk: number | null;
+  link: string | null;
+  platform: "instagram";
+  providerMediaId: string | null;
+  publishedAt: string | null;
+  scheduledAt: string | null;
+  state: string | null;
+  youtubeVideoId: null;
 };
 
 export type WorkspaceProject = {
@@ -116,6 +139,7 @@ export type WorkspaceProject = {
   prefillSettings: ExamplePrefillStudioSettings | null;
   videoFallbackUrl: string | null;
   videoUrl: string | null;
+  instagramPublication: WorkspaceProjectInstagramPublication | null;
   youtubePublication: WorkspaceProjectYouTubePublication | null;
 };
 
@@ -162,6 +186,7 @@ const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProject => (
   ...project,
   finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
   hashtags: [...project.hashtags],
+  instagramPublication: project.instagramPublication ? { ...project.instagramPublication } : null,
   youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 
@@ -527,11 +552,33 @@ const buildProjectFromAdminVideo = (
     normalizeText(item.youtube_channel_name)
       ? {
           channelName: normalizeText(item.youtube_channel_name) || null,
+          channelPk: normalizePositiveInteger(item.youtube_channel_pk),
           link: normalizeText(item.youtube_published_link) || null,
+          platform: "youtube" as const,
+          providerMediaId: normalizeText(item.youtube_video_id) || null,
           publishedAt: toIsoString(item.youtube_published_at),
           scheduledAt: toIsoString(item.youtube_scheduled_at),
           state: normalizeText(item.youtube_publish_state).toLowerCase() || null,
           youtubeVideoId: normalizeText(item.youtube_video_id) || null,
+        }
+      : null;
+  const instagramPublication =
+    normalizeText(item.instagram_publish_state) ||
+    normalizeText(item.instagram_published_link) ||
+    normalizeText(item.instagram_media_id) ||
+    normalizeText(item.instagram_published_at) ||
+    normalizeText(item.instagram_scheduled_at) ||
+    normalizeText(item.instagram_channel_name)
+      ? {
+          channelName: normalizeText(item.instagram_channel_name) || null,
+          channelPk: normalizePositiveInteger(item.instagram_channel_pk),
+          link: normalizeText(item.instagram_published_link) || null,
+          platform: "instagram" as const,
+          providerMediaId: normalizeText(item.instagram_media_id) || null,
+          publishedAt: toIsoString(item.instagram_published_at),
+          scheduledAt: toIsoString(item.instagram_scheduled_at),
+          state: normalizeText(item.instagram_publish_state).toLowerCase() || null,
+          youtubeVideoId: null,
         }
       : null;
 
@@ -544,6 +591,7 @@ const buildProjectFromAdminVideo = (
     generatedAt: createdAt,
     hashtags: metadata.hashtags,
     id: `project:${adId}`,
+    instagramPublication,
     jobId: historyJobId || null,
     prefillSettings: historyEntry?.prefillSettings ?? null,
     prompt: metadata.prompt,
@@ -616,6 +664,7 @@ const buildProjectFromLatestGeneration = (
     generatedAt,
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,
+    instagramPublication: null,
     jobId,
     prefillSettings: historyEntry?.prefillSettings ?? null,
     prompt: metadata.prompt,
@@ -682,6 +731,7 @@ const buildProjectFromHistoryEntry = (item: WorkspaceGenerationHistoryEntry): Wo
     generatedAt,
     hashtags: metadata.hashtags,
     id: `task:${jobId}`,
+    instagramPublication: null,
     jobId,
     prefillSettings: item.prefillSettings ?? null,
     prompt: metadata.prompt,

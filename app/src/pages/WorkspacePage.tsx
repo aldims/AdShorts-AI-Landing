@@ -662,8 +662,8 @@ import {
   formatDateTimeLocalValue,
   formatProjectDate,
   formatPublishTimeValue,
-  getYouTubePublicationMetaLabel,
-  hasConfirmedYouTubePublication,
+  getPublicationMetaLabel,
+  hasConfirmedPublication,
   isPublishJobFailureStatus,
   isPublishJobProgressStatus,
   isPublishJobSuccessStatus,
@@ -776,7 +776,8 @@ import type {
   StudioVideoMode,
   StudioVoiceOption,
   WorkspaceProject,
-  WorkspaceProjectYouTubePublication,
+  WorkspaceProjectPublication,
+  WorkspacePublishPlatform,
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorSession,
@@ -846,7 +847,9 @@ import {
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
+  shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
@@ -1410,6 +1413,16 @@ const createEmptyMediaLibraryVirtualLayout = (): MediaLibraryVirtualLayout => ({
   startIndex: 0,
   totalHeight: 0,
 });
+
+const getProjectPublicationForPlatform = (
+  project: Pick<WorkspaceProject, "instagramPublication" | "youtubePublication"> | null | undefined,
+  platform: WorkspacePublishPlatform,
+): WorkspaceProjectPublication | null =>
+  platform === "instagram" ? project?.instagramPublication ?? null : project?.youtubePublication ?? null;
+
+const getPreferredProjectPublication = (
+  project: Pick<WorkspaceProject, "instagramPublication" | "youtubePublication"> | null | undefined,
+): WorkspaceProjectPublication | null => project?.instagramPublication ?? project?.youtubePublication ?? null;
 
 export function WorkspacePage({
   defaultTab,
@@ -1985,6 +1998,7 @@ export function WorkspacePage({
   const [previewModalPlaybackError, setPreviewModalPlaybackError] = useState<string | null>(null);
   const [previewModalUseFallbackSource, setPreviewModalUseFallbackSource] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishPlatform, setPublishPlatform] = useState<WorkspacePublishPlatform>("youtube");
   const [publishBootstrap, setPublishBootstrap] = useState<WorkspacePublishBootstrapPayload | null>(null);
   const [publishTargetVideoProjectId, setPublishTargetVideoProjectId] = useState<number | null>(null);
   const [publishTargetTitle, setPublishTargetTitle] = useState<string>("");
@@ -3293,6 +3307,7 @@ export function WorkspacePage({
     setPublishBootstrapError(null);
     setPublishError(null);
     setPublishJobStatus(null);
+    setPublishPlatform("youtube");
     setPublishCalendarMonth(startOfPublishMonth(new Date()));
   };
 
@@ -3650,6 +3665,7 @@ export function WorkspacePage({
     setIsPublishModalOpen(false);
     setPublishBootstrap(null);
     setPublishJobStatus(null);
+    setPublishPlatform("youtube");
     setPublishBootstrapError(null);
     setPublishError(null);
     setPublishTargetVideoProjectId(null);
@@ -5194,14 +5210,20 @@ export function WorkspacePage({
       ? previewModalFallbackVideoUrl
       : previewModalPrimaryVideoUrl;
   const previewModalPublication = isProjectPreviewModalOpen
-    ? projectPreviewModal?.youtubePublication ?? null
+    ? getPreferredProjectPublication(projectPreviewModal)
     : generatedVideo?.adId
-      ? projects.find((project) => project.adId === generatedVideo.adId)?.youtubePublication ?? null
+      ? getPreferredProjectPublication(projects.find((project) => project.adId === generatedVideo.adId) ?? null)
       : null;
+  const previewModalPublicationPlatform: WorkspacePublishPlatform =
+    previewModalPublication?.platform === "instagram" ? "instagram" : "youtube";
+  const previewModalPublicationProduct =
+    previewModalPublicationPlatform === "instagram" ? "Reels" : "Shorts";
+  const previewModalPublicationTarget =
+    previewModalPublicationPlatform === "instagram" ? "Instagram" : "YouTube";
   const previewModalUpdatedAt = isProjectPreviewModalOpen ? projectPreviewModal?.updatedAt ?? "" : "";
   const previewModalStatusLabel =
     previewModalPublication?.state === "published"
-      ? workspaceText(locale, "Shorts опубликован", "Shorts published")
+      ? workspaceText(locale, `${previewModalPublicationProduct} опубликован`, `${previewModalPublicationProduct} published`)
       : previewModalPublication?.state === "scheduled"
         ? workspaceText(locale, "Публикация запланирована", "Publication scheduled")
         : workspaceText(locale, "Готово к публикации", "Ready to publish");
@@ -5212,10 +5234,10 @@ export function WorkspacePage({
         ? "scheduled"
         : "ready";
   const previewModalStatusMeta =
-    getYouTubePublicationMetaLabel(previewModalPublication, locale) ||
+    getPublicationMetaLabel(previewModalPublication, locale) ||
     (isProjectPreviewModalOpen
       ? workspaceText(locale, `Обновлено ${formatProjectDate(previewModalUpdatedAt, locale)}`, `Updated ${formatProjectDate(previewModalUpdatedAt, locale)}`)
-      : workspaceText(locale, "Готово к отправке в YouTube", "Ready to send to YouTube"));
+      : workspaceText(locale, `Готово к отправке в ${previewModalPublicationTarget}`, `Ready to send to ${previewModalPublicationTarget}`));
   const previewModalStatusLink = previewModalPublication?.link ?? null;
   const previewModalPublishTargetAdId = isProjectPreviewModalOpen ? projectPreviewModal?.adId ?? null : generatedVideo?.adId ?? null;
   const previewModalPlaybackToken = isProjectPreviewModalOpen
@@ -17665,14 +17687,17 @@ export function WorkspacePage({
 
   const applyPublicationToLocalState = (
     videoProjectId: number,
-    publication: WorkspaceProjectYouTubePublication | null,
+    publication: WorkspaceProjectPublication | null,
+    platform: WorkspacePublishPlatform,
   ) => {
     setProjects((currentProjects) =>
       currentProjects.map((project) =>
         project.adId === videoProjectId
           ? {
               ...project,
-              youtubePublication: publication,
+              ...(platform === "instagram"
+                ? { instagramPublication: publication }
+                : { youtubePublication: publication }),
             }
           : project,
       ),
@@ -17682,7 +17707,9 @@ export function WorkspacePage({
       currentProject && currentProject.adId === videoProjectId
         ? {
             ...currentProject,
-            youtubePublication: publication,
+            ...(platform === "instagram"
+              ? { instagramPublication: publication }
+              : { youtubePublication: publication }),
           }
         : currentProject,
     );
@@ -17938,6 +17965,7 @@ export function WorkspacePage({
   const buildOptimisticPublishBootstrap = (
     videoProjectId: number,
     fallbackTitle: string,
+    platform: WorkspacePublishPlatform,
   ): WorkspacePublishBootstrapPayload => {
     const matchingProject = projects.find((project) => project.adId === videoProjectId) ?? null;
     const matchingGeneration = generatedVideo?.adId === videoProjectId ? generatedVideo : null;
@@ -17948,9 +17976,10 @@ export function WorkspacePage({
           ? matchingGeneration.hashtags
           : [];
     const optimisticPublication =
-      matchingProject?.youtubePublication ??
-      (previewModalPublishTargetAdId === videoProjectId ? previewModalPublication : null) ??
-      null;
+      getProjectPublicationForPlatform(matchingProject, platform) ??
+      (previewModalPublishTargetAdId === videoProjectId && previewModalPublication?.platform === platform
+        ? previewModalPublication
+        : null);
 
     return {
       channels: [],
@@ -17960,20 +17989,27 @@ export function WorkspacePage({
         publishAt: optimisticPublication?.scheduledAt ?? null,
         title: matchingProject?.title ?? matchingGeneration?.title ?? fallbackTitle,
       },
+      platform,
       publication: optimisticPublication,
       selectedChannelPk: null,
       videoProjectId,
     };
   };
 
-  const openPublishModalForVideoProject = async (videoProjectId: number, title: string, initialError?: string | null) => {
+  const openPublishModalForVideoProject = async (
+    videoProjectId: number,
+    title: string,
+    initialError?: string | null,
+    initialPlatform: WorkspacePublishPlatform = "youtube",
+  ) => {
     publishRunRef.current += 1;
     const runId = publishRunRef.current;
-    const optimisticBootstrap = buildOptimisticPublishBootstrap(videoProjectId, title);
+    const optimisticBootstrap = buildOptimisticPublishBootstrap(videoProjectId, title, initialPlatform);
     const optimisticPublishMode = optimisticBootstrap.defaults.publishAt ? "schedule" : "now";
     const optimisticScheduledAtInput = formatDateTimeLocalValue(optimisticBootstrap.defaults.publishAt);
 
     setIsPublishModalOpen(true);
+    setPublishPlatform(initialPlatform);
     setIsPublishBootstrapLoading(true);
     setPublishBootstrap(optimisticBootstrap);
     setPublishJobStatus(
@@ -17981,6 +18017,7 @@ export function WorkspacePage({
         ? {
             jobId: "",
             publication: optimisticBootstrap.publication,
+            platform: initialPlatform,
             status: optimisticBootstrap.publication.state ?? "done",
             videoProjectId: optimisticBootstrap.videoProjectId,
           }
@@ -18007,6 +18044,7 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          platform: initialPlatform,
           videoProjectId,
         }),
       });
@@ -18022,6 +18060,7 @@ export function WorkspacePage({
 
       const currentFormSnapshot = publishFormSnapshotRef.current;
       const nextPublishMode = payload.data.defaults.publishAt ? "schedule" : "now";
+      setPublishPlatform(payload.data.platform);
       setPublishBootstrap(payload.data);
       setSelectedPublishChannelPk(payload.data.selectedChannelPk);
       const initialScheduledAtInput = formatDateTimeLocalValue(payload.data.defaults.publishAt);
@@ -18048,12 +18087,13 @@ export function WorkspacePage({
           ? {
               jobId: "",
               publication: payload.data.publication,
+              platform: payload.data.platform,
               status: payload.data.publication.state ?? "done",
               videoProjectId: payload.data.videoProjectId,
             }
           : null,
       );
-      applyPublicationToLocalState(payload.data.videoProjectId, payload.data.publication);
+      applyPublicationToLocalState(payload.data.videoProjectId, payload.data.publication, payload.data.platform);
     } catch (error) {
       if (publishRunRef.current !== runId) {
         return;
@@ -18084,18 +18124,21 @@ export function WorkspacePage({
 
         const publishData = payload.data;
         const latestStatus = normalizePublishJobStatus(publishData.status);
+        const statusPlatform = publishData.platform ?? publishPlatform;
         setPublishJobStatus(publishData);
 
         if (publishData.publication && publishData.videoProjectId) {
           setPublishBootstrap((currentBootstrap) =>
-            currentBootstrap && currentBootstrap.videoProjectId === publishData.videoProjectId
+            currentBootstrap &&
+            currentBootstrap.videoProjectId === publishData.videoProjectId &&
+            currentBootstrap.platform === statusPlatform
               ? {
                   ...currentBootstrap,
                   publication: publishData.publication,
                 }
               : currentBootstrap,
           );
-          applyPublicationToLocalState(publishData.videoProjectId, publishData.publication);
+          applyPublicationToLocalState(publishData.videoProjectId, publishData.publication, statusPlatform);
         }
 
         if (isPublishJobFailureStatus(latestStatus)) {
@@ -18103,8 +18146,9 @@ export function WorkspacePage({
         }
 
         if (isPublishJobSuccessStatus(latestStatus)) {
-          if (!hasConfirmedYouTubePublication(publishData.publication)) {
-            throw new Error("YouTube не вернул подтверждение публикации. Обновите проекты и попробуйте повторить публикацию.");
+          if (!hasConfirmedPublication(publishData.publication)) {
+            const platformLabel = statusPlatform === "instagram" ? "Instagram" : "YouTube";
+            throw new Error(`${platformLabel} не вернул подтверждение публикации. Обновите проекты и попробуйте повторить публикацию.`);
           }
           setHasLoadedProjects(false);
           break;
@@ -18122,13 +18166,14 @@ export function WorkspacePage({
     }
   };
 
-  const handleStartYouTubeConnect = async () => {
+  const handleStartPlatformConnect = async () => {
     if (!publishTargetVideoProjectId) return;
 
+    const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
     setPublishError(null);
 
     try {
-      const response = await fetch("/api/workspace/youtube/connect-url", {
+      const response = await fetch(`/api/workspace/${publishPlatform}/connect-url`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -18140,12 +18185,12 @@ export function WorkspacePage({
       const payload = (await response.json().catch(() => null)) as { data?: { url?: string }; error?: string } | null;
 
       if (!response.ok || !payload?.data?.url) {
-        throw new Error(payload?.error ?? "Не удалось открыть YouTube OAuth.");
+        throw new Error(payload?.error ?? `Не удалось открыть ${platformLabel} OAuth.`);
       }
 
       window.location.assign(payload.data.url);
     } catch (error) {
-      setPublishError(error instanceof Error ? error.message : "Не удалось открыть YouTube OAuth.");
+      setPublishError(error instanceof Error ? error.message : `Не удалось открыть ${platformLabel} OAuth.`);
     }
   };
 
@@ -18156,9 +18201,10 @@ export function WorkspacePage({
 
     setPublishError(null);
     setIsDisconnectingPublishChannel(true);
+    const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
 
     try {
-      const response = await fetch("/api/workspace/youtube/disconnect", {
+      const response = await fetch(`/api/workspace/${publishPlatform}/disconnect`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -18171,9 +18217,10 @@ export function WorkspacePage({
       const payload = (await response.json().catch(() => null)) as WorkspacePublishBootstrapResponse | null;
 
       if (!response.ok || !payload?.data) {
-        throw new Error(payload?.error ?? "Не удалось отключить YouTube-канал.");
+        throw new Error(payload?.error ?? `Не удалось отключить ${platformLabel}.`);
       }
 
+      setPublishPlatform(payload.data.platform);
       setPublishBootstrap(payload.data);
       setSelectedPublishChannelPk(payload.data.selectedChannelPk);
       setPublishJobStatus(
@@ -18181,14 +18228,15 @@ export function WorkspacePage({
           ? {
               jobId: publishJobStatus?.jobId ?? "",
               publication: payload.data.publication,
+              platform: payload.data.platform,
               status: publishJobStatus?.status ?? payload.data.publication.state ?? "done",
               videoProjectId: payload.data.videoProjectId,
             }
           : null,
       );
-      applyPublicationToLocalState(payload.data.videoProjectId, payload.data.publication);
+      applyPublicationToLocalState(payload.data.videoProjectId, payload.data.publication, payload.data.platform);
     } catch (error) {
-      setPublishError(error instanceof Error ? error.message : "Не удалось отключить YouTube-канал.");
+      setPublishError(error instanceof Error ? error.message : `Не удалось отключить ${platformLabel}.`);
     } finally {
       setIsDisconnectingPublishChannel(false);
     }
@@ -18197,13 +18245,16 @@ export function WorkspacePage({
   const handleSubmitPublish = async () => {
     if (!publishTargetVideoProjectId) return;
 
+    const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
+    const channelLabel = publishPlatform === "instagram" ? "Instagram-аккаунт" : "YouTube-канал";
+
     if (!selectedPublishChannelPk) {
-      setPublishError("Выберите YouTube-канал.");
+      setPublishError(`Выберите ${channelLabel}.`);
       return;
     }
 
     if (!publishTitle.trim()) {
-      setPublishError("Введите заголовок для YouTube.");
+      setPublishError(`Введите заголовок для ${platformLabel}.`);
       return;
     }
 
@@ -18218,7 +18269,7 @@ export function WorkspacePage({
     let didStartPolling = false;
 
     try {
-      const response = await fetch("/api/workspace/publish/youtube", {
+      const response = await fetch(`/api/workspace/publish/${publishPlatform}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -18227,6 +18278,7 @@ export function WorkspacePage({
           channelPk: selectedPublishChannelPk,
           description: publishDescription,
           hashtags: publishHashtags,
+          platform: publishPlatform,
           publishAt,
           title: publishTitle,
           videoProjectId: publishTargetVideoProjectId,
@@ -18244,6 +18296,7 @@ export function WorkspacePage({
 
       setPublishJobStatus({
         jobId: payload.data.jobId,
+        platform: payload.data.platform,
         publication: publishBootstrap?.publication ?? null,
         status: payload.data.status,
         videoProjectId: payload.data.videoProjectId,
@@ -18258,6 +18311,19 @@ export function WorkspacePage({
         setIsPublishSubmitting(false);
       }
     }
+  };
+
+  const handlePublishPlatformChange = (nextPlatform: WorkspacePublishPlatform) => {
+    if (nextPlatform === publishPlatform || !publishTargetVideoProjectId) {
+      return;
+    }
+
+    void openPublishModalForVideoProject(
+      publishTargetVideoProjectId,
+      publishTargetTitle || workspaceText(locale, "Публикация", "Publishing"),
+      null,
+      nextPlatform,
+    );
   };
 
   const pollGenerationJob = async (
@@ -20845,15 +20911,24 @@ export function WorkspacePage({
     const publishParam = Number(searchParams.get("publish") ?? 0);
     const routeProjectParam = Number(searchParams.get("projectId") ?? 0);
     const youtubeError = searchParams.get("youtube_error");
-    const shouldResumePublishAfterYouTubeConnect =
-      searchParams.get("youtube_connected") === "1" &&
+    const instagramError = searchParams.get("instagram_error");
+    const connectedPlatform: WorkspacePublishPlatform | null =
+      searchParams.get("instagram_connected") === "1"
+        ? "instagram"
+        : searchParams.get("youtube_connected") === "1"
+          ? "youtube"
+          : null;
+    const publishResumePlatform: WorkspacePublishPlatform =
+      instagramError || connectedPlatform === "instagram" ? "instagram" : "youtube";
+    const shouldResumePublishAfterConnect =
+      Boolean(connectedPlatform) &&
       (!Number.isFinite(publishParam) || publishParam <= 0) &&
       Number.isFinite(routeProjectParam) &&
       routeProjectParam > 0;
     const publishTargetParam =
       Number.isFinite(publishParam) && publishParam > 0
         ? publishParam
-        : shouldResumePublishAfterYouTubeConnect
+        : shouldResumePublishAfterConnect
           ? routeProjectParam
           : 0;
 
@@ -20874,28 +20949,37 @@ export function WorkspacePage({
 
     void openPublishModalForVideoProject(
       publishTargetParam,
-      targetProject?.title ?? workspaceText(locale, "Публикация в YouTube", "YouTube publishing"),
-      youtubeError ?? null,
+      targetProject?.title ?? workspaceText(locale, `Публикация в ${publishResumePlatform === "instagram" ? "Instagram" : "YouTube"}`, `${publishResumePlatform === "instagram" ? "Instagram" : "YouTube"} publishing`),
+      instagramError ?? youtubeError ?? null,
+      publishResumePlatform,
     );
     searchParams.delete("publish");
     searchParams.delete("youtube_error");
     searchParams.delete("youtube_connected");
+    searchParams.delete("instagram_error");
+    searchParams.delete("instagram_connected");
     navigate(localizePath(buildStudioRouteUrl(`?${searchParams.toString()}`, "create")), { replace: true });
   }, [hasLoadedProjects, isProjectsLoading, locale, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
   const effectivePublishStatus = normalizePublishJobStatus(publishJobStatus?.status);
   const publishStatusPublication = publishJobStatus?.publication ?? publishBootstrap?.publication ?? null;
-  const isPublishConfirmed = hasConfirmedYouTubePublication(publishStatusPublication);
+  const effectivePublishPlatform: WorkspacePublishPlatform =
+    publishStatusPublication?.platform === "instagram" || publishBootstrap?.platform === "instagram" || publishJobStatus?.platform === "instagram"
+      ? "instagram"
+      : "youtube";
+  const publishPlatformLabel = effectivePublishPlatform === "instagram" ? "Instagram" : "YouTube";
+  const publishProductLabel = effectivePublishPlatform === "instagram" ? "Reels" : "Shorts";
+  const isPublishConfirmed = hasConfirmedPublication(publishStatusPublication);
   const isPublishInFlight = isPublishSubmitting || isPublishJobProgressStatus(effectivePublishStatus);
   const publishSuccessNotice =
     !publishError && !isPublishInFlight && isPublishConfirmed && (isPublishJobSuccessStatus(effectivePublishStatus) || publishStatusPublication)
         ? {
             link: publishStatusPublication?.link ?? null,
-          text: getYouTubePublicationMetaLabel(publishStatusPublication, locale) || workspaceText(locale, "YouTube подтвердил публикацию.", "YouTube confirmed publication."),
+          text: getPublicationMetaLabel(publishStatusPublication, locale) || workspaceText(locale, `${publishPlatformLabel} подтвердил публикацию.`, `${publishPlatformLabel} confirmed publication.`),
           title: publishStatusPublication?.state === "scheduled"
             ? workspaceText(locale, "Публикация запланирована", "Publication scheduled")
-            : workspaceText(locale, "Shorts опубликован", "Shorts published"),
+            : workspaceText(locale, `${publishProductLabel} опубликован`, `${publishProductLabel} published`),
         }
       : null;
   const publishChannels = publishBootstrap?.channels ?? [];
@@ -20911,13 +20995,13 @@ export function WorkspacePage({
   const publishTimeValue = formatPublishTimeValue(publishScheduledDate) || "12:00";
   const publishPrimaryActionLabel = publishMode === "schedule"
     ? workspaceText(locale, "Запланировать публикацию", "Schedule publication")
-    : workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube");
+    : workspaceText(locale, `Опубликовать в ${publishPlatformLabel}`, `Publish to ${publishPlatformLabel}`);
   const publishScheduleSummary =
     publishMode === "schedule"
       ? publishScheduledDate
         ? formatProjectDate(publishScheduledDate.toISOString(), locale)
         : workspaceText(locale, "Выберите день и время публикации", "Choose publication date and time")
-      : workspaceText(locale, "Видео отправится в YouTube сразу после подтверждения.", "The video will be sent to YouTube after confirmation.");
+      : workspaceText(locale, `${publishProductLabel} отправится в ${publishPlatformLabel} сразу после подтверждения.`, `${publishProductLabel} will be sent to ${publishPlatformLabel} after confirmation.`);
   const shouldRenderStudioContentPlanRail = createMode !== "segment-editor";
   const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible && !isGuest;
   const contentPlanPanel = shouldRenderStudioContentPlanRail ? (
@@ -25107,6 +25191,7 @@ export function WorkspacePage({
   const prepareSegmentEditorFullPreviewAudioAtTime = async (
     currentTime: number,
     token: number,
+    options?: { allowActivePlayBeforeReady?: boolean },
   ): Promise<WorkspaceSegmentEditorFullPreviewAudioPreparationResult> => {
     if (typeof document === "undefined" || typeof window === "undefined") {
       return "not-ready";
@@ -25129,12 +25214,18 @@ export function WorkspacePage({
         currentTime,
       },
     );
+    const allowActivePlayBeforeReady = options?.allowActivePlayBeforeReady === true;
+    const activeTrackKeys = new Set(activeTracks.map((track) => track.key));
     const startMinimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA;
     const requiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
       managedTracks,
       activeTracks,
       currentTime,
-    ).filter((track) => track.kind === "voice");
+    ).filter(
+      (track) =>
+        track.kind === "voice" &&
+        (!allowActivePlayBeforeReady || !activeTrackKeys.has(track.key)),
+    );
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.start", {
       activeTrackCount: activeTracks.length,
       currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
@@ -25250,13 +25341,18 @@ export function WorkspacePage({
 
       return { element, sourceTime, track };
     });
-    const readyPromises = activeElements.map(({ element }) =>
-      waitForSegmentEditorFullPreviewMediaElementReady(element, {
-        minimumReadyState: startMinimumReadyState,
-        timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
-      }),
-    );
-    const activeReadyResults = await Promise.all(readyPromises);
+    const activeReadyResults = allowActivePlayBeforeReady
+      ? activeElements.map(({ element }) =>
+          isWorkspaceSegmentEditorFullPreviewAudioReadyState(element.readyState, startMinimumReadyState),
+        )
+      : await Promise.all(
+          activeElements.map(({ element }) =>
+            waitForSegmentEditorFullPreviewMediaElementReady(element, {
+              minimumReadyState: startMinimumReadyState,
+              timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
+            }),
+          ),
+        );
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
       activeElements.forEach(({ element }) => {
         element.pause();
@@ -25265,8 +25361,13 @@ export function WorkspacePage({
     }
 
     const unreadyActiveElements = activeElements.filter(
-      ({ track }, index) =>
-        !activeReadyResults[index] || segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+      ({ element, track }, index) =>
+        shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
+          allowPlayBeforeReady: allowActivePlayBeforeReady,
+          hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+          hasMediaError: Boolean(element.error),
+          isReady: Boolean(activeReadyResults[index]),
+        }),
     );
     if (unreadyActiveElements.length > 0) {
       unreadyActiveElements.forEach(({ element, track }) => {
@@ -25280,18 +25381,43 @@ export function WorkspacePage({
         ),
       });
     }
+    const pendingActiveElements = allowActivePlayBeforeReady
+      ? activeElements.filter(
+          ({ element, track }, index) =>
+            !Boolean(activeReadyResults[index]) &&
+            shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
+              allowPlayBeforeReady: allowActivePlayBeforeReady,
+              hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+              hasMediaError: Boolean(element.error),
+              isReady: Boolean(activeReadyResults[index]),
+            }),
+        )
+      : [];
+    if (pendingActiveElements.length > 0) {
+      writeSegmentEditorFullPreviewDebugTrace("audio.prepare.active-pending-play", {
+        currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
+        minimumReadyState: startMinimumReadyState,
+        tracks: pendingActiveElements.map(({ element, track }) =>
+          getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
+        ),
+      });
+    }
 
-    const readyActiveElements = activeElements.filter(
-      ({ track }, index) =>
-        Boolean(activeReadyResults[index]) &&
-        !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+    const startableActiveElements = activeElements.filter(
+      ({ element, track }, index) =>
+        shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
+          allowPlayBeforeReady: allowActivePlayBeforeReady,
+          hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+          hasMediaError: Boolean(element.error),
+          isReady: Boolean(activeReadyResults[index]),
+        }),
     );
-    if (readyActiveElements.length === 0) {
+    if (startableActiveElements.length === 0) {
       return "ready";
     }
 
     const playResults = await Promise.all(
-      readyActiveElements.map(
+      startableActiveElements.map(
         ({ element, track }) =>
           new Promise<boolean>((resolve) => {
             let settled = false;
@@ -25308,7 +25434,7 @@ export function WorkspacePage({
               resolve(result);
             };
             timeoutId = window.setTimeout(
-              () => settle(false),
+              () => settle(allowActivePlayBeforeReady && !element.error),
               WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
             );
             void playSegmentEditorFullPreviewAudioElement(track, element, "prepare-active").then(
@@ -25320,7 +25446,7 @@ export function WorkspacePage({
           }),
       ),
     );
-    const rejectedPlayElements = readyActiveElements.filter((_, index) => !playResults[index]);
+    const rejectedPlayElements = startableActiveElements.filter((_, index) => !playResults[index]);
     if (rejectedPlayElements.length > 0) {
       rejectedPlayElements.forEach(({ element, track }) => {
         segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
@@ -25332,7 +25458,7 @@ export function WorkspacePage({
           getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
         ),
       });
-      const activeVoiceTrackCount = readyActiveElements.filter(({ track }) =>
+      const activeVoiceTrackCount = startableActiveElements.filter(({ track }) =>
         isSegmentEditorFullPreviewVoiceAudioTrack(track),
       ).length;
       const rejectedVoiceTrackCount = rejectedPlayElements.filter(({ track }) =>
@@ -25348,7 +25474,7 @@ export function WorkspacePage({
       }
     }
 
-    const playingActiveElements = readyActiveElements.filter(
+    const playingActiveElements = startableActiveElements.filter(
       ({ track }, index) =>
         Boolean(playResults[index]) &&
         !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
@@ -25787,7 +25913,9 @@ export function WorkspacePage({
       fromUserGesture: options?.fromUserGesture,
     });
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token),
+      prepareSegmentEditorFullPreviewAudioAtTime(startTime, token, {
+        allowActivePlayBeforeReady: options?.fromUserGesture === true,
+      }),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -25869,7 +25997,9 @@ export function WorkspacePage({
     primeSegmentEditorFullPreviewEmbeddedVisualAudio(safeStartTime, { fromUserGesture: true });
 
     const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token),
+      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token, {
+        allowActivePlayBeforeReady: true,
+      }),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
@@ -34051,7 +34181,8 @@ export function WorkspacePage({
           onDisconnectChannel={handleDisconnectPublishChannel}
           onHashtagsChange={setPublishHashtags}
           onModeChange={handlePublishModeChange}
-          onStartYouTubeConnect={handleStartYouTubeConnect}
+          onPlatformChange={handlePublishPlatformChange}
+          onStartPlatformConnect={handleStartPlatformConnect}
           onSubmit={handleSubmitPublish}
           onTimeSelect={handlePublishTimeSelect}
           onTitleChange={setPublishTitle}
@@ -34059,6 +34190,8 @@ export function WorkspacePage({
           plannerPopoverRef={publishPlannerPopoverRef}
           plannerStyle={publishPlannerStyle}
           plannerTriggerRef={publishPlannerTriggerRef}
+          platform={publishPlatform}
+          platforms={["youtube", "instagram"]}
           primaryActionLabel={publishPrimaryActionLabel}
           publishError={publishError}
           scheduleSummary={publishScheduleSummary}

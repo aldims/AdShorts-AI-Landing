@@ -34,8 +34,10 @@ import {
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
+  shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
+  shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
 } from "./workspaceSegmentEditorFullPreview";
@@ -1052,6 +1054,42 @@ describe("workspace segment editor full preview", () => {
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(3, 3)).toBe(true);
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(2, 3)).toBe(false);
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(Number.NaN, 3)).toBe(false);
+  });
+
+  it("allows active preview audio to start before media readiness after a user gesture", () => {
+    expect(
+      shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
+        allowPlayBeforeReady: true,
+        hasFailedTrack: false,
+        hasMediaError: false,
+        isReady: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
+        allowPlayBeforeReady: true,
+        hasFailedTrack: false,
+        hasMediaError: false,
+        isReady: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
+        allowPlayBeforeReady: true,
+        hasFailedTrack: false,
+        hasMediaError: true,
+        isReady: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
+        allowPlayBeforeReady: true,
+        hasFailedTrack: false,
+        hasMediaError: true,
+        isReady: false,
+      }),
+    ).toBe(true);
   });
 
   it("does not treat a browser audio-unlock rejection as a ready full preview", () => {

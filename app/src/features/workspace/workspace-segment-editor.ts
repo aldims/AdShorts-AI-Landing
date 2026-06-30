@@ -2548,6 +2548,7 @@ export const cloneWorkspaceProject = (project: WorkspaceProject): WorkspaceProje
   ...project,
   finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
   hashtags: [...project.hashtags],
+  instagramPublication: project.instagramPublication ? { ...project.instagramPublication } : null,
   youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 

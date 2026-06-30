@@ -27,7 +27,8 @@ import type {
   StudioSubtitleStyleOption,
   StudioVideoMode,
   WorkspaceProject,
-  WorkspaceProjectYouTubePublication,
+  WorkspaceProjectPublication,
+  WorkspacePublishPlatform,
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorSession,
@@ -858,7 +859,8 @@ export type WorkspacePublishBootstrapPayload = {
     publishAt: string | null;
     title: string;
   };
-  publication: WorkspaceProjectYouTubePublication | null;
+  platform: WorkspacePublishPlatform;
+  publication: WorkspaceProjectPublication | null;
   selectedChannelPk: number | null;
   videoProjectId: number;
 };
@@ -871,6 +873,7 @@ export type WorkspacePublishBootstrapResponse = {
 export type WorkspacePublishJob = {
   enqueueError?: string | null;
   jobId: string;
+  platform: WorkspacePublishPlatform;
   status: string;
   videoProjectId: number;
 };
@@ -883,7 +886,8 @@ export type WorkspacePublishStartResponse = {
 export type WorkspacePublishJobStatusPayload = {
   error?: string;
   jobId: string;
-  publication: WorkspaceProjectYouTubePublication | null;
+  platform: WorkspacePublishPlatform;
+  publication: WorkspaceProjectPublication | null;
   status: string;
   videoProjectId: number | null;
 };
