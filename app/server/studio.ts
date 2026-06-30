@@ -6160,6 +6160,13 @@ export async function createStudioGenerationJob(
           voiceSourceEndTime: segment._voice_source_end_time ?? null,
           voiceSourceStartTime: segment._voice_source_start_time ?? null,
         })),
+        segmentVisuals: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
+          hasCustomVideoAssetId: Boolean(segment.custom_video_asset_id),
+          hasCustomVideoMimeType: Boolean(segment.custom_video_mime_type),
+          hasCustomVideoOriginalName: Boolean(segment.custom_video_original_name),
+          index: segment.index,
+          videoAction: segment.video_action,
+        })),
         segmentVoiceTypes: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voice_type ?? null),
         segmentVoiceoverAssetIds: normalizedSegmentEditorAssetPayload.segments.map(
           (segment) => segment.voiceover_asset_id ?? null,

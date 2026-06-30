@@ -7174,6 +7174,89 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.uploads).toHaveLength(0);
   });
 
+  it("exports scratch visual-only custom media with snake-case media asset ids", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        customVideo: {
+          fileName: "uploaded-scene.jpg",
+          fileSize: 0,
+          media_asset_id: 706,
+          mimeType: "image/jpeg",
+          remoteUrl: "/api/workspace/media-assets/706",
+          source: "upload",
+        } as NonNullable<DraftSegment["customVideo"]>,
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "custom" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 706,
+        customVideoFileDataUrl: undefined,
+        customVideoRemoteUrl: undefined,
+        text: "",
+        videoAction: "custom",
+      }),
+    );
+    expect(result.uploads).toHaveLength(0);
+  });
+
+  it("exports scratch visual-only first-party media URLs as asset ids", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        customVideo: {
+          fileName: "uploaded-scene.mp4",
+          fileSize: 0,
+          mimeType: "video/mp4",
+          remoteUrl: "/api/workspace/media-assets/707/playback",
+          source: "media-library",
+        } as NonNullable<DraftSegment["customVideo"]>,
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "custom" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 707,
+        customVideoFileDataUrl: undefined,
+        customVideoRemoteUrl: undefined,
+        text: "",
+        videoAction: "custom",
+      }),
+    );
+    expect(result.uploads).toHaveLength(0);
+  });
+
   it("exports scratch original-action current assets as custom media", async () => {
     const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
       language: "ru",

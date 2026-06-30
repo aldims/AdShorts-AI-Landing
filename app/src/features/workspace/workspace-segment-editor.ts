@@ -2324,7 +2324,7 @@ export const cloneStudioCustomMusicFile = (value: StudioCustomMusicFile | null) 
 export const cloneWorkspaceMediaAssetRef = (value: WorkspaceMediaAssetRef | null) => (value ? { ...value } : null);
 
 export const getStudioCustomVideoFileIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
-  const assetId = getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  const assetId = getWorkspaceSegmentCustomAssetId(asset);
   if (assetId) {
     return `asset:${assetId}`;
   }

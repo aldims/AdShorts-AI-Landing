@@ -539,4 +539,100 @@ describe("studio generation worker availability", () => {
     );
     expect(calls.map((call) => call.pathname)).not.toContain("/api/web/media-assets/direct-upload/init");
   });
+
+  it("forwards visual-only scratch segment asset ids to AdsFlow generation", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 5, subscription: 0 },
+            user: { balance: 95, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-visual-only-scratch",
+            status: "queued",
+            title: "Visual-only scratch",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("Create Shorts from the visual scenes in the editor.", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "ru",
+        segmentEditor: {
+          allowStructureChange: true,
+          source: "scratch",
+          segments: [
+            {
+              customVideoAssetId: 707,
+              duration: 5,
+              durationMode: "manual",
+              endTime: 5,
+              index: 0,
+              manualDurationSeconds: 5,
+              startTime: 0,
+              text: "",
+              videoAction: "custom",
+              voiceType: "none",
+            },
+          ],
+        },
+        subtitleEnabled: false,
+        videoMode: "standard",
+        voiceEnabled: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-visual-only-scratch",
+        status: "queued",
+      }),
+    );
+
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    const segmentEditor = generationBody?.segment_editor as {
+      segments?: Array<Record<string, unknown>>;
+      source?: string;
+    } | undefined;
+
+    expect(segmentEditor).toEqual(
+      expect.objectContaining({
+        allow_structure_change: true,
+        source: "scratch",
+      }),
+    );
+    expect(segmentEditor?.segments?.[0]).toEqual(
+      expect.objectContaining({
+        custom_video_asset_id: 707,
+        text: "",
+        video_action: "custom",
+        voice_type: "none",
+      }),
+    );
+    expect(calls.map((call) => call.pathname)).not.toContain("/api/web/media-assets/direct-upload/init");
+  });
 });

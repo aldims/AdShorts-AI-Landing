@@ -939,11 +939,17 @@ const buildRemoteFileDataUrl = async (
       return new URL("http://127.0.0.1");
     }
   })();
-  const targetUrl = new URL(remoteUrl, appOriginUrl);
   const requestOriginUrl = getRequestOriginUrl(req);
-  const shouldForwardAuth =
+  const targetUrl = new URL(remoteUrl, requestOriginUrl ?? appOriginUrl);
+  const isFirstPartyRemote =
     (requestOriginUrl && isSameOriginOrEquivalentLoopback(targetUrl, requestOriginUrl)) ||
     isSameOriginOrEquivalentLoopback(targetUrl, appOriginUrl);
+
+  if (!isFirstPartyRemote) {
+    throw new Error("Remote segment asset URL must use the app origin.");
+  }
+
+  const shouldForwardAuth = isFirstPartyRemote;
   const headers: Record<string, string> = {
     Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
   };

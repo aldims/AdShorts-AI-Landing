@@ -28,9 +28,27 @@ const readBlobAsDataUrl = (blob: Blob) =>
   );
 
 type StudioUploadableAsset =
-  | Pick<StudioBrandLogoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl">
-  | Pick<StudioCustomMusicFile, "assetId" | "dataUrl" | "file" | "fileName" | "objectUrl">
-  | Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl" | "remoteUrl">;
+  | (Pick<StudioBrandLogoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl"> & {
+      id?: unknown;
+      mediaAssetId?: unknown;
+      media_asset_id?: unknown;
+    })
+  | (Pick<StudioCustomMusicFile, "assetId" | "dataUrl" | "file" | "fileName" | "objectUrl"> & {
+      id?: unknown;
+      mediaAssetId?: unknown;
+      media_asset_id?: unknown;
+    })
+  | (Pick<StudioCustomVideoFile, "assetId" | "dataUrl" | "file" | "fileName" | "mimeType" | "objectUrl" | "remoteUrl"> & {
+      id?: unknown;
+      mediaAssetId?: unknown;
+      media_asset_id?: unknown;
+    });
+
+const getStudioUploadableAssetId = (asset: StudioUploadableAsset | null | undefined) => {
+  const rawAssetId = asset?.assetId ?? asset?.mediaAssetId ?? asset?.media_asset_id ?? asset?.id;
+  const assetId = Number(rawAssetId);
+  return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
+};
 
 const fetchStudioUploadSourceBlob = async (sourceUrl: string, fallbackMessage: string) => {
   const response = await fetch(sourceUrl);
@@ -366,10 +384,7 @@ export const ensureStudioUploadedAssetId = async (
     segmentIndex?: number | null;
   },
 ) => {
-  const existingAssetId =
-    asset && Number.isFinite(Number(asset.assetId)) && Number(asset.assetId) > 0
-      ? Math.trunc(Number(asset.assetId))
-      : null;
+  const existingAssetId = getStudioUploadableAssetId(asset);
   if (existingAssetId && !options.forceUpload) {
     return existingAssetId;
   }

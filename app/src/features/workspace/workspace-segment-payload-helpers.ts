@@ -7,6 +7,7 @@ import {
 } from "../../lib/workspaceSegmentEditorTimeline";
 import {
   ensureStudioUploadedAssetId,
+  ensureStudioUploadedAssetIdWithInlineFallback,
   resolveStudioCustomAssetDataUrl,
 } from "./workspace-upload-helpers";
 import {
@@ -186,6 +187,34 @@ const isWorkspaceSegmentCustomVisualSameAsCurrent = (
   return getWorkspaceSegmentCurrentVisualIdentityKey(segment) === assetIdentity;
 };
 
+const getWorkspaceSegmentAssetIdFromFirstPartyMediaUrl = (value: unknown) => {
+  const remoteUrl = typeof value === "string" ? value.trim() : "";
+  if (!remoteUrl) {
+    return null;
+  }
+
+  try {
+    const fallbackOrigin = "http://adshorts.local";
+    const parsedUrl = new URL(remoteUrl, fallbackOrigin);
+    const isRelativeUrl = parsedUrl.origin === fallbackOrigin && !/^[a-z][a-z\d+\-.]*:/i.test(remoteUrl);
+    const currentOrigin =
+      typeof window !== "undefined" && typeof window.location?.origin === "string"
+        ? window.location.origin
+        : null;
+    const isCurrentOrigin = currentOrigin ? parsedUrl.origin === new URL(currentOrigin).origin : false;
+    if (!isRelativeUrl && !isCurrentOrigin) {
+      return null;
+    }
+
+    const match = parsedUrl.pathname.match(/^\/api\/(?:workspace\/media-assets\/(\d+)|media\/(\d+)\/download)(?:\/|$)/i);
+    const rawAssetId = match?.[1] ?? match?.[2];
+    const assetId = Number(rawAssetId);
+    return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const buildWorkspaceSegmentEditorPayload = async (
   session: WorkspaceSegmentEditorDraftSession,
   options: {
@@ -270,16 +299,20 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const shouldAttachCustomVisualAsset = payloadVideoActionForSegment === "custom" || isPayloadTalkingPhotoExport;
 
     if (shouldAttachCustomVisualAsset) {
+      const customVisualAssetId =
+        getWorkspaceSegmentCustomAssetId(customVisualAsset) ??
+        getWorkspaceSegmentAssetIdFromFirstPartyMediaUrl(customVisualAsset?.remoteUrl);
+
       if (isWorkspaceSegmentCustomVisualSameAsOriginal(segment, customVisualAsset)) {
         throw new Error(
           `Визуал сегмента ${segment.index + 1} не обновился. Сгенерируйте ИИ фото ещё раз или обновите редактор.`,
         );
       }
 
-      if (customVisualAsset?.assetId) {
-        customVideoAssetId = customVisualAsset.assetId;
+      if (customVisualAssetId) {
+        customVideoAssetId = customVisualAssetId;
       } else if (customVisualAsset) {
-        customVideoAssetId = (await ensureStudioUploadedAssetId(customVisualAsset, {
+        const uploadResult = await ensureStudioUploadedAssetIdWithInlineFallback(customVisualAsset, {
           fallbackFileName: customVisualAsset.fileName || `segment-visual-${segment.index + 1}.bin`,
           fallbackMimeType: customVisualAsset.mimeType,
           kind: isPayloadTalkingPhotoExport ? "talking_photo" : "segment_source",
@@ -288,12 +321,19 @@ export const buildWorkspaceSegmentEditorPayload = async (
           projectId: mediaUploadScope.projectId,
           role: isPayloadTalkingPhotoExport ? "talking_photo" : "segment_source",
           segmentIndex: mediaUploadScope.segmentIndex,
-        })) ?? undefined;
+        });
+        customVideoAssetId = uploadResult.assetId ?? undefined;
+        customVideoFileDataUrl = uploadResult.assetId ? undefined : uploadResult.dataUrl;
       }
 
-      if (!customVideoAssetId && typeof customVisualAsset?.remoteUrl === "string" && customVisualAsset.remoteUrl.trim()) {
+      if (
+        !customVideoAssetId &&
+        !customVideoFileDataUrl &&
+        typeof customVisualAsset?.remoteUrl === "string" &&
+        customVisualAsset.remoteUrl.trim()
+      ) {
         customVideoRemoteUrl = customVisualAsset.remoteUrl.trim();
-      } else {
+      } else if (!customVideoFileDataUrl) {
         customVideoFileDataUrl = customVideoAssetId ? undefined : await resolveStudioCustomAssetDataUrl(customVisualAsset);
       }
     }
