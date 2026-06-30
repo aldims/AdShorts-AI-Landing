@@ -864,6 +864,7 @@ import {
   getWorkspaceSegmentEditorDisplayEndTime,
   getWorkspaceSegmentEditorDisplayStartTime,
   getWorkspaceSegmentEditorPlaybackDuration,
+  getWorkspaceSegmentTimelineSpeechRange,
   normalizeWorkspaceSegmentManualDurationSeconds,
   roundWorkspaceSegmentTimelineSeconds,
 } from "../lib/workspaceSegmentEditorTimeline";
@@ -10354,6 +10355,22 @@ export function WorkspacePage({
   const shouldRefreshSegmentEditorDraftSourceDurations = (draft: WorkspaceSegmentEditorDraftSession | null | undefined) =>
     Boolean(
       draft?.segments.some((segment) => {
+        if (hasWorkspaceSegmentProjectVoiceoverTimingData(segment) && getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) !== null) {
+          const voiceSourceDurationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
+          const speechRange = getWorkspaceSegmentTimelineSpeechRange(segment);
+          const speechRangeDurationSeconds =
+            speechRange !== null && speechRange.endTime > speechRange.startTime
+              ? speechRange.endTime - speechRange.startTime
+              : null;
+          if (
+            voiceSourceDurationSeconds !== null &&
+            speechRangeDurationSeconds !== null &&
+            voiceSourceDurationSeconds <= speechRangeDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+          ) {
+            return true;
+          }
+        }
+
         if (getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
           return false;
         }
