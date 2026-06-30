@@ -865,6 +865,18 @@ export type WorkspacePublishBootstrapPayload = {
   videoProjectId: number;
 };
 
+export const getPublishBootstrapForPlatform = (
+  bootstrap: WorkspacePublishBootstrapPayload | null,
+  platform: WorkspacePublishPlatform,
+): WorkspacePublishBootstrapPayload | null => {
+  return bootstrap?.platform === platform ? bootstrap : null;
+};
+
+export const getPublishChannelsForPlatform = (
+  bootstrap: WorkspacePublishBootstrapPayload | null,
+  platform: WorkspacePublishPlatform,
+): WorkspacePublishChannel[] => getPublishBootstrapForPlatform(bootstrap, platform)?.channels ?? [];
+
 export type WorkspacePublishBootstrapResponse = {
   data?: WorkspacePublishBootstrapPayload;
   error?: string;

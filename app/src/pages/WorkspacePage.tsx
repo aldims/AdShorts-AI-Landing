@@ -573,6 +573,8 @@ import {
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  getPublishBootstrapForPlatform,
+  getPublishChannelsForPlatform,
   waitWorkspaceDelay,
   isTextInputTarget,
   renderWorkspaceMediaLibraryPlayOverlay,
@@ -18195,7 +18197,12 @@ export function WorkspacePage({
   };
 
   const handleDisconnectPublishChannel = async () => {
-    if (!publishTargetVideoProjectId || !selectedPublishChannelPk) {
+    const platformChannels = getPublishChannelsForPlatform(publishBootstrap, publishPlatform);
+    const channelPk = platformChannels.some((channel) => channel.pk === selectedPublishChannelPk)
+      ? selectedPublishChannelPk
+      : null;
+
+    if (!publishTargetVideoProjectId || !channelPk) {
       return;
     }
 
@@ -18210,7 +18217,7 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          channelPk: selectedPublishChannelPk,
+          channelPk,
           videoProjectId: publishTargetVideoProjectId,
         }),
       });
@@ -18247,8 +18254,12 @@ export function WorkspacePage({
 
     const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
     const channelLabel = publishPlatform === "instagram" ? "Instagram-аккаунт" : "YouTube-канал";
+    const platformChannels = getPublishChannelsForPlatform(publishBootstrap, publishPlatform);
+    const channelPk = platformChannels.some((channel) => channel.pk === selectedPublishChannelPk)
+      ? selectedPublishChannelPk
+      : null;
 
-    if (!selectedPublishChannelPk) {
+    if (!channelPk) {
       setPublishError(`Выберите ${channelLabel}.`);
       return;
     }
@@ -18275,7 +18286,7 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          channelPk: selectedPublishChannelPk,
+          channelPk,
           description: publishDescription,
           hashtags: publishHashtags,
           platform: publishPlatform,
@@ -20963,11 +20974,10 @@ export function WorkspacePage({
 
   const isStudioRouteVisible = activeTab === "studio";
   const effectivePublishStatus = normalizePublishJobStatus(publishJobStatus?.status);
-  const publishStatusPublication = publishJobStatus?.publication ?? publishBootstrap?.publication ?? null;
-  const effectivePublishPlatform: WorkspacePublishPlatform =
-    publishStatusPublication?.platform === "instagram" || publishBootstrap?.platform === "instagram" || publishJobStatus?.platform === "instagram"
-      ? "instagram"
-      : "youtube";
+  const platformPublishBootstrap = getPublishBootstrapForPlatform(publishBootstrap, publishPlatform);
+  const platformPublishJobStatus = publishJobStatus?.platform === publishPlatform ? publishJobStatus : null;
+  const publishStatusPublication = platformPublishJobStatus?.publication ?? platformPublishBootstrap?.publication ?? null;
+  const effectivePublishPlatform: WorkspacePublishPlatform = publishPlatform;
   const publishPlatformLabel = effectivePublishPlatform === "instagram" ? "Instagram" : "YouTube";
   const publishProductLabel = effectivePublishPlatform === "instagram" ? "Reels" : "Shorts";
   const isPublishConfirmed = hasConfirmedPublication(publishStatusPublication);
@@ -20982,13 +20992,13 @@ export function WorkspacePage({
             : workspaceText(locale, `${publishProductLabel} опубликован`, `${publishProductLabel} published`),
         }
       : null;
-  const publishChannels = publishBootstrap?.channels ?? [];
+  const publishChannels = getPublishChannelsForPlatform(publishBootstrap, publishPlatform);
+  const selectedPublishChannel = publishChannels.find((channel) => channel.pk === selectedPublishChannelPk) ?? null;
   const publishCanSubmit =
-    Boolean(selectedPublishChannelPk) &&
+    Boolean(selectedPublishChannel) &&
     Boolean(publishTitle.trim()) &&
     !isPublishInFlight &&
     !isDisconnectingPublishChannel;
-  const selectedPublishChannel = publishChannels.find((channel) => channel.pk === selectedPublishChannelPk) ?? null;
   const publishScheduledDate = parsePublishDateTimeLocalValue(publishScheduledAtInput);
   const publishCalendarDays = buildPublishCalendarDays(publishCalendarMonth);
   const publishWeekdayLabels = publishCalendarWeekdayLabels[locale];
@@ -34158,7 +34168,7 @@ export function WorkspacePage({
           onVolumeChange={setStudioPreviewVolume}
         />
         <WorkspacePublishModal
-          bootstrap={publishBootstrap}
+          bootstrap={platformPublishBootstrap}
           bootstrapError={publishBootstrapError}
           calendarDays={publishCalendarDays}
           calendarMonth={publishCalendarMonth}

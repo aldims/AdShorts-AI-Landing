@@ -45,6 +45,7 @@ const cloneWorkspaceProject = (project) => ({
     ...project,
     finalAsset: project.finalAsset ? { ...project.finalAsset } : null,
     hashtags: [...project.hashtags],
+    instagramPublication: project.instagramPublication ? { ...project.instagramPublication } : null,
     youtubePublication: project.youtubePublication ? { ...project.youtubePublication } : null,
 });
 const cloneWorkspaceProjects = (projects) => projects.map(cloneWorkspaceProject);
@@ -331,11 +332,32 @@ const buildProjectFromAdminVideo = (item, historyEntry) => {
         normalizeText(item.youtube_channel_name)
         ? {
             channelName: normalizeText(item.youtube_channel_name) || null,
+            channelPk: normalizePositiveInteger(item.youtube_channel_pk),
             link: normalizeText(item.youtube_published_link) || null,
+            platform: "youtube",
+            providerMediaId: normalizeText(item.youtube_video_id) || null,
             publishedAt: toIsoString(item.youtube_published_at),
             scheduledAt: toIsoString(item.youtube_scheduled_at),
             state: normalizeText(item.youtube_publish_state).toLowerCase() || null,
             youtubeVideoId: normalizeText(item.youtube_video_id) || null,
+        }
+        : null;
+    const instagramPublication = normalizeText(item.instagram_publish_state) ||
+        normalizeText(item.instagram_published_link) ||
+        normalizeText(item.instagram_media_id) ||
+        normalizeText(item.instagram_published_at) ||
+        normalizeText(item.instagram_scheduled_at) ||
+        normalizeText(item.instagram_channel_name)
+        ? {
+            channelName: normalizeText(item.instagram_channel_name) || null,
+            channelPk: normalizePositiveInteger(item.instagram_channel_pk),
+            link: normalizeText(item.instagram_published_link) || null,
+            platform: "instagram",
+            providerMediaId: normalizeText(item.instagram_media_id) || null,
+            publishedAt: toIsoString(item.instagram_published_at),
+            scheduledAt: toIsoString(item.instagram_scheduled_at),
+            state: normalizeText(item.instagram_publish_state).toLowerCase() || null,
+            youtubeVideoId: null,
         }
         : null;
     return {
@@ -347,6 +369,7 @@ const buildProjectFromAdminVideo = (item, historyEntry) => {
         generatedAt: createdAt,
         hashtags: metadata.hashtags,
         id: `project:${adId}`,
+        instagramPublication,
         jobId: historyJobId || null,
         prefillSettings: historyEntry?.prefillSettings ?? null,
         prompt: metadata.prompt,
@@ -412,6 +435,7 @@ const buildProjectFromLatestGeneration = (item, historyEntry) => {
         generatedAt,
         hashtags: metadata.hashtags,
         id: `task:${jobId}`,
+        instagramPublication: null,
         jobId,
         prefillSettings: historyEntry?.prefillSettings ?? null,
         prompt: metadata.prompt,
@@ -475,6 +499,7 @@ const buildProjectFromHistoryEntry = (item) => {
         generatedAt,
         hashtags: metadata.hashtags,
         id: `task:${jobId}`,
+        instagramPublication: null,
         jobId,
         prefillSettings: item.prefillSettings ?? null,
         prompt: metadata.prompt,

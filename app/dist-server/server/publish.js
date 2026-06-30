@@ -9,6 +9,10 @@ const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 5
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+export const normalizeWorkspacePublishPlatform = (value) => {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "instagram" ? "instagram" : "youtube";
+};
 const assertAdsflowConfigured = () => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         throw new Error("AdsFlow API is not configured.");
@@ -89,26 +93,31 @@ const resolvePreferredExternalUserId = async (user) => {
         return buildExternalUserId(user);
     }
 };
-const normalizePublication = (value) => {
+const normalizePublication = (value, fallbackPlatform = "youtube") => {
     if (!value || typeof value !== "object")
         return null;
+    const platform = normalizeWorkspacePublishPlatform(value.platform || fallbackPlatform);
     const channelPkRaw = value.channel_pk;
     const channelPk = typeof channelPkRaw === "number" && Number.isFinite(channelPkRaw)
         ? channelPkRaw
         : typeof channelPkRaw === "string" && /^\d+$/.test(channelPkRaw)
             ? Number(channelPkRaw)
             : null;
+    const youtubeVideoId = normalizeText(value.youtube_video_id) || null;
+    const providerMediaId = normalizeText(value.provider_media_id) || youtubeVideoId || null;
     const normalized = {
         channelName: normalizeText(value.channel_name) || null,
         channelPk,
         link: normalizeText(value.link) || null,
+        platform,
+        providerMediaId,
         publishedAt: normalizeText(value.published_at) || null,
         scheduledAt: normalizeText(value.scheduled_at) || null,
         state: normalizeText(value.state).toLowerCase() || null,
-        youtubeVideoId: normalizeText(value.youtube_video_id) || null,
+        youtubeVideoId,
     };
     return normalized.link ||
-        normalized.youtubeVideoId ||
+        normalized.providerMediaId ||
         normalized.state ||
         normalized.publishedAt ||
         normalized.scheduledAt ||
@@ -116,34 +125,27 @@ const normalizePublication = (value) => {
         ? normalized
         : null;
 };
-export async function getWorkspacePublishBootstrap(user, videoProjectId) {
-    const externalUserId = await resolvePreferredExternalUserId(user);
-    const payload = await postAdsflowJson("/api/web/publish/bootstrap", {
-        admin_token: env.adsflowAdminToken,
-        external_user_id: externalUserId,
-        language: "ru",
-        user_email: user.email ?? undefined,
-        user_name: user.name ?? undefined,
-        video_project_id: videoProjectId,
-    });
-    const normalizedVideoProjectId = Number(payload.video_project_id ?? videoProjectId);
+const normalizePublishChannels = (value, fallbackName) => Array.isArray(value)
+    ? value
+        .map((channel) => {
+        const pk = Number(channel?.pk ?? 0);
+        if (!Number.isFinite(pk) || pk <= 0)
+            return null;
+        return {
+            channelId: normalizeText(channel?.channel_id) || null,
+            channelName: normalizeText(channel?.channel_name) || fallbackName,
+            pk,
+        };
+    })
+        .filter((channel) => Boolean(channel))
+    : [];
+const normalizePublishBootstrap = (payload, options) => {
+    const platform = normalizeWorkspacePublishPlatform(payload.platform || options.platform);
+    const normalizedVideoProjectId = Number(payload.video_project_id ?? options.videoProjectId);
     if (!Number.isFinite(normalizedVideoProjectId) || normalizedVideoProjectId <= 0) {
         throw new Error("AdsFlow did not return a valid video project id.");
     }
-    const channels = Array.isArray(payload.channels)
-        ? payload.channels
-            .map((channel) => {
-            const pk = Number(channel?.pk ?? 0);
-            if (!Number.isFinite(pk) || pk <= 0)
-                return null;
-            return {
-                channelId: normalizeText(channel?.channel_id) || null,
-                channelName: normalizeText(channel?.channel_name) || "YouTube",
-                pk,
-            };
-        })
-            .filter((channel) => Boolean(channel))
-        : [];
+    const channels = normalizePublishChannels(payload.channels, platform === "instagram" ? "Instagram" : "YouTube");
     const selectedChannelPkRaw = Number(payload.selected_channel_pk ?? 0);
     const selectedChannelPk = Number.isFinite(selectedChannelPkRaw) && selectedChannelPkRaw > 0 ? selectedChannelPkRaw : null;
     return {
@@ -154,10 +156,25 @@ export async function getWorkspacePublishBootstrap(user, videoProjectId) {
             publishAt: normalizeText(payload.defaults?.publish_at) || null,
             title: normalizeText(payload.defaults?.title) || "Shorts",
         },
-        publication: normalizePublication(payload.publication),
+        platform,
+        publication: normalizePublication(payload.publication, platform),
         selectedChannelPk,
         videoProjectId: normalizedVideoProjectId,
     };
+};
+export async function getWorkspacePublishBootstrap(user, videoProjectId, platform = "youtube") {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    const normalizedPlatform = normalizeWorkspacePublishPlatform(platform);
+    const payload = await postAdsflowJson("/api/web/publish/bootstrap", {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: "ru",
+        platform: normalizedPlatform,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+        video_project_id: videoProjectId,
+    });
+    return normalizePublishBootstrap(payload, { platform: normalizedPlatform, videoProjectId });
 }
 export async function getWorkspaceYoutubeConnectUrl(user, options) {
     const externalUserId = await resolvePreferredExternalUserId(user);
@@ -181,6 +198,28 @@ export async function getWorkspaceYoutubeConnectUrl(user, options) {
     }
     return url;
 }
+export async function getWorkspaceInstagramConnectUrl(user, options) {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    const returnTo = new URL("/app/studio", env.appUrl);
+    const normalizedVideoProjectId = Number(options?.videoProjectId ?? 0);
+    if (Number.isFinite(normalizedVideoProjectId) && normalizedVideoProjectId > 0) {
+        returnTo.searchParams.set("publish", String(normalizedVideoProjectId));
+    }
+    const payload = await postAdsflowJson("/api/web/instagram/connect-url", {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: "ru",
+        return_to: returnTo.toString(),
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+        video_project_id: Number.isFinite(normalizedVideoProjectId) && normalizedVideoProjectId > 0 ? normalizedVideoProjectId : undefined,
+    });
+    const url = normalizeText(payload.url);
+    if (!url) {
+        throw new Error("AdsFlow did not return Instagram connect url.");
+    }
+    return url;
+}
 export async function disconnectWorkspaceYoutubeChannel(user, options) {
     const externalUserId = await resolvePreferredExternalUserId(user);
     const payload = await postAdsflowJson("/api/web/youtube/disconnect", {
@@ -192,38 +231,20 @@ export async function disconnectWorkspaceYoutubeChannel(user, options) {
         user_name: user.name ?? undefined,
         video_project_id: options.videoProjectId,
     });
-    const normalizedVideoProjectId = Number(payload.video_project_id ?? options.videoProjectId);
-    if (!Number.isFinite(normalizedVideoProjectId) || normalizedVideoProjectId <= 0) {
-        throw new Error("AdsFlow did not return a valid video project id.");
-    }
-    const channels = Array.isArray(payload.channels)
-        ? payload.channels
-            .map((channel) => {
-            const pk = Number(channel?.pk ?? 0);
-            if (!Number.isFinite(pk) || pk <= 0)
-                return null;
-            return {
-                channelId: normalizeText(channel?.channel_id) || null,
-                channelName: normalizeText(channel?.channel_name) || "YouTube",
-                pk,
-            };
-        })
-            .filter((channel) => Boolean(channel))
-        : [];
-    const selectedChannelPkRaw = Number(payload.selected_channel_pk ?? 0);
-    const selectedChannelPk = Number.isFinite(selectedChannelPkRaw) && selectedChannelPkRaw > 0 ? selectedChannelPkRaw : null;
-    return {
-        channels,
-        defaults: {
-            description: normalizeText(payload.defaults?.description),
-            hashtags: normalizeText(payload.defaults?.hashtags),
-            publishAt: normalizeText(payload.defaults?.publish_at) || null,
-            title: normalizeText(payload.defaults?.title) || "Shorts",
-        },
-        publication: normalizePublication(payload.publication),
-        selectedChannelPk,
-        videoProjectId: normalizedVideoProjectId,
-    };
+    return normalizePublishBootstrap(payload, { platform: "youtube", videoProjectId: options.videoProjectId });
+}
+export async function disconnectWorkspaceInstagramChannel(user, options) {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    const payload = await postAdsflowJson("/api/web/instagram/disconnect", {
+        admin_token: env.adsflowAdminToken,
+        channel_pk: options.channelPk,
+        external_user_id: externalUserId,
+        language: "ru",
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+        video_project_id: options.videoProjectId,
+    });
+    return normalizePublishBootstrap(payload, { platform: "instagram", videoProjectId: options.videoProjectId });
 }
 export async function startWorkspaceYoutubePublish(user, options) {
     const externalUserId = await resolvePreferredExternalUserId(user);
@@ -251,6 +272,39 @@ export async function startWorkspaceYoutubePublish(user, options) {
     return {
         enqueueError,
         jobId,
+        platform: normalizeWorkspacePublishPlatform(payload.platform || "youtube"),
+        status: normalizeText(payload.status) || "queued",
+        videoProjectId: Number(payload.video_project_id ?? options.videoProjectId) || options.videoProjectId,
+    };
+}
+export async function startWorkspaceInstagramPublish(user, options) {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    const payload = await postAdsflowJson("/api/web/publish/instagram", {
+        admin_token: env.adsflowAdminToken,
+        channel_pk: options.channelPk,
+        description: options.description,
+        external_user_id: externalUserId,
+        hashtags: options.hashtags,
+        language: "ru",
+        platform: "instagram",
+        publish_at: options.publishAt || undefined,
+        title: options.title,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+        video_project_id: options.videoProjectId,
+    });
+    const jobId = normalizeText(payload.job_id);
+    if (!jobId) {
+        throw new Error("AdsFlow did not return a publish job id.");
+    }
+    const enqueueError = normalizeText(payload.enqueue_error) || null;
+    if (enqueueError) {
+        throw new Error(enqueueError);
+    }
+    return {
+        enqueueError,
+        jobId,
+        platform: normalizeWorkspacePublishPlatform(payload.platform || "instagram"),
         status: normalizeText(payload.status) || "queued",
         videoProjectId: Number(payload.video_project_id ?? options.videoProjectId) || options.videoProjectId,
     };
@@ -264,7 +318,8 @@ export async function getWorkspacePublishJobStatus(user, jobId) {
     return {
         error: normalizeText(payload.error) || undefined,
         jobId: normalizeText(payload.job_id) || jobId,
-        publication: normalizePublication(payload.publication),
+        platform: normalizeWorkspacePublishPlatform(payload.platform),
+        publication: normalizePublication(payload.publication, normalizeWorkspacePublishPlatform(payload.platform)),
         status: normalizeText(payload.status) || "queued",
         videoProjectId: Number(payload.video_project_id ?? 0) || null,
     };
