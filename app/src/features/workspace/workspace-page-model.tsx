@@ -775,6 +775,9 @@ export type WorkspaceSegmentVoiceoverJobStatusPayload = WorkspaceSegmentAiPhotoJ
   speechEndTime?: number | null;
   speechStartTime?: number | null;
   speechWords?: WorkspaceSegmentEditorSpeechWord[];
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
 };
 
 export type WorkspaceSegmentVoiceoverJobStatusResponse = {

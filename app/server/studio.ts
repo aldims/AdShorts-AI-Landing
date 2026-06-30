@@ -404,6 +404,12 @@ type AdsflowProjectVoiceoverSegmentStatusPayload = {
   speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
   start_time?: number | string | null;
   text?: string | null;
+  _voice_source_duration?: number | string | null;
+  _voice_source_end_time?: number | string | null;
+  _voice_source_start_time?: number | string | null;
+  voice_source_duration?: number | string | null;
+  voice_source_end_time?: number | string | null;
+  voice_source_start_time?: number | string | null;
 };
 
 type AdsflowSegmentVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobStatusResponse & {
@@ -659,6 +665,9 @@ export type StudioSegmentVoiceoverJobStatus = {
   speechStartTime: number | null;
   speechWords: StudioSegmentVoiceoverSpeechWord[];
   status: string;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
 };
 
 export type StudioProjectVoiceoverSegmentStatus = {
@@ -668,6 +677,9 @@ export type StudioProjectVoiceoverSegmentStatus = {
   speechStartTime: number | null;
   speechWords: StudioSegmentVoiceoverSpeechWord[];
   text: string;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
 };
 
 export type StudioProjectVoiceoverJobStatus = StudioSegmentVoiceoverJobStatus & {
@@ -1435,6 +1447,56 @@ const normalizeNumber = (value: unknown) => {
 };
 
 const roundStudioTimelineSeconds = (value: number) => Number(value.toFixed(3));
+
+const normalizeAdsflowVoiceSourceWindow = (
+  payload: {
+    _voice_source_duration?: unknown;
+    _voice_source_end_time?: unknown;
+    _voice_source_start_time?: unknown;
+    duration?: unknown;
+    end_time?: unknown;
+    start_time?: unknown;
+    voice_source_duration?: unknown;
+    voice_source_end_time?: unknown;
+    voice_source_start_time?: unknown;
+  },
+) => {
+  const sourceStartTime = normalizeNumber(
+    payload.voice_source_start_time ?? payload._voice_source_start_time ?? payload.start_time,
+  );
+  const sourceEndTime = normalizeNumber(
+    payload.voice_source_end_time ?? payload._voice_source_end_time ?? payload.end_time,
+  );
+  const explicitDuration = normalizeNumber(
+    payload.voice_source_duration ?? payload._voice_source_duration ?? payload.duration,
+  );
+
+  if (sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime) {
+    return {
+      voiceSourceDuration: roundStudioTimelineSeconds(sourceEndTime - sourceStartTime),
+      voiceSourceEndTime: roundStudioTimelineSeconds(Math.max(sourceStartTime, sourceEndTime)),
+      voiceSourceStartTime: roundStudioTimelineSeconds(Math.max(0, sourceStartTime)),
+    };
+  }
+
+  const voiceSourceDuration =
+    explicitDuration !== null && explicitDuration > 0
+      ? roundStudioTimelineSeconds(Math.max(0, explicitDuration))
+      : null;
+  const voiceSourceStartTime = sourceStartTime !== null ? roundStudioTimelineSeconds(Math.max(0, sourceStartTime)) : null;
+  const voiceSourceEndTime =
+    sourceEndTime !== null
+      ? roundStudioTimelineSeconds(Math.max(voiceSourceStartTime ?? 0, sourceEndTime))
+      : voiceSourceStartTime !== null && voiceSourceDuration !== null
+        ? roundStudioTimelineSeconds(voiceSourceStartTime + voiceSourceDuration)
+        : null;
+
+  return {
+    voiceSourceDuration,
+    voiceSourceEndTime,
+    voiceSourceStartTime,
+  };
+};
 
 const normalizeStudioSegmentVisualDurationSeconds = (value: unknown) => {
   const normalized = normalizeNumber(value);
@@ -7882,6 +7944,7 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (
       : null;
   const speechDuration =
     speechBoundaryDuration ?? normalizeNumber(payload.speech_duration ?? payload.duration);
+  const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(payload);
 
   return {
     asset,
@@ -7897,6 +7960,9 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (
     speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
     status: String(payload.status ?? "queued"),
     text: normalizeGenerationText(payload.text) || fallback.text || "",
+    voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+    voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+    voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
     voiceType,
   };
 };
@@ -8412,6 +8478,7 @@ export async function getStudioProjectVoiceoverJobStatus(
           : null;
       const segmentSpeechDuration =
         segmentSpeechBoundaryDuration ?? normalizeNumber(segment.speech_duration ?? segment.duration);
+      const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(segment);
 
       return {
         segmentIndex,
@@ -8423,6 +8490,9 @@ export async function getStudioProjectVoiceoverJobStatus(
         speechStartTime: segmentSpeechStartTime !== null ? Math.max(0, segmentSpeechStartTime) : null,
         speechWords: normalizeSegmentVoiceoverSpeechWords(segment.speech_words),
         text: normalizeGenerationText(segment.text),
+        voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+        voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+        voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
       } satisfies StudioProjectVoiceoverSegmentStatus;
     });
 
@@ -8484,6 +8554,9 @@ export async function getStudioBatchVoiceoverJobStatus(
             speechWords: segmentStatus?.speechWords ?? [],
             status: status.status,
             text: segmentStatus?.text || segment.text,
+            voiceSourceDuration: segmentStatus?.voiceSourceDuration ?? fallbackDuration,
+            voiceSourceEndTime: segmentStatus?.voiceSourceEndTime ?? fallbackEndTime,
+            voiceSourceStartTime: segmentStatus?.voiceSourceStartTime ?? fallbackStartTime,
             voiceType: group.voiceType,
           } satisfies StudioBatchVoiceoverJobSegmentStatus;
         });

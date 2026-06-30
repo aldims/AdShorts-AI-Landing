@@ -16794,6 +16794,10 @@ export function WorkspacePage({
     let lastLoggedReadyCount = -1;
     let lastLoggedStatus = "";
     const startedAt = Date.now();
+    const normalizeStatusDurationSeconds = (value: unknown) => {
+      const normalized = normalizeWorkspaceSegmentVoicePreviewTime(value);
+      return normalized !== null && normalized > 0 ? roundWorkspaceSegmentTimelineSeconds(normalized) : null;
+    };
 
     while (true) {
       if (Date.now() - startedAt >= WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS) {
@@ -16848,18 +16852,35 @@ export function WorkspacePage({
                 durationSeconds: assetDuration,
               }
             : segmentStatus.asset;
+        const speechDuration = normalizeStatusDurationSeconds(segmentStatus.speechDuration);
+        const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechStartTime);
+        const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechEndTime);
+        const sourceStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
+          segmentStatus.voiceSourceStartTime ?? segmentStatus.speechStartTime,
+        );
+        const sourceEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
+          segmentStatus.voiceSourceEndTime ?? segmentStatus.speechEndTime,
+        );
+        const sourceBoundaryDuration =
+          sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime
+            ? normalizeStatusDurationSeconds(sourceEndTime - sourceStartTime)
+            : null;
+        const voiceSourceDuration =
+          normalizeStatusDurationSeconds(segmentStatus.voiceSourceDuration) ??
+          sourceBoundaryDuration ??
+          speechDuration;
 
         clearSegmentEditorVoiceoverError(segmentStatus.segmentIndex);
         updateSegmentEditorDraftSegmentByIndex(segmentStatus.segmentIndex, (segment) => ({
           ...segment,
-          speechDuration: segmentStatus.speechDuration ?? null,
-          speechDurationSource: segmentStatus.speechDurationSource ?? (segmentStatus.speechDuration ? "audio" : null),
-          speechEndTime: segmentStatus.speechEndTime ?? null,
-          speechStartTime: segmentStatus.speechStartTime ?? null,
+          speechDuration,
+          speechDurationSource: segmentStatus.speechDurationSource ?? (speechDuration ? "audio" : null),
+          speechEndTime,
+          speechStartTime,
           speechWords: segmentStatus.speechWords ?? [],
-          voiceSourceDuration: segmentStatus.speechDuration ?? null,
-          voiceSourceEndTime: segmentStatus.speechEndTime ?? null,
-          voiceSourceStartTime: segmentStatus.speechStartTime ?? null,
+          voiceSourceDuration,
+          voiceSourceEndTime: sourceEndTime,
+          voiceSourceStartTime: sourceStartTime,
           voiceoverAsset,
           voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
           voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
