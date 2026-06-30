@@ -7080,7 +7080,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(scratchDraft)).toBe(false);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(textDraft)).toBe(true);
-    expect(hasWorkspaceSegmentEditorRenderableScratchScene(persistedOnlyDraft)).toBe(false);
+    expect(hasWorkspaceSegmentEditorRenderableScratchScene(persistedOnlyDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(recoveredCurrentVisualDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(visualDraft)).toBe(true);
   });
@@ -7166,6 +7166,42 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.payload.segments[0]).toEqual(
       expect.objectContaining({
         customVideoAssetId: 704,
+        index: 0,
+        text: "",
+        videoAction: "custom",
+      }),
+    );
+    expect(result.uploads).toHaveLength(0);
+  });
+
+  it("exports scratch original-action current assets as custom media", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        currentAsset: createMediaAsset(705, { mediaType: "photo" }),
+        currentPosterUrl: "/api/workspace/media-assets/705",
+        customVideo: null,
+        originalText: "",
+        originalTextByLanguage: { ru: "" },
+        text: "",
+        textByLanguage: { ru: "" },
+        videoAction: "original" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 705,
         index: 0,
         text: "",
         videoAction: "custom",

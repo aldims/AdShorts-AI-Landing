@@ -3030,7 +3030,8 @@ export const hasWorkspaceSegmentEditorRenderableScratchScene = (
     draft?.segments.some(
       (segment) =>
         Boolean(normalizeWorkspaceSegmentEditorTextForCompare(segment.text)) ||
-        hasWorkspaceSegmentExplicitDraftVisual(segment),
+        hasWorkspaceSegmentExplicitDraftVisual(segment) ||
+        hasWorkspaceSegmentPersistedMediaReference(segment),
     ),
   );
 

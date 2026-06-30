@@ -113,21 +113,26 @@ export type WorkspaceSegmentEditorUploadFile = {
 const resolveWorkspaceSegmentFallbackCustomVisualAsset = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): StudioCustomVideoFile | null => {
-  if (segment.videoAction !== "custom" || segment.customVideo) {
+  if (segment.customVideo) {
     return null;
   }
 
-  const currentVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
-  const originalVisualIdentity = getWorkspaceSegmentOriginalVisualIdentityKey(segment);
-  if (!currentVisualIdentity || currentVisualIdentity === originalVisualIdentity) {
-    return null;
-  }
-
-  return createStudioCustomVideoFileFromWorkspaceMediaAsset(segment.currentAsset, {
+  const currentVisualAsset = createStudioCustomVideoFileFromWorkspaceMediaAsset(segment.currentAsset, {
     fallbackFileName: `segment-visual-${segment.index + 1}.bin`,
     fallbackMimeType: segment.mediaType === "photo" ? "image/jpeg" : "video/mp4",
     fallbackRemoteUrl: segment.currentPlaybackUrl ?? segment.currentPreviewUrl,
     posterUrl: segment.currentPosterUrl,
+  });
+
+  if (currentVisualAsset) {
+    return currentVisualAsset;
+  }
+
+  return createStudioCustomVideoFileFromWorkspaceMediaAsset(segment.originalAsset, {
+    fallbackFileName: `segment-visual-${segment.index + 1}.bin`,
+    fallbackMimeType: segment.mediaType === "photo" ? "image/jpeg" : "video/mp4",
+    fallbackRemoteUrl: segment.originalPlaybackUrl ?? segment.originalPreviewUrl,
+    posterUrl: segment.originalPosterUrl,
   });
 };
 
