@@ -1447,6 +1447,23 @@ export function WorkspacePage({
   const location = useLocation();
   const routeStudioDefaults = getWorkspaceInitialStudioDefaults(locale);
   const routeLocaleLanguage = routeStudioDefaults.language;
+  const resolveStudioGenerationErrorMessage = useCallback(
+    (message: string) => {
+      const normalizedMessage = message.trim();
+      if (normalizedMessage === "Add text to at least one scene") {
+        return workspaceText(
+          locale,
+          "Добавьте текст или визуал хотя бы в одну сцену.",
+          "Add text or visual to at least one scene.",
+        );
+      }
+      if (normalizedMessage === "Prompt is required.") {
+        return workspaceText(locale, "Введите prompt для генерации.", "Enter a prompt to generate.");
+      }
+      return message;
+    },
+    [locale],
+  );
   const localizedStudioPathname = localizePath("/app/studio").replace(/\/+$/, "") || "/";
   const normalizedCurrentPathname = location.pathname.replace(/\/+$/, "") || "/";
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
@@ -18598,7 +18615,8 @@ export function WorkspacePage({
         return;
       }
 
-      const errorMessage = error instanceof Error ? error.message : "Failed to generate task.";
+      const rawErrorMessage = error instanceof Error ? error.message : "Failed to generate task.";
+      const errorMessage = resolveStudioGenerationErrorMessage(rawErrorMessage);
       setStatus("Generation failed");
       setGenerateError(errorMessage);
       setHasLoadedProjects(false);
@@ -19476,7 +19494,8 @@ export function WorkspacePage({
       });
     } catch (error) {
       console.error("[studio] generate.failed-before-job", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to generate task.";
+      const rawErrorMessage = error instanceof Error ? error.message : "Failed to generate task.";
+      const errorMessage = resolveStudioGenerationErrorMessage(rawErrorMessage);
       if (isSegmentEditorGeneration) {
         logSegmentEditorDiagnostics(
           "client.segment-editor.generate.failed-before-job",
