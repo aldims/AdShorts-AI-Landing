@@ -382,6 +382,11 @@ export type WorkspaceSegmentTimelineAudioPreviewTrack = {
 
 export type WorkspaceSegmentEditorFullPreviewStatus = "idle" | "loading" | "paused" | "playing";
 
+export const shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator = (
+  status: WorkspaceSegmentEditorFullPreviewStatus,
+  options?: { blockedByActiveGeneration?: boolean },
+) => status === "loading" && options?.blockedByActiveGeneration !== true;
+
 export type WorkspaceSegmentEditorFullPreviewAudioTrack = {
   endGraceSeconds?: number;
   key: string;

@@ -5,6 +5,7 @@ import {
   getPublishChannelsForPlatform,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
 
@@ -42,6 +43,20 @@ describe("segment scene sound generation availability", () => {
         sceneSoundRunState: {},
       }),
     ).toBe(true);
+  });
+});
+
+describe("segment editor full preview busy indicator", () => {
+  it("shows busy only while preview itself is loading", () => {
+    expect(shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator("loading")).toBe(true);
+    expect(
+      shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator("loading", {
+        blockedByActiveGeneration: true,
+      }),
+    ).toBe(false);
+    expect(shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator("idle")).toBe(false);
+    expect(shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator("playing")).toBe(false);
+    expect(shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator("paused")).toBe(false);
   });
 });
 

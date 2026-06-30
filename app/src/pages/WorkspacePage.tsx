@@ -577,6 +577,7 @@ import {
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
   waitWorkspaceDelay,
@@ -30659,11 +30660,14 @@ export function WorkspacePage({
   }, [isSegmentEditorFullPreviewUnavailable, segmentEditorPendingFullPreviewStartToken]);
   const isSegmentEditorFullPreviewAudioUnlockAction =
     isSegmentEditorFullPreviewPlaying && segmentEditorFullPreviewAudioUnlockRequired;
+  const shouldShowSegmentEditorFullPreviewBusyIndicator =
+    shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator(segmentEditorFullPreviewStatus, {
+      blockedByActiveGeneration: isSegmentEditorFullPreviewBlockedByActiveGeneration,
+    });
   const segmentEditorFullPreviewUnavailableButton = (
     <button
       className="studio-segment-editor__timeline-preview-toggle"
       type="button"
-      aria-busy={isSegmentEditorFullPreviewBlockedByActiveGeneration ? true : undefined}
       aria-label={segmentEditorFullPreviewUnavailableReason ?? workspaceText(locale, "Предпросмотр", "Preview")}
       title={segmentEditorFullPreviewUnavailableReason ?? workspaceText(locale, "Предпросмотр", "Preview")}
       disabled={isSegmentEditorFullPreviewBlockedByActiveGeneration}
@@ -30675,13 +30679,9 @@ export function WorkspacePage({
         openSegmentEditorVoiceoverPreviewRequiredModal();
       }}
     >
-      {isSegmentEditorFullPreviewBlockedByActiveGeneration ? (
-        <span className="studio-segment-editor__change-summary-create-spinner" aria-hidden="true"></span>
-      ) : (
-        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-          <path d="M6 3.8v9.4l7.35-4.7L6 3.8Z" fill="currentColor" />
-        </svg>
-      )}
+      <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+        <path d="M6 3.8v9.4l7.35-4.7L6 3.8Z" fill="currentColor" />
+      </svg>
       <span>{workspaceText(locale, "Предпросмотр", "Preview")}</span>
     </button>
   );
@@ -30746,11 +30746,11 @@ export function WorkspacePage({
   ) : (
     <button
       className={`studio-segment-editor__timeline-preview-toggle${isSegmentEditorFullPreviewPlaying ? " is-playing" : ""}${
-        isSegmentEditorFullPreviewLoading ? " is-loading" : ""
+        shouldShowSegmentEditorFullPreviewBusyIndicator ? " is-loading" : ""
       }`}
       type="button"
       disabled={isSegmentEditorFullPreviewUnavailable}
-      aria-busy={isSegmentEditorFullPreviewLoading ? true : undefined}
+      aria-busy={shouldShowSegmentEditorFullPreviewBusyIndicator ? true : undefined}
       aria-label={segmentEditorFullPreviewButtonLabel}
       aria-pressed={isSegmentEditorFullPreviewPlaying}
       title={segmentEditorFullPreviewButtonLabel}
@@ -30759,7 +30759,7 @@ export function WorkspacePage({
       onTouchStart={primeSegmentEditorFullPreviewAudioTracksFromUserGesture}
       onClick={handleSegmentEditorFullPreviewToggle}
     >
-      {isSegmentEditorFullPreviewLoading ? (
+      {shouldShowSegmentEditorFullPreviewBusyIndicator ? (
         <span className="studio-segment-editor__timeline-play-spinner" aria-hidden="true"></span>
       ) : isSegmentEditorFullPreviewPlaying && !isSegmentEditorFullPreviewAudioUnlockAction ? (
         <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
