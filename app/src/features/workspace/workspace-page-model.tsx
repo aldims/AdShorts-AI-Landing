@@ -921,6 +921,7 @@ export type WorkspaceSegmentVisualRunState = Record<number, number>;
 export type WorkspaceSegmentVisualRunScope =
   | "ai_photo"
   | "ai_video"
+  | "custom_upload"
   | "image_edit"
   | "image_upscale"
   | "photo_animation"
@@ -935,6 +936,11 @@ export const hasWorkspaceSegmentVisualRun = (
 
 export const hasAnyWorkspaceSegmentVisualRun = (runState: WorkspaceSegmentVisualRunState) =>
   Object.keys(runState).length > 0;
+
+export const isWorkspaceSegmentCustomVisualUploadBusy = (
+  runState: WorkspaceSegmentVisualRunState,
+  segmentIndex: number | null | undefined,
+) => hasWorkspaceSegmentVisualRun(runState, segmentIndex);
 
 export const isWorkspaceSegmentSceneSoundRunBusy = (
   segmentIndex: number | null | undefined,

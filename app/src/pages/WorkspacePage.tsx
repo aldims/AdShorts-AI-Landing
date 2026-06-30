@@ -547,6 +547,7 @@ import {
   WORKSPACE_SEGMENT_TIMELINE_AUDIO_PREVIEW_TAIL_PADDING_SECONDS,
   hasWorkspaceSegmentVisualRun,
   hasAnyWorkspaceSegmentVisualRun,
+  isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceSegmentSceneSoundRunBusy,
   clearWorkspaceSegmentVisualRunState,
   STUDIO_PROMPT_PANEL_BASE_WIDTH,
@@ -1949,7 +1950,9 @@ export function WorkspacePage({
       "Не удалось сгенерировать озвучку сцены.",
       "Failed to generate scene voiceover.",
     );
-  const [isSegmentEditorPreparingCustomVideo, setIsSegmentEditorPreparingCustomVideo] = useState(false);
+  const [segmentEditorPreparingCustomVideoRunIds, setSegmentEditorPreparingCustomVideoRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
+  const isSegmentEditorPreparingCustomVideo = hasAnyWorkspaceSegmentVisualRun(segmentEditorPreparingCustomVideoRunIds);
   const [segmentEditorPanelHeightLock, setSegmentEditorPanelHeightLock] = useState<number | null>(null);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
   const [playingSegmentEditorPreviewIndex, setPlayingSegmentEditorPreviewIndexState] = useState<number | null>(null);
@@ -2076,6 +2079,7 @@ export function WorkspacePage({
   const pendingGeneratedVideoActionModeRef = useRef<StudioGeneratedVideoActionMode>("expanded");
   const hasDisplayedGeneratedVideoActionsRef = useRef(false);
   const studioToastTimerRef = useRef<number | null>(null);
+  const segmentCustomVideoUploadRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentAiPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentAiPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -2362,6 +2366,7 @@ export function WorkspacePage({
   const getSegmentVisualRunScope = (
     runRef: { current: WorkspaceSegmentVisualRunState },
   ): WorkspaceSegmentVisualRunScope => {
+    if (runRef === segmentCustomVideoUploadRunRef) return "custom_upload";
     if (runRef === segmentAiPhotoRunRef) return "ai_photo";
     if (runRef === segmentAiVideoRunRef) return "ai_video";
     if (runRef === segmentImageEditRunRef) return "image_edit";
@@ -2442,6 +2447,7 @@ export function WorkspacePage({
 
     segmentEditorActiveVisualRunKeysRef.current.clear();
     clearRunRef(segmentAiPhotoRunRef);
+    clearRunRef(segmentCustomVideoUploadRunRef);
     clearRunRef(segmentAiVideoRunRef);
     clearRunRef(segmentPhotoAnimationRunRef);
     clearRunRef(segmentTalkingPhotoRunRef);
@@ -2454,6 +2460,7 @@ export function WorkspacePage({
     segmentTalkingPhotoActiveJobIdsRef.current.clear();
     segmentImageEditActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
+    setSegmentEditorPreparingCustomVideoRunIds({});
     setSegmentEditorGeneratingAiVideoRunIds({});
     setSegmentEditorGeneratingPhotoAnimationRunIds({});
     setSegmentEditorGeneratingTalkingPhotoRunIds({});
@@ -3742,7 +3749,6 @@ export function WorkspacePage({
       closeSegmentAiPhotoModal({ immediate: true });
       clearAllSegmentVisualRuns();
       setIsSegmentEditorLoading(false);
-      setIsSegmentEditorPreparingCustomVideo(false);
       setSegmentEditorPreviewTimes(clearWorkspaceSegmentPreviewTimes);
       queuedSegmentEditorPlaybackIndexRef.current = null;
       setQueuedSegmentEditorPlaybackIndex(null);
@@ -7036,6 +7042,14 @@ export function WorkspacePage({
   const isActiveSegmentVoiceoverCurrent = Boolean(
     activeSegment && hasWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds, activeSegment.index),
   );
+  const isActiveSegmentPreparingCustomVideo = isWorkspaceSegmentCustomVisualUploadBusy(
+    segmentEditorPreparingCustomVideoRunIds,
+    activeSegment?.index,
+  );
+  const isSegmentAiPhotoModalPreparingCustomVideo = isWorkspaceSegmentCustomVisualUploadBusy(
+    segmentEditorPreparingCustomVideoRunIds,
+    segmentAiPhotoModalSegment?.index,
+  );
   const isSegmentAiPhotoModalSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
   const canEditSegmentImage = canWorkspaceSegmentEditPhoto(segmentAiPhotoModalSegment);
   const canUpscaleSegmentImage = canWorkspaceSegmentUpscalePhoto(segmentAiPhotoModalSegment);
@@ -7068,7 +7082,7 @@ export function WorkspacePage({
     isReady: hasSegmentAiPhotoModalLibrarySelection,
   });
   const segmentAiPhotoModalUploadStatus = createSegmentAiPhotoModalStatus({
-    isBusy: isSegmentEditorPreparingCustomVideo,
+    isBusy: isSegmentAiPhotoModalPreparingCustomVideo,
     isReady: hasSegmentAiPhotoModalCustomFile,
   });
   const segmentAiPhotoModalUpscaleStatus = createSegmentAiPhotoModalStatus({
@@ -12684,7 +12698,16 @@ export function WorkspacePage({
       return false;
     }
 
-    setIsSegmentEditorPreparingCustomVideo(true);
+    if (isWorkspaceSegmentCustomVisualUploadBusy(segmentEditorPreparingCustomVideoRunIds, targetSegmentIndex)) {
+      setSegmentEditorVideoError(workspaceText(locale, "Визуал сцены уже загружается.", "Scene visual is already uploading."));
+      return false;
+    }
+
+    const customVideoUploadRunId = startSegmentVisualRun(
+      segmentCustomVideoUploadRunRef,
+      setSegmentEditorPreparingCustomVideoRunIds,
+      targetSegmentIndex,
+    );
     setSegmentEditorVideoError(null);
 
     try {
@@ -12700,6 +12723,35 @@ export function WorkspacePage({
       const mimeType = getWorkspaceSegmentCustomVisualMimeType(file);
       const objectUrl = createStudioObjectUrl(file);
       const durationSeconds = mimeType.startsWith("video/") ? await readWorkspaceVideoDurationSeconds(objectUrl) : null;
+      const isCurrentCustomVideoUpload = () =>
+        isSegmentVisualRunCurrent(segmentCustomVideoUploadRunRef, targetSegmentIndex, customVideoUploadRunId);
+      const restorePreviousSegmentVisual = () => {
+        updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
+          if (segment.customVideo?.objectUrl !== objectUrl) {
+            return segment;
+          }
+
+          return previousSegment
+            ? {
+                ...segment,
+                aiVideoAsset: previousSegment.aiVideoAsset,
+                aiVideoGeneratedMode: previousSegment.aiVideoGeneratedMode,
+                customVideo: previousSegment.customVideo,
+                durationExtensionSourceDurationSeconds: previousSegment.durationExtensionSourceDurationSeconds,
+                visualReset: previousSegment.visualReset,
+                videoAction: previousSegment.videoAction,
+              }
+            : {
+                ...segment,
+                aiVideoAsset: null,
+                aiVideoGeneratedMode: null,
+                customVideo: null,
+                durationExtensionSourceDurationSeconds: null,
+                visualReset: false,
+                videoAction: "original",
+              };
+        });
+      };
 
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
         ...segment,
@@ -12742,62 +12794,22 @@ export function WorkspacePage({
           },
         );
       } catch (error) {
-        updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
-          if (segment.customVideo?.objectUrl !== objectUrl) {
-            return segment;
-          }
-
-          return previousSegment
-            ? {
-                ...segment,
-                aiVideoAsset: previousSegment.aiVideoAsset,
-                aiVideoGeneratedMode: previousSegment.aiVideoGeneratedMode,
-                customVideo: previousSegment.customVideo,
-                durationExtensionSourceDurationSeconds: previousSegment.durationExtensionSourceDurationSeconds,
-                visualReset: previousSegment.visualReset,
-                videoAction: previousSegment.videoAction,
-              }
-            : {
-                ...segment,
-                aiVideoAsset: null,
-                aiVideoGeneratedMode: null,
-                customVideo: null,
-                durationExtensionSourceDurationSeconds: null,
-                visualReset: false,
-                videoAction: "original",
-              };
-        });
-        setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось загрузить файл сегмента.");
+        if (isCurrentCustomVideoUpload()) {
+          restorePreviousSegmentVisual();
+          setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось загрузить файл сегмента.");
+        }
         return false;
       }
 
       if (!uploadedAssetId) {
-        updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
-          if (segment.customVideo?.objectUrl !== objectUrl) {
-            return segment;
-          }
+        if (isCurrentCustomVideoUpload()) {
+          restorePreviousSegmentVisual();
+          setSegmentEditorVideoError("Не удалось сохранить визуал сегмента. Попробуйте загрузить файл еще раз.");
+        }
+        return false;
+      }
 
-          return previousSegment
-            ? {
-                ...segment,
-                aiVideoAsset: previousSegment.aiVideoAsset,
-                aiVideoGeneratedMode: previousSegment.aiVideoGeneratedMode,
-                customVideo: previousSegment.customVideo,
-                durationExtensionSourceDurationSeconds: previousSegment.durationExtensionSourceDurationSeconds,
-                visualReset: previousSegment.visualReset,
-                videoAction: previousSegment.videoAction,
-              }
-            : {
-                ...segment,
-                aiVideoAsset: null,
-                aiVideoGeneratedMode: null,
-                customVideo: null,
-                durationExtensionSourceDurationSeconds: null,
-                visualReset: false,
-                videoAction: "original",
-              };
-        });
-        setSegmentEditorVideoError("Не удалось сохранить визуал сегмента. Попробуйте загрузить файл еще раз.");
+      if (!isCurrentCustomVideoUpload()) {
         return false;
       }
 
@@ -12845,10 +12857,17 @@ export function WorkspacePage({
 
       return true;
     } catch (error) {
-      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось подготовить файл сегмента.");
+      if (isSegmentVisualRunCurrent(segmentCustomVideoUploadRunRef, targetSegmentIndex, customVideoUploadRunId)) {
+        setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось подготовить файл сегмента.");
+      }
       return false;
     } finally {
-      setIsSegmentEditorPreparingCustomVideo(false);
+      clearSegmentVisualRun(
+        segmentCustomVideoUploadRunRef,
+        setSegmentEditorPreparingCustomVideoRunIds,
+        targetSegmentIndex,
+        customVideoUploadRunId,
+      );
     }
   };
 
@@ -30056,14 +30075,14 @@ export function WorkspacePage({
     (isPromptImageEditMode && isSegmentImageEditModalGeneratingCurrentSegment) ||
     (isPromptUpscaleMode && isSegmentImageUpscaleCurrentSegment) ||
     (isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent) ||
-    (isPromptUploadMode && isSegmentEditorPreparingCustomVideo);
+    (isPromptUploadMode && isActiveSegmentPreparingCustomVideo);
   const isPromptTalkingPhotoVoiceMissing = isPromptTalkingPhotoMode && !activeSegmentEffectiveDraftVoiceId;
   const isPromptVisualJobBusyBlockingAction =
     isActiveSegmentVisualJobBusy && !isPromptReadyVisualSelectionMode;
   const isPromptVisualBaseDisabled =
     !activeSegment ||
     isPromptVisualJobBusyBlockingAction ||
-    isSegmentEditorPreparingCustomVideo ||
+    isActiveSegmentPreparingCustomVideo ||
     isSegmentAiPhotoPromptImproving ||
     (isPromptPhotoAnimationMode && !canAnimateSegmentPhoto) ||
     (isPromptTalkingPhotoMode && !canCreateSegmentTalkingPhoto) ||
@@ -31184,7 +31203,7 @@ export function WorkspacePage({
                                   }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                   type="button"
                                   aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                  disabled={!activeSegment || isSegmentEditorPreparingCustomVideo}
+                                  disabled={!activeSegment || isActiveSegmentPreparingCustomVideo}
                                   onClick={() => {
                                     if (!activeSegment) {
                                       return;
@@ -33521,7 +33540,7 @@ export function WorkspacePage({
                             costForQuality: getSegmentAiVideoCreditCost,
                             disabled:
                               isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentEditorPreparingCustomVideo ||
+                              isSegmentAiPhotoModalPreparingCustomVideo ||
                               isSegmentAiPhotoPromptImproving,
                             forcedPremiumDescription: isSegmentAiVideoPremiumBillingForced
                               ? segmentCharacterPremiumBillingDescription
@@ -33553,7 +33572,7 @@ export function WorkspacePage({
                                   !canImproveSegmentAiVideoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
                                   isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                  isSegmentEditorPreparingCustomVideo
+                                  isSegmentAiPhotoModalPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -33586,7 +33605,7 @@ export function WorkspacePage({
                               disabled={
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -33619,7 +33638,7 @@ export function WorkspacePage({
                             costForQuality: getSegmentPhotoAnimationCreditCost,
                             disabled:
                               isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentEditorPreparingCustomVideo ||
+                              isSegmentAiPhotoModalPreparingCustomVideo ||
                               isSegmentAiPhotoPromptImproving,
                             label: workspaceText(locale, "Качество AI анимации", "AI animation quality"),
                             onChange: setSelectedSegmentPhotoAnimationQuality,
@@ -33648,7 +33667,7 @@ export function WorkspacePage({
                                   !canImproveSegmentAiVideoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
                                   isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                  isSegmentEditorPreparingCustomVideo
+                                  isSegmentAiPhotoModalPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -33675,7 +33694,7 @@ export function WorkspacePage({
                               className: "studio-segment-photo-animation-duration--modal-action",
                               disabled:
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving,
                               onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
                               quality: selectedSegmentPhotoAnimationQuality,
@@ -33690,7 +33709,7 @@ export function WorkspacePage({
                                 !canAnimateSegmentPhoto ||
                                 isSegmentAiPhotoModalAiVideoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -33748,7 +33767,7 @@ export function WorkspacePage({
                                 !modalSegmentTalkingCharacterTarget ||
                                 !segmentAiPhotoModalTalkingPhotoVoiceId ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo
+                                isSegmentAiPhotoModalPreparingCustomVideo
                               }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
@@ -33796,7 +33815,7 @@ export function WorkspacePage({
                                   !canImproveSegmentImageEditPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
                                   isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                  isSegmentEditorPreparingCustomVideo
+                                  isSegmentAiPhotoModalPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -33829,7 +33848,7 @@ export function WorkspacePage({
                                 !canEditSegmentImage ||
                                 isSegmentImageEditModalPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -33871,7 +33890,7 @@ export function WorkspacePage({
                               disabled={
                                 !canUpscaleSegmentImage ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -33903,7 +33922,7 @@ export function WorkspacePage({
                             costForQuality: getSegmentAiPhotoCreditCost,
                             disabled:
                               isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentEditorPreparingCustomVideo ||
+                              isSegmentAiPhotoModalPreparingCustomVideo ||
                               isSegmentAiPhotoPromptImproving,
                             forcedPremiumDescription: isSegmentAiPhotoPremiumBillingForced
                               ? segmentCharacterPremiumBillingDescription
@@ -33935,7 +33954,7 @@ export function WorkspacePage({
                                   !canImproveSegmentAiPhotoPrompt ||
                                   isSegmentAiPhotoPromptImproving ||
                                   isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                  isSegmentEditorPreparingCustomVideo
+                                  isSegmentAiPhotoModalPreparingCustomVideo
                                 }
                                 onClick={() => {
                                   void handleSegmentAiPhotoModalImprovePrompt();
@@ -33968,7 +33987,7 @@ export function WorkspacePage({
                               disabled={
                                 isSegmentAiPhotoModalAiPhotoPromptEmpty ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentEditorPreparingCustomVideo ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving
                               }
                               onClick={() => {
@@ -34119,7 +34138,7 @@ export function WorkspacePage({
                                     }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                     type="button"
                                     aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                    disabled={isSegmentEditorPreparingCustomVideo}
+                                    disabled={isSegmentAiPhotoModalPreparingCustomVideo}
                                     onClick={() => {
                                       setSegmentEditorVideoError(null);
                                       setSegmentAiPhotoModalTab("library");
@@ -34185,14 +34204,14 @@ export function WorkspacePage({
                               className={`studio-ai-photo-modal__upload-btn${segmentAiPhotoModalCustomFileName ? " is-active" : ""}`}
                               type="button"
                               title={segmentAiPhotoModalCustomFileName || workspaceText(locale, "Загрузить файл", "Upload file")}
-                              disabled={isSegmentEditorPreparingCustomVideo}
+                              disabled={isSegmentAiPhotoModalPreparingCustomVideo}
                               onClick={() => {
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("upload");
                                 segmentAiPhotoModalFileInputRef.current?.click();
                               }}
                             >
-                              {isSegmentEditorPreparingCustomVideo
+                              {isSegmentAiPhotoModalPreparingCustomVideo
                                 ? workspaceText(locale, "Загрузка...", "Uploading...")
                                 : segmentAiPhotoModalCustomFileName
                                   ? workspaceText(locale, "Заменить файл", "Replace file")

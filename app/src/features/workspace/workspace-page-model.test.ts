@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
+  isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -43,6 +44,16 @@ describe("segment scene sound generation availability", () => {
         sceneSoundRunState: {},
       }),
     ).toBe(true);
+  });
+});
+
+describe("segment custom visual upload availability", () => {
+  it("scopes upload busy state to the matching segment", () => {
+    const uploadRunState = { 1: 4 };
+
+    expect(isWorkspaceSegmentCustomVisualUploadBusy(uploadRunState, 1)).toBe(true);
+    expect(isWorkspaceSegmentCustomVisualUploadBusy(uploadRunState, 2)).toBe(false);
+    expect(isWorkspaceSegmentCustomVisualUploadBusy(uploadRunState, null)).toBe(false);
   });
 });
 
