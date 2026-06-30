@@ -86,6 +86,14 @@ export type WorkspaceSegmentEditorFullPreviewAudioPlaybackStartOptions = {
   syncToleranceSeconds: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewMediaLoadOptions = {
+  isEnded: boolean;
+  isPaused: boolean;
+  minimumReadyState: number;
+  networkState: number;
+  readyState: number;
+};
+
 export type WorkspaceSegmentEditorFullPreviewAudioPreparationResult = "ready" | "not-ready" | "unlock-required";
 
 export type WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions = {
@@ -135,6 +143,8 @@ const normalizePreviewTime = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
 };
+
+const WORKSPACE_SEGMENT_EDITOR_MEDIA_NETWORK_LOADING = 2;
 
 const normalizePreviewSegmentBinding = (value: unknown) => {
   if (value === null || value === undefined || value === "") {
@@ -1170,6 +1180,24 @@ export const isWorkspaceSegmentEditorFullPreviewAudioReadyState = (
   Number.isFinite(readyState) &&
   Number.isFinite(minimumReadyState) &&
   readyState >= Math.max(0, minimumReadyState);
+
+export const shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement = ({
+  isEnded,
+  isPaused,
+  minimumReadyState,
+  networkState,
+  readyState,
+}: WorkspaceSegmentEditorFullPreviewMediaLoadOptions) => {
+  if (isWorkspaceSegmentEditorFullPreviewAudioReadyState(readyState, minimumReadyState)) {
+    return false;
+  }
+
+  if (!isPaused && !isEnded) {
+    return false;
+  }
+
+  return networkState !== WORKSPACE_SEGMENT_EDITOR_MEDIA_NETWORK_LOADING;
+};
 
 export const shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation = ({
   allowPlayBeforeReady,

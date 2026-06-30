@@ -851,6 +851,7 @@ import {
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement,
   shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
@@ -24436,12 +24437,15 @@ export function WorkspacePage({
       element.preload = "auto";
     }
 
-    if (element.networkState === HTMLMediaElement.NETWORK_EMPTY) {
-      element.load();
-      return;
-    }
-
-    if (element.readyState < minimumReadyState && element.networkState !== HTMLMediaElement.NETWORK_LOADING) {
+    if (
+      shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement({
+        isEnded: element.ended,
+        isPaused: element.paused,
+        minimumReadyState,
+        networkState: element.networkState,
+        readyState: element.readyState,
+      })
+    ) {
       element.load();
     }
   };

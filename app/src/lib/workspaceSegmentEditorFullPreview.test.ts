@@ -36,6 +36,7 @@ import {
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
   shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation,
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
+  shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioStartGateTrack,
@@ -266,6 +267,50 @@ describe("workspace segment editor full preview", () => {
         { finalVoiceGraceSeconds: 0.45 },
       ),
     ).toBeCloseTo(9.7, 6);
+  });
+
+  it("does not reload a voice element while its play request is waiting for data", () => {
+    expect(
+      shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement({
+        isEnded: false,
+        isPaused: false,
+        minimumReadyState: 2,
+        networkState: 1,
+        readyState: 0,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement({
+        isEnded: false,
+        isPaused: false,
+        minimumReadyState: 2,
+        networkState: 0,
+        readyState: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("loads paused media elements that still need playable data", () => {
+    expect(
+      shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement({
+        isEnded: false,
+        isPaused: true,
+        minimumReadyState: 2,
+        networkState: 0,
+        readyState: 0,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement({
+        isEnded: false,
+        isPaused: true,
+        minimumReadyState: 2,
+        networkState: 2,
+        readyState: 0,
+      }),
+    ).toBe(false);
   });
 
   it("queues voice tracks so a long line does not overlap the next scene voice", () => {
