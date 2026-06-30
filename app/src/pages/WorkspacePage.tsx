@@ -369,6 +369,7 @@ import {
   getWorkspaceSegmentSceneSoundVisualJobSource,
   getWorkspaceSegmentTalkingCharacterSourceAsset,
   getWorkspaceSegmentVisualModalDefaultTab,
+  isWorkspaceSegmentReadyVisualSelectionTab,
   isWorkspaceSegmentAiVideoReady,
   isWorkspaceSegmentImageEditReady,
   isWorkspaceSegmentVisualModalTabAllowed,
@@ -12861,8 +12862,8 @@ export function WorkspacePage({
       return false;
     }
 
-    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
+    if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds, targetSegmentIndex)) {
+      setSegmentEditorVideoError(workspaceText(locale, "Озвучка сцены уже создаётся.", "Scene voiceover is already generating."));
       return false;
     }
 
@@ -28751,6 +28752,7 @@ export function WorkspacePage({
   const isPromptVoiceoverMode = false;
   const isPromptLibraryMode = segmentEditorVisualPromptToolTab === "library";
   const isPromptUploadMode = segmentEditorVisualPromptToolTab === "upload";
+  const isPromptReadyVisualSelectionMode = isWorkspaceSegmentReadyVisualSelectionTab(segmentEditorVisualPromptToolTab);
   const canActiveSegmentUseVideoExtension =
     activeSegment ? canWorkspaceSegmentUseVideoExtensionTool(activeSegment) : false;
   const canExtendActiveSegmentVideo =
@@ -30055,9 +30057,11 @@ export function WorkspacePage({
     (isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent) ||
     (isPromptUploadMode && isSegmentEditorPreparingCustomVideo);
   const isPromptTalkingPhotoVoiceMissing = isPromptTalkingPhotoMode && !activeSegmentEffectiveDraftVoiceId;
+  const isPromptVisualJobBusyBlockingAction =
+    isActiveSegmentVisualJobBusy && !isPromptReadyVisualSelectionMode;
   const isPromptVisualBaseDisabled =
     !activeSegment ||
-    isActiveSegmentVisualJobBusy ||
+    isPromptVisualJobBusyBlockingAction ||
     isSegmentEditorPreparingCustomVideo ||
     isSegmentAiPhotoPromptImproving ||
     (isPromptPhotoAnimationMode && !canAnimateSegmentPhoto) ||
@@ -31180,7 +31184,7 @@ export function WorkspacePage({
                                   }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                   type="button"
                                   aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                  disabled={!activeSegment || isActiveSegmentVisualJobBusy || isSegmentEditorPreparingCustomVideo}
+                                  disabled={!activeSegment || isSegmentEditorPreparingCustomVideo}
                                   onClick={() => {
                                     if (!activeSegment) {
                                       return;
@@ -34115,7 +34119,7 @@ export function WorkspacePage({
                                     }${isSelectedLibraryItem ? " is-selected" : ""}`}
                                     type="button"
                                     aria-label={workspaceText(locale, `Выбрать ${itemKindLabel} из медиатеки`, `Select ${itemKindLabel} from media library`)}
-                                    disabled={isSegmentAiPhotoModalSegmentVisualJobBusy || isSegmentEditorPreparingCustomVideo}
+                                    disabled={isSegmentEditorPreparingCustomVideo}
                                     onClick={() => {
                                       setSegmentEditorVideoError(null);
                                       setSegmentAiPhotoModalTab("library");
@@ -34181,7 +34185,7 @@ export function WorkspacePage({
                               className={`studio-ai-photo-modal__upload-btn${segmentAiPhotoModalCustomFileName ? " is-active" : ""}`}
                               type="button"
                               title={segmentAiPhotoModalCustomFileName || workspaceText(locale, "Загрузить файл", "Upload file")}
-                              disabled={isSegmentEditorPreparingCustomVideo || isSegmentAiPhotoModalSegmentVisualJobBusy}
+                              disabled={isSegmentEditorPreparingCustomVideo}
                               onClick={() => {
                                 setSegmentEditorVideoError(null);
                                 setSegmentAiPhotoModalTab("upload");

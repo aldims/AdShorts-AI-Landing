@@ -617,6 +617,9 @@ export const isWorkspaceSegmentVisualModalTabAllowed = (
   }
 };
 
+export const isWorkspaceSegmentReadyVisualSelectionTab = (tab: WorkspaceSegmentVisualModalTab) =>
+  tab === "library" || tab === "upload";
+
 export const resolveWorkspaceSegmentVisualModalTab = (
   segment: WorkspaceSegmentEditorDraftSegment,
   tab: WorkspaceSegmentVisualModalTab,

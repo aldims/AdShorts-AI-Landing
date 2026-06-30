@@ -44,6 +44,7 @@ import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
   getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentSceneSoundVisualAssetId,
+  isWorkspaceSegmentReadyVisualSelectionTab,
 } from "./workspace-segment-visual-helpers";
 import { canReuseWorkspaceSegmentProjectTimelineVoiceover } from "./workspace-segment-editor-checklist";
 import { normalizeStoredWorkspaceSegmentEditorDraftSession } from "./workspace-segment-editor-storage";
@@ -127,6 +128,21 @@ const createProjectVoiceoverSegment = (
     ...overrides,
   };
 };
+
+describe("workspace segment ready visual selection tabs", () => {
+  it("allows upload and media library selection outside the AI visual job lock", () => {
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("upload")).toBe(true);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("library")).toBe(true);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("ai_photo")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("ai_video")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("image_edit")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("image_upscale")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("photo_animation")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("scene_sound")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("talking_photo")).toBe(false);
+    expect(isWorkspaceSegmentReadyVisualSelectionTab("voiceover")).toBe(false);
+  });
+});
 
 const createProjectVoiceoverDraft = (
   segments: WorkspaceSegmentEditorDraftSegment[],
