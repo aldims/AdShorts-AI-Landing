@@ -763,6 +763,7 @@ import {
   distributeWorkspaceSegmentBulkSubtitleText,
   formatWorkspaceSegmentDurationInputValue,
   getWorkspaceSegmentVoiceoverTextHash,
+  hasWorkspaceStudioPrimaryActionInput,
   normalizeWorkspaceVideoSourceUrl,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceRegenerationVideoMode,
@@ -1015,6 +1016,7 @@ export {
   distributeWorkspaceSegmentBulkSubtitleText,
   getWorkspaceSegmentVoiceoverGenerationKey,
   getWorkspaceSegmentVoiceoverTextHash,
+  hasWorkspaceStudioPrimaryActionInput,
   resolveWorkspaceProjectVoiceoverPendingSegments,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceRegenerationVideoMode,
@@ -5476,7 +5478,13 @@ export function WorkspacePage({
   const studioPrimaryActionLabel = hasAppliedSegmentEditorSession
     ? workspaceText(locale, "Создать Shorts", "Create Shorts")
     : workspaceText(locale, "Создать Shorts", "Create Shorts");
-  const isStudioPrimaryActionPromptEmpty = topicInput.trim().length === 0;
+  const hasStudioPrimaryActionInput = hasWorkspaceStudioPrimaryActionInput({
+    hasAppliedSegmentEditorSession,
+    hasSelectedCustomVideo: Boolean(selectedCustomVideo),
+    prompt: topicInput,
+    selectedVideoMode,
+  });
+  const isStudioPrimaryActionPromptEmpty = !hasStudioPrimaryActionInput;
   const segmentEditorProjectId = isScratchSegmentEditorDraft ? null : segmentEditorDraft?.projectId ?? null;
   const segmentEditorAppliedBaseSession =
     segmentEditorProjectId && segmentEditorAppliedSession?.projectId === segmentEditorProjectId ? segmentEditorAppliedSession : null;
@@ -19027,6 +19035,10 @@ export function WorkspacePage({
       voiceEnabled: effectiveVoiceEnabled,
       voiceId: effectiveVoiceId,
     });
+    const hasTopLevelCustomVisualInput =
+      !isSegmentEditorGeneration &&
+      effectiveVideoMode === "custom" &&
+      Boolean(selectedCustomVideo);
 
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setGenerateError(null);
@@ -19035,7 +19047,7 @@ export function WorkspacePage({
       return;
     }
 
-    if (!safeTopic.trim()) {
+    if (!safeTopic.trim() && !hasTopLevelCustomVisualInput) {
       reportGeneratePreflightFailure("Введите prompt для генерации.", "Prompt required");
       return;
     }

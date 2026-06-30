@@ -5869,13 +5869,23 @@ export async function createStudioGenerationJob(
   assertAdsflowConfigured();
 
   const normalizedPrompt = normalizePrompt(prompt);
-  if (!normalizedPrompt) {
+  const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
+  const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+  const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+  const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
+  const hasCustomVideoSource =
+    normalizedVideoMode === "custom" &&
+    Boolean(
+      normalizedCustomVideoAssetId ||
+        (normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName),
+    );
+  if (!normalizedPrompt && !hasCustomVideoSource) {
     throw new Error("Prompt is required.");
   }
 
   const requestedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
-  const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
   const requestedVoiceEnabled = options?.voiceEnabled !== false;
   const normalizedVoiceId = requestedVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
   const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
@@ -5910,10 +5920,6 @@ export async function createStudioGenerationJob(
   const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
   const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
   const normalizedCustomMusicAssetId = normalizePositiveInteger(options?.customMusicAssetId) ?? undefined;
-  const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
-  const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
-  const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
-  const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
   const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
   const isScratchSegmentEditorGeneration = normalizedSegmentEditor?.source === "scratch";
   const segmentEditorFinalVoiceCredits = normalizedSegmentEditor

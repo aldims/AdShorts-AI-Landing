@@ -84,6 +84,7 @@ import {
   getWorkspaceSegmentDraftSourceLabel,
   getWorkspaceSegmentDraftSourceDisplayLabel,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
+  hasWorkspaceStudioPrimaryActionInput,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   resolveWorkspaceSegmentAiDurationExtensionEffectiveTargetSeconds,
   resolveWorkspaceSegmentAiDurationExtensionTargetSeconds,
@@ -2777,6 +2778,28 @@ describe("WorkspacePage studio route transitions", () => {
       }),
     ).toBe("stored");
     expect(resolveWorkspaceSegmentEditorScratchDraftOpenSource({})).toBe("fresh");
+  });
+});
+
+describe("WorkspacePage studio primary action input", () => {
+  it("allows visual-only custom video generation without prompt text", () => {
+    expect(
+      hasWorkspaceStudioPrimaryActionInput({
+        hasSelectedCustomVideo: true,
+        prompt: "",
+        selectedVideoMode: "custom",
+      }),
+    ).toBe(true);
+  });
+
+  it("still requires prompt text when no custom visual is selected", () => {
+    expect(
+      hasWorkspaceStudioPrimaryActionInput({
+        hasSelectedCustomVideo: false,
+        prompt: "",
+        selectedVideoMode: "standard",
+      }),
+    ).toBe(false);
   });
 });
 

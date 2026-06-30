@@ -635,4 +635,77 @@ describe("studio generation worker availability", () => {
     );
     expect(calls.map((call) => call.pathname)).not.toContain("/api/web/media-assets/direct-upload/init");
   });
+
+  it("forwards visual-only top-level custom media without prompt text", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-visual-only-custom",
+            status: "queued",
+            title: "Visual-only custom",
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        customVideoAssetId: 808,
+        customVideoFileMimeType: "image/jpeg",
+        customVideoFileName: "scene.jpg",
+        language: "ru",
+        subtitleEnabled: false,
+        videoMode: "custom",
+        voiceEnabled: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-visual-only-custom",
+        status: "queued",
+      }),
+    );
+
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    expect(generationBody).toEqual(
+      expect.objectContaining({
+        custom_video_asset_id: 808,
+        custom_video_mime_type: "image/jpeg",
+        custom_video_original_name: "scene.jpg",
+        prompt: "",
+        video_mode: "custom",
+        voice_type: "none",
+      }),
+    );
+    expect(generationBody).not.toHaveProperty("segment_editor");
+    expect(calls.map((call) => call.pathname)).not.toContain("/api/web/media-assets/direct-upload/init");
+  });
 });

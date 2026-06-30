@@ -304,6 +304,16 @@ export const resolveWorkspaceGenerationEffectiveVideoMode = (options: {
   return effectiveVideoMode;
 };
 
+export const hasWorkspaceStudioPrimaryActionInput = (options: {
+  hasAppliedSegmentEditorSession?: boolean;
+  hasSelectedCustomVideo?: boolean;
+  prompt: string;
+  selectedVideoMode: StudioVideoMode;
+}) =>
+  String(options.prompt ?? "").trim().length > 0 ||
+  Boolean(options.hasAppliedSegmentEditorSession) ||
+  (options.selectedVideoMode === "custom" && Boolean(options.hasSelectedCustomVideo));
+
 export const resolveWorkspaceRegenerationVideoMode = (options: {
   selectedVideoMode: StudioVideoMode;
   wasVideoModeExplicitlyChanged?: boolean;
