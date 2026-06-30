@@ -3,6 +3,11 @@ export type WorkspaceSegmentTimelineWord = {
   startTime?: number | null;
 };
 
+export type WorkspaceSegmentTimelineRange = {
+  endTime: number;
+  startTime: number;
+};
+
 export type WorkspaceSegmentDurationMode = "auto" | "manual";
 export type WorkspaceSegmentDurationSyncMode = "voiceover" | "visual";
 
@@ -84,6 +89,21 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
 const areTimelineNumbersEqual = (left: number | null, right: number | null) =>
   left !== null && right !== null && Math.abs(left - right) <= WORKSPACE_SEGMENT_TIMELINE_EPSILON;
 
+const normalizeWorkspaceSegmentTimelineRange = (
+  range: WorkspaceSegmentTimelineRange | null | undefined,
+): WorkspaceSegmentTimelineRange | null => {
+  const startTime = normalizeWorkspaceSegmentTimelineTimeValue(range?.startTime);
+  const endTime = normalizeWorkspaceSegmentTimelineTimeValue(range?.endTime);
+  if (startTime === null || endTime === null || endTime <= startTime) {
+    return null;
+  }
+
+  return {
+    endTime: roundWorkspaceSegmentTimelineSeconds(endTime),
+    startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
+  };
+};
+
 const hasUserSelectedManualTimelineDuration = <T extends WorkspaceSegmentTimelineSegment>(segment: T | undefined) =>
   segment?.durationMode === "manual" &&
   segment.durationSyncModeUserSelected === true &&
@@ -139,6 +159,11 @@ export const getWorkspaceSegmentTimelineSpeechRange = <T extends WorkspaceSegmen
     startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
   };
 };
+
+const getWorkspaceSegmentResolvedTimelineSpeechRange = <T extends WorkspaceSegmentTimelineSegment>(
+  segment: T,
+  speechRange?: ((segment: T) => WorkspaceSegmentTimelineRange | null | undefined) | null,
+) => normalizeWorkspaceSegmentTimelineRange(speechRange?.(segment)) ?? getWorkspaceSegmentTimelineSpeechRange(segment);
 
 const shiftWorkspaceSegmentTimelineOptionalTimeValue = <T extends number | null | undefined>(
   value: T,
@@ -207,15 +232,22 @@ const shiftWorkspaceSegmentSpeechTimingToStart = <T extends WorkspaceSegmentTime
 export const resolveWorkspaceSegmentTimelineSpeechBoundaryTime = <T extends WorkspaceSegmentTimelineSegment>(
   previousSegment: T,
   nextSegment: T,
+  options?: {
+    preserveTouchingBoundary?: boolean;
+    speechRange?: ((segment: T) => WorkspaceSegmentTimelineRange | null | undefined) | null;
+  },
 ) => {
-  const previousSpeechRange = getWorkspaceSegmentTimelineSpeechRange(previousSegment);
-  const nextSpeechRange = getWorkspaceSegmentTimelineSpeechRange(nextSegment);
-  if (
-    previousSpeechRange === null ||
-    nextSpeechRange === null ||
-    nextSpeechRange.startTime <= previousSpeechRange.endTime + WORKSPACE_SEGMENT_TIMELINE_EPSILON
-  ) {
+  const previousSpeechRange = getWorkspaceSegmentResolvedTimelineSpeechRange(previousSegment, options?.speechRange);
+  const nextSpeechRange = getWorkspaceSegmentResolvedTimelineSpeechRange(nextSegment, options?.speechRange);
+  if (previousSpeechRange === null || nextSpeechRange === null) {
     return null;
+  }
+
+  if (nextSpeechRange.startTime <= previousSpeechRange.endTime + WORKSPACE_SEGMENT_TIMELINE_EPSILON) {
+    return options?.preserveTouchingBoundary &&
+      nextSpeechRange.startTime + WORKSPACE_SEGMENT_TIMELINE_EPSILON >= previousSpeechRange.endTime
+      ? roundWorkspaceSegmentTimelineSeconds(previousSpeechRange.endTime)
+      : null;
   }
 
   return roundWorkspaceSegmentTimelineSeconds(
@@ -422,6 +454,7 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
     voiceDurationSeconds?: (segment: T) => number | null | undefined;
     voiceEnabled?: boolean | ((segment: T) => boolean);
     speechBoundaryEnabled?: boolean | ((previousSegment: T, nextSegment: T) => boolean);
+    speechRange?: (segment: T) => WorkspaceSegmentTimelineRange | null | undefined;
     preserveSpeechBoundaries?: boolean;
     preserveSourceTimelineEnd?: boolean;
     preserveExistingStillDurations?: boolean | ((segment: T) => boolean);
@@ -519,7 +552,10 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
         !shouldIgnoreSourceSpeechBoundary &&
         previousSegment !== undefined &&
         nextSegment !== undefined
-          ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment)
+          ? resolveWorkspaceSegmentTimelineSpeechBoundaryTime(previousSegment, nextSegment, {
+              preserveTouchingBoundary: Boolean(options?.speechRange),
+              speechRange: options?.speechRange,
+            })
           : null;
       const previousBoundary = boundaries[boundaries.length - 1] ?? 0;
       const rebuiltDuration = normalizeWorkspaceSegmentTimelineTimeValue(nextSegments[index]?.duration);
@@ -540,7 +576,9 @@ export const rebuildWorkspaceSegmentEditorTimeline = <T extends WorkspaceSegment
 
     const lastSourceSegment = segments[segments.length - 1];
     const lastRebuiltSegment = nextSegments[nextSegments.length - 1];
-    const lastSpeechRange = lastSourceSegment ? getWorkspaceSegmentTimelineSpeechRange(lastSourceSegment) : null;
+    const lastSpeechRange = lastSourceSegment
+      ? getWorkspaceSegmentResolvedTimelineSpeechRange(lastSourceSegment, options?.speechRange)
+      : null;
     const rebuiltTimelineEnd = normalizeWorkspaceSegmentTimelineTimeValue(lastRebuiltSegment?.endTime) ?? cursor;
     const lastDuration = normalizeWorkspaceSegmentTimelineTimeValue(lastRebuiltSegment?.duration);
     const lastMinimumTimelineEnd = roundWorkspaceSegmentTimelineSeconds(

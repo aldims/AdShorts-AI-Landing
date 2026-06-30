@@ -61,6 +61,7 @@ import {
   rebuildWorkspaceSegmentEditorTimeline,
   roundWorkspaceSegmentTimelineSeconds,
   type WorkspaceSegmentDurationMode,
+  type WorkspaceSegmentTimelineRange,
 } from "../../lib/workspaceSegmentEditorTimeline";
 import {
   filterWorkspaceStillAssetUrls,
@@ -5458,6 +5459,12 @@ export const getWorkspaceSegmentVoiceSourceEndTime = (
 export const getWorkspaceSegmentVoiceSourceDurationSeconds = (
   segment: WorkspaceSegmentVoiceSourceTimingFields,
 ) => {
+  const startTime = getWorkspaceSegmentVoiceSourceStartTime(segment);
+  const endTime = getWorkspaceSegmentVoiceSourceEndTime(segment);
+  if (startTime !== null && endTime !== null && endTime > startTime) {
+    return roundWorkspaceSegmentTimelineSeconds(endTime - startTime);
+  }
+
   const explicitDuration = normalizeWorkspaceSegmentVoiceSourceDurationSeconds(
     segment.voiceSourceDuration ?? segment.voice_source_duration ?? segment._voice_source_duration,
   );
@@ -5465,11 +5472,7 @@ export const getWorkspaceSegmentVoiceSourceDurationSeconds = (
     return explicitDuration;
   }
 
-  const startTime = getWorkspaceSegmentVoiceSourceStartTime(segment);
-  const endTime = getWorkspaceSegmentVoiceSourceEndTime(segment);
-  return startTime !== null && endTime !== null && endTime > startTime
-    ? roundWorkspaceSegmentTimelineSeconds(endTime - startTime)
-    : null;
+  return null;
 };
 
 export const getWorkspaceSegmentVoiceSourceRange = (
@@ -6642,6 +6645,17 @@ export const shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary = (
   );
 };
 
+const getWorkspaceSegmentProjectVoiceoverTimelineSpeechRange = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
+): WorkspaceSegmentTimelineRange | null => {
+  if (!doesWorkspaceSegmentUseProjectVoiceoverTimelineTiming(segment, session)) {
+    return getWorkspaceSegmentTimelineSpeechRange(segment);
+  }
+
+  return getWorkspaceSegmentVoiceSourceRange(segment) ?? getWorkspaceSegmentTimelineSpeechRange(segment);
+};
+
 const getWorkspaceSegmentShorterProjectVoiceoverSpeechDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   assetDurationSeconds: number,
@@ -7061,6 +7075,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     voiceEnabled: (segment) => getWorkspaceSegmentEffectiveVoiceEnabled(segment, session),
     speechBoundaryEnabled: (previousSegment, nextSegment) =>
       shouldUseWorkspaceSegmentProjectVoiceoverSpeechBoundary(previousSegment, nextSegment, session),
+    speechRange: (segment) => getWorkspaceSegmentProjectVoiceoverTimelineSpeechRange(segment, session),
     preserveSpeechBoundaries,
     preserveSourceTimelineEnd:
       options?.preserveSourceTimelineEnd ?? (!hasVoiceoverTimelineDurationReset && !shouldRepairUserSelectedStillDurations),

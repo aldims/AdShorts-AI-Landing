@@ -639,6 +639,60 @@ describe("workspace segment editor timeline", () => {
     }));
   });
 
+  it("preserves contiguous source-window boundaries for project voiceover segments", () => {
+    const firstSegment = createSegment({
+      duration: 4.7,
+      endTime: 4.7,
+      speechDuration: 4.7,
+      speechEndTime: 4.7,
+      speechStartTime: 0,
+      text: "first scene",
+    });
+    const secondSegment = createSegment({
+      duration: 5.4,
+      endTime: 10.1,
+      speechDuration: 5.4,
+      speechEndTime: 10.1,
+      speechStartTime: 4.7,
+      startTime: 4.7,
+      text: "second scene",
+    });
+    const speechRange = (segment: WorkspaceSegmentTimelineSegment) => {
+      if (segment === firstSegment) {
+        return { endTime: 5, startTime: 0 };
+      }
+      if (segment === secondSegment) {
+        return { endTime: 10.5, startTime: 5 };
+      }
+      return null;
+    };
+
+    expect(
+      resolveWorkspaceSegmentTimelineSpeechBoundaryTime(firstSegment, secondSegment, {
+        preserveTouchingBoundary: true,
+        speechRange,
+      }),
+    ).toBe(5);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, secondSegment], {
+      preserveSourceTimelineEnd: true,
+      speechBoundaryEnabled: true,
+      speechRange,
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 5,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      duration: 5.5,
+      endTime: 10.5,
+      startTime: 5,
+    }));
+  });
+
   it("does not override a manual duration with automatic project voiceover boundaries", () => {
     const firstSegment = createSegment({
       duration: 4.9,

@@ -731,6 +731,54 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("preserves project voiceover source-window pauses when segment speech timings are local", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 4.7,
+      endTime: 4.7,
+      index: 0,
+      mediaType: "video",
+      speechDuration: 4.7,
+      speechDurationSource: "audio",
+      speechEndTime: 4.7,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "custom",
+      voiceSourceDuration: 4.7,
+      voiceSourceEndTime: 5,
+      voiceSourceStartTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      duration: 5.4,
+      endTime: 10.1,
+      index: 1,
+      mediaType: "video",
+      speechDuration: 5.4,
+      speechDurationSource: "audio",
+      speechEndTime: 10.1,
+      speechStartTime: 4.7,
+      startTime: 4.7,
+      videoAction: "custom",
+      voiceSourceDuration: 5.4,
+      voiceSourceEndTime: 10.5,
+      voiceSourceStartTime: 5,
+    });
+
+    const normalized = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([firstSegment, secondSegment]),
+    );
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 5,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 5.5,
+      endTime: 10.5,
+      startTime: 5,
+    }));
+  });
+
   it("does not warn when an ffmpeg-rendered photo segment is shorter than voiceover", () => {
     const segment = createProjectVoiceoverSegment({
       currentAsset: {
