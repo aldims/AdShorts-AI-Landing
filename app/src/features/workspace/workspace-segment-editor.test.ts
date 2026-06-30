@@ -11,6 +11,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
+  hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
@@ -1560,6 +1561,116 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
     expect(refreshed.segments[0]?.durationSyncMode).not.toBe("voiceover");
     expect(getWorkspaceSegmentKnownVisualDurationSeconds(refreshed.segments[0])).toBe(5);
+  });
+
+  it("keeps a completed photo animation live when a refresh still returns the old image", () => {
+    const originalSegment = createProjectVoiceoverSegment({
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      mediaType: "photo",
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const liveAnimatedSegment = {
+      ...originalSegment,
+      aiVideoAsset: {
+        assetId: 505,
+        durationSeconds: 5.1,
+        fileName: "scene-1-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/505/playback",
+      },
+      aiVideoGeneratedMode: "photo_animation" as const,
+      videoAction: "photo_animation" as const,
+    };
+    const liveDraft = createProjectVoiceoverDraft([liveAnimatedSegment]);
+    const staleFreshSession = createProjectVoiceoverDraft([originalSegment]);
+
+    expect(
+      hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo(
+        liveDraft,
+        staleFreshSession,
+        createProjectVoiceoverDraft([originalSegment]),
+      ),
+    ).toBe(true);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, staleFreshSession, {
+      baselineSession: createProjectVoiceoverDraft([originalSegment]),
+    });
+
+    expect(refreshed.segments[0]?.videoAction).toBe("photo_animation");
+    expect(refreshed.segments[0]?.aiVideoAsset?.assetId).toBe(505);
+    expect(getWorkspaceSegmentPreviewKind(refreshed.segments[0]!)).toBe("video");
+    expect(getWorkspaceSegmentSelectedVisualPreviewKind(refreshed.segments[0]!)).toBe("video");
+  });
+
+  it("allows a clean refresh once the server snapshot contains the generated video", () => {
+    const sourcePhotoSegment = createProjectVoiceoverSegment({
+      currentPreviewUrl: "/api/workspace/media-assets/101",
+      currentSourceKind: "stock",
+      mediaType: "photo",
+      originalPreviewUrl: "/api/workspace/media-assets/101",
+      originalSourceKind: "stock",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+    });
+    const liveAnimatedSegment = {
+      ...sourcePhotoSegment,
+      aiVideoAsset: {
+        assetId: 505,
+        durationSeconds: 5.1,
+        fileName: "scene-1-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/505/playback",
+      },
+      aiVideoGeneratedMode: "photo_animation" as const,
+      videoAction: "photo_animation" as const,
+    };
+    const persistedServerSegment = {
+      ...sourcePhotoSegment,
+      currentAsset: {
+        assetId: 505,
+        createdAt: null,
+        deletedAt: null,
+        downloadPath: null,
+        downloadUrl: "/api/workspace/media-assets/505",
+        expiresAt: null,
+        isCurrent: true,
+        kind: "rendered_segment",
+        libraryKind: "photo_animation",
+        lifecycle: "ready" as const,
+        mediaType: "video",
+        mimeType: "video/mp4",
+        originalUrl: null,
+        playbackUrl: "/api/workspace/media-assets/505/playback",
+        projectId: 77,
+        renderedAnimationMode: "i2v",
+        renderedViaI2v: true,
+        role: "rendered_segment",
+        segmentIndex: 0,
+        sourceKind: "ai_generated",
+        status: "ready",
+        storageKey: "users/1/projects/77/505.mp4",
+      },
+      currentPlaybackUrl: "/api/workspace/media-assets/505/playback",
+      currentPreviewUrl: "/api/workspace/media-assets/505/playback",
+      currentSourceKind: "ai_generated" as const,
+      mediaType: "video" as const,
+    };
+
+    expect(
+      hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo(
+        createProjectVoiceoverDraft([liveAnimatedSegment]),
+        createProjectVoiceoverDraft([persistedServerSegment]),
+        createProjectVoiceoverDraft([sourcePhotoSegment]),
+      ),
+    ).toBe(false);
   });
 
   it("adopts a longer fresh server video duration over a stale live draft duration", () => {

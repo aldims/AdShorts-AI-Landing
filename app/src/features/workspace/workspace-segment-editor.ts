@@ -7344,6 +7344,87 @@ export const createWorkspaceSegmentFreshAiVideoAsset = (
     posterUrl: buildWorkspaceMediaAssetPosterUrl(freshSegment.currentAsset),
   });
 
+const getWorkspaceSegmentRefreshGeneratedVideoMode = (
+  segment:
+    | Pick<WorkspaceSegmentEditorDraftSegment, "aiVideoAsset" | "aiVideoGeneratedMode" | "videoAction">
+    | null
+    | undefined,
+): WorkspaceSegmentAiVideoMode | null => {
+  if (!segment?.aiVideoAsset) {
+    return null;
+  }
+
+  if (segment.videoAction === "photo_animation" || segment.aiVideoGeneratedMode === "photo_animation") {
+    return "photo_animation";
+  }
+
+  if (segment.videoAction === "talking_photo" || segment.aiVideoGeneratedMode === "talking_photo") {
+    return "talking_photo";
+  }
+
+  if (segment.videoAction === "ai" || segment.aiVideoGeneratedMode === "ai_video") {
+    return "ai_video";
+  }
+
+  return null;
+};
+
+const getWorkspaceSegmentSessionSegmentByIndex = <
+  TSegment extends Pick<WorkspaceSegmentEditorSegment, "index">,
+>(
+  segments: TSegment[],
+  targetSegment: Pick<WorkspaceSegmentEditorSegment, "index">,
+) => segments.find((segment) => segment.index === targetSegment.index) ?? null;
+
+const isWorkspaceSegmentGeneratedVideoReflectedInRefreshSegment = (
+  liveSegment: WorkspaceSegmentEditorDraftSegment,
+  candidateSegment: WorkspaceSegmentEditorSegment | WorkspaceSegmentEditorDraftSegment | null | undefined,
+  mode: WorkspaceSegmentAiVideoMode,
+) => {
+  if (!candidateSegment) {
+    return false;
+  }
+
+  const candidateDraftAsset = "aiVideoAsset" in candidateSegment ? candidateSegment.aiVideoAsset : null;
+  if (
+    candidateDraftAsset &&
+    areStudioCustomVideoFilesSameIdentity(liveSegment.aiVideoAsset, candidateDraftAsset)
+  ) {
+    const candidateMode = getWorkspaceSegmentRefreshGeneratedVideoMode(
+      candidateSegment as WorkspaceSegmentEditorDraftSegment,
+    );
+    return candidateMode === mode;
+  }
+
+  if (mode === "ai_video") {
+    return shouldPromoteFreshServerVideoToAiVideo(liveSegment, candidateSegment);
+  }
+
+  return shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, candidateSegment);
+};
+
+export const hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo = (
+  liveDraft: WorkspaceSegmentEditorDraftSession,
+  freshSession: WorkspaceSegmentEditorSession,
+  baselineSession?: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null,
+) =>
+  liveDraft.segments.some((liveSegment) => {
+    const mode = getWorkspaceSegmentRefreshGeneratedVideoMode(liveSegment);
+    if (!mode || !getWorkspaceSegmentDisplayAiVideoAssetUrl(liveSegment, mode)) {
+      return false;
+    }
+
+    const baselineSegment = baselineSession
+      ? getWorkspaceSegmentSessionSegmentByIndex(baselineSession.segments, liveSegment)
+      : null;
+    if (isWorkspaceSegmentGeneratedVideoReflectedInRefreshSegment(liveSegment, baselineSegment, mode)) {
+      return false;
+    }
+
+    const freshSegment = getWorkspaceSegmentSessionSegmentByIndex(freshSession.segments, liveSegment);
+    return !isWorkspaceSegmentGeneratedVideoReflectedInRefreshSegment(liveSegment, freshSegment, mode);
+  });
+
 export const shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh = (segment: WorkspaceSegmentEditorDraftSegment) =>
   segment.visualReset ||
   segment.videoAction !== "original" ||

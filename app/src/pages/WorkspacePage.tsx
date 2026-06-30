@@ -233,6 +233,7 @@ import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
+  hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
@@ -10828,9 +10829,15 @@ export function WorkspacePage({
             })
           : null;
         const hasOnlyStaleLiveDraftDurationDrift = hasOnlyStaleSegmentEditorSourceDurationDrift(liveDraft, nextDraft);
+        const hasUnreflectedLiveGeneratedVideo = hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo(
+          liveDraft,
+          normalizedSession,
+          liveDraftChangeBaseline,
+        );
         const shouldReplaceCleanLiveDraftWithFreshSession =
           options?.bypassCache === true &&
           options.openDraft === false &&
+          !hasUnreflectedLiveGeneratedVideo &&
           ((liveDraftChangeChecklist !== null && liveDraftChangeChecklist.length === 0) ||
             hasOnlyStaleLiveDraftDurationDrift);
         if (shouldReplaceCleanLiveDraftWithFreshSession) {
