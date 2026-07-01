@@ -359,6 +359,7 @@ export const removeStoredWorkspaceSegmentEditorSession = (
 
 export const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-draft:";
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-draft:";
+export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_BASELINE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-baseline:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
 const WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-consumed-source:";
@@ -389,6 +390,9 @@ const getWorkspaceSegmentEditorDraftStorageKey = (email: string, projectId: numb
 
 const getWorkspaceSegmentEditorScratchDraftStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX}${email}`;
+
+const getWorkspaceSegmentEditorScratchBaselineStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_BASELINE_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
@@ -1279,6 +1283,82 @@ export const writeStoredWorkspaceSegmentEditorScratchDraft = (
       storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
     }),
   );
+};
+
+export const readStoredWorkspaceSegmentEditorScratchBaseline = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorScratchBaselineStorageKey(normalizedEmail);
+
+  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
+    try {
+      const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+      if (!isStoredWorkspaceSegmentEditorDraftSession(parsedValue)) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+
+      const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
+      if (candidate.storageName === "sessionStorage") {
+        writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify({
+          ...normalizedDraft,
+          storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+        }));
+      }
+
+      return normalizedDraft;
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+    }
+  }
+
+  return null;
+};
+
+export const writeStoredWorkspaceSegmentEditorScratchBaseline = (
+  email: string | null | undefined,
+  session: WorkspaceSegmentEditorDraftSession | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail || !session) {
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorScratchBaselineStorageKey(normalizedEmail),
+    JSON.stringify({
+      ...normalizeStoredWorkspaceSegmentEditorDraftSession(session),
+      storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
+    }),
+  );
+};
+
+export const removeStoredWorkspaceSegmentEditorScratchBaseline = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorScratchBaselineStorageKey(normalizedEmail));
 };
 
 export const removeStoredWorkspaceSegmentEditorScratchDraft = (

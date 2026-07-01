@@ -692,6 +692,7 @@ import {
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
   readStoredWorkspaceSegmentEditorExplicitStructureChange,
+  readStoredWorkspaceSegmentEditorScratchBaseline,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
@@ -702,6 +703,7 @@ import {
   removeStoredWorkspaceSegmentAiPhotoJobsForSegment,
   removeStoredWorkspaceSegmentEditorDraft,
   removeStoredWorkspaceSegmentEditorExplicitStructureChange,
+  removeStoredWorkspaceSegmentEditorScratchBaseline,
   removeStoredWorkspaceSegmentEditorScratchDraft,
   removeStoredWorkspaceSegmentEditorSession,
   removeStoredWorkspaceSegmentImageEditJob,
@@ -716,10 +718,12 @@ import {
   writeStoredWorkspaceSegmentEditorDraft,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorExplicitStructureChange,
+  writeStoredWorkspaceSegmentEditorScratchBaseline,
   writeStoredWorkspaceSegmentEditorScratchDraft,
   writeStoredWorkspaceSegmentEditorSession,
   writeWorkspaceSegmentVisualDurationCache,
   WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX,
+  WORKSPACE_SEGMENT_EDITOR_SCRATCH_BASELINE_STORAGE_KEY_PREFIX,
   WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX,
 } from "../features/workspace/workspace-segment-editor-storage";
 import type {
@@ -2855,6 +2859,9 @@ export function WorkspacePage({
     const scratchDraftStorageKey = normalizedDraftEmail
       ? `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX}${normalizedDraftEmail}`
       : null;
+    const scratchBaselineStorageKey = normalizedDraftEmail
+      ? `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_BASELINE_STORAGE_KEY_PREFIX}${normalizedDraftEmail}`
+      : null;
 
     const handleFocus = () => {
       syncStorageBackedMediaLibraryState();
@@ -2875,6 +2882,7 @@ export function WorkspacePage({
       if (
         (generatedStorageKey && storageKey === generatedStorageKey) ||
         (scratchDraftStorageKey && storageKey === scratchDraftStorageKey) ||
+        (scratchBaselineStorageKey && storageKey === scratchBaselineStorageKey) ||
         (draftStorageKeyPrefix && storageKey.startsWith(draftStorageKeyPrefix))
       ) {
         syncStorageBackedMediaLibraryState();
@@ -4090,7 +4098,12 @@ export function WorkspacePage({
   const persistSegmentEditorDraftSnapshot = useCallback((draft: WorkspaceSegmentEditorDraftSession) => {
     const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(draft);
     if (isWorkspaceSegmentEditorScratchDraft(normalizedDraft)) {
+      const persistedScratchBaseline =
+        segmentEditorFallbackChecklistBaseSessionRef.current?.projectId === normalizedDraft.projectId
+          ? segmentEditorFallbackChecklistBaseSessionRef.current.session
+          : normalizedDraft;
       writeStoredWorkspaceSegmentEditorScratchDraft(session.email, normalizedDraft);
+      writeStoredWorkspaceSegmentEditorScratchBaseline(session.email, persistedScratchBaseline);
       return normalizedDraft;
     }
 
@@ -10316,6 +10329,9 @@ export function WorkspacePage({
     const storedScratchDraft = options?.forceFreshDraft
       ? null
       : readStoredWorkspaceSegmentEditorScratchDraft(session.email);
+    const storedScratchBaseline = storedScratchDraft && !options?.forceFreshDraft
+      ? readStoredWorkspaceSegmentEditorScratchBaseline(session.email)
+      : null;
     const restoredScratchDraft = storedScratchDraft
       ? hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(storedScratchDraft, generatedMediaLibraryEntries)
       : null;
@@ -10334,6 +10350,26 @@ export function WorkspacePage({
     cancelPendingSegmentEditorLoad("segment-editor-scratch");
     if (scratchDraftOpenSource === "fresh") {
       removeStoredWorkspaceSegmentEditorScratchDraft(session.email);
+      removeStoredWorkspaceSegmentEditorScratchBaseline(session.email);
+      segmentEditorFallbackChecklistBaseSessionRef.current = null;
+    } else if (
+      scratchDraftOpenSource === "stored" &&
+      restoredScratchDraft &&
+      storedScratchBaseline &&
+      isWorkspaceSegmentEditorScratchDraft(storedScratchBaseline)
+    ) {
+      const restoredScratchBaselineSession = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(
+        storedScratchBaseline,
+        generatedMediaLibraryEntries,
+      );
+      segmentEditorFallbackChecklistBaseSessionRef.current = restoredScratchBaselineSession
+        ? {
+            projectId: restoredScratchDraft.projectId,
+            session: restoredScratchBaselineSession,
+          }
+        : null;
+    } else if (scratchDraftOpenSource === "stored") {
+      segmentEditorFallbackChecklistBaseSessionRef.current = null;
     }
     segmentEditorRouteRestoreKeyRef.current = null;
     segmentEditorHandledRouteRestoreKeyRef.current = null;
@@ -18590,6 +18626,7 @@ export function WorkspacePage({
             clearPersistedSegmentEditorStateForProject(options?.clearStoredSegmentEditorDraftProjectId);
             if (options?.clearStoredSegmentEditorScratchDraftOnSuccess) {
               removeStoredWorkspaceSegmentEditorScratchDraft(session.email);
+              removeStoredWorkspaceSegmentEditorScratchBaseline(session.email);
             }
             setCreateMode("default");
             setSegmentEditorAppliedSession(null);

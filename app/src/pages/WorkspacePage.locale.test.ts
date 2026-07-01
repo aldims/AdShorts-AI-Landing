@@ -22,11 +22,15 @@ import {
   readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
   readStoredWorkspaceSegmentEditorConsumedSourceProject,
+  readStoredWorkspaceSegmentEditorScratchBaseline,
+  readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   removeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorDraft,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
+  writeStoredWorkspaceSegmentEditorScratchBaseline,
+  writeStoredWorkspaceSegmentEditorScratchDraft,
   writeStoredWorkspaceSegmentEditorSession,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
@@ -1108,6 +1112,83 @@ describe("WorkspacePage segment editor draft persistence", () => {
       expect(JSON.parse(window.localStorage.getItem(talkingPhotoJobsKey) ?? "[]")).toEqual([
         expect.objectContaining({ jobId: "kept-talking", projectId: 102 }),
       ]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+      if (originalSessionStorage) {
+        Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
+  });
+
+  it("restores scratch visual history baseline after a refresh", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    const localStorageMock = createMemoryStorage();
+    const sessionStorageMock = createMemoryStorage();
+    const email = "scratch-history@example.test";
+    const baselineSegment = createDraftSegment({ index: 0, text: "Scene 1" });
+    const baselineSession = {
+      ...createDraftSession(baselineSegment),
+      projectId: 0,
+      segments: [baselineSegment],
+    };
+    const editedSegment = createDraftSegment({
+      ...baselineSegment,
+      customVideo: {
+        assetId: 7472,
+        fileName: "scene-1.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/7472/playback",
+      },
+      videoAction: "custom",
+    });
+    const editedSession = {
+      ...baselineSession,
+      segments: [editedSegment],
+    };
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+      Object.defineProperty(window, "sessionStorage", { configurable: true, value: sessionStorageMock });
+
+      writeStoredWorkspaceSegmentEditorScratchDraft(email, editedSession);
+      writeStoredWorkspaceSegmentEditorScratchBaseline(email, baselineSession);
+
+      const restoredDraft = readStoredWorkspaceSegmentEditorScratchDraft(email);
+      const restoredBaseline = readStoredWorkspaceSegmentEditorScratchBaseline(email);
+
+      expect(restoredDraft?.segments[0]?.customVideo?.assetId).toBe(7472);
+      expect(restoredBaseline?.segments[0]?.customVideo).toBeNull();
+      expect(
+        getWorkspaceSegmentVisualTimelineHistoryState(
+          restoredDraft!.segments[0]!,
+          restoredBaseline!.segments[0]!,
+          false,
+        ),
+      ).toEqual({
+        canBack: true,
+        canForward: false,
+      });
     } finally {
       if (originalLocalStorage) {
         Object.defineProperty(window, "localStorage", originalLocalStorage);
