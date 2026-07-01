@@ -2834,6 +2834,7 @@ describe("WorkspacePage studio route transitions", () => {
       }),
     );
     expect(buildStudioRouteUrl("", "create", { mode: "scenes" })).toBe("/app/studio?mode=scenes");
+    expect(buildStudioRouteUrl("?mode=scenes", "create")).toBe("/app/studio");
     expect(buildStudioRouteUrl("?mode=scenes", "edit", { projectId: 42, segmentIndex: 1 })).toBe(
       "/app/studio?section=edit&projectId=42&segment=1",
     );

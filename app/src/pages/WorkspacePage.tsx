@@ -2963,6 +2963,10 @@ export function WorkspacePage({
     const studioCreateUrl = localizePath("/app/studio");
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;
 
+    suppressScratchSegmentEditorRouteOpenRef.current = true;
+    setActiveTab("studio");
+    setStudioView("create");
+    setCreateMode("default");
     markPendingStudioRouteSection("create");
     if (currentUrl !== studioCreateUrl) {
       navigate(studioCreateUrl, { replace: options?.replace ?? true });
