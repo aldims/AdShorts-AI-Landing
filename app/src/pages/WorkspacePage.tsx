@@ -580,6 +580,7 @@ import {
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  shouldShowStudioGenerationError,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
@@ -5307,6 +5308,7 @@ export function WorkspacePage({
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
   const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
+  const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
@@ -18732,6 +18734,7 @@ export function WorkspacePage({
 
     setIsGenerating(true);
     setGenerationUiSource(options?.generationUiSource ?? "studio");
+    setGenerateError(null);
     setStatus(getStudioStatusLabel(initialStatus, locale));
     generationRunRef.current += 1;
     const runId = generationRunRef.current;
@@ -32760,13 +32763,13 @@ export function WorkspacePage({
                   </div>
                 ) : (
                   <div
-                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${generateError ? " is-error" : ""}`}
+                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}`}
                     role={isUserFacingGeneration ? "status" : undefined}
                     aria-live={isUserFacingGeneration ? "polite" : undefined}
                   >
                     {isUserFacingGeneration ? (
                       renderStudioShortsGenerationStatus()
-                    ) : generateError ? (
+                    ) : shouldShowGenerateError ? (
                       <>
                         <strong>{workspaceText(locale, "Ошибка генерации", "Generation error")}</strong>
                         <p>{generateError}</p>

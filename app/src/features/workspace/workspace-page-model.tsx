@@ -169,6 +169,12 @@ export const isStudioGenerationUserFacing = (
   generationUiSource: StudioGenerationUiSource,
 ) => isGenerating && generationUiSource !== "idle";
 
+export const shouldShowStudioGenerationError = (
+  generateError: string | null | undefined,
+  isGenerating: boolean,
+  generationUiSource: StudioGenerationUiSource,
+) => Boolean(generateError) && !isStudioGenerationUserFacing(isGenerating, generationUiSource);
+
 export type StudioGenerationJob = {
   jobId: string;
   profile: WorkspaceProfile;

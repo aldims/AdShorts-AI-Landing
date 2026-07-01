@@ -6,6 +6,7 @@ import {
   isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  shouldShowStudioGenerationError,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
@@ -18,6 +19,13 @@ describe("studio generation visibility", () => {
   it("does not show generation progress when no generation is running", () => {
     expect(isStudioGenerationUserFacing(false, "studio")).toBe(false);
     expect(isStudioGenerationUserFacing(true, "idle")).toBe(false);
+  });
+
+  it("does not show stale errors while a generation is visible", () => {
+    expect(shouldShowStudioGenerationError("Previous failure", true, "studio")).toBe(false);
+    expect(shouldShowStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
+    expect(shouldShowStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
+    expect(shouldShowStudioGenerationError("Previous failure", false, "idle")).toBe(true);
   });
 });
 
