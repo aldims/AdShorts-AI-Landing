@@ -497,6 +497,32 @@ const normalizeNumber = (value) => {
     return Number.isFinite(numeric) ? numeric : null;
 };
 const roundStudioTimelineSeconds = (value) => Number(value.toFixed(3));
+const normalizeAdsflowVoiceSourceWindow = (payload) => {
+    const sourceStartTime = normalizeNumber(payload.voice_source_start_time ?? payload._voice_source_start_time ?? payload.start_time);
+    const sourceEndTime = normalizeNumber(payload.voice_source_end_time ?? payload._voice_source_end_time ?? payload.end_time);
+    const explicitDuration = normalizeNumber(payload.voice_source_duration ?? payload._voice_source_duration ?? payload.duration);
+    if (sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime) {
+        return {
+            voiceSourceDuration: roundStudioTimelineSeconds(sourceEndTime - sourceStartTime),
+            voiceSourceEndTime: roundStudioTimelineSeconds(Math.max(sourceStartTime, sourceEndTime)),
+            voiceSourceStartTime: roundStudioTimelineSeconds(Math.max(0, sourceStartTime)),
+        };
+    }
+    const voiceSourceDuration = explicitDuration !== null && explicitDuration > 0
+        ? roundStudioTimelineSeconds(Math.max(0, explicitDuration))
+        : null;
+    const voiceSourceStartTime = sourceStartTime !== null ? roundStudioTimelineSeconds(Math.max(0, sourceStartTime)) : null;
+    const voiceSourceEndTime = sourceEndTime !== null
+        ? roundStudioTimelineSeconds(Math.max(voiceSourceStartTime ?? 0, sourceEndTime))
+        : voiceSourceStartTime !== null && voiceSourceDuration !== null
+            ? roundStudioTimelineSeconds(voiceSourceStartTime + voiceSourceDuration)
+            : null;
+    return {
+        voiceSourceDuration,
+        voiceSourceEndTime,
+        voiceSourceStartTime,
+    };
+};
 const normalizeStudioSegmentVisualDurationSeconds = (value) => {
     const normalized = normalizeNumber(value);
     return normalized !== null && normalized >= 1 ? Number(normalized.toFixed(3)) : undefined;
@@ -3748,12 +3774,19 @@ export async function getWorkspaceBootstrap(user, options = {}) {
 export async function createStudioGenerationJob(prompt, user, options) {
     assertAdsflowConfigured();
     const normalizedPrompt = normalizePrompt(prompt);
-    if (!normalizedPrompt) {
+    const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
+    const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
+    const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
+    const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
+    const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
+    const hasCustomVideoSource = normalizedVideoMode === "custom" &&
+        Boolean(normalizedCustomVideoAssetId ||
+            (normalizedCustomVideoFileDataUrl && normalizedCustomVideoFileName));
+    if (!normalizedPrompt && !hasCustomVideoSource) {
         throw new Error("Prompt is required.");
     }
     const requestedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
-    const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
     const requestedVoiceEnabled = options?.voiceEnabled !== false;
     const normalizedVoiceId = requestedVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;
     const normalizedMusicType = normalizeStudioMusicType(options?.musicType);
@@ -3779,10 +3812,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const normalizedCustomMusicFileName = String(options?.customMusicFileName ?? "").trim() || undefined;
     const normalizedCustomMusicFileDataUrl = String(options?.customMusicFileDataUrl ?? "").trim() || undefined;
     const normalizedCustomMusicAssetId = normalizePositiveInteger(options?.customMusicAssetId) ?? undefined;
-    const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
-    const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
-    const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
-    const normalizedCustomVideoAssetId = normalizePositiveInteger(options?.customVideoAssetId) ?? undefined;
     const normalizedEditedFromProjectAdId = normalizePositiveInteger(options?.editedFromProjectAdId) ?? undefined;
     const isScratchSegmentEditorGeneration = normalizedSegmentEditor?.source === "scratch";
     const segmentEditorFinalVoiceCredits = normalizedSegmentEditor
@@ -4007,6 +4036,13 @@ export async function createStudioGenerationJob(prompt, user, options) {
                     startTime: segment.start_time ?? null,
                     voiceSourceEndTime: segment._voice_source_end_time ?? null,
                     voiceSourceStartTime: segment._voice_source_start_time ?? null,
+                })),
+                segmentVisuals: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
+                    hasCustomVideoAssetId: Boolean(segment.custom_video_asset_id),
+                    hasCustomVideoMimeType: Boolean(segment.custom_video_mime_type),
+                    hasCustomVideoOriginalName: Boolean(segment.custom_video_original_name),
+                    index: segment.index,
+                    videoAction: segment.video_action,
                 })),
                 segmentVoiceTypes: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voice_type ?? null),
                 segmentVoiceoverAssetIds: normalizedSegmentEditorAssetPayload.segments.map((segment) => segment.voiceover_asset_id ?? null),
@@ -5319,6 +5355,7 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (payload, fallback) => {
         ? Math.max(0, speechEndTime - speechStartTime)
         : null;
     const speechDuration = speechBoundaryDuration ?? normalizeNumber(payload.speech_duration ?? payload.duration);
+    const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(payload);
     return {
         asset,
         error: normalizeGenerationText(payload.error) || undefined,
@@ -5332,6 +5369,9 @@ const normalizeAdsflowBatchVoiceoverStatusSegment = (payload, fallback) => {
         speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
         status: String(payload.status ?? "queued"),
         text: normalizeGenerationText(payload.text) || fallback.text || "",
+        voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+        voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+        voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
         voiceType,
     };
 };
@@ -5706,6 +5746,8 @@ export async function getStudioSegmentSceneSoundJobStatus(jobId, user) {
         profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
             rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
         }),
+        projectId: normalizePositiveInteger(payload.project_id) ?? null,
+        segmentIndex: normalizeNonNegativeInteger(payload.segment_index) ?? null,
         status,
     };
 }
@@ -5750,6 +5792,7 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
             ? Math.max(0, segmentSpeechEndTime - segmentSpeechStartTime)
             : null;
         const segmentSpeechDuration = segmentSpeechBoundaryDuration ?? normalizeNumber(segment.speech_duration ?? segment.duration);
+        const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(segment);
         return {
             segmentIndex,
             speechDuration: segmentSpeechDuration !== null ? Math.max(0, segmentSpeechDuration) : null,
@@ -5759,6 +5802,9 @@ export async function getStudioProjectVoiceoverJobStatus(jobId, user) {
             speechStartTime: segmentSpeechStartTime !== null ? Math.max(0, segmentSpeechStartTime) : null,
             speechWords: normalizeSegmentVoiceoverSpeechWords(segment.speech_words),
             text: normalizeGenerationText(segment.text),
+            voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+            voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+            voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
         };
     });
     return {
@@ -5807,6 +5853,9 @@ export async function getStudioBatchVoiceoverJobStatus(jobId, user) {
                     speechWords: segmentStatus?.speechWords ?? [],
                     status: status.status,
                     text: segmentStatus?.text || segment.text,
+                    voiceSourceDuration: segmentStatus?.voiceSourceDuration ?? fallbackDuration,
+                    voiceSourceEndTime: segmentStatus?.voiceSourceEndTime ?? fallbackEndTime,
+                    voiceSourceStartTime: segmentStatus?.voiceSourceStartTime ?? fallbackStartTime,
                     voiceType: group.voiceType,
                 };
             });

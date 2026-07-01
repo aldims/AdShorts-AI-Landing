@@ -388,7 +388,9 @@ type AdsflowSegmentAiVideoJobStatusResponse = {
   asset?: AdsflowSegmentAiVideoAssetPayload | null;
   error?: string | null;
   job_id?: string;
+  project_id?: number | string | null;
   segments?: AdsflowProjectVoiceoverSegmentStatusPayload[] | null;
+  segment_index?: number | string | null;
   status?: string;
   user?: AdsflowWebUserPayload | null;
 };
@@ -619,6 +621,8 @@ export type StudioSegmentSceneSoundJobStatus = {
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
+  projectId?: number | null;
+  segmentIndex?: number | null;
   status: string;
 };
 
@@ -8433,6 +8437,8 @@ export async function getStudioSegmentSceneSoundJobStatus(
     profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
       rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
     }),
+    projectId: normalizePositiveInteger(payload.project_id) ?? null,
+    segmentIndex: normalizeNonNegativeInteger(payload.segment_index) ?? null,
     status,
   };
 }

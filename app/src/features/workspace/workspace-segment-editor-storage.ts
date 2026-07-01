@@ -61,6 +61,15 @@ export type StoredWorkspaceSegmentImageEditJob = {
   status: string;
 };
 
+export type StoredWorkspaceSegmentSceneSoundJob = {
+  createdAt: number;
+  jobId: string;
+  projectId: number;
+  prompt: string;
+  segmentIndex: number;
+  status: string;
+};
+
 export type StoredWorkspaceSegmentAiPhotoJob = {
   createdAt: number;
   jobId: string;
@@ -374,6 +383,8 @@ const WORKSPACE_SEGMENT_TALKING_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.seg
 const WORKSPACE_SEGMENT_TALKING_PHOTO_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-image-edit-pending:";
 const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-scene-sound-pending:";
+const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRefresh?: boolean }) => {
   const forceRefresh = Boolean(options?.forceRefresh);
@@ -414,6 +425,9 @@ const getWorkspaceSegmentTalkingPhotoPendingStorageKey = (email: string) =>
 
 const getWorkspaceSegmentImageEditPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_STORAGE_KEY_PREFIX}${email}`;
+
+const getWorkspaceSegmentSceneSoundPendingStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX}${email}`;
 
 const isWorkspaceSegmentEditorPersistableRemoteUrl = (value: string) => {
   const normalized = value.trim().toLowerCase();
@@ -814,6 +828,146 @@ export const removeStoredWorkspaceSegmentImageEditJobsForSegment = (
     (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
   );
   writeStoredWorkspaceSegmentImageEditJobs(email, jobs);
+};
+
+const isStoredWorkspaceSegmentSceneSoundJob = (value: unknown): value is StoredWorkspaceSegmentSceneSoundJob => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Partial<StoredWorkspaceSegmentSceneSoundJob>;
+  return (
+    typeof payload.jobId === "string" &&
+    payload.jobId.trim().length > 0 &&
+    Number.isInteger(Number(payload.projectId)) &&
+    Number(payload.projectId) >= 0 &&
+    Number.isInteger(Number(payload.segmentIndex)) &&
+    Number(payload.segmentIndex) >= 0
+  );
+};
+
+const normalizeStoredWorkspaceSegmentSceneSoundJob = (
+  value: StoredWorkspaceSegmentSceneSoundJob,
+): StoredWorkspaceSegmentSceneSoundJob => ({
+  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  jobId: String(value.jobId ?? "").trim(),
+  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
+  prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
+  segmentIndex: Math.trunc(Number(value.segmentIndex)),
+  status: String(value.status ?? "queued").trim() || "queued",
+});
+
+export const readStoredWorkspaceSegmentSceneSoundJobs = (
+  email: string | null | undefined,
+): StoredWorkspaceSegmentSceneSoundJob[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const storageKey = getWorkspaceSegmentSceneSoundPendingStorageKey(normalizedEmail);
+  const candidate = readWorkspaceSegmentEditorStorageCandidates(storageKey)[0];
+  if (!candidate) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+    const rawJobs = Array.isArray(parsedValue) ? parsedValue : [];
+    const now = Date.now();
+    const jobs = rawJobs
+      .filter(isStoredWorkspaceSegmentSceneSoundJob)
+      .map(normalizeStoredWorkspaceSegmentSceneSoundJob)
+      .filter((job) => now - job.createdAt <= WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_TTL_MS);
+
+    if (jobs.length !== rawJobs.length || candidate.storageName === "sessionStorage") {
+      writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(jobs));
+    }
+
+    return jobs;
+  } catch {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return [];
+  }
+};
+
+const writeStoredWorkspaceSegmentSceneSoundJobs = (
+  email: string | null | undefined,
+  jobs: StoredWorkspaceSegmentSceneSoundJob[],
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  const storageKey = getWorkspaceSegmentSceneSoundPendingStorageKey(normalizedEmail);
+  const normalizedJobs = jobs
+    .filter(isStoredWorkspaceSegmentSceneSoundJob)
+    .map(normalizeStoredWorkspaceSegmentSceneSoundJob)
+    .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_TTL_MS);
+
+  if (!normalizedJobs.length) {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedJobs));
+};
+
+export const upsertStoredWorkspaceSegmentSceneSoundJob = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentSceneSoundJob,
+) => {
+  const normalizedJob = normalizeStoredWorkspaceSegmentSceneSoundJob(job);
+  const jobs = readStoredWorkspaceSegmentSceneSoundJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
+  writeStoredWorkspaceSegmentSceneSoundJobs(email, [normalizedJob, ...jobs]);
+};
+
+export const removeStoredWorkspaceSegmentSceneSoundJob = (
+  email: string | null | undefined,
+  jobId: string | null | undefined,
+) => {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentSceneSoundJobs(email).filter((job) => job.jobId !== safeJobId);
+  writeStoredWorkspaceSegmentSceneSoundJobs(email, jobs);
+};
+
+export const removeStoredWorkspaceSegmentSceneSoundJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId < 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return;
+  }
+
+  const jobs = readStoredWorkspaceSegmentSceneSoundJobs(email).filter(
+    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+  );
+  writeStoredWorkspaceSegmentSceneSoundJobs(email, jobs);
 };
 
 const isStoredWorkspaceSegmentPhotoAnimationJob = (value: unknown): value is StoredWorkspaceSegmentPhotoAnimationJob => {
@@ -1555,6 +1709,15 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
     return shouldKeep;
   });
   writeStoredWorkspaceSegmentImageEditJobs(normalizedEmail, nextImageEditJobs);
+
+  const nextSceneSoundJobs = readStoredWorkspaceSegmentSceneSoundJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentSceneSoundJobs(normalizedEmail, nextSceneSoundJobs);
 
   const nextTalkingPhotoJobs = readStoredWorkspaceSegmentTalkingPhotoJobs(normalizedEmail).filter((job) => {
     const shouldKeep = keptProjectIds.has(job.projectId);

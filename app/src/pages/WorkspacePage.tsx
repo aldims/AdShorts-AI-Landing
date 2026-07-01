@@ -159,6 +159,7 @@ import {
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceMediaAssetProxyUrl,
+  buildWorkspaceSegmentSceneSoundPayloadFromAsset,
   buildWorkspaceProjectMusicAudioProxyUrl,
   buildWorkspaceSegmentOriginalProxyUrl,
   canWorkspaceSegmentUseVideoExtensionTool,
@@ -698,6 +699,7 @@ import {
   readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
+  readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   readWorkspaceSegmentVisualDurationCache,
   removeStoredWorkspaceSegmentAiPhotoJob,
@@ -710,11 +712,14 @@ import {
   removeStoredWorkspaceSegmentImageEditJob,
   removeStoredWorkspaceSegmentImageEditJobsForSegment,
   removeStoredWorkspaceSegmentPhotoAnimationJob,
+  removeStoredWorkspaceSegmentSceneSoundJob,
+  removeStoredWorkspaceSegmentSceneSoundJobsForSegment,
   removeStoredWorkspaceSegmentTalkingPhotoJob,
   removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment,
   upsertStoredWorkspaceSegmentAiPhotoJob,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
+  upsertStoredWorkspaceSegmentSceneSoundJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
   writeStoredWorkspaceSegmentEditorDraft,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
@@ -731,6 +736,7 @@ import type {
   StoredWorkspaceSegmentAiPhotoJob,
   StoredWorkspaceSegmentImageEditJob,
   StoredWorkspaceSegmentPhotoAnimationJob,
+  StoredWorkspaceSegmentSceneSoundJob,
   StoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
 import {
@@ -1442,6 +1448,54 @@ const getPreferredProjectPublication = (
   project: Pick<WorkspaceProject, "instagramPublication" | "youtubePublication"> | null | undefined,
 ): WorkspaceProjectPublication | null => project?.instagramPublication ?? project?.youtubePublication ?? null;
 
+const areSegmentEditorDraftSessionsEqual = (
+  left: WorkspaceSegmentEditorDraftSession | null | undefined,
+  right: WorkspaceSegmentEditorDraftSession | null | undefined,
+) => {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return JSON.stringify(left) === JSON.stringify(right);
+};
+
+const areStoredSegmentEditorDraftListsEqual = (
+  left: WorkspaceSegmentEditorDraftSession[],
+  right: WorkspaceSegmentEditorDraftSession[],
+) => {
+  if (left === right) {
+    return true;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((draft, index) => {
+    const otherDraft = right[index];
+    return draft.projectId === otherDraft?.projectId && areSegmentEditorDraftSessionsEqual(draft, otherDraft);
+  });
+};
+
+const areGeneratedMediaLibraryEntryListsEqual = (
+  left: WorkspaceGeneratedMediaLibraryEntry[],
+  right: WorkspaceGeneratedMediaLibraryEntry[],
+) => {
+  if (left === right) {
+    return true;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((entry, index) => entry.id === right[index]?.id && JSON.stringify(entry) === JSON.stringify(right[index]));
+};
+
 export function WorkspacePage({
   defaultTab,
   initialProfile = null,
@@ -2099,6 +2153,7 @@ export function WorkspacePage({
   const segmentImageEditActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentSceneSoundActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentVoiceoverRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentEditorActiveVisualRunKeysRef = useRef<Set<string>>(new Set());
   const segmentEditorRunRef = useRef(0);
@@ -2466,6 +2521,7 @@ export function WorkspacePage({
     segmentPhotoAnimationActiveJobIdsRef.current.clear();
     segmentTalkingPhotoActiveJobIdsRef.current.clear();
     segmentImageEditActiveJobIdsRef.current.clear();
+    segmentSceneSoundActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
     setSegmentEditorPreparingCustomVideoRunIds({});
     setSegmentEditorGeneratingAiVideoRunIds({});
@@ -2722,7 +2778,7 @@ export function WorkspacePage({
     const nextStoredDrafts = readStoredWorkspaceSegmentEditorDrafts(session.email);
     setStoredSegmentEditorDrafts((currentDrafts) => {
       if (!currentDrafts.length) {
-        return nextStoredDrafts;
+        return areStoredSegmentEditorDraftListsEqual(currentDrafts, nextStoredDrafts) ? currentDrafts : nextStoredDrafts;
       }
 
       const draftsByProjectId = new Map(nextStoredDrafts.map((draft) => [draft.projectId, draft] as const));
@@ -2738,13 +2794,16 @@ export function WorkspacePage({
         }
       });
 
-      return Array.from(draftsByProjectId.values()).sort((left, right) => right.projectId - left.projectId);
+      const mergedDrafts = Array.from(draftsByProjectId.values()).sort((left, right) => right.projectId - left.projectId);
+      return areStoredSegmentEditorDraftListsEqual(currentDrafts, mergedDrafts) ? currentDrafts : mergedDrafts;
     });
 
     const nextGeneratedEntries = readStoredGeneratedMediaLibraryEntries(session.email);
     setGeneratedMediaLibraryEntries((currentEntries) => {
       if (!currentEntries.length) {
-        return nextGeneratedEntries;
+        return areGeneratedMediaLibraryEntryListsEqual(currentEntries, nextGeneratedEntries)
+          ? currentEntries
+          : nextGeneratedEntries;
       }
 
       if (!nextGeneratedEntries.length) {
@@ -2759,9 +2818,10 @@ export function WorkspacePage({
         }
       });
 
-      return Array.from(entriesById.values())
+      const mergedEntries = Array.from(entriesById.values())
         .sort((left, right) => right.createdAt - left.createdAt)
         .slice(0, WORKSPACE_GENERATED_MEDIA_LIBRARY_MAX_ENTRIES);
+      return areGeneratedMediaLibraryEntryListsEqual(currentEntries, mergedEntries) ? currentEntries : mergedEntries;
     });
   }, [isScratchSegmentEditorDraft, segmentEditorDraft, session.email]);
   useEffect(() => {
@@ -4088,7 +4148,8 @@ export function WorkspacePage({
         return currentDraft;
       }
 
-      return normalizeLegacyWorkspaceSegmentEditorDraftSession(currentDraft);
+      const nextDraft = normalizeLegacyWorkspaceSegmentEditorDraftSession(currentDraft);
+      return areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft) ? currentDraft : nextDraft;
     });
   }, [segmentEditorAppliedSession]);
 
@@ -4154,6 +4215,10 @@ export function WorkspacePage({
       const nextDraft = currentDraft
         ? hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(currentDraft, hydratableGeneratedMediaLibraryEntries)
         : currentDraft;
+      if (areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft)) {
+        segmentEditorDraftRef.current = currentDraft;
+        return currentDraft;
+      }
       segmentEditorDraftRef.current = nextDraft;
       return nextDraft;
     });
@@ -6785,6 +6850,7 @@ export function WorkspacePage({
     hasActiveSegmentEditorVisualRunScope("image_upscale") ||
     isSegmentEditorGeneratingSceneSound ||
     hasActiveSegmentEditorVisualRunScope("scene_sound") ||
+    segmentSceneSoundActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorGeneratingVoiceover ||
     hasActiveSegmentEditorVisualRunScope("voiceover");
   const isWorkspaceSegmentVisualJobBusy = (segmentIndex: number | null | undefined) =>
@@ -6844,7 +6910,11 @@ export function WorkspacePage({
       return "image_upscale";
     }
 
-    if (isSegmentEditorGeneratingSceneSound || hasActiveSegmentEditorVisualRunScope("scene_sound")) {
+    if (
+      isSegmentEditorGeneratingSceneSound ||
+      hasActiveSegmentEditorVisualRunScope("scene_sound") ||
+      segmentSceneSoundActiveJobIdsRef.current.size > 0
+    ) {
       return "scene_sound";
     }
 
@@ -11643,6 +11713,10 @@ export function WorkspacePage({
 
       const rebuiltDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(sourceDraft), options);
       const nextDraft = restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft);
+      if (areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft)) {
+        segmentEditorDraftRef.current = currentDraft;
+        return currentDraft;
+      }
       segmentEditorDraftRef.current = nextDraft;
       return nextDraft;
     });
@@ -11680,6 +11754,10 @@ export function WorkspacePage({
       preserveExistingStillDurations: (segment) => getWorkspaceSegmentPreviewKind(segment) === "image",
       preserveSourceTimelineEnd: false,
     });
+    if (areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft)) {
+      segmentEditorDraftRef.current = currentDraft;
+      return;
+    }
     segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft(nextDraft);
   }, [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorDraft]);
@@ -11702,6 +11780,10 @@ export function WorkspacePage({
       return;
     }
 
+    if (areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft)) {
+      segmentEditorDraftRef.current = currentDraft;
+      return;
+    }
     segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft(nextDraft);
   }, [segmentEditorDraft]);
@@ -12691,6 +12773,9 @@ export function WorkspacePage({
   };
 
   const cancelPendingSegmentSceneSoundRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentSceneSoundJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex)) {
       return;
     }
@@ -13958,7 +14043,9 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
       prompt: string;
+      projectId?: number;
       runId: number;
       segmentIndex: number;
     },
@@ -14594,7 +14681,9 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
       prompt: string;
+      projectId?: number;
       runId: number;
       segmentIndex: number;
     },
@@ -14606,7 +14695,8 @@ export function WorkspacePage({
     }
 
     let latestStatus = initialStatus;
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    segmentSceneSoundActiveJobIdsRef.current.add(safeJobId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentSceneSoundRunRef, options.segmentIndex, options.runId)) {
@@ -14627,36 +14717,51 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
+          upsertStoredWorkspaceSegmentSceneSoundJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            prompt: options.prompt,
+            segmentIndex: options.segmentIndex,
+            status: latestStatus,
+          });
+        }
 
         if (payload.data.asset) {
           const sceneSoundAsset = payload.data.asset;
           const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(sceneSoundAsset.assetId);
+          const sceneSoundPayload = buildWorkspaceSegmentSceneSoundPayloadFromAsset(sceneSoundAsset, sceneSoundAssetId);
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
             ...segment,
             sceneSound: cloneStudioCustomVideoFile(sceneSoundAsset),
             sceneSoundAsset,
             sceneSoundAssetId,
-            scene_sound: null,
-            scene_sound_asset_id: sceneSoundAssetId,
+            scene_sound: sceneSoundPayload,
+            scene_sound_asset_id: sceneSoundAssetId ?? sceneSoundPayload?.media_asset_id ?? null,
             sceneSoundGeneratedFromPrompt: options.prompt,
             sceneSoundPrompt: options.prompt,
             sceneSoundPromptInitialized: true,
           }));
           setSegmentSceneSoundModalPrompt(options.prompt);
+          removeStoredWorkspaceSegmentSceneSoundJob(session.email, safeJobId);
           return;
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentSceneSoundJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Не удалось сгенерировать звук сцены.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentSceneSoundJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированный звук сцены недоступен.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
+      segmentSceneSoundActiveJobIdsRef.current.delete(safeJobId);
       if (isSegmentVisualRunCurrent(segmentSceneSoundRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(
           segmentSceneSoundRunRef,
@@ -14667,6 +14772,103 @@ export function WorkspacePage({
       }
     }
   };
+
+  const resumePendingSegmentSceneSoundJob = (job: StoredWorkspaceSegmentSceneSoundJob) => {
+    if (segmentSceneSoundActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+    if (!targetSegment) {
+      removeStoredWorkspaceSegmentSceneSoundJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (targetSegment.sceneSoundGeneratedFromPrompt === job.prompt && createWorkspaceSegmentSceneSoundAsset(targetSegment, targetSegment.index)) {
+      removeStoredWorkspaceSegmentSceneSoundJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (isWorkspaceSegmentSceneSoundJobBusy(job.segmentIndex)) {
+      return false;
+    }
+
+    const runId = startSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, job.segmentIndex);
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+      ...segment,
+      sceneSoundPrompt: job.prompt || segment.sceneSoundPrompt,
+      sceneSoundPromptInitialized: Boolean(job.prompt || segment.sceneSoundPrompt),
+    }));
+    logSegmentEditorDiagnostics("client.segment-editor.scene-sound.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      targetSegmentIndex: job.segmentIndex,
+    });
+
+    void pollSegmentEditorSceneSoundJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      prompt: job.prompt,
+      runId,
+      segmentIndex: job.segmentIndex,
+    }).catch((error) => {
+      if (!isSegmentVisualRunCurrent(segmentSceneSoundRunRef, job.segmentIndex, runId)) {
+        return;
+      }
+
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать звук сцены.");
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingSceneSound = () => {
+      if (segmentSceneSoundActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentSceneSoundJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentSceneSoundJob(pendingJob);
+    };
+
+    tryResumePendingSceneSound();
+    const intervalId = window.setInterval(tryResumePendingSceneSound, 30_000);
+    const handleFocus = () => tryResumePendingSceneSound();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingSceneSound();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const pollSegmentEditorVoiceoverJob = async (
     jobId: string,
@@ -16701,9 +16903,23 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      const pendingJobCreatedAt = Date.now();
+      const pendingProjectId = sceneSoundProjectId ?? currentDraft.projectId ?? 0;
+      if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
+        upsertStoredWorkspaceSegmentSceneSoundJob(session.email, {
+          createdAt: pendingJobCreatedAt,
+          jobId: payload.data.jobId,
+          projectId: pendingProjectId,
+          prompt: normalizedPrompt,
+          segmentIndex: targetSegmentIndex,
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorSceneSoundJob(payload.data.jobId, payload.data.status, {
+        createdAt: pendingJobCreatedAt,
         prompt: normalizedPrompt,
+        projectId: pendingProjectId,
         runId,
         segmentIndex: targetSegmentIndex,
       });

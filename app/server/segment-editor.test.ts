@@ -309,6 +309,42 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.scene_sound?.mime_type).toBe("audio/wav");
   });
 
+  it("restores a current segment_sound media asset into the matching editor segment", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      42,
+      {
+        current_video: "current-marker",
+        duration: 5,
+        index: 1,
+        text: "Segment",
+      },
+      {
+        currentEntries: [],
+        originalEntries: [],
+        projectMediaAssets: [
+          createMediaAsset({
+            assetId: 7712,
+            kind: "segment_sound",
+            libraryKind: "scene_sound",
+            role: "segment_sound",
+            segmentIndex: 1,
+            sourceKind: "ai_scene_sound",
+            storageKey: "projects/42/segment-2-sound.wav",
+          }),
+        ],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: true,
+      },
+    );
+
+    expect(segment?.sceneSoundAssetId).toBe(7712);
+    expect(segment?.scene_sound).toEqual(expect.objectContaining({
+      file_name: "segment-2-sound.wav",
+      media_asset_id: 7712,
+      mime_type: "audio/wav",
+    }));
+  });
+
   it("restores embedded scene sound metadata from the upstream segment payload", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

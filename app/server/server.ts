@@ -5075,6 +5075,9 @@ app.get("/api/studio/segment-scene-sound/jobs/:jobId", async (req, res) => {
     const status = await getStudioSegmentSceneSoundJobStatus(req.params.jobId, session.user);
     if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
       await invalidateWorkspaceSegmentVisualCaches(session.user);
+      if (typeof status.projectId === "number" && status.projectId > 0) {
+        invalidateWorkspaceSegmentEditorSessionCache(session.user, status.projectId);
+      }
     }
     res.json({ data: status });
   } catch (error) {

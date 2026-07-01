@@ -2362,8 +2362,34 @@ const cloneWorkspaceSegmentSceneSoundPayload = (
   payload: WorkspaceSegmentSceneSoundPayload | null | undefined,
 ): WorkspaceSegmentSceneSoundPayload | null => (payload ? { ...payload } : null);
 
+export const buildWorkspaceSegmentSceneSoundPayloadFromAsset = (
+  asset: StudioCustomVideoFile | null | undefined,
+  explicitAssetId?: number | null,
+): WorkspaceSegmentSceneSoundPayload | null => {
+  const assetId =
+    getPositiveWorkspaceMediaAssetId(explicitAssetId) ??
+    getPositiveWorkspaceMediaAssetId(asset?.assetId);
+  const remoteUrl = String(asset?.remoteUrl ?? "").trim();
+  const fileName = String(asset?.fileName ?? "").trim() || (assetId ? `segment-scene-sound-${assetId}.wav` : "");
+  const mimeType = String(asset?.mimeType ?? "").trim() || "audio/wav";
+
+  if (!assetId && !remoteUrl) {
+    return null;
+  }
+
+  return {
+    download_url: remoteUrl || null,
+    file_name: fileName || "segment-scene-sound.wav",
+    file_size: Math.max(0, Number(asset?.fileSize ?? 0) || 0),
+    media_asset_id: assetId ?? null,
+    mime_type: mimeType,
+    remote_url: remoteUrl || null,
+    url: remoteUrl || null,
+  };
+};
+
 export const getWorkspaceSegmentSceneSoundStateAssetId = (
-  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  segment: Partial<WorkspaceSegmentEditorDraftSegment> | null | undefined,
 ) =>
   getPositiveWorkspaceMediaAssetId(segment?.sceneSoundAsset?.assetId) ??
   getPositiveWorkspaceMediaAssetId(segment?.sceneSound?.assetId) ??
@@ -7490,6 +7516,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   options?: { preserveUnbaselinedManualDuration?: boolean },
 ): WorkspaceSegmentEditorDraftSegment => {
   const normalizedFreshSegment = normalizeWorkspaceSegmentEditorSegmentUrls(freshSegment);
+  const normalizedFreshDraftSegment = normalizedFreshSegment as Partial<WorkspaceSegmentEditorDraftSegment>;
   if (isWorkspaceSegmentEditorDraftSegmentEmpty(liveSegment)) {
     return cloneWorkspaceSegmentEditorDraftSegment(liveSegment, fallbackLanguage);
   }
@@ -7511,6 +7538,10 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     ? createWorkspaceSegmentFreshAiVideoAsset(normalizedFreshSegment)
     : null;
   const freshSceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(normalizedFreshSegment, normalizedFreshSegment.index);
+  const freshSceneSoundAssetId = getWorkspaceSegmentSceneSoundStateAssetId(normalizedFreshDraftSegment);
+  const freshSceneSoundPayload =
+    cloneWorkspaceSegmentSceneSoundPayload(normalizedFreshDraftSegment.scene_sound) ??
+    buildWorkspaceSegmentSceneSoundPayloadFromAsset(freshSceneSoundAsset, freshSceneSoundAssetId);
   const freshVoiceoverAsset = createWorkspaceSegmentVoiceoverAsset(normalizedFreshSegment, normalizedFreshSegment.index);
   const freshSpeechWordsRange = (() => {
     const speechWords = Array.isArray(normalizedFreshSegment.speechWords) ? normalizedFreshSegment.speechWords : [];
@@ -7553,7 +7584,6 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     normalizedFreshSegment.manualDurationSeconds,
   );
   const liveVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(liveSegment);
-  const normalizedFreshDraftSegment = normalizedFreshSegment as Partial<WorkspaceSegmentEditorDraftSegment>;
   const hasUserSelectedLiveDuration = liveSegment.durationSyncModeUserSelected === true;
   const shouldAdoptFreshProjectVoiceoverSourceDuration =
     hasFreshProjectVoiceoverTiming &&
@@ -7618,6 +7648,18 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       voiceoverAsset: freshVoiceoverAsset,
     },
   );
+  const liveSceneSoundAsset =
+    cloneStudioCustomVideoFile(liveSegment.sceneSoundAsset) ??
+    cloneStudioCustomVideoFile(liveSegment.sceneSound ?? null);
+  const nextSceneSoundAsset = freshSceneSoundAsset ?? liveSceneSoundAsset;
+  const nextSceneSoundAssetId =
+    freshSceneSoundAssetId ??
+    getWorkspaceSegmentSceneSoundStateAssetId(liveSegment) ??
+    null;
+  const nextSceneSoundPayload =
+    freshSceneSoundPayload ??
+    cloneWorkspaceSegmentSceneSoundPayload(liveSegment.scene_sound) ??
+    buildWorkspaceSegmentSceneSoundPayloadFromAsset(nextSceneSoundAsset, nextSceneSoundAssetId);
 
   return {
     ...normalizedFreshSegment,
@@ -7686,7 +7728,11 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     originalPreviewUrl: originalVisualSegment.originalPreviewUrl,
     originalSourceKind: originalVisualSegment.originalSourceKind,
     photoAnimationSourceAsset: cloneStudioCustomVideoFile(liveSegment.photoAnimationSourceAsset),
-    sceneSoundAsset: freshSceneSoundAsset ?? cloneStudioCustomVideoFile(liveSegment.sceneSoundAsset),
+    sceneSound: cloneStudioCustomVideoFile(nextSceneSoundAsset),
+    sceneSoundAsset: nextSceneSoundAsset,
+    sceneSoundAssetId: nextSceneSoundAssetId,
+    scene_sound: nextSceneSoundPayload,
+    scene_sound_asset_id: nextSceneSoundAssetId ?? nextSceneSoundPayload?.media_asset_id ?? null,
     sceneSoundGeneratedFromPrompt: liveSegment.sceneSoundGeneratedFromPrompt,
     sceneSoundPrompt: liveSegment.sceneSoundPrompt,
     sceneSoundPromptInitialized: freshSceneSoundAsset ? true : liveSegment.sceneSoundPromptInitialized,

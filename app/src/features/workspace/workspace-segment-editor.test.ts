@@ -55,6 +55,7 @@ import type {
   WorkspaceSegmentEditorDraftSession,
 } from "./workspace-types";
 import { getWorkspaceSegmentVoiceoverTextHash } from "./workspace-utils";
+import { hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary } from "./workspace-media-library-helpers";
 
 const createProjectVoiceoverSegment = (
   overrides: Partial<WorkspaceSegmentEditorDraftSegment> = {},
@@ -452,6 +453,54 @@ describe("workspace segment editor scene sound preview", () => {
       mimeType: "audio/mpeg",
     });
     expect(getStudioSceneSoundAssetPreviewUrl(asset)).toBe("/api/workspace/media-assets/913/playback");
+  });
+
+  it("keeps the same draft reference when generated media hydration has no visual changes", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 812,
+        fileName: "segment-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/812/playback",
+        source: "media-library",
+      },
+      mediaType: "video",
+      videoAction: "ai",
+    });
+    const draft = createProjectVoiceoverDraft([segment]);
+
+    const hydrated = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(draft, [
+      {
+        createdAt: 1234,
+        id: "ai-video-812",
+        item: {
+          assetExpiresAt: null,
+          assetId: 812,
+          assetKind: "segment_current",
+          assetLifecycle: "ready",
+          assetMediaType: "video",
+          createdAt: 1234,
+          dedupeKey: "ai-video-812",
+          downloadName: "segment-video.mp4",
+          downloadUrl: "/api/workspace/media-assets/812/download",
+          itemKey: "ai-video-812",
+          kind: "ai_video",
+          previewKind: "video",
+          previewPosterUrl: null,
+          previewUrl: "/api/workspace/media-assets/812/playback",
+          projectId: 77,
+          projectTitle: "Session",
+          segmentIndex: 0,
+          segmentListIndex: 0,
+          segmentNumber: 1,
+          source: "persisted",
+        },
+        sourceJobId: "ai-video-812",
+      },
+    ]);
+
+    expect(hydrated).toBe(draft);
   });
 
   it("attaches an uploaded visual source id to custom visual drafts", () => {

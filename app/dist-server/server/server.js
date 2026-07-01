@@ -560,10 +560,14 @@ const buildRemoteFileDataUrl = async (req, remoteUrl, fallbackMimeType) => {
             return new URL("http://127.0.0.1");
         }
     })();
-    const targetUrl = new URL(remoteUrl, appOriginUrl);
     const requestOriginUrl = getRequestOriginUrl(req);
-    const shouldForwardAuth = (requestOriginUrl && isSameOriginOrEquivalentLoopback(targetUrl, requestOriginUrl)) ||
+    const targetUrl = new URL(remoteUrl, requestOriginUrl ?? appOriginUrl);
+    const isFirstPartyRemote = (requestOriginUrl && isSameOriginOrEquivalentLoopback(targetUrl, requestOriginUrl)) ||
         isSameOriginOrEquivalentLoopback(targetUrl, appOriginUrl);
+    if (!isFirstPartyRemote) {
+        throw new Error("Remote segment asset URL must use the app origin.");
+    }
+    const shouldForwardAuth = isFirstPartyRemote;
     const headers = {
         Accept: `${fallbackMimeType || "*/*"},application/octet-stream`,
     };
@@ -4141,6 +4145,9 @@ app.get("/api/studio/segment-scene-sound/jobs/:jobId", async (req, res) => {
         const status = await getStudioSegmentSceneSoundJobStatus(req.params.jobId, session.user);
         if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
             await invalidateWorkspaceSegmentVisualCaches(session.user);
+            if (typeof status.projectId === "number" && status.projectId > 0) {
+                invalidateWorkspaceSegmentEditorSessionCache(session.user, status.projectId);
+            }
         }
         res.json({ data: status });
     }

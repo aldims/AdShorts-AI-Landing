@@ -25,6 +25,7 @@ import {
   readStoredWorkspaceSegmentEditorScratchBaseline,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
+  readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   removeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorDraft,
@@ -34,6 +35,7 @@ import {
   writeStoredWorkspaceSegmentEditorSession,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
+  upsertStoredWorkspaceSegmentSceneSoundJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
 } from "../features/workspace/workspace-segment-editor-storage";
 import {
@@ -1065,6 +1067,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     const structure102Key = `adshorts.segment-editor-explicit-structure:${storageEmail}:102`;
     const aiPhotoJobsKey = `adshorts.segment-ai-photo-pending:${storageEmail}`;
     const animationJobsKey = `adshorts.segment-photo-animation-pending:${storageEmail}`;
+    const sceneSoundJobsKey = `adshorts.segment-scene-sound-pending:${storageEmail}`;
     const talkingPhotoJobsKey = `adshorts.segment-talking-photo-pending:${storageEmail}`;
     const draft101 = { ...createDraftSession(createDraftSegment({ text: "Old draft" })), projectId: 101 };
     const draft102 = { ...createDraftSession(createDraftSegment({ text: "Kept draft" })), projectId: 102 };
@@ -1097,6 +1100,13 @@ describe("WorkspacePage segment editor draft persistence", () => {
           { createdAt: Date.now(), jobId: "kept-talking", projectId: 102, script: "kept", segmentIndex: 0, sourceAsset: null, status: "queued" },
         ]),
       );
+      window.localStorage.setItem(
+        sceneSoundJobsKey,
+        JSON.stringify([
+          { createdAt: Date.now(), jobId: "old-sound", projectId: 101, prompt: "old", segmentIndex: 0, status: "queued" },
+          { createdAt: Date.now(), jobId: "kept-sound", projectId: 102, prompt: "kept", segmentIndex: 0, status: "queued" },
+        ]),
+      );
 
       expect(clearStoredWorkspaceSegmentEditorTemporaryStateExcept(email, [102])).toEqual([101]);
       expect(window.localStorage.getItem(draft101Key)).toBeNull();
@@ -1111,6 +1121,9 @@ describe("WorkspacePage segment editor draft persistence", () => {
       ]);
       expect(JSON.parse(window.localStorage.getItem(talkingPhotoJobsKey) ?? "[]")).toEqual([
         expect.objectContaining({ jobId: "kept-talking", projectId: 102 }),
+      ]);
+      expect(JSON.parse(window.localStorage.getItem(sceneSoundJobsKey) ?? "[]")).toEqual([
+        expect.objectContaining({ jobId: "kept-sound", projectId: 102 }),
       ]);
     } finally {
       if (originalLocalStorage) {
@@ -1399,6 +1412,14 @@ describe("WorkspacePage segment editor draft persistence", () => {
         segmentIndex: 3,
         status: "queued",
       });
+      upsertStoredWorkspaceSegmentSceneSoundJob("Scratch@Example.test", {
+        createdAt: Date.now(),
+        jobId: "scratch-scene-sound",
+        projectId: 0,
+        prompt: "tiny footsteps",
+        segmentIndex: 2,
+        status: "processing",
+      });
 
       expect(readStoredWorkspaceSegmentTalkingPhotoJobs("scratch@example.test")).toEqual([
         expect.objectContaining({
@@ -1416,6 +1437,15 @@ describe("WorkspacePage segment editor draft persistence", () => {
           prompt: "add milk",
           segmentIndex: 3,
           status: "queued",
+        }),
+      ]);
+      expect(readStoredWorkspaceSegmentSceneSoundJobs("scratch@example.test")).toEqual([
+        expect.objectContaining({
+          jobId: "scratch-scene-sound",
+          projectId: 0,
+          prompt: "tiny footsteps",
+          segmentIndex: 2,
+          status: "processing",
         }),
       ]);
     } finally {
@@ -3429,6 +3459,52 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(refreshedDraft.voiceType).toBe("Boris");
     expect(refreshedDraft.segments[0]?.sceneSoundAsset).toEqual(liveSegment.sceneSoundAsset);
     expect(refreshedDraft.segments[0]?.sceneSoundPrompt).toBe("soft wind");
+  });
+
+  it("adopts durable scene sound fields from a fresh session refresh", () => {
+    const baselineSegment = createDraftSegment({ index: 1, text: "Scene sound" });
+    const liveSegment = createDraftSegment({ ...baselineSegment });
+    const freshSegment = createDraftSegment({
+      ...baselineSegment,
+      sceneSoundAssetId: 7702,
+      scene_sound: {
+        download_url: "/api/workspace/media-assets/7702/playback",
+        file_name: "scene-2-sound.wav",
+        file_size: 1200,
+        media_asset_id: 7702,
+        mime_type: "audio/wav",
+        remote_url: "/api/workspace/media-assets/7702/playback",
+      },
+      scene_sound_asset_id: 7702,
+    });
+    const freshSession = createFreshSession(freshSegment);
+    freshSession.segments = [
+      {
+        ...freshSession.segments[0]!,
+        sceneSoundAssetId: 7702,
+        scene_sound: freshSegment.scene_sound,
+        scene_sound_asset_id: 7702,
+      },
+    ];
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createDraftSession(liveSegment),
+      freshSession,
+      {
+        baselineSession: createFreshSession(baselineSegment),
+      },
+    );
+
+    const refreshedSegment = refreshedDraft.segments[0];
+    expect(refreshedSegment?.sceneSoundAssetId).toBe(7702);
+    expect(refreshedSegment?.scene_sound_asset_id).toBe(7702);
+    expect(refreshedSegment?.scene_sound).toEqual(expect.objectContaining({
+      file_name: "scene-2-sound.wav",
+      media_asset_id: 7702,
+      mime_type: "audio/wav",
+    }));
+    expect(refreshedSegment?.sceneSoundAsset?.assetId).toBe(7702);
+    expect(refreshedSegment?.sceneSoundPromptInitialized).toBe(true);
   });
 
   it("preserves manual segment timing during a fresh session refresh", () => {
