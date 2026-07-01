@@ -11,6 +11,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
+  getStudioSceneSoundAssetPreviewUrl,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentSelectedVisualPreviewKind,
@@ -23,6 +24,7 @@ import {
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
+  createWorkspaceSegmentSceneSoundAsset,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorDraftSession,
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
@@ -415,6 +417,41 @@ describe("workspace segment editor scene sound preview", () => {
       fileName: "scene-sound.wav",
       mimeType: "audio/wav",
     })).toBe("audio");
+  });
+
+  it("rebuilds a playable scene sound asset from a persisted asset id", () => {
+    const segment = createProjectVoiceoverSegment({
+      sceneSoundAsset: null,
+      sceneSoundAssetId: 812,
+      scene_sound_asset_id: 812,
+    });
+
+    const asset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+
+    expect(asset?.assetId).toBe(812);
+    expect(asset?.fileName).toBe("segment-1-scene-sound.wav");
+    expect(getStudioSceneSoundAssetPreviewUrl(asset)).toBe("/api/workspace/media-assets/812/playback");
+  });
+
+  it("rebuilds a playable scene sound asset from AdsFlow-shaped persisted sound metadata", () => {
+    const segment = createProjectVoiceoverSegment({
+      sceneSoundAsset: null,
+      scene_sound: {
+        media_asset_id: 913,
+        file_name: "scene-sound.mp3",
+        mime_type: "audio/mpeg",
+      },
+      scene_sound_asset_id: 913,
+    });
+
+    const asset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+
+    expect(asset).toMatchObject({
+      assetId: 913,
+      fileName: "scene-sound.mp3",
+      mimeType: "audio/mpeg",
+    });
+    expect(getStudioSceneSoundAssetPreviewUrl(asset)).toBe("/api/workspace/media-assets/913/playback");
   });
 
   it("attaches an uploaded visual source id to custom visual drafts", () => {

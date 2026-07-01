@@ -170,6 +170,7 @@ import {
   cloneWorkspaceSegmentEditorDraftSession,
   createWorkspaceSegmentEditorDraftSession,
   createWorkspaceSegmentEditorInsertedSegment,
+  createWorkspaceSegmentSceneSoundAsset,
   createWorkspaceSegmentEditorResetDraftFromBaseline,
   createWorkspaceSegmentEditorScratchDraftSession,
   doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio,
@@ -24017,7 +24018,8 @@ export function WorkspacePage({
         return;
       }
 
-      const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segment.sceneSoundAsset);
+      const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+      const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(sceneSoundAsset);
       if (soundPreviewUrl) {
         tracks.push({
           key: `full-preview:sound:${segment.index}:${soundPreviewUrl}`,
@@ -27289,9 +27291,10 @@ export function WorkspacePage({
       ? segmentTimelineSoundMenuPromptDraft.prompt
       : segmentTimelineSoundMenuPersistedPrompt;
   const segmentTimelineSoundMenuPromptNormalized = normalizeWorkspaceSegmentSceneSoundPrompt(segmentTimelineSoundMenuPrompt);
-  const segmentTimelineSoundMenuPreviewUrl = segmentTimelineSoundMenuSegment
-    ? getStudioSceneSoundAssetPreviewUrl(segmentTimelineSoundMenuSegment.sceneSoundAsset)
+  const segmentTimelineSoundMenuAsset = segmentTimelineSoundMenuSegment
+    ? createWorkspaceSegmentSceneSoundAsset(segmentTimelineSoundMenuSegment, segmentTimelineSoundMenuSegment.index)
     : null;
+  const segmentTimelineSoundMenuPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segmentTimelineSoundMenuAsset);
   const segmentTimelineSoundMenuPlaceholder = workspaceText(
     locale,
     "Например: мягкий городской шум, шаги по мокрому асфальту, легкий синтвейв без голоса.",
@@ -27310,7 +27313,7 @@ export function WorkspacePage({
   );
   const canDeleteSegmentTimelineSoundMenu = Boolean(
     segmentTimelineSoundMenuSegment &&
-      (segmentTimelineSoundMenuSegment.sceneSoundAsset ||
+      (segmentTimelineSoundMenuAsset ||
         segmentTimelineSoundMenuSegment.sceneSoundPrompt ||
         segmentTimelineSoundMenuSegment.sceneSoundGeneratedFromPrompt ||
         isSegmentTimelineSoundMenuPending),
@@ -28634,8 +28637,9 @@ export function WorkspacePage({
                 segmentEditorGeneratingSceneSoundRunIds,
                 segment.index,
               );
-              const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(segment.sceneSoundAsset);
-              const soundPreviewMediaKind = getStudioSceneSoundAssetPreviewMediaKind(segment.sceneSoundAsset);
+              const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+              const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(sceneSoundAsset);
+              const soundPreviewMediaKind = getStudioSceneSoundAssetPreviewMediaKind(sceneSoundAsset);
               const soundAudioKey = `timeline:sound:${segment.index}:${soundPreviewUrl ?? "empty"}`;
               const soundLabel = getSegmentTimelineSoundLabel(segment, {
                 isEmpty: span.isEmpty,
@@ -30599,7 +30603,10 @@ export function WorkspacePage({
       onClick={handleSegmentEditorPromptBrandToolButtonClick}
     />
   );
-  const activeSegmentSceneSoundUrl = activeSegment ? getStudioSceneSoundAssetPreviewUrl(activeSegment.sceneSoundAsset) : null;
+  const activeSegmentSceneSoundAsset = activeSegment
+    ? createWorkspaceSegmentSceneSoundAsset(activeSegment, activeSegment.index)
+    : null;
+  const activeSegmentSceneSoundUrl = getStudioSceneSoundAssetPreviewUrl(activeSegmentSceneSoundAsset);
   const activeSegmentEffectiveVoiceIdForGeneration =
     activeSegment && segmentEditorDraft ? getWorkspaceSegmentEffectiveVoiceId(activeSegment, segmentEditorDraft) : null;
   const activeSegmentVoiceoverCost = activeSegmentEffectiveVoiceIdForGeneration

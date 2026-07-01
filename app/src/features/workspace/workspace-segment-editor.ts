@@ -1060,7 +1060,8 @@ export const createWorkspaceSegmentSceneSoundAsset = (
   segment: WorkspaceSegmentEditorSegment,
   fallbackSegmentIndex: number,
 ): StudioCustomVideoFile | null => {
-  const camelAsset = segment.sceneSound ?? null;
+  const explicitAsset = (segment as Partial<WorkspaceSegmentEditorDraftSegment>).sceneSoundAsset ?? null;
+  const camelAsset = explicitAsset ?? segment.sceneSound ?? null;
   const snakeAsset = segment.scene_sound ?? null;
   const assetId =
     getPositiveWorkspaceMediaAssetId(camelAsset?.assetId) ??
@@ -2361,7 +2362,7 @@ const cloneWorkspaceSegmentSceneSoundPayload = (
   payload: WorkspaceSegmentSceneSoundPayload | null | undefined,
 ): WorkspaceSegmentSceneSoundPayload | null => (payload ? { ...payload } : null);
 
-const getWorkspaceSegmentSceneSoundStateAssetId = (
+export const getWorkspaceSegmentSceneSoundStateAssetId = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) =>
   getPositiveWorkspaceMediaAssetId(segment?.sceneSoundAsset?.assetId) ??

@@ -115,6 +115,19 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
     expect(textRow?.spans[1]?.isEdited).toBe(false);
   });
 
+  it("treats AdsFlow-shaped scene sound metadata as a non-empty sound row", () => {
+    const tracks = buildWorkspaceSegmentEditorTracks([
+      createSegment(1, {
+        sceneSoundAsset: null,
+        sceneSoundAssetId: null,
+        scene_sound: { media_asset_id: 445 },
+        scene_sound_asset_id: null,
+      }),
+    ]);
+
+    expect(tracks.rows.find((row) => row.kind === "sound")?.spans[0]?.isEmpty).toBe(false);
+  });
+
   it("keeps active array index stable after reordering by consuming current array order", () => {
     const tracks = buildWorkspaceSegmentEditorTracks(
       [

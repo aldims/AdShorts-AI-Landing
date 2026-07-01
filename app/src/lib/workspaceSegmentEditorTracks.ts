@@ -10,6 +10,7 @@ export type WorkspaceSegmentEditorTrackSegment = WorkspaceSegmentTimelineSegment
   index: number;
   sceneSoundAsset?: unknown;
   sceneSoundAssetId?: number | null;
+  scene_sound?: { media_asset_id?: number | null } | null;
   scene_sound_asset_id?: number | null;
   voiceType?: string | null;
   voice_type?: string | null;
@@ -90,6 +91,7 @@ const getSegmentSoundPresence = (segment?: WorkspaceSegmentEditorTrackSegment | 
   Boolean(
     segment?.sceneSoundAsset ||
       normalizePositiveTrackNumber(segment?.sceneSoundAssetId) ||
+      normalizePositiveTrackNumber(segment?.scene_sound?.media_asset_id) ||
       normalizePositiveTrackNumber(segment?.scene_sound_asset_id),
   );
 

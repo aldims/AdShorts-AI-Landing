@@ -1,4 +1,5 @@
 import {
+  createWorkspaceSegmentSceneSoundAsset,
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
@@ -419,8 +420,12 @@ const getWorkspaceSegmentCustomAssetIdentityKey = (asset: StudioCustomVideoFile 
   return fallbackIdentity || null;
 };
 
-const getWorkspaceSegmentSceneSoundIdentityKey = getWorkspaceSegmentCustomAssetIdentityKey;
-export const getWorkspaceSegmentSceneSoundAssetId = getWorkspaceSegmentCustomAssetId;
+const getWorkspaceSegmentSceneSoundIdentityKey = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  getWorkspaceSegmentCustomAssetIdentityKey(
+    segment ? createWorkspaceSegmentSceneSoundAsset(segment, segment.index) : null,
+  );
 
 const getWorkspaceSegmentSceneSoundGenerationKey = (
   segment:
@@ -440,8 +445,8 @@ export const isWorkspaceSegmentDraftSceneSoundEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) => {
-  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment.sceneSoundAsset);
-  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment?.sceneSoundAsset);
+  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment);
+  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment);
 
   if (currentIdentity !== baselineIdentity) {
     return true;
@@ -567,8 +572,8 @@ const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) => {
-  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment.sceneSoundAsset);
-  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment?.sceneSoundAsset);
+  const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment);
+  const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment);
 
   if (currentIdentity && !baselineIdentity) {
     return "добавлен звук сцены";

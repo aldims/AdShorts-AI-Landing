@@ -22,6 +22,7 @@ import {
   getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentOriginalVisualIdentityKey,
+  getWorkspaceSegmentSceneSoundStateAssetId,
   getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
@@ -41,7 +42,6 @@ import {
   rebuildWorkspaceSegmentEditorDraftTimeline,
   resolveWorkspaceSegmentEditorMediaUploadScope,
 } from "./workspace-segment-editor";
-import { getWorkspaceSegmentSceneSoundAssetId } from "./workspace-segment-editor-checklist";
 import { WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS } from "./workspace-segment-editor-storage";
 import {
   isWorkspaceSegmentAiPhotoReady,
@@ -284,7 +284,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
     let customVideoAssetId: number | undefined;
     let customVideoFileUploadKey: string | undefined;
     let customVideoRemoteUrl: string | undefined;
-    let sceneSoundAssetId = getWorkspaceSegmentSceneSoundAssetId(segment.sceneSoundAsset) ?? undefined;
+    let sceneSoundAssetId = getWorkspaceSegmentSceneSoundStateAssetId(segment) ?? undefined;
     const payloadVideoActionForSegment: WorkspaceSegmentEditorPayloadVideoAction =
       isPayloadVisualSameAsOriginal
         ? "original"

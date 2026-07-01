@@ -8981,6 +8981,20 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("sends persisted scene sound ids even when the full sound asset was not hydrated", async () => {
+    const segment = createDraftSegment({
+      sceneSoundAsset: null,
+      sceneSoundAssetId: 9914,
+      scene_sound_asset_id: 9914,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toMatchObject({
+      sceneSoundAssetId: 9914,
+    });
+  });
+
   it("uploads generated scene sound audio before building the generation payload when asset id is missing", async () => {
     const originalFetch = globalThis.fetch;
     const fetchCalls: Array<{ body?: BodyInit | null; url: string }> = [];
