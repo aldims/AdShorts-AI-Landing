@@ -18687,6 +18687,8 @@ export function WorkspacePage({
 
       const rawErrorMessage = error instanceof Error ? error.message : "Failed to generate task.";
       const errorMessage = resolveStudioGenerationErrorMessage(rawErrorMessage);
+      suppressProjectFallbackPreviewRef.current = true;
+      setGeneratedVideo(null);
       setStatus("Generation failed");
       setGenerateError(errorMessage);
       setHasLoadedProjects(false);
@@ -20901,6 +20903,8 @@ export function WorkspacePage({
         }
 
         if (latestGeneration.status === "failed") {
+          suppressProjectFallbackPreviewRef.current = true;
+          setGeneratedVideo(null);
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
           setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
@@ -21025,6 +21029,8 @@ export function WorkspacePage({
 
         if (latestGeneration.status === "failed") {
           activeGenerationJobIdRef.current = null;
+          suppressProjectFallbackPreviewRef.current = true;
+          setGeneratedVideo(null);
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
           setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
