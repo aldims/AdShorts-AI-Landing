@@ -4553,11 +4553,14 @@
 
   .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster,
   .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster.has-create-mode-switch {
-    position: relative !important;
-    inset: auto !important;
-    grid-area: nav !important;
-    grid-column: auto !important;
-    grid-row: auto !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    grid-area: 1 / 1 / 2 / -1 !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -4565,7 +4568,7 @@
     width: min(100%, max-content) !important;
     max-width: 100% !important;
     gap: 10px !important;
-    transform: none !important;
+    transform: translate(-50%, -50%) !important;
     pointer-events: auto !important;
   }
 
