@@ -4397,7 +4397,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("shows the video duration in the visual badge instead of the looped scene duration", () => {
+  it("shows the scene duration in the visual badge when the source video duration differs", () => {
     const segment = createDraftSegment({
       currentPlaybackUrl: "/api/workspace/media-assets/505/playback",
       currentSourceKind: "upload",
@@ -4425,8 +4425,8 @@ describe("WorkspacePage studio locale defaults", () => {
         videoVisualDurationSeconds: 5,
       }),
     ).toEqual({
-      badgeLabel: "5 сек",
-      durationLabel: "5 с",
+      badgeLabel: "5.9 сек",
+      durationLabel: "5.9 с",
     });
 
     expect(
@@ -6180,7 +6180,7 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
     });
 
-    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(true);
+    expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 3)).toBe(false);
 
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
@@ -6247,7 +6247,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
       duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
+      durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
@@ -6307,17 +6307,17 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
+      duration: 2.3,
       durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 5,
-      manualDurationSeconds: 5,
+      endTime: 2.3,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      startTime: 5,
+      startTime: 2.3,
     }));
   });
 
@@ -6374,7 +6374,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
       duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
+      durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
@@ -6437,7 +6437,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
       duration: 2.3,
-      durationExtensionSourceDurationSeconds: null,
+      durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       endTime: 13.7,

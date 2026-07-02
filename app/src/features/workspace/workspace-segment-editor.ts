@@ -5384,10 +5384,19 @@ export const clearWorkspaceSegmentEditorVoiceoverGenerationState = (
 
   const startTime = getWorkspaceSegmentEditorDisplayStartTime(clearedSegment);
   const roundedEstimatedVoiceoverDurationSeconds = roundWorkspaceSegmentTimelineSeconds(estimatedVoiceoverDurationSeconds);
+  const knownVideoVisualDurationSeconds =
+    getWorkspaceSegmentSelectedVisualPreviewKind(clearedSegment) === "video"
+      ? getWorkspaceSegmentKnownVisualDurationSeconds(clearedSegment)
+      : null;
+  const estimatedVoiceoverVideoSourceDurationSeconds =
+    knownVideoVisualDurationSeconds !== null &&
+    knownVideoVisualDurationSeconds > roundedEstimatedVoiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+      ? roundWorkspaceSegmentTimelineSeconds(knownVideoVisualDurationSeconds)
+      : null;
   return {
     ...clearedSegment,
     duration: roundedEstimatedVoiceoverDurationSeconds,
-    durationExtensionSourceDurationSeconds: null,
+    durationExtensionSourceDurationSeconds: estimatedVoiceoverVideoSourceDurationSeconds,
     estimatedVoiceoverDurationSeconds: roundedEstimatedVoiceoverDurationSeconds,
     estimatedVoiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(clearedSegment.text),
     durationMode: "auto",
@@ -6217,25 +6226,11 @@ export const shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover = (
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" ||
     manualDurationSeconds !== null ||
     storedDurationExtensionSourceDurationSeconds !== null;
-  const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
-  const previewKind = getWorkspaceSegmentPreviewKind(segment);
-  const normalizedMediaType = String(segment.mediaType ?? "").trim().toLowerCase();
-  const isVideoVisualSegment =
-    selectedVisualPreviewKind === "video" ||
-    previewKind === "video" ||
-    normalizedMediaType === "video";
-  const isImageVisualSegment =
-    selectedVisualPreviewKind === "image" ||
-    previewKind === "image" ||
-    normalizedMediaType === "photo";
-  const hasPreservableVisualDuration =
-    isVideoVisualSegment || (isImageVisualSegment && hasUserSelectedVisualDurationSync);
-
   return (
     normalizedVoiceoverDurationSeconds !== null &&
     !hasUserSelectedVoiceoverDurationSync &&
     hasManualTimelineOverride &&
-    hasPreservableVisualDuration &&
+    hasUserSelectedVisualDurationSync &&
     storedDurationExtensionSourceDurationSeconds === null &&
     manualDurationSeconds !== null &&
     manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= normalizedVoiceoverDurationSeconds
@@ -6248,16 +6243,10 @@ export const shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover = (
 ) => {
   const normalizedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationSeconds);
   const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-  const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
-  const previewKind = getWorkspaceSegmentPreviewKind(segment);
-  const isVideoVisualSegment =
-    selectedVisualPreviewKind === "video" ||
-    previewKind === "video" ||
-    String(segment.mediaType ?? "").trim().toLowerCase() === "video";
   const hasVisualDurationSync = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual";
   return (
     hasVisualDurationSync &&
-    (segment.durationSyncModeUserSelected === true || isVideoVisualSegment) &&
+    segment.durationSyncModeUserSelected === true &&
     normalizedVoiceoverDurationSeconds !== null &&
     manualDurationSeconds !== null
   );
@@ -6289,6 +6278,7 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
   const hasUserSelectedVisualDurationSync =
     durationSyncMode === "visual" && segment.durationSyncModeUserSelected === true;
   const hasStaleVoiceoverTrimmedVisualRestoreCandidate =
+    freshVoiceoverDurationSeconds === null &&
     durationSyncMode === "voiceover" &&
     segment.durationSyncModeUserSelected !== true &&
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "auto" &&
@@ -6411,6 +6401,7 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     (shouldVoiceoverOwnTimelineDuration ||
       hasUserSelectedVoiceoverDurationSync ||
       actualExtendedVoiceoverDurationSeconds !== null ||
+      (isVideoVisualSegment && !hasUserSelectedVisualDurationSync && freshVoiceoverDurationSeconds !== null) ||
       (!isManualVideoTimelineAtStoredSourceDuration &&
         shouldAutoTrimWorkspaceSegmentVideoToVoiceover(currentVideoDurationSeconds, voiceoverDurationSeconds)) ||
       (hasFreshVoiceoverTimelineDuration &&
@@ -6428,10 +6419,15 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     shouldSyncVideoToVoiceover
   ) {
     const duration = roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds);
+    const sourceDurationSeconds =
+      currentVideoDurationSeconds !== null &&
+      currentVideoDurationSeconds > duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+        ? roundWorkspaceSegmentTimelineSeconds(currentVideoDurationSeconds)
+        : null;
     return {
       ...segment,
       duration,
-      durationExtensionSourceDurationSeconds: null,
+      durationExtensionSourceDurationSeconds: sourceDurationSeconds,
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: hasUserSelectedVoiceoverDurationSync,
       durationMode: "auto",
@@ -6443,6 +6439,7 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
 
   if (
     isVideoVisualSegment &&
+    hasUserSelectedVisualDurationSync &&
     currentVideoDurationSeconds !== null &&
     currentVideoDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
   ) {
@@ -6541,8 +6538,7 @@ const restoreWorkspaceSegmentStaleVoiceoverTrimToVisualDuration = (
   }
 
   if (
-    isWorkspaceSegmentFreshSceneVoiceoverAsset(segment, session) &&
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) === null
+    getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session) !== null
   ) {
     return segment;
   }

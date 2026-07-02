@@ -1192,18 +1192,10 @@ export const resolveWorkspaceSegmentTimelineVisualDurationDisplay = (options: {
   const slotDurationSeconds = Number.isFinite(options.segmentSlotDurationSeconds)
     ? roundWorkspaceSegmentTimelineSeconds(Math.max(0, options.segmentSlotDurationSeconds))
     : 0;
-  const rawVideoVisualDurationSeconds = Number(options.videoVisualDurationSeconds);
-  const videoVisualDurationSeconds =
-    !options.isImageDurationSegment &&
-    Number.isFinite(rawVideoVisualDurationSeconds) &&
-    rawVideoVisualDurationSeconds > 0
-      ? roundWorkspaceSegmentTimelineSeconds(rawVideoVisualDurationSeconds)
-      : null;
-  const displayDurationSeconds = videoVisualDurationSeconds ?? slotDurationSeconds;
 
   return {
-    badgeLabel: formatWorkspaceSegmentEditorDurationBadgeLabel(displayDurationSeconds, options.locale),
-    durationLabel: formatWorkspaceSegmentEditorSegmentDurationLabel(0, displayDurationSeconds, options.locale),
+    badgeLabel: formatWorkspaceSegmentEditorDurationBadgeLabel(slotDurationSeconds, options.locale),
+    durationLabel: formatWorkspaceSegmentEditorSegmentDurationLabel(0, slotDurationSeconds, options.locale),
   };
 };
 
@@ -27983,8 +27975,7 @@ export function WorkspacePage({
               const isImageDurationSegment = selectedVisualPreviewKind === "image";
               const isSegmentVideoTrimmedToVoiceover =
                 selectedVisualPreviewKind === "video" &&
-                normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
-                segment.durationSyncModeUserSelected === true;
+                normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover";
               const segmentVideoVisualDurationBadgeSeconds =
                 selectedVisualPreviewKind === "video"
                   ? (shouldUseShorterSourceVideoDuration ? sourceVideoVisualDurationSeconds : null) ??

@@ -1251,7 +1251,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(shouldAutoTrimWorkspaceSegmentVideoToVoiceover(11.7, 11.8)).toBe(false);
   });
 
-  it("preserves a short manual video tail after a fresh voiceover duration", () => {
+  it("trims a default manual video tail to a fresh voiceover duration", () => {
     const segment = createProjectVoiceoverSegment({
       duration: 11.8,
       durationExtensionSourceDurationSeconds: 5,
@@ -1275,12 +1275,12 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.8,
-      durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      endTime: 11.8,
-      manualDurationSeconds: 11.8,
+      duration: 11.7,
+      durationExtensionSourceDurationSeconds: 11.8,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 11.7,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
@@ -1343,6 +1343,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       durationExtensionSourceDurationSeconds: 5,
       durationMode: "manual",
       durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 5,
       manualDurationSeconds: 5,
       mediaType: "video",
@@ -1655,13 +1656,13 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
+      duration: 2.7,
       durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      manualDurationSeconds: 5,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      manualDurationSeconds: null,
     }));
-    expect(refreshed.segments[0]?.durationSyncMode).not.toBe("voiceover");
     expect(getWorkspaceSegmentKnownVisualDurationSeconds(refreshed.segments[0])).toBe(5);
   });
 
@@ -1775,7 +1776,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     ).toBe(false);
   });
 
-  it("adopts a longer fresh server video duration over a stale live draft duration", () => {
+  it("keeps the scene synced to voiceover when a fresh server video source is longer", () => {
     const liveSegment = createProjectVoiceoverSegment({
       currentSourceKind: "upload",
       duration: 2.7,
@@ -1809,10 +1810,12 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
-      duration: 5.042,
-      durationMode: "manual",
-      endTime: 5.042,
-      manualDurationSeconds: 5.042,
+      duration: 2.7,
+      durationExtensionSourceDurationSeconds: 5.042,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 2.7,
+      manualDurationSeconds: null,
       startTime: 0,
     }));
   });
@@ -2828,7 +2831,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
-  it("restores a stale voiceover-trimmed video draft to the known visual duration", () => {
+  it("keeps a stale voiceover-trimmed video draft trimmed while preserving the known visual duration", () => {
     const segment = createProjectVoiceoverSegment({
       customVideo: {
         assetId: 4404,
@@ -2873,13 +2876,13 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5,
+      duration: 4.7,
       durationExtensionSourceDurationSeconds: 5,
-      durationMode: "manual",
-      durationSyncMode: "visual",
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 5,
-      manualDurationSeconds: 5,
+      endTime: 4.7,
+      manualDurationSeconds: null,
       speechDuration: 4.7,
       startTime: 0,
     }));
@@ -2931,7 +2934,7 @@ describe("workspace segment editor project voiceover timeline", () => {
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
       duration: 2.2,
-      durationExtensionSourceDurationSeconds: null,
+      durationExtensionSourceDurationSeconds: 10,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       endTime: 2.2,
@@ -4772,6 +4775,54 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("resets an inherited video duration to pending voiceover text estimate", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      startTime: 0,
+      text: "a",
+      videoAction: "custom",
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+    const clearedSegment = clearWorkspaceSegmentEditorVoiceoverGenerationState(segment, {
+      resetTimelineToEstimatedVoiceover: true,
+      session,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      {
+        ...session,
+        segments: [clearedSegment],
+      },
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 1.8,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 1.8,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
   it("scales pending voiceover duration from the previous measured word duration", () => {
     const previousText = "Чемпионат мира 2026 года в Северной Америке перевернет все футбольные расклады!";
     const nextText = "Чемпионат мира 2026 в Северной Америке перевернет все футбольные расклады!";
@@ -4880,6 +4931,53 @@ describe("workspace segment editor project voiceover timeline", () => {
       durationSyncModeUserSelected: true,
       endTime: 6.2,
       manualDurationSeconds: 6.2,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves a user-selected video duration when pending voiceover text is shorter", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      startTime: 0,
+      text: "a",
+      videoAction: "custom",
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+    const clearedSegment = clearWorkspaceSegmentEditorVoiceoverGenerationState(segment, {
+      resetTimelineToEstimatedVoiceover: true,
+      session,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      {
+        ...session,
+        segments: [clearedSegment],
+      },
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
       startTime: 0,
     }));
   });
@@ -5029,6 +5127,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       duration: 30,
       durationMode: "manual",
       durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
       endTime: 33.9,
       index: 1,
       manualDurationSeconds: 30,
