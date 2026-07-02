@@ -4823,6 +4823,57 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("syncs an uploaded video visual to pending voiceover text estimate", () => {
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 4404,
+        durationSeconds: 5,
+        fileName: "uploaded-scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/4404/playback",
+        source: "upload",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      startTime: 0,
+      text: "a",
+      videoAction: "custom",
+      voiceoverAsset: null,
+      voiceoverTextHash: null,
+      voiceoverVoiceType: null,
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+    });
+
+    const rebuilt = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+      createProjectVoiceoverDraft([segment]),
+      { preserveSourceTimelineEnd: false },
+    );
+
+    expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
+      duration: 1.8,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 1.8,
+      estimatedVoiceoverDurationSeconds: 1.8,
+      estimatedVoiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("a"),
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
   it("scales pending voiceover duration from the previous measured word duration", () => {
     const previousText = "Чемпионат мира 2026 года в Северной Америке перевернет все футбольные расклады!";
     const nextText = "Чемпионат мира 2026 в Северной Америке перевернет все футбольные расклады!";

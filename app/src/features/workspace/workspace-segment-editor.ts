@@ -4668,6 +4668,113 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
   };
 };
 
+const syncWorkspaceSegmentPendingVoiceoverEstimatedDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
+): WorkspaceSegmentEditorDraftSegment => {
+  const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
+  const previewKind = getWorkspaceSegmentPreviewKind(segment);
+  const isVideoVisualSegment =
+    selectedVisualPreviewKind === "video" ||
+    previewKind === "video" ||
+    String(segment.mediaType ?? "").trim().toLowerCase() === "video";
+  if (!isVideoVisualSegment) {
+    return segment;
+  }
+
+  if (segment.voiceoverAsset || doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return segment;
+  }
+
+  const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+  const hasUserSelectedVisualDurationSync =
+    durationSyncMode === "visual" && segment.durationSyncModeUserSelected === true;
+  if (hasUserSelectedVisualDurationSync) {
+    return segment;
+  }
+
+  const estimatedVoiceoverTextHash = getWorkspaceSegmentVoiceoverTextHash(segment.text);
+  const storedEstimatedVoiceoverTextHash =
+    typeof segment.estimatedVoiceoverTextHash === "string" ? segment.estimatedVoiceoverTextHash : null;
+  const storedEstimatedVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    segment.estimatedVoiceoverDurationSeconds,
+  );
+  const hasStoredPendingVoiceoverEstimate =
+    storedEstimatedVoiceoverDurationSeconds !== null &&
+    storedEstimatedVoiceoverTextHash === estimatedVoiceoverTextHash;
+  const hasCustomVideoVisual = Boolean(segment.customVideo) || getWorkspaceSegmentLatestVisualAction(segment) === "custom";
+  if (
+    !hasStoredPendingVoiceoverEstimate &&
+    !hasCustomVideoVisual
+  ) {
+    return segment;
+  }
+
+  const voiceoverDurationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session, {
+    allowEmbeddedVisualFallback: false,
+  });
+  const estimatedVoiceoverDurationSeconds =
+    voiceoverDurationInfo?.source === "estimated"
+      ? normalizeWorkspaceSegmentManualDurationSeconds(voiceoverDurationInfo.durationSeconds)
+      : null;
+  if (estimatedVoiceoverDurationSeconds === null) {
+    return segment;
+  }
+
+  const sourceDurationCandidates = [
+    getWorkspaceSegmentKnownVisualDurationSeconds(segment),
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
+    getWorkspaceSegmentCanonicalSlotDurationSeconds(segment),
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.duration),
+  ].filter((value): value is number => value !== null);
+  const sourceDurationSeconds =
+    sourceDurationCandidates.length > 0
+      ? roundWorkspaceSegmentTimelineSeconds(Math.max(...sourceDurationCandidates))
+      : null;
+  const duration = roundWorkspaceSegmentTimelineSeconds(estimatedVoiceoverDurationSeconds);
+  const durationExtensionSourceDurationSeconds =
+    sourceDurationSeconds !== null &&
+    sourceDurationSeconds > duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
+      ? sourceDurationSeconds
+      : null;
+  const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+  if (
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "auto" &&
+    durationSyncMode === "voiceover" &&
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) === null &&
+    areWorkspaceSegmentDurationValuesEqual(
+      normalizeWorkspaceSegmentManualDurationSeconds(segment.duration),
+      duration,
+    ) &&
+    areWorkspaceSegmentDurationValuesEqual(
+      getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment),
+      durationExtensionSourceDurationSeconds,
+    ) &&
+    segment.estimatedVoiceoverTextHash === estimatedVoiceoverTextHash &&
+    areWorkspaceSegmentDurationValuesEqual(
+      normalizeWorkspaceSegmentManualDurationSeconds(segment.estimatedVoiceoverDurationSeconds),
+      duration,
+    )
+  ) {
+    return segment;
+  }
+
+  return {
+    ...segment,
+    duration,
+    durationExtensionSourceDurationSeconds,
+    durationMode: "auto",
+    durationSyncMode: "voiceover",
+    durationSyncModeUserSelected:
+      durationSyncMode === "voiceover" && segment.durationSyncModeUserSelected === true,
+    endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+    estimatedVoiceoverDurationSeconds: duration,
+    estimatedVoiceoverTextHash,
+    manualDurationSeconds: null,
+    startTime,
+  };
+};
+
 export const getWorkspaceSegmentManualDurationMinimum = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
@@ -7054,8 +7161,12 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     const segmentWithGeneratedVideoVisualDuration = syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration(
       segmentWithSanitizedProjectVoiceoverDuration,
     );
-    const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(
+    const segmentWithPendingVoiceoverTiming = syncWorkspaceSegmentPendingVoiceoverEstimatedDuration(
       segmentWithGeneratedVideoVisualDuration,
+      session,
+    );
+    const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(
+      segmentWithPendingVoiceoverTiming,
       session,
     );
     const segmentWithRestoredVisualDuration = restoreWorkspaceSegmentStaleVoiceoverTrimToVisualDuration(
