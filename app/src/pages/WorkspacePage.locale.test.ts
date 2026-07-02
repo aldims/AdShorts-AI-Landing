@@ -2783,6 +2783,31 @@ describe("WorkspacePage segment editor draft persistence", () => {
       ]),
     );
   });
+
+  it("marks replacing project music asset with the same music type as a change", () => {
+    const segment = createDraftSegment({ index: 0, text: "First" });
+    const baseline = {
+      ...createDraftSession(segment),
+      musicAssetId: 11,
+      musicName: "fun_1.mp3",
+      musicType: "fun",
+    };
+    const draft = {
+      ...baseline,
+      musicAssetId: 12,
+      musicName: "fun_2.mp3",
+    };
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, baseline)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "global",
+          label: "Общее: музыка: Веселая",
+          resetSettingIds: expect.arrayContaining(["music"]),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("WorkspacePage studio route transitions", () => {

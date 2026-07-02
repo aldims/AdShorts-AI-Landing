@@ -264,10 +264,18 @@ const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEdi
       : null;
   const customMusicFileName =
     musicType === "custom" ? String(session?.customMusicFileName ?? "").replace(/\s+/g, " ").trim() || null : null;
+  const musicAssetId =
+    musicType !== "custom" && Number.isFinite(Number(session?.musicAssetId)) && Number(session?.musicAssetId) > 0
+      ? Math.trunc(Number(session?.musicAssetId))
+      : null;
+  const musicName =
+    musicType !== "custom" ? String(session?.musicName ?? "").replace(/\s+/g, " ").trim() || null : null;
 
   return {
     customMusicAssetId,
     customMusicFileName,
+    musicAssetId,
+    musicName,
     musicType,
     subtitleColorId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleColor) ?? "purple" : null,
     subtitleEnabled,
@@ -835,9 +843,10 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
 
   if (
     draftSettings.musicType !== baselineSettings.musicType ||
-    (draftSettings.musicType === "custom" &&
-      (draftSettings.customMusicAssetId !== baselineSettings.customMusicAssetId ||
-        draftSettings.customMusicFileName !== baselineSettings.customMusicFileName))
+    draftSettings.musicAssetId !== baselineSettings.musicAssetId ||
+    draftSettings.musicName !== baselineSettings.musicName ||
+    draftSettings.customMusicAssetId !== baselineSettings.customMusicAssetId ||
+    draftSettings.customMusicFileName !== baselineSettings.customMusicFileName
   ) {
     globalChanges.push(
       lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistMusicSettingsLabel(draftSettings)),
