@@ -130,6 +130,8 @@ import {
   buildWorkspaceGeneratedMediaLibraryEntriesFromMediaLibraryItems,
   hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary,
   readStoredWorkspaceSegmentEditorBrandSnapshot,
+  formatWorkspaceSegmentEditorMissingVisualScenesMessage,
+  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   hasWorkspaceSegmentEditorRenderableScratchScene,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
@@ -7197,7 +7199,7 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
-  it("exports scratch scene drafts as scene-controlled generation payloads without a project id", async () => {
+  it("blocks scratch scene drafts without a scene visual before payload export", async () => {
     const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
       language: "ru",
       title: "Новый Shorts",
@@ -7210,25 +7212,20 @@ describe("WorkspacePage studio locale defaults", () => {
       })),
     };
 
-    const result = await buildWorkspaceSegmentEditorPayload(scratchSceneDraft, {
-      allowStructureChange: true,
-      language: "ru",
-    });
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(scratchSceneDraft)).toEqual([1]);
+    expect(formatWorkspaceSegmentEditorMissingVisualScenesMessage([1], "ru")).toBe(
+      "Визуал не задан для сцены 1. Добавьте визуал или удалите сцену.",
+    );
+    expect(formatWorkspaceSegmentEditorMissingVisualScenesMessage([2, 3], "en")).toBe(
+      "Scenes 2 and 3 have no visual. Add visuals or delete these scenes.",
+    );
 
-    expect(result.payload).toEqual(
-      expect.objectContaining({
+    await expect(
+      buildWorkspaceSegmentEditorPayload(scratchSceneDraft, {
         allowStructureChange: true,
-        source: "scratch",
+        language: "ru",
       }),
-    );
-    expect(result.payload.projectId).toBeUndefined();
-    expect(result.payload.segments[0]).toEqual(
-      expect.objectContaining({
-        index: 0,
-        text: "Крупный план продукта на светлом столе",
-        videoAction: "ai",
-      }),
-    );
+    ).rejects.toThrow("Визуал не задан для сцены 1. Добавьте визуал или удалите сцену.");
   });
 
   it("treats scratch visual-only scenes as valid create input", () => {
@@ -7289,6 +7286,11 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(persistedOnlyDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(recoveredCurrentVisualDraft)).toBe(true);
     expect(hasWorkspaceSegmentEditorRenderableScratchScene(visualDraft)).toBe(true);
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(scratchDraft)).toEqual([1]);
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(textDraft)).toEqual([1]);
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(persistedOnlyDraft)).toEqual([]);
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(recoveredCurrentVisualDraft)).toEqual([]);
+    expect(getWorkspaceSegmentEditorMissingVisualSceneNumbers(visualDraft)).toEqual([]);
   });
 
   it("exports scratch visual-only scene drafts without voice text", async () => {
@@ -9167,6 +9169,14 @@ describe("WorkspacePage studio locale defaults", () => {
 
     try {
       const segment = createDraftSegment({
+        customVideo: {
+          assetId: 8804,
+          fileName: "scratch-scene-visual.mp4",
+          fileSize: 0,
+          mimeType: "video/mp4",
+          remoteUrl: "/api/workspace/media-assets/8804/playback",
+          source: "upload",
+        },
         index: 1,
         sceneSoundAsset: {
           fileName: "segment-scene-sound.wav",
@@ -9174,6 +9184,7 @@ describe("WorkspacePage studio locale defaults", () => {
           mimeType: "audio/wav",
           remoteUrl: "/api/studio/segment-scene-sound/jobs/job-scene/audio",
         },
+        videoAction: "custom",
       });
       const scratchSession = {
         ...createDraftSession(segment),

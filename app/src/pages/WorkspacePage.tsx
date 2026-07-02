@@ -203,6 +203,7 @@ import {
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
+  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorReservedSegmentIndexes,
   getWorkspaceSegmentEditorSessionLanguage,
@@ -232,6 +233,7 @@ import {
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
   getWorkspaceSegmentVoiceOverrideId,
+  formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
@@ -931,6 +933,7 @@ export {
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceGenerationRequiredCredits,
+  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentEffectiveVoiceEnabled,
@@ -947,6 +950,7 @@ export {
   getWorkspaceSegmentVoiceoverPreviewRange,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasWorkspaceSegmentEditorRenderableScratchScene,
+  formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentEditorScratchDraft,
@@ -17653,6 +17657,24 @@ export function WorkspacePage({
       );
       setSegmentEditorVideoError(`Редактор поддерживает максимум ${WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS} сегментов.`);
       return;
+    }
+
+    if (isScratchDraft) {
+      const missingVisualSceneNumbers = getWorkspaceSegmentEditorMissingVisualSceneNumbers(effectiveDraft);
+      if (missingVisualSceneNumbers.length > 0) {
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.create-shorts.blocked",
+          {
+            missingVisualSceneNumbers,
+            reason: "scratch-missing-scene-visual",
+          },
+          { draft: effectiveDraft, includeOrder: true, level: "warn" },
+        );
+        setSegmentEditorVideoError(
+          formatWorkspaceSegmentEditorMissingVisualScenesMessage(missingVisualSceneNumbers, locale),
+        );
+        return;
+      }
     }
 
     const segmentEditorBrandStateForGeneration = resolveWorkspaceSegmentEditorEffectiveBrandState({

@@ -2948,6 +2948,72 @@ export const hasWorkspaceSegmentPersistedMediaReference = (segment: WorkspaceSeg
       segment.originalExternalPreviewUrl,
   );
 
+const hasWorkspaceSegmentExportablePersistedVisualReference = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  Boolean(
+    segment.currentAsset ||
+      segment.originalAsset ||
+      segment.currentPlaybackUrl ||
+      segment.currentPreviewUrl ||
+      segment.currentExternalPlaybackUrl ||
+      segment.currentExternalPreviewUrl ||
+      segment.originalPlaybackUrl ||
+      segment.originalPreviewUrl ||
+      segment.originalExternalPlaybackUrl ||
+      segment.originalExternalPreviewUrl,
+  );
+
+export const hasWorkspaceSegmentEditorScratchReadyVisual = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  Boolean(hasWorkspaceSegmentExplicitDraftVisual(segment) || hasWorkspaceSegmentExportablePersistedVisualReference(segment));
+
+export const getWorkspaceSegmentEditorMissingVisualSceneNumbers = (
+  draft: Pick<WorkspaceSegmentEditorDraftSession, "segments"> | null | undefined,
+) =>
+  (draft?.segments ?? []).flatMap((segment, index) =>
+    hasWorkspaceSegmentEditorScratchReadyVisual(segment) ? [] : [index + 1],
+  );
+
+const normalizeWorkspaceSegmentEditorSceneNumbers = (sceneNumbers: readonly number[]) =>
+  sceneNumbers
+    .map((sceneNumber) => Math.trunc(Number(sceneNumber)))
+    .filter((sceneNumber, index, allSceneNumbers) =>
+      Number.isInteger(sceneNumber) &&
+      sceneNumber > 0 &&
+      allSceneNumbers.indexOf(sceneNumber) === index,
+    );
+
+const formatWorkspaceSegmentEditorSceneNumberList = (
+  sceneNumbers: readonly number[],
+  language: StudioLanguage = "ru",
+) => {
+  const normalizedSceneNumbers = normalizeWorkspaceSegmentEditorSceneNumbers(sceneNumbers);
+
+  if (normalizedSceneNumbers.length <= 1) {
+    return String(normalizedSceneNumbers[0] ?? 1);
+  }
+
+  const lastSceneNumber = normalizedSceneNumbers[normalizedSceneNumbers.length - 1];
+  const prefix = normalizedSceneNumbers.slice(0, -1).join(", ");
+  return `${prefix}${language === "en" ? " and " : " и "}${lastSceneNumber}`;
+};
+
+export const formatWorkspaceSegmentEditorMissingVisualScenesMessage = (
+  sceneNumbers: readonly number[],
+  language: StudioLanguage = "ru",
+) => {
+  const normalizedSceneNumbers = normalizeWorkspaceSegmentEditorSceneNumbers(sceneNumbers);
+
+  const sceneNumberList = formatWorkspaceSegmentEditorSceneNumberList(normalizedSceneNumbers, language);
+  if (normalizedSceneNumbers.length <= 1) {
+    return language === "en"
+      ? `Scene ${sceneNumberList} has no visual. Add a visual or delete the scene.`
+      : `Визуал не задан для сцены ${sceneNumberList}. Добавьте визуал или удалите сцену.`;
+  }
+
+  return language === "en"
+    ? `Scenes ${sceneNumberList} have no visual. Add visuals or delete these scenes.`
+    : `Визуал не задан для сцен ${sceneNumberList}. Добавьте визуал или удалите эти сцены.`;
+};
+
 const isWorkspaceSegmentProjectVisualUrl = (value: string | null | undefined) => {
   const normalized = String(value ?? "").trim();
   return (

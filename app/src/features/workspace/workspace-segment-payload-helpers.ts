@@ -21,6 +21,7 @@ import {
   getWorkspaceSegmentCustomPreviewKind,
   getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   getWorkspaceSegmentOriginalVisualIdentityKey,
   getWorkspaceSegmentSceneSoundStateAssetId,
   getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
@@ -31,6 +32,7 @@ import {
   getWorkspaceSegmentVoiceSourceEndTime,
   getWorkspaceSegmentVoiceSourceStartTime,
   getWorkspaceSegmentVoiceOverrideId,
+  formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   hasWorkspaceSegmentDisplayAiVideoAsset,
   hasWorkspaceSegmentPersistedMediaReference,
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
@@ -228,6 +230,17 @@ export const buildWorkspaceSegmentEditorPayload = async (
   const normalizedSegments = rebuildWorkspaceSegmentEditorDraftTimeline(session.segments, session);
   const isScratchSession = !Number.isInteger(session.projectId) || session.projectId <= 0;
   let timelineCursor = 0;
+
+  if (isScratchSession) {
+    const missingVisualSceneNumbers = getWorkspaceSegmentEditorMissingVisualSceneNumbers({
+      segments: normalizedSegments,
+    });
+    if (missingVisualSceneNumbers.length > 0) {
+      throw new Error(
+        formatWorkspaceSegmentEditorMissingVisualScenesMessage(missingVisualSceneNumbers, options.language),
+      );
+    }
+  }
 
   for (const segment of normalizedSegments) {
     const mediaUploadScope = isScratchSession
