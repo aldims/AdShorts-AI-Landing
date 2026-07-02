@@ -8214,6 +8214,34 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.payload.segments[1]?.voiceoverAssetId).toBeUndefined();
   });
 
+  it("exports the editor timeline duration before stale visual source duration", async () => {
+    const segment = createDraftSegment({
+      duration: 5,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 3.6,
+      index: 0,
+      mediaType: "video",
+      speechDuration: 3.6,
+      speechDurationSource: "audio",
+      speechEndTime: 3.6,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "Timeline duration must win over visual source duration.",
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(expect.objectContaining({
+      duration: 3.6,
+      durationMode: "auto",
+      endTime: 3.6,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+  });
+
   it("exports talking photo with embedded audio and canonical slot duration", async () => {
     const segment = createDraftSegment({
       aiVideoAsset: {

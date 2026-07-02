@@ -364,17 +364,14 @@ export const buildWorkspaceSegmentEditorPayload = async (
     const timelineDuration = getWorkspaceSegmentEditorDisplayEndTime(segment) - sourceStartTime;
     const normalizedTimelineDuration = normalizeWorkspaceSegmentManualDurationSeconds(timelineDuration);
     const normalizedSegmentDuration = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
-    const manualDurationCandidates = [manualDurationSeconds, normalizedTimelineDuration, normalizedSegmentDuration].filter(
-      (value): value is number => value !== null,
-    );
     const resolvedManualDurationSeconds =
-      durationMode === "manual" && manualDurationCandidates.length > 0
-          ? Math.max(...manualDurationCandidates)
-          : null;
+      durationMode === "manual"
+        ? manualDurationSeconds ?? normalizedTimelineDuration ?? normalizedSegmentDuration
+        : null;
     const rawDuration =
       durationMode === "manual" && resolvedManualDurationSeconds !== null
         ? resolvedManualDurationSeconds
-        : normalizedSegmentDuration ?? normalizedTimelineDuration ?? undefined;
+        : normalizedTimelineDuration ?? normalizedSegmentDuration ?? undefined;
     const duration = typeof rawDuration === "number" ? roundWorkspaceSegmentTimelineSeconds(rawDuration) : undefined;
     const endTime = typeof duration === "number" ? roundWorkspaceSegmentTimelineSeconds(startTime + duration) : segment.endTime;
     const roundedManualDurationSeconds =
