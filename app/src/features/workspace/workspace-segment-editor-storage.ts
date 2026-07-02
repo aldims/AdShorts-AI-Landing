@@ -9,7 +9,9 @@ import {
   getWorkspaceSegmentEditorSessionLanguage,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentStillPreviewUrls,
+  getWorkspaceSegmentVoiceSourceDurationSeconds,
   normalizeLegacyWorkspaceSegmentEditorDraftSession,
+  normalizeWorkspaceSegmentDurationMode,
   normalizeWorkspaceSegmentAiPhotoPrompt,
   normalizeWorkspaceSegmentAiPhotoPrompt as normalizeWorkspaceSegmentAiVideoPrompt,
   normalizeWorkspaceSegmentEditorSession,
@@ -25,6 +27,8 @@ import type {
 } from "./workspace-types";
 import { sanitizeWorkspaceSegmentEditorCustomMusicState } from "../../lib/workspaceSegmentEditorMusic";
 import {
+  estimateWorkspaceSegmentEditorSpeechDuration,
+  isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration,
   normalizeWorkspaceSegmentManualDurationSeconds,
   roundWorkspaceSegmentTimelineSeconds,
 } from "../../lib/workspaceSegmentEditorTimeline";
@@ -528,6 +532,43 @@ const canRestoreStoredWorkspaceSegmentEditorDraftSession = (session: WorkspaceSe
     return hasWorkspaceSegmentImmediateImagePreview(segment);
   });
 
+const hasStoredWorkspaceSegmentSpeechTiming = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration) !== null ||
+  normalizeWorkspaceSegmentManualDurationSeconds(segment.speechStartTime) !== null ||
+  normalizeWorkspaceSegmentManualDurationSeconds(segment.speechEndTime) !== null ||
+  getWorkspaceSegmentVoiceSourceDurationSeconds(segment) !== null ||
+  (Array.isArray(segment.speechWords) && segment.speechWords.length > 0);
+
+const normalizeStoredWorkspaceSegmentTimelineTime = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+};
+
+const normalizeStoredWorkspaceSegmentLegacyEstimatedDuration = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+): WorkspaceSegmentEditorDraftSegment => {
+  const durationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.duration);
+  if (
+    durationSeconds === null ||
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) !== "auto" ||
+    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null ||
+    segment.durationSyncModeUserSelected === true ||
+    hasStoredWorkspaceSegmentSpeechTiming(segment) ||
+    !isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration(segment.text, durationSeconds)
+  ) {
+    return segment;
+  }
+
+  const duration = estimateWorkspaceSegmentEditorSpeechDuration(segment.text);
+  const startTime = normalizeStoredWorkspaceSegmentTimelineTime(segment.startTime) ?? 0;
+  return {
+    ...segment,
+    duration,
+    endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+    startTime,
+  };
+};
+
 export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
@@ -537,16 +578,18 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   );
   return normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...clonedSession,
-    segments: clonedSession.segments.map((segment) => ({
-      ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
-      aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
-      aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
-      customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
-      imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
-      photoAnimationSourceAsset: normalizePersistedStudioCustomVideoFile(segment.photoAnimationSourceAsset),
-      sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
-      voiceoverAsset: normalizePersistedStudioCustomVideoFile(segment.voiceoverAsset),
-    })),
+    segments: clonedSession.segments.map((segment) =>
+      normalizeStoredWorkspaceSegmentLegacyEstimatedDuration({
+        ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
+        aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
+        aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
+        customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
+        imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
+        photoAnimationSourceAsset: normalizePersistedStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+        sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
+        voiceoverAsset: normalizePersistedStudioCustomVideoFile(segment.voiceoverAsset),
+      }),
+    ),
   }));
 };
 

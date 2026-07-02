@@ -3786,7 +3786,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     };
 
     expect(getWorkspaceSegmentVoiceoverPreviewRange(segment, session)).toEqual({
-      endTime: 12.09,
+      endTime: 11.75,
       startTime: 5.42,
     });
     expect(
@@ -3800,7 +3800,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       }),
     ).toEqual(expect.objectContaining({
       audioUrl: "/api/workspace/media-assets/888/playback",
-      previewRange: { endTime: 12.09, startTime: 5.42 },
+      previewRange: { endTime: 11.75, startTime: 5.42 },
       shouldClip: true,
       sourceKind: "project",
     }));
@@ -4510,6 +4510,60 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 12,
       manualDurationSeconds: 8,
       startTime: 4,
+    }));
+  });
+
+  it("repairs stored auto durations inflated by standalone punctuation tokens", () => {
+    const session = createProjectVoiceoverDraft([
+      createProjectVoiceoverSegment({
+        duration: 6.21,
+        durationMode: "auto",
+        durationSyncMode: "voiceover",
+        durationSyncModeUserSelected: false,
+        endTime: 6.21,
+        index: 0,
+        manualDurationSeconds: null,
+        mediaType: "photo",
+        startTime: 0,
+        text: "Один прыжок — и монстр уже летит на землю, не успев понять, что случилось.",
+        voiceoverAsset: null,
+        voiceoverLanguage: null,
+        voiceoverTextHash: null,
+        voiceoverVoiceType: null,
+      }),
+      createProjectVoiceoverSegment({
+        duration: 4.64,
+        durationMode: "auto",
+        durationSyncMode: "voiceover",
+        durationSyncModeUserSelected: false,
+        endTime: 10.85,
+        index: 1,
+        manualDurationSeconds: null,
+        mediaType: "photo",
+        startTime: 6.21,
+        text: "Город встречал героя, а он просто играл со своей новой игрушкой.",
+        voiceoverAsset: null,
+        voiceoverLanguage: null,
+        voiceoverTextHash: null,
+        voiceoverVoiceType: null,
+      }),
+    ]);
+
+    const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...session,
+      ttsAssetId: null,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+      storageVersion: 3,
+    } as WorkspaceSegmentEditorDraftSession);
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 5.87,
+      endTime: 5.87,
+      manualDurationSeconds: null,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      startTime: 5.87,
     }));
   });
 

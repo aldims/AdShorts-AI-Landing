@@ -61,6 +61,12 @@ const tokenizeWorkspaceSegmentTimelineText = (value: string) =>
   value
     .split(/\s+/)
     .map((word) => word.trim())
+    .filter((word) => /[\p{L}\p{N}]/u.test(word));
+
+const tokenizeLegacyWorkspaceSegmentTimelineText = (value: string) =>
+  value
+    .split(/\s+/)
+    .map((word) => word.trim())
     .filter(Boolean);
 
 export const estimateWorkspaceSegmentEditorSpeechDuration = (
@@ -83,6 +89,29 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
       WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS,
       resolvedWordCount * WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD + punctuationPauseSeconds,
     ),
+  );
+};
+
+export const isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration = (
+  text: string | null | undefined,
+  durationSeconds: number | null | undefined,
+) => {
+  if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return false;
+  }
+
+  const normalizedText = String(text ?? "");
+  const currentWordCount = tokenizeWorkspaceSegmentTimelineText(normalizedText).length;
+  const legacyWordCount = tokenizeLegacyWorkspaceSegmentTimelineText(normalizedText).length;
+  if (legacyWordCount <= currentWordCount) {
+    return false;
+  }
+
+  const currentEstimate = estimateWorkspaceSegmentEditorSpeechDuration(normalizedText, currentWordCount);
+  const legacyEstimate = estimateWorkspaceSegmentEditorSpeechDuration(normalizedText, legacyWordCount);
+  return (
+    legacyEstimate > currentEstimate + WORKSPACE_SEGMENT_TIMELINE_EPSILON &&
+    Math.abs(durationSeconds - legacyEstimate) <= 0.005
   );
 };
 

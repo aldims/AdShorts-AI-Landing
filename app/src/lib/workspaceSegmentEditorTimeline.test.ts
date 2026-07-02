@@ -4,6 +4,7 @@ import {
   estimateWorkspaceSegmentEditorSpeechDuration,
   getWorkspaceSegmentEditorPlaybackDuration,
   getWorkspaceSegmentTimelineSpeechRange,
+  isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration,
   rebuildWorkspaceSegmentEditorTimeline,
   resolveWorkspaceSegmentTimelineSpeechBoundaryTime,
   resolveWorkspaceSegmentDuration,
@@ -132,6 +133,26 @@ describe("workspace segment editor timeline", () => {
       3.4,
       6,
     );
+  });
+
+  it("does not count standalone punctuation as spoken words", () => {
+    expect(
+      estimateWorkspaceSegmentEditorSpeechDuration(
+        "Один прыжок — и монстр уже летит на землю, не успев понять, что случилось.",
+      ),
+    ).toBeCloseTo(5.87, 6);
+    expect(
+      isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration(
+        "Один прыжок — и монстр уже летит на землю, не успев понять, что случилось.",
+        6.21,
+      ),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration(
+        "Один прыжок — и монстр уже летит на землю, не успев понять, что случилось.",
+        5.87,
+      ),
+    ).toBe(false);
   });
 
   it("adds pause time for punctuation when estimating speech duration", () => {
