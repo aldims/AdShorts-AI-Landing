@@ -7977,8 +7977,25 @@ describe("WorkspacePage studio locale defaults", () => {
       ...freshSegment,
       voiceType: "Marfa",
     };
+    const freshRemoteSegment = createDraftSegment({
+      text: "Подписывайтесь на канал",
+      voiceoverAsset: {
+        durationSeconds: 2.6,
+        fileName: "scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/889/file",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash("Подписывайтесь на канал"),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
 
     const freshResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(freshSegment), { language: "ru" });
+    const freshRemoteResult = await buildWorkspaceSegmentEditorPayload(
+      createDraftSession(freshRemoteSegment),
+      { language: "ru" },
+    );
     const staleTextResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(staleTextSegment), { language: "ru" });
     const staleVoiceResult = await buildWorkspaceSegmentEditorPayload(createDraftSession(staleVoiceSegment), { language: "ru" });
     const staleLanguageResult = await buildWorkspaceSegmentEditorPayload(
@@ -7991,6 +8008,9 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(freshResult.payload.segments[0]).toEqual(expect.objectContaining({
       voiceoverAssetId: 888,
+    }));
+    expect(freshRemoteResult.payload.segments[0]).toEqual(expect.objectContaining({
+      voiceoverAssetId: 889,
     }));
     expect(staleTextResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();
     expect(staleVoiceResult.payload.segments[0]?.voiceoverAssetId).toBeUndefined();

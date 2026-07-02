@@ -694,6 +694,8 @@ import {
   normalizeStoredWorkspaceSegmentEditorDraftSession,
   normalizeWorkspaceSegmentEditorStorageEmail,
   readStoredWorkspaceSegmentAiPhotoJobs,
+  readStoredWorkspaceSegmentAiVideoJobs,
+  readStoredWorkspaceSegmentBatchVoiceoverJobs,
   readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
@@ -702,12 +704,16 @@ import {
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
+  readStoredWorkspaceSegmentImageUpscaleJobs,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
   readWorkspaceSegmentVisualDurationCache,
   removeStoredWorkspaceSegmentAiPhotoJob,
   removeStoredWorkspaceSegmentAiPhotoJobsForSegment,
+  removeStoredWorkspaceSegmentAiVideoJob,
+  removeStoredWorkspaceSegmentAiVideoJobsForSegment,
+  removeStoredWorkspaceSegmentBatchVoiceoverJob,
   removeStoredWorkspaceSegmentEditorDraft,
   removeStoredWorkspaceSegmentEditorExplicitStructureChange,
   removeStoredWorkspaceSegmentEditorScratchBaseline,
@@ -715,13 +721,18 @@ import {
   removeStoredWorkspaceSegmentEditorSession,
   removeStoredWorkspaceSegmentImageEditJob,
   removeStoredWorkspaceSegmentImageEditJobsForSegment,
+  removeStoredWorkspaceSegmentImageUpscaleJob,
+  removeStoredWorkspaceSegmentImageUpscaleJobsForSegment,
   removeStoredWorkspaceSegmentPhotoAnimationJob,
   removeStoredWorkspaceSegmentSceneSoundJob,
   removeStoredWorkspaceSegmentSceneSoundJobsForSegment,
   removeStoredWorkspaceSegmentTalkingPhotoJob,
   removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment,
   upsertStoredWorkspaceSegmentAiPhotoJob,
+  upsertStoredWorkspaceSegmentAiVideoJob,
+  upsertStoredWorkspaceSegmentBatchVoiceoverJob,
   upsertStoredWorkspaceSegmentImageEditJob,
+  upsertStoredWorkspaceSegmentImageUpscaleJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentSceneSoundJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
@@ -738,7 +749,10 @@ import {
 } from "../features/workspace/workspace-segment-editor-storage";
 import type {
   StoredWorkspaceSegmentAiPhotoJob,
+  StoredWorkspaceSegmentAiVideoJob,
+  StoredWorkspaceSegmentBatchVoiceoverJob,
   StoredWorkspaceSegmentImageEditJob,
+  StoredWorkspaceSegmentImageUpscaleJob,
   StoredWorkspaceSegmentPhotoAnimationJob,
   StoredWorkspaceSegmentSceneSoundJob,
   StoredWorkspaceSegmentTalkingPhotoJob,
@@ -2144,6 +2158,7 @@ export function WorkspacePage({
   const segmentAiPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentAiPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentAiVideoActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
@@ -2152,9 +2167,11 @@ export function WorkspacePage({
   const segmentImageEditRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentImageEditActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentImageUpscaleActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentVoiceoverRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentBatchVoiceoverActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentEditorActiveVisualRunKeysRef = useRef<Set<string>>(new Set());
   const segmentEditorRunRef = useRef(0);
   const segmentEditorRequestAbortRef = useRef<AbortController | null>(null);
@@ -2518,10 +2535,13 @@ export function WorkspacePage({
     clearRunRef(segmentSceneSoundRunRef);
     clearRunRef(segmentVoiceoverRunRef);
     segmentAiPhotoActiveJobIdsRef.current.clear();
+    segmentAiVideoActiveJobIdsRef.current.clear();
     segmentPhotoAnimationActiveJobIdsRef.current.clear();
     segmentTalkingPhotoActiveJobIdsRef.current.clear();
     segmentImageEditActiveJobIdsRef.current.clear();
+    segmentImageUpscaleActiveJobIdsRef.current.clear();
     segmentSceneSoundActiveJobIdsRef.current.clear();
+    segmentBatchVoiceoverActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
     setSegmentEditorPreparingCustomVideoRunIds({});
     setSegmentEditorGeneratingAiVideoRunIds({});
@@ -6681,10 +6701,19 @@ export function WorkspacePage({
     selectedSegmentReferenceCharacterIds,
   ]);
   useEffect(() => {
-    if (selectedSegmentReferenceSceneKey) {
+    if (!selectedSegmentReferenceSceneKey) {
+      return;
+    }
+
+    const hasSelectedSceneReference = [...projectSceneReferenceOptions, ...savedSceneReferenceOptions].some(
+      (option) =>
+        option.key === selectedSegmentReferenceSceneKey ||
+        option.key === `project-scene:${selectedSegmentReferenceSceneKey}`,
+    );
+    if (!hasSelectedSceneReference) {
       setSelectedSegmentReferenceSceneKey(null);
     }
-  }, [selectedSegmentReferenceSceneKey]);
+  }, [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
@@ -6840,6 +6869,7 @@ export function WorkspacePage({
     hasActiveSegmentEditorVisualRunScope("ai_photo") ||
     isSegmentEditorGeneratingAiVideo ||
     hasActiveSegmentEditorVisualRunScope("ai_video") ||
+    segmentAiVideoActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorGeneratingPhotoAnimation ||
     hasActiveSegmentEditorVisualRunScope("photo_animation") ||
     isSegmentEditorGeneratingTalkingPhoto ||
@@ -6849,11 +6879,13 @@ export function WorkspacePage({
     segmentImageEditActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorUpscalingImage ||
     hasActiveSegmentEditorVisualRunScope("image_upscale") ||
+    segmentImageUpscaleActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorGeneratingSceneSound ||
     hasActiveSegmentEditorVisualRunScope("scene_sound") ||
     segmentSceneSoundActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorGeneratingVoiceover ||
-    hasActiveSegmentEditorVisualRunScope("voiceover");
+    hasActiveSegmentEditorVisualRunScope("voiceover") ||
+    segmentBatchVoiceoverActiveJobIdsRef.current.size > 0;
   const isWorkspaceSegmentVisualJobBusy = (segmentIndex: number | null | undefined) =>
     typeof segmentIndex === "number" &&
     (hasActiveSegmentEditorVisualRunForSegment(segmentIndex) ||
@@ -6879,7 +6911,11 @@ export function WorkspacePage({
       return "ai_photo";
     }
 
-    if (isSegmentEditorGeneratingAiVideo || hasActiveSegmentEditorVisualRunScope("ai_video")) {
+    if (
+      isSegmentEditorGeneratingAiVideo ||
+      hasActiveSegmentEditorVisualRunScope("ai_video") ||
+      segmentAiVideoActiveJobIdsRef.current.size > 0
+    ) {
       return "ai_video";
     }
 
@@ -6907,7 +6943,11 @@ export function WorkspacePage({
       return "image_edit";
     }
 
-    if (isSegmentEditorUpscalingImage || hasActiveSegmentEditorVisualRunScope("image_upscale")) {
+    if (
+      isSegmentEditorUpscalingImage ||
+      hasActiveSegmentEditorVisualRunScope("image_upscale") ||
+      segmentImageUpscaleActiveJobIdsRef.current.size > 0
+    ) {
       return "image_upscale";
     }
 
@@ -6919,7 +6959,11 @@ export function WorkspacePage({
       return "scene_sound";
     }
 
-    if (isSegmentEditorGeneratingVoiceover || hasActiveSegmentEditorVisualRunScope("voiceover")) {
+    if (
+      isSegmentEditorGeneratingVoiceover ||
+      hasActiveSegmentEditorVisualRunScope("voiceover") ||
+      segmentBatchVoiceoverActiveJobIdsRef.current.size > 0
+    ) {
       return "voiceover";
     }
 
@@ -12754,6 +12798,9 @@ export function WorkspacePage({
   };
 
   const cancelPendingSegmentAiVideoRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentAiVideoJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, targetSegmentIndex)) {
       return;
     }
@@ -12792,6 +12839,9 @@ export function WorkspacePage({
   };
 
   const cancelPendingSegmentImageUpscaleRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentImageUpscaleJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+
     if (!hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, targetSegmentIndex)) {
       return;
     }
@@ -14084,7 +14134,9 @@ export function WorkspacePage({
     }
 
     let latestStatus = initialStatus;
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    segmentAiVideoActiveJobIdsRef.current.add(safeJobId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
@@ -14092,12 +14144,55 @@ export function WorkspacePage({
           throw new Error("ИИ видео генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
 
-        const response = await fetch(`/api/studio/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}`);
-        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobStatusResponse | null;
+        let response: Response;
+        let payload: WorkspaceSegmentAiVideoJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.ai-video.status.transient-fetch-failed",
+            {
+              error:
+                error instanceof Error
+                  ? {
+                      message: error.message,
+                      name: error.name,
+                    }
+                  : String(error),
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+              targetSegmentIndex: options.segmentIndex,
+            },
+            { level: "warn" },
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 3500));
+          continue;
+        }
 
         if (!response.ok || !payload?.data) {
-          throw new Error(payload?.error ?? "Не удалось получить статус ИИ видео.");
+          const statusError = payload?.error ?? "Не удалось получить статус ИИ видео.";
+          if (response.status >= 500) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.ai-video.status.transient-server-failed",
+              {
+                failures: transientStatusFailures,
+                jobId: safeJobId,
+                statusCode: response.status,
+                targetSegmentIndex: options.segmentIndex,
+              },
+              { level: "warn" },
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 3500));
+            continue;
+          }
+
+          removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
+          throw new Error(statusError);
         }
+        transientStatusFailures = 0;
 
         if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
           return;
@@ -14105,6 +14200,16 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
+          upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            prompt: options.prompt,
+            segmentIndex: options.segmentIndex,
+            status: latestStatus,
+          });
+        }
 
         const aiVideoPayload = payload.data;
         const aiVideoAsset = aiVideoPayload.asset;
@@ -14154,20 +14259,24 @@ export function WorkspacePage({
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
           });
+          removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
           return;
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Не удалось сгенерировать ИИ видео.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированное ИИ видео недоступно.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
+      segmentAiVideoActiveJobIdsRef.current.delete(safeJobId);
       if (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, options.segmentIndex, options.runId);
       }
@@ -14647,6 +14756,8 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
+      projectId?: number;
       runId: number;
       segmentIndex: number;
     },
@@ -14658,7 +14769,9 @@ export function WorkspacePage({
     }
 
     let latestStatus = initialStatus;
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    segmentImageUpscaleActiveJobIdsRef.current.add(safeJobId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
@@ -14666,12 +14779,55 @@ export function WorkspacePage({
           throw new Error("Улучшение качества изображения занимает слишком много времени. Попробуйте ещё раз.");
         }
 
-        const response = await fetch(`/api/studio/segment-image-upscale/jobs/${encodeURIComponent(safeJobId)}`);
-        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentImageUpscaleJobStatusResponse | null;
+        let response: Response;
+        let payload: WorkspaceSegmentImageUpscaleJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-image-upscale/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentImageUpscaleJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.image-upscale.status.transient-fetch-failed",
+            {
+              error:
+                error instanceof Error
+                  ? {
+                      message: error.message,
+                      name: error.name,
+                    }
+                  : String(error),
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+              targetSegmentIndex: options.segmentIndex,
+            },
+            { level: "warn" },
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 3500));
+          continue;
+        }
 
         if (!response.ok || !payload?.data) {
-          throw new Error(payload?.error ?? "Не удалось получить статус улучшения изображения.");
+          const statusError = payload?.error ?? "Не удалось получить статус улучшения изображения.";
+          if (response.status >= 500) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.image-upscale.status.transient-server-failed",
+              {
+                failures: transientStatusFailures,
+                jobId: safeJobId,
+                statusCode: response.status,
+                targetSegmentIndex: options.segmentIndex,
+              },
+              { level: "warn" },
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 3500));
+            continue;
+          }
+
+          removeStoredWorkspaceSegmentImageUpscaleJob(session.email, safeJobId);
+          throw new Error(statusError);
         }
+        transientStatusFailures = 0;
 
         if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
           return;
@@ -14679,25 +14835,38 @@ export function WorkspacePage({
 
         latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
         applyWorkspaceProfile(payload.data.profile);
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
+          upsertStoredWorkspaceSegmentImageUpscaleJob(session.email, {
+            createdAt: startedAt,
+            jobId: safeJobId,
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            status: latestStatus,
+          });
+        }
 
         if (payload.data.asset) {
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) =>
             applyWorkspaceSegmentUpscaledImageAsset(segment, payload.data!.asset!),
           );
+          removeStoredWorkspaceSegmentImageUpscaleJob(session.email, safeJobId);
           return;
         }
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentImageUpscaleJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Не удалось улучшить качество изображения.");
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentImageUpscaleJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Улучшенное изображение недоступно.");
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
+      segmentImageUpscaleActiveJobIdsRef.current.delete(safeJobId);
       if (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, options.segmentIndex, options.runId);
       }
@@ -15702,9 +15871,22 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      const pendingJobCreatedAt = Date.now();
+      if (typeof visualJobBinding.projectId === "number" && visualJobBinding.projectId >= 0) {
+        upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
+          createdAt: pendingJobCreatedAt,
+          jobId: payload.data.jobId,
+          projectId: visualJobBinding.projectId,
+          prompt: normalizedPrompt,
+          segmentIndex: targetSegmentIndex,
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorAiVideoJob(payload.data.jobId, payload.data.status, {
+        createdAt: pendingJobCreatedAt,
         prompt: normalizedPrompt,
+        projectId: visualJobBinding.projectId,
         runId,
         segmentIndex: targetSegmentIndex,
       });
@@ -15719,6 +15901,108 @@ export function WorkspacePage({
       }
     }
   };
+
+  const resumePendingSegmentAiVideoJob = (job: StoredWorkspaceSegmentAiVideoJob) => {
+    if (segmentAiVideoActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+    if (!targetSegment) {
+      removeStoredWorkspaceSegmentAiVideoJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (
+      targetSegment.aiVideoGeneratedFromPrompt === job.prompt &&
+      targetSegment.aiVideoGeneratedMode === "ai_video" &&
+      targetSegment.aiVideoAsset
+    ) {
+      removeStoredWorkspaceSegmentAiVideoJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(job.segmentIndex)) {
+      return false;
+    }
+
+    const runId = startSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, job.segmentIndex);
+    setSegmentEditorVideoError(null);
+    updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+      ...segment,
+      aiVideoPrompt: job.prompt || segment.aiVideoPrompt,
+      aiVideoPromptInitialized: Boolean(job.prompt || segment.aiVideoPrompt),
+      visualReset: false,
+    }));
+    logSegmentEditorDiagnostics("client.segment-editor.ai-video.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      targetSegmentIndex: job.segmentIndex,
+    });
+
+    void pollSegmentEditorAiVideoJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      prompt: job.prompt,
+      runId,
+      segmentIndex: job.segmentIndex,
+    }).catch((error) => {
+      if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, job.segmentIndex, runId)) {
+        return;
+      }
+
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать ИИ видео.");
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingAiVideo = () => {
+      if (segmentAiVideoActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentAiVideoJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentAiVideoJob(pendingJob);
+    };
+
+    tryResumePendingAiVideo();
+    const intervalId = window.setInterval(tryResumePendingAiVideo, 30_000);
+    const handleFocus = () => tryResumePendingAiVideo();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingAiVideo();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const buildSegmentEditorPhotoAnimationPendingState = (
     segment: WorkspaceSegmentEditorDraftSegment,
@@ -16784,8 +17068,20 @@ export function WorkspacePage({
       }
 
       applyWorkspaceProfile(payload.data.profile);
+      const pendingJobCreatedAt = Date.now();
+      if (typeof visualJobBinding.projectId === "number" && visualJobBinding.projectId >= 0) {
+        upsertStoredWorkspaceSegmentImageUpscaleJob(session.email, {
+          createdAt: pendingJobCreatedAt,
+          jobId: payload.data.jobId,
+          projectId: visualJobBinding.projectId,
+          segmentIndex: targetSegmentIndex,
+          status: payload.data.status,
+        });
+      }
       pollStarted = true;
       await pollSegmentEditorImageUpscaleJob(payload.data.jobId, payload.data.status, {
+        createdAt: pendingJobCreatedAt,
+        projectId: visualJobBinding.projectId,
         runId,
         segmentIndex: targetSegmentIndex,
       });
@@ -16801,6 +17097,92 @@ export function WorkspacePage({
       }
     }
   };
+
+  const resumePendingSegmentImageUpscaleJob = (job: StoredWorkspaceSegmentImageUpscaleJob) => {
+    if (segmentImageUpscaleActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+    if (!targetSegment) {
+      removeStoredWorkspaceSegmentImageUpscaleJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (isWorkspaceSegmentVisualJobBusy(job.segmentIndex)) {
+      return false;
+    }
+
+    const runId = startSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, job.segmentIndex);
+    setSegmentEditorVideoError(null);
+    logSegmentEditorDiagnostics("client.segment-editor.image-upscale.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      targetSegmentIndex: job.segmentIndex,
+    });
+
+    void pollSegmentEditorImageUpscaleJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      runId,
+      segmentIndex: job.segmentIndex,
+    }).catch((error) => {
+      if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, job.segmentIndex, runId)) {
+        return;
+      }
+
+      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось улучшить качество изображения.");
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingImageUpscale = () => {
+      if (segmentImageUpscaleActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentImageUpscaleJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentImageUpscaleJob(pendingJob);
+    };
+
+    tryResumePendingImageUpscale();
+    const intervalId = window.setInterval(tryResumePendingImageUpscale, 30_000);
+    const handleFocus = () => tryResumePendingImageUpscale();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingImageUpscale();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const handleSegmentEditorSceneSoundGenerate = async (
     options?: {
@@ -17124,12 +17506,15 @@ export function WorkspacePage({
     jobId: string,
     initialStatus = "queued",
     options: {
+      createdAt?: number;
+      projectId?: number;
       segments: Array<{
         language: StudioLanguage;
         segmentIndex: number;
         text: string;
         voiceType: string;
       }>;
+      source?: StoredWorkspaceSegmentBatchVoiceoverJob["source"];
     },
   ) => {
     const safeJobId = jobId.trim();
@@ -17143,159 +17528,371 @@ export function WorkspacePage({
     let latestStatus = initialStatus;
     let lastLoggedReadyCount = -1;
     let lastLoggedStatus = "";
-    const startedAt = Date.now();
+    const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    segmentBatchVoiceoverActiveJobIdsRef.current.add(safeJobId);
     const normalizeStatusDurationSeconds = (value: unknown) => {
       const normalized = normalizeWorkspaceSegmentVoicePreviewTime(value);
       return normalized !== null && normalized > 0 ? roundWorkspaceSegmentTimelineSeconds(normalized) : null;
     };
 
-    while (true) {
-      if (Date.now() - startedAt >= WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS) {
-        logSegmentEditorDiagnostics(
-          "client.segment-editor.batch-voiceover.timeout",
-          {
-            completedSegmentCount: completedSegmentIndexes.size,
-            expectedSegmentCount: expectedSegments.size,
-            jobId: safeJobId,
-            latestStatus,
-          },
-          { level: "warn" },
-        );
-        throw new Error("Озвучка сцен генерируется слишком долго. Попробуйте запустить ещё раз.");
-      }
+    try {
+      while (true) {
+        if (Date.now() - startedAt >= WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS) {
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.batch-voiceover.timeout",
+            {
+              completedSegmentCount: completedSegmentIndexes.size,
+              expectedSegmentCount: expectedSegments.size,
+              jobId: safeJobId,
+              latestStatus,
+            },
+            { level: "warn" },
+          );
+          removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, safeJobId);
+          throw new Error("Озвучка сцен генерируется слишком долго. Попробуйте запустить ещё раз.");
+        }
 
-      const response = await fetch(`/api/studio/voiceover/batch-jobs/${encodeURIComponent(safeJobId)}`);
-      const payload = (await response.json().catch(() => null)) as WorkspaceBatchVoiceoverJobStatusResponse | null;
-
-      if (!response.ok || !payload?.data) {
-        throw new Error(payload?.error ?? "Не удалось получить статус генерации озвучки сцен.");
-      }
-
-      latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
-      applyWorkspaceProfile(payload.data.profile);
-      const segmentStatuses = payload.data.segments ?? [];
-      const readySegmentCount = segmentStatuses.filter((segmentStatus) => Boolean(segmentStatus.asset)).length;
-
-      if (latestStatus !== lastLoggedStatus || readySegmentCount !== lastLoggedReadyCount) {
-        logSegmentEditorDiagnostics("client.segment-editor.batch-voiceover.status", {
-          completedSegmentCount: completedSegmentIndexes.size,
-          expectedSegmentCount: expectedSegments.size,
-          jobId: safeJobId,
-          readySegmentCount,
-          status: latestStatus,
-        });
-        lastLoggedReadyCount = readySegmentCount;
-        lastLoggedStatus = latestStatus;
-      }
-
-      for (const segmentStatus of segmentStatuses) {
-        const expectedSegment = expectedSegments.get(segmentStatus.segmentIndex);
-        if (!expectedSegment || completedSegmentIndexes.has(segmentStatus.segmentIndex) || !segmentStatus.asset) {
+        let response: Response;
+        let payload: WorkspaceBatchVoiceoverJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/voiceover/batch-jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceBatchVoiceoverJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.batch-voiceover.status.transient-fetch-failed",
+            {
+              error:
+                error instanceof Error
+                  ? {
+                      message: error.message,
+                      name: error.name,
+                    }
+                  : String(error),
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+            },
+            { level: "warn" },
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 3500));
           continue;
         }
 
-        const assetDuration = getStudioCustomVideoFileDurationSeconds(segmentStatus.asset);
-        const voiceoverAsset =
-          assetDuration !== null
-            ? {
-                ...segmentStatus.asset,
-                durationSeconds: assetDuration,
-              }
-            : segmentStatus.asset;
-        const speechDuration = normalizeStatusDurationSeconds(segmentStatus.speechDuration);
-        const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechStartTime);
-        const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechEndTime);
-        const sourceStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
-          segmentStatus.voiceSourceStartTime ?? segmentStatus.speechStartTime,
-        );
-        const sourceEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
-          segmentStatus.voiceSourceEndTime ?? segmentStatus.speechEndTime,
-        );
-        const sourceBoundaryDuration =
-          sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime
-            ? normalizeStatusDurationSeconds(sourceEndTime - sourceStartTime)
-            : null;
-        const voiceSourceDuration =
-          normalizeStatusDurationSeconds(segmentStatus.voiceSourceDuration) ??
-          sourceBoundaryDuration ??
-          speechDuration;
+        if (!response.ok || !payload?.data) {
+          const statusError = payload?.error ?? "Не удалось получить статус генерации озвучки сцен.";
+          if (response.status >= 500) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.batch-voiceover.status.transient-server-failed",
+              {
+                failures: transientStatusFailures,
+                jobId: safeJobId,
+                statusCode: response.status,
+              },
+              { level: "warn" },
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 3500));
+            continue;
+          }
 
-        clearSegmentEditorVoiceoverError(segmentStatus.segmentIndex);
-        updateSegmentEditorDraftSegmentByIndex(segmentStatus.segmentIndex, (segment) => ({
-          ...segment,
-          speechDuration,
-          speechDurationSource: segmentStatus.speechDurationSource ?? (speechDuration ? "audio" : null),
-          speechEndTime,
-          speechStartTime,
-          speechWords: segmentStatus.speechWords ?? [],
-          voiceSourceDuration,
-          voiceSourceEndTime: sourceEndTime,
-          voiceSourceStartTime: sourceStartTime,
-          voiceoverAsset,
-          voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
-          voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
-          voiceoverVoiceType: segmentStatus.voiceType ?? expectedSegment.voiceType,
-        }));
-        completedSegmentIndexes.add(segmentStatus.segmentIndex);
-      }
+          removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, safeJobId);
+          throw new Error(statusError);
+        }
+        transientStatusFailures = 0;
 
-      if (completedSegmentIndexes.size >= expectedSegments.size) {
-        logSegmentEditorDiagnostics("client.segment-editor.batch-voiceover.done", {
-          completedSegmentCount: completedSegmentIndexes.size,
-          expectedSegmentCount: expectedSegments.size,
-          jobId: safeJobId,
-          status: latestStatus,
-        });
-        return;
-      }
-
-      const failedSegment = segmentStatuses.find((segment) =>
-        isWorkspaceSegmentGenerationJobFailedStatus(segment.status),
-      );
-      if (failedSegment) {
-        logSegmentEditorDiagnostics(
-          "client.segment-editor.batch-voiceover.failed-segment",
-          {
-            error: failedSegment.error ?? null,
+        latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
+        applyWorkspaceProfile(payload.data.profile);
+        if (typeof options.projectId === "number" && options.projectId >= 0) {
+          upsertStoredWorkspaceSegmentBatchVoiceoverJob(session.email, {
+            createdAt: startedAt,
             jobId: safeJobId,
-            segmentIndex: failedSegment.segmentIndex,
-            status: failedSegment.status,
-          },
-          { level: "warn" },
-        );
-        throw new Error(failedSegment.error ?? "Не удалось сгенерировать озвучку одной из сцен.");
-      }
-
-      if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
-        logSegmentEditorDiagnostics(
-          "client.segment-editor.batch-voiceover.failed",
-          {
-            error: payload.data.error ?? null,
-            jobId: safeJobId,
+            projectId: options.projectId,
+            segments: options.segments,
+            source: options.source ?? "global-voiceover",
             status: latestStatus,
-          },
-          { level: "warn" },
-        );
-        throw new Error(payload.data.error ?? "Не удалось сгенерировать озвучку сцен.");
-      }
+          });
+        }
+        const segmentStatuses = payload.data.segments ?? [];
+        const readySegmentCount = segmentStatuses.filter((segmentStatus) => Boolean(segmentStatus.asset)).length;
 
-      if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
-        logSegmentEditorDiagnostics(
-          "client.segment-editor.batch-voiceover.waiting-for-assets",
-          {
+        if (latestStatus !== lastLoggedStatus || readySegmentCount !== lastLoggedReadyCount) {
+          logSegmentEditorDiagnostics("client.segment-editor.batch-voiceover.status", {
             completedSegmentCount: completedSegmentIndexes.size,
             expectedSegmentCount: expectedSegments.size,
             jobId: safeJobId,
             readySegmentCount,
             status: latestStatus,
-          },
-          { level: "warn" },
-        );
-      }
+          });
+          lastLoggedReadyCount = readySegmentCount;
+          lastLoggedStatus = latestStatus;
+        }
 
-      await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
+        for (const segmentStatus of segmentStatuses) {
+          const expectedSegment = expectedSegments.get(segmentStatus.segmentIndex);
+          if (!expectedSegment || completedSegmentIndexes.has(segmentStatus.segmentIndex) || !segmentStatus.asset) {
+            continue;
+          }
+
+          const assetDuration = getStudioCustomVideoFileDurationSeconds(segmentStatus.asset);
+          const voiceoverAsset =
+            assetDuration !== null
+              ? {
+                  ...segmentStatus.asset,
+                  durationSeconds: assetDuration,
+                }
+              : segmentStatus.asset;
+          const speechDuration = normalizeStatusDurationSeconds(segmentStatus.speechDuration);
+          const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechStartTime);
+          const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(segmentStatus.speechEndTime);
+          const sourceStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
+            segmentStatus.voiceSourceStartTime ?? segmentStatus.speechStartTime,
+          );
+          const sourceEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
+            segmentStatus.voiceSourceEndTime ?? segmentStatus.speechEndTime,
+          );
+          const sourceBoundaryDuration =
+            sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime
+              ? normalizeStatusDurationSeconds(sourceEndTime - sourceStartTime)
+              : null;
+          const voiceSourceDuration =
+            normalizeStatusDurationSeconds(segmentStatus.voiceSourceDuration) ??
+            sourceBoundaryDuration ??
+            speechDuration;
+
+          clearSegmentEditorVoiceoverError(segmentStatus.segmentIndex);
+          updateSegmentEditorDraftSegmentByIndex(segmentStatus.segmentIndex, (segment) => ({
+            ...segment,
+            speechDuration,
+            speechDurationSource: segmentStatus.speechDurationSource ?? (speechDuration ? "audio" : null),
+            speechEndTime,
+            speechStartTime,
+            speechWords: segmentStatus.speechWords ?? [],
+            voiceSourceDuration,
+            voiceSourceEndTime: sourceEndTime,
+            voiceSourceStartTime: sourceStartTime,
+            voiceoverAsset,
+            voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
+            voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
+            voiceoverVoiceType: segmentStatus.voiceType ?? expectedSegment.voiceType,
+          }));
+          completedSegmentIndexes.add(segmentStatus.segmentIndex);
+        }
+
+        if (completedSegmentIndexes.size >= expectedSegments.size) {
+          logSegmentEditorDiagnostics("client.segment-editor.batch-voiceover.done", {
+            completedSegmentCount: completedSegmentIndexes.size,
+            expectedSegmentCount: expectedSegments.size,
+            jobId: safeJobId,
+            status: latestStatus,
+          });
+          removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, safeJobId);
+          return;
+        }
+
+        const failedSegment = segmentStatuses.find((segment) =>
+          isWorkspaceSegmentGenerationJobFailedStatus(segment.status),
+        );
+        if (failedSegment) {
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.batch-voiceover.failed-segment",
+            {
+              error: failedSegment.error ?? null,
+              jobId: safeJobId,
+              segmentIndex: failedSegment.segmentIndex,
+              status: failedSegment.status,
+            },
+            { level: "warn" },
+          );
+          removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, safeJobId);
+          throw new Error(failedSegment.error ?? "Не удалось сгенерировать озвучку одной из сцен.");
+        }
+
+        if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.batch-voiceover.failed",
+            {
+              error: payload.data.error ?? null,
+              jobId: safeJobId,
+              status: latestStatus,
+            },
+            { level: "warn" },
+          );
+          removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, safeJobId);
+          throw new Error(payload.data.error ?? "Не удалось сгенерировать озвучку сцен.");
+        }
+
+        if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.batch-voiceover.waiting-for-assets",
+            {
+              completedSegmentCount: completedSegmentIndexes.size,
+              expectedSegmentCount: expectedSegments.size,
+              jobId: safeJobId,
+              readySegmentCount,
+              status: latestStatus,
+            },
+            { level: "warn" },
+          );
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
+      }
+    } finally {
+      segmentBatchVoiceoverActiveJobIdsRef.current.delete(safeJobId);
     }
   };
+
+  const resumePendingSegmentBatchVoiceoverJob = (job: StoredWorkspaceSegmentBatchVoiceoverJob) => {
+    if (segmentBatchVoiceoverActiveJobIdsRef.current.size > 0) {
+      return false;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current;
+    if (!currentDraft || currentDraft.projectId !== job.projectId) {
+      return false;
+    }
+
+    const jobSegments = job.segments
+      .map((jobSegment) => {
+        const segment = currentDraft.segments.find((item) => item.index === jobSegment.segmentIndex) ?? null;
+        return segment ? { jobSegment, segment } : null;
+      })
+      .filter((item): item is { jobSegment: StoredWorkspaceSegmentBatchVoiceoverJob["segments"][number]; segment: WorkspaceSegmentEditorDraftSegment } =>
+        Boolean(item),
+      );
+    if (jobSegments.length !== job.segments.length) {
+      removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, job.jobId);
+      return false;
+    }
+
+    const hasStaleInputs = jobSegments.some(({ jobSegment, segment }) => {
+      const text = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
+      const voiceType = normalizeWorkspaceSegmentEditorSetting(getWorkspaceSegmentEffectiveVoiceId(segment, currentDraft));
+      const language = getStudioLanguageForVoiceId(jobSegment.voiceType) ?? getWorkspaceSegmentEditorSessionLanguage(currentDraft);
+      return text !== jobSegment.text || voiceType !== jobSegment.voiceType || language !== jobSegment.language;
+    });
+    if (hasStaleInputs) {
+      removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, job.jobId);
+      return false;
+    }
+
+    const areAllVoiceoversAlreadyFresh = jobSegments.every(({ jobSegment, segment }) =>
+      isSegmentEditorVoiceoverFreshForVoice(segment, jobSegment.language, jobSegment.voiceType, currentDraft),
+    );
+    if (areAllVoiceoversAlreadyFresh) {
+      removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, job.jobId);
+      if (job.source === "create-shorts") {
+        void handleCreateShortsFromSegmentEditor();
+      }
+      return true;
+    }
+
+    if (jobSegments.some(({ segment }) => isWorkspaceSegmentVisualJobBusy(segment.index))) {
+      return false;
+    }
+
+    if (job.source === "create-shorts") {
+      showSegmentEditorCreateShortsGenerationUi();
+    } else {
+      setIsSegmentEditorGeneratingGlobalVoiceover(true);
+      setSegmentEditorVideoError(null);
+      setInsufficientCreditsContext(null);
+    }
+
+    const voiceoverRuns = jobSegments.map(({ segment }) => ({
+      runId: startSegmentVisualRun(segmentVoiceoverRunRef, setSegmentEditorGeneratingVoiceoverRunIds, segment.index),
+      segmentIndex: segment.index,
+    }));
+    logSegmentEditorDiagnostics("client.segment-editor.batch-voiceover.resume", {
+      jobId: job.jobId,
+      projectId: job.projectId,
+      segmentIndexes: job.segments.map((segment) => segment.segmentIndex),
+      source: job.source,
+    });
+
+    void pollSegmentEditorBatchVoiceoverJob(job.jobId, job.status || "queued", {
+      createdAt: job.createdAt,
+      projectId: job.projectId,
+      segments: job.segments,
+      source: job.source,
+    })
+      .then(() => {
+        if (job.source === "create-shorts") {
+          void handleCreateShortsFromSegmentEditor();
+          return;
+        }
+
+        showStudioToast(workspaceText(locale, "Озвучка сцен готова.", "Scene voiceover is ready."));
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : workspaceText(locale, "Не удалось сгенерировать озвучку сцен.", "Failed to generate scene voiceover.");
+        if (job.source === "create-shorts") {
+          resetSegmentEditorCreateShortsGenerationUi({ errorMessage: message });
+          return;
+        }
+
+        setSegmentEditorVideoError(message);
+      })
+      .finally(() => {
+        voiceoverRuns.forEach(({ runId, segmentIndex }) => {
+          if (isSegmentVisualRunCurrent(segmentVoiceoverRunRef, segmentIndex, runId)) {
+            clearSegmentVisualRun(segmentVoiceoverRunRef, setSegmentEditorGeneratingVoiceoverRunIds, segmentIndex, runId);
+          }
+        });
+        if (job.source === "global-voiceover") {
+          setIsSegmentEditorGeneratingGlobalVoiceover(false);
+        }
+      });
+
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+
+    const tryResumePendingBatchVoiceover = () => {
+      if (segmentBatchVoiceoverActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+
+      const pendingJob = readStoredWorkspaceSegmentBatchVoiceoverJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (!pendingJob) {
+        return;
+      }
+
+      resumePendingSegmentBatchVoiceoverJob(pendingJob);
+    };
+
+    tryResumePendingBatchVoiceover();
+    const intervalId = window.setInterval(tryResumePendingBatchVoiceover, 30_000);
+    const handleFocus = () => tryResumePendingBatchVoiceover();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryResumePendingBatchVoiceover();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
   const handleSegmentAiPhotoModalCustomVideoChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -17967,13 +18564,29 @@ export function WorkspacePage({
           projectId: projectId ?? null,
           status: payload.data.status,
         }, { draft: effectiveDraft });
+        const voiceoverSegments = voiceoverTargetsToGenerateOnCreate.map((target) => ({
+          language: target.language,
+          segmentIndex: target.segment.index,
+          text: target.text,
+          voiceType: target.voiceType,
+        }));
+        const pendingJobCreatedAt = Date.now();
+        const pendingProjectId = projectId ?? draftForVoiceoverGeneration.projectId ?? 0;
+        if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
+          upsertStoredWorkspaceSegmentBatchVoiceoverJob(session.email, {
+            createdAt: pendingJobCreatedAt,
+            jobId: payload.data.jobId,
+            projectId: pendingProjectId,
+            segments: voiceoverSegments,
+            source: "create-shorts",
+            status: payload.data.status,
+          });
+        }
         await pollSegmentEditorBatchVoiceoverJob(payload.data.jobId, payload.data.status, {
-          segments: voiceoverTargetsToGenerateOnCreate.map((target) => ({
-            language: target.language,
-            segmentIndex: target.segment.index,
-            text: target.text,
-            voiceType: target.voiceType,
-          })),
+          createdAt: pendingJobCreatedAt,
+          projectId: pendingProjectId,
+          segments: voiceoverSegments,
+          source: "create-shorts",
         });
         logSegmentEditorDiagnostics("client.segment-editor.create-shorts.voiceover-batch.done", {
           jobId: payload.data.jobId,
@@ -22254,13 +22867,29 @@ export function WorkspacePage({
         }
 
         applyWorkspaceProfile(payload.data.profile);
+        const voiceoverSegments = targetsToGenerate.map((target) => ({
+          language: target.language,
+          segmentIndex: target.segment.index,
+          text: target.text,
+          voiceType: target.voiceType,
+        }));
+        const pendingJobCreatedAt = Date.now();
+        const pendingProjectId = projectId ?? currentDraft.projectId ?? 0;
+        if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
+          upsertStoredWorkspaceSegmentBatchVoiceoverJob(session.email, {
+            createdAt: pendingJobCreatedAt,
+            jobId: payload.data.jobId,
+            projectId: pendingProjectId,
+            segments: voiceoverSegments,
+            source: "global-voiceover",
+            status: payload.data.status,
+          });
+        }
         await pollSegmentEditorBatchVoiceoverJob(payload.data.jobId, payload.data.status, {
-          segments: targetsToGenerate.map((target) => ({
-            language: target.language,
-            segmentIndex: target.segment.index,
-            text: target.text,
-            voiceType: target.voiceType,
-          })),
+          createdAt: pendingJobCreatedAt,
+          projectId: pendingProjectId,
+          segments: voiceoverSegments,
+          source: "global-voiceover",
         });
       } else {
         if (selectedGlobalVoiceType && selectedGlobalVoiceType !== "none") {

@@ -432,9 +432,24 @@ export const buildWorkspaceSegmentEditorPayload = async (
           ? "default"
           : null)
       : "none";
-    const voiceoverAssetId = isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
-      ? getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) ?? undefined
+    const hasFreshVoiceoverAsset = isWorkspaceSegmentVoiceoverAssetFresh(segment, session);
+    let voiceoverAssetId = hasFreshVoiceoverAsset
+      ? getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) ??
+        getWorkspaceSegmentAssetIdFromFirstPartyMediaUrl(segment.voiceoverAsset?.remoteUrl) ??
+        undefined
       : undefined;
+    if (hasFreshVoiceoverAsset && !voiceoverAssetId && segment.voiceoverAsset) {
+      voiceoverAssetId = (await ensureStudioUploadedAssetId(segment.voiceoverAsset, {
+        fallbackFileName: segment.voiceoverAsset.fileName || `segment-${segment.index + 1}-voiceover.wav`,
+        fallbackMimeType: segment.voiceoverAsset.mimeType || "audio/wav",
+        kind: "segment_voiceover",
+        language: options.language,
+        mediaType: "audio",
+        projectId: mediaUploadScope.projectId,
+        role: "segment_voiceover",
+        segmentIndex: mediaUploadScope.segmentIndex,
+      })) ?? undefined;
+    }
     const rawVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
     const hasLeakedProjectVoiceSourceDuration = isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(
       segment,

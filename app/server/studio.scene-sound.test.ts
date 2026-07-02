@@ -492,19 +492,22 @@ describe("studio segment voiceover jobs", () => {
       name: "Alex",
     });
 
+    expect(status.status).not.toBe("done");
     expect(status.segments).toEqual([
       expect.objectContaining({
+        asset: undefined,
         segmentIndex: 0,
-        speechDuration: 7.9,
-        speechEndTime: 7.9,
-        speechStartTime: 0,
+        speechDuration: null,
+        speechEndTime: null,
+        speechStartTime: null,
         text: "Scene one",
       }),
       expect.objectContaining({
+        asset: undefined,
         segmentIndex: 1,
-        speechDuration: 5,
-        speechEndTime: 12.9,
-        speechStartTime: 7.9,
+        speechDuration: null,
+        speechEndTime: null,
+        speechStartTime: null,
         text: "Scene two",
       }),
     ]);

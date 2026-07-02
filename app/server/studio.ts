@@ -8862,17 +8862,32 @@ export async function getStudioBatchVoiceoverJobStatus(
     const projectGroupStatuses = await Promise.all(
       fallbackJob.projectGroups.map(async (group) => {
         const status = await getStudioProjectVoiceoverJobStatus(group.jobId, user);
-        let fallbackCursor = 0;
         const segments = group.segments.map((segment) => {
           const segmentStatus = status.segments.find(
             (item) =>
               item.segmentIndex === segment.segmentIndex &&
               isStudioVoiceoverSegmentTextCompatible(item.text, segment.text),
           );
-          const fallbackStartTime = fallbackCursor;
-          const fallbackDuration = Math.max(0.2, segment.targetDurationSeconds ?? segmentStatus?.speechDuration ?? 0.8);
-          const fallbackEndTime = fallbackStartTime + fallbackDuration;
-          fallbackCursor = fallbackEndTime;
+          if (!segmentStatus) {
+            return {
+              asset: undefined,
+              error: status.error,
+              jobId: status.jobId,
+              language: group.language,
+              profile: status.profile,
+              segmentIndex: segment.segmentIndex,
+              speechDuration: null,
+              speechEndTime: null,
+              speechStartTime: null,
+              speechWords: [],
+              status: isStudioVoiceoverReadyStatus(status.status) ? "processing" : status.status,
+              text: segment.text,
+              voiceSourceDuration: null,
+              voiceSourceEndTime: null,
+              voiceSourceStartTime: null,
+              voiceType: group.voiceType,
+            } satisfies StudioBatchVoiceoverJobSegmentStatus;
+          }
 
           return {
             asset: status.asset,
@@ -8881,15 +8896,15 @@ export async function getStudioBatchVoiceoverJobStatus(
             language: group.language,
             profile: status.profile,
             segmentIndex: segment.segmentIndex,
-            speechDuration: segmentStatus?.speechDuration ?? fallbackDuration,
-            speechEndTime: segmentStatus?.speechEndTime ?? fallbackEndTime,
-            speechStartTime: segmentStatus?.speechStartTime ?? fallbackStartTime,
-            speechWords: segmentStatus?.speechWords ?? [],
+            speechDuration: segmentStatus.speechDuration ?? null,
+            speechEndTime: segmentStatus.speechEndTime ?? null,
+            speechStartTime: segmentStatus.speechStartTime ?? null,
+            speechWords: segmentStatus.speechWords ?? [],
             status: status.status,
-            text: segmentStatus?.text || segment.text,
-            voiceSourceDuration: segmentStatus?.voiceSourceDuration ?? fallbackDuration,
-            voiceSourceEndTime: segmentStatus?.voiceSourceEndTime ?? fallbackEndTime,
-            voiceSourceStartTime: segmentStatus?.voiceSourceStartTime ?? fallbackStartTime,
+            text: segmentStatus.text || segment.text,
+            voiceSourceDuration: segmentStatus.voiceSourceDuration ?? segmentStatus.speechDuration ?? null,
+            voiceSourceEndTime: segmentStatus.voiceSourceEndTime ?? segmentStatus.speechEndTime ?? null,
+            voiceSourceStartTime: segmentStatus.voiceSourceStartTime ?? segmentStatus.speechStartTime ?? null,
             voiceType: group.voiceType,
           } satisfies StudioBatchVoiceoverJobSegmentStatus;
         });
