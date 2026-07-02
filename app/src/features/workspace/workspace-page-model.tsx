@@ -1065,6 +1065,16 @@ export const isWorkspaceSegmentEditorNotFoundError = (value: string) => {
   return normalized === "not found" || normalized.includes("404");
 };
 
+export const isWorkspaceSegmentEditorProjectUnavailableError = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.includes("проект удал") ||
+    normalized.includes("недоступен для редактирования") ||
+    normalized.includes("project deleted") ||
+    normalized.includes("not available for editing")
+  );
+};
+
 export const isWorkspaceSegmentEditorPreparingError = (value: string) => {
   const normalized = value.trim().toLowerCase();
   return (

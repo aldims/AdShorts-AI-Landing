@@ -2868,6 +2868,11 @@ app.get("/api/workspace/projects/:projectId/segment-editor/reload", async (req, 
     });
     res.json({ data });
   } catch (error) {
+    if (error instanceof WorkspaceSegmentEditorError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+
     console.error("[workspace] Failed to load project segment editor", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to load project segment editor.",

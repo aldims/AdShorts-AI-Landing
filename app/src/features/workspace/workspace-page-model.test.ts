@@ -4,6 +4,7 @@ import {
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
   isWorkspaceSegmentCustomVisualUploadBusy,
+  isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
   shouldShowStudioGenerationError,
@@ -26,6 +27,14 @@ describe("studio generation visibility", () => {
     expect(shouldShowStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
     expect(shouldShowStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
     expect(shouldShowStudioGenerationError("Previous failure", false, "idle")).toBe(true);
+  });
+});
+
+describe("segment editor project availability errors", () => {
+  it("detects deleted project responses separately from generic not found errors", () => {
+    expect(isWorkspaceSegmentEditorProjectUnavailableError("Проект удалён и недоступен для редактирования.")).toBe(true);
+    expect(isWorkspaceSegmentEditorProjectUnavailableError("Project deleted and not available for editing.")).toBe(true);
+    expect(isWorkspaceSegmentEditorProjectUnavailableError("Not found")).toBe(false);
   });
 });
 

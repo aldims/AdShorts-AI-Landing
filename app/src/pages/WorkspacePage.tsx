@@ -580,6 +580,7 @@ import {
   SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS,
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
+  isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
   shouldShowStudioGenerationError,
@@ -11109,10 +11110,12 @@ export function WorkspacePage({
       }
 
       const errorMessage = error instanceof Error ? error.message : "Не удалось открыть редактор Shorts.";
+      const isProjectUnavailableError = isWorkspaceSegmentEditorProjectUnavailableError(errorMessage);
       logSegmentEditorDiagnostics(
         "client.segment-editor.load.error",
         {
           error: errorMessage,
+          isProjectUnavailableError,
           projectId,
           requestedSegmentIndex,
         },
@@ -11120,6 +11123,30 @@ export function WorkspacePage({
           level: "error",
         },
       );
+      if (isProjectUnavailableError) {
+        clearPersistedSegmentEditorStateForProject(projectId);
+        segmentEditorRouteRestoreKeyRef.current = null;
+        segmentEditorHandledRouteRestoreKeyRef.current = null;
+        segmentEditorFreshRouteFetchKeyRef.current = null;
+        segmentEditorFreshRouteAttemptedKeyRef.current = null;
+        segmentEditorPendingRouteSyncKeyRef.current = null;
+        segmentEditorDraftRef.current = null;
+        setSegmentEditorDraft(null);
+        setSegmentEditorLoadedSession(null);
+        setSegmentEditorAppliedSession(null);
+        setSegmentEditorError(null);
+        setCreateMode("default");
+        setStudioView("projects");
+        setProjectDeleteError(errorMessage);
+        setProjects((currentProjects) =>
+          currentProjects.filter((project) => project.adId !== projectId && project.id !== `project:${projectId}`),
+        );
+        setHasLoadedProjects(false);
+        if (routeStudioState.projectId === projectId) {
+          syncStudioRouteSection("projects", { replace: true });
+        }
+        return null;
+      }
       setSegmentEditorError(
         isWorkspaceSegmentEditorNotFoundError(errorMessage)
           ? "Для этого проекта сегменты пока недоступны."
