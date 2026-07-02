@@ -1,4 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
@@ -7925,6 +7927,308 @@ const normalizeStudioBatchVoiceoverGroups = (
 const getStudioBatchVoiceoverCreditCost = (groups: NormalizedStudioBatchVoiceoverGroup[]) =>
   groups.reduce((total, group) => total + Math.max(0, group.creditCost), 0);
 
+const STUDIO_BATCH_VOICEOVER_JOB_STORE_SCHEMA_VERSION = 1;
+const STUDIO_BATCH_VOICEOVER_JOB_STORE_DIR_NAME = "studio-batch-voiceover-jobs";
+
+type StoredStudioBatchVoiceoverJobDocument = {
+  createdAt: number;
+  fallbackJob?: StudioBatchVoiceoverFallbackJob | null;
+  jobId: string;
+  metadata?: StudioBatchVoiceoverJobMetadata | null;
+  ownerKeyHashes: string[];
+  schemaVersion: number;
+};
+
+const getStudioBatchVoiceoverJobStoreDir = () =>
+  join(env.dataDir, STUDIO_BATCH_VOICEOVER_JOB_STORE_DIR_NAME);
+
+const getStudioBatchVoiceoverJobStorePath = (jobId: string) =>
+  join(
+    getStudioBatchVoiceoverJobStoreDir(),
+    `${createHash("sha1").update(jobId).digest("hex")}.json`,
+  );
+
+const hashStudioBatchVoiceoverOwnerKey = (value: string) =>
+  createHash("sha1").update(value).digest("hex");
+
+const isStudioBatchVoiceoverRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+const normalizeStudioBatchVoiceoverStoredTimestamp = (value: unknown, fallback = Date.now()) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const normalizeStudioBatchVoiceoverStoredSegments = (
+  value: unknown,
+): NormalizedStudioBatchVoiceoverSegment[] =>
+  Array.isArray(value)
+    ? value
+        .map((segment, index) => {
+          if (!isStudioBatchVoiceoverRecord(segment)) {
+            return null;
+          }
+
+          const text = normalizeGenerationText(segment.text);
+          if (!text) {
+            return null;
+          }
+
+          return {
+            segmentIndex: normalizeNonNegativeInteger(segment.segmentIndex ?? segment.segment_index) ?? index,
+            targetDurationSeconds: normalizeNumber(segment.targetDurationSeconds ?? segment.target_duration_seconds),
+            text,
+          };
+        })
+        .filter((segment): segment is NormalizedStudioBatchVoiceoverSegment => Boolean(segment))
+    : [];
+
+const normalizeStudioBatchVoiceoverStoredGroup = (value: unknown): NormalizedStudioBatchVoiceoverGroup | null => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return null;
+  }
+
+  const language = normalizeStudioLanguage(normalizeGenerationText(value.language));
+  const voiceType = normalizeStudioVoiceIdForLanguage(
+    normalizeGenerationText(value.voiceType ?? value.voice_type),
+    language,
+  );
+  const segments = normalizeStudioBatchVoiceoverStoredSegments(value.segments);
+  if (!voiceType || voiceType === "none" || segments.length === 0) {
+    return null;
+  }
+
+  return {
+    creditCost:
+      Math.max(0, normalizeNumber(value.creditCost ?? value.credit_cost) ?? 0) ||
+      getStudioSegmentVoiceoverCreditCost(voiceType) ||
+      STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+    language,
+    segments,
+    voiceType,
+  };
+};
+
+const normalizeStudioBatchVoiceoverStoredMetadata = (
+  value: unknown,
+): StudioBatchVoiceoverJobMetadata | null => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return null;
+  }
+
+  const groups = Array.isArray(value.groups)
+    ? value.groups.map(normalizeStudioBatchVoiceoverStoredGroup).filter(Boolean) as NormalizedStudioBatchVoiceoverGroup[]
+    : [];
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return {
+    createdAt: normalizeStudioBatchVoiceoverStoredTimestamp(value.createdAt),
+    creditCost: Math.max(0, normalizeNumber(value.creditCost ?? value.credit_cost) ?? 0) || getStudioBatchVoiceoverCreditCost(groups),
+    groups,
+  };
+};
+
+const normalizeStudioBatchVoiceoverStoredProfile = (value: unknown): WorkspaceProfile => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return buildWorkspaceProfile();
+  }
+
+  const plan = normalizeGenerationText(value.plan).toUpperCase() || "FREE";
+  return {
+    balance: Math.max(0, normalizeNumber(value.balance) ?? 0),
+    expiresAt: normalizeGenerationText(value.expiresAt ?? value.expires_at) || null,
+    plan,
+    startPlanUsed: Boolean(value.startPlanUsed ?? value.start_plan_used),
+    userId: normalizeGenerationText(value.userId ?? value.user_id) || null,
+  };
+};
+
+const normalizeStudioBatchVoiceoverStoredChildJob = (
+  value: unknown,
+): StudioBatchVoiceoverFallbackChildJob | null => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return null;
+  }
+
+  const jobId = normalizeGenerationText(value.jobId ?? value.job_id);
+  const text = normalizeGenerationText(value.text);
+  const language = normalizeStudioLanguage(normalizeGenerationText(value.language));
+  const voiceType = normalizeStudioVoiceIdForLanguage(
+    normalizeGenerationText(value.voiceType ?? value.voice_type),
+    language,
+  );
+  if (!jobId || !text || !voiceType || voiceType === "none") {
+    return null;
+  }
+
+  return {
+    jobId,
+    language,
+    segmentIndex: normalizeNonNegativeInteger(value.segmentIndex ?? value.segment_index) ?? 0,
+    targetDurationSeconds: normalizeNumber(value.targetDurationSeconds ?? value.target_duration_seconds),
+    text,
+    voiceType,
+  };
+};
+
+const normalizeStudioBatchVoiceoverStoredProjectGroupJob = (
+  value: unknown,
+): StudioBatchVoiceoverFallbackProjectGroupJob | null => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return null;
+  }
+
+  const group = normalizeStudioBatchVoiceoverStoredGroup(value);
+  const jobId = normalizeGenerationText(value.jobId ?? value.job_id);
+  if (!group || !jobId) {
+    return null;
+  }
+
+  return {
+    ...group,
+    jobId,
+  };
+};
+
+const normalizeStudioBatchVoiceoverStoredFallbackJob = (
+  value: unknown,
+): StudioBatchVoiceoverFallbackJob | null => {
+  if (!isStudioBatchVoiceoverRecord(value)) {
+    return null;
+  }
+
+  const children = Array.isArray(value.children)
+    ? value.children.map(normalizeStudioBatchVoiceoverStoredChildJob).filter(Boolean) as StudioBatchVoiceoverFallbackChildJob[]
+    : [];
+  const projectGroups = Array.isArray(value.projectGroups)
+    ? value.projectGroups.map(normalizeStudioBatchVoiceoverStoredProjectGroupJob).filter(Boolean) as StudioBatchVoiceoverFallbackProjectGroupJob[]
+    : [];
+  if (children.length === 0 && projectGroups.length === 0) {
+    return null;
+  }
+
+  return {
+    children,
+    createdAt: normalizeStudioBatchVoiceoverStoredTimestamp(value.createdAt),
+    creditCost: Math.max(0, normalizeNumber(value.creditCost ?? value.credit_cost) ?? 0),
+    profile: normalizeStudioBatchVoiceoverStoredProfile(value.profile),
+    projectGroups,
+    status: normalizeGenerationText(value.status) || "queued",
+  };
+};
+
+const resolveStudioBatchVoiceoverOwnerKeyHashes = async (user: StudioUser) => {
+  const ownerKeys = new Set<string>();
+  const addOwnerKey = (value: unknown) => {
+    const normalized = normalizeGenerationText(value);
+    if (normalized) {
+      ownerKeys.add(normalized);
+    }
+  };
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  addOwnerKey(externalUserId);
+  addOwnerKey(await resolveStudioAuthScopedCacheKey(user, externalUserId));
+  addOwnerKey(user.id ? `id:${user.id}` : null);
+  addOwnerKey(user.email ? `email:${String(user.email).trim().toLowerCase()}` : null);
+
+  return [...ownerKeys].map(hashStudioBatchVoiceoverOwnerKey);
+};
+
+const readStoredStudioBatchVoiceoverJob = async (
+  jobId: string,
+  user: StudioUser,
+): Promise<Pick<StoredStudioBatchVoiceoverJobDocument, "fallbackJob" | "metadata"> | null> => {
+  const path = getStudioBatchVoiceoverJobStorePath(jobId);
+  let payload: unknown;
+
+  try {
+    payload = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+
+  if (!isStudioBatchVoiceoverRecord(payload) || normalizeGenerationText(payload.jobId) !== jobId) {
+    await rm(path, { force: true }).catch(() => undefined);
+    return null;
+  }
+
+  const createdAt = normalizeStudioBatchVoiceoverStoredTimestamp(payload.createdAt, 0);
+  if (Date.now() - createdAt > STUDIO_BATCH_VOICEOVER_FALLBACK_JOB_TTL_MS) {
+    await rm(path, { force: true }).catch(() => undefined);
+    return null;
+  }
+
+  const ownerKeyHashes = Array.isArray(payload.ownerKeyHashes)
+    ? payload.ownerKeyHashes.map(normalizeGenerationText).filter(Boolean)
+    : [];
+  const currentOwnerKeyHashes = await resolveStudioBatchVoiceoverOwnerKeyHashes(user);
+  if (
+    ownerKeyHashes.length === 0 ||
+    !currentOwnerKeyHashes.some((ownerKeyHash) => ownerKeyHashes.includes(ownerKeyHash))
+  ) {
+    return null;
+  }
+
+  const metadata = normalizeStudioBatchVoiceoverStoredMetadata(payload.metadata);
+  const fallbackJob = normalizeStudioBatchVoiceoverStoredFallbackJob(payload.fallbackJob);
+  if (!metadata && !fallbackJob) {
+    return null;
+  }
+
+  if (metadata) {
+    studioBatchVoiceoverJobMetadata.set(jobId, metadata);
+  }
+  if (fallbackJob) {
+    studioBatchVoiceoverFallbackJobs.set(jobId, fallbackJob);
+  }
+
+  return { fallbackJob, metadata };
+};
+
+const persistStudioBatchVoiceoverJob = async (
+  jobId: string,
+  user: StudioUser,
+  payload: {
+    fallbackJob?: StudioBatchVoiceoverFallbackJob | null;
+    metadata?: StudioBatchVoiceoverJobMetadata | null;
+  },
+) => {
+  try {
+    await mkdir(getStudioBatchVoiceoverJobStoreDir(), { recursive: true });
+    const path = getStudioBatchVoiceoverJobStorePath(jobId);
+    const tempPath = `${path}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+    const createdAt = payload.fallbackJob?.createdAt ?? payload.metadata?.createdAt ?? Date.now();
+    const document: StoredStudioBatchVoiceoverJobDocument = {
+      createdAt,
+      fallbackJob: payload.fallbackJob ?? null,
+      jobId,
+      metadata: payload.metadata ?? null,
+      ownerKeyHashes: await resolveStudioBatchVoiceoverOwnerKeyHashes(user),
+      schemaVersion: STUDIO_BATCH_VOICEOVER_JOB_STORE_SCHEMA_VERSION,
+    };
+
+    try {
+      await writeFile(tempPath, JSON.stringify(document, null, 2), "utf8");
+      await rename(tempPath, path);
+    } catch (error) {
+      await rm(tempPath, { force: true }).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    console.warn("[studio] Failed to persist batch voiceover job metadata", {
+      error: error instanceof Error ? error.message : String(error ?? "Unknown error"),
+      jobId,
+    });
+  }
+};
+
+const removeStoredStudioBatchVoiceoverJob = async (jobId: string) => {
+  await rm(getStudioBatchVoiceoverJobStorePath(jobId), { force: true }).catch(() => undefined);
+};
+
 const normalizeAdsflowBatchVoiceoverStatusSegment = (
   payload: AdsflowBatchVoiceoverSegmentStatusPayload,
   fallback: {
@@ -8056,11 +8360,13 @@ export async function createStudioBatchVoiceoverJob(
       throw new Error("AdsFlow did not return a batch voiceover job id.");
     }
 
-    studioBatchVoiceoverJobMetadata.set(jobId, {
+    const metadata: StudioBatchVoiceoverJobMetadata = {
       createdAt: Date.now(),
       creditCost,
       groups: normalizedGroups,
-    });
+    };
+    studioBatchVoiceoverJobMetadata.set(jobId, metadata);
+    await persistStudioBatchVoiceoverJob(jobId, user, { metadata });
 
     return {
       creditCost,
@@ -8165,19 +8471,22 @@ export async function createStudioBatchVoiceoverJob(
   }
 
   const jobId = `voiceover-batch-${randomUUID()}`;
-  studioBatchVoiceoverJobMetadata.set(jobId, {
+  const metadata: StudioBatchVoiceoverJobMetadata = {
     createdAt: Date.now(),
     creditCost,
     groups: normalizedGroups,
-  });
-  studioBatchVoiceoverFallbackJobs.set(jobId, {
+  };
+  const fallbackJob: StudioBatchVoiceoverFallbackJob = {
     children,
-    createdAt: Date.now(),
+    createdAt: metadata.createdAt,
     creditCost,
     profile: fallbackProfile,
     projectGroups,
     status: "queued",
-  });
+  };
+  studioBatchVoiceoverJobMetadata.set(jobId, metadata);
+  studioBatchVoiceoverFallbackJobs.set(jobId, fallbackJob);
+  await persistStudioBatchVoiceoverJob(jobId, user, { fallbackJob, metadata });
 
   return {
     creditCost,
@@ -8543,7 +8852,12 @@ export async function getStudioBatchVoiceoverJobStatus(
     throw new Error("Job id is required.");
   }
 
-  const fallbackJob = studioBatchVoiceoverFallbackJobs.get(safeJobId);
+  let fallbackJob = studioBatchVoiceoverFallbackJobs.get(safeJobId);
+  if (!fallbackJob) {
+    const storedJob = await readStoredStudioBatchVoiceoverJob(safeJobId, user);
+    fallbackJob = storedJob?.fallbackJob ?? undefined;
+  }
+
   if (fallbackJob) {
     const projectGroupStatuses = await Promise.all(
       fallbackJob.projectGroups.map(async (group) => {
@@ -8615,6 +8929,7 @@ export async function getStudioBatchVoiceoverJobStatus(
     if (isStudioVoiceoverReadyStatus(status) || isStudioVoiceoverFailedStatus(status)) {
       studioBatchVoiceoverFallbackJobs.delete(safeJobId);
       studioBatchVoiceoverJobMetadata.delete(safeJobId);
+      await removeStoredStudioBatchVoiceoverJob(safeJobId);
     }
 
     return {
@@ -8655,6 +8970,8 @@ export async function getStudioBatchVoiceoverJobStatus(
   if (isStudioVoiceoverReadyStatus(resolvedStatus) || isStudioVoiceoverFailedStatus(resolvedStatus)) {
     studioBatchVoiceoverJobMetadata.delete(safeJobId);
     studioBatchVoiceoverJobMetadata.delete(resolvedJobId);
+    await removeStoredStudioBatchVoiceoverJob(safeJobId);
+    await removeStoredStudioBatchVoiceoverJob(resolvedJobId);
   }
 
   return {

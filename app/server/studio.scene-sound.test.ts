@@ -1,10 +1,28 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadStudioModule = async () => {
-  vi.resetModules();
+const testDirectories: string[] = [];
+
+const configureStudioTestEnv = () => {
   vi.stubEnv("ADSFLOW_API_BASE_URL", "https://adsflow.test");
   vi.stubEnv("ADSFLOW_ADMIN_TOKEN", "admin-token");
   vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
+};
+
+const loadStudioModule = async () => {
+  vi.resetModules();
+  configureStudioTestEnv();
+  return import("./studio.js");
+};
+
+const loadStudioModuleWithDataDir = async (dataDir: string) => {
+  vi.resetModules();
+  configureStudioTestEnv();
+  const { env } = await import("./env.js");
+  env.dataDir = dataDir;
   return import("./studio.js");
 };
 
@@ -19,10 +37,11 @@ describe("studio scene sound jobs", () => {
     vi.unstubAllGlobals();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    await Promise.all(testDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
   });
 
   it("requires a project id or explicit visual source before contacting AdsFlow", async () => {
@@ -489,6 +508,125 @@ describe("studio segment voiceover jobs", () => {
         text: "Scene two",
       }),
     ]);
+  });
+
+  it("restores fallback batch voiceover jobs after a server module reload", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "adshorts-batch-voiceover-"));
+    testDirectories.push(dataDir);
+    const calls: string[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const method = String(init?.method ?? "GET").toUpperCase();
+        calls.push(`${method} ${url.pathname}`);
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (method === "POST" && url.pathname === "/api/web/voiceover/batch-jobs") {
+          return jsonResponse({ detail: "not found" }, 404);
+        }
+
+        if (method === "POST" && url.pathname === "/api/web/project-voiceover/jobs") {
+          return jsonResponse({
+            job_id: "project-voiceover-job-1",
+            status: "queued",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        if (method === "GET" && url.pathname === "/api/web/project-voiceover/jobs/project-voiceover-job-1") {
+          return jsonResponse({
+            asset: {
+              file_name: "project-voiceover.wav",
+              media_asset_id: 902,
+              mime_type: "audio/wav",
+            },
+            job_id: "project-voiceover-job-1",
+            segments: [
+              {
+                segment_index: 0,
+                speech_duration: 3.5,
+                speech_end_time: 3.5,
+                speech_start_time: 0,
+                text: "Scene one",
+              },
+              {
+                segment_index: 1,
+                speech_duration: 4.1,
+                speech_end_time: 7.6,
+                speech_start_time: 3.5,
+                text: "Scene two",
+              },
+            ],
+            status: "completed",
+            user: {
+              balance: 12,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        if (method === "GET" && url.pathname.startsWith("/api/web/voiceover/batch-jobs/")) {
+          return jsonResponse({ detail: "batch status unavailable" }, 404);
+        }
+
+        return jsonResponse({ detail: `unexpected ${method} ${url.pathname}` }, 500);
+      }),
+    );
+
+    const firstStudio = await loadStudioModuleWithDataDir(dataDir);
+    const job = await firstStudio.createStudioBatchVoiceoverJob({
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      groups: [
+        {
+          language: "ru",
+          segments: [
+            { segmentIndex: 0, targetDurationSeconds: 3.5, text: "Scene one" },
+            { segmentIndex: 1, targetDurationSeconds: 4.1, text: "Scene two" },
+          ],
+          voiceType: "Liam",
+        },
+      ],
+      projectId: 3657,
+    });
+
+    expect(job.jobId).toMatch(/^voiceover-batch-/);
+
+    const secondStudio = await loadStudioModuleWithDataDir(dataDir);
+    const status = await secondStudio.getStudioBatchVoiceoverJobStatus(job.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status.status).toBe("done");
+    expect(status.segments).toEqual([
+      expect.objectContaining({
+        asset: expect.objectContaining({
+          assetId: 902,
+        }),
+        segmentIndex: 0,
+        text: "Scene one",
+      }),
+      expect.objectContaining({
+        asset: expect.objectContaining({
+          assetId: 902,
+        }),
+        segmentIndex: 1,
+        text: "Scene two",
+      }),
+    ]);
+    expect(calls.some((call) => call === `GET /api/web/voiceover/batch-jobs/${job.jobId}`)).toBe(false);
   });
 
   it("normalizes speech metadata from AdsFlow status responses", async () => {
