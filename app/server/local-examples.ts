@@ -54,6 +54,8 @@ export type LocalExampleClientItem = {
   summary: string;
   tags: string[];
   title: string;
+  useDisabled?: boolean;
+  useLabel?: string;
   videoSrc: string;
 };
 
@@ -69,6 +71,8 @@ type StoredLocalExampleItem = {
   prompt: string;
   sourceId: string | null;
   title: string;
+  useDisabled?: boolean | null;
+  useLabel?: string | null;
 };
 
 type StoredLocalExamplesIndex = {
@@ -558,6 +562,8 @@ const toLocalExampleClientItem = (item: StoredLocalExampleItem): LocalExampleCli
   summary: buildLocalExampleSummary(item.prompt),
   tags: ["Локально", "Studio"],
   title: item.title,
+  useDisabled: item.useDisabled === true ? true : undefined,
+  useLabel: normalizeText(item.useLabel) || undefined,
   videoSrc: buildLocalExampleVideoUrl(item.id),
 });
 

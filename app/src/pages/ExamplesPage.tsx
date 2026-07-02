@@ -48,6 +48,8 @@ type ExampleItem = {
   summary: string;
   tags: string[];
   title: string;
+  useDisabled?: boolean;
+  useLabel?: string;
   videoSrc: string;
 };
 
@@ -855,58 +857,74 @@ export function ExamplesPage({
             </div>
 
             <div className="examples-modern__grid">
-              {visibleExamples.map((example, index) => (
-                <article key={example.id} className="examples-modern__card">
-                  {example.isLocal && canManageLocalExamples ? (
-                    <button
-                      className="examples-modern__delete"
-                      type="button"
-                      aria-label={t(examplesMessages.deleteExample)}
-                      title={t(examplesMessages.deleteExample)}
-                      disabled={deletingLocalExampleId === example.id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleDeleteLocalExample(example.id);
-                      }}
-                    >
-                      {deletingLocalExampleId === example.id ? (
-                        <span className="examples-modern__delete-spinner" aria-hidden="true"></span>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M6 7h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          <path d="M9.5 4h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          <path d="M10 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          <path d="M14 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          <path d="m7 7 1 11a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </button>
-                  ) : null}
-                  <ExampleVideoPreview
-                    className="examples-modern__preview"
-                    example={example}
-                    overlay={
-                      <>
-                        <div className="examples-modern__preview-bar">
-                          <span className="examples-modern__preview-goal">{(goalCopy[example.goal] ?? goalCopy["ads"]).shortLabel}</span>
-                          {!example.isLocal ? <span className="examples-modern__preview-index">{formatExampleOrdinal(index)}</span> : null}
-                        </div>
-                        <div className="examples-modern__preview-copy">
-                          <h3 className="examples-modern__preview-title">{example.title}</h3>
-                        </div>
-                      </>
-                    }
-                    priority={index < 4}
-                    videoClassName="examples-modern__preview-video"
-                  />
+              {visibleExamples.map((example, index) => {
+                const isUseDisabled = example.useDisabled === true;
+                const useLabel = example.useLabel?.trim() || t(examplesMessages.use);
 
-                  <div className="examples-modern__card-body">
-                    <button className="examples-modern__use route-button" type="button" onClick={() => openExampleInStudio(example)}>
-                      {t(examplesMessages.use)}
-                    </button>
-                  </div>
-                </article>
-              ))}
+                return (
+                  <article key={example.id} className="examples-modern__card">
+                    {example.isLocal && canManageLocalExamples ? (
+                      <button
+                        className="examples-modern__delete"
+                        type="button"
+                        aria-label={t(examplesMessages.deleteExample)}
+                        title={t(examplesMessages.deleteExample)}
+                        disabled={deletingLocalExampleId === example.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDeleteLocalExample(example.id);
+                        }}
+                      >
+                        {deletingLocalExampleId === example.id ? (
+                          <span className="examples-modern__delete-spinner" aria-hidden="true"></span>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M6 7h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M9.5 4h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M10 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M14 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="m7 7 1 11a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </button>
+                    ) : null}
+                    <ExampleVideoPreview
+                      className="examples-modern__preview"
+                      example={example}
+                      overlay={
+                        <>
+                          <div className="examples-modern__preview-bar">
+                            <span className="examples-modern__preview-goal">{(goalCopy[example.goal] ?? goalCopy["ads"]).shortLabel}</span>
+                            {!example.isLocal ? <span className="examples-modern__preview-index">{formatExampleOrdinal(index)}</span> : null}
+                          </div>
+                          <div className="examples-modern__preview-copy">
+                            <h3 className="examples-modern__preview-title">{example.title}</h3>
+                          </div>
+                        </>
+                      }
+                      priority={index < 4}
+                      videoClassName="examples-modern__preview-video"
+                    />
+
+                    <div className="examples-modern__card-body">
+                      <button
+                        className="examples-modern__use route-button"
+                        type="button"
+                        disabled={isUseDisabled}
+                        onClick={() => {
+                          if (isUseDisabled) {
+                            return;
+                          }
+
+                          openExampleInStudio(example);
+                        }}
+                      >
+                        {useLabel}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             {localExampleDeleteError ? (

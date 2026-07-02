@@ -400,6 +400,8 @@ const toLocalExampleClientItem = (item) => ({
     summary: buildLocalExampleSummary(item.prompt),
     tags: ["Локально", "Studio"],
     title: item.title,
+    useDisabled: item.useDisabled === true ? true : undefined,
+    useLabel: normalizeText(item.useLabel) || undefined,
     videoSrc: buildLocalExampleVideoUrl(item.id),
 });
 export const getLocalExamplesState = async (user) => {

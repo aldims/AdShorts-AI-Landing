@@ -313,4 +313,54 @@ describe("ExamplesPage copy", () => {
       voiceId: "Liam",
     });
   });
+
+  it("renders disabled local example actions with a custom label", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => ({
+          data: {
+            canManage: false,
+            enabled: true,
+            items: [
+              {
+                goal: "growth",
+                id: "scene-built-jeep",
+                isLocal: true,
+                promptHint: "Готовые сцены",
+                seedPrompt: "джип едет в горах",
+                summary: "Видео создано из сцен",
+                tags: ["Локально"],
+                title: "Джип едет в горах",
+                useDisabled: true,
+                useLabel: "Создано из сцен",
+                videoSrc: "/api/examples/local-video/scene-built-jeep",
+              },
+            ],
+          },
+        }),
+        ok: true,
+      })),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/examples"]}>
+        <LocaleProvider locale="ru">
+          <ExamplesPage
+            session={{ email: "user@example.com", name: "User", plan: "FREE" }}
+            onOpenSignup={() => undefined}
+            onOpenSignin={() => undefined}
+            onLogout={() => undefined}
+            onOpenWorkspace={() => undefined}
+          />
+        </LocaleProvider>
+      </MemoryRouter>,
+    );
+
+    const useButton = await screen.findByRole("button", { name: "Создано из сцен" });
+    expect((useButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(useButton);
+    expect(window.sessionStorage.getItem("adshorts.example-prefill-intent")).toBeNull();
+  });
 });
