@@ -1115,6 +1115,8 @@ export type {
   WorkspaceSegmentVoiceTimelineState,
 } from "../features/workspace/workspace-types";
 
+const SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID = "__segment_editor_create_shorts_preparing__";
+
 export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
   currentVideoDurationSeconds: number | null | undefined;
   locale: Parameters<typeof formatWorkspaceSegmentEditorSegmentDurationLabel>[2];
@@ -17639,6 +17641,56 @@ export function WorkspacePage({
     return [description ? `${contextLabel}: ${description}` : "", ...sceneLines].filter(Boolean).join("\n");
   };
 
+  const clearSegmentEditorCreateShortsPreparingGenerationMarker = () => {
+    if (activeGenerationJobIdRef.current === SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID) {
+      activeGenerationJobIdRef.current = null;
+    }
+  };
+
+  const stopSegmentEditorCreateShortsPlayback = () => {
+    stopSegmentTimelineAudioPlayback();
+    stopSegmentTimelineVoicePreview();
+    resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+    previewVideoRef.current?.pause();
+  };
+
+  const showSegmentEditorCreateShortsGenerationUi = () => {
+    activeGenerationJobIdRef.current = SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID;
+    stopSegmentEditorCreateShortsPlayback();
+    flushSync(() => {
+      setActiveTab("studio");
+      setStudioView("create");
+      setCreateMode("default");
+      setGeneratedVideo(null);
+      setGenerateError(null);
+      setInsufficientCreditsContext(null);
+      setIsGenerating(true);
+      setGenerationUiSource("segment-editor");
+      setIsPreviewModalOpen(false);
+      setSegmentEditorError(null);
+      setSegmentEditorVideoError(null);
+      setStatus(workspaceText(locale, "Готовим озвучку сцен...", "Preparing scene voiceover..."));
+      suppressProjectFallbackPreviewRef.current = true;
+      updateDismissedStudioPreviewKey(null);
+      closeSegmentAiPhotoModal({ immediate: true });
+    });
+    navigateToStudioCreateWaitingRoute({ replace: true });
+  };
+
+  const resetSegmentEditorCreateShortsGenerationUi = (options?: {
+    errorMessage?: string | null;
+    status?: string;
+  }) => {
+    clearSegmentEditorCreateShortsPreparingGenerationMarker();
+    setIsGenerating(false);
+    setGenerationUiSource("idle");
+    setStatus(options?.status ?? "Generation failed");
+    setGenerateError(options?.errorMessage ?? null);
+    if (options?.errorMessage) {
+      setSegmentEditorVideoError(options.errorMessage);
+    }
+  };
+
   const handleCreateShortsFromSegmentEditor = async () => {
     const currentSegmentEditorDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!currentSegmentEditorDraft) {
@@ -17649,6 +17701,8 @@ export function WorkspacePage({
       );
       return;
     }
+
+    stopSegmentEditorCreateShortsPlayback();
 
     logSegmentEditorDiagnostics("client.segment-editor.create-shorts.start", {
       segmentCount: currentSegmentEditorDraft.segments.length,
@@ -17853,6 +17907,8 @@ export function WorkspacePage({
       return;
     }
 
+    showSegmentEditorCreateShortsGenerationUi();
+
     const createShortsVoiceoverRuns = voiceoverTargetsToGenerateOnCreate.map((target) => ({
       runId: startSegmentVisualRun(
         segmentVoiceoverRunRef,
@@ -17893,7 +17949,10 @@ export function WorkspacePage({
         const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiPhotoJobCreateResponse | null;
 
         if (response.status === 402) {
-          setSegmentEditorVideoError(null);
+          resetSegmentEditorCreateShortsGenerationUi({
+            errorMessage: null,
+            status: "Credits required",
+          });
           openInsufficientCreditsModal("segment_voiceover", voiceoverRequiredCredits);
           return;
         }
@@ -17929,11 +17988,12 @@ export function WorkspacePage({
         },
         { draft: effectiveDraft, level: "warn" },
       );
-      setSegmentEditorVideoError(
-        error instanceof Error
-          ? error.message
-          : workspaceText(locale, "Не удалось сгенерировать озвучку сцен.", "Failed to generate scene voiceover."),
-      );
+      resetSegmentEditorCreateShortsGenerationUi({
+        errorMessage:
+          error instanceof Error
+            ? error.message
+            : workspaceText(locale, "Не удалось сгенерировать озвучку сцен.", "Failed to generate scene voiceover."),
+      });
       return;
     } finally {
       createShortsVoiceoverRuns.forEach(({ runId, segmentIndex }) => {
@@ -18017,13 +18077,13 @@ export function WorkspacePage({
         },
         { includeOrder: true, draft: effectiveDraft, level: "warn" },
       );
-      setSegmentEditorVideoError(
-        workspaceText(
+      resetSegmentEditorCreateShortsGenerationUi({
+        errorMessage: workspaceText(
           locale,
           "Структура сегментов изменилась без явного добавления, удаления или перестановки. Обновите редактор и повторите правку текста.",
           "Segment structure changed without an explicit add, delete, or reorder. Reload the editor and apply the text edit again.",
         ),
-      );
+      });
       return;
     }
 
@@ -18046,7 +18106,9 @@ export function WorkspacePage({
         },
         { draft: effectiveDraft, includeOrder: true, level: "warn" },
       );
-      setSegmentEditorVideoError("Не удалось определить тему проекта для перегенерации.");
+      resetSegmentEditorCreateShortsGenerationUi({
+        errorMessage: "Не удалось определить тему проекта для перегенерации.",
+      });
       return;
     }
     setSegmentEditorAppliedSession(nextAppliedSession);
@@ -19277,6 +19339,14 @@ export function WorkspacePage({
         selectedVideoMode,
         statusLabel,
       });
+      if (
+        isSegmentEditorGeneration &&
+        activeGenerationJobIdRef.current === SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID
+      ) {
+        activeGenerationJobIdRef.current = null;
+        setIsGenerating(false);
+        setGenerationUiSource("idle");
+      }
       if (isSegmentEditorGeneration) {
         logSegmentEditorDiagnostics(
           "client.segment-editor.generate.preflight-blocked",
@@ -19774,6 +19844,7 @@ export function WorkspacePage({
       const payload = (await response.json().catch(() => null)) as StudioGenerationStartResponse | null;
 
       if (response.status === 402) {
+        clearSegmentEditorCreateShortsPreparingGenerationMarker();
         if (isSegmentEditorGeneration) {
           logSegmentEditorDiagnostics(
             "client.segment-editor.generate.blocked",
@@ -19833,6 +19904,7 @@ export function WorkspacePage({
       console.error("[studio] generate.failed-before-job", error);
       const rawErrorMessage = error instanceof Error ? error.message : "Failed to generate task.";
       const errorMessage = resolveStudioGenerationErrorMessage(rawErrorMessage);
+      clearSegmentEditorCreateShortsPreparingGenerationMarker();
       if (isSegmentEditorGeneration) {
         logSegmentEditorDiagnostics(
           "client.segment-editor.generate.failed-before-job",
@@ -21255,6 +21327,10 @@ export function WorkspacePage({
 
     const resumeGenerationFromBootstrap = async () => {
       if (isCancelled || isChecking || document.hidden) {
+        return;
+      }
+
+      if (activeGenerationJobIdRef.current === SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID) {
         return;
       }
 
