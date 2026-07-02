@@ -36,6 +36,7 @@ describe("SiteHeaderWorkspaceStatus", () => {
       startPlanUsed: false,
     });
 
+    expect(screen.getByRole("link", { name: "Открыть тариф и баланс" })).toBeTruthy();
     expect(screen.getByText("Тариф активен до 02.05.2026.")).toBeTruthy();
   });
 

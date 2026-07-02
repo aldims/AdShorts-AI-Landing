@@ -32068,6 +32068,7 @@ export function WorkspacePage({
                 activeStudioSection={studioSidebarActiveItem}
                 onOpenStudioSection={handleStudioTopMenuSelect}
                 projectsCount={projects.length}
+                showStudioPricingLink={false}
                 studioSectionLabels={studioNavSectionLabels}
                 onStudioBack={isSegmentEditorPageActive && !isScratchSegmentEditorDraft ? () => handleStudioTopMenuSelect("create") : null}
               />

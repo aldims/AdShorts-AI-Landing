@@ -5121,3 +5121,70 @@
     order: 4 !important;
   }
 }
+
+/* Studio header: plan and credits are one billing control. */
+.studio-canvas-route .site-header--workspace .site-header__billing {
+  min-width: 0 !important;
+  min-height: 44px !important;
+  padding: 0 13px !important;
+  gap: 8px !important;
+  border-color: rgba(251, 191, 36, 0.28) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075) 0%, rgba(251, 191, 36, 0.14) 100%),
+    rgba(14, 12, 18, 0.52) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 0.5px rgba(251, 191, 36, 0.12) !important;
+}
+
+.studio-canvas-route .site-header--workspace .site-header__billing-plan > span:first-child,
+.studio-canvas-route .site-header--workspace .site-header__billing-divider,
+.studio-canvas-route .site-header--workspace .site-header__credits-label {
+  display: none !important;
+}
+
+.studio-canvas-route .site-header--workspace .site-header__billing strong {
+  font-size: 0.82rem !important;
+}
+
+.studio-canvas-route .site-header--workspace .site-header__credits-value svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+@media (max-width: 1180px) {
+  .studio-canvas-route .site-header--workspace .site-header__billing {
+    min-height: 34px !important;
+    max-width: 98px !important;
+    padding: 0 9px !important;
+    gap: 6px !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__billing strong {
+    max-width: 48px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.72rem !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-canvas-route .site-header--workspace .site-header__billing {
+    height: var(--studio-header-control-height) !important;
+    min-height: var(--studio-header-control-height) !important;
+    max-width: 88px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .studio-canvas-route .site-header--workspace .site-header__billing {
+    max-width: 50px !important;
+    min-height: 32px !important;
+    padding-inline: 8px !important;
+  }
+
+  .studio-canvas-route .site-header--workspace .site-header__billing-plan {
+    display: none !important;
+  }
+}

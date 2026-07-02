@@ -38,6 +38,22 @@ describe("PrimarySiteNav", () => {
     expect(screen.queryByRole("link", { name: "Примеры" })).toBeNull();
   });
 
+  it("can hide pricing from the studio tab navigation", () => {
+    renderPrimarySiteNav(
+      <PrimarySiteNav
+        activeItem="studio"
+        onOpenStudio={() => undefined}
+        onOpenStudioSection={() => undefined}
+        showStudioPricingLink={false}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Создать Shorts" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Проекты" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Медиатека" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Тарифы" })).toBeNull();
+  });
+
   it("opens studio directly without expanding the intermediate menu", () => {
     const handleOpenStudioSection = vi.fn();
 

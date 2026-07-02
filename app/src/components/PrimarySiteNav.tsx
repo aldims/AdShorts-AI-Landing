@@ -13,6 +13,7 @@ type Props = {
   onOpenStudioSection?: (section: StudioEntryIntentSection) => void;
   preferStudioSections?: boolean;
   projectsCount?: number;
+  showStudioPricingLink?: boolean;
   studioSectionLabels?: Partial<Record<StudioEntryIntentSection, string>>;
   onStudioBack?: (() => void) | null;
 };
@@ -67,6 +68,7 @@ export function PrimarySiteNav({
   onOpenStudioSection,
   preferStudioSections = false,
   projectsCount = 0,
+  showStudioPricingLink = true,
   studioSectionLabels,
   onStudioBack = null,
 }: Props) {
@@ -108,7 +110,7 @@ export function PrimarySiteNav({
 
     const content = studioTabsContentRef.current;
     const activeStudioNavItem: StudioNavItem =
-      activeItem === "pricing" ? "pricing" : resolvedActiveStudioSection ?? "create";
+      activeItem === "pricing" && showStudioPricingLink ? "pricing" : resolvedActiveStudioSection ?? "create";
     const activeElement = studioTabItemRefs.current[activeStudioNavItem];
 
     if (!content || !activeElement) {
@@ -142,6 +144,7 @@ export function PrimarySiteNav({
     projectsCount,
     resolvedActiveStudioSection,
     shouldRenderStudioSections,
+    showStudioPricingLink,
   ]);
 
   const handleStudioSectionSelect = (section: StudioEntryIntentSection) => {
@@ -216,17 +219,19 @@ export function PrimarySiteNav({
               {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
             </button>
           ))}
-          <Link
-            ref={(element) => {
-              studioTabItemRefs.current.pricing = element;
-            }}
-            className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
-            to={localizePath("/pricing/")}
-            state={{ fromStudio: true }}
-            onClick={() => setIsCompactMenuOpen(false)}
-          >
-            {t(navMessages.pricing)}
-          </Link>
+          {showStudioPricingLink ? (
+            <Link
+              ref={(element) => {
+                studioTabItemRefs.current.pricing = element;
+              }}
+              className={`site-nav__item${activeItem === "pricing" ? " site-nav__item--active" : ""}`}
+              to={localizePath("/pricing/")}
+              state={{ fromStudio: true }}
+              onClick={() => setIsCompactMenuOpen(false)}
+            >
+              {t(navMessages.pricing)}
+            </Link>
+          ) : null}
         </div>
       </nav>
     );

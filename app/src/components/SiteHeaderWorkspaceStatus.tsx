@@ -56,17 +56,13 @@ const workspaceStatusMessages = defineMessages({
     ru: "Бесплатный тариф без даты окончания.",
     en: "Free plan with no expiration date.",
   },
-  openPlan: {
-    ru: "Открыть тариф",
-    en: "Open plan",
+  openPlanAndBalance: {
+    ru: "Открыть тариф и баланс",
+    en: "Open plan and balance",
   },
   plan: {
     ru: "Тариф",
     en: "Plan",
-  },
-  refillBalance: {
-    ru: "Пополнить баланс",
-    en: "Top up balance",
   },
   tariffActive: {
     ru: "Тариф активен.",
@@ -96,19 +92,20 @@ export function SiteHeaderWorkspaceStatus({ isProfileVerified = true, profile = 
   }
 
   return (
-    <>
-      <Link
-        className={`site-header__plan${isExpiringSoon ? " is-expiring-soon" : ""}`}
-        to={localizePath("/pricing/")}
-        aria-label={t(workspaceStatusMessages.openPlan)}
-      >
+    <Link
+      className={`site-header__billing${isExpiringSoon ? " is-expiring-soon" : ""}`}
+      to={localizePath("/pricing/")}
+      aria-label={t(workspaceStatusMessages.openPlanAndBalance)}
+    >
+      <span className="site-header__billing-plan">
         <span>{t(workspaceStatusMessages.plan)}</span>
         <strong>{normalizedPlan}</strong>
         <span className="site-header__plan-tooltip" aria-hidden="true">
           {tooltipText}
         </span>
-      </Link>
-      <Link className="site-header__credits" to={localizePath("/pricing/")} aria-label={t(workspaceStatusMessages.refillBalance)}>
+      </span>
+      <span className="site-header__billing-divider" aria-hidden="true" />
+      <span className="site-header__billing-credits">
         <span className="site-header__credits-label">{t(workspaceStatusMessages.balance)}</span>
         <span className="site-header__credits-value">
           <strong>{normalizeBalance(displayProfile?.balance)}</strong>
@@ -116,7 +113,7 @@ export function SiteHeaderWorkspaceStatus({ isProfileVerified = true, profile = 
             <path d="M13 3v6h6l-8 12v-6H5l8-12z" />
           </svg>
         </span>
-      </Link>
-    </>
+      </span>
+    </Link>
   );
 }
