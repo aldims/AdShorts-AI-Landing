@@ -5588,6 +5588,9 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
           ...segment,
           subtitleType: isVoiceDisabled ? "none" : segment.subtitleType,
           voiceType: null,
+        }, {
+          resetTimelineToEstimatedVoiceover: true,
+          session: draft,
         });
       }
 
@@ -5595,10 +5598,16 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
         return clearWorkspaceSegmentEditorVoiceoverGenerationState({
           ...segment,
           subtitleType: "none",
+        }, {
+          resetTimelineToEstimatedVoiceover: true,
+          session: draft,
         });
       }
 
-      return clearWorkspaceSegmentEditorVoiceoverGenerationState(segment);
+      return clearWorkspaceSegmentEditorVoiceoverGenerationState(segment, {
+        resetTimelineToEstimatedVoiceover: true,
+        session: draft,
+      });
     }),
   };
 };
@@ -5614,15 +5623,14 @@ export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
     segment.index === segmentIndex
       ? doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)
         ? segment
-        : {
+        : clearWorkspaceSegmentEditorVoiceoverGenerationState({
             ...segment,
             ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
-            voiceoverAsset: null,
-            voiceoverLanguage: null,
-            voiceoverTextHash: null,
-            voiceoverVoiceType: null,
             voiceType,
-          }
+          }, {
+            resetTimelineToEstimatedVoiceover: true,
+            session: draft,
+          })
       : segment,
   ),
 });

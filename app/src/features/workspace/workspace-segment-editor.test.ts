@@ -4,6 +4,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../../shared/studio-credit-costs";
 import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
+  applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
@@ -227,6 +228,13 @@ it("applies a voice override only to the selected scene", () => {
   expect(updatedDraft.voiceType).toBe(draft.voiceType);
   expect(updatedDraft.segments[0]).toEqual(
     expect.objectContaining({
+      duration: 1.8,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 1.8,
+      estimatedVoiceoverDurationSeconds: 1.8,
+      manualDurationSeconds: null,
+      startTime: 0,
       voiceType: "Russian_BrightHeroine",
       voiceoverAsset: null,
       voiceoverLanguage: null,
@@ -235,6 +243,44 @@ it("applies a voice override only to the selected scene", () => {
     }),
   );
   expect(updatedDraft.segments[1]).toBe(secondSegment);
+});
+
+it("resets scene duration to pending voiceover estimate after a global voice change", () => {
+  const segment = createProjectVoiceoverSegment({
+    customVideo: {
+      assetId: 4404,
+      durationSeconds: 5.5,
+      fileName: "uploaded-scene.mp4",
+      fileSize: 0,
+      mimeType: "video/mp4",
+      remoteUrl: "/api/workspace/media-assets/4404/playback",
+      source: "upload",
+    },
+    duration: 5.5,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    durationSyncModeUserSelected: false,
+    endTime: 5.5,
+    manualDurationSeconds: 5.5,
+    mediaType: "video",
+    startTime: 0,
+    text: "один два три четыре пять шесть",
+    videoAction: "custom",
+  });
+  const draft = createProjectVoiceoverDraft([segment]);
+
+  const updatedDraft = applyWorkspaceSegmentEditorGlobalVoiceToSegments(draft, "Russian_BrightHeroine");
+
+  expect(updatedDraft.segments[0]).toEqual(expect.objectContaining({
+    duration: 2.04,
+    durationExtensionSourceDurationSeconds: 5.5,
+    durationMode: "auto",
+    durationSyncMode: "voiceover",
+    endTime: 2.04,
+    estimatedVoiceoverDurationSeconds: 2.04,
+    manualDurationSeconds: null,
+    startTime: 0,
+  }));
 });
 
 it("infers the project voice from uniform scene voiceovers when the stored project voice is stale", () => {
