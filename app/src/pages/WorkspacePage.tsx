@@ -1220,10 +1220,16 @@ export const resolveWorkspaceSegmentTimelineVisualDurationDisplay = (options: {
   const slotDurationSeconds = Number.isFinite(options.segmentSlotDurationSeconds)
     ? roundWorkspaceSegmentTimelineSeconds(Math.max(0, options.segmentSlotDurationSeconds))
     : 0;
+  const visualDurationSeconds =
+    !options.isImageDurationSegment &&
+    typeof options.videoVisualDurationSeconds === "number" &&
+    Number.isFinite(options.videoVisualDurationSeconds)
+      ? roundWorkspaceSegmentTimelineSeconds(Math.max(0, options.videoVisualDurationSeconds))
+      : slotDurationSeconds;
 
   return {
-    badgeLabel: formatWorkspaceSegmentEditorDurationBadgeLabel(slotDurationSeconds, options.locale),
-    durationLabel: formatWorkspaceSegmentEditorSegmentDurationLabel(0, slotDurationSeconds, options.locale),
+    badgeLabel: formatWorkspaceSegmentEditorDurationBadgeLabel(visualDurationSeconds, options.locale),
+    durationLabel: formatWorkspaceSegmentEditorSegmentDurationLabel(0, visualDurationSeconds, options.locale),
   };
 };
 

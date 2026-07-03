@@ -4432,7 +4432,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("shows the scene duration in the visual badge when the source video duration differs", () => {
+  it("shows the source video duration in the visual badge when the scene slot is longer", () => {
     const segment = createDraftSegment({
       currentPlaybackUrl: "/api/workspace/media-assets/505/playback",
       currentSourceKind: "upload",
@@ -4460,8 +4460,8 @@ describe("WorkspacePage studio locale defaults", () => {
         videoVisualDurationSeconds: 5,
       }),
     ).toEqual({
-      badgeLabel: "5.9 сек",
-      durationLabel: "5.9 с",
+      badgeLabel: "5 сек",
+      durationLabel: "5 с",
     });
 
     expect(
