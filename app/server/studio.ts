@@ -984,14 +984,23 @@ const studioRussianVoiceIds = new Set([
   "May_24000",
   "Ost_24000",
   "Russian_ReliableMan",
+  "Russian_Mikhail",
   "male-qn-jingying",
 ]);
 const studioRussianVoiceAliases = new Map<string, string>([
+  ["mikhail", "Russian_Mikhail"],
+  ["russian_mikhail", "Russian_Mikhail"],
+  ["михаил", "Russian_Mikhail"],
   ["pon_24000", "Russian_ReliableMan"],
   ["russian_reliableman", "Russian_ReliableMan"],
 ]);
 const studioVoiceModelPaths = new Map<string, string>([
+  ["Nec_24000", "google/gemini-2.5-flash/text-to-speech"],
+  ["Tur_24000", "google/gemini-2.5-flash/text-to-speech"],
+  ["May_24000", "google/gemini-2.5-flash/text-to-speech"],
+  ["Ost_24000", "google/gemini-2.5-flash/text-to-speech"],
   ["Russian_ReliableMan", "minimax/speech-2.8-hd"],
+  ["Russian_Mikhail", "google/gemini-2.5-flash/text-to-speech"],
   ["male-qn-jingying", "google/gemini-2.5-flash/text-to-speech"],
 ]);
 const studioEnglishVoiceIds = new Set([

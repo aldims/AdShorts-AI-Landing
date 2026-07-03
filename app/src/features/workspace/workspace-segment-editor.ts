@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260703-2";
+export const studioVoicePreviewAssetVersion = "20260703-3";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
@@ -639,19 +639,19 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
     {
       id: "Nec_24000",
       label: "Наталья",
-      description: "Базовый женский голос",
+      description: "Женский голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("natalya.wav"),
     },
     {
       id: "Tur_24000",
-      label: "Тарас",
+      label: "Владимир",
       description: "Уверенный мужской голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("taras.wav"),
     },
     {
       id: "May_24000",
-      label: "Марфа",
-      description: "Молодой женский голос",
+      label: "Екатерина",
+      description: "Женский голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("marfa.wav"),
     },
     {
@@ -659,6 +659,12 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       label: "Александра",
       description: "Естественный рекламный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("alexandra.wav"),
+    },
+    {
+      id: "Russian_Mikhail",
+      label: "Михаил",
+      description: "Мужской голос",
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("mikhail.wav"),
     },
     {
       id: "Russian_ReliableMan",
@@ -737,16 +743,17 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   English_ManWithDeepVoice: { label: "Gleb", description: "Deep premium voice" },
   Eric: { description: "Lively male voice with a slight rasp" },
   Liam: { label: "Alexander", description: "Expressive premium voice" },
-  May_24000: { label: "Marfa", description: "Young female voice" },
-  Nec_24000: { label: "Natalia", description: "Basic female voice" },
+  May_24000: { label: "Ekaterina", description: "Female voice" },
+  Nec_24000: { label: "Natalia", description: "Female voice" },
   Ono_Anna: { description: "Light Japanese female tone" },
   Ost_24000: { label: "Alexandra", description: "Natural advertising voice" },
+  Russian_Mikhail: { label: "Mikhail", description: "Male voice" },
   Russian_ReliableMan: { label: "Sergey", description: "Businesslike male voice" },
   Russian_BrightHeroine: { label: "Tim", description: "Bright premium voice" },
   Ryan: { description: "Energetic male voice with a strong rhythm" },
   Serena: { description: "Warm, soft female voice" },
   Sohee: { description: "Warm Korean female voice with emotion" },
-  Tur_24000: { label: "Taras", description: "Confident male voice" },
+  Tur_24000: { label: "Vladimir", description: "Confident male voice" },
   Uncle_Fu: { description: "Low, mature male timbre" },
   Vivian: { description: "Bright young female voice with character" },
   "male-qn-jingying": { label: "Alexey", description: "Expressive male voice" },
