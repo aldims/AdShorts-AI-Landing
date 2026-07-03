@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "./workspace-utils";
 
@@ -60,6 +61,15 @@ describe("workspace voice timeline edit display", () => {
         isGeneratedVoiceoverEdited: false,
         isGlobalVoiceEdited: true,
         isVoiceSettingsEdited: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("shows the subtitle timeline edited badge for global subtitle changes", () => {
+    expect(
+      shouldDisplayWorkspaceSegmentSubtitleCellEdited({
+        isGlobalSubtitleEdited: true,
+        isSubtitleSettingsEdited: false,
       }),
     ).toBe(true);
   });

@@ -254,6 +254,11 @@ export const shouldDisplayWorkspaceSegmentVoiceCellEdited = (options: {
   options.isGeneratedVoiceoverEdited ||
   options.isVoiceSettingsEdited;
 
+export const shouldDisplayWorkspaceSegmentSubtitleCellEdited = (options: {
+  isGlobalSubtitleEdited: boolean;
+  isSubtitleSettingsEdited: boolean;
+}) => options.isGlobalSubtitleEdited || options.isSubtitleSettingsEdited;
+
 export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   canForwardText: boolean;
   canForwardVoice: boolean;

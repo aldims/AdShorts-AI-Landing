@@ -805,6 +805,7 @@ import {
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "../features/workspace/workspace-utils";
 import type {
@@ -1061,6 +1062,7 @@ export {
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "../features/workspace/workspace-utils";
 export {
@@ -7363,6 +7365,42 @@ export function WorkspacePage({
       segmentEditorChangeDisplayBaseSession &&
       getWorkspaceSegmentEditorProjectVoiceType(segmentEditorDraft) !==
         getWorkspaceSegmentEditorProjectVoiceType(segmentEditorChangeDisplayBaseSession),
+  );
+  const isSegmentTimelineGlobalSubtitleEdited = Boolean(
+    !shouldSuppressSegmentEditorEmptyDraftChanges &&
+      segmentEditorDraft &&
+      segmentEditorChangeDisplayBaseSession &&
+      (() => {
+        const draftVoiceEnabled = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.voiceType) !== "none";
+        const baselineVoiceEnabled =
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorChangeDisplayBaseSession.voiceType) !== "none";
+        const draftSubtitleEnabled =
+          draftVoiceEnabled && normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.subtitleType) !== "none";
+        const baselineSubtitleEnabled =
+          baselineVoiceEnabled &&
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorChangeDisplayBaseSession.subtitleType) !== "none";
+
+        if (draftSubtitleEnabled !== baselineSubtitleEnabled) {
+          return true;
+        }
+
+        if (!draftSubtitleEnabled) {
+          return false;
+        }
+
+        const draftSubtitleStyleId =
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.subtitleStyle) ?? fallbackStudioSubtitleStyleOption.id;
+        const baselineSubtitleStyleId =
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorChangeDisplayBaseSession.subtitleStyle) ??
+          fallbackStudioSubtitleStyleOption.id;
+        const draftSubtitleColorId =
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.subtitleColor) ?? fallbackStudioSubtitleColorOption.id;
+        const baselineSubtitleColorId =
+          normalizeWorkspaceSegmentEditorSetting(segmentEditorChangeDisplayBaseSession.subtitleColor) ??
+          fallbackStudioSubtitleColorOption.id;
+
+        return draftSubtitleStyleId !== baselineSubtitleStyleId || draftSubtitleColorId !== baselineSubtitleColorId;
+      })(),
   );
   const uniformSegmentEditorVoiceOverrideId = segmentEditorDraft
     ? inferWorkspaceSegmentEditorUniformVoiceType(segmentEditorDraft)
@@ -29571,6 +29609,10 @@ export function WorkspacePage({
               const subtitleHistoryKey = getWorkspaceSegmentTimelineHistoryKey("subtitle", segment.index);
               const canForwardSubtitle = Boolean(segmentTimelineRedoSnapshots[subtitleHistoryKey]);
               const subtitleDisplay = getSegmentTimelineSubtitleDisplayWithPendingVoice(segment);
+              const isSubtitleCellEdited = shouldDisplayWorkspaceSegmentSubtitleCellEdited({
+                isGlobalSubtitleEdited: isSegmentTimelineGlobalSubtitleEdited,
+                isSubtitleSettingsEdited: span.isEdited,
+              });
 
               return (
                 <div
@@ -29585,9 +29627,9 @@ export function WorkspacePage({
                     }${
                       isSegmentEditorTimelineSpanActiveForRender(span) ? " is-active" : ""
                     }${segmentTimelineTextMenuSegmentIndex === segment.index ? " is-menu-open" : ""}${
-                      span.isEdited ? " is-edited" : ""
+                      isSubtitleCellEdited ? " is-edited" : ""
                     }${span.isEmpty ? " is-empty" : ""}`}
-                    data-edited-label={span.isEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
+                    data-edited-label={isSubtitleCellEdited ? workspaceText(locale, "Изменен", "Changed") : undefined}
                     type="button"
                     aria-label={workspaceText(locale, `Настроить субтитры сцены ${index + 1}`, `Configure scene ${index + 1} subtitles`)}
                     title={subtitleDisplay.title}
