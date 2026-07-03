@@ -401,7 +401,7 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   if (segment.durationMode === "manual" && manualDuration !== null) {
     if (visualKind === "video" && durationSyncMode === "visual") {
       return Math.max(
-        WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS,
+        minimumDuration,
         manualDuration,
       );
     }

@@ -1281,11 +1281,13 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
   }
 
   const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const shouldPreserveUserSelectedVisualDuration =
     durationSyncMode === "visual" &&
     segment.durationSyncModeUserSelected === true &&
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
-    normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
+    manualDurationSeconds !== null &&
+    manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= nextDurationSeconds;
   const speechStartTime = roundWorkspaceSegmentTimelineSeconds(Math.max(0, options.speechStartTime));
   const speechEndTime = roundWorkspaceSegmentTimelineSeconds(speechStartTime + nextDurationSeconds);
   const nextVoiceoverAsset =

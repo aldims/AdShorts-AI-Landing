@@ -227,6 +227,48 @@ describe("workspace segment editor timeline", () => {
     expect(resolveWorkspaceSegmentDuration(segment, { voiceEnabled: true })).toBeCloseTo(4.25, 6);
   });
 
+  it("does not allow a manual video visual slot shorter than voiceover", () => {
+    const firstSegment = createSegment({
+      duration: 2.64,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 2.64,
+      manualDurationSeconds: 2.64,
+      mediaType: "video",
+      speechDuration: 3.06,
+      speechEndTime: 3.06,
+      speechStartTime: 0,
+      text: "Gleb voice is longer than the old Boris slot",
+    });
+    const secondSegment = createSegment({
+      duration: 2,
+      endTime: 4.64,
+      mediaType: "photo",
+      startTime: 2.64,
+      text: "next scene",
+    });
+
+    expect(resolveWorkspaceSegmentDuration(firstSegment, {
+      visualKind: "video",
+      voiceEnabled: true,
+    })).toBeCloseTo(3.06, 6);
+
+    const rebuilt = rebuildWorkspaceSegmentEditorTimeline([firstSegment, secondSegment], {
+      visualKind: (segment) => (segment === firstSegment ? "video" : "image"),
+      voiceEnabled: true,
+    });
+
+    expect(rebuilt[0]).toEqual(expect.objectContaining({
+      duration: 3.06,
+      endTime: 3.06,
+      startTime: 0,
+    }));
+    expect(rebuilt[1]).toEqual(expect.objectContaining({
+      startTime: 3.06,
+    }));
+  });
+
   it("uses the caller-provided minimum as the initial still scene duration", () => {
     const segment = createSegment({
       duration: 6.9,
