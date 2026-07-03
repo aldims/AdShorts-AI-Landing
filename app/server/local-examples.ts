@@ -731,9 +731,17 @@ export const deleteLocalExample = async (user: LocalExamplesUser, exampleId: str
   await writeLocalExamplesIndex(index);
 
   const ownerDir = buildLocalExamplesOwnerDir(ownerKey);
-  const absolutePath = join(ownerDir, item.mediaFileName);
-  await rm(absolutePath, { force: true }).catch(() => undefined);
-  if (item.posterFileName) {
+  const isMediaFileUsedElsewhere = index.items.some((entry) => entry.mediaFileName === item.mediaFileName);
+  const isPosterFileUsedElsewhere = item.posterFileName
+    ? index.items.some((entry) => entry.posterFileName === item.posterFileName)
+    : false;
+
+  if (!isMediaFileUsedElsewhere) {
+    const absolutePath = join(ownerDir, item.mediaFileName);
+    await rm(absolutePath, { force: true }).catch(() => undefined);
+  }
+
+  if (!isPosterFileUsedElsewhere && item.posterFileName) {
     await rm(join(ownerDir, item.posterFileName), { force: true }).catch(() => undefined);
   }
 
