@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260703-1";
+export const studioVoicePreviewAssetVersion = "20260703-2";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;

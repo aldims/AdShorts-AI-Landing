@@ -992,6 +992,7 @@ const studioRussianVoiceAliases = new Map<string, string>([
 ]);
 const studioVoiceModelPaths = new Map<string, string>([
   ["Russian_ReliableMan", "minimax/speech-2.8-hd"],
+  ["male-qn-jingying", "google/gemini-2.5-flash/text-to-speech"],
 ]);
 const studioEnglishVoiceIds = new Set([
   "Aiden",
