@@ -19,6 +19,7 @@ const MAX_PROJECT_FETCH_LIMIT = 200;
 const ADSFLOW_ADMIN_VIDEOS_MAX_PAGE_SIZE = 100;
 const PROJECTS_CACHE_TTL_MS = 15_000;
 const workspaceProjectsCache = new Map();
+const workspaceProjectsCacheEpochs = new Map();
 const workspaceProjectsInFlight = new Map();
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizePrompt = (value) => normalizeText(value);
@@ -786,6 +787,7 @@ export async function invalidateWorkspaceProjectsCache(user) {
     for (const key of new Set([cacheKey, externalUserId])) {
         workspaceProjectsCache.delete(key);
         workspaceProjectsInFlight.delete(key);
+        workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
     }
 }
 export function invalidateWorkspaceProjectsCacheByIdentityFragments(fragments) {
@@ -797,11 +799,13 @@ export function invalidateWorkspaceProjectsCacheByIdentityFragments(fragments) {
     for (const key of workspaceProjectsCache.keys()) {
         if (shouldDelete(key)) {
             workspaceProjectsCache.delete(key);
+            workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
         }
     }
     for (const key of workspaceProjectsInFlight.keys()) {
         if (shouldDelete(key)) {
             workspaceProjectsInFlight.delete(key);
+            workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
         }
     }
 }
@@ -815,12 +819,15 @@ export async function getWorkspaceProjects(user) {
     if (inFlightRequest) {
         return cloneWorkspaceProjects(await inFlightRequest);
     }
+    const cacheEpoch = workspaceProjectsCacheEpochs.get(cacheKey) ?? 0;
     const request = loadWorkspaceProjects(user, externalUserId)
         .then((projects) => {
-        workspaceProjectsCache.set(cacheKey, {
-            expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
-            projects: cloneWorkspaceProjects(projects),
-        });
+        if ((workspaceProjectsCacheEpochs.get(cacheKey) ?? 0) === cacheEpoch) {
+            workspaceProjectsCache.set(cacheKey, {
+                expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
+                projects: cloneWorkspaceProjects(projects),
+            });
+        }
         return projects;
     })
         .finally(() => {

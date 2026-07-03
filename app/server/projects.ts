@@ -155,6 +155,7 @@ const MAX_PROJECT_FETCH_LIMIT = 200;
 const ADSFLOW_ADMIN_VIDEOS_MAX_PAGE_SIZE = 100;
 const PROJECTS_CACHE_TTL_MS = 15_000;
 const workspaceProjectsCache = new Map<string, { expiresAt: number; projects: WorkspaceProject[] }>();
+const workspaceProjectsCacheEpochs = new Map<string, number>();
 const workspaceProjectsInFlight = new Map<string, Promise<WorkspaceProject[]>>();
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
@@ -1096,6 +1097,7 @@ export async function invalidateWorkspaceProjectsCache(user: WorkspaceUser) {
   for (const key of new Set([cacheKey, externalUserId])) {
     workspaceProjectsCache.delete(key);
     workspaceProjectsInFlight.delete(key);
+    workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
   }
 }
 
@@ -1111,11 +1113,13 @@ export function invalidateWorkspaceProjectsCacheByIdentityFragments(fragments: r
   for (const key of workspaceProjectsCache.keys()) {
     if (shouldDelete(key)) {
       workspaceProjectsCache.delete(key);
+      workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
     }
   }
   for (const key of workspaceProjectsInFlight.keys()) {
     if (shouldDelete(key)) {
       workspaceProjectsInFlight.delete(key);
+      workspaceProjectsCacheEpochs.set(key, (workspaceProjectsCacheEpochs.get(key) ?? 0) + 1);
     }
   }
 }
@@ -1133,12 +1137,15 @@ export async function getWorkspaceProjects(user: WorkspaceUser): Promise<Workspa
     return cloneWorkspaceProjects(await inFlightRequest);
   }
 
+  const cacheEpoch = workspaceProjectsCacheEpochs.get(cacheKey) ?? 0;
   const request = loadWorkspaceProjects(user, externalUserId)
     .then((projects) => {
-      workspaceProjectsCache.set(cacheKey, {
-        expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
-        projects: cloneWorkspaceProjects(projects),
-      });
+      if ((workspaceProjectsCacheEpochs.get(cacheKey) ?? 0) === cacheEpoch) {
+        workspaceProjectsCache.set(cacheKey, {
+          expiresAt: Date.now() + PROJECTS_CACHE_TTL_MS,
+          projects: cloneWorkspaceProjects(projects),
+        });
+      }
       return projects;
     })
     .finally(() => {

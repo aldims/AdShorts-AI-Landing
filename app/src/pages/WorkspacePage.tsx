@@ -428,8 +428,11 @@ import {
   buildStudioGenerationFromProject,
   doesStudioGenerationMatchWorkspaceProject,
   doesWorkspaceProjectMatch,
+  filterWorkspaceProjectsByDeletionSnapshots,
   formatProjectVersionsLabel,
   getStudioStatusLabel,
+  mergeWorkspaceProjectDeletionSnapshots,
+  removeWorkspaceProjectDeletionSnapshots,
 } from "../features/workspace/workspace-project-cards";
 import {
   WorkspaceModalVideoPlayer,
@@ -2129,6 +2132,7 @@ export function WorkspacePage({
   const previewModalVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewModalPendingPlaybackRef = useRef<{ immediate?: boolean; resetToStart?: boolean } | null>(null);
   const pendingProjectDeleteIdsRef = useRef<Set<string>>(new Set());
+  const locallyDeletedProjectsRef = useRef<WorkspaceProject[]>([]);
   const contentPlanPanelRef = useRef<HTMLElement | null>(null);
   const promptInnerRef = useRef<HTMLDivElement | null>(null);
   const promptFooterRef = useRef<HTMLDivElement | null>(null);
@@ -3761,6 +3765,7 @@ export function WorkspacePage({
     setIsSegmentEditorResetConfirmOpen(false);
     setIsProjectDeleteSubmitting(false);
     pendingProjectDeleteIdsRef.current.clear();
+    locallyDeletedProjectsRef.current = [];
     if (isSessionEmailChange) {
       segmentEditorConsumedSourceResetProjectIdsRef.current.clear();
     }
@@ -4784,6 +4789,39 @@ export function WorkspacePage({
     return normalized ? failedStudioVideoUrls.includes(normalized) : false;
   };
 
+  const rememberLocallyDeletedProjects = (targetProjects: WorkspaceProject[]) => {
+    if (targetProjects.length === 0) {
+      return;
+    }
+
+    locallyDeletedProjectsRef.current = mergeWorkspaceProjectDeletionSnapshots(
+      locallyDeletedProjectsRef.current,
+      targetProjects,
+    );
+  };
+
+  const forgetLocallyDeletedProjects = (targetProjects: WorkspaceProject[]) => {
+    if (targetProjects.length === 0 || locallyDeletedProjectsRef.current.length === 0) {
+      return;
+    }
+
+    locallyDeletedProjectsRef.current = removeWorkspaceProjectDeletionSnapshots(
+      locallyDeletedProjectsRef.current,
+      targetProjects,
+    );
+  };
+
+  const filterLocallyDeletedProjects = (nextProjects: WorkspaceProject[]) => {
+    if (locallyDeletedProjectsRef.current.length === 0) {
+      return nextProjects;
+    }
+
+    return filterWorkspaceProjectsByDeletionSnapshots(
+      nextProjects,
+      locallyDeletedProjectsRef.current,
+    );
+  };
+
   const markStudioVideoAsFailed = (value: string | null | undefined) => {
     const normalized = String(value ?? "").trim();
     if (!normalized) {
@@ -4816,7 +4854,7 @@ export function WorkspacePage({
           throw new Error(payload?.error ?? "Failed to load projects.");
         }
 
-        setProjects(payload.data.projects);
+        setProjects(filterLocallyDeletedProjects(payload.data.projects));
         setHasLoadedProjects(true);
       } catch (error) {
         if (controller.signal.aborted) {
@@ -18980,6 +19018,7 @@ export function WorkspacePage({
 
     setProjectDeleteError(null);
     setIsProjectDeleteSubmitting(true);
+    rememberLocallyDeletedProjects(projectsToDelete);
     projectsToDelete.forEach((targetProject) => {
       pendingProjectDeleteIdsRef.current.add(targetProject.id);
       removeProjectFromLocalState(targetProject);
@@ -19013,6 +19052,7 @@ export function WorkspacePage({
       );
 
       if (failedResults.length > 0) {
+        forgetLocallyDeletedProjects(failedResults.map((result) => result.project));
         failedResults.forEach((result) => restoreProjectToLocalState(result.project));
         setProjectPendingDelete(failedResults[0]?.project ?? null);
         setProjectPendingDeleteProjects(failedResults.map((result) => result.project));

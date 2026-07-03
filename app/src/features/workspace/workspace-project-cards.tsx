@@ -478,6 +478,39 @@ export const doesWorkspaceProjectMatch = (
   return false;
 };
 
+export const mergeWorkspaceProjectDeletionSnapshots = <TProject extends Pick<WorkspaceProject, "id" | "adId" | "jobId">>(
+  currentSnapshots: TProject[],
+  targetProjects: TProject[],
+) =>
+  targetProjects.reduce((snapshots, targetProject) => {
+    if (snapshots.some((snapshot) => doesWorkspaceProjectMatch(snapshot, targetProject))) {
+      return snapshots;
+    }
+
+    return [...snapshots, targetProject];
+  }, currentSnapshots);
+
+export const removeWorkspaceProjectDeletionSnapshots = <TProject extends Pick<WorkspaceProject, "id" | "adId" | "jobId">>(
+  currentSnapshots: TProject[],
+  targetProjects: TProject[],
+) =>
+  currentSnapshots.filter(
+    (snapshot) => !targetProjects.some((targetProject) => doesWorkspaceProjectMatch(snapshot, targetProject)),
+  );
+
+export const filterWorkspaceProjectsByDeletionSnapshots = <TProject extends Pick<WorkspaceProject, "id" | "adId" | "jobId">>(
+  projects: TProject[],
+  deletionSnapshots: ReadonlyArray<Pick<WorkspaceProject, "id" | "adId" | "jobId">>,
+) => {
+  if (deletionSnapshots.length === 0) {
+    return projects;
+  }
+
+  return projects.filter(
+    (project) => !deletionSnapshots.some((snapshot) => doesWorkspaceProjectMatch(project, snapshot)),
+  );
+};
+
 export const doesStudioGenerationMatchWorkspaceProject = (
   generation: Pick<WorkspaceProjectStudioGeneration, "adId" | "id">,
   project: Pick<WorkspaceProject, "id" | "adId" | "jobId">,
