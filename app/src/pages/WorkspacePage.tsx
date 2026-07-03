@@ -1319,6 +1319,10 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
   };
 };
 
+export const shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft = (
+  sourceKind: "project" | "scene" | "segment" | null | undefined,
+) => sourceKind === "scene" || sourceKind === "segment";
+
 const WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID = -1;
 const WORKSPACE_SEGMENT_EDITOR_DELETE_TIMELINE_REBUILD_OPTIONS = {
   preserveExistingStillDurations: false,
@@ -24477,7 +24481,8 @@ export function WorkspacePage({
         });
         return;
       }
-      const shouldSyncMeasuredVoiceoverDurationToDraft = voiceoverAudioPreviewSource.sourceKind === "scene";
+      const shouldSyncMeasuredVoiceoverDurationToDraft =
+        shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft(voiceoverAudioPreviewSource.sourceKind);
       writeSegmentEditorVoiceDurationDebugTrace("measure.start", {
         isVoiceAudioStale,
         segmentIndex: segment.index,
@@ -24509,17 +24514,6 @@ export function WorkspacePage({
         }
 
         const speechStartTime = getWorkspaceSegmentEditorDisplayStartTime(currentDraftSegment);
-        const existingVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(currentDraftSegment);
-        const existingSpeechDuration = normalizeWorkspaceSegmentManualDurationSeconds(currentDraftSegment.speechDuration);
-        const trustedExistingVoiceoverDuration =
-          existingVoiceSourceDuration ?? (currentDraftSegment.speechDurationSource === "audio" ? existingSpeechDuration : null);
-        if (
-          trustedExistingVoiceoverDuration !== null &&
-          Math.abs(trustedExistingVoiceoverDuration - nextDurationSeconds) > 0.04
-        ) {
-          return;
-        }
-
         const speechEndTime = roundWorkspaceSegmentTimelineSeconds(speechStartTime + nextDurationSeconds);
         const currentSpeechDuration = normalizeWorkspaceSegmentManualDurationSeconds(currentDraftSegment.speechDuration);
         const currentSpeechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(currentDraftSegment.speechStartTime);
@@ -24578,6 +24572,9 @@ export function WorkspacePage({
           segmentIndex: segment.index,
           sourceUrl,
         });
+        if (shouldSyncMeasuredVoiceoverDurationToDraft) {
+          syncMeasuredVoiceoverDurationToDraft(currentEntry.durationSeconds);
+        }
         return;
       }
 

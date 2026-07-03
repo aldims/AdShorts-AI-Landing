@@ -150,6 +150,7 @@ import {
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
+  shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
@@ -206,6 +207,13 @@ describe("WorkspacePage segment timeline drag drop", () => {
 
   it("does not commit a drop when dragging never started", () => {
     expect(resolveWorkspaceSegmentThumbFinalInsertIndex(false, 4, 3)).toBeNull();
+  });
+
+  it("syncs measured scene and segment voiceover durations back to the draft", () => {
+    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("scene")).toBe(true);
+    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("segment")).toBe(true);
+    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("project")).toBe(false);
+    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft(null)).toBe(false);
   });
 });
 
@@ -6055,7 +6063,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldPreserveWorkspaceSegmentManualVisualDurationForVoiceover(segment, 12.1)).toBe(false);
   });
 
-  it("keeps a user-selected photo duration when measured scene voiceover is longer", () => {
+  it("resets a shorter user-selected photo duration when measured scene voiceover is longer", () => {
     const voiceText = "Длинная озвучка для короткой фото сцены";
     const segment = createDraftSegment({
       duration: 4,
@@ -6093,11 +6101,11 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(measured).toEqual(expect.objectContaining({
       duration: 4,
-      durationMode: "manual",
-      durationSyncMode: "visual",
-      durationSyncModeUserSelected: true,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
       endTime: 4,
-      manualDurationSeconds: 4,
+      manualDurationSeconds: null,
       speechDuration: 6.1,
       speechDurationSource: "audio",
       speechEndTime: 6.1,
