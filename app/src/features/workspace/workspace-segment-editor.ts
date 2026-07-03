@@ -5273,23 +5273,7 @@ export const getWorkspaceSegmentEstimatedVoiceoverDurationSeconds = (
 export const getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null,
-) => {
-  if (!doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) && !getWorkspaceSegmentEffectiveVoiceEnabled(segment, session)) {
-    return null;
-  }
-
-  const normalizedText = normalizeWorkspaceSegmentBulkSubtitleText(segment.text);
-  if (!normalizedText) {
-    return null;
-  }
-
-  const wordCount = splitWorkspaceSegmentBulkSubtitleWords(normalizedText).length;
-  const inlinePauseCount = normalizedText.match(/[,;:]/g)?.length ?? 0;
-  const sentencePauseCount = normalizedText.match(/[.!?…]+/g)?.length ?? 0;
-  return roundWorkspaceSegmentTimelineSeconds(
-    Math.max(1.8, wordCount * 0.3 + inlinePauseCount * 0.12 + sentencePauseCount * 0.18),
-  );
-};
+) => getWorkspaceSegmentEstimatedVoiceoverDurationSeconds(segment, session);
 
 export const getWorkspaceSegmentTimelineVoiceoverDurationInfo = (
   segment: WorkspaceSegmentEditorDraftSegment,

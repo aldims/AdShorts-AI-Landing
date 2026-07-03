@@ -11,6 +11,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
+  getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
   getStudioSceneSoundAssetPreviewUrl,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   getWorkspaceSegmentPreviewKind,
@@ -5001,6 +5002,29 @@ describe("workspace segment editor project voiceover timeline", () => {
       durationSeconds: 2.04,
       source: "estimated",
     });
+  });
+
+  it("uses the same estimated voiceover duration for timeline and label", () => {
+    const segment = createProjectVoiceoverSegment({
+      estimatedVoiceoverDurationSeconds: null,
+      estimatedVoiceoverTextHash: null,
+      speechDuration: null,
+      speechEndTime: null,
+      speechStartTime: null,
+      text: "один два три четыре пять шесть",
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+    const voiceoverDurationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, session);
+    const labelDuration = getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds(segment, session);
+
+    expect(voiceoverDurationInfo).toEqual({
+      durationSeconds: 2.04,
+      source: "estimated",
+    });
+    expect(labelDuration).toBe(voiceoverDurationInfo?.durationSeconds);
   });
 
   it("preserves a user-selected photo duration when pending voiceover text is shorter", () => {
