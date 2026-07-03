@@ -236,7 +236,7 @@ const exampleItems: ExampleItem[] = [
       musicType: "business",
       subtitleColorId: "yellow",
       subtitleStyleId: "impact",
-      voiceId: "Pon_24000",
+      voiceId: "Russian_ReliableMan",
     }),
     promptHint: "Продажа через боль, решение и короткий CTA.",
     seedPrompt:

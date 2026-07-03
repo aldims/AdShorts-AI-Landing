@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260504-1";
+export const studioVoicePreviewAssetVersion = "20260703-1";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
@@ -661,7 +661,7 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       previewSampleUrl: getStudioVoicePreviewSampleUrl("alexandra.wav"),
     },
     {
-      id: "Pon_24000",
+      id: "Russian_ReliableMan",
       label: "Сергей",
       description: "Деловой мужской голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("sergey.wav"),
@@ -741,7 +741,7 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   Nec_24000: { label: "Natalia", description: "Basic female voice" },
   Ono_Anna: { description: "Light Japanese female tone" },
   Ost_24000: { label: "Alexandra", description: "Natural advertising voice" },
-  Pon_24000: { label: "Sergey", description: "Businesslike male voice" },
+  Russian_ReliableMan: { label: "Sergey", description: "Businesslike male voice" },
   Russian_BrightHeroine: { label: "Tim", description: "Bright premium voice" },
   Ryan: { description: "Energetic male voice with a strong rhythm" },
   Serena: { description: "Warm, soft female voice" },

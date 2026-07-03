@@ -55,7 +55,7 @@ export const STUDIO_VOICE_PREVIEW_SAMPLES: Record<string, StudioVoicePreviewSamp
     fileName: "alexandra.wav",
     language: "ru",
   },
-  Pon_24000: {
+  Russian_ReliableMan: {
     fileName: "sergey.wav",
     language: "ru",
   },
@@ -140,7 +140,9 @@ const voiceAliases = new Map<string, keyof typeof STUDIO_VOICE_PREVIEW_SAMPLES>(
   ["tur_24000", "Tur_24000"],
   ["may_24000", "May_24000"],
   ["ost_24000", "Ost_24000"],
-  ["pon_24000", "Pon_24000"],
+  ["pon_24000", "Russian_ReliableMan"],
+  ["russian_reliableman", "Russian_ReliableMan"],
+  ["russian reliableman", "Russian_ReliableMan"],
   ["male_qn_jingying", "male-qn-jingying"],
   ["aleksey", "male-qn-jingying"],
   ["alexey", "male-qn-jingying"],

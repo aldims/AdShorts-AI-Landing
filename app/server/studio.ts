@@ -983,8 +983,15 @@ const studioRussianVoiceIds = new Set([
   "Tur_24000",
   "May_24000",
   "Ost_24000",
-  "Pon_24000",
+  "Russian_ReliableMan",
   "male-qn-jingying",
+]);
+const studioRussianVoiceAliases = new Map<string, string>([
+  ["pon_24000", "Russian_ReliableMan"],
+  ["russian_reliableman", "Russian_ReliableMan"],
+]);
+const studioVoiceModelPaths = new Map<string, string>([
+  ["Russian_ReliableMan", "minimax/speech-2.8-hd"],
 ]);
 const studioEnglishVoiceIds = new Set([
   "Aiden",
@@ -1152,6 +1159,11 @@ const getCanonicalStudioVoiceId = (voiceId: string | null | undefined) => {
   }
 
   const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  const aliasVoiceId = studioRussianVoiceAliases.get(normalizedVoiceKey);
+  if (aliasVoiceId) {
+    return aliasVoiceId;
+  }
+
   for (const candidateVoiceId of [...studioRussianVoiceIds, ...studioEnglishVoiceIds]) {
     if (candidateVoiceId.toLowerCase() === normalizedVoiceKey) {
       return candidateVoiceId;
@@ -1332,6 +1344,15 @@ export const normalizeStudioVoiceIdForLanguage = (
   const canonicalVoiceId = getCanonicalStudioVoiceId(normalizedVoiceId);
   const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
   return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
+};
+
+const getStudioVoiceModelPath = (voiceId: string | null | undefined) => {
+  const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+  if (!canonicalVoiceId) {
+    return undefined;
+  }
+
+  return studioVoiceModelPaths.get(canonicalVoiceId);
 };
 
 export const resolveStudioSegmentEditorAdsflowVoiceType = ({
@@ -6080,6 +6101,7 @@ export async function createStudioGenerationJob(
               });
               const segmentVoiceTypeForPayload =
                 segment.voiceType === null || segment.voiceType === undefined ? undefined : adsflowVoiceType;
+              const segmentVoiceModelPath = getStudioVoiceModelPath(adsflowVoiceType);
               const segmentAssetId =
                 attachesCustomVisual && segment.customVideoAssetId
                   ? segment.customVideoAssetId
@@ -6146,6 +6168,7 @@ export async function createStudioGenerationJob(
                 voice_source_start_time: voiceSourceStartTime,
                 effective_voice_type: adsflowVoiceType,
                 voice_type: segmentVoiceTypeForPayload,
+                ...(segmentVoiceModelPath ? { model_path: segmentVoiceModelPath } : {}),
               };
             }),
           ),
@@ -7630,6 +7653,7 @@ export async function createStudioSegmentVoiceoverJob(
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
   const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+  const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
 
   if (normalizedSegmentIndex === null) {
     throw new Error("Segment index is required for segment voiceover generation.");
@@ -7655,6 +7679,7 @@ export async function createStudioSegmentVoiceoverJob(
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,
       voice_type: normalizedVoiceType,
+      ...(studioVoiceModelPath ? { model_path: studioVoiceModelPath } : {}),
     }, {
       retryDelaysMs: [],
       timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
@@ -7704,6 +7729,7 @@ export async function createStudioProjectVoiceoverJob(
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
   const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+  const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
   const segments = (options?.segments ?? [])
     .map((segment, index) => {
       const segmentText = normalizeGenerationText(segment.text);
@@ -7753,6 +7779,7 @@ export async function createStudioProjectVoiceoverJob(
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,
       voice_type: normalizedVoiceType,
+      ...(studioVoiceModelPath ? { model_path: studioVoiceModelPath } : {}),
     }, {
       retryDelaysMs: [],
       timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
@@ -8346,6 +8373,7 @@ export async function createStudioBatchVoiceoverJob(
           text: segment.text,
         })),
         voice_type: group.voiceType,
+        ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
       })),
       project_id: normalizedProjectId ?? undefined,
       user_email: user.email ?? undefined,
@@ -8408,6 +8436,7 @@ export async function createStudioBatchVoiceoverJob(
           user_email: user.email ?? undefined,
           user_name: user.name ?? undefined,
           voice_type: group.voiceType,
+          ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
         }, {
           retryDelaysMs: [],
           timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
@@ -8442,6 +8471,7 @@ export async function createStudioBatchVoiceoverJob(
             user_email: user.email ?? undefined,
             user_name: user.name ?? undefined,
             voice_type: group.voiceType,
+            ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
           }, {
             retryDelaysMs: [],
             timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
