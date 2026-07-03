@@ -805,6 +805,7 @@ import {
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "../features/workspace/workspace-utils";
 import type {
   StudioBrandLogoFile,
@@ -1060,6 +1061,7 @@ export {
   resolveWorkspaceSegmentThumbFinalInsertIndex,
   resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "../features/workspace/workspace-utils";
 export {
   buildWorkspaceReferenceAiPrompt,
@@ -29432,7 +29434,11 @@ export function WorkspacePage({
                 isVoiceHistoryDisabled: usesEmbeddedTalkingPhotoAudio,
                 isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
               });
-              const isVoiceCellEdited = isDisplayedGeneratedVoiceoverEdited || isDisplayedVoiceSettingsEdited;
+              const isVoiceCellEdited = shouldDisplayWorkspaceSegmentVoiceCellEdited({
+                isGeneratedVoiceoverEdited: isDisplayedGeneratedVoiceoverEdited,
+                isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
+                isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
+              });
 
               return (
                 <div

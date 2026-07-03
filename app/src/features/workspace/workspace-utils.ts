@@ -245,6 +245,15 @@ export const shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited = (options: {
   return hasSceneScopedVoiceChange && (options.isGeneratedVoiceoverEdited || options.isUnrenderedSceneVoiceoverAsset);
 };
 
+export const shouldDisplayWorkspaceSegmentVoiceCellEdited = (options: {
+  isGeneratedVoiceoverEdited: boolean;
+  isGlobalVoiceEdited: boolean;
+  isVoiceSettingsEdited: boolean;
+}) =>
+  options.isGlobalVoiceEdited ||
+  options.isGeneratedVoiceoverEdited ||
+  options.isVoiceSettingsEdited;
+
 export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   canForwardText: boolean;
   canForwardVoice: boolean;

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited } from "./workspace-utils";
+import {
+  shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
+  shouldDisplayWorkspaceSegmentVoiceCellEdited,
+} from "./workspace-utils";
 
 describe("workspace voice timeline edit display", () => {
   it("does not mark every inherited scene voice as edited after a global voice change", () => {
@@ -49,5 +52,15 @@ describe("workspace voice timeline edit display", () => {
         isUnrenderedSceneVoiceoverAsset: true,
       }),
     ).toBe(false);
+  });
+
+  it("shows the voice timeline edited badge for global voice changes", () => {
+    expect(
+      shouldDisplayWorkspaceSegmentVoiceCellEdited({
+        isGeneratedVoiceoverEdited: false,
+        isGlobalVoiceEdited: true,
+        isVoiceSettingsEdited: false,
+      }),
+    ).toBe(true);
   });
 });
