@@ -32879,9 +32879,10 @@ export function WorkspacePage({
         type="button"
         role="tab"
         aria-selected={isScenesCreateMode}
+        disabled
         onClick={handleStudioCreateScenesModeSelect}
       >
-        {workspaceText(locale, "По сценам", "By scenes")}
+        {workspaceText(locale, "По сценам(Скоро)", "By scenes")}
       </button>
     </div>
   ) : null;

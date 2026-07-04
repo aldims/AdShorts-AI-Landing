@@ -26,6 +26,9 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
   playbackUrl,
   projectPreparingTitle,
 }: WorkspaceStudioInlinePreviewActionsOptions) => {
+  const improveSoonLabel = workspaceText(locale, "✏️ Улучшить (Скоро)", "✏️ Improve (Soon)");
+  const improveSoonMobileLabel = workspaceText(locale, "✏️ (Скоро)", "✏️ (Soon)");
+
   if (!playbackUrl) {
     return null;
   }
@@ -35,20 +38,18 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
       <button
         className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
         type="button"
-        aria-label={workspaceText(locale, "Улучшить", "Improve")}
+        aria-label={improveSoonLabel}
         title={
-          isProjectReadyForActions
-            ? workspaceText(locale, "Улучшить", "Improve")
-            : projectPreparingTitle
+          isProjectReadyForActions ? improveSoonLabel : workspaceText(locale, "Скоро", "Coming soon")
         }
-        disabled={!isProjectReadyForActions || isSegmentEditorLoading}
+        disabled
         onClick={() => void onOpenSegmentEditor()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
           <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
-        <span>{workspaceText(locale, "Улучшить", "Improve")}</span>
+        <span>{improveSoonLabel}</span>
       </button>
       <button
         className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
@@ -93,13 +94,11 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
       <button
         className="studio-canvas-preview__quick-action"
         type="button"
-        aria-label={workspaceText(locale, "Редактировать сцены", "Edit scenes")}
+        aria-label={improveSoonMobileLabel}
         title={
-          isProjectReadyForActions
-            ? workspaceText(locale, "Редактировать сцены", "Edit scenes")
-            : projectPreparingTitle
+          isProjectReadyForActions ? improveSoonMobileLabel : workspaceText(locale, "Скоро", "Coming soon")
         }
-        disabled={!isProjectReadyForActions || isSegmentEditorLoading}
+        disabled
         onClick={() => void onOpenSegmentEditor()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -5626,44 +5626,20 @@ export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
   options?: { subtitleType?: string | null },
 ): WorkspaceSegmentEditorDraftSession => ({
   ...draft,
-  segments: draft.segments.map((segment) => {
-    if (segment.index !== segmentIndex) {
-      return segment;
-    }
-    if (doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
-      return segment;
-    }
-
-    const shouldPreserveProjectVoiceoverTiming =
-      isWorkspaceSegmentProjectVoiceoverAsset(segment, draft) ||
-      (getPositiveWorkspaceMediaAssetId(draft.ttsAssetId) !== null &&
-        !segment.voiceoverAsset &&
-        hasWorkspaceSegmentProjectVoiceoverTimingData(segment));
-    const clearedSegment = clearWorkspaceSegmentEditorVoiceoverGenerationState({
-      ...segment,
-      ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
-      voiceType,
-    }, {
-      resetTimelineToEstimatedVoiceover: true,
-      session: draft,
-    });
-
-    if (!shouldPreserveProjectVoiceoverTiming) {
-      return clearedSegment;
-    }
-
-    return {
-      ...clearedSegment,
-      speechDuration: segment.speechDuration,
-      speechDurationSource: segment.speechDurationSource ?? null,
-      speechEndTime: segment.speechEndTime,
-      speechStartTime: segment.speechStartTime,
-      speechWords: Array.isArray(segment.speechWords) ? segment.speechWords.map((word) => ({ ...word })) : [],
-      voiceSourceDuration: segment.voiceSourceDuration,
-      voiceSourceEndTime: segment.voiceSourceEndTime,
-      voiceSourceStartTime: segment.voiceSourceStartTime,
-    };
-  }),
+  segments: draft.segments.map((segment) =>
+    segment.index === segmentIndex
+      ? doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)
+        ? segment
+        : clearWorkspaceSegmentEditorVoiceoverGenerationState({
+            ...segment,
+            ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
+            voiceType,
+          }, {
+            resetTimelineToEstimatedVoiceover: true,
+            session: draft,
+          })
+      : segment,
+  ),
 });
 
 export const normalizeWorkspaceSegmentVoicePreviewTime = (value: unknown) => {

@@ -421,12 +421,6 @@ type AdsflowSegmentVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobStatusRe
   speech_end_time?: number | string | null;
   speech_start_time?: number | string | null;
   speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
-  _voice_source_duration?: number | string | null;
-  _voice_source_end_time?: number | string | null;
-  _voice_source_start_time?: number | string | null;
-  voice_source_duration?: number | string | null;
-  voice_source_end_time?: number | string | null;
-  voice_source_start_time?: number | string | null;
 };
 
 type AdsflowBatchVoiceoverSegmentStatusPayload = AdsflowSegmentVoiceoverJobStatusResponse & {
