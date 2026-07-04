@@ -1493,19 +1493,28 @@ const normalizeAdsflowVoiceSourceWindow = (
     duration?: unknown;
     end_time?: unknown;
     start_time?: unknown;
+    speech_duration?: unknown;
+    speech_end_time?: unknown;
+    speech_start_time?: unknown;
     voice_source_duration?: unknown;
     voice_source_end_time?: unknown;
     voice_source_start_time?: unknown;
   },
 ) => {
   const sourceStartTime = normalizeNumber(
-    payload.voice_source_start_time ?? payload._voice_source_start_time ?? payload.start_time,
+    payload.voice_source_start_time ??
+      payload._voice_source_start_time ??
+      payload.start_time ??
+      payload.speech_start_time,
   );
   const sourceEndTime = normalizeNumber(
-    payload.voice_source_end_time ?? payload._voice_source_end_time ?? payload.end_time,
+    payload.voice_source_end_time ?? payload._voice_source_end_time ?? payload.end_time ?? payload.speech_end_time,
   );
   const explicitDuration = normalizeNumber(
-    payload.voice_source_duration ?? payload._voice_source_duration ?? payload.duration,
+    payload.voice_source_duration ??
+      payload._voice_source_duration ??
+      payload.duration ??
+      payload.speech_duration,
   );
 
   if (sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime) {
