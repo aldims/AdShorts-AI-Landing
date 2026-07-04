@@ -162,10 +162,10 @@ export function WorkspaceProjectCard({
   const projectDownloadUrl = appendUrlToken(project.videoUrl, "download", project.updatedAt || project.generatedAt || project.id);
   const projectDownloadName = getVideoDownloadName(projectTitle);
   const canUseReadyProjectActions = project.status === "ready" && Boolean(project.videoUrl);
-  const canEditProject = Boolean(project.adId) && canUseReadyProjectActions;
   const canDownloadProject = Boolean(projectDownloadUrl);
   const canAddProjectToExamples = canUseLocalExamples && Boolean(project.videoUrl);
   const canPublishProject = Boolean(project.adId) && canUseReadyProjectActions;
+  const projectSoonTooltip = workspaceText(locale, "Скоро", "Soon");
   const [shouldLoadPreview, setShouldLoadPreview] = useState(false);
   const [hasPreviewFrame, setHasPreviewFrame] = useState(false);
   const [isPreviewVideoReady, setIsPreviewVideoReady] = useState(false);
@@ -324,21 +324,15 @@ export function WorkspaceProjectCard({
           />
         ) : null}
         {stackBadgeLabel ? <span className="studio-project-card__stack-label">{stackBadgeLabel}</span> : null}
-        <div className="studio-project-card__quick-actions" onClick={(event) => event.stopPropagation()}>
+      <div className="studio-project-card__quick-actions" onClick={(event) => event.stopPropagation()}>
           <button
             className="studio-canvas-preview__quick-action"
             type="button"
-            aria-label={workspaceText(locale, "Открыть Shorts по сценам", "Open Shorts by segments")}
+            aria-label={projectSoonTooltip}
             title={
-              canEditProject
-                ? workspaceText(locale, "Открыть Shorts по сценам", "Open Shorts by segments")
-                : workspaceText(
-                    locale,
-                    "Shorts по сценам доступны после готовности проекта",
-                    "Segment editor is available after the project is ready",
-                  )
+              projectSoonTooltip
             }
-            disabled={!canEditProject || isProjectActionBusy}
+            disabled
             onClick={() => onEdit(project)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
