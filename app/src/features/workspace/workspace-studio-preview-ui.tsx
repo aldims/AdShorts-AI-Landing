@@ -5,7 +5,6 @@ type WorkspaceStudioInlinePreviewActionsOptions = {
   downloadName: string;
   isExpanded: boolean;
   isProjectReadyForActions: boolean;
-  isSegmentEditorLoading: boolean;
   locale: Locale;
   onDismiss: () => void;
   onOpenSegmentEditor: () => void | Promise<void>;
@@ -18,7 +17,6 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
   downloadName,
   isExpanded,
   isProjectReadyForActions,
-  isSegmentEditorLoading,
   locale,
   onDismiss,
   onOpenSegmentEditor,
