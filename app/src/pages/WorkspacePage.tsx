@@ -5475,7 +5475,6 @@ export function WorkspacePage({
       downloadName: studioInlinePreviewDownloadName,
       isExpanded: isGeneratedVideoPrimaryActionExpanded,
       isProjectReadyForActions: isGeneratedVideoProjectReadyForActions,
-      isSegmentEditorLoading,
       locale,
       onDismiss: handleDismissStudioPreview,
       onOpenSegmentEditor: handleOpenSegmentEditor,
