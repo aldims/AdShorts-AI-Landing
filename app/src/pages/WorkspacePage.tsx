@@ -15205,6 +15205,21 @@ export function WorkspacePage({
                   durationSeconds: assetDuration,
                 }
               : payload.data.asset;
+          const sourceStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
+            payload.data.voiceSourceStartTime ?? payload.data.speechStartTime,
+          );
+          const sourceEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
+            payload.data.voiceSourceEndTime ?? payload.data.speechEndTime,
+          );
+          const sourceBoundaryDuration =
+            sourceStartTime !== null && sourceEndTime !== null && sourceEndTime > sourceStartTime
+              ? roundWorkspaceSegmentTimelineSeconds(sourceEndTime - sourceStartTime)
+              : null;
+          const voiceSourceDuration =
+            normalizeWorkspaceSegmentVoicePreviewTime(payload.data.voiceSourceDuration) ??
+            sourceBoundaryDuration ??
+            payload.data.speechDuration ??
+            null;
 
           clearSegmentEditorVoiceoverError(options.segmentIndex);
           updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
@@ -15214,6 +15229,9 @@ export function WorkspacePage({
             speechEndTime: payload.data!.speechEndTime ?? null,
             speechStartTime: payload.data!.speechStartTime ?? null,
             speechWords: payload.data!.speechWords ?? [],
+            voiceSourceDuration,
+            voiceSourceEndTime: sourceEndTime,
+            voiceSourceStartTime: sourceStartTime,
             voiceoverAsset,
             voiceoverLanguage: options.language,
             voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(options.text),
