@@ -1566,7 +1566,19 @@ export function WorkspacePage({
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
   const isEditHideEnabled = useMemo(() => {
     const editHideSearchParam = new URLSearchParams(location.search).get("edit_hide");
+    if (editHideSearchParam === null) {
+      return true;
+    }
+
     return editHideSearchParam === "1" || editHideSearchParam?.toLowerCase() === "true";
+  }, [location.search]);
+  const isInstagramHideEnabled = useMemo(() => {
+    const instagramHideSearchParam = new URLSearchParams(location.search).get("instagram_hide");
+    if (instagramHideSearchParam === null) {
+      return true;
+    }
+
+    return instagramHideSearchParam === "1" || instagramHideSearchParam?.toLowerCase() === "true";
   }, [location.search]);
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
@@ -19208,14 +19220,15 @@ export function WorkspacePage({
     initialError?: string | null,
     initialPlatform: WorkspacePublishPlatform = "youtube",
   ) => {
+    const resolvedInitialPlatform = isInstagramHideEnabled && initialPlatform === "instagram" ? "youtube" : initialPlatform;
     publishRunRef.current += 1;
     const runId = publishRunRef.current;
-    const optimisticBootstrap = buildOptimisticPublishBootstrap(videoProjectId, title, initialPlatform);
+    const optimisticBootstrap = buildOptimisticPublishBootstrap(videoProjectId, title, resolvedInitialPlatform);
     const optimisticPublishMode = optimisticBootstrap.defaults.publishAt ? "schedule" : "now";
     const optimisticScheduledAtInput = formatDateTimeLocalValue(optimisticBootstrap.defaults.publishAt);
 
     setIsPublishModalOpen(true);
-    setPublishPlatform(initialPlatform);
+    setPublishPlatform(resolvedInitialPlatform);
     setIsPublishBootstrapLoading(true);
     setPublishBootstrap(optimisticBootstrap);
     setPublishJobStatus(
@@ -19223,7 +19236,7 @@ export function WorkspacePage({
         ? {
             jobId: "",
             publication: optimisticBootstrap.publication,
-            platform: initialPlatform,
+            platform: resolvedInitialPlatform,
             status: optimisticBootstrap.publication.state ?? "done",
             videoProjectId: optimisticBootstrap.videoProjectId,
           }
@@ -19250,7 +19263,7 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          platform: initialPlatform,
+          platform: resolvedInitialPlatform,
           videoProjectId,
         }),
       });
@@ -19374,6 +19387,10 @@ export function WorkspacePage({
 
   const handleStartPlatformConnect = async () => {
     if (!publishTargetVideoProjectId) return;
+    if (isInstagramHideEnabled && publishPlatform === "instagram") {
+      setPublishError(workspaceText(locale, "Instagram пока недоступен. Скоро.", "Instagram publishing is not available yet. Coming soon."));
+      return;
+    }
 
     const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
     setPublishError(null);
@@ -19455,6 +19472,10 @@ export function WorkspacePage({
 
   const handleSubmitPublish = async () => {
     if (!publishTargetVideoProjectId) return;
+    if (isInstagramHideEnabled && publishPlatform === "instagram") {
+      setPublishError(workspaceText(locale, "Instagram пока недоступен. Скоро.", "Instagram publishing is not available yet. Coming soon."));
+      return;
+    }
 
     const platformLabel = publishPlatform === "instagram" ? "Instagram" : "YouTube";
     const channelLabel = publishPlatform === "instagram" ? "Instagram-аккаунт" : "YouTube-канал";
@@ -19529,7 +19550,7 @@ export function WorkspacePage({
   };
 
   const handlePublishPlatformChange = (nextPlatform: WorkspacePublishPlatform) => {
-    if (nextPlatform === publishPlatform || !publishTargetVideoProjectId) {
+    if (nextPlatform === publishPlatform || !publishTargetVideoProjectId || (isInstagramHideEnabled && nextPlatform === "instagram")) {
       return;
     }
 
@@ -22162,7 +22183,11 @@ export function WorkspacePage({
           ? "youtube"
           : null;
     const publishResumePlatform: WorkspacePublishPlatform =
-      instagramError || connectedPlatform === "instagram" ? "instagram" : "youtube";
+      instagramError || connectedPlatform === "instagram"
+        ? isInstagramHideEnabled
+          ? "youtube"
+          : "instagram"
+        : "youtube";
     const shouldResumePublishAfterConnect =
       Boolean(connectedPlatform) &&
       (!Number.isFinite(publishParam) || publishParam <= 0) &&
@@ -22202,7 +22227,7 @@ export function WorkspacePage({
     searchParams.delete("instagram_error");
     searchParams.delete("instagram_connected");
     navigate(localizePath(buildStudioRouteUrl(`?${searchParams.toString()}`, "create")), { replace: true });
-  }, [hasLoadedProjects, isProjectsLoading, locale, location.search, navigate, projects]);
+  }, [hasLoadedProjects, isProjectsLoading, isInstagramHideEnabled, locale, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
   const effectivePublishStatus = normalizePublishJobStatus(publishJobStatus?.status);
@@ -35469,6 +35494,7 @@ export function WorkspacePage({
           plannerStyle={publishPlannerStyle}
           plannerTriggerRef={publishPlannerTriggerRef}
           platform={publishPlatform}
+          isInstagramHideEnabled={isInstagramHideEnabled}
           platforms={["youtube", "instagram"]}
           primaryActionLabel={publishPrimaryActionLabel}
           publishError={publishError}

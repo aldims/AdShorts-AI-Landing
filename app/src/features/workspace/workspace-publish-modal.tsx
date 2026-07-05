@@ -43,6 +43,7 @@ type WorkspacePublishModalProps = {
   isOpen: boolean;
   isPlannerOpen: boolean;
   locale: Locale;
+  isInstagramHideEnabled: boolean;
   mode: "now" | "schedule";
   onCalendarDaySelect: (nextDate: Date) => void;
   onClose: () => void;
@@ -96,6 +97,7 @@ export function WorkspacePublishModal({
   isOpen,
   isPlannerOpen,
   locale,
+  isInstagramHideEnabled,
   mode,
   onCalendarDaySelect,
   onClose,
@@ -140,11 +142,13 @@ export function WorkspacePublishModal({
   const channelSectionLabel = platform === "instagram"
     ? workspaceText(locale, "Аккаунт", "Account")
     : workspaceText(locale, "Канал", "Channel");
+  const instagramSoonLabel = workspaceText(locale, "Скоро", "Soon");
   const platformOptions: Array<{
     id: WorkspacePublishPlatform;
     eyebrow: string;
     title: string;
     description: string;
+    isDisabled?: boolean;
   }> = [
     {
       id: "youtube" as const,
@@ -155,8 +159,11 @@ export function WorkspacePublishModal({
     {
       id: "instagram" as const,
       eyebrow: "Instagram",
-      title: "Instagram Reels",
-      description: workspaceText(locale, "Публикация в подключённый professional аккаунт.", "Publish to a connected professional account."),
+      title: isInstagramHideEnabled ? workspaceText(locale, `Instagram Reels (${instagramSoonLabel})`, `Instagram Reels (${instagramSoonLabel})`) : "Instagram Reels",
+      description: isInstagramHideEnabled
+        ? workspaceText(locale, "Instagram скоро будет доступен.", "Instagram is coming soon.")
+        : workspaceText(locale, "Публикация в подключённый professional аккаунт.", "Publish to a connected professional account."),
+      isDisabled: isInstagramHideEnabled,
     },
   ].filter((option) => platforms.includes(option.id));
 
@@ -222,14 +229,15 @@ export function WorkspacePublishModal({
                   <div className="studio-publish-modal__mode-grid studio-publish-modal__platform-grid" role="radiogroup" aria-label={workspaceText(locale, "Платформа публикации", "Publishing platform")}>
                     {platformOptions.map((option) => {
                       const isActive = option.id === platform;
+                      const isInstagramOptionDisabled = option.isDisabled === true;
                       return (
                         <button
                           key={option.id}
-                          className={`studio-publish-modal__mode-card${isActive ? " is-active" : ""}`}
+                          className={`studio-publish-modal__mode-card${isActive ? " is-active" : ""}${isInstagramOptionDisabled ? " is-disabled" : ""}`}
                           type="button"
                           role="radio"
                           aria-checked={isActive}
-                          disabled={isInFlight || isDisconnectingChannel || isBootstrapLoading}
+                          disabled={isInFlight || isDisconnectingChannel || isBootstrapLoading || isInstagramOptionDisabled}
                           onClick={() => onPlatformChange(option.id)}
                         >
                           <span>{option.eyebrow}</span>
