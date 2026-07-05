@@ -5,6 +5,8 @@ type WorkspaceStudioInlinePreviewActionsOptions = {
   downloadName: string;
   isExpanded: boolean;
   isProjectReadyForActions: boolean;
+  isSegmentEditorLoading?: boolean;
+  isEditHideEnabled?: boolean;
   locale: Locale;
   onDismiss: () => void;
   onOpenSegmentEditor: () => void | Promise<void>;
@@ -17,6 +19,8 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
   downloadName,
   isExpanded,
   isProjectReadyForActions,
+  isSegmentEditorLoading = false,
+  isEditHideEnabled = false,
   locale,
   onDismiss,
   onOpenSegmentEditor,
@@ -24,8 +28,12 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
   playbackUrl,
   projectPreparingTitle,
 }: WorkspaceStudioInlinePreviewActionsOptions) => {
-  const improveSoonLabel = workspaceText(locale, "✏️ Улучшить (Скоро)", "✏️ Improve (Soon)");
-  const improveSoonMobileLabel = workspaceText(locale, "✏️ (Скоро)", "✏️ (Soon)");
+  const improveLabel = workspaceText(locale, "Улучшить", "Improve");
+  const improveSoonLabel = workspaceText(locale, "Улучшить (Скоро)", "Improve (Soon)");
+  const improveMobileLabel = improveLabel;
+  const isImproveActionDisabled = isEditHideEnabled || !isProjectReadyForActions || isSegmentEditorLoading;
+  const shouldHideImproveAction = isEditHideEnabled;
+  const editActionDisabledLabel = workspaceText(locale, "Скоро", "Coming soon");
 
   if (!playbackUrl) {
     return null;
@@ -36,18 +44,22 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
       <button
         className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
         type="button"
-        aria-label={improveSoonLabel}
+        aria-label={shouldHideImproveAction ? improveSoonLabel : improveLabel}
         title={
-          isProjectReadyForActions ? improveSoonLabel : workspaceText(locale, "Скоро", "Coming soon")
+          shouldHideImproveAction
+            ? editActionDisabledLabel
+            : isProjectReadyForActions
+              ? improveLabel
+              : editActionDisabledLabel
         }
-        disabled
+        disabled={isImproveActionDisabled}
         onClick={() => void onOpenSegmentEditor()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
           <path d="m13 7 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
-        <span>{improveSoonLabel}</span>
+        <span>{shouldHideImproveAction ? improveSoonLabel : improveLabel}</span>
       </button>
       <button
         className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
@@ -92,11 +104,15 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
       <button
         className="studio-canvas-preview__quick-action"
         type="button"
-        aria-label={improveSoonMobileLabel}
+        aria-label={shouldHideImproveAction ? workspaceText(locale, "Скоро", "Soon") : improveMobileLabel}
         title={
-          isProjectReadyForActions ? improveSoonMobileLabel : workspaceText(locale, "Скоро", "Coming soon")
+          shouldHideImproveAction
+            ? workspaceText(locale, "Скоро", "Soon")
+            : isProjectReadyForActions
+              ? improveMobileLabel
+              : editActionDisabledLabel
         }
-        disabled
+        disabled={isImproveActionDisabled}
         onClick={() => void onOpenSegmentEditor()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

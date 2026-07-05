@@ -1564,6 +1564,10 @@ export function WorkspacePage({
   const localizedStudioPathname = localizePath("/app/studio").replace(/\/+$/, "") || "/";
   const normalizedCurrentPathname = location.pathname.replace(/\/+$/, "") || "/";
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
+  const isEditHideEnabled = useMemo(() => {
+    const editHideSearchParam = new URLSearchParams(location.search).get("edit_hide");
+    return editHideSearchParam === "1" || editHideSearchParam?.toLowerCase() === "true";
+  }, [location.search]);
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
   const initialExamplePrefillRef = useRef(readExamplePrefillIntent());
@@ -5475,6 +5479,8 @@ export function WorkspacePage({
       downloadName: studioInlinePreviewDownloadName,
       isExpanded: isGeneratedVideoPrimaryActionExpanded,
       isProjectReadyForActions: isGeneratedVideoProjectReadyForActions,
+      isSegmentEditorLoading,
+      isEditHideEnabled,
       locale,
       onDismiss: handleDismissStudioPreview,
       onOpenSegmentEditor: handleOpenSegmentEditor,
@@ -32878,10 +32884,14 @@ export function WorkspacePage({
         type="button"
         role="tab"
         aria-selected={isScenesCreateMode}
-        disabled
+        disabled={isEditHideEnabled}
         onClick={handleStudioCreateScenesModeSelect}
       >
-        {workspaceText(locale, "По сценам(Скоро)", "By scenes")}
+        {workspaceText(
+          locale,
+          isEditHideEnabled ? "По сценам(Скоро)" : "По сценам",
+          isEditHideEnabled ? "By scenes (Soon)" : "By scenes",
+        )}
       </button>
     </div>
   ) : null;
@@ -33913,6 +33923,7 @@ export function WorkspacePage({
                         <WorkspaceProjectCard
                           key={group.leadProject.id}
                           canUseLocalExamples={canManageLocalExamples}
+                          isEditHideEnabled={isEditHideEnabled}
                           isProjectActionBusy={isSegmentEditorLoading || isSavingLocalExample}
                           isPreviewing={activeProjectPreviewId === group.leadProject.id}
                           onAddToExamples={handleOpenProjectLocalExampleModal}
@@ -33937,6 +33948,7 @@ export function WorkspacePage({
                       <WorkspaceProjectCard
                         key={project.id}
                           canUseLocalExamples={canManageLocalExamples}
+                          isEditHideEnabled={isEditHideEnabled}
                           isProjectActionBusy={isSegmentEditorLoading || isSavingLocalExample}
                         isPreviewing={activeProjectPreviewId === project.id}
                           isStackExpanded={index === 0}
@@ -33959,8 +33971,9 @@ export function WorkspacePage({
                     return (
                       <div className={`studio-project-stack${isExpanded ? " is-expanded" : ""}`} key={group.key}>
                         <div className="studio-project-stack__lead">
-                          <WorkspaceProjectCard
+                        <WorkspaceProjectCard
                             canUseLocalExamples={canManageLocalExamples}
+                            isEditHideEnabled={isEditHideEnabled}
                             isProjectActionBusy={isSegmentEditorLoading || isSavingLocalExample}
                             isPreviewing={activeProjectPreviewId === group.leadProject.id}
                             isStackExpanded={isExpanded}

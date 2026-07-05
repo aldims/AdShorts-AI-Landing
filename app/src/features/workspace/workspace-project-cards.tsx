@@ -116,6 +116,7 @@ export const getProjectPreviewNote = (project: WorkspaceProject, locale: Locale 
 
 type WorkspaceProjectCardProps = {
   canUseLocalExamples: boolean;
+  isEditHideEnabled?: boolean;
   isChild?: boolean;
   isProjectActionBusy: boolean;
   isPreviewing: boolean;
@@ -137,6 +138,7 @@ type WorkspaceProjectCardProps = {
 
 export function WorkspaceProjectCard({
   canUseLocalExamples,
+  isEditHideEnabled = false,
   isChild = false,
   isProjectActionBusy,
   isPreviewing,
@@ -162,10 +164,21 @@ export function WorkspaceProjectCard({
   const projectDownloadUrl = appendUrlToken(project.videoUrl, "download", project.updatedAt || project.generatedAt || project.id);
   const projectDownloadName = getVideoDownloadName(projectTitle);
   const canUseReadyProjectActions = project.status === "ready" && Boolean(project.videoUrl);
+  const canEditProject = canUseReadyProjectActions;
   const canDownloadProject = Boolean(projectDownloadUrl);
   const canAddProjectToExamples = canUseLocalExamples && Boolean(project.videoUrl);
   const canPublishProject = Boolean(project.adId) && canUseReadyProjectActions;
   const projectSoonTooltip = workspaceText(locale, "Скоро", "Soon");
+  const editProjectTooltip = isEditHideEnabled
+    ? projectSoonTooltip
+    : canEditProject
+      ? workspaceText(locale, "Открыть Shorts по сценам", "Open Shorts by segments")
+      : workspaceText(
+          locale,
+          "Shorts по сценам доступны после готовности проекта",
+          "Segment editor is available after the project is ready",
+        );
+  const isEditDisabled = isEditHideEnabled || !canEditProject || isProjectActionBusy;
   const [shouldLoadPreview, setShouldLoadPreview] = useState(false);
   const [hasPreviewFrame, setHasPreviewFrame] = useState(false);
   const [isPreviewVideoReady, setIsPreviewVideoReady] = useState(false);
@@ -328,11 +341,9 @@ export function WorkspaceProjectCard({
           <button
             className="studio-canvas-preview__quick-action"
             type="button"
-            aria-label={projectSoonTooltip}
-            title={
-              projectSoonTooltip
-            }
-            disabled
+            aria-label={editProjectTooltip}
+            title={editProjectTooltip}
+            disabled={isEditDisabled}
             onClick={() => onEdit(project)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
