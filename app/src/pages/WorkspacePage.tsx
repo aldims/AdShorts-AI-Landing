@@ -1564,13 +1564,18 @@ export function WorkspacePage({
   const localizedStudioPathname = localizePath("/app/studio").replace(/\/+$/, "") || "/";
   const normalizedCurrentPathname = location.pathname.replace(/\/+$/, "") || "/";
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
+  const isTruthyFlagEnabled = (value: string | null) => value === "1" || value?.toLowerCase() === "true";
   const isEditHideEnabled = useMemo(() => {
-    const editHideSearchParam = new URLSearchParams(location.search).get("edit_hide");
-    return editHideSearchParam === "1" || editHideSearchParam?.toLowerCase() === "true";
+    const hideSearchParams = new URLSearchParams(location.search);
+    const editHideSearchParam = hideSearchParams.get("edit_hide");
+    const hideEditSearchParam = hideSearchParams.get("hide_edit");
+    return isTruthyFlagEnabled(editHideSearchParam) || isTruthyFlagEnabled(hideEditSearchParam);
   }, [location.search]);
   const isInstagramHideEnabled = useMemo(() => {
-    const instagramHideSearchParam = new URLSearchParams(location.search).get("instagram_hide");
-    return instagramHideSearchParam === "1" || instagramHideSearchParam?.toLowerCase() === "true";
+    const hideSearchParams = new URLSearchParams(location.search);
+    const instagramHideSearchParam = hideSearchParams.get("instagram_hide");
+    const hideInstagramSearchParam = hideSearchParams.get("hide_instagram");
+    return isTruthyFlagEnabled(instagramHideSearchParam) || isTruthyFlagEnabled(hideInstagramSearchParam);
   }, [location.search]);
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
