@@ -1565,17 +1565,32 @@ export function WorkspacePage({
   const normalizedCurrentPathname = location.pathname.replace(/\/+$/, "") || "/";
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
   const isTruthyFlagEnabled = (value: string | null) => value === "1" || value?.toLowerCase() === "true";
+  const isFalsyFlagEnabled = (value: string | null) => value === "0" || value?.toLowerCase() === "false";
   const isEditHideEnabled = useMemo(() => {
     const hideSearchParams = new URLSearchParams(location.search);
     const editHideSearchParam = hideSearchParams.get("edit_hide");
     const hideEditSearchParam = hideSearchParams.get("hide_edit");
-    return isTruthyFlagEnabled(editHideSearchParam) || isTruthyFlagEnabled(hideEditSearchParam);
+    const hasExplicitFlag = [editHideSearchParam, hideEditSearchParam].some((value) => value !== null);
+    if (!hasExplicitFlag) {
+      return true;
+    }
+    if ([editHideSearchParam, hideEditSearchParam].some(isFalsyFlagEnabled)) {
+      return false;
+    }
+    return [editHideSearchParam, hideEditSearchParam].some(isTruthyFlagEnabled);
   }, [location.search]);
   const isInstagramHideEnabled = useMemo(() => {
     const hideSearchParams = new URLSearchParams(location.search);
     const instagramHideSearchParam = hideSearchParams.get("instagram_hide");
     const hideInstagramSearchParam = hideSearchParams.get("hide_instagram");
-    return isTruthyFlagEnabled(instagramHideSearchParam) || isTruthyFlagEnabled(hideInstagramSearchParam);
+    const hasExplicitFlag = [instagramHideSearchParam, hideInstagramSearchParam].some((value) => value !== null);
+    if (!hasExplicitFlag) {
+      return true;
+    }
+    if ([instagramHideSearchParam, hideInstagramSearchParam].some(isFalsyFlagEnabled)) {
+      return false;
+    }
+    return [instagramHideSearchParam, hideInstagramSearchParam].some(isTruthyFlagEnabled);
   }, [location.search]);
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
