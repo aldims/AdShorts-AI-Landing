@@ -1566,18 +1566,10 @@ export function WorkspacePage({
   const isStudioPathname = normalizedCurrentPathname === localizedStudioPathname;
   const isEditHideEnabled = useMemo(() => {
     const editHideSearchParam = new URLSearchParams(location.search).get("edit_hide");
-    if (editHideSearchParam === null) {
-      return true;
-    }
-
     return editHideSearchParam === "1" || editHideSearchParam?.toLowerCase() === "true";
   }, [location.search]);
   const isInstagramHideEnabled = useMemo(() => {
     const instagramHideSearchParam = new URLSearchParams(location.search).get("instagram_hide");
-    if (instagramHideSearchParam === null) {
-      return true;
-    }
-
     return instagramHideSearchParam === "1" || instagramHideSearchParam?.toLowerCase() === "true";
   }, [location.search]);
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
