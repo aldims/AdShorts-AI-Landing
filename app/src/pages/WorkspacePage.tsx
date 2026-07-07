@@ -2608,10 +2608,10 @@ export function WorkspacePage({
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
   }, []);
-  const dismissStudioWelcomeCard = useCallback(() => {
-    setIsStudioWelcomeCardClosed(true);
-    setIsStudioWelcomeCardDismissed(true);
-    persistDismissedStudioWelcomeCard(session.email, true);
+  const openStudioWelcomeCard = useCallback(() => {
+    setIsStudioWelcomeCardClosed(false);
+    setIsStudioWelcomeCardDismissed(false);
+    persistDismissedStudioWelcomeCard(session.email, false);
   }, [session.email]);
   const updateContentPlanVisibility = useCallback(
     (nextValue: boolean) => {
@@ -33860,9 +33860,6 @@ export function WorkspacePage({
                           <button className="studio-canvas-welcome__start" type="button" onClick={closeStudioWelcomeCard}>
                             {workspaceText(locale, "Начать", "Start")}
                           </button>
-                          <button className="studio-canvas-welcome__dismiss" type="button" onClick={dismissStudioWelcomeCard}>
-                            {workspaceText(locale, "Больше не показывать", "Do not show again")}
-                          </button>
                         </div>
                       </div>
                     ) : (
@@ -33875,6 +33872,9 @@ export function WorkspacePage({
                         </div>
                         <strong>{workspaceText(locale, "Создайте свой Shorts", "Create your Shorts")}</strong>
                         <p>{workspaceText(locale, "Введите тему и нажмите «Создать»", "Enter a topic and press Create")}</p>
+                        <button className="studio-canvas-preview__help-link" type="button" onClick={openStudioWelcomeCard}>
+                          {workspaceText(locale, "Как работает студия", "How the studio works")}
+                        </button>
                       </>
                       )}
                     </div>
