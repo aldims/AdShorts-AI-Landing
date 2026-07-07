@@ -22925,11 +22925,11 @@ textarea {
 }
 
 .studio-canvas-welcome__body {
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
-  flex-direction: column;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
-  justify-content: space-between;
+  align-content: stretch;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -22987,8 +22987,8 @@ textarea {
 
 .studio-canvas-welcome__intro {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 12px;
   padding-right: 44px;
 }
 
@@ -22996,8 +22996,8 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   color: #8b63ff;
   filter: drop-shadow(0 0 14px rgba(139, 99, 255, 0.46));
 }
@@ -23043,9 +23043,11 @@ textarea {
 }
 
 .studio-canvas-welcome__flow {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-width: 0;
+  min-height: 0;
 }
 
 .studio-canvas-welcome__flow h3 {
@@ -23069,8 +23071,11 @@ textarea {
 
 .studio-canvas-welcome__steps {
   position: relative;
-  display: grid;
-  gap: 9px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -23089,8 +23094,8 @@ textarea {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
   min-width: 0;
 }
@@ -23099,8 +23104,8 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 50px;
+  height: 50px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.045);
@@ -23113,7 +23118,7 @@ textarea {
 .studio-canvas-welcome__step-number {
   position: absolute;
   top: -8px;
-  left: 38px;
+  left: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -23250,23 +23255,24 @@ textarea {
   }
 
   .studio-canvas-welcome__body {
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 9px;
   }
 
   .studio-canvas-welcome__intro {
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 11px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 9px;
     padding-right: 38px;
   }
 
   .studio-canvas-welcome__megaphone {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 
   .studio-canvas-welcome__megaphone svg {
-    width: 42px;
-    height: 42px;
+    width: 36px;
+    height: 36px;
   }
 
   .studio-canvas-welcome__headline h2 {
@@ -23289,7 +23295,7 @@ textarea {
   }
 
   .studio-canvas-welcome__steps {
-    gap: 8px;
+    gap: 13px;
   }
 
   .studio-canvas-welcome__steps::before {
@@ -23299,23 +23305,23 @@ textarea {
   }
 
   .studio-canvas-welcome__step {
-    grid-template-columns: 46px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 8px;
   }
 
   .studio-canvas-welcome__step-icon {
-    width: 46px;
-    height: 46px;
-    border-radius: 13px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
   }
 
   .studio-canvas-welcome__step-icon svg {
-    width: 29px;
-    height: 29px;
+    width: 26px;
+    height: 26px;
   }
 
   .studio-canvas-welcome__step-number {
-    left: 31px;
+    left: 27px;
     width: 21px;
     height: 21px;
     font-size: 0.7rem;
@@ -23387,14 +23393,14 @@ textarea {
   }
 
   .studio-canvas-welcome__intro {
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
     padding-right: 34px;
   }
 
   .studio-canvas-welcome__megaphone {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 
   .studio-canvas-welcome__headline h2 {
@@ -23419,7 +23425,7 @@ textarea {
   }
 
   .studio-canvas-welcome__steps {
-    gap: 8px;
+    gap: 12px;
   }
 
   .studio-canvas-welcome__steps::before {
@@ -23429,23 +23435,23 @@ textarea {
   }
 
   .studio-canvas-welcome__step {
-    grid-template-columns: 46px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 8px;
   }
 
   .studio-canvas-welcome__step-icon {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     border-radius: 13px;
   }
 
   .studio-canvas-welcome__step-icon svg {
-    width: 29px;
-    height: 29px;
+    width: 26px;
+    height: 26px;
   }
 
   .studio-canvas-welcome__step-number {
-    left: 31px;
+    left: 27px;
     width: 21px;
     height: 21px;
     font-size: 0.7rem;
