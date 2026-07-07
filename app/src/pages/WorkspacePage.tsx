@@ -29,9 +29,11 @@ import {
   getStudioPreviewDismissKey,
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
+  persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateSettings,
   readDismissedStudioPreviewKey,
+  readDismissedStudioWelcomeCard,
   readHiddenMediaLibraryItemKeys,
   readStoredStudioCreateSettings,
   type StoredStudioCreateSettings,
@@ -1843,6 +1845,10 @@ export function WorkspacePage({
   const [dismissedStudioPreviewKey, setDismissedStudioPreviewKey] = useState<string | null>(() =>
     readDismissedStudioPreviewKey(session.email),
   );
+  const [isStudioWelcomeCardClosed, setIsStudioWelcomeCardClosed] = useState(false);
+  const [isStudioWelcomeCardDismissed, setIsStudioWelcomeCardDismissed] = useState(() =>
+    readDismissedStudioWelcomeCard(session.email),
+  );
   const [hiddenMediaLibraryItemKeys, setHiddenMediaLibraryItemKeys] = useState<string[]>(() =>
     readHiddenMediaLibraryItemKeys(session.email),
   );
@@ -2599,6 +2605,14 @@ export function WorkspacePage({
     },
     [session.email],
   );
+  const closeStudioWelcomeCard = useCallback(() => {
+    setIsStudioWelcomeCardClosed(true);
+  }, []);
+  const dismissStudioWelcomeCard = useCallback(() => {
+    setIsStudioWelcomeCardClosed(true);
+    setIsStudioWelcomeCardDismissed(true);
+    persistDismissedStudioWelcomeCard(session.email, true);
+  }, [session.email]);
   const updateContentPlanVisibility = useCallback(
     (nextValue: boolean) => {
       setIsContentPlanVisible(nextValue);
@@ -3832,6 +3846,8 @@ export function WorkspacePage({
     setActiveProjectPreviewId(null);
     setFailedStudioVideoUrls([]);
     setDismissedStudioPreviewKey(readDismissedStudioPreviewKey(session.email));
+    setIsStudioWelcomeCardClosed(false);
+    setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
     setIsWorkspaceBootstrapPending(true);
     setIsPublishModalOpen(false);
@@ -5399,6 +5415,12 @@ export function WorkspacePage({
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
   const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
   const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
+  const shouldShowStudioWelcomeCard =
+    !isWorkspaceBootstrapPending &&
+    !isUserFacingGeneration &&
+    !shouldShowGenerateError &&
+    !isStudioWelcomeCardClosed &&
+    !isStudioWelcomeCardDismissed;
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
@@ -33678,7 +33700,7 @@ export function WorkspacePage({
                   </div>
                 ) : (
                   <div
-                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}`}
+                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}`}
                     role={isUserFacingGeneration ? "status" : undefined}
                     aria-live={isUserFacingGeneration ? "polite" : undefined}
                   >
@@ -33694,6 +33716,155 @@ export function WorkspacePage({
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                         <strong>{workspaceText(locale, "Загрузка...", "Loading...")}</strong>
                       </>
+                    ) : shouldShowStudioWelcomeCard ? (
+                      <div
+                        className="studio-canvas-welcome"
+                        role="region"
+                        aria-label={workspaceText(locale, "Добро пожаловать в студию AdShorts AI", "Welcome to AdShorts AI Studio")}
+                      >
+                        <button
+                          className="studio-canvas-welcome__close"
+                          type="button"
+                          aria-label={workspaceText(locale, "Закрыть приветствие", "Close welcome")}
+                          onClick={closeStudioWelcomeCard}
+                        >
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                        </button>
+
+                        <div className="studio-canvas-welcome__body">
+                          <div className="studio-canvas-welcome__intro">
+                            <span className="studio-canvas-welcome__megaphone" aria-hidden="true">
+                              <svg width="50" height="50" viewBox="0 0 64 64" fill="none">
+                                <path
+                                  d="M12 36h9l23 11V17L21 28h-9a8 8 0 0 0 0 8Z"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="m20 37 3 14h8l-3-12"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M49 27h3a5 5 0 0 1 0 10h-3"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </span>
+                            <div className="studio-canvas-welcome__headline">
+                              <h2>
+                                <span>{workspaceText(locale, "Добро пожаловать", "Welcome to")}</span>
+                                <span>
+                                  {workspaceText(locale, "в студию", "the")} <em>{workspaceText(locale, "AdShorts AI", "AdShorts AI Studio")}</em>
+                                </span>
+                              </h2>
+                              <p>
+                                {workspaceText(
+                                  locale,
+                                  "Здесь вы можете создать Shorts из идеи или собрать ролик вручную по сценам.",
+                                  "Create Shorts from an idea or assemble a video manually scene by scene.",
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="studio-canvas-welcome__flow" aria-label={workspaceText(locale, "Как работает студия", "How the studio works")}>
+                            <h3>{workspaceText(locale, "Как работает студия", "How the studio works")}</h3>
+                            <ol className="studio-canvas-welcome__steps">
+                              <li className="studio-canvas-welcome__step">
+                                <span className="studio-canvas-welcome__step-icon" aria-hidden="true">
+                                  <svg width="38" height="38" viewBox="0 0 48 48" fill="none">
+                                    <path d="M24 8v5M24 35v5M8 24h5M35 24h5M12.7 12.7l3.5 3.5M31.8 31.8l3.5 3.5M35.3 12.7l-3.5 3.5M16.2 31.8l-3.5 3.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                    <path d="M17 23.2a7 7 0 1 1 14 0c0 3.2-2.1 4.6-3.4 6.6-.5.7-.6 1.4-.6 2.2h-6c0-.8-.2-1.5-.6-2.2-1.3-2-3.4-3.4-3.4-6.6Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                                    <path d="M20.5 37h7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                  </svg>
+                                </span>
+                                <span className="studio-canvas-welcome__step-number">1</span>
+                                <span className="studio-canvas-welcome__step-copy">
+                                  <strong>{workspaceText(locale, "Выберите режим создания", "Choose a creation mode")}</strong>
+                                  <span>
+                                    {workspaceText(
+                                      locale,
+                                      "Из идеи - AI сам соберёт ролик. По сценам - создайте ролик вручную с полным контролем.",
+                                      "From idea lets AI assemble the video. Scene mode gives full manual control.",
+                                    )}
+                                  </span>
+                                </span>
+                              </li>
+                              <li className="studio-canvas-welcome__step">
+                                <span className="studio-canvas-welcome__step-icon" aria-hidden="true">
+                                  <svg width="38" height="38" viewBox="0 0 48 48" fill="none">
+                                    <path d="m30 7 3.2 7.8L41 18l-7.8 3.2L30 29l-3.2-7.8L19 18l7.8-3.2L30 7Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                                    <path d="m21 27-9 9a4 4 0 0 0 5.7 5.7l9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                    <path d="m24 30-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                  </svg>
+                                </span>
+                                <span className="studio-canvas-welcome__step-number">2</span>
+                                <span className="studio-canvas-welcome__step-copy">
+                                  <strong>{workspaceText(locale, "Улучшайте сцены", "Improve scenes")}</strong>
+                                  <span>
+                                    {workspaceText(
+                                      locale,
+                                      "Оживляйте сцены, добавляйте говорящее лицо, персонажей, AI-звуки и дорисовку.",
+                                      "Animate scenes, add a talking face, characters, AI sounds, and image edits.",
+                                    )}
+                                  </span>
+                                </span>
+                              </li>
+                              <li className="studio-canvas-welcome__step">
+                                <span className="studio-canvas-welcome__step-icon" aria-hidden="true">
+                                  <svg width="38" height="38" viewBox="0 0 48 48" fill="none">
+                                    <path d="M11 37 17 25 9 17l13 3 9-10 1 14 10 7-13 4-7 11-2-13-9 4Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                                    <path d="M26 22 17 31" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                  </svg>
+                                </span>
+                                <span className="studio-canvas-welcome__step-number">3</span>
+                                <span className="studio-canvas-welcome__step-copy">
+                                  <strong>{workspaceText(locale, "Опубликуйте ролик", "Publish the video")}</strong>
+                                  <span>
+                                    {workspaceText(
+                                      locale,
+                                      "Скачайте Shorts или опубликуйте его прямо из сервиса.",
+                                      "Download the Shorts or publish it directly from the service.",
+                                    )}
+                                  </span>
+                                </span>
+                              </li>
+                            </ol>
+                          </div>
+
+                          <div className="studio-canvas-welcome__note">
+                            <span className="studio-canvas-welcome__note-icon" aria-hidden="true">
+                              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                                <path d="M13 2 4 14h7l-1 8 10-13h-7l0-7Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <p>
+                              {workspaceText(
+                                locale,
+                                "Сначала вы быстро видите весь ролик целиком, а полноценное AI-видео делаете только для важных сцен. Это быстрее, дешевле и проще для редактирования.",
+                                "Preview the whole video quickly, then create full AI video only for important scenes. It is faster, cheaper, and easier to edit.",
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="studio-canvas-welcome__actions">
+                          <button className="studio-canvas-welcome__start" type="button" onClick={closeStudioWelcomeCard}>
+                            {workspaceText(locale, "Начать", "Start")}
+                          </button>
+                          <button className="studio-canvas-welcome__dismiss" type="button" onClick={dismissStudioWelcomeCard}>
+                            {workspaceText(locale, "Больше не показывать", "Do not show again")}
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <>
                         <div className="studio-canvas-preview__icon" aria-hidden="true">

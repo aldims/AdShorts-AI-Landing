@@ -1,12 +1,17 @@
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
 const STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-create-settings:";
+const STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-welcome-card-dismiss:";
 
 export const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
 const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateSettingsStorageKey = (email: string) => `${STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
+const getStudioWelcomeCardDismissStorageOwner = (email: string | null | undefined) =>
+  normalizeWorkspaceEmail(email) || "guest";
+const getStudioWelcomeCardDismissStorageKey = (owner: string) =>
+  `${STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX}${owner}`;
 
 export type StoredStudioCreateSettings = {
   language?: string;
@@ -135,6 +140,43 @@ export const persistDismissedStudioPreviewKey = (email: string | null | undefine
     }
 
     window.sessionStorage.setItem(storageKey, normalizedDismissKey);
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
+export const readDismissedStudioWelcomeCard = (email: string | null | undefined) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const storageValue = window.localStorage.getItem(
+      getStudioWelcomeCardDismissStorageKey(getStudioWelcomeCardDismissStorageOwner(email)),
+    );
+    return storageValue === "1" || storageValue === "true";
+  } catch {
+    return false;
+  }
+};
+
+export const persistDismissedStudioWelcomeCard = (
+  email: string | null | undefined,
+  isDismissed: boolean,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const storageKey = getStudioWelcomeCardDismissStorageKey(getStudioWelcomeCardDismissStorageOwner(email));
+
+    if (!isDismissed) {
+      window.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, "1");
   } catch {
     // Ignore storage write errors.
   }
