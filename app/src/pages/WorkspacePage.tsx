@@ -1296,6 +1296,7 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
     manualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= nextDurationSeconds;
   const speechStartTime = roundWorkspaceSegmentTimelineSeconds(Math.max(0, options.speechStartTime));
   const speechEndTime = roundWorkspaceSegmentTimelineSeconds(speechStartTime + nextDurationSeconds);
+  const visualStartTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
   const nextVoiceoverAsset =
     options.latestSceneVoiceoverAudioUrl !== null && options.latestSceneVoiceoverAudioUrl !== undefined && segment.voiceoverAsset
       ? {
@@ -1306,12 +1307,15 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
   const timelinePatch: Partial<WorkspaceSegmentEditorDraftSegment> = shouldPreserveUserSelectedVisualDuration
     ? {}
     : {
+        duration: nextDurationSeconds,
         durationExtensionSourceDurationSeconds: null,
+        endTime: roundWorkspaceSegmentTimelineSeconds(visualStartTime + nextDurationSeconds),
         durationMode: "auto",
         durationSyncMode: "voiceover",
         durationSyncModeUserSelected:
           durationSyncMode === "voiceover" && segment.durationSyncModeUserSelected === true,
         manualDurationSeconds: null,
+        startTime: visualStartTime,
       };
 
   return {
@@ -15234,23 +15238,34 @@ export function WorkspacePage({
             sourceBoundaryDuration ??
             payload.data.speechDuration ??
             null;
+          const resolvedSpeechDuration = payload.data!.speechDuration ?? voiceSourceDuration ?? null;
+          const resolvedSpeechStartTime = payload.data!.speechStartTime ?? 0;
 
           clearSegmentEditorVoiceoverError(options.segmentIndex);
-          updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => ({
-            ...segment,
-            speechDuration: payload.data!.speechDuration ?? null,
-            speechDurationSource: payload.data!.speechDurationSource ?? (payload.data!.speechDuration ? "audio" : null),
-            speechEndTime: payload.data!.speechEndTime ?? null,
-            speechStartTime: payload.data!.speechStartTime ?? null,
-            speechWords: payload.data!.speechWords ?? [],
-            voiceSourceDuration,
-            voiceSourceEndTime: sourceEndTime,
-            voiceSourceStartTime: sourceStartTime,
-            voiceoverAsset,
-            voiceoverLanguage: options.language,
-            voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(options.text),
-            voiceoverVoiceType: options.voiceType,
-          }));
+          updateSegmentEditorDraftSegmentByIndex(options.segmentIndex, (segment) => {
+            const measuredSegment = applyWorkspaceSegmentMeasuredSceneVoiceoverDuration(segment, {
+              durationSeconds: resolvedSpeechDuration,
+              latestSceneVoiceoverAudioUrl: voiceoverAsset.remoteUrl ?? null,
+              speechStartTime: resolvedSpeechStartTime,
+            });
+
+            return {
+              ...measuredSegment,
+              speechDuration: resolvedSpeechDuration,
+              speechDurationSource:
+                payload.data!.speechDurationSource ?? (resolvedSpeechDuration !== null ? "audio" : null),
+              speechEndTime: payload.data!.speechEndTime ?? measuredSegment.speechEndTime ?? null,
+              speechStartTime: payload.data!.speechStartTime ?? measuredSegment.speechStartTime ?? null,
+              speechWords: payload.data!.speechWords ?? [],
+              voiceSourceDuration,
+              voiceSourceEndTime: sourceEndTime,
+              voiceSourceStartTime: sourceStartTime,
+              voiceoverAsset,
+              voiceoverLanguage: options.language,
+              voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(options.text),
+              voiceoverVoiceType: options.voiceType,
+            };
+          });
           return;
         }
 
@@ -17781,23 +17796,34 @@ export function WorkspacePage({
             normalizeStatusDurationSeconds(segmentStatus.voiceSourceDuration) ??
             sourceBoundaryDuration ??
             speechDuration;
+          const resolvedSpeechDuration = speechDuration ?? voiceSourceDuration ?? assetDuration;
+          const resolvedSpeechStartTime = speechStartTime ?? 0;
 
           clearSegmentEditorVoiceoverError(segmentStatus.segmentIndex);
-          updateSegmentEditorDraftSegmentByIndex(segmentStatus.segmentIndex, (segment) => ({
-            ...segment,
-            speechDuration,
-            speechDurationSource: segmentStatus.speechDurationSource ?? (speechDuration ? "audio" : null),
-            speechEndTime,
-            speechStartTime,
-            speechWords: segmentStatus.speechWords ?? [],
-            voiceSourceDuration,
-            voiceSourceEndTime: sourceEndTime,
-            voiceSourceStartTime: sourceStartTime,
-            voiceoverAsset,
-            voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
-            voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
-            voiceoverVoiceType: segmentStatus.voiceType ?? expectedSegment.voiceType,
-          }));
+          updateSegmentEditorDraftSegmentByIndex(segmentStatus.segmentIndex, (segment) => {
+            const measuredSegment = applyWorkspaceSegmentMeasuredSceneVoiceoverDuration(segment, {
+              durationSeconds: resolvedSpeechDuration,
+              latestSceneVoiceoverAudioUrl: voiceoverAsset.remoteUrl ?? null,
+              speechStartTime: resolvedSpeechStartTime,
+            });
+
+            return {
+              ...measuredSegment,
+              speechDuration: resolvedSpeechDuration,
+              speechDurationSource:
+                segmentStatus.speechDurationSource ?? (resolvedSpeechDuration !== null ? "audio" : null),
+              speechEndTime: speechEndTime ?? measuredSegment.speechEndTime ?? null,
+              speechStartTime: speechStartTime ?? measuredSegment.speechStartTime ?? null,
+              speechWords: segmentStatus.speechWords ?? [],
+              voiceSourceDuration,
+              voiceSourceEndTime: sourceEndTime,
+              voiceSourceStartTime: sourceStartTime,
+              voiceoverAsset,
+              voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
+              voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
+              voiceoverVoiceType: segmentStatus.voiceType ?? expectedSegment.voiceType,
+            };
+          });
           completedSegmentIndexes.add(segmentStatus.segmentIndex);
         }
 

@@ -391,6 +391,7 @@ describe("studio segment voiceover jobs", () => {
         credit_cost: 5,
         external_user_id: "email:alex@example.test",
         language: "ru",
+        persist_as_segment_assets: true,
         project_id: 3657,
         text: "First scene Second scene",
         voice_type: "Liam",
@@ -555,6 +556,12 @@ describe("studio segment voiceover jobs", () => {
             job_id: "project-voiceover-job-1",
             segments: [
               {
+                asset: {
+                  file_name: "segment-voiceover-1.wav",
+                  media_asset_id: 903,
+                  mime_type: "audio/wav",
+                  remote_url: "https://cdn.example.test/segment-voiceover-1.wav",
+                },
                 segment_index: 0,
                 speech_duration: 3.5,
                 speech_end_time: 3.5,
@@ -562,6 +569,12 @@ describe("studio segment voiceover jobs", () => {
                 text: "Scene one",
               },
               {
+                asset: {
+                  file_name: "segment-voiceover-2.wav",
+                  media_asset_id: 904,
+                  mime_type: "audio/wav",
+                  remote_url: "https://cdn.example.test/segment-voiceover-2.wav",
+                },
                 segment_index: 1,
                 speech_duration: 4.1,
                 speech_end_time: 7.6,
@@ -616,14 +629,14 @@ describe("studio segment voiceover jobs", () => {
     expect(status.segments).toEqual([
       expect.objectContaining({
         asset: expect.objectContaining({
-          assetId: 902,
+          assetId: 903,
         }),
         segmentIndex: 0,
         text: "Scene one",
       }),
       expect.objectContaining({
         asset: expect.objectContaining({
-          assetId: 902,
+          assetId: 904,
         }),
         segmentIndex: 1,
         text: "Scene two",

@@ -6100,11 +6100,11 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(measured).toEqual(expect.objectContaining({
-      duration: 4,
+      duration: 6.1,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 4,
+      endTime: 6.1,
       manualDurationSeconds: null,
       speechDuration: 6.1,
       speechDurationSource: "audio",
@@ -7578,7 +7578,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveWorkspaceProjectVoiceoverPendingSegments(targets, [])).toEqual([]);
   });
 
-  it("keeps project voiceover timing when a scene voice is toggled off and back on", () => {
+  it("clears project voiceover timing when a scene voice is toggled off and back on", () => {
     const text = "Речь идет о полноценном нейроинтерфейсе.";
     const segment = createDraftSegment({
       duration: 4.3,
@@ -7590,6 +7590,9 @@ describe("WorkspacePage studio locale defaults", () => {
       speechWords: [{ confidence: 1, endTime: 4.3, startTime: 0, text }],
       text,
       textByLanguage: { ru: text },
+      voiceSourceDuration: 4.3,
+      voiceSourceEndTime: 4.3,
+      voiceSourceStartTime: 0,
       voiceoverAsset: {
         assetId: 777,
         durationSeconds: 31.7,
@@ -7623,7 +7626,7 @@ describe("WorkspacePage studio locale defaults", () => {
     const restoredSegment = restoredDraft.segments[0]!;
 
     expect(disabledDraft.ttsAssetId).toBe(777);
-    expect(staleSceneVoiceSegment.speechDuration).toBe(4.3);
+    expect(staleSceneVoiceSegment.speechDuration).toBeNull();
     expect(
       getWorkspaceSegmentTimelineVoiceoverDurationInfo(staleSceneVoiceSegment, staleSceneVoiceDraft, {
         isStale: true,
@@ -7631,10 +7634,9 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toMatchObject({
       source: "estimated",
     });
-    expect(restoredSegment.speechDuration).toBe(4.3);
+    expect(restoredSegment.speechDuration).toBeNull();
     expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(restoredSegment, restoredDraft)).toMatchObject({
-      durationSeconds: 4.3,
-      source: "actual",
+      source: "estimated",
     });
   });
 

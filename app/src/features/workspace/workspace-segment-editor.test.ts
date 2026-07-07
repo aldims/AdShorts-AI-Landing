@@ -3094,7 +3094,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       sourceKind: null,
     }));
 
-    expect(isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, session)).toBe(true);
+    expect(isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, session)).toBe(false);
     expect(
       getWorkspaceSegmentVoiceoverAudioPreviewSource({
         allowProjectTimelineFallback: true,
@@ -3106,16 +3106,15 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: "/api/workspace/media-assets/777/playback",
-      previewRange: { endTime: 22.957, startTime: 12.957 },
-      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777/playback",
+      audioUrl: null,
+      projectVoiceoverAudioUrl: null,
       segmentVoiceoverAudioUrl: null,
-      shouldClip: true,
-      sourceKind: "project",
+      shouldClip: false,
+      sourceKind: null,
     }));
   });
 
-  it("uses the project TTS timeline when legacy segment voiceover metadata is missing", () => {
+  it("does not use the project TTS timeline when legacy segment voiceover metadata is missing", () => {
     const text = "Влейте молоко и перемешайте.";
     const segment = createProjectVoiceoverSegment({
       duration: 1.962,
@@ -3149,7 +3148,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       isWorkspaceSegmentProjectTimelineVoiceoverAvailable(segment, session, {
         allowMissingVoiceoverMetadata: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       getWorkspaceSegmentVoiceoverAudioPreviewSource({
         allowProjectTimelineFallback: true,
@@ -3161,12 +3160,11 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: "/api/workspace/media-assets/777/playback",
-      previewRange: { endTime: 24.919, startTime: 22.957 },
-      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777/playback",
+      audioUrl: null,
+      projectVoiceoverAudioUrl: null,
       segmentVoiceoverAudioUrl: null,
-      shouldClip: true,
-      sourceKind: "project",
+      shouldClip: false,
+      sourceKind: null,
     }));
   });
 
@@ -3348,7 +3346,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(restored.ttsAssetId).toBeNull();
   });
 
-  it("requires an explicit unchanged-track opt-in before using stale project TTS without metadata", () => {
+  it("does not use stale project TTS without timing metadata", () => {
     const text = "Влейте молоко и перемешайте.";
     const segment = createProjectVoiceoverSegment({
       duration: 1.962,
@@ -3411,16 +3409,15 @@ describe("workspace segment editor project voiceover timeline", () => {
         voiceOption: null,
       }),
     ).toEqual(expect.objectContaining({
-      audioUrl: "/api/workspace/media-assets/777/playback",
-      previewRange: { endTime: 24.919, startTime: 22.957 },
-      projectVoiceoverAudioUrl: "/api/workspace/media-assets/777/playback",
+      audioUrl: null,
+      projectVoiceoverAudioUrl: null,
       segmentVoiceoverAudioUrl: null,
-      shouldClip: true,
-      sourceKind: "project",
+      shouldClip: false,
+      sourceKind: null,
     }));
   });
 
-  it("reuses stale project TTS without metadata when only the visual changed", () => {
+  it("does not reuse stale project TTS without metadata when only the visual changed", () => {
     const text = "Влейте молоко и перемешайте.";
     const segment = createProjectVoiceoverSegment({
       duration: 1.962,
@@ -3458,10 +3455,10 @@ describe("workspace segment editor project voiceover timeline", () => {
         baselineSession,
         isGlobalVoiceEdited: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("reuses project TTS only for unchanged scenes after one scene text edit", () => {
+  it("does not reuse project TTS without timing metadata after one scene text edit", () => {
     const firstOriginalText = "Влейте молоко и перемешайте.";
     const firstEditedText = "Влейте молоко и тщательно перемешайте.";
     const secondText = "Поставьте тесто на десять минут.";
@@ -3533,7 +3530,7 @@ describe("workspace segment editor project voiceover timeline", () => {
         baselineSession,
         isGlobalVoiceEdited: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("does not reuse stale project TTS without metadata after a scene voice override", () => {

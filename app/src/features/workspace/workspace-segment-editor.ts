@@ -3938,6 +3938,10 @@ export const isWorkspaceSegmentProjectTimelineVoiceoverAvailable = (
     return false;
   }
 
+  if (!hasWorkspaceSegmentProjectVoiceoverTimingData(segment)) {
+    return false;
+  }
+
   const voiceoverTextHash = String(segment.voiceoverTextHash ?? "").trim();
   const voiceoverVoiceType = normalizeWorkspaceSegmentEditorSetting(segment.voiceoverVoiceType);
   const hasTextMetadata = voiceoverTextHash.length > 0;

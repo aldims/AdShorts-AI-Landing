@@ -398,6 +398,7 @@ type AdsflowSegmentAiVideoJobStatusResponse = {
 };
 
 type AdsflowProjectVoiceoverSegmentStatusPayload = {
+  asset?: AdsflowSegmentAiVideoAssetPayload | null;
   duration?: number | string | null;
   end_time?: number | string | null;
   segmentIndex?: number | string | null;
@@ -677,6 +678,7 @@ export type StudioSegmentVoiceoverJobStatus = {
 };
 
 export type StudioProjectVoiceoverSegmentStatus = {
+  asset?: StudioGeneratedAudioAsset;
   segmentIndex: number;
   speechDuration: number | null;
   speechEndTime: number | null;
@@ -7792,6 +7794,7 @@ export async function createStudioProjectVoiceoverJob(
       credit_cost: requiredCredits,
       external_user_id: externalUserId,
       language: normalizedLanguage,
+      persist_as_segment_assets: true,
       project_id: normalizedProjectId,
       segments,
       text: normalizedText,
@@ -8444,6 +8447,7 @@ export async function createStudioBatchVoiceoverJob(
           credit_cost: group.creditCost,
           external_user_id: externalUserId,
           language: group.language,
+          persist_as_segment_assets: true,
           project_id: normalizedProjectId,
           segments: group.segments.map((segment) => ({
             duration: segment.targetDurationSeconds,
@@ -8860,8 +8864,16 @@ export async function getStudioProjectVoiceoverJobStatus(
       const segmentSpeechDuration =
         segmentSpeechBoundaryDuration ?? normalizeNumber(segment.speech_duration ?? segment.duration);
       const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(segment);
+      const segmentAsset = segment.asset
+        ? normalizeAdsflowBatchVoiceoverSegmentAsset(
+            null,
+            `project-voiceover-segment-${segmentIndex + 1}.wav`,
+            segment.asset,
+          )
+        : undefined;
 
       return {
+        asset: segmentAsset,
         segmentIndex,
         speechDuration: segmentSpeechDuration !== null ? Math.max(0, segmentSpeechDuration) : null,
         speechEndTime:
@@ -8943,7 +8955,7 @@ export async function getStudioBatchVoiceoverJobStatus(
           }
 
           return {
-            asset: status.asset,
+            asset: segmentStatus.asset,
             error: status.error,
             jobId: status.jobId,
             language: group.language,
