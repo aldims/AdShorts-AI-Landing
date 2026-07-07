@@ -23078,7 +23078,7 @@ textarea {
   justify-content: space-around;
   gap: 16px;
   margin: 0;
-  padding: 0;
+  padding: 18px 0 48px;
   list-style: none;
 }
 
@@ -23298,6 +23298,7 @@ textarea {
 
   .studio-canvas-welcome__steps {
     gap: 10px;
+    padding: 14px 0 34px;
   }
 
   .studio-canvas-welcome__steps::before {
@@ -23428,7 +23429,8 @@ textarea {
   }
 
   .studio-canvas-welcome__steps {
-    gap: 8px;
+    gap: 6px;
+    padding: 0;
   }
 
   .studio-canvas-welcome__steps::before {
