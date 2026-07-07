@@ -979,6 +979,7 @@ const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original", 
 const studioRussianVoiceIds = new Set([
   "Bys_24000",
   "Liam",
+  "Liam_Timing",
   "English_ManWithDeepVoice",
   "Russian_BrightHeroine",
   "Nec_24000",
@@ -990,6 +991,15 @@ const studioRussianVoiceIds = new Set([
   "male-qn-jingying",
 ]);
 const studioRussianVoiceAliases = new Map<string, string>([
+  ["liam_timing", "Liam_Timing"],
+  ["alexander_timing", "Liam_Timing"],
+  ["alexander timing", "Liam_Timing"],
+  ["alexandr_timing", "Liam_Timing"],
+  ["alexandr timing", "Liam_Timing"],
+  ["aleksandr_timing", "Liam_Timing"],
+  ["aleksandr timing", "Liam_Timing"],
+  ["александр_timing", "Liam_Timing"],
+  ["александр timing", "Liam_Timing"],
   ["mikhail", "Russian_Mikhail"],
   ["russian_mikhail", "Russian_Mikhail"],
   ["михаил", "Russian_Mikhail"],
@@ -997,6 +1007,7 @@ const studioRussianVoiceAliases = new Map<string, string>([
   ["russian_reliableman", "Russian_ReliableMan"],
 ]);
 const studioVoiceModelPaths = new Map<string, string>([
+  ["Liam_Timing", "eleven_v3/with-timestamps"],
   ["Nec_24000", "google/gemini-2.5-flash/text-to-speech"],
   ["Tur_24000", "google/gemini-2.5-flash/text-to-speech"],
   ["May_24000", "google/gemini-2.5-flash/text-to-speech"],
@@ -1160,6 +1171,7 @@ const getStudioSegmentPhotoAnimationRequiredCredits = (
 
 const studioPremiumVoiceIds = new Set([
   "Liam",
+  "Liam_Timing",
   "English_ManWithDeepVoice",
   "Russian_BrightHeroine",
 ]);

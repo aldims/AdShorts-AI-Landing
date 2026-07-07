@@ -76,8 +76,13 @@ describe("studio generation language resolution", () => {
   it("keeps the explicit ElevenLabs premium voice for Russian generation", () => {
     expect(normalizeStudioVoiceIdForLanguage("Liam", "ru")).toBe("Liam");
     expect(normalizeStudioVoiceIdForLanguage("liam", "ru")).toBe("Liam");
+    expect(normalizeStudioVoiceIdForLanguage("Liam_Timing", "ru")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("liam_timing", "ru")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("александр timing", "ru")).toBe("Liam_Timing");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
+    expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
+    expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
   });
 
   it("keeps explicit MiniMax premium voices for Russian generation", () => {

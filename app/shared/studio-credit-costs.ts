@@ -41,6 +41,7 @@ export const STUDIO_SEGMENT_VOICEOVER_CREDIT_COST = 1;
 export const STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST = 5;
 export const STUDIO_PREMIUM_VOICE_IDS = [
   "Liam",
+  "Liam_Timing",
   "English_ManWithDeepVoice",
   "Russian_BrightHeroine",
 ] as const;

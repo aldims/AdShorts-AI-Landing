@@ -27,6 +27,10 @@ export const STUDIO_VOICE_PREVIEW_SAMPLES: Record<string, StudioVoicePreviewSamp
     fileName: "alexander-premium.wav",
     language: "ru",
   },
+  Liam_Timing: {
+    fileName: "alexander-premium.wav",
+    language: "ru",
+  },
   English_ManWithDeepVoice: {
     fileName: "gleb-premium.wav",
     language: "ru",
@@ -125,6 +129,11 @@ const voiceAliases = new Map<string, keyof typeof STUDIO_VOICE_PREVIEW_SAMPLES>(
   ["ono anna", "Ono_Anna"],
   ["sohee", "Sohee"],
   ["liam", "Liam"],
+  ["liam_timing", "Liam_Timing"],
+  ["alexander_timing", "Liam_Timing"],
+  ["alexandr_timing", "Liam_Timing"],
+  ["aleksandr_timing", "Liam_Timing"],
+  ["александр_timing", "Liam_Timing"],
   ["alexander", "Liam"],
   ["alexandr", "Liam"],
   ["aleksandr", "Liam"],

@@ -615,6 +615,14 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
     },
     {
+      id: "Liam_Timing",
+      label: "Александр Timing",
+      description: "Premium-голос с точными таймингами",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
+    },
+    {
       id: "English_ManWithDeepVoice",
       label: "Глеб",
       description: "Глубокий premium-голос",
@@ -743,6 +751,7 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   English_ManWithDeepVoice: { label: "Gleb", description: "Deep premium voice" },
   Eric: { description: "Lively male voice with a slight rasp" },
   Liam: { label: "Alexander", description: "Expressive premium voice" },
+  Liam_Timing: { label: "Alexander Timing", description: "Premium voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
   Nec_24000: { label: "Natalia", description: "Female voice" },
   Ono_Anna: { description: "Light Japanese female tone" },
