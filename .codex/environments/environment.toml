@@ -11,6 +11,7 @@ icon = "tool"
 command = '''
 cd "/Users/dima/Desktop/AdsFlow AI"
 python update_services.py
+sleep 10
 ./scripts/deploy_worker.sh -h 147.45.173.96 -u root -w 2
 '''
 
