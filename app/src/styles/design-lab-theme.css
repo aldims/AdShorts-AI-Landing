@@ -22929,6 +22929,7 @@ textarea {
   flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
+  justify-content: space-between;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -23027,6 +23028,7 @@ textarea {
 .studio-canvas-welcome__headline h2 em {
   color: #8f6bff;
   font-style: normal;
+  white-space: nowrap;
   text-shadow: 0 0 20px rgba(143, 107, 255, 0.42);
 }
 
@@ -23241,10 +23243,139 @@ textarea {
   transform: translateY(-1px);
 }
 
+@container (max-width: 370px) {
+  .studio-canvas-welcome {
+    gap: 10px;
+    padding: 18px 18px 16px;
+  }
+
+  .studio-canvas-welcome__body {
+    gap: 9px;
+  }
+
+  .studio-canvas-welcome__intro {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 11px;
+    padding-right: 38px;
+  }
+
+  .studio-canvas-welcome__megaphone {
+    width: 40px;
+    height: 40px;
+  }
+
+  .studio-canvas-welcome__megaphone svg {
+    width: 42px;
+    height: 42px;
+  }
+
+  .studio-canvas-welcome__headline h2 {
+    margin: 0 0 6px;
+    font-size: 1.28rem;
+    line-height: 1.07;
+  }
+
+  .studio-canvas-welcome__headline p {
+    font-size: 0.72rem;
+    line-height: 1.3;
+  }
+
+  .studio-canvas-welcome__flow {
+    gap: 8px;
+  }
+
+  .studio-canvas-welcome__flow h3 {
+    font-size: 1rem;
+  }
+
+  .studio-canvas-welcome__steps {
+    gap: 8px;
+  }
+
+  .studio-canvas-welcome__steps::before {
+    top: 42px;
+    bottom: 42px;
+    left: 22px;
+  }
+
+  .studio-canvas-welcome__step {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .studio-canvas-welcome__step-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+  }
+
+  .studio-canvas-welcome__step-icon svg {
+    width: 29px;
+    height: 29px;
+  }
+
+  .studio-canvas-welcome__step-number {
+    left: 31px;
+    width: 21px;
+    height: 21px;
+    font-size: 0.7rem;
+  }
+
+  .studio-canvas-welcome__step-copy {
+    gap: 2px;
+  }
+
+  .studio-canvas-welcome__step-copy strong {
+    font-size: 0.8rem;
+    line-height: 1.14;
+  }
+
+  .studio-canvas-welcome__step-copy span {
+    font-size: 0.65rem;
+    line-height: 1.28;
+  }
+
+  .studio-canvas-welcome__note {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 13px;
+  }
+
+  .studio-canvas-welcome__note-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .studio-canvas-welcome__note-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .studio-canvas-welcome__note p {
+    font-size: 0.65rem;
+    line-height: 1.28;
+  }
+
+  .studio-canvas-welcome__actions {
+    gap: 4px;
+  }
+
+  .studio-canvas-welcome__start {
+    min-height: 38px;
+    font-size: 0.86rem;
+  }
+
+  .studio-canvas-welcome__dismiss {
+    min-height: 22px;
+    font-size: 0.68rem;
+  }
+}
+
 @container (max-width: 340px) {
   .studio-canvas-welcome {
-    gap: 14px;
-    padding: 22px 18px 18px;
+    gap: 10px;
+    padding: 18px 16px 16px;
     border-radius: 24px;
   }
 
@@ -23256,98 +23387,99 @@ textarea {
   }
 
   .studio-canvas-welcome__intro {
-    grid-template-columns: 48px minmax(0, 1fr);
-    gap: 12px;
-    padding-right: 36px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    padding-right: 34px;
   }
 
   .studio-canvas-welcome__megaphone {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
   }
 
   .studio-canvas-welcome__headline h2 {
-    margin-top: 2px;
-    margin-bottom: 9px;
-    font-size: 1.38rem;
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 1.24rem;
   }
 
   .studio-canvas-welcome__headline p,
   .studio-canvas-welcome__step-copy span,
   .studio-canvas-welcome__note p {
-    font-size: 0.76rem;
-    line-height: 1.38;
+    font-size: 0.68rem;
+    line-height: 1.3;
   }
 
   .studio-canvas-welcome__flow {
-    gap: 12px;
+    gap: 8px;
   }
 
   .studio-canvas-welcome__flow h3 {
-    font-size: 1.08rem;
+    font-size: 0.98rem;
   }
 
   .studio-canvas-welcome__steps {
-    gap: 11px;
+    gap: 8px;
   }
 
   .studio-canvas-welcome__steps::before {
-    top: 48px;
-    bottom: 48px;
-    left: 25px;
+    top: 42px;
+    bottom: 42px;
+    left: 22px;
   }
 
   .studio-canvas-welcome__step {
-    grid-template-columns: 52px minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
   }
 
   .studio-canvas-welcome__step-icon {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
   }
 
   .studio-canvas-welcome__step-icon svg {
-    width: 31px;
-    height: 31px;
+    width: 29px;
+    height: 29px;
   }
 
   .studio-canvas-welcome__step-number {
-    left: 36px;
-    width: 24px;
-    height: 24px;
-    font-size: 0.78rem;
+    left: 31px;
+    width: 21px;
+    height: 21px;
+    font-size: 0.7rem;
   }
 
   .studio-canvas-welcome__step-copy {
-    gap: 4px;
+    gap: 2px;
   }
 
   .studio-canvas-welcome__step-copy strong {
-    font-size: 0.9rem;
+    font-size: 0.78rem;
+    line-height: 1.14;
   }
 
   .studio-canvas-welcome__note {
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 10px;
-    padding: 12px;
-    border-radius: 14px;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 13px;
   }
 
   .studio-canvas-welcome__note-icon {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
   }
 
   .studio-canvas-welcome__start {
-    min-height: 42px;
-    font-size: 0.92rem;
+    min-height: 38px;
+    font-size: 0.86rem;
   }
 
   .studio-canvas-welcome__dismiss {
-    min-height: 28px;
-    font-size: 0.76rem;
+    min-height: 22px;
+    font-size: 0.68rem;
   }
 }
 
