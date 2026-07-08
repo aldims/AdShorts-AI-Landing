@@ -978,7 +978,6 @@ const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original", 
 
 const studioRussianVoiceIds = new Set([
   "Bys_24000",
-  "Liam",
   "Liam_Timing",
   "Elena",
   "English_ManWithDeepVoice",
@@ -992,13 +991,18 @@ const studioRussianVoiceIds = new Set([
   "male-qn-jingying",
 ]);
 const studioRussianVoiceAliases = new Map<string, string>([
+  ["liam", "Liam_Timing"],
   ["liam_timing", "Liam_Timing"],
+  ["alexander", "Liam_Timing"],
   ["alexander_timing", "Liam_Timing"],
   ["alexander timing", "Liam_Timing"],
+  ["alexandr", "Liam_Timing"],
   ["alexandr_timing", "Liam_Timing"],
   ["alexandr timing", "Liam_Timing"],
+  ["aleksandr", "Liam_Timing"],
   ["aleksandr_timing", "Liam_Timing"],
   ["aleksandr timing", "Liam_Timing"],
+  ["александр", "Liam_Timing"],
   ["александр_timing", "Liam_Timing"],
   ["александр timing", "Liam_Timing"],
   ["elena", "Elena"],
@@ -1183,7 +1187,6 @@ const getStudioSegmentPhotoAnimationRequiredCredits = (
 ) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
 
 const studioPremiumVoiceIds = new Set([
-  "Liam",
   "Liam_Timing",
   "Elena",
   "English_ManWithDeepVoice",

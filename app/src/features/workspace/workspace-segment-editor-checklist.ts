@@ -1,5 +1,6 @@
 import {
   createWorkspaceSegmentSceneSoundAsset,
+  getCanonicalStudioVoiceOptionId,
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
@@ -299,7 +300,7 @@ export const formatWorkspaceSegmentEditorChecklistPreview = (value: string, maxC
 };
 
 const getWorkspaceSegmentEditorChecklistVoiceLabel = (voiceId?: string | null) => {
-  const safeVoiceId = normalizeWorkspaceSegmentEditorSetting(voiceId);
+  const safeVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
   if (!safeVoiceId) {
     return "выключена";
   }
@@ -474,7 +475,7 @@ const normalizeWorkspaceSegmentVoiceOverrideForLanguage = (
   voiceId: string | null | undefined,
   language: StudioLanguage,
 ) => {
-  const normalizedVoiceId = normalizeWorkspaceSegmentEditorSetting(voiceId);
+  const normalizedVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
   if (!normalizedVoiceId || normalizedVoiceId === "none") {
     return null;
   }

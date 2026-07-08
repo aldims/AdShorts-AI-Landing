@@ -3,6 +3,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import type { Locale } from "../../lib/i18n";
 import { STUDIO_BRAND_TEXT_MAX_CHARS } from "./workspace-brand-helpers";
 import {
+  getCanonicalStudioVoiceOptionId,
   getStudioLanguageForVoiceId,
   normalizeStudioLanguageValue,
   studioVideoOptions,
@@ -18,11 +19,12 @@ import type {
 } from "./workspace-types";
 
 export const getStudioVoiceOptionById = (voiceId: string | null | undefined): StudioVoiceOption | null => {
-  const normalizedVoiceKey = String(voiceId ?? "").trim().toLowerCase();
-  if (!normalizedVoiceKey || normalizedVoiceKey === "none") {
+  const canonicalVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
+  if (!canonicalVoiceId) {
     return null;
   }
 
+  const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
   for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
     const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
     if (voice) {
@@ -41,8 +43,8 @@ export const resolveStudioVoiceIdForLanguage = (
   voiceId: string | null | undefined,
   fallbackVoiceId?: string | null | undefined,
 ): StudioVoiceOption["id"] => {
-  const requestedVoiceKey = String(voiceId ?? "").trim().toLowerCase();
-  const fallbackVoiceKey = String(fallbackVoiceId ?? "").trim().toLowerCase();
+  const requestedVoiceKey = getCanonicalStudioVoiceOptionId(voiceId)?.toLowerCase() ?? "";
+  const fallbackVoiceKey = getCanonicalStudioVoiceOptionId(fallbackVoiceId)?.toLowerCase() ?? "";
   return (
     studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === requestedVoiceKey)?.id ??
     studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === fallbackVoiceKey)?.id ??

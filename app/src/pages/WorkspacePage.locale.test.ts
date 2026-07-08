@@ -893,7 +893,7 @@ describe("WorkspacePage example prefill settings", () => {
       subtitleStyleId: "karaoke",
       videoMode: "ai_photo",
       voiceEnabled: true,
-      voiceId: "Liam",
+      voiceId: "Liam_Timing",
     });
   });
 
@@ -1887,7 +1887,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist).toEqual([
       expect.objectContaining({
         kind: "segment",
-        label: "Сегмент 1: озвучка: голос Александр",
+        label: "Сегмент 1: озвучка: голос Александр Timing",
         resetVoice: true,
         segmentIndex: 0,
       }),
@@ -2967,6 +2967,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.en)).toBe("en");
     expect(getStudioLanguageForVoiceId("Liam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("liam")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Александр")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Liam_Timing")).toBe("ru");
     expect(getStudioLanguageForVoiceId("liam_timing")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Elena")).toBe("ru");
@@ -2978,8 +2979,9 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId("Rnu_24000")).toBeNull();
     expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru)).toBe(DEFAULT_STUDIO_VOICE_ID.en);
     expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
-    expect(resolveStudioVoiceIdForLanguage("ru", "Liam")).toBe("Liam");
-    expect(resolveStudioVoiceIdForLanguage("ru", "liam")).toBe("Liam");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Liam")).toBe("Liam_Timing");
+    expect(resolveStudioVoiceIdForLanguage("ru", "liam")).toBe("Liam_Timing");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Александр")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "Liam_Timing")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "liam_timing")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "Elena")).toBe("Elena");
@@ -3046,6 +3048,7 @@ describe("WorkspacePage studio locale defaults", () => {
         .map((voice) => [voice.id, voice]),
     );
 
+    expect(voicesById.has("Liam")).toBe(false);
     expect(voicesById.get("Elena")?.previewSampleUrl).toContain("/voice-previews/elena.wav?v=");
     expect(voicesById.get("Adam")?.previewSampleUrl).toContain("/voice-previews/adam.wav?v=");
 

@@ -23,10 +23,6 @@ export class StudioVoicePreviewNotFoundError extends Error {
 }
 
 export const STUDIO_VOICE_PREVIEW_SAMPLES: Record<string, StudioVoicePreviewSample> = {
-  Liam: {
-    fileName: "alexander-premium.wav",
-    language: "ru",
-  },
   Liam_Timing: {
     fileName: "alexander-premium.wav",
     language: "ru",
@@ -136,16 +132,16 @@ const voiceAliases = new Map<string, keyof typeof STUDIO_VOICE_PREVIEW_SAMPLES>(
   ["ono_anna", "Ono_Anna"],
   ["ono anna", "Ono_Anna"],
   ["sohee", "Sohee"],
-  ["liam", "Liam"],
+  ["liam", "Liam_Timing"],
+  ["alexander", "Liam_Timing"],
+  ["alexandr", "Liam_Timing"],
+  ["aleksandr", "Liam_Timing"],
+  ["александр", "Liam_Timing"],
   ["liam_timing", "Liam_Timing"],
   ["alexander_timing", "Liam_Timing"],
   ["alexandr_timing", "Liam_Timing"],
   ["aleksandr_timing", "Liam_Timing"],
   ["александр_timing", "Liam_Timing"],
-  ["alexander", "Liam"],
-  ["alexandr", "Liam"],
-  ["aleksandr", "Liam"],
-  ["александр", "Liam"],
   ["elena", "Elena"],
   ["elena_v3", "Elena"],
   ["ellen", "Elena"],

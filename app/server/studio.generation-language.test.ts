@@ -73,9 +73,10 @@ describe("studio generation language resolution", () => {
     expect(normalizeStudioVoiceIdForLanguage("Aiden", "ru")).toBe("Bys_24000");
   });
 
-  it("keeps the explicit ElevenLabs premium voice for Russian generation", () => {
-    expect(normalizeStudioVoiceIdForLanguage("Liam", "ru")).toBe("Liam");
-    expect(normalizeStudioVoiceIdForLanguage("liam", "ru")).toBe("Liam");
+  it("routes the legacy Alexander voice to the provider-timed ElevenLabs voice", () => {
+    expect(normalizeStudioVoiceIdForLanguage("Liam", "ru")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("liam", "ru")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("Александр", "ru")).toBe("Liam_Timing");
     expect(normalizeStudioVoiceIdForLanguage("Liam_Timing", "ru")).toBe("Liam_Timing");
     expect(normalizeStudioVoiceIdForLanguage("liam_timing", "ru")).toBe("Liam_Timing");
     expect(normalizeStudioVoiceIdForLanguage("александр timing", "ru")).toBe("Liam_Timing");

@@ -607,14 +607,6 @@ export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
 export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
   ru: [
     {
-      id: "Liam",
-      label: "Александр",
-      description: "Выразительный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
-      previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
-    },
-    {
       id: "Liam_Timing",
       label: "Александр Timing",
       description: "Premium-голос с точными таймингами",
@@ -768,7 +760,6 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   Eric: { description: "Lively male voice with a slight rasp" },
   Elena: { label: "Elena", description: "Serious, direct, confident premium voice" },
   Adam: { label: "Adam", description: "Dark, confident premium ElevenLabs voice" },
-  Liam: { label: "Alexander", description: "Expressive premium voice" },
   Liam_Timing: { label: "Alexander Timing", description: "Premium voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
   Nec_24000: { label: "Natalia", description: "Female voice" },
@@ -787,6 +778,24 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   Aiden: { description: "Clear American male voice" },
 };
 
+const studioVoiceLegacyAliases = new Map<string, StudioVoiceOption["id"]>([
+  ["liam", "Liam_Timing"],
+  ["alexander", "Liam_Timing"],
+  ["alexandr", "Liam_Timing"],
+  ["aleksandr", "Liam_Timing"],
+  ["александр", "Liam_Timing"],
+]);
+
+export const getCanonicalStudioVoiceOptionId = (voiceId: string | null | undefined): string | null => {
+  const normalizedVoiceId = String(voiceId ?? "").trim();
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  return studioVoiceLegacyAliases.get(normalizedVoiceKey) ?? normalizedVoiceId;
+};
+
 export const getStudioVoiceOptionCopy = (voice: StudioVoiceOption, locale: string): StudioVoiceOption => {
   if (locale !== "en") {
     return voice;
@@ -799,12 +808,12 @@ export const getStudioVoiceOptionCopy = (voice: StudioVoiceOption, locale: strin
 };
 
 export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
-  const normalizedVoiceId = String(voiceId ?? "").trim();
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+  const canonicalVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
+  if (!canonicalVoiceId) {
     return null;
   }
 
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
   for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
     if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)) {
       return language;
@@ -2237,12 +2246,12 @@ export const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
 };
 
 export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
-  const normalizedVoiceId = String(voiceId ?? "").trim();
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+  const canonicalVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
+  if (!canonicalVoiceId) {
     return 0;
   }
 
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
   for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
     const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
     if (voice) {
