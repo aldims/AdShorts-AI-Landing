@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260703-3";
+export const studioVoicePreviewAssetVersion = "20260708-1";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
@@ -628,6 +628,7 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       description: "Серьёзный, прямой и уверенный premium-голос",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("elena.wav"),
     },
     {
       id: "Adam",
@@ -635,6 +636,7 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       description: "Тёмный, уверенный premium-голос ElevenLabs",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("adam.wav"),
     },
     {
       id: "English_ManWithDeepVoice",

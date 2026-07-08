@@ -3040,6 +3040,15 @@ describe("WorkspacePage studio locale defaults", () => {
   });
 
   it("uses bundled voice preview files instead of generated API previews", () => {
+    const voicesById = new Map(
+      Object.values(studioVoiceOptionsByLanguage)
+        .flat()
+        .map((voice) => [voice.id, voice]),
+    );
+
+    expect(voicesById.get("Elena")?.previewSampleUrl).toContain("/voice-previews/elena.wav?v=");
+    expect(voicesById.get("Adam")?.previewSampleUrl).toContain("/voice-previews/adam.wav?v=");
+
     for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
       for (const voice of voiceOptions) {
         if (!voice.previewSampleUrl) {
