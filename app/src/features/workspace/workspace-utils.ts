@@ -4,7 +4,6 @@ import {
 } from "../../lib/workspaceSegmentEditorTimeline";
 import {
   WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS,
-  WORKSPACE_SEGMENT_PHOTO_DURATION_VOICEOVER_PAUSE_SECONDS,
   WORKSPACE_STUDIO_VIDEO_MODE_IDS,
 } from "./workspace-constants";
 import type {
@@ -341,9 +340,7 @@ export const getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds = (
     return null;
   }
 
-  return roundWorkspaceSegmentTimelineSeconds(
-    voiceoverDuration + WORKSPACE_SEGMENT_PHOTO_DURATION_VOICEOVER_PAUSE_SECONDS,
-  );
+  return roundWorkspaceSegmentTimelineSeconds(voiceoverDuration);
 };
 
 export const resolveWorkspaceSegmentPhotoDurationVoiceoverGuard = (
