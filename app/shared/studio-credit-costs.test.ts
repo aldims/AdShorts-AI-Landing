@@ -45,6 +45,7 @@ describe("segment voiceover credit costs", () => {
     expect(getStudioSegmentVoiceoverCreditCost("Bys_24000")).toBe(1);
     expect(getStudioSegmentVoiceoverCreditCost("Liam")).toBe(5);
     expect(getStudioSegmentVoiceoverCreditCost("Liam_Timing")).toBe(5);
+    expect(getStudioSegmentVoiceoverCreditCost("Elena")).toBe(5);
     expect(getStudioSegmentVoiceoverCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioSegmentVoiceoverCreditCost("none")).toBe(0);

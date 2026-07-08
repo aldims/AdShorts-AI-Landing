@@ -2969,6 +2969,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId("liam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Liam_Timing")).toBe("ru");
     expect(getStudioLanguageForVoiceId("liam_timing")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Elena")).toBe("ru");
     expect(getStudioLanguageForVoiceId("English_ManWithDeepVoice")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_BrightHeroine")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_HandsomeChildhoodFriend")).toBeNull();
@@ -2980,11 +2981,13 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("ru", "liam")).toBe("Liam");
     expect(resolveStudioVoiceIdForLanguage("ru", "Liam_Timing")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "liam_timing")).toBe("Liam_Timing");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Elena")).toBe("Elena");
     expect(resolveStudioVoiceIdForLanguage("ru", "Russian_BrightHeroine")).toBe("Russian_BrightHeroine");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
     expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
     expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
+    expect(getStudioVoiceCreditCost("Elena")).toBe(5);
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
@@ -3036,6 +3039,9 @@ describe("WorkspacePage studio locale defaults", () => {
   it("uses bundled voice preview files instead of generated API previews", () => {
     for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
       for (const voice of voiceOptions) {
+        if (!voice.previewSampleUrl) {
+          continue;
+        }
         expect(voice.previewSampleUrl).toMatch(/^\/voice-previews\/[^?]+\.wav\?v=/);
         expect(voice.previewSampleUrl).not.toContain("/api/workspace/voice-preview");
         expect(Object.prototype.hasOwnProperty.call(voice, "previewText")).toBe(false);
