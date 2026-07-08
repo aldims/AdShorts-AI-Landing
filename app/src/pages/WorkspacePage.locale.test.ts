@@ -2974,6 +2974,11 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId("Adam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Maxim")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Vika")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Alisa")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Anastasia")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Lesha")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Stas")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Misha")).toBe("ru");
     expect(getStudioLanguageForVoiceId("English_ManWithDeepVoice")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_BrightHeroine")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_HandsomeChildhoodFriend")).toBeNull();
@@ -2992,6 +2997,16 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("ru", "Максим")).toBe("Maxim");
     expect(resolveStudioVoiceIdForLanguage("ru", "Vika Grib")).toBe("Vika");
     expect(resolveStudioVoiceIdForLanguage("ru", "Вика")).toBe("Vika");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Arabella - Mysterious and Emotive")).toBe("Alisa");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Алиса")).toBe("Alisa");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Hope - upbeat and clear")).toBe("Anastasia");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Анастасия")).toBe("Anastasia");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Hale - Smooth, Confident and Persuasive")).toBe("Lesha");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Леша")).toBe("Lesha");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Spuds Oxley - Wise and Approachable")).toBe("Stas");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Стас")).toBe("Stas");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Michael C. Vincent - Confident, Expressive")).toBe("Misha");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Миша")).toBe("Misha");
     expect(resolveStudioVoiceIdForLanguage("ru", "Russian_BrightHeroine")).toBe("Russian_BrightHeroine");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
@@ -3001,6 +3016,11 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioVoiceCreditCost("Adam")).toBe(5);
     expect(getStudioVoiceCreditCost("Maxim")).toBe(5);
     expect(getStudioVoiceCreditCost("Vika")).toBe(5);
+    expect(getStudioVoiceCreditCost("Alisa")).toBe(5);
+    expect(getStudioVoiceCreditCost("Anastasia")).toBe(5);
+    expect(getStudioVoiceCreditCost("Lesha")).toBe(5);
+    expect(getStudioVoiceCreditCost("Stas")).toBe(5);
+    expect(getStudioVoiceCreditCost("Misha")).toBe(5);
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
@@ -3061,6 +3081,11 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(voicesById.get("Adam")?.previewSampleUrl).toContain("/voice-previews/adam.wav?v=");
     expect(voicesById.get("Maxim")?.previewSampleUrl).toContain("/voice-previews/maxim.wav?v=");
     expect(voicesById.get("Vika")?.previewSampleUrl).toContain("/voice-previews/vika.wav?v=");
+    expect(voicesById.get("Alisa")?.previewSampleUrl).toContain("/voice-previews/alisa.wav?v=");
+    expect(voicesById.get("Anastasia")?.previewSampleUrl).toContain("/voice-previews/anastasia.wav?v=");
+    expect(voicesById.get("Lesha")?.previewSampleUrl).toContain("/voice-previews/lesha.wav?v=");
+    expect(voicesById.get("Stas")?.previewSampleUrl).toContain("/voice-previews/stas.wav?v=");
+    expect(voicesById.get("Misha")?.previewSampleUrl).toContain("/voice-previews/misha.wav?v=");
 
     for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
       for (const voice of voiceOptions) {

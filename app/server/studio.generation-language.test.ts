@@ -89,6 +89,16 @@ describe("studio generation language resolution", () => {
     expect(normalizeStudioVoiceIdForLanguage("Максим", "ru")).toBe("Maxim");
     expect(normalizeStudioVoiceIdForLanguage("Vika Grib", "ru")).toBe("Vika");
     expect(normalizeStudioVoiceIdForLanguage("Вика", "ru")).toBe("Vika");
+    expect(normalizeStudioVoiceIdForLanguage("Arabella - Mysterious and Emotive", "ru")).toBe("Alisa");
+    expect(normalizeStudioVoiceIdForLanguage("Алиса", "ru")).toBe("Alisa");
+    expect(normalizeStudioVoiceIdForLanguage("Hope - upbeat and clear", "ru")).toBe("Anastasia");
+    expect(normalizeStudioVoiceIdForLanguage("Анастасия", "ru")).toBe("Anastasia");
+    expect(normalizeStudioVoiceIdForLanguage("Hale - Smooth, Confident and Persuasive", "ru")).toBe("Lesha");
+    expect(normalizeStudioVoiceIdForLanguage("Леша", "ru")).toBe("Lesha");
+    expect(normalizeStudioVoiceIdForLanguage("Spuds Oxley - Wise and Approachable", "ru")).toBe("Stas");
+    expect(normalizeStudioVoiceIdForLanguage("Стас", "ru")).toBe("Stas");
+    expect(normalizeStudioVoiceIdForLanguage("Michael C. Vincent - Confident, Expressive", "ru")).toBe("Misha");
+    expect(normalizeStudioVoiceIdForLanguage("Миша", "ru")).toBe("Misha");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
     expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
@@ -97,6 +107,11 @@ describe("studio generation language resolution", () => {
     expect(getStudioVoiceCreditCost("Adam")).toBe(5);
     expect(getStudioVoiceCreditCost("Maxim")).toBe(5);
     expect(getStudioVoiceCreditCost("Vika")).toBe(5);
+    expect(getStudioVoiceCreditCost("Alisa")).toBe(5);
+    expect(getStudioVoiceCreditCost("Anastasia")).toBe(5);
+    expect(getStudioVoiceCreditCost("Lesha")).toBe(5);
+    expect(getStudioVoiceCreditCost("Stas")).toBe(5);
+    expect(getStudioVoiceCreditCost("Misha")).toBe(5);
   });
 
   it("keeps explicit MiniMax premium voices for Russian generation", () => {
