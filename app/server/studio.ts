@@ -68,6 +68,11 @@ import {
   getCurrentAdsflowWebSignalHeaders,
 } from "./web-device.js";
 import {
+  createOpenAIImageEdit,
+  createOpenAIImageGeneration,
+  isOpenAIImagePolicyError,
+} from "./openai-image-worker.js";
+import {
   createWaveSpeedImageUpscaleJob,
   createWaveSpeedGptImage2EditJob,
   createWaveSpeedGptImage2TextToImageJob,
@@ -5622,6 +5627,93 @@ const createDirectWorkspaceReferenceAiPhotoJob = async (
   };
 };
 
+const createDirectWorkspaceReferenceOpenAIPhotoJob = async (
+  prompt: string,
+  user: StudioUser,
+  options: {
+    consumed: WorkspaceCreditConsumption;
+    externalUserId: string;
+    language: "en" | "ru";
+    profile: WorkspaceProfile;
+    projectId?: number | null;
+    referenceKind?: string;
+    segmentIndex?: number | null;
+    sourceImage?: {
+      bytes: Buffer;
+      fileName?: string;
+      mimeType?: string;
+    } | null;
+  },
+): Promise<StudioSegmentAiPhotoJob> => {
+  const jobId = `${DIRECT_SEGMENT_AI_PHOTO_JOB_PREFIX}${randomUUID()}`;
+  const generatedImage = options.sourceImage
+    ? await createOpenAIImageEdit({
+        image: options.sourceImage.bytes,
+        imageFileName: options.sourceImage.fileName,
+        imageMimeType: options.sourceImage.mimeType,
+        prompt,
+      })
+    : await createOpenAIImageGeneration({
+        prompt,
+      });
+  const fileName = normalizeDirectSegmentAiPhotoFileName(jobId, options.referenceKind, generatedImage.mimeType);
+  const assetId = await uploadStudioMediaAsset(user, {
+    dataUrl: buildDataUrlFromBytes(generatedImage.bytes, generatedImage.mimeType),
+    externalUserId: options.externalUserId,
+    fileName,
+    kind: "workspace_reference",
+    language: options.language,
+    mediaType: "photo",
+    mimeType: generatedImage.mimeType,
+    projectId: options.projectId,
+    role: options.referenceKind === "scene" ? "scene_reference" : "character_reference",
+    segmentIndex: options.segmentIndex,
+  });
+  const asset: StudioGeneratedImageAsset = {
+    assetId,
+    fileName,
+    fileSize: generatedImage.fileSize,
+    mimeType: generatedImage.mimeType,
+    remoteUrl: `/api/workspace/media-assets/${assetId}`,
+  };
+  const profile = { ...options.profile };
+
+  studioDirectSegmentAiPhotoJobContexts.set(jobId, {
+    asset,
+    consumed: options.consumed,
+    language: options.language,
+    ownerExternalUserId: options.externalUserId,
+    profile,
+    projectId: options.projectId,
+    referenceKind: options.referenceKind,
+    segmentIndex: options.segmentIndex,
+    upscaleRequired: false,
+  });
+
+  console.info(
+    JSON.stringify({
+      assetId,
+      event: "server.segment-ai-photo.openai-character-reference.created",
+      jobId,
+      model: generatedImage.meta.model,
+      outputFormat: generatedImage.meta.outputFormat,
+      projectId: options.projectId,
+      quality: generatedImage.meta.quality,
+      referenceKind: options.referenceKind,
+      requestId: generatedImage.meta.requestId ?? null,
+      segmentIndex: options.segmentIndex,
+      size: generatedImage.meta.size,
+    }),
+  );
+
+  return {
+    asset,
+    jobId,
+    profile,
+    status: "completed",
+  };
+};
+
 const fetchAdsflowJobStatus = async (jobId: string, user: StudioUser) => {
   assertAdsflowConfigured();
 
@@ -7061,6 +7153,26 @@ export async function createStudioSegmentAiPhotoJob(
     let jobCreated = false;
 
     try {
+      try {
+        const directJob = await createDirectWorkspaceReferenceOpenAIPhotoJob(workspaceCharacterReferencePrompt, user, {
+          consumed: creditReservation.consumed,
+          externalUserId,
+          language: normalizedLanguage,
+          profile: creditReservation.profile,
+          projectId: normalizedProjectId,
+          referenceKind: normalizedReferenceKind,
+          segmentIndex: normalizedSegmentIndex,
+          sourceImage,
+        });
+        jobCreated = true;
+        return directJob;
+      } catch (openAIError) {
+        if (isOpenAIImagePolicyError(openAIError)) {
+          throw openAIError;
+        }
+        console.warn("[studio] OpenAI character reference edit failed; falling back to WaveSpeed GPT Image 2 edit", openAIError);
+      }
+
       const prediction = await createWaveSpeedGptImage2EditJob({
         aspectRatio: "1:1",
         image: sourceImage.bytes,
@@ -7126,6 +7238,27 @@ export async function createStudioSegmentAiPhotoJob(
     const textToImagePrompt = isWorkspaceCharacterReference ? workspaceCharacterReferencePrompt : normalizedPrompt;
 
     try {
+      if (isWorkspaceCharacterReference) {
+        try {
+          const directJob = await createDirectWorkspaceReferenceOpenAIPhotoJob(textToImagePrompt, user, {
+            consumed: creditReservation.consumed,
+            externalUserId,
+            language: normalizedLanguage,
+            profile: creditReservation.profile,
+            projectId: normalizedProjectId,
+            referenceKind: normalizedReferenceKind,
+            segmentIndex: normalizedSegmentIndex,
+          });
+          jobCreated = true;
+          return directJob;
+        } catch (openAIError) {
+          if (isOpenAIImagePolicyError(openAIError)) {
+            throw openAIError;
+          }
+          console.warn("[studio] OpenAI character reference generation failed; falling back to WaveSpeed GPT Image 2 text-to-image", openAIError);
+        }
+      }
+
       const prediction = await createWaveSpeedGptImage2TextToImageJob({
         aspectRatio: "1:1",
         outputFormat: "png",
