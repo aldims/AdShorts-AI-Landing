@@ -13524,6 +13524,7 @@ export function WorkspacePage({
         voiceoverTextHash: restoredVoiceoverSegment?.voiceoverTextHash ?? null,
         voiceoverVoiceType: restoredVoiceoverSegment?.voiceoverVoiceType ?? null,
         voiceType: nextVoiceType,
+        voice_type: nextVoiceType,
       };
     });
   };
@@ -13630,36 +13631,37 @@ export function WorkspacePage({
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
-    const baselineVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(baselineSegment);
-    const nextVoiceType = baselineVoiceOverrideId;
 
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
-      const nextText = baselineSegment?.text ?? segment.originalText;
-      const nextTextByLanguage = baselineSegment
-        ? { ...baselineSegment.textByLanguage }
-        : {
-            ...segment.originalTextByLanguage,
-            [selectedLanguage]: segment.originalText,
-          };
+      if (baselineSegment) {
+        return restoreWorkspaceSegmentTimelineSnapshot(segment, baselineSegment, "voice");
+      }
+
+      const nextText = segment.originalText;
+      const nextTextByLanguage = {
+        ...segment.originalTextByLanguage,
+        [selectedLanguage]: segment.originalText,
+      };
 
       return {
         ...segment,
-        speechDuration: baselineSegment?.speechDuration ?? null,
-        speechDurationSource: baselineSegment?.speechDurationSource ?? null,
-        speechEndTime: baselineSegment?.speechEndTime ?? null,
-        speechStartTime: baselineSegment?.speechStartTime ?? null,
-        speechWords: baselineSegment?.speechWords.map((word) => ({ ...word })) ?? [],
+        speechDuration: null,
+        speechDurationSource: null,
+        speechEndTime: null,
+        speechStartTime: null,
+        speechWords: [],
         text: nextText,
         textByLanguage: nextTextByLanguage,
-        voiceSourceDuration: baselineSegment?.voiceSourceDuration ?? null,
-        voiceSourceEndTime: baselineSegment?.voiceSourceEndTime ?? null,
-        voiceSourceStartTime: baselineSegment?.voiceSourceStartTime ?? null,
-        voiceoverAsset: cloneStudioCustomVideoFile(baselineSegment?.voiceoverAsset ?? null),
-        voiceoverLanguage: baselineSegment?.voiceoverLanguage ?? null,
-        voiceoverTextHash: baselineSegment?.voiceoverTextHash ?? null,
-        voiceoverVoiceType: baselineSegment?.voiceoverVoiceType ?? null,
-        voiceType: nextVoiceType,
+        voiceSourceDuration: null,
+        voiceSourceEndTime: null,
+        voiceSourceStartTime: null,
+        voiceoverAsset: null,
+        voiceoverLanguage: null,
+        voiceoverTextHash: null,
+        voiceoverVoiceType: null,
+        voiceType: null,
+        voice_type: null,
       };
     });
   };
