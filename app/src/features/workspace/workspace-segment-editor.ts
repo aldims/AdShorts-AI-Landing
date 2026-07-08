@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260708-1";
+export const studioVoicePreviewAssetVersion = "20260708-2";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
@@ -608,7 +608,7 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
   ru: [
     {
       id: "Liam_Timing",
-      label: "Александр Timing",
+      label: "Александр",
       description: "Premium-голос с точными таймингами",
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
@@ -760,7 +760,7 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   Eric: { description: "Lively male voice with a slight rasp" },
   Elena: { label: "Elena", description: "Serious, direct, confident premium voice" },
   Adam: { label: "Adam", description: "Dark, confident premium ElevenLabs voice" },
-  Liam_Timing: { label: "Alexander Timing", description: "Premium voice with provider timings" },
+  Liam_Timing: { label: "Alexander", description: "Premium voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
   Nec_24000: { label: "Natalia", description: "Female voice" },
   Ono_Anna: { description: "Light Japanese female tone" },

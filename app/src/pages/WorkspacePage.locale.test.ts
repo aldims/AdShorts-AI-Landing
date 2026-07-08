@@ -1887,7 +1887,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist).toEqual([
       expect.objectContaining({
         kind: "segment",
-        label: "Сегмент 1: озвучка: голос Александр Timing",
+        label: "Сегмент 1: озвучка: голос Александр",
         resetVoice: true,
         segmentIndex: 0,
       }),
