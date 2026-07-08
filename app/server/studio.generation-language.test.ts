@@ -83,11 +83,20 @@ describe("studio generation language resolution", () => {
     expect(normalizeStudioVoiceIdForLanguage("Elena", "ru")).toBe("Elena");
     expect(normalizeStudioVoiceIdForLanguage("ellen", "ru")).toBe("Elena");
     expect(normalizeStudioVoiceIdForLanguage("Елена", "ru")).toBe("Elena");
+    expect(normalizeStudioVoiceIdForLanguage("Adam", "ru")).toBe("Adam");
+    expect(normalizeStudioVoiceIdForLanguage("Адам", "ru")).toBe("Adam");
+    expect(normalizeStudioVoiceIdForLanguage("Mark", "ru")).toBe("Maxim");
+    expect(normalizeStudioVoiceIdForLanguage("Максим", "ru")).toBe("Maxim");
+    expect(normalizeStudioVoiceIdForLanguage("Vika Grib", "ru")).toBe("Vika");
+    expect(normalizeStudioVoiceIdForLanguage("Вика", "ru")).toBe("Vika");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
     expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
     expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
     expect(getStudioVoiceCreditCost("Elena")).toBe(5);
+    expect(getStudioVoiceCreditCost("Adam")).toBe(5);
+    expect(getStudioVoiceCreditCost("Maxim")).toBe(5);
+    expect(getStudioVoiceCreditCost("Vika")).toBe(5);
   });
 
   it("keeps explicit MiniMax premium voices for Russian generation", () => {

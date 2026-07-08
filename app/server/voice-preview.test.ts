@@ -35,6 +35,12 @@ describe("studio voice previews", () => {
     await expect(getStudioVoicePreview({ language: "ru", voiceId: "adam_v3" })).resolves.toMatchObject({
       contentType: "audio/wav",
     });
+    await expect(getStudioVoicePreview({ language: "ru", voiceId: "mark" })).resolves.toMatchObject({
+      contentType: "audio/wav",
+    });
+    await expect(getStudioVoicePreview({ language: "ru", voiceId: "vika grib" })).resolves.toMatchObject({
+      contentType: "audio/wav",
+    });
     await expect(getStudioVoicePreview({ language: "en", voiceId: "uncle fu" })).resolves.toMatchObject({
       contentType: "audio/wav",
     });

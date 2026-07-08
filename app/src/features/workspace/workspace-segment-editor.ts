@@ -599,7 +599,7 @@ const normalizeWorkspaceSegmentEditorSessionVoiceInheritance = <T extends Worksp
   };
 };
 
-export const studioVoicePreviewAssetVersion = "20260708-2";
+export const studioVoicePreviewAssetVersion = "20260708-3";
 
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
@@ -629,6 +629,22 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       badgeLabel: "Premium",
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
       previewSampleUrl: getStudioVoicePreviewSampleUrl("adam.wav"),
+    },
+    {
+      id: "Maxim",
+      label: "Максим",
+      description: "Естественный разговорный premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("maxim.wav"),
+    },
+    {
+      id: "Vika",
+      label: "Вика",
+      description: "Естественный, ясный и дружелюбный premium-голос",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      previewSampleUrl: getStudioVoicePreviewSampleUrl("vika.wav"),
     },
     {
       id: "English_ManWithDeepVoice",
@@ -760,6 +776,8 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   Eric: { description: "Lively male voice with a slight rasp" },
   Elena: { label: "Elena", description: "Serious, direct, confident premium voice" },
   Adam: { label: "Adam", description: "Dark, confident premium ElevenLabs voice" },
+  Maxim: { label: "Maxim", description: "Natural conversational premium voice" },
+  Vika: { label: "Vika", description: "Natural, clear, friendly premium voice" },
   Liam_Timing: { label: "Alexander", description: "Premium voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
   Nec_24000: { label: "Natalia", description: "Female voice" },
@@ -784,6 +802,25 @@ const studioVoiceLegacyAliases = new Map<string, StudioVoiceOption["id"]>([
   ["alexandr", "Liam_Timing"],
   ["aleksandr", "Liam_Timing"],
   ["александр", "Liam_Timing"],
+  ["mark", "Maxim"],
+  ["mark_v3", "Maxim"],
+  ["mark v3", "Maxim"],
+  ["mark_natural_conversations", "Maxim"],
+  ["mark natural conversations", "Maxim"],
+  ["mark - natural conversations", "Maxim"],
+  ["maxim", "Maxim"],
+  ["maxim_v3", "Maxim"],
+  ["maxim v3", "Maxim"],
+  ["максим", "Maxim"],
+  ["vika", "Vika"],
+  ["vika_v3", "Vika"],
+  ["vika v3", "Vika"],
+  ["vika_grib", "Vika"],
+  ["vika grib", "Vika"],
+  ["vika_grib_natural_clear_and_friendly", "Vika"],
+  ["vika grib natural clear and friendly", "Vika"],
+  ["vika grib - natural, clear and friendly", "Vika"],
+  ["вика", "Vika"],
 ]);
 
 export const getCanonicalStudioVoiceOptionId = (voiceId: string | null | undefined): string | null => {
