@@ -2547,7 +2547,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     });
 
     expect(afterTextEdit.segments.map((segment) => Number(segment.duration.toFixed(1)))).toEqual([
-      5.8,
+      5.6,
       5.8,
       5.6,
       6.9,
@@ -2970,6 +2970,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId("Liam_Timing")).toBe("ru");
     expect(getStudioLanguageForVoiceId("liam_timing")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Elena")).toBe("ru");
+    expect(getStudioLanguageForVoiceId("Adam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("English_ManWithDeepVoice")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_BrightHeroine")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Russian_HandsomeChildhoodFriend")).toBeNull();
@@ -2982,12 +2983,14 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("ru", "Liam_Timing")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "liam_timing")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "Elena")).toBe("Elena");
+    expect(resolveStudioVoiceIdForLanguage("ru", "Adam")).toBe("Adam");
     expect(resolveStudioVoiceIdForLanguage("ru", "Russian_BrightHeroine")).toBe("Russian_BrightHeroine");
     expect(getStudioVoiceCreditCost("Liam")).toBe(5);
     expect(getStudioVoiceCreditCost("liam")).toBe(5);
     expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
     expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
     expect(getStudioVoiceCreditCost("Elena")).toBe(5);
+    expect(getStudioVoiceCreditCost("Adam")).toBe(5);
     expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
@@ -5889,28 +5892,22 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.payload.segments[0]?.voiceSourceStartTime).toBeUndefined();
   });
 
-  it("uses voiceover plus pause as the photo visual duration floor", () => {
+  it("uses voiceover duration as the photo visual duration floor", () => {
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, 3.2)).toEqual({
-      minimumDurationSeconds: 3.4,
+      minimumDurationSeconds: 3.2,
       requestedDurationSeconds: 2.4,
     });
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.15, 3.2)).toEqual({
-      minimumDurationSeconds: 3.4,
+      minimumDurationSeconds: 3.2,
       requestedDurationSeconds: 3.15,
     });
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2, 3.3)).toEqual({
-      minimumDurationSeconds: 3.5,
+      minimumDurationSeconds: 3.3,
       requestedDurationSeconds: 2,
     });
-    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toEqual({
-      minimumDurationSeconds: 3.4,
-      requestedDurationSeconds: 3.2,
-    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.2, 3.2)).toBeNull();
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(3.3995, 3.2)).toBeNull();
-    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(4.9, 4.949)).toEqual({
-      minimumDurationSeconds: 5.149,
-      requestedDurationSeconds: 4.9,
-    });
+    expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(4.9, 4.949)).toBeNull();
     expect(resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(2.4, null)).toBeNull();
   });
 
@@ -7074,7 +7071,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolved.segmentStartTime).toBe(5);
   });
 
-  it("clamps segment boundary timing to the voiceover plus pause minimum duration", () => {
+  it("clamps segment boundary timing to the voiceover minimum duration", () => {
     const segment = createDraftSegment({
       duration: 4,
       endTime: 9,
@@ -7089,11 +7086,11 @@ describe("WorkspacePage studio locale defaults", () => {
     if (resolved.status === "valid") {
       expect(resolved.clamped).toBe(true);
     }
-    expect(resolved.duration).toBeCloseTo(2.6, 6);
-    expect(resolved.boundaryTime).toBeCloseTo(7.6, 6);
+    expect(resolved.duration).toBeCloseTo(2.4, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(7.4, 6);
   });
 
-  it("clamps photo visual duration from a shorter manual request to voiceover plus pause", () => {
+  it("clamps photo visual duration from a shorter manual request to voiceover duration", () => {
     const segment = createDraftSegment({
       duration: 10,
       durationMode: "manual",
@@ -7112,8 +7109,8 @@ describe("WorkspacePage studio locale defaults", () => {
     if (resolved.status === "valid") {
       expect(resolved.clamped).toBe(true);
     }
-    expect(resolved.duration).toBeCloseTo(3.5, 6);
-    expect(resolved.boundaryTime).toBeCloseTo(3.5, 6);
+    expect(resolved.duration).toBeCloseTo(3.3, 6);
+    expect(resolved.boundaryTime).toBeCloseTo(3.3, 6);
   });
 
   it("allows shrinking a talking photo video below the generated video duration", () => {

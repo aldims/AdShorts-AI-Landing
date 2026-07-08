@@ -630,6 +630,13 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
       creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
     },
     {
+      id: "Adam",
+      label: "Адам",
+      description: "Тёмный, уверенный premium-голос ElevenLabs",
+      badgeLabel: "Premium",
+      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+    },
+    {
       id: "English_ManWithDeepVoice",
       label: "Глеб",
       description: "Глубокий premium-голос",
@@ -758,6 +765,7 @@ const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOptio
   English_ManWithDeepVoice: { label: "Gleb", description: "Deep premium voice" },
   Eric: { description: "Lively male voice with a slight rasp" },
   Elena: { label: "Elena", description: "Serious, direct, confident premium voice" },
+  Adam: { label: "Adam", description: "Dark, confident premium ElevenLabs voice" },
   Liam: { label: "Alexander", description: "Expressive premium voice" },
   Liam_Timing: { label: "Alexander Timing", description: "Premium voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
