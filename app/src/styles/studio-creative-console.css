@@ -1566,9 +1566,9 @@
 /* The desktop/tablet glass rail intentionally reaches both viewport edges. */
 @media (min-width: 641px) {
   .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .site-header__inner {
-    width: 100% !important;
+    width: calc(100% - 24px) !important;
     max-width: none !important;
-    margin-top: 0 !important;
-    border-radius: 0 0 22px 22px;
+    margin-top: 8px !important;
+    border-radius: 22px;
   }
 }
