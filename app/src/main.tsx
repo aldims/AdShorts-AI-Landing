@@ -5,6 +5,7 @@ import { App } from "./App";
 import "./styles/design-lab-theme.css";
 import "./styles/global.css";
 import "./styles/studio-liquid-glass.css";
+import "./styles/studio-creative-console.css";
 
 const appElement = document.getElementById("app");
 
