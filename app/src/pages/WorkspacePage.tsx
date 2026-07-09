@@ -33799,17 +33799,18 @@ export function WorkspacePage({
                             <div className="studio-welcome-card__eyebrow">
                               <span className="studio-welcome-card__eyebrow-dot" aria-hidden="true"></span>
                               <strong>ADSHORTS STUDIO</strong>
-                              <span>{workspaceText(locale, "AI-продакшн нового поколения", "Next-generation AI production")}</span>
+                              <span>{workspaceText(locale, "AI-студия для коротких видео", "AI studio for short-form video")}</span>
                             </div>
 
                             <h2>
-                              {workspaceText(locale, "Добро пожаловать в", "Welcome to")} <em>AdShorts AI Studio</em>
+                              {workspaceText(locale, "Создайте Shorts", "Create a Short")} {" "}
+                              <em>{workspaceText(locale, "из одной идеи", "from a single idea")}</em>
                             </h2>
                             <p>
                               {workspaceText(
                                 locale,
-                                "Опишите идею — AI соберёт сценарий, визуал, голос, музыку и субтитры. Каждый этап можно изменить.",
-                                "Describe an idea and AI will assemble the script, visuals, voice, music, and captions. Every stage stays editable.",
+                                "Опишите тему — AI соберёт сценарий, визуал, озвучку, музыку и субтитры. После генерации можно изменить любую сцену.",
+                                "Describe a topic and AI will assemble the script, visuals, voiceover, music, and captions. After generation, you can change any scene.",
                               )}
                             </p>
 
@@ -33826,7 +33827,7 @@ export function WorkspacePage({
                                 </span>
                                 <span>
                                   <strong>{workspaceText(locale, "Из идеи", "From idea")}</strong>
-                                  <small>{workspaceText(locale, "Быстрый старт с AI", "Fast start with AI")}</small>
+                                  <small>{workspaceText(locale, "Один текст → готовый Shorts", "One prompt → a finished Short")}</small>
                                 </span>
                                 <em>01</em>
                               </div>
@@ -33839,7 +33840,7 @@ export function WorkspacePage({
                                 </span>
                                 <span>
                                   <strong>{workspaceText(locale, "По сценам", "By scenes")}</strong>
-                                  <small>{workspaceText(locale, "Полный контроль", "Full control")}</small>
+                                  <small>{workspaceText(locale, "Соберите ролик вручную", "Build the video scene by scene")}</small>
                                 </span>
                                 <em>02</em>
                               </div>
@@ -33855,7 +33856,7 @@ export function WorkspacePage({
                           <div className="studio-welcome-card__guide-head">
                             <div>
                               <span>{workspaceText(locale, "БЫСТРЫЙ СТАРТ", "QUICK START")}</span>
-                              <h3>{workspaceText(locale, "Первый Shorts за три шага", "Your first Short in three steps")}</h3>
+                              <h3>{workspaceText(locale, "Первый Shorts за 3 шага", "Your first Short in 3 steps")}</h3>
                             </div>
                             <small>{workspaceText(locale, "≈ 1 минута", "≈ 1 minute")}</small>
                           </div>
@@ -33885,8 +33886,14 @@ export function WorkspacePage({
                                 </svg>
                               </span>
                               <span className="studio-welcome-card__step-copy">
-                                <strong>{workspaceText(locale, "Настройте стиль", "Set the style")}</strong>
-                                <span>{workspaceText(locale, "Выберите визуал, голос и субтитры.", "Choose visuals, voice, and captions.")}</span>
+                                <strong>{workspaceText(locale, "Выберите стиль", "Choose the style")}</strong>
+                                <span>
+                                  {workspaceText(
+                                    locale,
+                                    "Настройте визуал, голос, субтитры и музыку.",
+                                    "Set the visuals, voice, captions, and music.",
+                                  )}
+                                </span>
                               </span>
                             </li>
                             <li>
@@ -33899,7 +33906,13 @@ export function WorkspacePage({
                               </span>
                               <span className="studio-welcome-card__step-copy">
                                 <strong>{workspaceText(locale, "Запустите генерацию", "Start generation")}</strong>
-                                <span>{workspaceText(locale, "Получите ролик 9:16 и улучшайте сцены.", "Get a 9:16 video and refine its scenes.")}</span>
+                                <span>
+                                  {workspaceText(
+                                    locale,
+                                    "Получите готовый ролик и улучшайте нужные сцены.",
+                                    "Get a finished video and refine the scenes you need.",
+                                  )}
+                                </span>
                               </span>
                             </li>
                           </ol>
@@ -33914,12 +33927,18 @@ export function WorkspacePage({
                               </svg>
                             </span>
                             <span>
-                              <strong>{workspaceText(locale, "Всё под контролем", "You stay in control")}</strong>
+                              <strong>
+                                {workspaceText(
+                                  locale,
+                                  "Всё можно изменить после генерации",
+                                  "Everything stays editable after generation",
+                                )}
+                              </strong>
                               <small>
                                 {workspaceText(
                                   locale,
-                                  "После генерации можно заменить любую сцену, голос или стиль.",
-                                  "After generation, replace any scene, voice, or style.",
+                                  "Текст, сцену, голос, визуал, субтитры или музыку.",
+                                  "Change the text, scene, voice, visuals, captions, or music.",
                                 )}
                               </small>
                             </span>
