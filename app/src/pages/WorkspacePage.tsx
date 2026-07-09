@@ -33037,13 +33037,15 @@ export function WorkspacePage({
       >
         <header className="site-header site-header--workspace">
           <div className="container site-header__inner">
-            <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
-              <img src="/logo.png" alt="" width="44" height="44" />
-              <span>AdShorts AI</span>
-            </Link>
-
-            <div className={`site-header__studio-nav-cluster${shouldShowStudioCreateModeSwitch ? " has-create-mode-switch" : ""}`}>
+            <div className={`site-header__mode${shouldShowStudioCreateModeSwitch ? " has-create-mode-switch" : ""}`}>
+              <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
+                <img src="/logo.png" alt="" width="44" height="44" />
+                <span>AdShorts AI</span>
+              </Link>
               {studioCreateModeSwitch}
+            </div>
+
+            <div className="site-header__studio-nav-cluster">
               <PrimarySiteNav
                 activeItem="studio"
                 onOpenStudio={() => setActiveTab("studio")}

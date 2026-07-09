@@ -169,13 +169,22 @@ export function PrimarySiteNav({
     onOpenStudio();
   };
 
-  const compactToggleLabel = isStudioActive
-    ? t(navMessages.studio)
-    : activeItem === "pricing"
-      ? t(navMessages.pricing)
-      : activeItem === "examples"
-        ? t(navMessages.examples)
-        : t(navMessages.home);
+  const activeStudioSectionLabel =
+    resolvedActiveStudioSection === "projects"
+      ? studioSectionLabels?.projects ?? t(navMessages.projects)
+      : resolvedActiveStudioSection === "media"
+        ? studioSectionLabels?.media ?? t(navMessages.media)
+        : studioSectionLabels?.create ?? t(navMessages.studioCreate);
+  const compactToggleLabel =
+    isStudioActive && shouldRenderStudioSections
+      ? activeStudioSectionLabel
+      : isStudioActive
+        ? t(navMessages.studio)
+        : activeItem === "pricing"
+          ? t(navMessages.pricing)
+          : activeItem === "examples"
+            ? t(navMessages.examples)
+            : t(navMessages.home);
 
   const compactToggle = (
     <button
@@ -183,6 +192,7 @@ export function PrimarySiteNav({
       type="button"
       aria-controls={compactMenuId}
       aria-expanded={isCompactMenuOpen}
+      aria-label={shouldRenderStudioSections ? `${t(navMessages.ariaStudioSections)}: ${compactToggleLabel}` : undefined}
       onClick={() => setIsCompactMenuOpen((current) => !current)}
     >
       <span>{compactToggleLabel}</span>
