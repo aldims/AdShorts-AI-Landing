@@ -1,0 +1,57 @@
+/*
+ * The Studio sections live on their own centre rail.  The creation-mode
+ * switch is deliberately positioned to the left so the navigation remains
+ * geometrically centred while its active tab changes.
+ */
+@media (min-width: 961px) {
+  .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .site-header__inner {
+    --studio-header-tabs-rail-width: 390px;
+    position: relative !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .site-header--workspace
+    .site-header__studio-nav-cluster.has-create-mode-switch {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 2 !important;
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    transform: none !important;
+    pointer-events: none !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .site-header--workspace
+    .site-header__studio-nav-cluster.has-create-mode-switch
+    .studio-create-mode-switch {
+    position: absolute !important;
+    top: 50% !important;
+    left: max(72px, calc(50% - 404px)) !important;
+    transform: translateY(-50%) !important;
+    pointer-events: auto !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .site-header--workspace
+    .site-nav--studio-tabs {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    width: var(--studio-header-tabs-rail-width) !important;
+    max-width: var(--studio-header-tabs-rail-width) !important;
+    transform: translate(-50%, -50%) !important;
+    pointer-events: auto !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .site-header--workspace
+    .site-nav--studio-tabs
+    .site-nav__content {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+}
