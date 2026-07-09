@@ -36,32 +36,16 @@
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
   position: relative;
   isolation: isolate;
-  border: 1px solid var(--scenes-glass-line);
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(137, 157, 235, 0.12), transparent 38%),
-    radial-gradient(circle at 88% 8%, rgba(158, 125, 222, 0.08), transparent 30%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.047), rgba(255, 255, 255, 0.012) 38%),
-    linear-gradient(160deg, rgba(18, 24, 39, 0.82), rgba(7, 10, 18, 0.9));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 1px 0 0 rgba(255, 255, 255, 0.025),
-    0 28px 80px -44px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(128, 148, 220, 0.025);
-  backdrop-filter: blur(34px) saturate(132%);
-  -webkit-backdrop-filter: blur(34px) saturate(132%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.055), transparent 22%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 18%);
-  pointer-events: none;
+  content: none;
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column > * {
@@ -153,18 +137,14 @@
   justify-self: end !important;
   width: auto !important;
   min-height: 46px;
-  padding: 5px !important;
-  gap: 6px;
-  border: 1px solid var(--scenes-glass-line);
-  border-radius: 17px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.014)),
-    rgba(10, 14, 25, 0.78);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 18px 38px -26px rgba(0, 0, 0, 0.94);
-  backdrop-filter: blur(24px) saturate(135%);
-  -webkit-backdrop-filter: blur(24px) saturate(135%);
+  padding: 0 !important;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-preview-controls {
@@ -207,10 +187,10 @@
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
-  border: 1px solid rgba(190, 204, 255, 0.08);
-  background:
-    linear-gradient(90deg, rgba(20, 25, 41, 0.97) 72%, rgba(13, 17, 29, 0.76));
+  border: 0;
+  background: transparent;
   color: rgba(222, 228, 248, 0.76);
+  box-shadow: none;
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
@@ -276,10 +256,6 @@
 }
 
 @media (max-width: 980px) {
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
-    border-radius: 24px;
-  }
-
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
     border-radius: 22px;
   }
@@ -288,13 +264,6 @@
 @media (max-width: 640px) {
   #app .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden {
     padding-inline: 10px;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
-    border-radius: 22px;
-    background:
-      radial-gradient(circle at 50% 10%, rgba(137, 157, 235, 0.1), transparent 34%),
-      linear-gradient(160deg, rgba(18, 23, 37, 0.86), rgba(7, 10, 17, 0.94));
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
