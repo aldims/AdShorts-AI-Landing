@@ -8,6 +8,7 @@ import "./styles/studio-liquid-glass.css";
 import "./styles/studio-creative-console.css";
 import "./styles/studio-welcome-card.css";
 import "./styles/studio-header-centered-nav.css";
+import "./styles/site-header-premium.css";
 import "./styles/studio-prompt-refinement.css";
 
 const appElement = document.getElementById("app");
