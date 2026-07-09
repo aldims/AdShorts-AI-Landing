@@ -2633,6 +2633,12 @@ export function WorkspacePage({
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
   }, []);
+  const handleStudioWelcomeStart = useCallback(() => {
+    closeStudioWelcomeCard();
+    window.requestAnimationFrame(() => {
+      promptTextareaRef.current?.focus();
+    });
+  }, [closeStudioWelcomeCard]);
   const openStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(false);
@@ -33828,33 +33834,6 @@ export function WorkspacePage({
                             </div>
                           </div>
 
-                          <div className="studio-welcome-card__visual" aria-hidden="true">
-                            <span className="studio-welcome-card__visual-status">
-                              <span></span>
-                              {workspaceText(locale, "AI-режиссёр готов", "AI director ready")}
-                            </span>
-                            <div className="studio-welcome-card__preview">
-                              <div className="studio-welcome-card__preview-topline">
-                                <span>9:16</span>
-                                <span>PREVIEW</span>
-                                <span>00:28</span>
-                              </div>
-                              <div className="studio-welcome-card__preview-scene">
-                                <small>SCENE 01</small>
-                                <span className="studio-welcome-card__preview-orbit"></span>
-                                <strong>{workspaceText(locale, "ИДЕЯ\nСТАНОВИТСЯ\nSHORTS", "IDEA\nBECOMES\nA SHORT")}</strong>
-                              </div>
-                              <div className="studio-welcome-card__preview-track">
-                                <span></span><span className="is-active"></span><span></span><span></span>
-                              </div>
-                            </div>
-                            <span className="studio-welcome-card__visual-chip studio-welcome-card__visual-chip--script">
-                              01 · {workspaceText(locale, "Сценарий", "Script")}
-                            </span>
-                            <span className="studio-welcome-card__visual-chip studio-welcome-card__visual-chip--voice">
-                              03 · {workspaceText(locale, "Озвучка", "Voice")}
-                            </span>
-                          </div>
                         </div>
 
                         <section
@@ -33934,8 +33913,8 @@ export function WorkspacePage({
                             </span>
                           </div>
 
-                          <button className="studio-welcome-card__start" type="button" onClick={closeStudioWelcomeCard}>
-                            <span>{workspaceText(locale, "Создать первый Shorts", "Create your first Short")}</span>
+                          <button className="studio-welcome-card__start" type="button" onClick={handleStudioWelcomeStart}>
+                            <span>{workspaceText(locale, "Ввести идею", "Enter an idea")}</span>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
