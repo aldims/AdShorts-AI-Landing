@@ -1657,6 +1657,7 @@ export const isWorkspaceSegmentGeneratedVideoVisual = (segment: WorkspaceSegment
 };
 
 export const canWorkspaceSegmentUseVideoExtensionTool = (segment: WorkspaceSegmentEditorDraftSegment) =>
+  getWorkspaceSegmentLatestVisualAction(segment) !== "photo_animation" &&
   getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "video" &&
   Boolean(getWorkspaceSegmentDurationExtensionStillSourceAsset(segment));
 

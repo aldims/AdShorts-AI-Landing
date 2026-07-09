@@ -23,6 +23,7 @@ import {
   getWorkspaceSegmentVisualAudioDurationMismatchInfo,
   getStudioSceneSoundAssetPreviewMediaKind,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
+  canWorkspaceSegmentUseVideoExtensionTool,
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
@@ -1025,7 +1026,39 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(getWorkspaceSegmentCurrentVideoSourceAsset(segment)).toEqual(selectedVideo);
+    expect(canWorkspaceSegmentUseVideoExtensionTool(segment)).toBe(true);
     expect(resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(segment)).toBe(5);
+  });
+
+  it("keeps the photo animation tool selected for generated photo animations", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 611,
+        durationSeconds: 4.6,
+        fileName: "segment-photo-animation.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        posterUrl: "/api/workspace/media-assets/611/poster",
+        remoteUrl: "/api/workspace/media-assets/611/playback",
+        source: "media-library",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      duration: 4.6,
+      endTime: 4.6,
+      mediaType: "photo",
+      photoAnimationSourceAsset: {
+        assetId: 610,
+        fileName: "segment-ai-photo.jpg",
+        fileSize: 0,
+        mimeType: "image/jpeg",
+        remoteUrl: "/api/workspace/media-assets/610",
+        source: "media-library",
+      },
+      videoAction: "photo_animation",
+    });
+
+    expect(getWorkspaceSegmentSelectedVisualPreviewKind(segment)).toBe("video");
+    expect(canWorkspaceSegmentUseVideoExtensionTool(segment)).toBe(false);
   });
 
   it("uses the longer current video slot for the extension menu over a stale stored source duration", () => {
