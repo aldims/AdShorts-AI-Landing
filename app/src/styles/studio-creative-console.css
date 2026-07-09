@@ -1662,3 +1662,35 @@
     height: 30px !important;
   }
 }
+
+/* Keep the five creation settings on one precise, evenly spaced baseline. */
+@media (min-width: 761px) {
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-video-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-subtitle-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-voice-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-music-selector {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-video-selector__trigger,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-subtitle-selector__trigger,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-voice-selector__trigger,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips .studio-canvas-prompt__chip.studio-music-selector__trigger {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    justify-content: stretch !important;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+}
