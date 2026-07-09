@@ -1,0 +1,4 @@
+/* Keep the idea field visually open; settings below already form a distinct control row. */
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row {
+  border-bottom: 0 !important;
+}
