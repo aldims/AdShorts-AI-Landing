@@ -251,6 +251,7 @@ import {
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentEditorScratchDraft,
+  isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentImageFile,
   isWorkspaceSegmentProjectVoiceoverAsset,
   isWorkspaceSegmentGeneratedVideoVisual,
@@ -287,6 +288,7 @@ import {
   restoreWorkspaceSegmentEditorDraftProjectTtsAsset,
   restoreWorkspaceSegmentDraftVisualFromBaseline,
   restoreWorkspaceSegmentSceneSoundState,
+  restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   restoreWorkspaceSegmentTimelineSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
@@ -318,7 +320,6 @@ import {
   isWorkspaceSegmentAppliedVisualResetChange,
   isWorkspaceSegmentDraftSceneSoundEdited,
   isWorkspaceSegmentDraftSubtitleEdited,
-  isWorkspaceSegmentDraftVisualResettable,
   isWorkspaceSegmentDraftVoiceEdited,
   reorderWorkspaceSegmentEditorSegmentsByIndex,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
@@ -1333,7 +1334,7 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
 
 export const shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft = (
   sourceKind: "project" | "scene" | "segment" | null | undefined,
-) => sourceKind === "scene" || sourceKind === "segment";
+) => sourceKind === "scene";
 
 const WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID = -1;
 const WORKSPACE_SEGMENT_EDITOR_DELETE_TIMELINE_REBUILD_OPTIONS = {
@@ -10821,6 +10822,11 @@ export function WorkspacePage({
         areWorkspaceSegmentDurationValuesEqual(draftSourceDurationSeconds, baselineSourceDurationSeconds) &&
         baselineManualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < draftManualDurationSeconds;
       if (!isStaleSourceDuration) {
+        if (isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(draftSegment, baselineSegment)) {
+          hasStaleDurationDrift = true;
+          continue;
+        }
+
         const isSameVisualSlotDurationDrift =
           getWorkspaceSegmentSelectedVisualPreviewKind(draftSegment) === "video" &&
           getWorkspaceSegmentSelectedVisualPreviewKind(baselineSegment) === "video" &&
@@ -11970,11 +11976,17 @@ export function WorkspacePage({
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     let hasChanges = false;
     const nextSegments = currentDraft.segments.map((segment) => {
-      const measuredDurationSeconds = getSegmentEditorMeasuredVisualDurationSeconds(segment);
+      const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+        (candidate) => candidate.index === segment.index,
+      );
+      const durationRepairedSegment = baselineSegment
+        ? restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(segment, baselineSegment)
+        : segment;
+      const measuredDurationSeconds = getSegmentEditorMeasuredVisualDurationSeconds(durationRepairedSegment);
       const voiceoverDurationSeconds =
-        getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, currentDraft, { allowEstimated: false })?.durationSeconds ??
+        getWorkspaceSegmentTimelineVoiceoverDurationInfo(durationRepairedSegment, currentDraft, { allowEstimated: false })?.durationSeconds ??
         null;
-      const nextSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, measuredDurationSeconds, {
+      const nextSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(durationRepairedSegment, measuredDurationSeconds, {
         voiceoverDurationSeconds,
       });
       if (nextSegment !== segment) {
@@ -12000,7 +12012,7 @@ export function WorkspacePage({
     }
     segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft(nextDraft);
-  }, [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorDraft]);
+  }, [getSegmentEditorMeasuredVisualDurationSeconds, segmentEditorChecklistBaseSession, segmentEditorDraft]);
 
   useEffect(() => {
     if (!segmentEditorDraft) {
@@ -33345,8 +33357,8 @@ export function WorkspacePage({
                                 const baselineVisualSegment = segmentEditorChangeDisplayBaseSession?.segments.find(
                                   (baselineSegment) => baselineSegment.index === segment.index,
                                 );
-                                const canResetVisual = isWorkspaceSegmentDraftVisualResettable(segment);
                                 const segmentVisualStatus = getWorkspaceSegmentDraftVisualStatus(segment, baselineVisualSegment);
+                                const canResetVisual = segmentVisualStatus !== "none";
                                 const isSegmentVisualChanged = segmentVisualStatus === "changed";
                                 const shouldMuteSegmentPreviewVideo = !(
                                   isEmbeddedTalkingPhotoVideoPreview &&

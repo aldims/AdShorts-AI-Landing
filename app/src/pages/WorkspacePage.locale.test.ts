@@ -209,9 +209,9 @@ describe("WorkspacePage segment timeline drag drop", () => {
     expect(resolveWorkspaceSegmentThumbFinalInsertIndex(false, 4, 3)).toBeNull();
   });
 
-  it("syncs measured scene and segment voiceover durations back to the draft", () => {
+  it("syncs only generated scene voiceover assets back to the draft", () => {
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("scene")).toBe(true);
-    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("segment")).toBe(true);
+    expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("segment")).toBe(false);
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("project")).toBe(false);
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft(null)).toBe(false);
   });
@@ -1005,7 +1005,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(loadedBaseline.segments[0]?.currentAsset?.assetId).toBe(101);
   });
 
-  it("restores original segment text and visual when a reset baseline already contains fresh edits", () => {
+  it("uses the loaded project state as the reset baseline even when it retains source references", () => {
     const originalText = "Исходная озвучка сцены";
     const editedText = "Исходная озвучка сцены. Новая длинная фраза.";
     const originalAsset = createMediaAsset(101, { mediaType: "photo", sourceKind: "stock" });
@@ -1040,11 +1040,11 @@ describe("WorkspacePage segment editor draft persistence", () => {
     );
     const resetSegment = resetDraft.segments[0]!;
 
-    expect(resetSegment.text).toBe(originalText);
-    expect(resetSegment.speechDuration).toBeNull();
-    expect(resetSegment.voiceoverAsset).toBeNull();
-    expect(resetSegment.currentAsset?.assetId).toBe(101);
-    expect(getWorkspaceSegmentDraftPreviewUrl(resetSegment)).toBe("/api/workspace/media-assets/101");
+    expect(resetSegment.text).toBe(editedText);
+    expect(resetSegment.speechDuration).toBe(12.4);
+    expect(resetSegment.voiceoverAsset?.assetId).toBe(901);
+    expect(resetSegment.currentAsset?.assetId).toBe(303);
+    expect(resetSegment.currentPreviewUrl).toBe("/api/workspace/media-assets/303");
   });
 
   it("clears temporary editor state for other projects after a project is created", () => {
@@ -9945,7 +9945,7 @@ describe("WorkspacePage studio locale defaults", () => {
     ]);
   });
 
-  it("compares reset-all visual changes with the original source visual", () => {
+  it("compares reset-all visual changes with the loaded project visual", () => {
     const originalAsset = createMediaAsset(101, {
       mediaType: "photo",
       sourceKind: "stock",
@@ -9971,12 +9971,12 @@ describe("WorkspacePage studio locale defaults", () => {
       createDraftSession(appliedSegment),
     );
 
-    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(resetSegment), resetTarget)).toEqual([]);
-    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(appliedSegment), resetTarget)).toEqual([
+    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(appliedSegment), resetTarget)).toEqual([]);
+    expect(buildWorkspaceSegmentEditorChangeChecklist(createDraftSession(resetSegment), resetTarget)).toEqual([
       expect.objectContaining({
-        label: "Сегмент 1: обновлен визуал",
-        resetVisual: true,
-        restoreVisual: false,
+        label: "Сегмент 1: сброшен визуал",
+        resetVisual: false,
+        restoreVisual: true,
         segmentIndex: 0,
       }),
     ]);

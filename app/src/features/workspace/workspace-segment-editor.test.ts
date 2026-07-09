@@ -26,6 +26,7 @@ import {
   canWorkspaceSegmentUseVideoExtensionTool,
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
+  isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   createWorkspaceSegmentSceneSoundAsset,
   createWorkspaceSegmentEditorInsertedSegment,
@@ -35,6 +36,7 @@ import {
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   repairWorkspaceSegmentEditorSpeechWordBoundaries,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
+  restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   restoreWorkspaceSegmentEditorDraftProjectTtsAsset,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
@@ -2642,6 +2644,82 @@ describe("workspace segment editor project voiceover timeline", () => {
       manualDurationSeconds: 5,
       startTime: 11.1,
     }));
+  });
+
+  it("keeps the server timeline for persisted ffmpeg photo renders with transition handles", () => {
+    const currentAsset = {
+      assetId: 6670,
+      durationSeconds: null,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      mediaType: "video",
+      mimeType: "video/mp4",
+      renderedAnimationMode: "ffmpeg",
+      renderedViaI2v: false,
+      role: "rendered_segment",
+      sourceKind: "ai_generated",
+    } as any;
+    const baselineSegment = createProjectVoiceoverSegment({
+      currentAsset,
+      currentSourceKind: "ai_generated",
+      duration: 4.104,
+      durationMode: "auto",
+      endTime: 4.104,
+      mediaType: "photo",
+      speechDuration: 3.96,
+      speechDurationSource: "audio",
+      speechEndTime: 3.96,
+      speechStartTime: 0,
+      startTime: 0,
+      videoAction: "original",
+      voiceSourceDuration: 4.104,
+      voiceSourceEndTime: 4.104,
+      voiceSourceStartTime: 0,
+    });
+    const staleMeasuredSegment = createProjectVoiceoverSegment({
+      ...baselineSegment,
+      currentAsset: { assetId: 6670 } as any,
+      duration: 4.604,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 4.604,
+      manualDurationSeconds: 4.604,
+      speechDuration: 4.624,
+      speechEndTime: 4.624,
+      voiceSourceDuration: 4.624,
+      voiceSourceEndTime: 4.624,
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(baselineSegment, 4.604)).toBe(baselineSegment);
+    expect(
+      isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(staleMeasuredSegment, baselineSegment),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(
+        { ...staleMeasuredSegment, currentAsset },
+        { ...baselineSegment, currentAsset: { assetId: 6670 } as any },
+      ),
+    ).toBe(true);
+    expect(
+      restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(staleMeasuredSegment, baselineSegment),
+    ).toEqual(expect.objectContaining({
+      duration: 4.104,
+      durationMode: "auto",
+      durationSyncMode: null,
+      endTime: 4.104,
+      manualDurationSeconds: null,
+      speechDuration: 3.96,
+      speechEndTime: 3.96,
+      voiceSourceDuration: 4.104,
+      voiceSourceEndTime: 4.104,
+    }));
+    expect(
+      isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(
+        { ...staleMeasuredSegment, durationSyncModeUserSelected: true },
+        baselineSegment,
+      ),
+    ).toBe(false);
   });
 
   it("does not replace a voiceover-trimmed video scene with measured visual duration", () => {

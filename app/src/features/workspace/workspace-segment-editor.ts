@@ -4771,6 +4771,57 @@ export const syncWorkspaceSegmentsEmbeddedVisualDurations = (
   return hasChanges ? nextSegments : segments;
 };
 
+export const isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
+  draftSegment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment,
+) => {
+  const draftManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    draftSegment.manualDurationSeconds,
+  );
+  const baselineManualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    baselineSegment.manualDurationSeconds,
+  );
+  const draftDurationSeconds =
+    draftManualDurationSeconds ?? normalizeWorkspaceSegmentManualDurationSeconds(draftSegment.duration);
+  const baselineDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    baselineManualDurationSeconds ?? baselineSegment.duration,
+  );
+  const draftVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(draftSegment);
+  const baselineVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(baselineSegment);
+
+  return Boolean(
+    (isWorkspaceSegmentHoldableRenderedPhotoVisual(draftSegment) ||
+      isWorkspaceSegmentHoldableRenderedPhotoVisual(baselineSegment)) &&
+      draftSegment.durationSyncModeUserSelected !== true &&
+      draftDurationSeconds !== null &&
+      baselineDurationSeconds !== null &&
+      Boolean(draftVisualIdentity) &&
+      draftVisualIdentity === baselineVisualIdentity &&
+      !areWorkspaceSegmentDurationValuesEqual(draftDurationSeconds, baselineDurationSeconds)
+  );
+};
+
+export const restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
+  draftSegment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment,
+): WorkspaceSegmentEditorDraftSegment =>
+  isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(draftSegment, baselineSegment)
+    ? restoreWorkspaceSegmentTimelineDurationState(
+        {
+          ...draftSegment,
+          speechDuration: baselineSegment.speechDuration,
+          speechDurationSource: baselineSegment.speechDurationSource ?? null,
+          speechEndTime: baselineSegment.speechEndTime,
+          speechStartTime: baselineSegment.speechStartTime,
+          speechWords: baselineSegment.speechWords.map((word) => ({ ...word })),
+          voiceSourceDuration: baselineSegment.voiceSourceDuration ?? null,
+          voiceSourceEndTime: baselineSegment.voiceSourceEndTime ?? null,
+          voiceSourceStartTime: baselineSegment.voiceSourceStartTime ?? null,
+        },
+        baselineSegment,
+      )
+    : draftSegment;
+
 export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   durationSeconds: number | null | undefined,
@@ -4780,6 +4831,14 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
 ): WorkspaceSegmentEditorDraftSegment => {
   const measuredVisualDuration = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
   if (measuredVisualDuration === null || getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+    return segment;
+  }
+
+  // Persisted ffmpeg photo renders may contain transition handles beyond the
+  // logical scene slot. The server timeline remains authoritative for them;
+  // treating the encoded file length as a user duration changes both the UI
+  // and the reset checklist immediately after opening an untouched project.
+  if (isWorkspaceSegmentHoldableRenderedPhotoVisual(segment)) {
     return segment;
   }
 
@@ -8244,81 +8303,9 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
 };
 
 export const createWorkspaceSegmentEditorResetDraftFromBaseline = (
-  draft: WorkspaceSegmentEditorDraftSession,
+  _draft: WorkspaceSegmentEditorDraftSession,
   baseline: WorkspaceSegmentEditorDraftSession,
-): WorkspaceSegmentEditorDraftSession => {
-  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(baseline);
-  const draftSegmentsByIndex = new Map(draft.segments.map((segment) => [segment.index, segment] as const));
-  const nextSession = cloneWorkspaceSegmentEditorDraftSession(baseline);
-
-  return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-    ...nextSession,
-    segments: nextSession.segments.map((baselineSegment) => {
-      const draftSegment = draftSegmentsByIndex.get(baselineSegment.index);
-      if (!draftSegment) {
-        return baselineSegment;
-      }
-
-      const originalText = typeof draftSegment.originalText === "string" ? draftSegment.originalText : baselineSegment.originalText;
-      const originalTextByLanguage = cloneWorkspaceSegmentEditorLocalizedTextMap(
-        draftSegment.originalTextByLanguage,
-        originalText,
-        fallbackLanguage,
-      );
-      const shouldRestoreOriginalText =
-        baselineSegment.text !== originalText ||
-        !areWorkspaceSegmentEditorLocalizedTextMapsEqual(baselineSegment.textByLanguage, originalTextByLanguage);
-      const segmentWithOriginalText = shouldRestoreOriginalText
-        ? {
-            ...baselineSegment,
-            originalText,
-            originalTextByLanguage,
-            speechDuration: null,
-            speechDurationSource: null,
-            speechEndTime: null,
-            speechStartTime: null,
-            speechWords: [],
-            voiceSourceDuration: null,
-            voiceSourceEndTime: null,
-            voiceSourceStartTime: null,
-            text: originalText,
-            textByLanguage: originalTextByLanguage,
-            voiceoverAsset: null,
-            voiceoverLanguage: null,
-            voiceoverTextHash: null,
-            voiceoverVoiceType: null,
-          }
-        : {
-            ...baselineSegment,
-            originalText,
-            originalTextByLanguage,
-          };
-
-      if (
-        !isWorkspaceSegmentCurrentVisualDifferentFromOriginal(draftSegment) &&
-        !isWorkspaceSegmentCurrentVisualDifferentFromOriginal(segmentWithOriginalText)
-      ) {
-        return segmentWithOriginalText;
-      }
-
-      return resetWorkspaceSegmentDraftVisualToOriginal(
-        {
-          ...segmentWithOriginalText,
-          originalAsset: cloneWorkspaceMediaAssetRef(draftSegment.originalAsset ?? segmentWithOriginalText.originalAsset),
-          originalExternalPlaybackUrl:
-            draftSegment.originalExternalPlaybackUrl ?? segmentWithOriginalText.originalExternalPlaybackUrl,
-          originalExternalPreviewUrl:
-            draftSegment.originalExternalPreviewUrl ?? segmentWithOriginalText.originalExternalPreviewUrl,
-          originalPlaybackUrl: draftSegment.originalPlaybackUrl ?? segmentWithOriginalText.originalPlaybackUrl,
-          originalPosterUrl: draftSegment.originalPosterUrl ?? segmentWithOriginalText.originalPosterUrl,
-          originalPreviewUrl: draftSegment.originalPreviewUrl ?? segmentWithOriginalText.originalPreviewUrl,
-          originalSourceKind: draftSegment.originalSourceKind ?? segmentWithOriginalText.originalSourceKind,
-        },
-        nextSession.projectId,
-      );
-    }),
-  });
-};
+): WorkspaceSegmentEditorDraftSession => cloneWorkspaceSegmentEditorDraftSession(baseline);
 
 export const getWorkspaceSegmentEditorNextSegmentIndex = (
   segments: WorkspaceSegmentEditorDraftSegment[],
