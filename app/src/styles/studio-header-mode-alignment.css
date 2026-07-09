@@ -1,0 +1,26 @@
+/* Centre the creation-mode switch in the real gap between brand and workspace navigation. */
+@media (min-width: 961px) and (max-width: 1180px) {
+  #app .studio-canvas-route .site-header--workspace .site-header__mode {
+    position: static !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch {
+    position: absolute !important;
+    top: 50% !important;
+    left: calc(25% - 62px) !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
+
+@media (min-width: 1181px) {
+  #app .studio-canvas-route .site-header--workspace .site-header__mode {
+    position: static !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch {
+    position: absolute !important;
+    top: 50% !important;
+    left: calc(25% - 70px) !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
