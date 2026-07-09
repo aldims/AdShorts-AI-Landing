@@ -2,3 +2,39 @@
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row {
   border-bottom: 0 !important;
 }
+
+/* Equal desktop columns with optically centred labels and values. */
+@media (min-width: 761px) {
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > * > .studio-canvas-prompt__chip {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    justify-content: stretch !important;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+}
+
+@media (min-width: 1181px) {
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > * > .studio-canvas-prompt__chip {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding-inline: 10px !important;
+  }
+}
