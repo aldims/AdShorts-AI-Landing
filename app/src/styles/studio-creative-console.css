@@ -67,11 +67,10 @@
 
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-bg {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    radial-gradient(circle at 50% 18%, rgba(94, 142, 151, 0.12), transparent 34%),
-    #050607;
-  background-size: 72px 72px, 72px 72px, auto, auto;
+    radial-gradient(80% 62% at 50% -10%, rgba(101, 120, 170, 0.13), transparent 64%),
+    radial-gradient(44% 58% at -6% 38%, rgba(75, 119, 188, 0.07), transparent 70%),
+    radial-gradient(48% 58% at 106% 82%, rgba(132, 99, 188, 0.06), transparent 70%),
+    linear-gradient(180deg, #090c11 0%, #06080c 48%, #050609 100%);
   -webkit-mask-image: linear-gradient(to bottom, black, rgba(0, 0, 0, 0.68) 72%, transparent);
   mask-image: linear-gradient(to bottom, black, rgba(0, 0, 0, 0.68) 72%, transparent);
 }
@@ -482,11 +481,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 88%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 88%);
+    linear-gradient(138deg, rgba(255, 255, 255, 0.07), transparent 32%),
+    radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.055), transparent 34%);
 }
 
 .studio-canvas-empty__scene-index {
