@@ -7,10 +7,18 @@ script = ""
 
 [[actions]]
 name = "backend deploy"
-icon = "tool"
+icon = "run"
 command = '''
 cd "/Users/dima/Desktop/AdsFlow AI"
 python update_services.py
+'''
+
+[[actions]]
+name = "workers deploy"
+icon = "run"
+command = '''
+cd "/Users/dima/Desktop/AdsFlow AI"
+./scripts/deploy_worker.sh -h 147.45.173.96 -u root -w 2
 '''
 
 [[actions]]
@@ -19,12 +27,4 @@ icon = "run"
 command = '''
 cd "/Users/dima/Desktop/AdShorts AI landing"
 ./deploy-production.sh
-'''
-
-[[actions]]
-name = "workers deploy"
-icon = "tool"
-command = '''
-cd "/Users/dima/Desktop/AdsFlow AI"
-./scripts/deploy_worker.sh -h 147.45.173.96 -u root -w 2
 '''
