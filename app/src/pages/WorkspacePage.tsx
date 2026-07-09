@@ -1563,6 +1563,30 @@ export function WorkspacePage({
       if (normalizedMessage === "Prompt is required.") {
         return workspaceText(locale, "Введите prompt для генерации.", "Enter a prompt to generate.");
       }
+      const lowerMessage = normalizedMessage.toLowerCase();
+      if (
+        lowerMessage.includes("ai_visuals_rejected") ||
+        lowerMessage.includes("ai visuals could not be created") ||
+        lowerMessage.includes("ai-only visual generation failed") ||
+        lowerMessage.includes("stock fallback is disabled") ||
+        lowerMessage.includes("openai image edit blocked prompt") ||
+        lowerMessage.includes("content flagged as potentially sensitive") ||
+        lowerMessage.includes("blocked prompt") ||
+        lowerMessage.includes("не удалось создать ai-визуалы")
+      ) {
+        return workspaceText(
+          locale,
+          "Не удалось создать AI-визуалы для этой темы: часть изображений была отклонена провайдером. Попробуйте переформулировать запрос без защищённых персонажей/брендов или выберите другой визуальный режим.",
+          "AI visuals could not be created for this topic because some images were rejected by the provider. Rephrase the prompt without protected characters or brands, or choose another visual mode.",
+        );
+      }
+      if (lowerMessage.includes("final_video_missing") || lowerMessage.includes("no_final_video_generated")) {
+        return workspaceText(
+          locale,
+          "Не удалось собрать финальное видео. Попробуйте повторить генерацию позже.",
+          "The final video could not be assembled. Please try generating it again later.",
+        );
+      }
       return message;
     },
     [locale],
@@ -22008,11 +22032,14 @@ export function WorkspacePage({
 
         const latestGeneration = payload.data.latestGeneration;
         if (!latestGeneration) return;
+        const latestGenerationError = latestGeneration.error
+          ? resolveStudioGenerationErrorMessage(latestGeneration.error)
+          : null;
 
         if (latestGeneration.generation) {
           suppressProjectFallbackPreviewRef.current = false;
           setGeneratedVideo(latestGeneration.generation);
-          setGenerateError(latestGeneration.error ?? null);
+          setGenerateError(latestGenerationError);
         }
 
         if (latestGeneration.status === "done" && latestGeneration.generation) {
@@ -22035,7 +22062,7 @@ export function WorkspacePage({
           suppressProjectFallbackPreviewRef.current = true;
           setGeneratedVideo(null);
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
-          setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
+          setGenerateError(latestGenerationError ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
           setGenerationUiSource("idle");
           return;
@@ -22060,7 +22087,7 @@ export function WorkspacePage({
     return () => {
       isCancelled = true;
     };
-  }, [locale, session.email]);
+  }, [locale, resolveStudioGenerationErrorMessage, session.email]);
 
   const refreshWorkspaceNotifications = useCallback(async () => {
     try {
@@ -22147,12 +22174,15 @@ export function WorkspacePage({
         if (!latestGeneration) {
           return;
         }
+        const latestGenerationError = latestGeneration.error
+          ? resolveStudioGenerationErrorMessage(latestGeneration.error)
+          : null;
 
         if (latestGeneration.generation) {
           activeGenerationJobIdRef.current = null;
           suppressProjectFallbackPreviewRef.current = false;
           setGeneratedVideo(latestGeneration.generation);
-          setGenerateError(latestGeneration.error ?? null);
+          setGenerateError(latestGenerationError);
           setStatus("");
           setIsGenerating(false);
           setGenerationUiSource("idle");
@@ -22165,7 +22195,7 @@ export function WorkspacePage({
           suppressProjectFallbackPreviewRef.current = true;
           setGeneratedVideo(null);
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
-          setGenerateError(latestGeneration.error ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
+          setGenerateError(latestGenerationError ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
           setGenerationUiSource("idle");
           return;
@@ -22206,7 +22236,7 @@ export function WorkspacePage({
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [generatedVideo?.id, generationUiSource, isGenerating, locale, session.email]);
+  }, [generatedVideo?.id, generationUiSource, isGenerating, locale, resolveStudioGenerationErrorMessage, session.email]);
 
   const dismissWorkspaceNotification = (notificationId: number) => {
     setWorkspaceNotifications((current) => current.filter((notification) => notification.id !== notificationId));
