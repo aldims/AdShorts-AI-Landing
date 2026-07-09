@@ -5944,15 +5944,29 @@ const fetchAdsflowBatchVoiceoverJobStatus = async (jobId: string, user: StudioUs
   );
 };
 
-const consumeWorkspaceGenerationCredit = async (user: StudioUser, amount = 1, language?: string) => {
+const consumeWorkspaceGenerationCredit = async (
+  user: StudioUser,
+  amount = 1,
+  language?: string,
+  options?: {
+    jobId?: string;
+    projectId?: number;
+    taskType?: string;
+    usageEventKey?: string;
+  },
+) => {
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payloadText = await postAdsflowText("/api/web/credits/consume", {
     admin_token: env.adsflowAdminToken,
     amount: Math.max(1, Math.trunc(amount || 1)),
     external_user_id: externalUserId,
+    job_id: options?.jobId,
     language: normalizeStudioLanguage(language),
+    project_id: options?.projectId,
     referral_source: "landing_site",
+    task_type: options?.taskType,
+    usage_event_key: options?.usageEventKey,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   });
@@ -5975,6 +5989,12 @@ const refundWorkspaceGenerationCredit = async (
   user: StudioUser,
   consumed: WorkspaceCreditConsumption,
   language?: string,
+  options?: {
+    jobId?: string;
+    projectId?: number;
+    taskType?: string;
+    usageEventKey?: string;
+  },
 ): Promise<WorkspaceProfile> => {
   if (consumed.purchased <= 0 && consumed.subscription <= 0) {
     return buildWorkspaceProfile();
@@ -5987,8 +6007,12 @@ const refundWorkspaceGenerationCredit = async (
     consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
     consumed_subscription: Math.max(0, Math.trunc(consumed.subscription || 0)),
     external_user_id: externalUserId,
+    job_id: options?.jobId,
     language: normalizeStudioLanguage(language),
+    project_id: options?.projectId,
     referral_source: "landing_site",
+    task_type: options?.taskType,
+    usage_event_key: options?.usageEventKey,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   });
@@ -6276,7 +6300,16 @@ export async function createStudioGenerationJob(
 
   await ensureStudioGenerationWorkersAvailable();
 
-  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage);
+  const creditReservationEventKey = `usage:web-video-generation:${randomUUID()}`;
+  const creditReservationRefundEventKey = `${creditReservationEventKey}:refund`;
+  const creditTaskType = options?.isRegeneration && !isScratchSegmentEditorGeneration && normalizedProjectId
+    ? "video.edit"
+    : "video.generate";
+  const creditReservation = await consumeWorkspaceGenerationCredit(user, requiredCredits, normalizedLanguage, {
+    projectId: normalizedProjectId ?? undefined,
+    taskType: creditTaskType,
+    usageEventKey: creditReservationEventKey,
+  });
   const externalUserId = await resolveStudioExternalUserId(user);
   const requiresFreeWatermark =
     creditReservation.profile.plan === "FREE" &&
@@ -6298,6 +6331,7 @@ export async function createStudioGenerationJob(
   });
 
   let jobCreated = false;
+  let createdJobId: string | undefined;
 
   try {
     console.info("[studio] adsflow.brand-payload", {
@@ -6517,6 +6551,7 @@ export async function createStudioGenerationJob(
         brand_changed: options?.brandChanged,
         clear_branding: options?.clearBranding,
         credit_cost: requiredCredits,
+        usage_event_key: creditReservationEventKey,
         brand_logo_asset_id: brandLogoAssetId,
         brand_logo_mime_type: normalizedBrandLogoFileMimeType,
         brand_logo_original_name: normalizedBrandLogoFileName,
@@ -6549,6 +6584,7 @@ export async function createStudioGenerationJob(
     if (!jobId) {
       throw new Error("AdsFlow did not return a job id.");
     }
+    createdJobId = jobId;
 
     const enqueueError = normalizeGenerationText(payload.enqueue_error);
     if (enqueueError) {
@@ -6595,7 +6631,15 @@ export async function createStudioGenerationJob(
   } catch (error) {
     if (!jobCreated) {
       try {
-        await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage);
+        const refundUsageEventKey = createdJobId
+          ? `usage:${createdJobId}:refund`
+          : creditReservationRefundEventKey;
+        await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage, {
+          jobId: createdJobId,
+          projectId: normalizedProjectId ?? undefined,
+          taskType: creditTaskType,
+          usageEventKey: refundUsageEventKey,
+        });
       } catch (refundError) {
         console.error("[studio] Failed to refund reserved credits", refundError);
       }

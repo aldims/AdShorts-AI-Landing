@@ -177,7 +177,13 @@ describe("studio generation worker availability", () => {
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/consume");
     expect(calls.map((call) => call.pathname)).toContain("/api/web/generations");
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/refund");
-    expect(calls.find((call) => call.pathname === "/api/web/credits/refund")?.body).toEqual(
+    const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    const refundBody = calls.find((call) => call.pathname === "/api/web/credits/refund")?.body;
+    expect(consumeBody?.usage_event_key).toEqual(expect.stringMatching(/^usage:web-video-generation:/));
+    expect(generationBody?.usage_event_key).toBe(consumeBody?.usage_event_key);
+    expect(refundBody?.usage_event_key).toBe(`${consumeBody?.usage_event_key}:refund`);
+    expect(refundBody).toEqual(
       expect.objectContaining({
         consumed_purchased: 10,
         consumed_subscription: 0,
@@ -244,7 +250,14 @@ describe("studio generation worker availability", () => {
 
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/consume");
     expect(calls.map((call) => call.pathname)).toContain("/api/web/credits/refund");
-    expect(calls.find((call) => call.pathname === "/api/web/credits/refund")?.body).toEqual(
+    const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    const refundBody = calls.find((call) => call.pathname === "/api/web/credits/refund")?.body;
+    expect(consumeBody?.usage_event_key).toEqual(expect.stringMatching(/^usage:web-video-generation:/));
+    expect(generationBody?.usage_event_key).toBe(consumeBody?.usage_event_key);
+    expect(refundBody?.job_id).toBe("job-1");
+    expect(refundBody?.usage_event_key).toBe("usage:job-1:refund");
+    expect(refundBody).toEqual(
       expect.objectContaining({
         consumed_purchased: 10,
         consumed_subscription: 0,
@@ -305,7 +318,11 @@ describe("studio generation worker availability", () => {
       }),
     );
 
-    expect(calls.find((call) => call.pathname === "/api/web/generations")?.body).toEqual(
+    const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    expect(consumeBody?.usage_event_key).toEqual(expect.stringMatching(/^usage:web-video-generation:/));
+    expect(generationBody?.usage_event_key).toBe(consumeBody?.usage_event_key);
+    expect(generationBody).toEqual(
       expect.objectContaining({
         add_watermark: true,
       }),
