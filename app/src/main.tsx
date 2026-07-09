@@ -6,6 +6,7 @@ import "./styles/design-lab-theme.css";
 import "./styles/global.css";
 import "./styles/studio-liquid-glass.css";
 import "./styles/studio-creative-console.css";
+import "./styles/studio-welcome-card.css";
 
 const appElement = document.getElementById("app");
 
