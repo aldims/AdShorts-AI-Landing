@@ -408,6 +408,30 @@
   outline-offset: 2px !important;
 }
 
+@media (min-width: 880px) {
+  #app .route-page:not(.studio-canvas-route) > .site-header .brand {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    max-width: 168px !important;
+    gap: 10px !important;
+    justify-content: flex-start !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .brand span {
+    display: inline-block !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    color: rgba(239, 243, 252, 0.9) !important;
+    font-family: "Sora", "Manrope", sans-serif !important;
+    font-size: 0.86rem !important;
+    font-weight: 720 !important;
+    line-height: 1 !important;
+    letter-spacing: -0.035em !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
 @media (min-width: 641px) and (max-width: 960px) {
   #app .route-page:not(.studio-canvas-route) > .site-header {
     --premium-header-height: 116px;

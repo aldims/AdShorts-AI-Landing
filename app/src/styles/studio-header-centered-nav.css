@@ -546,6 +546,31 @@
     0 13px 25px -13px rgba(112, 108, 235, 0.94) !important;
 }
 
+@media (min-width: 1181px) {
+  #app .studio-canvas-route .site-header--workspace .brand {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 168px !important;
+    gap: 10px !important;
+    justify-content: flex-start !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .brand span {
+    display: inline-block !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    color: rgba(239, 243, 252, 0.9) !important;
+    font-family: "Sora", "Manrope", sans-serif !important;
+    font-size: 0.86rem !important;
+    font-weight: 720 !important;
+    line-height: 1 !important;
+    letter-spacing: -0.035em !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+}
+
 /* Compact desktop: retain the exact three-zone geometry. */
 @media (min-width: 961px) and (max-width: 1180px) {
   #app .studio-canvas-route .site-header--workspace .site-header__inner {
