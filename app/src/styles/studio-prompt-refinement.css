@@ -3,29 +3,36 @@
   border-bottom: 0 !important;
 }
 
-/* Equal desktop columns with optically centred labels and values. */
+/* Distribute the visible setting groups with equal real gaps. */
 @media (min-width: 761px) {
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
     gap: 8px !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
   }
 
-  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > * {
-    width: 100% !important;
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-video-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-subtitle-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-voice-selector,
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > .studio-music-selector {
+    flex: 0 0 auto !important;
+    width: max-content !important;
     min-width: 0 !important;
-    max-width: 100% !important;
+    max-width: 172px !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips > * > .studio-canvas-prompt__chip {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-columns: minmax(0, max-content) auto !important;
     grid-template-rows: auto auto !important;
-    width: 100% !important;
+    width: max-content !important;
     min-width: 0 !important;
-    max-width: 100% !important;
-    justify-content: stretch !important;
-    justify-items: center !important;
-    text-align: center !important;
+    max-width: 172px !important;
+    justify-content: center !important;
+    justify-items: start !important;
   }
 }
 
