@@ -8,11 +8,11 @@
   --studio-header-reserve: 78px !important;
   --studio-header-height: 74px;
   --studio-header-control-height: 40px;
-  --studio-header-line: rgba(210, 220, 244, 0.13);
-  --studio-header-line-strong: rgba(220, 228, 252, 0.22);
+  --studio-header-line: rgba(216, 224, 244, 0.115);
+  --studio-header-line-strong: rgba(224, 231, 250, 0.2);
   --studio-header-text: rgba(244, 247, 255, 0.96);
-  --studio-header-muted: rgba(201, 210, 232, 0.58);
-  --studio-header-surface: rgba(10, 13, 21, 0.82);
+  --studio-header-muted: rgba(205, 214, 233, 0.65);
+  --studio-header-surface: rgba(8, 12, 20, 0.88);
 }
 
 #app .studio-canvas-route .site-header--workspace {
@@ -55,18 +55,17 @@
   gap: 12px !important;
   overflow: visible !important;
   border: 1px solid var(--studio-header-line) !important;
-  border-radius: 20px !important;
+  border-radius: 18px !important;
   background:
-    radial-gradient(90% 140% at 50% -90%, rgba(188, 204, 255, 0.09), transparent 60%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 36%, rgba(255, 255, 255, 0.018)),
+    radial-gradient(80% 130% at 50% -92%, rgba(210, 220, 245, 0.075), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
     var(--studio-header-surface) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.36),
-    0 22px 54px -30px rgba(0, 0, 0, 0.92),
-    0 1px 0 rgba(255, 255, 255, 0.025) !important;
-  backdrop-filter: blur(28px) saturate(132%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(132%) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 22px 52px -32px rgba(0, 0, 0, 0.96) !important;
+  backdrop-filter: blur(24px) saturate(122%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(122%) !important;
 }
 
 #app .studio-canvas-route .site-header--workspace .site-header__inner::before {
@@ -80,7 +79,7 @@
   border-radius: 999px !important;
   background: linear-gradient(90deg, transparent, rgba(240, 245, 255, 0.26) 48%, transparent) !important;
   box-shadow: none !important;
-  opacity: 0.72 !important;
+  opacity: 0.58 !important;
   pointer-events: none !important;
 }
 
@@ -93,7 +92,7 @@
   width: auto !important;
   height: 14px !important;
   border-radius: 999px !important;
-  background: rgba(160, 180, 255, 0.045) !important;
+  background: rgba(205, 214, 238, 0.034) !important;
   filter: blur(12px) !important;
   pointer-events: none !important;
 }
@@ -110,7 +109,7 @@
   align-items: center;
   justify-self: start;
   min-width: 0;
-  gap: 13px;
+  gap: 14px;
 }
 
 #app .studio-canvas-route .site-header--workspace .brand {
@@ -176,9 +175,9 @@
   padding: 3px !important;
   gap: 2px !important;
   overflow: hidden !important;
-  border: 1px solid rgba(215, 224, 247, 0.1) !important;
+  border: 1px solid rgba(215, 224, 247, 0.085) !important;
   border-radius: 13px !important;
-  background: rgba(0, 3, 9, 0.32) !important;
+  background: rgba(0, 3, 9, 0.26) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 1px 0 rgba(255, 255, 255, 0.018) !important;
@@ -205,8 +204,8 @@
   border: 1px solid transparent !important;
   border-radius: 10px !important;
   background: transparent !important;
-  color: var(--studio-header-muted) !important;
-  font-size: 0.76rem !important;
+  color: rgba(205, 214, 233, 0.62) !important;
+  font-size: 0.77rem !important;
   font-weight: 700 !important;
   letter-spacing: -0.012em !important;
   text-shadow: none !important;
@@ -220,15 +219,15 @@
 }
 
 #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn.is-active {
-  border-color: rgba(215, 224, 255, 0.17) !important;
+  border-color: rgba(219, 226, 246, 0.14) !important;
   background:
-    linear-gradient(180deg, rgba(218, 226, 255, 0.16), rgba(161, 175, 221, 0.07)),
-    rgba(24, 30, 45, 0.72) !important;
+    linear-gradient(180deg, rgba(230, 235, 248, 0.135), rgba(181, 190, 214, 0.045)),
+    rgba(23, 28, 39, 0.78) !important;
   color: var(--studio-header-text) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     inset 0 -1px 0 rgba(0, 0, 0, 0.28),
-    0 7px 18px -12px rgba(111, 127, 230, 0.75) !important;
+    0 8px 18px -13px rgba(0, 0, 0, 0.9) !important;
 }
 
 #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn:focus-visible,
@@ -267,13 +266,13 @@
   height: var(--studio-header-control-height) !important;
   min-height: var(--studio-header-control-height) !important;
   margin: 0 !important;
-  padding: 3px !important;
+  padding: 0 !important;
   gap: 0 !important;
-  overflow: hidden !important;
-  border: 1px solid rgba(215, 224, 247, 0.095) !important;
-  border-radius: 13px !important;
-  background: rgba(0, 3, 9, 0.25) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transform: none !important;
@@ -291,8 +290,8 @@
   justify-content: stretch !important;
   width: 100% !important;
   max-width: none !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: 40px !important;
+  min-height: 40px !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: visible !important;
@@ -309,14 +308,12 @@
   inset: 0 auto 0 0 !important;
   z-index: 0 !important;
   width: var(--site-nav-selection-width, 0px) !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  border: 1px solid rgba(205, 215, 244, 0.105) !important;
-  border-radius: 10px !important;
-  background: rgba(255, 255, 255, 0.042) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.065),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   opacity: 0 !important;
   transform: translate3d(var(--site-nav-selection-x, 0px), 0, 0) !important;
 }
@@ -324,13 +321,13 @@
 #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__selection::after {
   content: "";
   position: absolute;
-  right: 15px;
-  bottom: -1px;
-  left: 15px;
-  height: 1px;
+  right: 24px;
+  bottom: 3px;
+  left: 24px;
+  height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(166, 183, 255, 0.82), transparent);
-  box-shadow: 0 0 9px rgba(125, 145, 255, 0.34);
+  background: linear-gradient(90deg, transparent, rgba(180, 194, 239, 0.78), transparent);
+  box-shadow: 0 0 8px rgba(137, 155, 220, 0.24);
 }
 
 #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content[data-selection-ready="true"] > .site-nav__selection {
@@ -351,8 +348,8 @@
   width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: 40px !important;
+  min-height: 40px !important;
   padding: 0 13px !important;
   gap: 7px !important;
   overflow: hidden !important;
@@ -360,7 +357,7 @@
   border-radius: 10px !important;
   background: transparent !important;
   color: var(--studio-header-muted) !important;
-  font-size: 0.78rem !important;
+  font-size: 0.8rem !important;
   font-weight: 690 !important;
   letter-spacing: -0.012em !important;
   box-shadow: none !important;
@@ -371,7 +368,7 @@
 
 #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content > .site-nav__item:hover {
   color: rgba(245, 248, 255, 0.9) !important;
-  background: rgba(255, 255, 255, 0.024) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
   transform: none !important;
 }
 
@@ -417,7 +414,7 @@
   min-height: var(--studio-header-control-height) !important;
   margin: 0 !important;
   padding: 0 !important;
-  gap: 6px !important;
+  gap: 5px !important;
   overflow: visible !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -445,7 +442,7 @@
   margin: 0 !important;
   border-radius: 12px !important;
   font-size: 0.75rem !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease !important;
@@ -455,9 +452,9 @@
   min-width: 58px !important;
   padding: 0 10px !important;
   gap: 7px !important;
-  border: 1px solid rgba(215, 224, 247, 0.095) !important;
-  background: rgba(255, 255, 255, 0.024) !important;
-  color: rgba(211, 220, 239, 0.68) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: rgba(211, 220, 239, 0.72) !important;
 }
 
 #app .studio-canvas-route .site-header--workspace .language-switcher__trigger:hover,
@@ -479,10 +476,10 @@
   max-width: 160px !important;
   padding: 0 11px !important;
   gap: 8px !important;
-  border: 1px solid rgba(219, 181, 88, 0.21) !important;
+  border: 1px solid rgba(219, 181, 88, 0.17) !important;
   background:
-    linear-gradient(135deg, rgba(215, 178, 85, 0.08), rgba(255, 255, 255, 0.015)),
-    rgba(8, 8, 10, 0.2) !important;
+    linear-gradient(135deg, rgba(215, 178, 85, 0.055), rgba(255, 255, 255, 0.01)),
+    rgba(8, 8, 10, 0.14) !important;
   color: rgba(229, 232, 240, 0.78) !important;
 }
 
