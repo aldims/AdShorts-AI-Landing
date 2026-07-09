@@ -10,6 +10,7 @@ import "./styles/studio-welcome-card.css";
 import "./styles/studio-header-centered-nav.css";
 import "./styles/site-header-premium.css";
 import "./styles/studio-prompt-refinement.css";
+import "./styles/studio-scenes-glass.css";
 
 const appElement = document.getElementById("app");
 
