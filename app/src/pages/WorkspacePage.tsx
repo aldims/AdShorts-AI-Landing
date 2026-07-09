@@ -33020,7 +33020,7 @@ export function WorkspacePage({
         <header className="site-header site-header--workspace">
           <div className="container site-header__inner">
             <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
-              <img src="/logo.png" alt="" width="44" height="44" />
+              <img src="/adshorts-mark.svg" alt="" width="44" height="44" />
               <span>AdShorts AI</span>
             </Link>
 
@@ -35829,7 +35829,7 @@ export function WorkspacePage({
       <header className="site-header site-header--workspace">
         <div className="container site-header__inner">
           <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
-            <img src="/logo.png" alt="" width="44" height="44" />
+            <img src="/adshorts-mark.svg" alt="" width="44" height="44" />
             <span>AdShorts AI</span>
           </Link>
 

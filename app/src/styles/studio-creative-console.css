@@ -1572,3 +1572,46 @@
     border-radius: 22px;
   }
 }
+
+/* Keep the brand mark crisp: the navigation carries the glass treatment, not the logo. */
+.studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  height: 42px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand img {
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 8px 14px rgba(83, 107, 245, 0.28));
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand:hover img {
+  transform: translateY(-1px) scale(1.03);
+  filter: drop-shadow(0 10px 16px rgba(103, 95, 247, 0.38));
+}
+
+@media (max-width: 640px) {
+  .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand img {
+    width: 30px !important;
+    min-width: 30px !important;
+    height: 30px !important;
+  }
+}
