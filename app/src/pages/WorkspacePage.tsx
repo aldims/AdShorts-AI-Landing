@@ -33763,9 +33763,9 @@ export function WorkspacePage({
                   </div>
                 ) : (
                   <div
-                    className={`studio-canvas-preview__placeholder${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}`}
-                    role={isUserFacingGeneration ? "status" : undefined}
-                    aria-live={isUserFacingGeneration ? "polite" : undefined}
+                    className={`studio-canvas-preview__placeholder${isWorkspaceBootstrapPending ? " is-bootstrap-loading" : ""}${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}`}
+                    role={isUserFacingGeneration || isWorkspaceBootstrapPending ? "status" : undefined}
+                    aria-live={isUserFacingGeneration || isWorkspaceBootstrapPending ? "polite" : undefined}
                   >
                     {isUserFacingGeneration ? (
                       renderStudioShortsGenerationStatus()

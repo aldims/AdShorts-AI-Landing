@@ -377,7 +377,7 @@
 
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief
-  .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card) {
+  .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card):not(.is-bootstrap-loading) {
   align-items: stretch;
   justify-content: stretch;
   gap: 0;
@@ -398,6 +398,16 @@
     0 0 0 1px rgba(166, 184, 255, 0.035);
   backdrop-filter: blur(38px) saturate(138%);
   -webkit-backdrop-filter: blur(38px) saturate(138%);
+}
+
+.studio-canvas-route:not(.is-segment-editor)
+  .studio-canvas-preview.is-creative-brief
+  .studio-canvas-preview__placeholder.is-bootstrap-loading {
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px;
+  text-align: center;
 }
 
 .studio-canvas-empty {
@@ -1100,7 +1110,7 @@
   }
 
   .studio-canvas-preview.is-creative-brief
-    .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card) {
+    .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card):not(.is-bootstrap-loading) {
     border-radius: 26px;
   }
 
