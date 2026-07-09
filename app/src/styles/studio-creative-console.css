@@ -358,6 +358,23 @@
   animation: none;
 }
 
+/* A rendered Short is vertical, so its in-progress canvas must be vertical too. */
+.studio-canvas-route:not(.is-segment-editor)
+  .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.is-generating),
+.studio-canvas-route:not(.is-segment-editor)
+  .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__overlay.is-generating) {
+  width: min(
+    calc(var(--studio-preview-available-height) * 0.5625),
+    382px,
+    calc(100vw - 48px)
+  ) !important;
+  max-width: calc(100vw - 48px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: var(--studio-preview-available-height) !important;
+  aspect-ratio: 9 / 16 !important;
+}
+
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief
   .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card) {
@@ -1066,6 +1083,22 @@
     height: min(510px, var(--studio-preview-available-height)) !important;
   }
 
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.is-generating),
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__overlay.is-generating) {
+    width: min(
+      calc(var(--studio-preview-available-height) * 0.5625),
+      287px,
+      calc(100vw - 32px)
+    ) !important;
+    max-width: calc(100vw - 32px) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: var(--studio-preview-available-height) !important;
+    aspect-ratio: 9 / 16 !important;
+  }
+
   .studio-canvas-preview.is-creative-brief
     .studio-canvas-preview__placeholder:not(.is-generating):not(.is-error):not(.has-welcome-card) {
     border-radius: 26px;
@@ -1199,6 +1232,20 @@
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-preview.is-creative-brief {
     height: min(480px, var(--studio-preview-available-height)) !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.is-generating),
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__overlay.is-generating) {
+    width: min(
+      calc(var(--studio-preview-available-height) * 0.5625),
+      270px,
+      calc(100vw - 32px)
+    ) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: var(--studio-preview-available-height) !important;
   }
 
   .studio-canvas-empty__copy {
