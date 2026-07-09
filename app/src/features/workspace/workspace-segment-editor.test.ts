@@ -9,6 +9,7 @@ import {
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
+  getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
@@ -773,6 +774,41 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
 });
 
 describe("workspace segment editor project voiceover timeline", () => {
+  it("treats an ffmpeg-rendered photo wrapper as a still visual", () => {
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 8519,
+        kind: "rendered_segment",
+        libraryKind: "photo_animation",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        renderedAnimationMode: "ffmpeg",
+        renderedViaI2v: false,
+        role: "rendered_segment",
+        sourceKind: "ai_generated",
+      } as any,
+      currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=4170&segmentIndex=0&source=current&delivery=playback",
+      currentPreviewUrl: "/api/workspace/project-segment-video?projectId=4170&segmentIndex=0&source=current&delivery=preview",
+      currentSourceKind: "ai_generated",
+      mediaType: "photo",
+      originalAsset: {
+        assetId: 8512,
+        kind: "source_ai_image",
+        mediaType: "photo",
+        mimeType: "image/png",
+        role: "source_ai_image",
+        sourceKind: "ai_generated",
+      } as any,
+      originalPreviewUrl: "/api/workspace/media-assets/8512",
+      originalSourceKind: "ai_generated",
+      videoAction: "original",
+    });
+
+    expect(getWorkspaceSegmentLatestVisualAction(segment)).toBe("original");
+    expect(getWorkspaceSegmentPreviewKind(segment)).toBe("image");
+    expect(getWorkspaceSegmentSelectedVisualPreviewKind(segment)).toBe("image");
+  });
+
   it("does not treat an existing scene slot as the source video duration", () => {
     const segment = createProjectVoiceoverSegment({
       duration: 3.8,

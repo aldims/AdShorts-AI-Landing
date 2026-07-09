@@ -2327,6 +2327,15 @@ export const getWorkspaceSegmentLatestVisualAction = (
     return "talking_photo";
   }
 
+  // The renderer stores a still photo as an MP4 so it can participate in the
+  // final timeline. `libraryKind: photo_animation` describes that render
+  // pipeline, while ffmpeg + renderedViaI2v=false proves that no real video
+  // animation was generated. Keep the authoritative segment media type here
+  // so photo duration controls do not turn into video-extension controls.
+  if (segment.mediaType === "photo" && isWorkspaceSegmentHoldableRenderedPhotoVisual(segment)) {
+    return segment.videoAction;
+  }
+
   if (isWorkspacePhotoAnimationMediaAsset(segment.currentAsset)) {
     return "photo_animation";
   }

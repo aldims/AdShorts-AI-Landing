@@ -151,6 +151,7 @@ import {
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft,
+  shouldUseWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
@@ -209,7 +210,11 @@ describe("WorkspacePage segment timeline drag drop", () => {
     expect(resolveWorkspaceSegmentThumbFinalInsertIndex(false, 4, 3)).toBeNull();
   });
 
-  it("syncs only generated scene voiceover assets back to the draft", () => {
+  it("uses only isolated scene audio measurements as canonical duration", () => {
+    expect(shouldUseWorkspaceSegmentMeasuredVoiceoverDuration("scene")).toBe(true);
+    expect(shouldUseWorkspaceSegmentMeasuredVoiceoverDuration("segment")).toBe(false);
+    expect(shouldUseWorkspaceSegmentMeasuredVoiceoverDuration("project")).toBe(false);
+    expect(shouldUseWorkspaceSegmentMeasuredVoiceoverDuration(null)).toBe(false);
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("scene")).toBe(true);
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("segment")).toBe(false);
     expect(shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft("project")).toBe(false);
@@ -4816,7 +4821,7 @@ describe("WorkspacePage studio locale defaults", () => {
         },
         videoAction: "photo_animation",
       })),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
         mediaType: "photo",

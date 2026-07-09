@@ -1332,9 +1332,12 @@ export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
   };
 };
 
-export const shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft = (
+export const shouldUseWorkspaceSegmentMeasuredVoiceoverDuration = (
   sourceKind: "project" | "scene" | "segment" | null | undefined,
 ) => sourceKind === "scene";
+
+export const shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft =
+  shouldUseWorkspaceSegmentMeasuredVoiceoverDuration;
 
 const WORKSPACE_SEGMENT_TIMELINE_MOUSE_DRAG_POINTER_ID = -1;
 const WORKSPACE_SEGMENT_EDITOR_DELETE_TIMELINE_REBUILD_OPTIONS = {
@@ -24510,8 +24513,7 @@ export function WorkspacePage({
       : null;
     const measuredVoiceoverDurationSeconds =
       embeddedTalkingPhotoAudioUrl ||
-      voiceoverAudioPreviewSource.sourceKind === "scene" ||
-      voiceoverAudioPreviewSource.sourceKind === "segment"
+      shouldUseWorkspaceSegmentMeasuredVoiceoverDuration(voiceoverAudioPreviewSource.sourceKind)
         ? getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(
             segment,
             draft,
@@ -24943,7 +24945,7 @@ export function WorkspacePage({
       const voiceoverAudioUrl = voiceoverAudioPreviewSource.audioUrl;
       const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
       const measuredVoiceoverDurationSeconds =
-        voiceoverAudioPreviewSource.sourceKind === "scene" || voiceoverAudioPreviewSource.sourceKind === "segment"
+        shouldUseWorkspaceSegmentMeasuredVoiceoverDuration(voiceoverAudioPreviewSource.sourceKind)
           ? getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(segment, segmentEditorDraft, voiceoverAudioUrl)
           : null;
       const voiceoverDurationSeconds = resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds({
@@ -29436,7 +29438,7 @@ export function WorkspacePage({
                 : null;
               const voiceoverMeasuredDurationSourceUrl =
                 embeddedTalkingPhotoAudioUrl ??
-                (voiceoverAudioPreviewSource.sourceKind === "scene" || voiceoverAudioPreviewSource.sourceKind === "segment"
+                (shouldUseWorkspaceSegmentMeasuredVoiceoverDuration(voiceoverAudioPreviewSource.sourceKind)
                   ? voiceoverAudioPreviewSource.audioUrl
                   : null);
               const measuredVoiceoverDurationSeconds = getSegmentEditorSafeMeasuredVoiceoverDurationSeconds(
