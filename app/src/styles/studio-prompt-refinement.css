@@ -3,13 +3,13 @@
   border-bottom: 0 !important;
 }
 
-/* Distribute the visible setting groups with equal real gaps. */
+/* Keep the visible setting groups together at the left edge of the prompt. */
 @media (min-width: 761px) {
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chips {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    gap: 8px !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
     flex: 1 1 auto !important;
     width: auto !important;
   }
