@@ -9783,7 +9783,8 @@ export function WorkspacePage({
           }
         : undefined;
   const hasLongStudioTopicPrompt = topicInput.trim().length > 72 || /[\r\n]/.test(topicInput);
-  const shouldUseExpandedStudioPrompt = composerSourceIdea !== null || hasLongStudioTopicPrompt;
+  const shouldUseExpandedStudioPrompt =
+    !shouldShowStudioWelcomeCard && (composerSourceIdea !== null || hasLongStudioTopicPrompt);
   const hasStudioPromptAuxiliaryContent =
     shouldUseExpandedStudioPrompt || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
