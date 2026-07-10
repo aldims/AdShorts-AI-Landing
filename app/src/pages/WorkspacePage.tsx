@@ -33979,7 +33979,6 @@ export function WorkspacePage({
                           <div className="studio-welcome-card__guide-head">
                             <div>
                               <span>{workspaceText(locale, "РЕКОМЕНДУЕМЫЙ ПУТЬ", "RECOMMENDED FLOW")}</span>
-                              <h3>{workspaceText(locale, "Сначала основа. Затем — только важные сцены.", "Start with a base. Then refine only the key scenes.")}</h3>
                             </div>
                             <small>{workspaceText(locale, "Меньше времени и затрат", "Less time and spend")}</small>
                           </div>
@@ -34029,26 +34028,6 @@ export function WorkspacePage({
                           </ol>
                         </section>
 
-                        <div className="studio-welcome-card__footer">
-                          <div className="studio-welcome-card__note">
-                            <span className="studio-welcome-card__note-icon" aria-hidden="true">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 3v18M3 12h18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                                <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.5" opacity=".55" />
-                              </svg>
-                            </span>
-                            <span>
-                              <strong>{workspaceText(locale, "AI-инструменты для каждой сцены", "AI tools for every scene")}</strong>
-                              <small>
-                                {workspaceText(
-                                  locale,
-                                  "Оживление · Дорисовка · Говорящий персонаж · Создание персонажа · Продление",
-                                  "Animation · Image editing · Talking character · Character creation · Extension",
-                                )}
-                              </small>
-                            </span>
-                          </div>
-                        </div>
                       </div>
                     ) : null}
                     </div>
