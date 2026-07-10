@@ -34022,7 +34022,7 @@ export function WorkspacePage({
                                 </span>
                               </div>
                               <button
-                                className="studio-welcome-card__mode"
+                                className="studio-welcome-card__mode studio-welcome-card__mode--scenes"
                                 type="button"
                                 onClick={() => {
                                   closeStudioWelcomeCard();
@@ -34049,19 +34049,13 @@ export function WorkspacePage({
                                       "Create from scratch or refine a finished video — scene by scene.",
                                     )}
                                   </small>
-                                  <span className="studio-welcome-card__mode-capabilities">
-                                    <span>{workspaceText(locale, "Оживление фото", "Photo animation")}</span>
-                                    <span>{workspaceText(locale, "Изменение фото", "Photo editing")}</span>
-                                    <span>{workspaceText(locale, "Продление видео", "Video extension")}</span>
-                                    <span>{workspaceText(locale, "Создание персонажа", "Character creation")}</span>
-                                    <span>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</span>
-                                  </span>
                                 </span>
-                                <span className="studio-welcome-card__mode-action">
-                                  {workspaceText(locale, "Открыть редактор", "Open editor")}
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                <span className="studio-welcome-card__mode-capabilities">
+                                  <span>{workspaceText(locale, "Оживление фото", "Photo animation")}</span>
+                                  <span>{workspaceText(locale, "Изменение фото", "Photo editing")}</span>
+                                  <span>{workspaceText(locale, "Продление видео", "Video extension")}</span>
+                                  <span>{workspaceText(locale, "Создание персонажа", "Character creation")}</span>
+                                  <span>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</span>
                                 </span>
                               </button>
                             </div>

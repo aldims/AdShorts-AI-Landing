@@ -245,6 +245,40 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.studio-welcome-card__mode--scenes {
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.8fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 9px;
+}
+
+.studio-welcome-card__mode--scenes .studio-welcome-card__mode-topline {
+  grid-column: 1 / -1;
+}
+
+.studio-welcome-card__mode--scenes .studio-welcome-card__mode-copy {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
+  display: grid;
+  grid-column: 2;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  align-self: start;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities > span {
+  width: 100%;
+  min-height: 22px;
+  justify-content: flex-start;
+  padding-inline: 9px;
+  border-radius: 9px;
+}
+
 .studio-welcome-card__mode:not(.is-selected):hover {
   border-color: rgba(203, 213, 250, 0.2);
   background-color: rgba(255, 255, 255, 0.035);
@@ -372,25 +406,6 @@
   line-height: 1;
 }
 
-.studio-welcome-card__mode-action {
-  display: inline-flex;
-  width: max-content;
-  align-items: center;
-  gap: 7px;
-  color: rgba(225, 231, 251, 0.76);
-  font-size: 0.69rem;
-  font-weight: 760;
-  line-height: 1;
-}
-
-.studio-welcome-card__mode-action svg {
-  transition: transform 180ms ease;
-}
-
-.studio-welcome-card__mode:not(.is-selected):hover .studio-welcome-card__mode-action svg {
-  transform: translateX(3px);
-}
-
 .studio-welcome-card__close:focus-visible,
 .studio-welcome-card__mode:focus-visible {
   outline: 2px solid rgba(183, 198, 255, 0.85);
@@ -468,9 +483,6 @@
     font-size: 0.76rem;
   }
 
-  .studio-welcome-card__mode-action {
-    font-size: 0.7rem;
-  }
 }
 
 @media (min-width: 761px) and (max-height: 760px) {
@@ -634,10 +646,6 @@
     -webkit-line-clamp: 2;
   }
 
-  .studio-welcome-card__mode-action {
-    font-size: 0.65rem;
-  }
-
   .studio-welcome-card__mode-capabilities {
     column-gap: 5px;
     row-gap: 9px;
@@ -654,6 +662,33 @@
     right: 6px;
     height: 9px;
     font-size: 0.34rem;
+  }
+
+  .studio-welcome-card__mode--scenes {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    gap: 7px;
+  }
+
+  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-topline,
+  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-copy,
+  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
+    display: flex;
+    column-gap: 5px;
+    row-gap: 9px;
+    margin-top: 7px;
+  }
+
+  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities > span {
+    width: auto;
+    min-height: 22px;
+    padding-inline: 6px;
+    border-radius: 999px;
   }
 
 }
