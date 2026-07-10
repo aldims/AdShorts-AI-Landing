@@ -32518,7 +32518,7 @@ html.platform-windows .studio-voice-selector__menu {
   gap: 6px;
 }
 
-.studio-video-selector__brand-field span {
+.studio-video-selector__brand-field > .studio-video-selector__brand-field-heading {
   color: rgba(255, 255, 255, 0.62);
   font-size: 0.68rem;
   font-weight: 800;
@@ -32555,6 +32555,13 @@ html.platform-windows .studio-voice-selector__menu {
   gap: 12px;
   color: rgba(255, 255, 255, 0.46);
   font-size: 0.68rem;
+}
+
+.studio-video-selector__brand-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .studio-video-selector__brand-clear {

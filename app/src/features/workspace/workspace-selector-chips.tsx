@@ -1520,16 +1520,18 @@ export function StudioVideoSelectorChip({
                       ) : null}
                     </div>
                   </div>
-                  <div className="studio-video-selector__brand-meta">
-                    <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
-                    {brandText ? (
-                      <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
-                        {locale === "en" ? "Clear text" : "Очистить текст"}
-                      </button>
-                    ) : null}
-                  </div>
                   <label className="studio-video-selector__brand-field">
-                    <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                    <span className="studio-video-selector__brand-field-heading">
+                      <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                      <span className="studio-video-selector__brand-meta">
+                        <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
+                        {brandText ? (
+                          <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
+                            {locale === "en" ? "Clear text" : "Очистить текст"}
+                          </button>
+                        ) : null}
+                      </span>
+                    </span>
                     <input
                       className="studio-video-selector__brand-input"
                       type="text"
@@ -1853,16 +1855,18 @@ export function StudioBrandSelectorChip({
                       ) : null}
                     </div>
                   </div>
-                  <div className="studio-video-selector__brand-meta">
-                    <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
-                    {brandText ? (
-                      <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
-                        {locale === "en" ? "Clear text" : "Очистить текст"}
-                      </button>
-                    ) : null}
-                  </div>
                   <label className="studio-video-selector__brand-field">
-                    <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                    <span className="studio-video-selector__brand-field-heading">
+                      <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                      <span className="studio-video-selector__brand-meta">
+                        <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
+                        {brandText ? (
+                          <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
+                            {locale === "en" ? "Clear text" : "Очистить текст"}
+                          </button>
+                        ) : null}
+                      </span>
+                    </span>
                     <input
                       className="studio-video-selector__brand-input"
                       type="text"
