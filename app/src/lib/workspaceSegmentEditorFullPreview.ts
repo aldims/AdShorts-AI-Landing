@@ -116,6 +116,29 @@ export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
   timelineStartTime: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewVoiceClockHoldOptions = {
+  currentPreviewTime: number;
+  currentSourceTime: number;
+  desiredPreviewTime: number;
+  isEnded: boolean;
+  isPaused: boolean;
+  isSeeking: boolean;
+  lagToleranceSeconds: number;
+  minimumReadyState: number;
+  readyState: number;
+  track: WorkspaceSegmentEditorFullPreviewAudioClockTrack;
+};
+
+export type WorkspaceSegmentTimelineAudioPreviewEndWatchdogOptions = {
+  currentTime: number;
+  endTime: number;
+  isEnded: boolean;
+  isPaused: boolean;
+  isSeeking: boolean;
+  minimumReadyState: number;
+  readyState: number;
+};
+
 export type WorkspaceSegmentEditorFullPreviewVoiceQueueTrack = {
   key: string;
   kind: string;
@@ -1248,6 +1271,94 @@ export const getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime
       : normalizedSourceTime;
 
   return Math.min(timelineEndTime, Math.max(timelineStartTime, timelineStartTime + elapsedSourceTime));
+};
+
+export const resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime = ({
+  currentPreviewTime,
+  currentSourceTime,
+  desiredPreviewTime,
+  isEnded,
+  isPaused,
+  isSeeking,
+  lagToleranceSeconds,
+  minimumReadyState,
+  readyState,
+  track,
+}: WorkspaceSegmentEditorFullPreviewVoiceClockHoldOptions) => {
+  if (isEnded) {
+    return null;
+  }
+
+  const timelineStartTime = normalizePreviewTime(track.timelineStartTime) ?? 0;
+  const timelineEndTime = Math.max(
+    timelineStartTime,
+    normalizePreviewTime(track.timelineEndTime) ?? timelineStartTime,
+  );
+  const currentTime = Math.min(
+    timelineEndTime,
+    Math.max(timelineStartTime, normalizePreviewTime(currentPreviewTime) ?? timelineStartTime),
+  );
+  const desiredTime = Math.min(
+    timelineEndTime,
+    Math.max(currentTime, normalizePreviewTime(desiredPreviewTime) ?? currentTime),
+  );
+  if (desiredTime <= timelineStartTime || currentTime >= timelineEndTime) {
+    return null;
+  }
+
+  const hasPlayableData =
+    Number.isFinite(readyState) &&
+    Number.isFinite(minimumReadyState) &&
+    readyState >= Math.max(0, minimumReadyState);
+  if (isPaused || isSeeking || !hasPlayableData || !Number.isFinite(currentSourceTime)) {
+    return currentTime;
+  }
+
+  const voiceTimelineTime = getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime(
+    track,
+    currentSourceTime,
+  );
+  if (voiceTimelineTime === null) {
+    return currentTime;
+  }
+
+  const toleranceSeconds = normalizePreviewTime(lagToleranceSeconds) ?? 0;
+  return voiceTimelineTime + toleranceSeconds < desiredTime
+    ? Math.max(currentTime, voiceTimelineTime)
+    : null;
+};
+
+export const getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs = ({
+  currentTime,
+  endTime,
+  isEnded,
+  isPaused,
+  isSeeking,
+  minimumReadyState,
+  readyState,
+}: WorkspaceSegmentTimelineAudioPreviewEndWatchdogOptions) => {
+  const safeCurrentTime = normalizePreviewTime(currentTime);
+  const safeEndTime = normalizePreviewTime(endTime);
+  if (safeCurrentTime === null || safeEndTime === null) {
+    return null;
+  }
+
+  const remainingMs = Math.max(0, (safeEndTime - safeCurrentTime) * 1000);
+  if (remainingMs <= 20) {
+    return 0;
+  }
+  if (
+    isEnded ||
+    isPaused ||
+    isSeeking ||
+    !Number.isFinite(readyState) ||
+    !Number.isFinite(minimumReadyState) ||
+    readyState < Math.max(0, minimumReadyState)
+  ) {
+    return null;
+  }
+
+  return Math.min(250, remainingMs + 30);
 };
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (

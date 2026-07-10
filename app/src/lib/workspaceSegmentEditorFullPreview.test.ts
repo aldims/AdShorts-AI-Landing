@@ -12,6 +12,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
+  getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails,
@@ -30,6 +31,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
+  resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
@@ -1309,5 +1311,118 @@ describe("workspace segment editor full preview", () => {
         13.25,
       ),
     ).toBe(5.25);
+  });
+
+  it("holds the preview clock when voice media is buffering", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime({
+        currentPreviewTime: 4.1,
+        currentSourceTime: 4.1,
+        desiredPreviewTime: 4.9,
+        isEnded: false,
+        isPaused: false,
+        isSeeking: false,
+        lagToleranceSeconds: 0.045,
+        minimumReadyState: 2,
+        readyState: 1,
+        track: {
+          sourceKind: "isolated",
+          sourceStartTime: 0,
+          timelineEndTime: 4.9,
+          timelineStartTime: 0,
+        },
+      }),
+    ).toBe(4.1);
+  });
+
+  it("uses the voice media clock instead of crossing a segment boundary", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime({
+        currentPreviewTime: 4.7,
+        currentSourceTime: 4.55,
+        desiredPreviewTime: 4.9,
+        isEnded: false,
+        isPaused: false,
+        isSeeking: false,
+        lagToleranceSeconds: 0.045,
+        minimumReadyState: 2,
+        readyState: 4,
+        track: {
+          sourceKind: "isolated",
+          sourceStartTime: 0,
+          timelineEndTime: 4.9,
+          timelineStartTime: 0,
+        },
+      }),
+    ).toBe(4.7);
+  });
+
+  it("releases the voice clock after media catches up or ends", () => {
+    const baseOptions = {
+      currentPreviewTime: 4.7,
+      currentSourceTime: 4.88,
+      desiredPreviewTime: 4.9,
+      isPaused: false,
+      isSeeking: false,
+      lagToleranceSeconds: 0.045,
+      minimumReadyState: 2,
+      readyState: 4,
+      track: {
+        sourceKind: "isolated" as const,
+        sourceStartTime: 0,
+        timelineEndTime: 4.9,
+        timelineStartTime: 0,
+      },
+    };
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime({
+        ...baseOptions,
+        isEnded: false,
+      }),
+    ).toBeNull();
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime({
+        ...baseOptions,
+        currentSourceTime: 4.2,
+        isEnded: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not let the timeline audio watchdog expire while media is stalled", () => {
+    expect(
+      getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs({
+        currentTime: 4.1,
+        endTime: 4.9,
+        isEnded: false,
+        isPaused: false,
+        isSeeking: false,
+        minimumReadyState: 2,
+        readyState: 1,
+      }),
+    ).toBeNull();
+    expect(
+      getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs({
+        currentTime: 4.1,
+        endTime: 4.9,
+        isEnded: false,
+        isPaused: false,
+        isSeeking: false,
+        minimumReadyState: 2,
+        readyState: 4,
+      }),
+    ).toBe(250);
+    expect(
+      getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs({
+        currentTime: 4.89,
+        endTime: 4.9,
+        isEnded: false,
+        isPaused: false,
+        isSeeking: false,
+        minimumReadyState: 2,
+        readyState: 4,
+      }),
+    ).toBe(0);
   });
 });
