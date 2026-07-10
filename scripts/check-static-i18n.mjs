@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const singleLocalePaths = new Set(indexPolicy.singleLocale);
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 const excludedDirs = new Set([".git", ".codex-tmp", "app", "logs", "node_modules", "tmp"]);
 const siteOrigin = "https://adshortsai.com";
 const requiredLocales = ["ru", "en"];
@@ -71,10 +74,12 @@ const checkFile = async (filePath) => {
   const alternates = parseAlternates(html);
   const hasLocaleAlternates = requiredLocales.some((locale) => alternates.has(locale));
   const hasAllRequiredAlternates = requiredLocales.every((locale) => alternates.has(locale));
+  const pathname = new URL(/<link\s+rel="canonical"\s+href="([^"]+)"/i.exec(html)?.[1] ?? siteOrigin).pathname;
+  const isAllowedSingleLocale = indexPaths.has(pathname) || singleLocalePaths.has(pathname) || allowedSingleLocaleFiles.has(relativeFilePath);
 
   if (!hasLocaleAlternates) return errors;
 
-  if (!hasAllRequiredAlternates && allowedSingleLocaleFiles.has(relativeFilePath)) {
+  if (!hasAllRequiredAlternates && isAllowedSingleLocale) {
     if (/class="lang-switch\b/.test(html)) {
       errors.push(`${relativeFilePath}: still uses legacy language switch`);
     }

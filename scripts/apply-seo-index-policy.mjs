@@ -80,6 +80,11 @@ const filterHreflang = (html) => html.replace(
   (tag, href) => statusFor(normalizePath(href)) === "index" ? tag : "",
 );
 
+const stripHreflang = (html) => html.replace(
+  /\s*<link\s+rel=["']alternate["']\s+hreflang=["'][^"']+["']\s+href=["'][^"']+["']\s*\/?>/gi,
+  "",
+);
+
 const stripDeprecatedSeoBlocks = (html) => html
   .replace(/\s*<!-- seo-(?:index-boost|action-plan):start -->[\s\S]*?<!-- seo-(?:index-boost|action-plan):end -->/gi, "")
   .replace(/\s*<!-- seo-sprint-faq-jsonld:start -->\s*<!-- seo-sprint-faq-jsonld:end -->/gi, "");
@@ -87,7 +92,7 @@ const stripDeprecatedSeoBlocks = (html) => html
 for (const [pathname, page] of pages) {
   const status = statusFor(pathname);
   let html = setRobots(page.html, status === "index" ? "index, follow" : "noindex, follow");
-  html = filterHreflang(html);
+  html = status === "index" ? filterHreflang(html) : stripHreflang(html);
   if (status === "index") html = stripDeprecatedSeoBlocks(html);
   await writeFile(page.file, html, "utf8");
   page.html = html;

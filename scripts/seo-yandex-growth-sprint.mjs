@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-06-18";
+const dateModified = "2026-07-10";
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 
 const escapeHtml = (value) =>
   String(value)
@@ -152,9 +154,9 @@ const pageUpdates = [
   {
     file: "avtomatizaciya-youtube-shorts/index.html",
     route: "/avtomatizaciya-youtube-shorts/",
-    title: "Автоматическое создание Shorts: AI workflow без монтажа",
+    title: "Автоматическое создание Shorts: процесс без монтажа",
     description:
-      "Автоматическое создание Shorts: AI workflow для сценариев, озвучки, субтитров и черновиков видео без ручного монтажа.",
+      "Автоматическое создание Shorts: процесс подготовки сценариев, озвучки, субтитров и черновиков видео без ручного монтажа.",
     h1: "Автоматическое создание Shorts без монтажа",
     block: {
       heading: "Сервис AI Shorts 24/7: что автоматизировать",
@@ -227,44 +229,19 @@ const updatePage = async (page) => {
   html = updateHeadMeta(html, page);
   html = setH1(html, page.h1);
   html = stripBlock(html, "seo-yandex-growth");
-  html = addBeforeReadAlso(html, renderBlock(page.block));
   await writeFile(filePath, html, "utf8");
   return page.file;
 };
 
-const updateSitemap = async () => {
-  const sitemapPath = path.join(rootDir, "sitemap.xml");
-  let sitemap = await readFile(sitemapPath, "utf8");
-  let updated = 0;
-
-  for (const page of pageUpdates) {
-    const canonical = `${siteOrigin}${page.route}`;
-    const pattern = new RegExp(`(<loc>${escapeRegExp(canonical)}<\\/loc>[\\s\\S]*?<lastmod>)([^<]+)(<\\/lastmod>)`);
-    if (!pattern.test(sitemap)) {
-      throw new Error(`sitemap.xml: missing ${canonical}`);
-    }
-    sitemap = sitemap.replace(pattern, (_match, before, current, after) => {
-      if (current === dateModified) return `${before}${current}${after}`;
-      updated += 1;
-      return `${before}${dateModified}${after}`;
-    });
-  }
-
-  await writeFile(sitemapPath, sitemap, "utf8");
-  return updated;
-};
-
 const changed = [];
-for (const page of pageUpdates) {
+for (const page of pageUpdates.filter((entry) => indexPaths.has(entry.route))) {
   changed.push(await updatePage(page));
 }
-
-const sitemapUpdates = await updateSitemap();
 
 console.log(
   [
     `SEO Yandex growth sprint updated ${changed.length} pages.`,
-    `Updated ${sitemapUpdates} sitemap lastmod values to ${dateModified}.`,
+    "Run apply-seo-index-policy.mjs to update sitemap and index controls.",
     ...changed.map((file) => `- ${file}`),
   ].join("\n"),
 );

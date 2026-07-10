@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://adshortsai.com/schemas/seo-index-policy.schema.json",
   "type": "object",
-  "required": ["schemaVersion", "siteOrigin", "reviewDate", "default", "index", "redirect", "hubs"],
+  "required": ["schemaVersion", "siteOrigin", "reviewDate", "default", "index", "redirect", "hubs", "singleLocale"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "siteOrigin": { "type": "string", "format": "uri" },
@@ -43,6 +43,10 @@
       }
     },
     "hubs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^/" }
+    },
+    "singleLocale": {
       "type": "array",
       "items": { "type": "string", "pattern": "^/" }
     }

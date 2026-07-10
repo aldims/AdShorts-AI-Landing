@@ -85,7 +85,8 @@
     },
     {
       "url": "/sozdat-shorts-video/",
-      "reason": "Коммерческий приоритет: создание Shorts"
+      "reason": "Коммерческий приоритет: создание Shorts",
+      "contentModified": "2026-07-10"
     },
     {
       "url": "/ai-generator-video-dlya-socsetey/",
@@ -93,7 +94,8 @@
     },
     {
       "url": "/ai-generator-shorts-dlya-malogo-biznesa/",
-      "reason": "Коммерческий приоритет: малый бизнес"
+      "reason": "Коммерческий приоритет: малый бизнес",
+      "contentModified": "2026-07-10"
     },
     {
       "url": "/shorts-dlya-biznesa/",
@@ -238,7 +240,8 @@
     },
     {
       "url": "/kak-sdelat-shorts-bez-montazha/",
-      "reason": "Коммерческий приоритет: быстрый веб-workflow"
+      "reason": "Коммерческий приоритет: быстрое создание в веб-сервисе",
+      "contentModified": "2026-07-10"
     },
     {
       "url": "/kak-privesti-trafik-iz-shorts-na-sayt/",
@@ -426,5 +429,9 @@
   "hubs": [
     "/shorts-guides/",
     "/en/shorts-guides/"
+  ],
+  "singleLocale": [
+    "/offer/",
+    "/kalkulyator-stoimosti-shorts/"
   ]
 }
