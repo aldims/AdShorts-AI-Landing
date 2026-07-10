@@ -45,8 +45,8 @@
   padding: 0 10px !important;
   gap: 12px !important;
   overflow: visible !important;
-  border: 1px solid rgba(216, 224, 244, 0.1) !important;
-  border-radius: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
@@ -54,14 +54,7 @@
 }
 
 #app .route-page:not(.studio-canvas-route) > .site-header .site-header__inner::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 0 22px auto !important;
-  z-index: 0 !important;
-  height: 1px !important;
-  background: linear-gradient(90deg, transparent, rgba(240, 245, 255, 0.26) 48%, transparent) !important;
-  opacity: 0.34 !important;
-  pointer-events: none !important;
+  display: none !important;
 }
 
 #app .route-page:not(.studio-canvas-route) > .site-header .site-header__inner > * {
@@ -122,13 +115,15 @@
   height: var(--premium-control-height) !important;
   min-height: var(--premium-control-height) !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 3px !important;
   gap: 0 !important;
   overflow: visible !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: 1px solid rgba(215, 224, 247, 0.085) !important;
+  border-radius: 13px !important;
+  background: rgba(0, 3, 9, 0.26) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 1px 0 rgba(255, 255, 255, 0.018) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -145,7 +140,8 @@
   width: auto !important;
   min-width: 0 !important;
   max-width: 100% !important;
-  height: var(--premium-control-height) !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
   gap: 2px !important;
   overflow: visible !important;
@@ -163,8 +159,8 @@
   flex: 0 0 auto !important;
   width: auto !important;
   min-width: 0 !important;
-  height: var(--premium-control-height) !important;
-  min-height: var(--premium-control-height) !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 13px !important;
   gap: 7px !important;
   overflow: visible !important;
