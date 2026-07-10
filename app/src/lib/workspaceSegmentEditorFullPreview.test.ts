@@ -36,6 +36,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
+  shouldShowWorkspaceSegmentEditorFullPreviewBuffering,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
@@ -1501,5 +1502,29 @@ describe("workspace segment editor full preview", () => {
         { kind: "voice", url: "blob:already-local" },
       ]),
     ).toEqual(["/voice/1", "/voice/2"]);
+  });
+
+  it("does not expose one-frame voice start holds as UI buffering", () => {
+    expect(
+      shouldShowWorkspaceSegmentEditorFullPreviewBuffering({
+        delayMs: 300,
+        isHolding: true,
+        stalledForMs: 16,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowWorkspaceSegmentEditorFullPreviewBuffering({
+        delayMs: 300,
+        isHolding: true,
+        stalledForMs: 299,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowWorkspaceSegmentEditorFullPreviewBuffering({
+        delayMs: 300,
+        isHolding: true,
+        stalledForMs: 300,
+      }),
+    ).toBe(true);
   });
 });

@@ -1419,6 +1419,16 @@ export const shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack = (optio
   isVoiceTrack: boolean;
 }) => options.hasVoiceClockHold && !options.isVoiceTrack;
 
+export const shouldShowWorkspaceSegmentEditorFullPreviewBuffering = (options: {
+  delayMs: number;
+  isHolding: boolean;
+  stalledForMs: number;
+}) => {
+  const delayMs = Number.isFinite(options.delayMs) ? Math.max(0, options.delayMs) : 0;
+  const stalledForMs = Number.isFinite(options.stalledForMs) ? Math.max(0, options.stalledForMs) : 0;
+  return options.isHolding && stalledForMs >= delayMs;
+};
+
 export const getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls = (
   tracks: WorkspaceSegmentEditorFullPreviewPreloadTrack[],
 ) => Array.from(

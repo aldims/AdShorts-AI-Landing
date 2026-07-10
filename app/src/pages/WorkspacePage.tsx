@@ -551,6 +551,7 @@ import {
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_TIMEOUT_MS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_CLOCK_LAG_TOLERANCE_SECONDS,
+  WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_BUFFERING_UI_DELAY_MS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_MEDIA_END_TOLERANCE_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_STALL_TIMEOUT_MS,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_DEBUG_STORAGE_KEY,
@@ -907,6 +908,7 @@ import {
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
   shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement,
   shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
+  shouldShowWorkspaceSegmentEditorFullPreviewBuffering,
   shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
   shouldSeekWorkspaceSegmentEditorFullPreviewAudioTrack,
@@ -26059,7 +26061,11 @@ export function WorkspacePage({
       };
       return {
         holdTime: currentTime,
-        isBuffering: true,
+        isBuffering: shouldShowWorkspaceSegmentEditorFullPreviewBuffering({
+          delayMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_BUFFERING_UI_DELAY_MS,
+          isHolding: true,
+          stalledForMs,
+        }),
         stalledForMs,
         timedOut: stalledForMs >= WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_STALL_TIMEOUT_MS,
         track,
@@ -26110,11 +26116,11 @@ export function WorkspacePage({
     }
     return {
       holdTime,
-      isBuffering:
-        element.paused ||
-        element.seeking ||
-        element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
-        stalledForMs >= 250,
+      isBuffering: shouldShowWorkspaceSegmentEditorFullPreviewBuffering({
+        delayMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_BUFFERING_UI_DELAY_MS,
+        isHolding: true,
+        stalledForMs,
+      }),
       stalledForMs,
       timedOut: stalledForMs >= WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_STALL_TIMEOUT_MS,
       track,
