@@ -245,40 +245,6 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.studio-welcome-card__mode--scenes {
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.8fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  column-gap: 16px;
-  row-gap: 9px;
-}
-
-.studio-welcome-card__mode--scenes .studio-welcome-card__mode-topline {
-  grid-column: 1 / -1;
-}
-
-.studio-welcome-card__mode--scenes .studio-welcome-card__mode-copy {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
-  display: grid;
-  grid-column: 2;
-  grid-row: 2;
-  grid-template-columns: minmax(0, 1fr);
-  align-self: start;
-  gap: 8px;
-  margin-top: 3px;
-}
-
-.studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities > span {
-  width: 100%;
-  min-height: 22px;
-  justify-content: flex-start;
-  padding-inline: 9px;
-  border-radius: 9px;
-}
-
 .studio-welcome-card__mode:not(.is-selected):hover {
   border-color: rgba(203, 213, 250, 0.2);
   background-color: rgba(255, 255, 255, 0.035);
@@ -662,33 +628,6 @@
     right: 6px;
     height: 9px;
     font-size: 0.34rem;
-  }
-
-  .studio-welcome-card__mode--scenes {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
-    gap: 7px;
-  }
-
-  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-topline,
-  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-copy,
-  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
-  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities {
-    display: flex;
-    column-gap: 5px;
-    row-gap: 9px;
-    margin-top: 7px;
-  }
-
-  .studio-welcome-card__mode--scenes .studio-welcome-card__mode-capabilities > span {
-    width: auto;
-    min-height: 22px;
-    padding-inline: 6px;
-    border-radius: 999px;
   }
 
 }

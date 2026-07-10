@@ -34022,7 +34022,7 @@ export function WorkspacePage({
                                 </span>
                               </div>
                               <button
-                                className="studio-welcome-card__mode studio-welcome-card__mode--scenes"
+                                className="studio-welcome-card__mode"
                                 type="button"
                                 onClick={() => {
                                   closeStudioWelcomeCard();
