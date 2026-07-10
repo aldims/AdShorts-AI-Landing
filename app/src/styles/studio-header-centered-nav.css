@@ -674,8 +674,8 @@
 /* Mobile: two compact rows; both creation modes keep the same switch position. */
 @media (max-width: 640px) {
   #app .studio-canvas-route {
-    --studio-header-reserve: 116px !important;
-    --studio-header-height: 112px;
+    --studio-header-reserve: 124px !important;
+    --studio-header-height: 120px;
     --studio-header-control-height: 36px;
   }
 
@@ -687,8 +687,8 @@
       "navigation navigation" !important;
     align-content: center !important;
     width: calc(100% - 12px) !important;
-    height: 104px !important;
-    min-height: 104px !important;
+    height: 112px !important;
+    min-height: 112px !important;
     margin-top: 4px !important;
     padding: 6px 8px !important;
     row-gap: 2px !important;
@@ -698,7 +698,7 @@
 
   /* Keep the primary studio menu beside the logo; creation modes form a second row. */
   #app .studio-canvas-route .site-header--workspace .site-header__inner {
-    grid-template-columns: 36px minmax(0, 1fr) auto !important;
+    grid-template-columns: 32px minmax(0, 1fr) auto !important;
     grid-template-areas:
       "brand navigation actions"
       "switcher switcher switcher" !important;
@@ -715,7 +715,7 @@
 
   #app .studio-canvas-route .site-header--workspace .studio-create-mode-controls {
     grid-area: switcher !important;
-    justify-self: center !important;
+    justify-self: start !important;
     width: auto !important;
   }
 
@@ -773,8 +773,8 @@
   }
 
   #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
-    width: min(220px, 100%) !important;
-    max-width: min(220px, 100%) !important;
+    width: min(180px, 100%) !important;
+    max-width: min(180px, 100%) !important;
     overflow: visible !important;
     border-radius: 11px !important;
   }
@@ -847,14 +847,29 @@
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__billing {
-    max-width: 66px !important;
-    padding: 0 8px !important;
+    max-width: 104px !important;
+    padding: 0 7px !important;
+    gap: 5px !important;
     border-radius: 11px !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__billing-plan,
   #app .studio-canvas-route .site-header--workspace .site-header__billing-divider {
-    display: none !important;
+    display: inline-flex !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-header__billing-plan strong {
+    max-width: 38px;
+    overflow: hidden;
+    font-size: 0.6rem !important;
+    letter-spacing: 0.025em !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-header__billing-credits strong {
+    font-size: 0.65rem !important;
+    letter-spacing: 0.035em !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__account-wrap,
@@ -891,8 +906,14 @@
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__billing {
-    max-width: 58px !important;
-    padding-inline: 7px !important;
+    max-width: 94px !important;
+    padding-inline: 6px !important;
+    gap: 4px !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-header__billing-plan strong {
+    max-width: 30px;
+    font-size: 0.55rem !important;
   }
 }
 

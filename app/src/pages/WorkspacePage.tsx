@@ -2362,6 +2362,7 @@ export function WorkspacePage({
   const segmentTimelineAudioCleanupRef = useRef<null | (() => void)>(null);
   const segmentTimelineAudioObjectUrlsRef = useRef<string[]>([]);
   const segmentTimelineVoicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const segmentTimelineScrollRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbStripRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineDurationButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
@@ -7479,6 +7480,8 @@ export function WorkspacePage({
     segmentTimelineImmediateActiveIndex < segmentEditorDraft.segments.length
       ? segmentTimelineImmediateActiveIndex
       : activeSegmentIndex;
+  const segmentEditorTimelineActiveStableIndex =
+    segmentEditorDraft?.segments[segmentEditorTimelineActiveArrayIndex]?.index ?? null;
   const segmentThumbDragGhostStyle: CSSProperties | null = segmentThumbDragState
     ? {
         left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
@@ -7486,6 +7489,55 @@ export function WorkspacePage({
         width: `${segmentThumbDragState.width}px`,
       }
     : null;
+
+  useEffect(() => {
+    if (
+      createMode !== "segment-editor" ||
+      segmentEditorTimelineActiveStableIndex === null ||
+      typeof window.matchMedia !== "function" ||
+      !window.matchMedia("(max-width: 640px)").matches
+    ) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const scrollContainer = segmentTimelineScrollRef.current;
+      const activeThumb = segmentThumbButtonRefs.current[segmentEditorTimelineActiveStableIndex];
+      const activeCell = activeThumb?.closest<HTMLElement>(".studio-segment-editor__timeline-cell-shell");
+
+      if (
+        !scrollContainer ||
+        !activeCell ||
+        typeof scrollContainer.scrollTo !== "function" ||
+        scrollContainer.scrollWidth <= scrollContainer.clientWidth
+      ) {
+        return;
+      }
+
+      const scrollContainerBounds = scrollContainer.getBoundingClientRect();
+      const activeCellBounds = activeCell.getBoundingClientRect();
+      const targetScrollLeft = Math.max(
+        0,
+        scrollContainer.scrollLeft +
+          activeCellBounds.left -
+          scrollContainerBounds.left -
+          (scrollContainer.clientWidth - activeCellBounds.width) / 2,
+      );
+
+      if (Math.abs(targetScrollLeft - scrollContainer.scrollLeft) < 2) {
+        return;
+      }
+
+      scrollContainer.scrollTo({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        left: targetScrollLeft,
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [createMode, segmentEditorTimelineActiveStableIndex]);
 
   useEffect(() => {
     setPreviewModalPlaybackError(null);
@@ -28911,7 +28963,7 @@ export function WorkspacePage({
             </span>
           </button>
         ) : null}
-        <div className="studio-segment-editor__timeline-scroll">
+        <div ref={segmentTimelineScrollRef} className="studio-segment-editor__timeline-scroll">
         <div className="studio-segment-editor__timeline-ruler" aria-label={workspaceText(locale, "Границы сегментов", "Segment boundaries")}>
           <div className="studio-segment-editor__timeline-label" aria-hidden="true"></div>
           <div

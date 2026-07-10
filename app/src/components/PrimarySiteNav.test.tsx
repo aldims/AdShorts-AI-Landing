@@ -70,4 +70,22 @@ describe("PrimarySiteNav", () => {
     expect(handleOpenStudioSection).toHaveBeenCalledWith("create");
     expect(screen.getByRole("button", { name: "Студия" }).getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("closes the compact studio menu after an outside pointer interaction", () => {
+    renderPrimarySiteNav(
+      <PrimarySiteNav
+        activeItem="studio"
+        activeStudioSection="create"
+        onOpenStudio={() => undefined}
+        onOpenStudioSection={() => undefined}
+      />,
+    );
+
+    const compactToggle = screen.getByRole("button", { name: "Разделы студии: Создать Shorts" });
+    fireEvent.click(compactToggle);
+    expect(compactToggle.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.pointerDown(document.body);
+    expect(compactToggle.getAttribute("aria-expanded")).toBe("false");
+  });
 });

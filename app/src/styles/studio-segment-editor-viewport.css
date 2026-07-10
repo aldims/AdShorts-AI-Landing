@@ -237,6 +237,61 @@
     max-height: var(--studio-segment-editor-carousel-height) !important;
   }
 
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay {
+    padding: 52px 8px 8px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-footer {
+    display: grid !important;
+    grid-template-columns: 60px minmax(0, 74px) !important;
+    align-items: end !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-main {
+    min-width: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy strong {
+    font-size: 0.7rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy span {
+    font-size: 0.5rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-footer-actions {
+    width: 100% !important;
+    max-width: 74px !important;
+    min-width: 0 !important;
+    justify-content: flex-end !important;
+    gap: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge,
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__card-overlay.is-active
+    .studio-segment-editor__card-badge {
+    width: auto !important;
+    max-width: 74px !important;
+    min-height: 20px !important;
+    margin-bottom: 0 !important;
+    padding: 0 6px !important;
+    overflow: hidden !important;
+    font-size: 0.52rem !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--card {
+    bottom: 8px !important;
+    max-width: 76px !important;
+    min-height: 20px !important;
+    padding-inline: 2px !important;
+    font-size: 0.59rem !important;
+  }
+
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
     position: sticky !important;
     bottom: max(8px, env(safe-area-inset-bottom)) !important;

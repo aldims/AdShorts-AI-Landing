@@ -80,6 +80,7 @@ export function PrimarySiteNav({
   const compactMenuId = useId();
   const [isStudioMenuOpen, setIsStudioMenuOpen] = useState(false);
   const [isCompactMenuOpen, setIsCompactMenuOpen] = useState(false);
+  const navigationRef = useRef<HTMLElement | null>(null);
   const studioTabsContentRef = useRef<HTMLDivElement | null>(null);
   const studioTabItemRefs = useRef<Partial<Record<StudioNavItem, HTMLElement | null>>>({});
 
@@ -102,6 +103,32 @@ export function PrimarySiteNav({
   useEffect(() => {
     setIsCompactMenuOpen(false);
   }, [activeItem, activeStudioSection, preferStudioSections]);
+
+  useEffect(() => {
+    if (!isCompactMenuOpen) {
+      return;
+    }
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const navigation = navigationRef.current;
+      if (navigation && event.target instanceof Node && !navigation.contains(event.target)) {
+        setIsCompactMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsCompactMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isCompactMenuOpen]);
 
   useEffect(() => {
     if (!shouldRenderStudioSections) {
@@ -205,6 +232,7 @@ export function PrimarySiteNav({
   if (shouldRenderStudioSections && onOpenStudioSection) {
     return (
       <nav
+        ref={navigationRef}
         className={`site-nav site-nav--studio-tabs${isCompactMenuOpen ? " is-compact-open" : ""}`}
         aria-label={t(navMessages.ariaStudioSections)}
       >
@@ -248,7 +276,11 @@ export function PrimarySiteNav({
   }
 
   return (
-    <nav className={`site-nav${isCompactMenuOpen ? " is-compact-open" : ""}`} aria-label={t(navMessages.ariaMain)}>
+    <nav
+      ref={navigationRef}
+      className={`site-nav${isCompactMenuOpen ? " is-compact-open" : ""}`}
+      aria-label={t(navMessages.ariaMain)}
+    >
       {compactToggle}
       <div id={compactMenuId} className="site-nav__content">
         <Link
