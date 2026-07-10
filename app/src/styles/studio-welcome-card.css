@@ -359,12 +359,12 @@
     position: static;
     flex: 1 1 auto;
     min-height: 0;
-    align-items: center;
+    align-items: start;
   }
 
   .studio-welcome-card__hero-copy {
     width: 100%;
-    padding: 44px 8px 12px;
+    padding: 50px 8px 12px;
   }
 
   .studio-welcome-card__eyebrow {
@@ -386,6 +386,8 @@
   .studio-welcome-card__hero-copy > p {
     max-width: none;
     margin-top: 11px;
+    font-size: 0.94rem;
+    text-wrap: wrap;
   }
 
   .studio-welcome-card__modes {
