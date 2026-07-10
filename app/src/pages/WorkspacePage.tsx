@@ -34157,12 +34157,7 @@ export function WorkspacePage({
                               )}
                           </p>
                         ) : null}
-                        {!composerSourceIdea ? (
-                          <div className="studio-canvas-prompt__actions-row">
-                            {studioIdeaPromptActions}
-                          </div>
-                        ) : null}
-                        <div className="studio-canvas-prompt__input-row">
+                        <div className={`studio-canvas-prompt__input-row${!composerSourceIdea ? " studio-canvas-prompt__input-row--idea" : ""}`}>
                           <div className="studio-canvas-prompt__input-main">
                             <textarea
                               ref={promptTextareaRef}
@@ -34173,6 +34168,11 @@ export function WorkspacePage({
                               rows={1}
                               />
                           </div>
+                          {!composerSourceIdea ? (
+                            <div className="studio-canvas-prompt__topbar">
+                              {studioIdeaPromptActions}
+                            </div>
+                          ) : null}
                         </div>
                             <div className="studio-canvas-prompt__footer" ref={promptFooterRef}>
                             <div className="studio-canvas-prompt__chips" ref={promptChipsRef}>

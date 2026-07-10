@@ -7,33 +7,21 @@
   gap: 6px;
 }
 
-.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__actions-row {
-  display: flex;
-  width: 100%;
-  min-height: 31px;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row,
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-main {
   width: 100%;
 }
 
-.studio-canvas-route:not(.is-segment-editor)
-  .studio-canvas-prompt__actions-row
-  + .studio-canvas-prompt__input-row {
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row--idea {
   flex: 1 1 0;
   min-height: 0 !important;
   height: auto !important;
-  align-items: stretch !important;
+  align-items: flex-start !important;
   padding-bottom: 0 !important;
 }
 
 .studio-canvas-route:not(.is-segment-editor)
-  .studio-canvas-prompt__actions-row
-  + .studio-canvas-prompt__input-row
+  .studio-canvas-prompt__input-row--idea
   .studio-canvas-prompt__input-main {
   display: flex;
   min-height: 0;
@@ -41,8 +29,7 @@
 }
 
 .studio-canvas-route:not(.is-segment-editor)
-  .studio-canvas-prompt__actions-row
-  + .studio-canvas-prompt__input-row
+  .studio-canvas-prompt__input-row--idea
   .studio-canvas-prompt__textarea {
   flex: 1 1 auto;
   min-height: 0 !important;
