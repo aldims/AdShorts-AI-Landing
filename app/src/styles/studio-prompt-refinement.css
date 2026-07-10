@@ -85,10 +85,28 @@
 
 @media (max-width: 760px) {
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__topbar .studio-canvas-prompt__chip--improve {
+    flex: 0 0 34px;
+    width: 34px;
+    min-width: 34px;
     min-height: 34px !important;
-    padding-inline: 10px !important;
+    padding-inline: 0 !important;
     font-size: 0.76rem !important;
     line-height: 1 !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-prompt__topbar
+    .studio-canvas-prompt__chip--improve
+    > span:not(.studio-canvas-prompt__improve-spinner) {
+    display: none;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-prompt__topbar
+    .studio-canvas-prompt__chip--toggle {
+    flex: 0 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
   }
 }
 

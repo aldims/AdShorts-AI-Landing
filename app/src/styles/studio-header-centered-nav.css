@@ -696,6 +696,34 @@
     border-radius: 17px !important;
   }
 
+  /* Keep the primary studio menu beside the logo; creation modes form a second row. */
+  #app .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .site-header__inner {
+    grid-template-columns: 36px minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "brand navigation actions"
+      "switcher switcher switcher" !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .site-header__mode {
+    display: contents !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .brand {
+    grid-area: brand !important;
+    justify-self: start !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .studio-create-mode-controls {
+    grid-area: switcher !important;
+    justify-self: center !important;
+    width: auto !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .site-header--workspace .studio-create-mode-switch {
+    width: min(180px, 100%) !important;
+    max-width: 180px !important;
+  }
+
   #app .studio-canvas-route .site-header--workspace {
     --studio-header-control-height: 36px !important;
   }
