@@ -23,7 +23,7 @@
 
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-  height: min(480px, var(--studio-preview-available-height)) !important;
+  height: min(390px, var(--studio-preview-available-height)) !important;
 }
 
 .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
@@ -350,6 +350,11 @@
 }
 
 @media (min-width: 900px) and (min-height: 761px) {
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
+    height: min(360px, var(--studio-preview-available-height)) !important;
+  }
+
   .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
     justify-content: center;
     padding: 26px 28px !important;
