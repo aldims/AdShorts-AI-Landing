@@ -212,6 +212,7 @@ import {
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentEditorVisualDurationMaxSeconds,
   getWorkspaceSegmentEffectiveSubtitleSettings,
+  getWorkspaceSegmentEffectiveVoiceEnabled,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
   getWorkspaceSegmentKnownVisualDurationSeconds,
@@ -23745,21 +23746,29 @@ export function WorkspacePage({
     clearSegmentEditorVoiceoverError(segmentIndex);
     updateSegmentEditorDraft((currentDraft) => ({
       ...currentDraft,
-      segments: currentDraft.segments.map((segment) =>
-        segment.index === segmentIndex
-          ? clearSegmentEditorVoiceoverGenerationState({
-              ...segment,
-              text: nextValue,
-              textByLanguage: {
-                ...segment.textByLanguage,
-                [selectedLanguage]: nextValue,
-              },
-            }, {
-              preserveUserSelectedVisualDuration: false,
-              previousText: segment.text,
-            })
-          : segment,
-      ),
+      segments: currentDraft.segments.map((segment) => {
+        if (segment.index !== segmentIndex) {
+          return segment;
+        }
+
+        const shouldEnableDefaultVoice =
+          Boolean(normalizeWorkspaceSegmentEditorTextForCompare(nextValue)) &&
+          !doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) &&
+          !getWorkspaceSegmentEffectiveVoiceEnabled(segment, currentDraft);
+
+        return clearSegmentEditorVoiceoverGenerationState({
+          ...segment,
+          text: nextValue,
+          textByLanguage: {
+            ...segment.textByLanguage,
+            [selectedLanguage]: nextValue,
+          },
+          ...(shouldEnableDefaultVoice ? { voiceType: DEFAULT_STUDIO_VOICE_ID.ru } : {}),
+        }, {
+          preserveUserSelectedVisualDuration: false,
+          previousText: segment.text,
+        });
+      }),
     }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
   };
   const handleSegmentTimelineSubtitleDisable = (segmentIndex: number) => {
