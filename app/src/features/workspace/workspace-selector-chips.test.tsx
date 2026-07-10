@@ -116,6 +116,7 @@ describe("StudioVideoSelectorChip", () => {
     expect(aiVideoOption.disabled).toBe(true);
     expect(screen.getByText("1–2 минуты")).toBeTruthy();
     expect(screen.getByText("3–5 минут")).toBeTruthy();
+    expect(screen.getByText("0/50").parentElement?.nextElementSibling?.className).toContain("studio-video-selector__brand-field");
     expect(screen.queryByText("Premium")).toBeNull();
     expect(screen.queryByText("Загрузить свой визуал")).toBeNull();
     expect(screen.queryByText("Лого: .jpg, .png, .webp, .avif")).toBeNull();
