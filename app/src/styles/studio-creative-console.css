@@ -833,6 +833,21 @@
   background: linear-gradient(to top, rgba(5, 6, 7, 0.96), rgba(5, 6, 7, 0.38) 72%, transparent);
 }
 
+@media (min-width: 761px) {
+  .studio-canvas-route:not(.is-segment-editor).is-clean-start .studio-canvas-prompt {
+    top: 46%;
+    bottom: auto;
+    transform: translateY(-50%);
+    background: transparent;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor).is-clean-start .studio-canvas-prompt__inner--starter {
+    height: 190px !important;
+    min-height: 190px !important;
+    max-height: 190px !important;
+  }
+}
+
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt::before {
   bottom: 6px;
   width: min(760px, 68%);
@@ -867,6 +882,76 @@
     0 30px 74px -22px rgba(0, 0, 0, 0.92),
     0 0 0 1px rgba(185, 200, 255, 0.055),
     0 0 44px -20px rgba(157, 124, 255, 0.2);
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 3px 6px 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter > span {
+  flex: 0 0 auto;
+  color: rgba(224, 230, 233, 0.32);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter-examples {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.028);
+  color: rgba(231, 235, 238, 0.62);
+  font: inherit;
+  font-size: 0.67rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter button:hover,
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(185, 200, 255, 0.2);
+  background: rgba(185, 200, 255, 0.065);
+  color: rgba(246, 248, 249, 0.9);
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter button:focus-visible {
+  outline: 2px solid rgba(185, 200, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter .studio-canvas-prompt__starter-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  color: rgba(223, 229, 232, 0.42);
+  white-space: nowrap;
 }
 
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row {
@@ -1195,6 +1280,35 @@
     max-width: calc(100vw - 16px) !important;
     padding: 12px !important;
     border-radius: 20px;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__inner--starter {
+    height: 260px !important;
+    min-height: 260px !important;
+    max-height: 260px !important;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter > span {
+    display: none;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter-examples {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__starter-examples::-webkit-scrollbar {
+    display: none;
+  }
+
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-prompt__starter
+    .studio-canvas-prompt__starter-help {
+    justify-content: center;
+    width: 30px;
+    min-width: 30px;
+    padding: 0;
+    font-size: 0;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row {

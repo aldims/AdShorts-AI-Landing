@@ -5475,6 +5475,16 @@ export function WorkspacePage({
           video: visibleGeneratedVideo,
         }
       : null;
+  const isStudioCleanStart =
+    createMode === "default" &&
+    !studioInlinePreview &&
+    !isWorkspaceBootstrapPending &&
+    !isUserFacingGeneration &&
+    !shouldShowGenerateError &&
+    !shouldShowStudioWelcomeCard;
+  const shouldRenderStudioPreviewStage = createMode === "segment-editor" || !isStudioCleanStart;
+  const shouldShowStudioStarterHints =
+    isStudioCleanStart && !composerSourceIdea;
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
     : isPreviewModalOpen
@@ -33050,6 +33060,8 @@ export function WorkspacePage({
           shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
         }${
           composerSourceIdea ? " has-composer-source" : ""
+        }${
+          isStudioCleanStart ? " is-clean-start" : ""
         }`}
         hidden={!isStudioRouteVisible}
       >
@@ -33127,6 +33139,7 @@ export function WorkspacePage({
                   </div>
                 ) : null}
                 <div className="studio-canvas-create-layout">
+                {shouldRenderStudioPreviewStage ? (
                 <div
                   className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}${
                     studioInlinePreview ? " has-video-preview" : ""
@@ -33953,97 +33966,11 @@ export function WorkspacePage({
                           </button>
                         </div>
                       </div>
-                    ) : (
-                      <div className="studio-canvas-empty">
-                        <div className="studio-canvas-empty__copy">
-                          <span className="studio-canvas-empty__status">
-                            <span aria-hidden="true"></span>
-                            {workspaceText(locale, "AI-режиссёр готов", "AI director is ready")}
-                          </span>
-                          <h1>
-                            {workspaceText(locale, "Одна идея.", "One idea.")} <em>{workspaceText(locale, "Целый Shorts.", "A complete Short.")}</em>
-                          </h1>
-                          <p>
-                            {workspaceText(
-                              locale,
-                              "Опишите тему — студия соберёт сценарий, визуал, озвучку, музыку и субтитры в один готовый ролик.",
-                              "Describe a topic and the studio will assemble the script, visuals, voiceover, music, and captions into a finished video.",
-                            )}
-                          </p>
-
-                          <div
-                            className="studio-canvas-empty__suggestions"
-                            role="group"
-                            aria-label={workspaceText(locale, "Примеры идей", "Idea examples")}
-                          >
-                            <span>{workspaceText(locale, "Можно начать с", "Start with")}</span>
-                            <div>
-                              <button
-                                type="button"
-                                onClick={() => handleStudioPromptSuggestionSelect(
-                                  workspaceText(locale, "3 ошибки, из-за которых реклама не окупается", "3 mistakes that make ads unprofitable"),
-                                )}
-                              >
-                                {workspaceText(locale, "3 ошибки в рекламе", "3 ad mistakes")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStudioPromptSuggestionSelect(
-                                  workspaceText(locale, "Почему мы откладываем важные дела и как начать действовать", "Why we procrastinate and how to start taking action"),
-                                )}
-                              >
-                                {workspaceText(locale, "Почему мы откладываем", "Why we procrastinate")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStudioPromptSuggestionSelect(
-                                  workspaceText(locale, "Пять привычек, которые незаметно меняют качество жизни", "Five habits that quietly improve your quality of life"),
-                                )}
-                              >
-                                {workspaceText(locale, "5 полезных привычек", "5 useful habits")}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="studio-canvas-empty__visual" aria-hidden="true">
-                          <span className="studio-canvas-empty__float-tag studio-canvas-empty__float-tag--script">01 · {workspaceText(locale, "Сценарий", "Script")}</span>
-                          <span className="studio-canvas-empty__float-tag studio-canvas-empty__float-tag--captions">04 · {workspaceText(locale, "Субтитры", "Captions")}</span>
-                          <div className="studio-canvas-empty__phone">
-                            <div className="studio-canvas-empty__phone-topline">
-                              <span>9:16</span>
-                              <span>{workspaceText(locale, "ПРЕВЬЮ", "PREVIEW")}</span>
-                              <span>00:28</span>
-                            </div>
-                            <div className="studio-canvas-empty__scene">
-                              <span className="studio-canvas-empty__scene-index">SCENE 02</span>
-                              <svg viewBox="0 0 220 220" fill="none">
-                                <path d="M28 148C60 91 90 69 130 70c31 0 49-15 65-39" />
-                                <path d="M20 170c38-27 72-34 101-24 36 12 61-2 79-31" />
-                                <circle cx="130" cy="70" r="5" />
-                                <circle cx="121" cy="146" r="5" />
-                              </svg>
-                              <strong>{workspaceText(locale, "ИДЕЯ\nСТАНОВИТСЯ\nИСТОРИЕЙ", "IDEA\nBECOMES\nA STORY")}</strong>
-                            </div>
-                            <div className="studio-canvas-empty__timeline">
-                              <span></span><span></span><span className="is-active"></span><span></span><span></span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button className="studio-canvas-preview__help-link" type="button" onClick={openStudioWelcomeCard}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-                            <path d="M9.8 9.2a2.4 2.4 0 0 1 4.64.86c0 1.7-2.44 1.9-2.44 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                            <circle cx="12" cy="17" r="1" fill="currentColor" />
-                          </svg>
-                          {workspaceText(locale, "Как работает студия", "How the studio works")}
-                        </button>
-                      </div>
-                      )}
+                    ) : null}
                     </div>
                   )}
                 </div>
+                ) : null}
                   {contentPlanPanel}
                 </div>
               </div>
@@ -34056,12 +33983,59 @@ export function WorkspacePage({
                 >
                   <div
                     ref={promptInnerRef}
-                    className={studioPromptInnerClassName}
+                    className={`${studioPromptInnerClassName}${shouldShowStudioStarterHints ? " studio-canvas-prompt__inner--starter" : ""}`}
                     style={promptInnerStyle}
                   >
                   <div className="studio-canvas-prompt__editor-layout">
                     <div className="studio-canvas-prompt__editor-pane">
                       <>
+                          {shouldShowStudioStarterHints ? (
+                            <div
+                              className="studio-canvas-prompt__starter"
+                              role="group"
+                              aria-label={workspaceText(locale, "Примеры идей", "Idea examples")}
+                            >
+                              <span>{workspaceText(locale, "Попробуйте", "Try")}</span>
+                              <div className="studio-canvas-prompt__starter-examples">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudioPromptSuggestionSelect(
+                                    workspaceText(locale, "3 ошибки, из-за которых реклама не окупается", "3 mistakes that make ads unprofitable"),
+                                  )}
+                                >
+                                  {workspaceText(locale, "3 ошибки в рекламе", "3 ad mistakes")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudioPromptSuggestionSelect(
+                                    workspaceText(locale, "Почему мы откладываем важные дела и как начать действовать", "Why we procrastinate and how to start taking action"),
+                                  )}
+                                >
+                                  {workspaceText(locale, "Почему мы откладываем", "Why we procrastinate")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudioPromptSuggestionSelect(
+                                    workspaceText(locale, "Пять привычек, которые незаметно меняют качество жизни", "Five habits that quietly improve your quality of life"),
+                                  )}
+                                >
+                                  {workspaceText(locale, "5 полезных привычек", "5 useful habits")}
+                                </button>
+                              </div>
+                              <button
+                                className="studio-canvas-prompt__starter-help"
+                                type="button"
+                                onClick={openStudioWelcomeCard}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+                                  <path d="M9.8 9.2a2.4 2.4 0 0 1 4.64.86c0 1.7-2.44 1.9-2.44 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                                  <circle cx="12" cy="17" r="1" fill="currentColor" />
+                                </svg>
+                                {workspaceText(locale, "Как это работает", "How it works")}
+                              </button>
+                            </div>
+                          ) : null}
                           {composerSourceIdea ? (
                             <div className="studio-canvas-prompt__head">
                               <div className="studio-canvas-prompt__source">
