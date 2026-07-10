@@ -1,7 +1,6 @@
 import { Fragment, type CSSProperties, type ChangeEvent, type ClipboardEvent as ReactClipboardEvent, type FocusEvent as ReactFocusEvent, type FormEvent as ReactFormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction, type SyntheticEvent as ReactSyntheticEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import newScenesProjectIcon from "../assets/studio/new-scenes-project-icon.png";
 import { AccountMenuButton } from "../components/AccountMenuButton";
 import { InsufficientCreditsModal } from "../components/InsufficientCreditsModal";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
@@ -33418,14 +33417,9 @@ export function WorkspacePage({
           onClick={requestStartFreshSegmentEditor}
           disabled={isSegmentEditorStructureActionBusy}
         >
-          <img
-            className="studio-create-mode-fresh-action__icon"
-            src={newScenesProjectIcon}
-            alt=""
-            width="27"
-            height="27"
-            aria-hidden="true"
-          />
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+          </svg>
         </button>
       ) : null}
     </div>
