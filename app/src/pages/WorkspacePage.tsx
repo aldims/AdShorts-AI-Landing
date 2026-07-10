@@ -32353,7 +32353,6 @@ export function WorkspacePage({
                 <div className="studio-segment-editor__prompt-heading-title">
                   <strong>{workspaceText(locale, `Визуал — Сцена ${activeSegmentDisplayNumber}`, `Visual — Scene ${activeSegmentDisplayNumber}`)}</strong>
                   {activeSegmentTimeRangeLabel ? <span>{activeSegmentTimeRangeLabel}</span> : null}
-                  <span className="studio-segment-editor__prompt-heading-info" aria-hidden="true">i</span>
                 </div>
                 <div className="studio-segment-editor__scene-nav" aria-label={workspaceText(locale, "Навигация по сценам", "Scene navigation")}>
                   <button
