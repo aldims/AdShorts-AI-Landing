@@ -13,6 +13,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
   getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs,
+  isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
   isWorkspaceSegmentEditorFullPreviewAudioReadyState,
   extendWorkspaceSegmentEditorFullPreviewAudioTimelineRangeTails,
@@ -33,6 +34,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
+  shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleAudioTracks,
@@ -1424,5 +1426,66 @@ describe("workspace segment editor full preview", () => {
         readyState: 4,
       }),
     ).toBe(0);
+  });
+
+  it("treats a naturally consumed voice tail as complete at the end of the timeline", () => {
+    expect(
+      isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete({
+        currentSourceTime: 6.09,
+        currentTimelineTime: 29.9,
+        expectedSourceTime: 5.94,
+        isEnded: false,
+        isLooping: false,
+        mediaDuration: 6.09,
+        sourceEndToleranceSeconds: 0.02,
+        timelineEndTime: 30,
+        timelineTailToleranceSeconds: 0.22,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps waiting when voice media has not actually reached its end", () => {
+    expect(
+      isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete({
+        currentSourceTime: 5.7,
+        currentTimelineTime: 29.9,
+        expectedSourceTime: 5.94,
+        isEnded: false,
+        isLooping: false,
+        mediaDuration: 6.09,
+        sourceEndToleranceSeconds: 0.02,
+        timelineEndTime: 30,
+        timelineTailToleranceSeconds: 0.22,
+      }),
+    ).toBe(false);
+
+    expect(
+      isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete({
+        currentSourceTime: 6,
+        currentTimelineTime: 29.9,
+        expectedSourceTime: 5.94,
+        isEnded: false,
+        isLooping: false,
+        mediaDuration: 6.09,
+        sourceEndToleranceSeconds: 0.02,
+        timelineEndTime: 30,
+        timelineTailToleranceSeconds: 0.22,
+      }),
+    ).toBe(false);
+  });
+
+  it("pauses companion audio while the voice clock is holding", () => {
+    expect(
+      shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
+        hasVoiceClockHold: true,
+        isVoiceTrack: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
+        hasVoiceClockHold: true,
+        isVoiceTrack: true,
+      }),
+    ).toBe(false);
   });
 });

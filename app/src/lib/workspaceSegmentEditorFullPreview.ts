@@ -139,6 +139,18 @@ export type WorkspaceSegmentTimelineAudioPreviewEndWatchdogOptions = {
   readyState: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioCompletionOptions = {
+  currentSourceTime: number;
+  currentTimelineTime: number;
+  expectedSourceTime: number;
+  isEnded: boolean;
+  isLooping: boolean;
+  mediaDuration: number | null;
+  sourceEndToleranceSeconds: number;
+  timelineEndTime: number;
+  timelineTailToleranceSeconds: number;
+};
+
 export type WorkspaceSegmentEditorFullPreviewVoiceQueueTrack = {
   key: string;
   kind: string;
@@ -1360,6 +1372,45 @@ export const getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs = ({
 
   return Math.min(250, remainingMs + 30);
 };
+
+export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete = ({
+  currentSourceTime,
+  currentTimelineTime,
+  expectedSourceTime,
+  isEnded,
+  isLooping,
+  mediaDuration,
+  sourceEndToleranceSeconds,
+  timelineEndTime,
+  timelineTailToleranceSeconds,
+}: WorkspaceSegmentEditorFullPreviewAudioCompletionOptions) => {
+  if (isLooping || mediaDuration === null || !Number.isFinite(mediaDuration) || mediaDuration <= 0) {
+    return false;
+  }
+
+  const sourceTolerance = normalizePreviewTime(sourceEndToleranceSeconds) ?? 0;
+  const mediaReachedEnd =
+    isEnded ||
+    (Number.isFinite(currentSourceTime) && currentSourceTime >= Math.max(0, mediaDuration - sourceTolerance));
+  if (!mediaReachedEnd) {
+    return false;
+  }
+
+  const expectedReachedEnd =
+    Number.isFinite(expectedSourceTime) &&
+    expectedSourceTime >= Math.max(0, mediaDuration - sourceTolerance);
+  const timelineTailTolerance = normalizePreviewTime(timelineTailToleranceSeconds) ?? 0;
+  const remainingTimelineTime = Math.max(
+    0,
+    (normalizePreviewTime(timelineEndTime) ?? 0) - (normalizePreviewTime(currentTimelineTime) ?? 0),
+  );
+  return expectedReachedEnd || remainingTimelineTime <= timelineTailTolerance;
+};
+
+export const shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack = (options: {
+  hasVoiceClockHold: boolean;
+  isVoiceTrack: boolean;
+}) => options.hasVoiceClockHold && !options.isVoiceTrack;
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (
   segments: WorkspaceSegmentEditorFullPreviewSegment[],
