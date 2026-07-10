@@ -33868,8 +33868,8 @@ export function WorkspacePage({
                           <div className="studio-welcome-card__hero-copy">
                             <div className="studio-welcome-card__eyebrow">
                               <span className="studio-welcome-card__eyebrow-dot" aria-hidden="true"></span>
-                              <strong>ADSHORTS STUDIO</strong>
-                              <span>{workspaceText(locale, "AI-продакшн нового поколения", "Next-generation AI production")}</span>
+                              <strong>{workspaceText(locale, "ДВА РЕЖИМА", "TWO MODES")}</strong>
+                              <span>{workspaceText(locale, "один удобный workflow", "one seamless workflow")}</span>
                             </div>
 
                             <h2>
@@ -33878,8 +33878,8 @@ export function WorkspacePage({
                             <p>
                               {workspaceText(
                                 locale,
-                                "Опишите идею — AI соберёт сценарий, визуал, голос, музыку и субтитры. Каждый этап можно изменить.",
-                                "Describe an idea and AI will assemble the script, visuals, voice, music, and captions. Every stage stays editable.",
+                                "Создайте Shorts из идеи, затем оживите и настройте только нужные сцены — с полным контролем над результатом и расходами.",
+                                "Create a Short from an idea, then animate and refine only the scenes that matter — with full control over the result and spend.",
                               )}
                             </p>
 
@@ -33887,32 +33887,73 @@ export function WorkspacePage({
                               className="studio-welcome-card__modes"
                               aria-label={workspaceText(locale, "Режимы создания", "Creation modes")}
                             >
-                              <div className="studio-welcome-card__mode is-primary">
-                                <span className="studio-welcome-card__mode-icon" aria-hidden="true">
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                                    <path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                                  </svg>
+                              <button className="studio-welcome-card__mode is-primary" type="button" onClick={handleStudioWelcomeStart}>
+                                <span className="studio-welcome-card__mode-topline">
+                                  <span className="studio-welcome-card__mode-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                      <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                                      <path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                                    </svg>
+                                  </span>
+                                  <span className="studio-welcome-card__mode-kicker">
+                                    {workspaceText(locale, "БЫСТРЫЙ РЕЖИМ", "FAST MODE")}
+                                  </span>
+                                  <em>01</em>
                                 </span>
-                                <span>
+                                <span className="studio-welcome-card__mode-copy">
                                   <strong>{workspaceText(locale, "Из идеи", "From idea")}</strong>
-                                  <small>{workspaceText(locale, "Быстрый старт с AI", "Fast start with AI")}</small>
+                                  <small>
+                                    {workspaceText(
+                                      locale,
+                                      "AI соберёт готовый Shorts: сценарий, фото, озвучка, музыка и субтитры.",
+                                      "AI assembles a complete Short: script, images, voiceover, music, and captions.",
+                                    )}
+                                  </small>
                                 </span>
-                                <em>01</em>
-                              </div>
-                              <div className="studio-welcome-card__mode">
-                                <span className="studio-welcome-card__mode-icon" aria-hidden="true">
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.7" />
-                                    <path d="M9 5v14M15 5v14" stroke="currentColor" strokeWidth="1.4" opacity=".75" />
+                                <span className="studio-welcome-card__mode-action">
+                                  {workspaceText(locale, "Создать основу", "Create a base")}
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                   </svg>
                                 </span>
-                                <span>
-                                  <strong>{workspaceText(locale, "По сценам", "By scenes")}</strong>
-                                  <small>{workspaceText(locale, "Полный контроль", "Full control")}</small>
+                              </button>
+                              <button
+                                className="studio-welcome-card__mode"
+                                type="button"
+                                onClick={() => {
+                                  closeStudioWelcomeCard();
+                                  handleStudioCreateScenesModeSelect();
+                                }}
+                              >
+                                <span className="studio-welcome-card__mode-topline">
+                                  <span className="studio-welcome-card__mode-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                      <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.7" />
+                                      <path d="M9 5v14M15 5v14" stroke="currentColor" strokeWidth="1.4" opacity=".75" />
+                                    </svg>
+                                  </span>
+                                  <span className="studio-welcome-card__mode-kicker">
+                                    {workspaceText(locale, "ПОЛНЫЙ КОНТРОЛЬ", "FULL CONTROL")}
+                                  </span>
+                                  <em>02</em>
                                 </span>
-                                <em>02</em>
-                              </div>
+                                <span className="studio-welcome-card__mode-copy">
+                                  <strong>{workspaceText(locale, "По сценам", "By scenes")}</strong>
+                                  <small>
+                                    {workspaceText(
+                                      locale,
+                                      "Создавайте с нуля или дорабатывайте готовый ролик — сцена за сценой.",
+                                      "Create from scratch or refine a finished video — scene by scene.",
+                                    )}
+                                  </small>
+                                </span>
+                                <span className="studio-welcome-card__mode-action">
+                                  {workspaceText(locale, "Открыть редактор", "Open editor")}
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </span>
+                              </button>
                             </div>
                           </div>
 
@@ -33924,10 +33965,10 @@ export function WorkspacePage({
                         >
                           <div className="studio-welcome-card__guide-head">
                             <div>
-                              <span>{workspaceText(locale, "БЫСТРЫЙ СТАРТ", "QUICK START")}</span>
-                              <h3>{workspaceText(locale, "Первый Shorts за три шага", "Your first Short in three steps")}</h3>
+                              <span>{workspaceText(locale, "РЕКОМЕНДУЕМЫЙ ПУТЬ", "RECOMMENDED FLOW")}</span>
+                              <h3>{workspaceText(locale, "Сначала основа. Затем — только важные сцены.", "Start with a base. Then refine only the key scenes.")}</h3>
                             </div>
-                            <small>{workspaceText(locale, "≈ 1 минута", "≈ 1 minute")}</small>
+                            <small>{workspaceText(locale, "Меньше времени и затрат", "Less time and spend")}</small>
                           </div>
 
                           <ol className="studio-welcome-card__steps">
@@ -33940,8 +33981,8 @@ export function WorkspacePage({
                                 </svg>
                               </span>
                               <span className="studio-welcome-card__step-copy">
-                                <strong>{workspaceText(locale, "Опишите идею", "Describe the idea")}</strong>
-                                <span>{workspaceText(locale, "Достаточно одного предложения.", "One sentence is enough.")}</span>
+                                <strong>{workspaceText(locale, "Создайте основу", "Create the base")}</strong>
+                                <span>{workspaceText(locale, "Получите готовый Shorts из AI-фото.", "Get a complete Short made from AI images.")}</span>
                               </span>
                             </li>
                             <li>
@@ -33955,8 +33996,8 @@ export function WorkspacePage({
                                 </svg>
                               </span>
                               <span className="studio-welcome-card__step-copy">
-                                <strong>{workspaceText(locale, "Настройте стиль", "Set the style")}</strong>
-                                <span>{workspaceText(locale, "Выберите визуал, голос и субтитры.", "Choose visuals, voice, and captions.")}</span>
+                                <strong>{workspaceText(locale, "Выберите сцены", "Choose scenes")}</strong>
+                                <span>{workspaceText(locale, "Решите, какие кадры стоит усилить.", "Decide which shots are worth enhancing.")}</span>
                               </span>
                             </li>
                             <li>
@@ -33968,8 +34009,8 @@ export function WorkspacePage({
                                 </svg>
                               </span>
                               <span className="studio-welcome-card__step-copy">
-                                <strong>{workspaceText(locale, "Запустите генерацию", "Start generation")}</strong>
-                                <span>{workspaceText(locale, "Получите ролик 9:16 и улучшайте сцены.", "Get a 9:16 video and refine its scenes.")}</span>
+                                <strong>{workspaceText(locale, "Улучшите с AI", "Enhance with AI")}</strong>
+                                <span>{workspaceText(locale, "Оживите, дорисуйте или продлите сцену.", "Animate, extend, or edit the scene.")}</span>
                               </span>
                             </li>
                           </ol>
@@ -33984,19 +34025,19 @@ export function WorkspacePage({
                               </svg>
                             </span>
                             <span>
-                              <strong>{workspaceText(locale, "Всё под контролем", "You stay in control")}</strong>
+                              <strong>{workspaceText(locale, "AI-инструменты для каждой сцены", "AI tools for every scene")}</strong>
                               <small>
                                 {workspaceText(
                                   locale,
-                                  "После генерации можно заменить любую сцену, голос или стиль.",
-                                  "After generation, replace any scene, voice, or style.",
+                                  "Оживление · Дорисовка · Говорящий персонаж · Создание персонажа · Продление",
+                                  "Animation · Image editing · Talking character · Character creation · Extension",
                                 )}
                               </small>
                             </span>
                           </div>
 
                           <button className="studio-welcome-card__start" type="button" onClick={handleStudioWelcomeStart}>
-                            <span>{workspaceText(locale, "Ввести идею", "Enter an idea")}</span>
+                            <span>{workspaceText(locale, "Создать Shorts из идеи", "Create a Short from an idea")}</span>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
