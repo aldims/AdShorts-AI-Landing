@@ -1328,6 +1328,81 @@ describe("WorkspacePage segment editor draft persistence", () => {
     }
   });
 
+  it("keeps the reset project draft when the editor is reopened", () => {
+    const createMemoryStorage = (): Storage => {
+      const values = new Map<string, string>();
+      return {
+        get length() {
+          return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+        setItem: (key: string, value: string) => {
+          values.set(key, String(value));
+        },
+      };
+    };
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    const localStorageMock = createMemoryStorage();
+    const sessionStorageMock = createMemoryStorage();
+    const email = "reset-draft@example.test";
+    const projectId = 3871;
+    const baselineSegment = createDraftSegment({
+      index: 0,
+      mediaType: "video",
+      originalText: "Исходная сцена",
+      originalTextByLanguage: { ru: "Исходная сцена" },
+      text: "Исходная сцена",
+      textByLanguage: { ru: "Исходная сцена" },
+    });
+    const editedSegment = createDraftSegment({
+      ...baselineSegment,
+      text: "Изменённая сцена",
+      textByLanguage: { ru: "Изменённая сцена" },
+    });
+    const baselineSession = {
+      ...createDraftSession(baselineSegment),
+      projectId,
+      segments: [baselineSegment],
+    };
+    const editedSession = {
+      ...createDraftSession(editedSegment),
+      projectId,
+      segments: [editedSegment],
+    };
+    const resetSession = createWorkspaceSegmentEditorResetDraftFromBaseline(editedSession, baselineSession);
+
+    try {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: localStorageMock });
+      Object.defineProperty(window, "sessionStorage", { configurable: true, value: sessionStorageMock });
+
+      writeStoredWorkspaceSegmentEditorSession(email, baselineSession);
+      writeStoredWorkspaceSegmentEditorDraft(email, editedSession);
+      writeStoredWorkspaceSegmentEditorDraft(email, resetSession);
+
+      const reopenedDraft = readStoredWorkspaceSegmentEditorDraft(email, projectId);
+      expect(reopenedDraft?.segments[0]?.text).toBe("Исходная сцена");
+      expect(
+        buildWorkspaceSegmentEditorChangeChecklist(
+          reopenedDraft!,
+          createWorkspaceSegmentEditorDraftSession(readStoredWorkspaceSegmentEditorSession(email, projectId)!),
+        ),
+      ).toEqual([]);
+    } finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(window, "localStorage", originalLocalStorage);
+      }
+      if (originalSessionStorage) {
+        Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+      }
+    }
+  });
+
   it("marks a source project as consumed after Shorts creation starts", () => {
     const createMemoryStorage = (): Storage => {
       const values = new Map<string, string>();

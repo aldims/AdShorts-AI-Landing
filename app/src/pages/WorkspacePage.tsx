@@ -10524,11 +10524,12 @@ export function WorkspacePage({
   };
 
   const stashCurrentSegmentEditorDraft = () => {
-    if (!segmentEditorDraft) {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft) {
       return;
     }
 
-    const draftSnapshot = cloneWorkspaceSegmentEditorDraftSession(segmentEditorDraft);
+    const draftSnapshot = cloneWorkspaceSegmentEditorDraftSession(currentDraft);
     persistSegmentEditorDraftSnapshot(draftSnapshot);
     detachedSegmentEditorDraftRef.current = {
       activeSegmentIndex,
@@ -12006,22 +12007,29 @@ export function WorkspacePage({
       preserveSourceTimelineEnd?: boolean;
     },
   ) => {
+    const sourceDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!sourceDraft) {
+      segmentEditorDraftRef.current = null;
+      return null;
+    }
+
+    const rebuiltDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(sourceDraft), options);
+    const nextDraft = restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft);
+    // Keep the ref ahead of React state: navigation can stash or reopen the editor
+    // before a batched state update has rendered.
+    segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft((currentDraft) => {
-      const sourceDraft = segmentEditorDraftRef.current ?? currentDraft;
-      if (!sourceDraft) {
-        segmentEditorDraftRef.current = null;
+      if (!currentDraft || currentDraft.projectId !== nextDraft.projectId) {
         return currentDraft;
       }
 
-      const rebuiltDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(sourceDraft), options);
-      const nextDraft = restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft);
       if (areSegmentEditorDraftSessionsEqual(currentDraft, nextDraft)) {
-        segmentEditorDraftRef.current = currentDraft;
         return currentDraft;
       }
-      segmentEditorDraftRef.current = nextDraft;
       return nextDraft;
     });
+
+    return nextDraft;
   };
 
   useEffect(() => {
@@ -12431,8 +12439,18 @@ export function WorkspacePage({
     setHasEditedSegmentSubtitleBulkTextInput(false);
     setSegmentSubtitleBulkTextError(null);
     closeSegmentAiPhotoModal({ immediate: true });
-    updateSegmentEditorDraft(() => nextDraft);
-    syncSegmentEditorRouteForArrayIndex(nextDraft, safeNextActiveSegmentIndex);
+    const resetDraft = updateSegmentEditorDraft(() => nextDraft) ?? nextDraft;
+    // Reset is an explicit replacement of the working copy. Persist it immediately
+    // so that a mode switch or reopening through "Улучшить" cannot restore an
+    // earlier detached/local snapshot while React is committing the state update.
+    persistSegmentEditorDraftSnapshot(resetDraft);
+    if (detachedSegmentEditorDraftRef.current?.draft.projectId === resetDraft.projectId) {
+      detachedSegmentEditorDraftRef.current = {
+        activeSegmentIndex: safeNextActiveSegmentIndex,
+        draft: cloneWorkspaceSegmentEditorDraftSession(resetDraft),
+      };
+    }
+    syncSegmentEditorRouteForArrayIndex(resetDraft, safeNextActiveSegmentIndex);
     setActiveSegmentIndex(safeNextActiveSegmentIndex);
     setSelectedMusicType(baselineMusicType as StudioMusicType);
     setSelectedCustomMusic(null);
