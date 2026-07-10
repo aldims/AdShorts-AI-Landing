@@ -1,0 +1,86 @@
+/* Keep the desktop scene editor inside the viewport and let the preview use the
+ * space left by the controls and the complete timeline. */
+@media (min-width: 981px) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    --studio-segment-editor-adaptive-gap: clamp(10px, 1.5dvh, 16px);
+    --studio-segment-editor-preview-inset: clamp(6px, 0.8dvh, 10px);
+    --studio-segment-editor-submit-height: 48px;
+    --studio-segment-editor-adaptive-visual-track-height: clamp(58px, 7dvh, 72px);
+    --studio-segment-editor-adaptive-scene-track-height: clamp(38px, 4.5dvh, 46px);
+    --studio-segment-editor-adaptive-timeline-height: calc(
+      46px + var(--studio-segment-editor-adaptive-visual-track-height) +
+        var(--studio-segment-editor-adaptive-scene-track-height) +
+        var(--studio-segment-editor-adaptive-scene-track-height) +
+        var(--studio-segment-editor-adaptive-scene-track-height) +
+        var(--studio-segment-editor-adaptive-scene-track-height)
+    );
+    --studio-segment-editor-carousel-height: clamp(
+      160px,
+      calc(
+        var(--studio-segment-editor-layout-height) - var(--studio-segment-editor-submit-height) -
+          var(--studio-segment-editor-adaptive-timeline-height) -
+          (var(--studio-segment-editor-adaptive-gap) * 2) -
+          (var(--studio-segment-editor-preview-inset) * 2)
+      ),
+      760px
+    ) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+    --studio-segment-editor-layout-height: calc(100dvh - 108px) !important;
+    min-height: var(--studio-segment-editor-layout-height) !important;
+    height: var(--studio-segment-editor-layout-height) !important;
+    max-height: var(--studio-segment-editor-layout-height) !important;
+    grid-template-rows:
+      minmax(0, 1fr)
+      var(--studio-segment-editor-submit-height)
+      var(--studio-segment-editor-adaptive-timeline-height) !important;
+    row-gap: var(--studio-segment-editor-adaptive-gap) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
+    min-height: 0 !important;
+    height: 100% !important;
+    padding-block: var(--studio-segment-editor-preview-inset) !important;
+    align-content: center !important;
+    align-items: center !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__stage {
+    min-height: 0 !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: 100% !important;
+    align-self: center !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__carousel {
+    width: var(--studio-segment-editor-carousel-width) !important;
+    min-width: var(--studio-segment-editor-carousel-width) !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: 100% !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-visual-track-height:
+      var(--studio-segment-editor-adaptive-visual-track-height) !important;
+    --studio-segment-editor-timeline-scene-track-height:
+      var(--studio-segment-editor-adaptive-scene-track-height) !important;
+    min-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    max-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    overflow-y: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
+    min-height: var(--studio-segment-editor-submit-height) !important;
+    height: var(--studio-segment-editor-submit-height) !important;
+    transform: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-content.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create-layout,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor {
+    overflow: visible !important;
+  }
+}
