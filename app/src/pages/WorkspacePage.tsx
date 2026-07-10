@@ -34049,7 +34049,6 @@ export function WorkspacePage({
                                     )}
                                   </small>
                                   <span className="studio-welcome-card__mode-capabilities">
-                                    <span className="studio-welcome-card__mode-capabilities-label" aria-hidden="true">AI</span>
                                     <span>{workspaceText(locale, "Оживление фото", "Photo animation")}</span>
                                     <span>{workspaceText(locale, "Изменение фото", "Photo editing")}</span>
                                     <span>{workspaceText(locale, "Продление видео", "Video extension")}</span>
