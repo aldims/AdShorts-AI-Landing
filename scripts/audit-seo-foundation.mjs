@@ -176,6 +176,7 @@ assert(baseline.googleSearchConsole?.clicks === 213, "seo-measurement-baseline.j
 assert(baseline.yandexWebmaster?.clicks === 210, "seo-measurement-baseline.json: Yandex baseline mismatch");
 assert(await exists("scripts/analyze-seo-exports.mjs"), "SEO export analyzer is missing");
 assert(await exists("scripts/analyze-seo-exports.test.mjs"), "SEO export analyzer tests are missing");
+assert(await exists("scripts/crawl-seo-pages.mjs"), "SEO HTTP crawler is missing");
 
 const seoDeploy = await readRootFile("deploy-seo-only.sh").catch(() => "");
 if (seoDeploy) {
