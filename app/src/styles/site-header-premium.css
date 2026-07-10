@@ -68,11 +68,11 @@
   align-items: center !important;
   justify-content: center !important;
   justify-self: start !important;
-  flex: 0 0 40px !important;
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
+  flex: 0 0 var(--premium-control-height) !important;
+  width: var(--premium-control-height) !important;
+  min-width: var(--premium-control-height) !important;
+  max-width: var(--premium-control-height) !important;
+  height: var(--premium-control-height) !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: visible !important;
@@ -84,9 +84,9 @@
 }
 
 #app .route-page:not(.studio-canvas-route) > .site-header .brand img {
-  width: 36px !important;
-  min-width: 36px !important;
-  height: 36px !important;
+  width: calc(var(--premium-control-height) - 4px) !important;
+  min-width: calc(var(--premium-control-height) - 4px) !important;
+  height: calc(var(--premium-control-height) - 4px) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -370,12 +370,12 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 0 40px !important;
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  flex: 0 0 var(--premium-control-height) !important;
+  width: var(--premium-control-height) !important;
+  min-width: var(--premium-control-height) !important;
+  max-width: var(--premium-control-height) !important;
+  height: var(--premium-control-height) !important;
+  min-height: var(--premium-control-height) !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 1px solid rgba(222, 226, 255, 0.22) !important;
@@ -457,6 +457,22 @@
     bottom: 4px;
     left: 28px;
   }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-header__actions {
+    gap: 6px !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .language-switcher__trigger,
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-header__billing,
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-header__signin,
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-header__account {
+    border-radius: 14px !important;
+    font-size: 0.8rem !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-header__billing {
+    padding-inline: 13px !important;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 960px) {
@@ -510,11 +526,11 @@
   }
 
   #app .route-page:not(.studio-canvas-route) > .site-header .brand {
-    flex-basis: 34px !important;
-    width: 34px !important;
-    min-width: 34px !important;
-    max-width: 34px !important;
-    height: 34px !important;
+    flex-basis: var(--premium-control-height) !important;
+    width: var(--premium-control-height) !important;
+    min-width: var(--premium-control-height) !important;
+    max-width: var(--premium-control-height) !important;
+    height: var(--premium-control-height) !important;
   }
 
   #app .route-page:not(.studio-canvas-route) > .site-header .brand img {
